@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.pool import NullPool
-from sqlalchemy import event
+from sqlalchemy import text
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional
 import asyncio
@@ -44,14 +44,25 @@ class DatabaseManager:
 
         try:
             # 비동기 엔진 생성
+            engine_kwargs = {
+                "echo": settings.db_echo,
+            }
+
+            # SQLite가 아닌 경우만 pool 설정 추가
+            if not settings.database_url.startswith("sqlite"):
+                engine_kwargs.update({
+                    "pool_pre_ping": True,
+                    "pool_recycle": 3600,  # 1시간
+                    "pool_size": 5,
+                    "max_overflow": 10,
+                })
+            else:
+                # SQLite는 NullPool 사용
+                engine_kwargs["poolclass"] = NullPool
+
             self.engine = create_async_engine(
                 settings.database_url,
-                echo=settings.db_echo,
-                pool_pre_ping=True,
-                pool_recycle=3600,  # 1시간
-                pool_size=5,
-                max_overflow=10,
-                poolclass=NullPool if settings.is_testing else None
+                **engine_kwargs
             )
 
             # 세션 팩토리 생성
@@ -77,7 +88,7 @@ class DatabaseManager:
         """연결 테스트"""
         try:
             async with self.engine.begin() as conn:
-                await conn.execute("SELECT 1")
+                await conn.execute(text("SELECT 1"))
             logger.info("데이터베이스 연결 테스트 성공")
         except Exception as e:
             logger.error(f"데이터베이스 연결 테스트 실패: {e}")
@@ -144,11 +155,4 @@ async def close_database() -> None:
     await db_manager.close()
 
 
-# SQLAlchemy 이벤트 리스너
-@event.listens_for(AsyncEngine, "connect")
-def set_sqlite_pragma(dbapi_connection, connection_record):
-    """SQLite 설정 (개발환경용)"""
-    if "sqlite" in str(dbapi_connection):
-        cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.close()
+# SQLAlchemy 이벤트 리스너는 필요시 별도로 추가

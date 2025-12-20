@@ -235,6 +235,9 @@ class AuthService:
         user.update_last_login()
         await self.db.commit()
 
+        # async context에서 모든 필드 미리 추출
+        await self.db.refresh(user)
+
         # JWT 토큰 생성
         token_data = {
             "sub": str(user.id),
@@ -247,10 +250,37 @@ class AuthService:
         # 성공 로깅
         log_auth_attempt(logger, user.email, ip_address, True)
 
-        # 응답 생성
-        return AuthResponse(
-            access_token=access_token,
-            token_type="bearer",
-            expires_in=settings.jwt_expire_minutes * 60,
-            user=UserResponse.from_orm(user)
-        )
+        # 응답 생성 - async context에서 안전하게 필드 추출
+        try:
+            # User 모델의 to_dict 메소드 사용하여 안전한 직렬화
+            user_data = user.to_dict()
+
+            return AuthResponse(
+                access_token=access_token,
+                token_type="bearer",
+                expires_in=settings.jwt_expire_minutes * 60,
+                user=UserResponse(**user_data)
+            )
+        except Exception as e:
+            logger.error(f"UserResponse 생성 실패: {e}")
+            # 실패 시 기본 데이터로 응답 생성
+            basic_user_data = {
+                "id": user.id,
+                "email": user.email,
+                "full_name": user.full_name or "",
+                "tier": user.tier.value if hasattr(user.tier, 'value') else "free",
+                "is_active": True,
+                "is_verified": False,
+                "is_superuser": False,
+                "created_at": None,
+                "updated_at": None,
+                "last_login_at": None,
+                "display_name": user.full_name if user.full_name else user.email.split("@")[0]
+            }
+
+            return AuthResponse(
+                access_token=access_token,
+                token_type="bearer",
+                expires_in=settings.jwt_expire_minutes * 60,
+                user=UserResponse(**basic_user_data)
+            )

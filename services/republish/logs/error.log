@@ -1,0 +1,12 @@
+2025-12-21 06:32:27 | ERROR | database | initialize | 데이터베이스 연결 실패: Invalid argument(s) 'pool_size','max_overflow' sent to create_engine(), using configuration SQLiteDialect_aiosqlite/NullPool/Engine.  Please check that the keyword arguments are appropriate for this combination of components.
+2025-12-21 06:32:56 | ERROR | database | _test_connection | 데이터베이스 연결 테스트 실패: Not an executable object: 'SELECT 1'
+2025-12-21 06:32:56 | ERROR | database | initialize | 데이터베이스 연결 실패: Not an executable object: 'SELECT 1'
+2025-12-21 06:34:03 | ERROR | auth_service | register_user | 회원가입 실패 | 이메일=test@example.com | 오류=1 validation error for UserResponse
+updated_at
+  Error extracting attribute: MissingGreenlet: greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s) [type=get_attribute_error, input_value=<unprintable User object>, input_type=User]
+    For further information visit https://errors.pydantic.dev/2.4/v/get_attribute_error
+2025-12-21 06:34:47 | ERROR | auth_service | register_user | 회원가입 실패 | 이메일=test2@example.com | 오류=greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)
+2025-12-21 06:35:12 | ERROR | auth_service | register_user | 회원가입 실패 | 이메일=test3@example.com | 오류=greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)
+2025-12-21 06:35:24 | ERROR | auth_service | register_user | 회원가입 실패 | 이메일=test4@example.com | 오류=greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)
+2025-12-21 06:35:59 | ERROR | auth_service | register_user | 회원가입 실패 | 이메일=success@example.com | 오류=greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)
+2025-12-21 06:41:49 | ERROR | auth_service | register_user | 회원가입 실패 | 이메일=gooooooooodz@naver.com | 오류=greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)

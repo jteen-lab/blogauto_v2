@@ -45,7 +45,7 @@ class UserRegisterRequest(BaseModel):
         return v
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "email": "user@example.com",
                 "password": "SecurePassword123",
@@ -60,7 +60,7 @@ class UserLoginRequest(BaseModel):
     password: str = Field(..., description="비밀번호")
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "email": "user@example.com",
                 "password": "SecurePassword123"
@@ -73,17 +73,18 @@ class UserResponse(BaseModel):
     id: int = Field(..., description="사용자 ID")
     email: EmailStr = Field(..., description="이메일 주소")
     full_name: Optional[str] = Field(None, description="전체 이름")
-    tier: UserTier = Field(..., description="사용자 등급")
+    tier: str = Field(..., description="사용자 등급")
     is_active: bool = Field(..., description="활성화 상태")
     is_verified: bool = Field(..., description="이메일 인증 여부")
-    created_at: datetime = Field(..., description="계정 생성일")
-    updated_at: datetime = Field(..., description="정보 수정일")
+    is_superuser: bool = Field(False, description="관리자 권한 여부")
+    created_at: Optional[datetime] = Field(None, description="계정 생성일")
+    updated_at: Optional[datetime] = Field(None, description="정보 수정일")
     last_login_at: Optional[datetime] = Field(None, description="마지막 로그인")
     display_name: str = Field(..., description="표시 이름")
 
     class Config:
-        orm_mode = True
-        schema_extra = {
+        from_attributes = True
+        json_schema_extra = {
             "example": {
                 "id": 1,
                 "email": "user@example.com",
@@ -107,7 +108,7 @@ class AuthResponse(BaseModel):
     user: UserResponse = Field(..., description="사용자 정보")
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                 "token_type": "bearer",
@@ -145,7 +146,7 @@ class ErrorResponse(BaseModel):
     details: Optional[dict] = Field(None, description="상세 정보")
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "error": "INVALID_CREDENTIALS",
                 "message": "이메일 또는 비밀번호가 잘못되었습니다",
@@ -174,7 +175,7 @@ class PasswordChangeRequest(BaseModel):
         return v
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "current_password": "OldPassword123",
                 "new_password": "NewSecurePassword456"

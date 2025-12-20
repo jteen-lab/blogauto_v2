@@ -8,7 +8,6 @@ Features:
 - 타이밍 공격 방지
 """
 from passlib.context import CryptContext
-from typing import str as String
 import secrets
 import time
 

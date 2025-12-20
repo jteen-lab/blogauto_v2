@@ -1,0 +1,101 @@
+2025-12-21 06:32:27 | INFO | main | lifespan | BlogAuto V2 애플리케이션 시작
+2025-12-21 06:32:27 | INFO | database | initialize | 데이터베이스 연결 초기화 시작
+2025-12-21 06:32:27 | ERROR | database | initialize | 데이터베이스 연결 실패: Invalid argument(s) 'pool_size','max_overflow' sent to create_engine(), using configuration SQLiteDialect_aiosqlite/NullPool/Engine.  Please check that the keyword arguments are appropriate for this combination of components.
+2025-12-21 06:32:56 | INFO | main | lifespan | BlogAuto V2 애플리케이션 시작
+2025-12-21 06:32:56 | INFO | database | initialize | 데이터베이스 연결 초기화 시작
+2025-12-21 06:32:56 | ERROR | database | _test_connection | 데이터베이스 연결 테스트 실패: Not an executable object: 'SELECT 1'
+2025-12-21 06:32:56 | ERROR | database | initialize | 데이터베이스 연결 실패: Not an executable object: 'SELECT 1'
+2025-12-21 06:33:32 | INFO | main | lifespan | BlogAuto V2 애플리케이션 시작
+2025-12-21 06:33:32 | INFO | database | initialize | 데이터베이스 연결 초기화 시작
+2025-12-21 06:33:32 | INFO | database | _test_connection | 데이터베이스 연결 테스트 성공
+2025-12-21 06:33:32 | INFO | database | initialize | 데이터베이스 연결 초기화 완료
+2025-12-21 06:33:32 | INFO | database | create_tables | 데이터베이스 테이블 생성 완료
+2025-12-21 06:33:32 | INFO | main | lifespan | 개발환경 - 데이터베이스 테이블 생성
+2025-12-21 06:34:03 | INFO | password | hash_password | 비밀번호 해싱 완료 | 소요시간=0.374초
+2025-12-21 06:34:03 | INFO | jwt | create_access_token | JWT 토큰 생성 | 사용자=1 | 만료=2025-12-27T21:34:03.320918
+2025-12-21 06:34:23 | INFO | database | close | 데이터베이스 연결 종료
+2025-12-21 06:34:23 | INFO | main | lifespan | BlogAuto V2 애플리케이션 종료
+2025-12-21 06:34:25 | INFO | main | lifespan | BlogAuto V2 애플리케이션 시작
+2025-12-21 06:34:25 | INFO | database | initialize | 데이터베이스 연결 초기화 시작
+2025-12-21 06:34:25 | INFO | database | _test_connection | 데이터베이스 연결 테스트 성공
+2025-12-21 06:34:25 | INFO | database | initialize | 데이터베이스 연결 초기화 완료
+2025-12-21 06:34:25 | INFO | database | create_tables | 데이터베이스 테이블 생성 완료
+2025-12-21 06:34:25 | INFO | main | lifespan | 개발환경 - 데이터베이스 테이블 생성
+2025-12-21 06:34:30 | INFO | database | close | 데이터베이스 연결 종료
+2025-12-21 06:34:30 | INFO | main | lifespan | BlogAuto V2 애플리케이션 종료
+2025-12-21 06:34:32 | INFO | main | lifespan | BlogAuto V2 애플리케이션 시작
+2025-12-21 06:34:32 | INFO | database | initialize | 데이터베이스 연결 초기화 시작
+2025-12-21 06:34:32 | INFO | database | _test_connection | 데이터베이스 연결 테스트 성공
+2025-12-21 06:34:32 | INFO | database | initialize | 데이터베이스 연결 초기화 완료
+2025-12-21 06:34:32 | INFO | database | create_tables | 데이터베이스 테이블 생성 완료
+2025-12-21 06:34:32 | INFO | main | lifespan | 개발환경 - 데이터베이스 테이블 생성
+2025-12-21 06:34:47 | INFO | password | hash_password | 비밀번호 해싱 완료 | 소요시간=0.357초
+2025-12-21 06:34:47 | INFO | jwt | create_access_token | JWT 토큰 생성 | 사용자=2 | 만료=2025-12-27T21:34:47.967719
+2025-12-21 06:35:00 | INFO | database | close | 데이터베이스 연결 종료
+2025-12-21 06:35:00 | INFO | main | lifespan | BlogAuto V2 애플리케이션 종료
+2025-12-21 06:35:02 | INFO | main | lifespan | BlogAuto V2 애플리케이션 시작
+2025-12-21 06:35:02 | INFO | database | initialize | 데이터베이스 연결 초기화 시작
+2025-12-21 06:35:02 | INFO | database | _test_connection | 데이터베이스 연결 테스트 성공
+2025-12-21 06:35:02 | INFO | database | initialize | 데이터베이스 연결 초기화 완료
+2025-12-21 06:35:02 | INFO | database | create_tables | 데이터베이스 테이블 생성 완료
+2025-12-21 06:35:02 | INFO | main | lifespan | 개발환경 - 데이터베이스 테이블 생성
+2025-12-21 06:35:12 | INFO | password | hash_password | 비밀번호 해싱 완료 | 소요시간=0.350초
+2025-12-21 06:35:12 | INFO | jwt | create_access_token | JWT 토큰 생성 | 사용자=3 | 만료=2025-12-27T21:35:12.551146
+2025-12-21 06:35:24 | INFO | password | hash_password | 비밀번호 해싱 완료 | 소요시간=0.529초
+2025-12-21 06:35:24 | INFO | jwt | create_access_token | JWT 토큰 생성 | 사용자=4 | 만료=2025-12-27T21:35:24.143529
+2025-12-21 06:35:38 | INFO | database | close | 데이터베이스 연결 종료
+2025-12-21 06:35:38 | INFO | main | lifespan | BlogAuto V2 애플리케이션 종료
+2025-12-21 06:35:41 | INFO | main | lifespan | BlogAuto V2 애플리케이션 시작
+2025-12-21 06:35:41 | INFO | database | initialize | 데이터베이스 연결 초기화 시작
+2025-12-21 06:35:41 | INFO | database | _test_connection | 데이터베이스 연결 테스트 성공
+2025-12-21 06:35:41 | INFO | database | initialize | 데이터베이스 연결 초기화 완료
+2025-12-21 06:35:41 | INFO | database | create_tables | 데이터베이스 테이블 생성 완료
+2025-12-21 06:35:41 | INFO | main | lifespan | 개발환경 - 데이터베이스 테이블 생성
+2025-12-21 06:35:49 | INFO | database | close | 데이터베이스 연결 종료
+2025-12-21 06:35:49 | INFO | main | lifespan | BlogAuto V2 애플리케이션 종료
+2025-12-21 06:35:51 | INFO | main | lifespan | BlogAuto V2 애플리케이션 시작
+2025-12-21 06:35:51 | INFO | database | initialize | 데이터베이스 연결 초기화 시작
+2025-12-21 06:35:51 | INFO | database | _test_connection | 데이터베이스 연결 테스트 성공
+2025-12-21 06:35:51 | INFO | database | initialize | 데이터베이스 연결 초기화 완료
+2025-12-21 06:35:51 | INFO | database | create_tables | 데이터베이스 테이블 생성 완료
+2025-12-21 06:35:51 | INFO | main | lifespan | 개발환경 - 데이터베이스 테이블 생성
+2025-12-21 06:35:59 | INFO | password | hash_password | 비밀번호 해싱 완료 | 소요시간=0.385초
+2025-12-21 06:35:59 | INFO | jwt | create_access_token | JWT 토큰 생성 | 사용자=5 | 만료=2025-12-27T21:35:59.382895
+2025-12-21 06:37:09 | WARNING | main | not_found_handler | 404 에러 | 경로=/favicon.ico | IP=127.0.0.1
+2025-12-21 06:39:20 | INFO | main | lifespan | BlogAuto V2 애플리케이션 시작
+2025-12-21 06:39:20 | INFO | database | initialize | 데이터베이스 연결 초기화 시작
+2025-12-21 06:39:20 | INFO | database | _test_connection | 데이터베이스 연결 테스트 성공
+2025-12-21 06:39:20 | INFO | database | initialize | 데이터베이스 연결 초기화 완료
+2025-12-21 06:39:20 | INFO | database | create_tables | 데이터베이스 테이블 생성 완료
+2025-12-21 06:39:20 | INFO | main | lifespan | 개발환경 - 데이터베이스 테이블 생성
+2025-12-21 06:41:49 | INFO | password | hash_password | 비밀번호 해싱 완료 | 소요시간=0.294초
+2025-12-21 06:41:49 | INFO | jwt | create_access_token | JWT 토큰 생성 | 사용자=6 | 만료=2025-12-27T21:41:49.374234
+2025-12-21 06:42:07 | INFO | password | verify_password | 비밀번호 검증 | 결과=False | 소요시간=0.295초
+2025-12-21 06:46:02 | INFO | database | close | 데이터베이스 연결 종료
+2025-12-21 06:46:02 | INFO | main | lifespan | BlogAuto V2 애플리케이션 종료
+2025-12-21 06:46:04 | INFO | main | lifespan | BlogAuto V2 애플리케이션 시작
+2025-12-21 06:46:04 | INFO | database | initialize | 데이터베이스 연결 초기화 시작
+2025-12-21 06:46:04 | INFO | database | _test_connection | 데이터베이스 연결 테스트 성공
+2025-12-21 06:46:04 | INFO | database | initialize | 데이터베이스 연결 초기화 완료
+2025-12-21 06:46:04 | INFO | database | create_tables | 데이터베이스 테이블 생성 완료
+2025-12-21 06:46:04 | INFO | main | lifespan | 개발환경 - 데이터베이스 테이블 생성
+2025-12-21 06:46:52 | INFO | database | close | 데이터베이스 연결 종료
+2025-12-21 06:46:52 | INFO | main | lifespan | BlogAuto V2 애플리케이션 종료
+2025-12-21 06:46:54 | INFO | main | lifespan | BlogAuto V2 애플리케이션 시작
+2025-12-21 06:46:54 | INFO | database | initialize | 데이터베이스 연결 초기화 시작
+2025-12-21 06:46:54 | INFO | database | _test_connection | 데이터베이스 연결 테스트 성공
+2025-12-21 06:46:54 | INFO | database | initialize | 데이터베이스 연결 초기화 완료
+2025-12-21 06:46:54 | INFO | database | create_tables | 데이터베이스 테이블 생성 완료
+2025-12-21 06:46:54 | INFO | main | lifespan | 개발환경 - 데이터베이스 테이블 생성
+2025-12-21 06:47:34 | INFO | password | hash_password | 비밀번호 해싱 완료 | 소요시간=0.346초
+2025-12-21 06:47:34 | INFO | jwt | create_access_token | JWT 토큰 생성 | 사용자=7 | 만료=2025-12-27T21:47:34.875050
+2025-12-21 06:47:57 | INFO | password | verify_password | 비밀번호 검증 | 결과=True | 소요시간=0.322초
+2025-12-21 06:47:57 | INFO | jwt | create_access_token | JWT 토큰 생성 | 사용자=7 | 만료=2025-12-27T21:47:57.420441
+2025-12-21 06:48:09 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=7
+2025-12-21 06:50:42 | INFO | password | verify_password | 비밀번호 검증 | 결과=False | 소요시간=0.292초
+2025-12-21 06:50:48 | INFO | password | verify_password | 비밀번호 검증 | 결과=False | 소요시간=0.282초
+2025-12-21 06:51:16 | INFO | password | hash_password | 비밀번호 해싱 완료 | 소요시간=0.302초
+2025-12-21 06:51:16 | INFO | jwt | create_access_token | JWT 토큰 생성 | 사용자=8 | 만료=2025-12-27T21:51:16.720212
+2025-12-21 06:51:18 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=8
+2025-12-21 06:51:18 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=8
+2025-12-21 06:51:18 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=8

@@ -1,0 +1,87 @@
+2025-12-21 06:33:53 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/7.81.0
+2025-12-21 06:33:53 | INFO | request | dispatch | 요청시작 | ID=ed9878db | GET /health | IP=127.0.0.1 | UA=curl/7.81.0
+2025-12-21 06:33:53 | INFO | request | dispatch | 요청완료 | ID=ed9878db | GET /health | Status=200 | 처리시간=0.002초
+2025-12-21 06:34:02 | INFO | request | log_request_info | 요청 | POST /api/v1/auth/register | IP=127.0.0.1 | UA=curl/7.81.0
+2025-12-21 06:34:02 | INFO | request | dispatch | 요청시작 | ID=a6336f5d | POST /api/v1/auth/register | IP=127.0.0.1 | UA=curl/7.81.0
+2025-12-21 06:34:03 | INFO | request | dispatch | 요청완료 | ID=a6336f5d | POST /api/v1/auth/register | Status=500 | 처리시간=0.439초
+2025-12-21 06:34:47 | INFO | request | log_request_info | 요청 | POST /api/v1/auth/register | IP=127.0.0.1 | UA=curl/7.81.0
+2025-12-21 06:34:47 | INFO | request | dispatch | 요청시작 | ID=363a0a3c | POST /api/v1/auth/register | IP=127.0.0.1 | UA=curl/7.81.0
+2025-12-21 06:34:47 | INFO | request | dispatch | 요청완료 | ID=363a0a3c | POST /api/v1/auth/register | Status=500 | 처리시간=0.411초
+2025-12-21 06:35:12 | INFO | request | log_request_info | 요청 | POST /api/v1/auth/register | IP=127.0.0.1 | UA=curl/7.81.0
+2025-12-21 06:35:12 | INFO | request | dispatch | 요청시작 | ID=241021dc | POST /api/v1/auth/register | IP=127.0.0.1 | UA=curl/7.81.0
+2025-12-21 06:35:12 | INFO | request | dispatch | 요청완료 | ID=241021dc | POST /api/v1/auth/register | Status=500 | 처리시간=0.406초
+2025-12-21 06:35:23 | INFO | request | log_request_info | 요청 | POST /api/v1/auth/register | IP=127.0.0.1 | UA=curl/7.81.0
+2025-12-21 06:35:23 | INFO | request | dispatch | 요청시작 | ID=c3d2b3b0 | POST /api/v1/auth/register | IP=127.0.0.1 | UA=curl/7.81.0
+2025-12-21 06:35:24 | INFO | request | dispatch | 요청완료 | ID=c3d2b3b0 | POST /api/v1/auth/register | Status=500 | 처리시간=0.588초
+2025-12-21 06:35:58 | INFO | request | log_request_info | 요청 | POST /api/v1/auth/register | IP=127.0.0.1 | UA=curl/7.81.0
+2025-12-21 06:35:58 | INFO | request | dispatch | 요청시작 | ID=5ee34918 | POST /api/v1/auth/register | IP=127.0.0.1 | UA=curl/7.81.0
+2025-12-21 06:35:59 | INFO | request | dispatch | 요청완료 | ID=5ee34918 | POST /api/v1/auth/register | Status=500 | 처리시간=0.453초
+2025-12-21 06:37:09 | INFO | request | log_request_info | 요청 | GET / | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 06:37:09 | INFO | request | dispatch | 요청시작 | ID=f06fddbb | GET / | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 06:37:09 | INFO | request | dispatch | 요청완료 | ID=f06fddbb | GET / | Status=302 | 처리시간=0.003초
+2025-12-21 06:37:09 | INFO | request | log_request_info | 요청 | GET /login | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 06:37:09 | INFO | request | dispatch | 요청시작 | ID=e14d7336 | GET /login | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 06:37:09 | INFO | request | dispatch | 요청완료 | ID=e14d7336 | GET /login | Status=200 | 처리시간=0.020초
+2025-12-21 06:37:09 | INFO | request | log_request_info | 요청 | GET /api/v1/auth/me | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 06:37:09 | INFO | request | dispatch | 요청시작 | ID=d94e675e | GET /api/v1/auth/me | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 06:37:09 | INFO | request | dispatch | 요청완료 | ID=d94e675e | GET /api/v1/auth/me | Status=401 | 처리시간=0.002초
+2025-12-21 06:37:09 | INFO | request | log_request_info | 요청 | GET /favicon.ico | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 06:37:09 | INFO | request | dispatch | 요청시작 | ID=e3aacbe5 | GET /favicon.ico | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 06:37:09 | INFO | request | dispatch | 요청완료 | ID=e3aacbe5 | GET /favicon.ico | Status=404 | 처리시간=0.006초
+2025-12-21 06:37:14 | INFO | request | log_request_info | 요청 | POST /api/v1/auth/login | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 06:37:14 | INFO | request | dispatch | 요청시작 | ID=3aa859c8 | POST /api/v1/auth/login | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 06:37:14 | INFO | request | dispatch | 요청완료 | ID=3aa859c8 | POST /api/v1/auth/login | Status=401 | 처리시간=0.011초
+2025-12-21 06:39:36 | INFO | request | log_request_info | 요청 | GET /login | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 06:39:36 | INFO | request | dispatch | 요청시작 | ID=94b65756 | GET /login | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 06:39:36 | INFO | request | dispatch | 요청완료 | ID=94b65756 | GET /login | Status=200 | 처리시간=0.013초
+2025-12-21 06:39:37 | INFO | request | log_request_info | 요청 | GET /api/v1/auth/me | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 06:39:37 | INFO | request | dispatch | 요청시작 | ID=8dcdb117 | GET /api/v1/auth/me | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 06:39:37 | INFO | request | dispatch | 요청완료 | ID=8dcdb117 | GET /api/v1/auth/me | Status=401 | 처리시간=0.003초
+2025-12-21 06:41:49 | INFO | request | log_request_info | 요청 | POST /api/v1/auth/register | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 06:41:49 | INFO | request | dispatch | 요청시작 | ID=920128d1 | POST /api/v1/auth/register | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 06:41:49 | INFO | request | dispatch | 요청완료 | ID=920128d1 | POST /api/v1/auth/register | Status=500 | 처리시간=0.377초
+2025-12-21 06:42:06 | INFO | request | log_request_info | 요청 | POST /api/v1/auth/login | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 06:42:06 | INFO | request | dispatch | 요청시작 | ID=fff31f8c | POST /api/v1/auth/login | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 06:42:07 | INFO | request | dispatch | 요청완료 | ID=fff31f8c | POST /api/v1/auth/login | Status=401 | 처리시간=0.302초
+2025-12-21 06:47:34 | INFO | request | log_request_info | 요청 | POST /api/v1/auth/register | IP=127.0.0.1 | UA=curl/7.81.0
+2025-12-21 06:47:34 | INFO | request | dispatch | 요청시작 | ID=59d8fa55 | POST /api/v1/auth/register | IP=127.0.0.1 | UA=curl/7.81.0
+2025-12-21 06:47:34 | INFO | request | dispatch | 요청완료 | ID=59d8fa55 | POST /api/v1/auth/register | Status=201 | 처리시간=0.420초
+2025-12-21 06:47:57 | INFO | request | log_request_info | 요청 | POST /api/v1/auth/login | IP=127.0.0.1 | UA=curl/7.81.0
+2025-12-21 06:47:57 | INFO | request | dispatch | 요청시작 | ID=90ea5bb7 | POST /api/v1/auth/login | IP=127.0.0.1 | UA=curl/7.81.0
+2025-12-21 06:47:57 | INFO | request | dispatch | 요청완료 | ID=90ea5bb7 | POST /api/v1/auth/login | Status=200 | 처리시간=0.343초
+2025-12-21 06:48:09 | INFO | request | log_request_info | 요청 | GET /api/v1/auth/me | IP=127.0.0.1 | UA=curl/7.81.0
+2025-12-21 06:48:09 | INFO | request | dispatch | 요청시작 | ID=3defe733 | GET /api/v1/auth/me | IP=127.0.0.1 | UA=curl/7.81.0
+2025-12-21 06:48:09 | INFO | request | dispatch | 요청완료 | ID=3defe733 | GET /api/v1/auth/me | Status=200 | 처리시간=0.006초
+2025-12-21 06:50:24 | INFO | request | log_request_info | 요청 | GET /login | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 06:50:24 | INFO | request | dispatch | 요청시작 | ID=796e03e2 | GET /login | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 06:50:24 | INFO | request | dispatch | 요청완료 | ID=796e03e2 | GET /login | Status=200 | 처리시간=0.013초
+2025-12-21 06:50:24 | INFO | request | log_request_info | 요청 | GET /api/v1/auth/me | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 06:50:24 | INFO | request | dispatch | 요청시작 | ID=dc4f58f5 | GET /api/v1/auth/me | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 06:50:24 | INFO | request | dispatch | 요청완료 | ID=dc4f58f5 | GET /api/v1/auth/me | Status=401 | 처리시간=0.002초
+2025-12-21 06:50:34 | INFO | request | log_request_info | 요청 | POST /api/v1/auth/register | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 06:50:34 | INFO | request | dispatch | 요청시작 | ID=5cf40ac6 | POST /api/v1/auth/register | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 06:50:34 | INFO | request | dispatch | 요청완료 | ID=5cf40ac6 | POST /api/v1/auth/register | Status=400 | 처리시간=0.009초
+2025-12-21 06:50:42 | INFO | request | log_request_info | 요청 | POST /api/v1/auth/login | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 06:50:42 | INFO | request | dispatch | 요청시작 | ID=b10e5190 | POST /api/v1/auth/login | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 06:50:42 | INFO | request | dispatch | 요청완료 | ID=b10e5190 | POST /api/v1/auth/login | Status=401 | 처리시간=0.299초
+2025-12-21 06:50:48 | INFO | request | log_request_info | 요청 | POST /api/v1/auth/login | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 06:50:48 | INFO | request | dispatch | 요청시작 | ID=c538d8cf | POST /api/v1/auth/login | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 06:50:48 | INFO | request | dispatch | 요청완료 | ID=c538d8cf | POST /api/v1/auth/login | Status=401 | 처리시간=0.289초
+2025-12-21 06:50:58 | INFO | request | log_request_info | 요청 | POST /api/v1/auth/login | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 06:50:58 | INFO | request | dispatch | 요청시작 | ID=71fed368 | POST /api/v1/auth/login | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 06:50:58 | INFO | request | dispatch | 요청완료 | ID=71fed368 | POST /api/v1/auth/login | Status=401 | 처리시간=0.006초
+2025-12-21 06:51:16 | INFO | request | log_request_info | 요청 | POST /api/v1/auth/register | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 06:51:16 | INFO | request | dispatch | 요청시작 | ID=fdb7dfe6 | POST /api/v1/auth/register | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 06:51:16 | INFO | request | dispatch | 요청완료 | ID=fdb7dfe6 | POST /api/v1/auth/register | Status=201 | 처리시간=0.334초
+2025-12-21 06:51:17 | INFO | request | log_request_info | 요청 | GET /dashboard | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 06:51:17 | INFO | request | dispatch | 요청시작 | ID=66f24a82 | GET /dashboard | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 06:51:17 | INFO | request | dispatch | 요청완료 | ID=66f24a82 | GET /dashboard | Status=200 | 처리시간=0.006초
+2025-12-21 06:51:18 | INFO | request | log_request_info | 요청 | GET /api/v1/auth/me | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 06:51:18 | INFO | request | dispatch | 요청시작 | ID=a489de2d | GET /api/v1/auth/me | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 06:51:18 | INFO | request | dispatch | 요청완료 | ID=a489de2d | GET /api/v1/auth/me | Status=200 | 처리시간=0.006초
+2025-12-21 06:51:18 | INFO | request | log_request_info | 요청 | GET /api/v1/auth/me | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 06:51:18 | INFO | request | dispatch | 요청시작 | ID=aa7f1c6f | GET /api/v1/auth/me | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 06:51:18 | INFO | request | dispatch | 요청완료 | ID=aa7f1c6f | GET /api/v1/auth/me | Status=200 | 처리시간=0.006초
+2025-12-21 06:51:18 | INFO | request | log_request_info | 요청 | GET /api/v1/auth/me | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 06:51:18 | INFO | request | dispatch | 요청시작 | ID=cc1e9f51 | GET /api/v1/auth/me | IP=127.0.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 06:51:18 | INFO | request | dispatch | 요청완료 | ID=cc1e9f51 | GET /api/v1/auth/me | Status=200 | 처리시간=0.006초

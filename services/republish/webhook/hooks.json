@@ -1,0 +1,45 @@
+[
+  {
+    "id": "blogauto-deploy",
+    "execute-command": "/home/ubuntu/blogauto_v2/services/republish/scripts/deploy.sh",
+    "command-working-directory": "/home/ubuntu/blogauto_v2/services/republish",
+    "response-message": "BlogAuto V2 배포가 시작되었습니다.",
+    "response-headers": [
+      {
+        "name": "Content-Type",
+        "value": "application/json"
+      }
+    ],
+    "pass-arguments-to-command": [],
+    "pass-environment-to-command": [
+      {
+        "source": "string",
+        "name": "WEBHOOK_SECRET"
+      }
+    ],
+    "trigger-rule": {
+      "and": [
+        {
+          "match": {
+            "type": "payload-hash-sha1",
+            "secret": "WEBHOOK_SECRET_PLACEHOLDER",
+            "parameter": {
+              "source": "header",
+              "name": "X-Hub-Signature"
+            }
+          }
+        },
+        {
+          "match": {
+            "type": "value",
+            "value": "refs/heads/main",
+            "parameter": {
+              "source": "payload",
+              "name": "ref"
+            }
+          }
+        }
+      ]
+    }
+  }
+]

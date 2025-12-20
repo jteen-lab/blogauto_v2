@@ -1,0 +1,53 @@
+# Phase 1-1: BlogAuto V2 Docker Compose (개발/프로덕션 공통)
+version: '3.8'
+
+services:
+  # PostgreSQL 데이터베이스
+  db:
+    image: postgres:15-alpine
+    container_name: blogauto_db
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-blogauto}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-blogauto123}
+      - POSTGRES_DB=${POSTGRES_DB:-blogauto_v2}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./logs:/app/logs
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-blogauto}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # FastAPI 애플리케이션
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: blogauto_app
+    depends_on:
+      - db
+    environment:
+      - DEBUG=${DEBUG:-true}
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-dev-encryption-key-32-bytes-long}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://blogauto:blogauto123@db:5432/blogauto_v2}
+      - JWT_SECRET=${JWT_SECRET:-dev-jwt-secret-change-in-production}
+      - JWT_EXPIRE_MINUTES=${JWT_EXPIRE_MINUTES:-1440}
+    volumes:
+      - ./logs:/app/logs
+      - ./app:/app/app
+    ports:
+      - "8001:8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:

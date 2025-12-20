@@ -7,7 +7,8 @@ Features:
 - 민감정보 보호
 - 기본값 제공
 """
-from pydantic import BaseSettings, validator
+from pydantic_settings import BaseSettings
+from pydantic import validator
 from typing import Optional
 import os
 

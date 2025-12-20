@@ -1,0 +1,35 @@
+# Phase 1-1: BlogAuto V2 프로덕션 환경 오버라이드
+version: '3.8'
+
+services:
+  # Nginx 리버스 프록시 (프로덕션에만 추가)
+  nginx:
+    image: nginx:alpine
+    container_name: blogauto_nginx
+    depends_on:
+      - app
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./logs:/app/logs
+    ports:
+      - "80:80"
+      - "443:443"
+    restart: unless-stopped
+
+  # 데이터베이스 (프로덕션 설정 오버라이드)
+  db:
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+      - ./logs:/app/logs
+    ports: []  # 외부 노출 제거
+
+  # 앱 (프로덕션 설정 오버라이드)
+  app:
+    environment:
+      - DEBUG=false
+    volumes:
+      - ./logs:/app/logs  # 소스 코드 볼륨 마운트 제거
+    ports: []  # 외부 노출 제거 (nginx를 통해서만 접근)
+
+volumes:
+  postgres_prod_data:

@@ -39,140 +39,6 @@ responses = {
     500: {"model": ErrorResponse, "description": "서버 내부 오류"}
 }
 
-@router.post(
-    "/register",
-    response_model=AuthResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="회원가입",
-    description="새 사용자 계정을 생성합니다",
-    responses=responses
-)
-async def register(
-    request: UserRegisterRequest,
-    http_request: Request,
-    response: Response,
-    db: AsyncSession = Depends(get_db_session)
-) -> AuthResponse:
-    """사용자 회원가입"""
-    client_ip = _get_client_ip(http_request)
-
-    auth_service = AuthService(db)
-    auth_response = await auth_service.register_user(request, client_ip)
-
-    # JWT 토큰을 HttpOnly 쿠키에 저장
-    _set_auth_cookie(response, auth_response.access_token)
-
-    logger.info(f"회원가입 완료 | 사용자={request.email} | IP={client_ip}")
-    return auth_response
-
-@router.post(
-    "/login",
-    response_model=AuthResponse,
-    summary="로그인",
-    description="이메일과 비밀번호로 로그인합니다",
-    responses=responses
-)
-async def login(
-    request: UserLoginRequest,
-    http_request: Request,
-    response: Response,
-    db: AsyncSession = Depends(get_db_session)
-) -> AuthResponse:
-    """사용자 로그인"""
-    client_ip = _get_client_ip(http_request)
-
-    auth_service = AuthService(db)
-    auth_response = await auth_service.login_user(request, client_ip)
-
-    # JWT 토큰을 HttpOnly 쿠키에 저장
-    _set_auth_cookie(response, auth_response.access_token)
-
-    logger.info(f"로그인 완료 | 사용자={request.email} | IP={client_ip}")
-    return auth_response
-
-@router.post(
-    "/logout",
-    summary="로그아웃",
-    description="현재 세션을 종료합니다",
-    responses={200: {"description": "로그아웃 성공"}}
-)
-async def logout(
-    request: Request,
-    response: Response,
-    current_user: User = Depends(get_current_user)
-) -> dict:
-    """사용자 로그아웃"""
-    client_ip = _get_client_ip(request)
-
-    # 토큰 추출 및 블랙리스트 추가
-    token = _get_token_from_request(request)
-    if token:
-        blacklist_token(token)
-
-    # 쿠키 삭제
-    _clear_auth_cookie(response)
-
-    logger.info(f"로그아웃 완료 | 사용자={current_user.email} | IP={client_ip}")
-    return {"message": "로그아웃되었습니다"}
-
-@router.get(
-    "/me",
-    response_model=UserResponse,
-    summary="현재 사용자 정보",
-    description="로그인한 사용자의 정보를 반환합니다",
-    responses=responses
-)
-async def get_current_user_info(
-    current_user: User = Depends(get_current_user)
-) -> UserResponse:
-    """현재 사용자 정보 조회"""
-    return UserResponse.from_orm(current_user)
-
-@router.post(
-    "/change-password",
-    summary="비밀번호 변경",
-    description="현재 비밀번호를 확인 후 새 비밀번호로 변경합니다",
-    responses=responses
-)
-async def change_password(
-    request: PasswordChangeRequest,
-    http_request: Request,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db_session)
-) -> dict:
-    """비밀번호 변경"""
-    client_ip = _get_client_ip(http_request)
-
-    auth_service = AuthService(db)
-    await auth_service.change_password(
-        current_user,
-        request.current_password,
-        request.new_password,
-        client_ip
-    )
-
-    return {"message": "비밀번호가 변경되었습니다"}
-
-@router.get(
-    "/token-info",
-    response_model=TokenInfo,
-    summary="토큰 정보 조회",
-    description="현재 토큰의 상세 정보를 반환합니다"
-)
-async def get_token_info(request: Request) -> TokenInfo:
-    """토큰 정보 조회"""
-    from ..core.jwt import jwt_manager
-
-    token = _get_token_from_request(request)
-    if not token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="토큰이 없습니다"
-        )
-
-    token_info = jwt_manager.get_token_info(token)
-    return TokenInfo(**token_info)
-
 # 의존성 함수들
 
 async def get_current_user(
@@ -263,3 +129,150 @@ def _clear_auth_cookie(response: Response) -> None:
         secure=False,  # 개발환경 고려
         samesite="lax"
     )
+
+@router.post(
+    "/register",
+    response_model=AuthResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="회원가입",
+    description="새 사용자 계정을 생성합니다",
+    responses=responses
+)
+async def register(
+    request: UserRegisterRequest,
+    http_request: Request,
+    response: Response,
+    db: AsyncSession = Depends(get_db_session)
+) -> AuthResponse:
+    """사용자 회원가입"""
+    client_ip = _get_client_ip(http_request)
+
+    auth_service = AuthService(db)
+    auth_response = await auth_service.register_user(request, client_ip)
+
+    # JWT 토큰을 HttpOnly 쿠키에 저장
+    _set_auth_cookie(response, auth_response.access_token)
+
+    logger.info(f"회원가입 완료 | 사용자={request.email} | IP={client_ip}")
+    return auth_response
+
+@router.post(
+    "/login",
+    response_model=AuthResponse,
+    summary="로그인",
+    description="이메일과 비밀번호로 로그인합니다",
+    responses=responses
+)
+async def login(
+    request: UserLoginRequest,
+    http_request: Request,
+    response: Response,
+    db: AsyncSession = Depends(get_db_session)
+) -> AuthResponse:
+    """사용자 로그인"""
+    client_ip = _get_client_ip(http_request)
+
+    auth_service = AuthService(db)
+    auth_response = await auth_service.login_user(request, client_ip)
+
+    # JWT 토큰을 HttpOnly 쿠키에 저장
+    _set_auth_cookie(response, auth_response.access_token)
+
+    logger.info(f"로그인 완료 | 사용자={request.email} | IP={client_ip}")
+    return auth_response
+
+@router.post(
+    "/logout",
+    summary="로그아웃",
+    description="현재 세션을 종료합니다",
+    responses={200: {"description": "로그아웃 성공"}}
+)
+async def logout(
+    request: Request,
+    response: Response,
+    current_user: User = Depends(get_current_user)
+) -> dict:
+    """사용자 로그아웃"""
+    client_ip = _get_client_ip(request)
+
+    # 토큰 추출 및 블랙리스트 추가
+    token = _get_token_from_request(request)
+    if token:
+        blacklist_token(token)
+
+    # 쿠키 삭제
+    _clear_auth_cookie(response)
+
+    logger.info(f"로그아웃 완료 | 사용자={current_user.email} | IP={client_ip}")
+    return {"message": "로그아웃되었습니다"}
+
+@router.get(
+    "/me",
+    response_model=UserResponse,
+    summary="현재 사용자 정보",
+    description="로그인한 사용자의 정보를 반환합니다",
+    responses=responses
+)
+async def get_current_user_info(
+    current_user: User = Depends(get_current_user)
+) -> UserResponse:
+    """현재 사용자 정보 조회"""
+    user_data = {
+        "id": current_user.id,
+        "email": current_user.email,
+        "full_name": current_user.full_name,
+        "tier": current_user.tier.value,
+        "is_active": current_user.is_active,
+        "is_verified": current_user.is_verified,
+        "is_superuser": current_user.is_superuser,
+        "created_at": current_user.created_at,
+        "updated_at": current_user.updated_at,
+        "last_login_at": current_user.last_login_at,
+        "display_name": current_user.full_name if current_user.full_name else current_user.email.split("@")[0]
+    }
+    return UserResponse(**user_data)
+
+@router.post(
+    "/change-password",
+    summary="비밀번호 변경",
+    description="현재 비밀번호를 확인 후 새 비밀번호로 변경합니다",
+    responses=responses
+)
+async def change_password(
+    request: PasswordChangeRequest,
+    http_request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """비밀번호 변경"""
+    client_ip = _get_client_ip(http_request)
+
+    auth_service = AuthService(db)
+    await auth_service.change_password(
+        current_user,
+        request.current_password,
+        request.new_password,
+        client_ip
+    )
+
+    return {"message": "비밀번호가 변경되었습니다"}
+
+@router.get(
+    "/token-info",
+    response_model=TokenInfo,
+    summary="토큰 정보 조회",
+    description="현재 토큰의 상세 정보를 반환합니다"
+)
+async def get_token_info(request: Request) -> TokenInfo:
+    """토큰 정보 조회"""
+    from ..core.jwt import jwt_manager
+
+    token = _get_token_from_request(request)
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="토큰이 없습니다"
+        )
+
+    token_info = jwt_manager.get_token_info(token)
+    return TokenInfo(**token_info)
