@@ -1,0 +1,349 @@
+{% extends "base.html" %}
+
+{% block title %}대시보드 - BlogAuto V2{% endblock %}
+
+{% block content %}
+<div x-data="dashboardData()" x-init="init()" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- 헤더 -->
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900">대시보드</h1>
+        <p class="text-gray-600 mt-2">BlogAuto V2 시스템에 오신 것을 환영합니다</p>
+    </div>
+
+    <!-- 로딩 상태 -->
+    <div x-show="isLoading" class="flex items-center justify-center py-12">
+        <div class="loading"></div>
+        <span class="ml-2 text-gray-600">사용자 정보를 불러오는 중...</span>
+    </div>
+
+    <!-- 메인 콘텐츠 -->
+    <div x-show="!isLoading && user" class="space-y-8">
+        <!-- 사용자 정보 카드 -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold text-gray-900 mb-4">내 정보</h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">이메일</label>
+                    <div class="mt-1 text-lg text-gray-900" x-text="user?.email"></div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">이름</label>
+                    <div class="mt-1 text-lg text-gray-900" x-text="user?.full_name || '미설정'"></div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">사용자 등급</label>
+                    <div class="mt-1">
+                        <span
+                            :class="{
+                                'bg-gray-100 text-gray-800': user?.tier === 'free',
+                                'bg-blue-100 text-blue-800': user?.tier === 'pro',
+                                'bg-purple-100 text-purple-800': user?.tier === 'enterprise'
+                            }"
+                            class="inline-flex px-2 py-1 text-sm font-medium rounded-md"
+                            x-text="getTierName(user?.tier)"
+                        ></span>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">가입일</label>
+                    <div class="mt-1 text-lg text-gray-900" x-text="formatDate(user?.created_at)"></div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">마지막 로그인</label>
+                    <div class="mt-1 text-lg text-gray-900" x-text="formatDate(user?.last_login_at)"></div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">계정 상태</label>
+                    <div class="mt-1">
+                        <span
+                            :class="user?.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'"
+                            class="inline-flex px-2 py-1 text-sm font-medium rounded-md"
+                            x-text="user?.is_active ? '활성' : '비활성'"
+                        ></span>
+
+                        <span
+                            :class="user?.is_verified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'"
+                            class="inline-flex px-2 py-1 text-sm font-medium rounded-md ml-2"
+                            x-text="user?.is_verified ? '인증됨' : '미인증'"
+                        ></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 기능 카드들 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- 재발행 서비스 -->
+            <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-blue-100 rounded-md flex items-center justify-center">
+                            <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-lg font-medium text-gray-900">재발행 서비스</h3>
+                        <p class="text-sm text-gray-600">블로그 포스트 자동 재발행</p>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <button class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md text-sm transition-colors">
+                        서비스 이용하기
+                    </button>
+                </div>
+                <div class="mt-2 text-xs text-gray-500">
+                    곧 제공될 예정입니다
+                </div>
+            </div>
+
+            <!-- 제목 관리 -->
+            <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-500">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-green-100 rounded-md flex items-center justify-center">
+                            <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-lg font-medium text-gray-900">제목 관리</h3>
+                        <p class="text-sm text-gray-600">블로그 제목 수집 및 관리</p>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <button class="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-md text-sm transition-colors">
+                        서비스 이용하기
+                    </button>
+                </div>
+                <div class="mt-2 text-xs text-gray-500">
+                    곧 제공될 예정입니다
+                </div>
+            </div>
+
+            <!-- 콘텐츠 생성 -->
+            <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-purple-500">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-purple-100 rounded-md flex items-center justify-center">
+                            <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-lg font-medium text-gray-900">콘텐츠 생성</h3>
+                        <p class="text-sm text-gray-600">AI 기반 자동 콘텐츠 생성</p>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <button class="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-md text-sm transition-colors">
+                        서비스 이용하기
+                    </button>
+                </div>
+                <div class="mt-2 text-xs text-gray-500">
+                    곧 제공될 예정입니다
+                </div>
+            </div>
+        </div>
+
+        <!-- 시스템 정보 -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold text-gray-900 mb-4">시스템 정보</h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="text-center">
+                    <div class="text-2xl font-bold text-blue-600">Phase 1</div>
+                    <div class="text-sm text-gray-600">현재 단계</div>
+                    <div class="text-xs text-gray-500 mt-1">기반 시스템 + 인증</div>
+                </div>
+
+                <div class="text-center">
+                    <div class="text-2xl font-bold text-green-600">100%</div>
+                    <div class="text-sm text-gray-600">인증 시스템</div>
+                    <div class="text-xs text-gray-500 mt-1">완료</div>
+                </div>
+
+                <div class="text-center">
+                    <div class="text-2xl font-bold text-yellow-600">v2.0.0</div>
+                    <div class="text-sm text-gray-600">시스템 버전</div>
+                    <div class="text-xs text-gray-500 mt-1">최신 버전</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 비밀번호 변경 -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold text-gray-900 mb-4">계정 관리</h2>
+
+            <button
+                @click="showPasswordChange = !showPasswordChange"
+                class="bg-gray-600 hover:bg-gray-700 text-white py-2 px-4 rounded-md text-sm transition-colors"
+            >
+                비밀번호 변경
+            </button>
+
+            <!-- 비밀번호 변경 폼 -->
+            <div x-show="showPasswordChange" class="mt-4 border-t border-gray-200 pt-4">
+                <form @submit.prevent="changePassword()" class="max-w-md space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">현재 비밀번호</label>
+                        <input
+                            x-model="passwordForm.current_password"
+                            type="password"
+                            required
+                            class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">새 비밀번호</label>
+                        <input
+                            x-model="passwordForm.new_password"
+                            type="password"
+                            required
+                            class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                    </div>
+
+                    <div class="flex space-x-3">
+                        <button
+                            type="submit"
+                            :disabled="isChangingPassword"
+                            class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md text-sm transition-colors disabled:opacity-50"
+                        >
+                            <span x-show="!isChangingPassword">변경</span>
+                            <span x-show="isChangingPassword">변경 중...</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            @click="showPasswordChange = false; passwordForm = {current_password: '', new_password: ''}"
+                            class="bg-gray-400 hover:bg-gray-500 text-white py-2 px-4 rounded-md text-sm transition-colors"
+                        >
+                            취소
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 인증되지 않은 사용자 -->
+    <div x-show="!isLoading && !user" class="text-center py-12">
+        <div class="text-gray-500">
+            <p class="text-lg mb-4">로그인이 필요합니다</p>
+            <button
+                @click="window.location.href = '/login'"
+                class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md transition-colors"
+            >
+                로그인 페이지로 이동
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function dashboardData() {
+    return {
+        isLoading: true,
+        user: null,
+        showPasswordChange: false,
+        isChangingPassword: false,
+        passwordForm: {
+            current_password: '',
+            new_password: ''
+        },
+
+        async init() {
+            await this.loadUser();
+        },
+
+        async loadUser() {
+            this.isLoading = true;
+
+            try {
+                const response = await fetch(`${API_BASE}/auth/me`, {
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    this.user = await response.json();
+                } else if (response.status === 401) {
+                    // 인증되지 않은 사용자는 로그인 페이지로
+                    window.location.href = '/login';
+                    return;
+                }
+            } catch (error) {
+                console.error('사용자 정보 로드 실패:', error);
+                showErrorMessage('사용자 정보를 불러올 수 없습니다.');
+            } finally {
+                this.isLoading = false;
+            }
+        },
+
+        async changePassword() {
+            this.isChangingPassword = true;
+
+            try {
+                const response = await fetch(`${API_BASE}/auth/change-password`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify(this.passwordForm)
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showSuccessMessage('비밀번호가 변경되었습니다.');
+                    this.showPasswordChange = false;
+                    this.passwordForm = {current_password: '', new_password: ''};
+                } else {
+                    showErrorMessage(data.detail || '비밀번호 변경에 실패했습니다.');
+                }
+            } catch (error) {
+                showErrorMessage('서버와의 연결에 실패했습니다.');
+                console.error('비밀번호 변경 실패:', error);
+            } finally {
+                this.isChangingPassword = false;
+            }
+        },
+
+        getTierName(tier) {
+            const tierNames = {
+                'free': '무료',
+                'pro': '프로',
+                'enterprise': '엔터프라이즈'
+            };
+            return tierNames[tier] || tier;
+        },
+
+        formatDate(dateString) {
+            if (!dateString) return '없음';
+
+            const date = new Date(dateString);
+            return date.toLocaleString('ko-KR', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+    }
+}
+</script>
+{% endblock %}

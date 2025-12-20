@@ -1,0 +1,309 @@
+{% extends "base.html" %}
+
+{% block title %}로그인 - BlogAuto V2{% endblock %}
+
+{% block content %}
+<div class="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-md w-full space-y-8">
+        <!-- 로고 및 헤더 -->
+        <div class="text-center">
+            <h1 class="text-4xl font-bold text-gray-900 mb-2">BlogAuto V2</h1>
+            <p class="text-lg text-gray-600">블로그 자동화 시스템</p>
+            <p class="text-sm text-gray-500 mt-2">계정에 로그인하세요</p>
+        </div>
+
+        <!-- 로그인/회원가입 폼 -->
+        <div x-data="authForm()" class="bg-white p-8 rounded-lg shadow-lg form-fade-in">
+            <!-- 탭 -->
+            <div class="flex mb-6 border-b border-gray-200">
+                <button
+                    @click="activeTab = 'login'"
+                    :class="activeTab === 'login' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500'"
+                    class="flex-1 py-2 px-4 text-center border-b-2 font-medium text-sm transition-colors"
+                >
+                    로그인
+                </button>
+                <button
+                    @click="activeTab = 'register'"
+                    :class="activeTab === 'register' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500'"
+                    class="flex-1 py-2 px-4 text-center border-b-2 font-medium text-sm transition-colors"
+                >
+                    회원가입
+                </button>
+            </div>
+
+            <!-- 에러 메시지 -->
+            <div x-show="errorMessage" class="error-message" x-text="errorMessage"></div>
+
+            <!-- 로그인 폼 -->
+            <form x-show="activeTab === 'login'" @submit.prevent="login()" class="space-y-6">
+                <div>
+                    <label for="login-email" class="block text-sm font-medium text-gray-700 mb-1">
+                        이메일 주소
+                    </label>
+                    <input
+                        id="login-email"
+                        x-model="loginForm.email"
+                        type="email"
+                        required
+                        autocomplete="email"
+                        placeholder="your-email@example.com"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                </div>
+
+                <div>
+                    <label for="login-password" class="block text-sm font-medium text-gray-700 mb-1">
+                        비밀번호
+                    </label>
+                    <input
+                        id="login-password"
+                        x-model="loginForm.password"
+                        type="password"
+                        required
+                        autocomplete="current-password"
+                        placeholder="비밀번호를 입력하세요"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                </div>
+
+                <button
+                    type="submit"
+                    :disabled="isLoading"
+                    class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                    <span x-show="!isLoading">로그인</span>
+                    <span x-show="isLoading" class="flex items-center">
+                        <div class="loading mr-2"></div>
+                        로그인 중...
+                    </span>
+                </button>
+            </form>
+
+            <!-- 회원가입 폼 -->
+            <form x-show="activeTab === 'register'" @submit.prevent="register()" class="space-y-6">
+                <div>
+                    <label for="register-email" class="block text-sm font-medium text-gray-700 mb-1">
+                        이메일 주소
+                    </label>
+                    <input
+                        id="register-email"
+                        x-model="registerForm.email"
+                        type="email"
+                        required
+                        autocomplete="email"
+                        placeholder="your-email@example.com"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                </div>
+
+                <div>
+                    <label for="register-name" class="block text-sm font-medium text-gray-700 mb-1">
+                        이름 (선택사항)
+                    </label>
+                    <input
+                        id="register-name"
+                        x-model="registerForm.full_name"
+                        type="text"
+                        autocomplete="name"
+                        placeholder="홍길동"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                </div>
+
+                <div>
+                    <label for="register-password" class="block text-sm font-medium text-gray-700 mb-1">
+                        비밀번호
+                    </label>
+                    <input
+                        id="register-password"
+                        x-model="registerForm.password"
+                        type="password"
+                        required
+                        autocomplete="new-password"
+                        placeholder="8자 이상, 대소문자+숫자 포함"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    <div class="mt-1 text-xs text-gray-500">
+                        비밀번호는 8자 이상이며 대문자, 소문자, 숫자를 포함해야 합니다.
+                    </div>
+                </div>
+
+                <button
+                    type="submit"
+                    :disabled="isLoading"
+                    class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                    <span x-show="!isLoading">회원가입</span>
+                    <span x-show="isLoading" class="flex items-center">
+                        <div class="loading mr-2"></div>
+                        가입 중...
+                    </span>
+                </button>
+            </form>
+        </div>
+
+        <!-- 추가 정보 -->
+        <div class="text-center text-sm text-gray-600">
+            <p>BlogAuto V2는 블로그 콘텐츠를 자동으로 관리해주는 시스템입니다.</p>
+            <p class="mt-2">문의사항이 있으시면 관리자에게 연락하세요.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function authForm() {
+    return {
+        activeTab: 'login',
+        isLoading: false,
+        errorMessage: '',
+
+        loginForm: {
+            email: '',
+            password: ''
+        },
+
+        registerForm: {
+            email: '',
+            full_name: '',
+            password: ''
+        },
+
+        // 로그인 처리
+        async login() {
+            this.isLoading = true;
+            this.errorMessage = '';
+
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify(this.loginForm)
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showSuccessMessage('로그인 성공!');
+
+                    // 대시보드로 이동
+                    setTimeout(() => {
+                        window.location.href = '/dashboard';
+                    }, 1000);
+                } else {
+                    this.errorMessage = data.detail || '로그인에 실패했습니다.';
+                }
+            } catch (error) {
+                this.errorMessage = '서버와의 연결에 실패했습니다.';
+                console.error('로그인 에러:', error);
+            } finally {
+                this.isLoading = false;
+            }
+        },
+
+        // 회원가입 처리
+        async register() {
+            this.isLoading = true;
+            this.errorMessage = '';
+
+            // 클라이언트 측 비밀번호 검증
+            if (!this.validatePassword(this.registerForm.password)) {
+                this.isLoading = false;
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/auth/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify(this.registerForm)
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showSuccessMessage('회원가입 성공! 로그인됩니다.');
+
+                    // 대시보드로 이동
+                    setTimeout(() => {
+                        window.location.href = '/dashboard';
+                    }, 1000);
+                } else {
+                    // 검증 에러 처리
+                    if (data.detail && Array.isArray(data.detail)) {
+                        const errors = data.detail.map(err => err.msg).join(', ');
+                        this.errorMessage = errors;
+                    } else {
+                        this.errorMessage = data.detail || '회원가입에 실패했습니다.';
+                    }
+                }
+            } catch (error) {
+                this.errorMessage = '서버와의 연결에 실패했습니다.';
+                console.error('회원가입 에러:', error);
+            } finally {
+                this.isLoading = false;
+            }
+        },
+
+        // 비밀번호 검증
+        validatePassword(password) {
+            const errors = [];
+
+            if (password.length < 8) {
+                errors.push('8자 이상');
+            }
+
+            if (!/[a-z]/.test(password)) {
+                errors.push('소문자 포함');
+            }
+
+            if (!/[A-Z]/.test(password)) {
+                errors.push('대문자 포함');
+            }
+
+            if (!/[0-9]/.test(password)) {
+                errors.push('숫자 포함');
+            }
+
+            if (errors.length > 0) {
+                this.errorMessage = `비밀번호 요구사항: ${errors.join(', ')}`;
+                return false;
+            }
+
+            return true;
+        },
+
+        // 탭 변경시 에러 메시지 초기화
+        init() {
+            this.$watch('activeTab', () => {
+                this.errorMessage = '';
+            });
+        }
+    }
+}
+
+// 페이지 로드시 이미 로그인된 사용자인지 확인
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        const response = await fetch(`${API_BASE}/auth/me`, {
+            credentials: 'include'
+        });
+
+        if (response.ok) {
+            // 이미 로그인된 사용자는 대시보드로 리다이렉트
+            window.location.href = '/dashboard';
+        }
+    } catch (error) {
+        // 에러 무시 (로그인 페이지에 머무름)
+    }
+});
+</script>
+{% endblock %}

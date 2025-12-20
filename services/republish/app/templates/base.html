@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}BlogAuto V2{% endblock %}</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Alpine.js for interactivity -->
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    <!-- 커스텀 CSS -->
+    <style>
+        /* 로딩 애니메이션 */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* 폼 애니메이션 */
+        .form-fade-in {
+            animation: fadeInUp 0.5s ease-out;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* 에러 메시지 스타일 */
+        .error-message {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a52);
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        /* 성공 메시지 스타일 */
+        .success-message {
+            background: linear-gradient(135deg, #51cf66, #40c057);
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+
+    {% block extra_css %}{% endblock %}
+</head>
+
+<body class="bg-gray-50 min-h-screen">
+    <!-- 메인 컨테이너 -->
+    <div class="min-h-screen flex flex-col">
+        <!-- 헤더 (로그인 페이지에서는 숨김) -->
+        {% if request.url.path != '/login' %}
+        <header class="bg-white shadow-sm border-b border-gray-200">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center h-16">
+                    <div class="flex items-center">
+                        <h1 class="text-xl font-bold text-gray-900">BlogAuto V2</h1>
+                    </div>
+
+                    <div class="flex items-center space-x-4">
+                        <div class="text-sm text-gray-600" x-data="{ user: null }" x-init="fetchUser()">
+                            <span x-text="user ? `안녕하세요, ${user.display_name}님` : '로딩 중...'"></span>
+                        </div>
+                        <button
+                            onclick="logout()"
+                            class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md text-sm transition-colors"
+                        >
+                            로그아웃
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+        {% endif %}
+
+        <!-- 메인 콘텐츠 -->
+        <main class="flex-1">
+            {% block content %}{% endblock %}
+        </main>
+
+        <!-- 푸터 -->
+        <footer class="bg-white border-t border-gray-200 py-4">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center text-sm text-gray-500">
+                    <p>&copy; 2024 BlogAuto V2. All rights reserved.</p>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- 전역 스크립트 -->
+    <script>
+        // API 기본 설정
+        const API_BASE = '/api/v1';
+
+        // 공통 에러 처리
+        function handleError(error) {
+            console.error('API 에러:', error);
+
+            let message = '알 수 없는 오류가 발생했습니다.';
+
+            if (error.response?.data?.message) {
+                message = error.response.data.message;
+            } else if (error.message) {
+                message = error.message;
+            }
+
+            showErrorMessage(message);
+        }
+
+        // 에러 메시지 표시
+        function showErrorMessage(message) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message fixed top-4 right-4 z-50';
+            errorDiv.textContent = message;
+
+            document.body.appendChild(errorDiv);
+
+            setTimeout(() => {
+                errorDiv.remove();
+            }, 5000);
+        }
+
+        // 성공 메시지 표시
+        function showSuccessMessage(message) {
+            const successDiv = document.createElement('div');
+            successDiv.className = 'success-message fixed top-4 right-4 z-50';
+            successDiv.textContent = message;
+
+            document.body.appendChild(successDiv);
+
+            setTimeout(() => {
+                successDiv.remove();
+            }, 3000);
+        }
+
+        // 로그아웃 처리
+        async function logout() {
+            try {
+                const response = await fetch(`${API_BASE}/auth/logout`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    showSuccessMessage('로그아웃되었습니다.');
+                    setTimeout(() => {
+                        window.location.href = '/login';
+                    }, 1000);
+                } else {
+                    throw new Error('로그아웃 실패');
+                }
+            } catch (error) {
+                handleError(error);
+            }
+        }
+
+        // 현재 사용자 정보 조회
+        async function fetchUser() {
+            try {
+                const response = await fetch(`${API_BASE}/auth/me`, {
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    const user = await response.json();
+                    return user;
+                } else if (response.status === 401) {
+                    // 인증되지 않은 사용자는 로그인 페이지로
+                    if (window.location.pathname !== '/login') {
+                        window.location.href = '/login';
+                    }
+                }
+                return null;
+            } catch (error) {
+                console.error('사용자 정보 조회 실패:', error);
+                return null;
+            }
+        }
+
+        // Alpine.js 전역 함수 등록
+        document.addEventListener('alpine:init', () => {
+            Alpine.store('auth', {
+                user: null,
+
+                async fetchUser() {
+                    this.user = await fetchUser();
+                }
+            });
+        });
+    </script>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

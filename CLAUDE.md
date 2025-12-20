@@ -10,6 +10,8 @@ This file provides guidance to Claude Code, Claude Chat, and Gemini CLI when wor
 
 ## 🚨 CRITICAL INSTRUCTIONS - 절대 지침
 
+**Please answer in Korean**
+
 ### ❌ NEVER - 절대 금지 사항
 
 **1. NEVER START THE DEVELOPMENT SERVER**

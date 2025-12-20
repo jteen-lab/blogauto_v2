@@ -1,0 +1,35 @@
+# BlogAuto V2 - Phase 1 Dependencies
+
+# 웹 프레임워크
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# 데이터베이스
+sqlalchemy[asyncio]==2.0.23
+asyncpg==0.29.0
+alembic==1.12.1
+
+# 인증 및 보안
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+cryptography==41.0.7
+
+# 설정 관리
+pydantic[email]==2.4.2
+pydantic-settings==2.0.3
+python-dotenv==1.0.0
+
+# HTTP 및 템플릿
+httpx==0.25.2
+jinja2==3.1.2
+python-multipart==0.0.6
+
+# 테스트
+pytest==7.4.3
+pytest-asyncio==0.21.1
+httpx==0.25.2
+
+# 개발 도구 (선택적)
+black==23.10.1
+isort==5.12.0
+flake8==6.1.0
