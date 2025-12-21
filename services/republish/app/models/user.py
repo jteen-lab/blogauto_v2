@@ -9,6 +9,7 @@ Features:
 """
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, Enum as SQLEnum
 from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 from datetime import datetime
 from enum import Enum
 from typing import Optional
@@ -43,6 +44,9 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     last_login_at = Column(DateTime(timezone=True), nullable=True)
+
+    # 관계 설정
+    blogs = relationship("Blog", back_populates="user", lazy="dynamic")
 
     def __repr__(self) -> str:
         return f"<User(id={self.id}, email={self.email}, tier={self.tier.value})>"
