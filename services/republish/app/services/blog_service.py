@@ -23,7 +23,7 @@ from ..schemas.blog import (
     BlogConnectionTestResponse,
     BlogStatsResponse
 )
-from ..core.security import encrypt_value, decrypt_value
+from ..core.security import encrypt_data, decrypt_data
 from ..core.logger import get_logger, log_security_event
 
 logger = get_logger("blog_service", "blog.log")
@@ -377,7 +377,7 @@ class BlogService:
     async def _encrypt_api_credential(self, value: str, field_name: str) -> str:
         """API 인증 정보 암호화"""
         try:
-            encrypted_value = encrypt_value(value)
+            encrypted_value = encrypt_data(value)
 
             # 보안 로그 (값은 마스킹)
             masked_value = "****" + value[-4:] if len(value) > 4 else "****"

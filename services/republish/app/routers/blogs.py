@@ -31,7 +31,7 @@ from .auth import get_current_user
 logger = get_logger("blog_router", "blog.log")
 templates = Jinja2Templates(directory="app/templates")
 
-router = APIRouter(prefix="/api/v1/blogs", tags=["블로그 관리"])
+router = APIRouter(prefix="/blogs", tags=["블로그 관리"])
 page_router = APIRouter(tags=["블로그 페이지"])
 
 # 응답 예시
