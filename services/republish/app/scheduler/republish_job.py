@@ -15,7 +15,7 @@ from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from ..database import get_db_session
+from ..core.database import get_db_session
 from ..models import Blog, Post, PublishProfile, BlogProfileLink
 from ..services.strategy_service import StrategyService
 from ..services.publish_service import PublishService
