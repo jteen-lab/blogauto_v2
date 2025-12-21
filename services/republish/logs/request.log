@@ -3997,3 +3997,894 @@
 2025-12-21 12:36:28 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
 2025-12-21 12:36:28 | INFO | request | dispatch | 요청시작 | ID=a4dbf082 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
 2025-12-21 12:36:28 | INFO | request | dispatch | 요청완료 | ID=a4dbf082 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 12:36:56 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:36:56 | INFO | request | dispatch | 요청시작 | ID=5254cf79 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:36:56 | INFO | request | dispatch | 요청완료 | ID=5254cf79 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 12:37:25 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:37:25 | INFO | request | dispatch | 요청시작 | ID=d408b7d9 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:37:25 | INFO | request | dispatch | 요청완료 | ID=d408b7d9 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 12:37:53 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:37:53 | INFO | request | dispatch | 요청시작 | ID=72432317 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:37:53 | INFO | request | dispatch | 요청완료 | ID=72432317 | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 12:38:21 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:38:21 | INFO | request | dispatch | 요청시작 | ID=14994664 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:38:21 | INFO | request | dispatch | 요청완료 | ID=14994664 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 12:38:49 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:38:49 | INFO | request | dispatch | 요청시작 | ID=577aef1f | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:38:49 | INFO | request | dispatch | 요청완료 | ID=577aef1f | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 12:39:18 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:39:18 | INFO | request | dispatch | 요청시작 | ID=09fe532b | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:39:18 | INFO | request | dispatch | 요청완료 | ID=09fe532b | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 12:39:46 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:39:46 | INFO | request | dispatch | 요청시작 | ID=a6185fb6 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:39:46 | INFO | request | dispatch | 요청완료 | ID=a6185fb6 | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 12:40:14 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:40:14 | INFO | request | dispatch | 요청시작 | ID=671276e3 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:40:14 | INFO | request | dispatch | 요청완료 | ID=671276e3 | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 12:40:43 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:40:43 | INFO | request | dispatch | 요청시작 | ID=5837b0ba | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:40:43 | INFO | request | dispatch | 요청완료 | ID=5837b0ba | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 12:41:11 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:41:11 | INFO | request | dispatch | 요청시작 | ID=c5d91c41 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:41:11 | INFO | request | dispatch | 요청완료 | ID=c5d91c41 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 12:41:39 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:41:39 | INFO | request | dispatch | 요청시작 | ID=3526d8c0 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:41:39 | INFO | request | dispatch | 요청완료 | ID=3526d8c0 | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 12:42:08 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:42:08 | INFO | request | dispatch | 요청시작 | ID=f55ba4c7 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:42:08 | INFO | request | dispatch | 요청완료 | ID=f55ba4c7 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 12:42:36 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:42:36 | INFO | request | dispatch | 요청시작 | ID=032771e8 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:42:36 | INFO | request | dispatch | 요청완료 | ID=032771e8 | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 12:43:04 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:43:04 | INFO | request | dispatch | 요청시작 | ID=7d16d257 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:43:04 | INFO | request | dispatch | 요청완료 | ID=7d16d257 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 12:43:33 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:43:33 | INFO | request | dispatch | 요청시작 | ID=02131b93 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:43:33 | INFO | request | dispatch | 요청완료 | ID=02131b93 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 12:44:01 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:44:01 | INFO | request | dispatch | 요청시작 | ID=45cc1343 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:44:01 | INFO | request | dispatch | 요청완료 | ID=45cc1343 | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 12:44:29 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:44:29 | INFO | request | dispatch | 요청시작 | ID=e8f18bdf | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:44:29 | INFO | request | dispatch | 요청완료 | ID=e8f18bdf | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 12:44:58 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:44:58 | INFO | request | dispatch | 요청시작 | ID=73a993a8 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:44:58 | INFO | request | dispatch | 요청완료 | ID=73a993a8 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 12:45:26 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:45:26 | INFO | request | dispatch | 요청시작 | ID=3abbed55 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:45:26 | INFO | request | dispatch | 요청완료 | ID=3abbed55 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 12:45:54 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:45:54 | INFO | request | dispatch | 요청시작 | ID=09db4f2c | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:45:54 | INFO | request | dispatch | 요청완료 | ID=09db4f2c | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 12:46:22 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:46:22 | INFO | request | dispatch | 요청시작 | ID=09b6ecaa | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:46:22 | INFO | request | dispatch | 요청완료 | ID=09b6ecaa | GET /health | Status=200 | 처리시간=0.003초
+2025-12-21 12:46:50 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:46:50 | INFO | request | dispatch | 요청시작 | ID=0c1d4de4 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:46:50 | INFO | request | dispatch | 요청완료 | ID=0c1d4de4 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 12:47:17 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:47:17 | INFO | request | dispatch | 요청시작 | ID=76f91afd | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:47:17 | INFO | request | dispatch | 요청완료 | ID=76f91afd | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 12:47:46 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:47:46 | INFO | request | dispatch | 요청시작 | ID=60618b07 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:47:46 | INFO | request | dispatch | 요청완료 | ID=60618b07 | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 12:48:14 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:48:14 | INFO | request | dispatch | 요청시작 | ID=c7299e1e | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:48:14 | INFO | request | dispatch | 요청완료 | ID=c7299e1e | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 12:48:42 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:48:42 | INFO | request | dispatch | 요청시작 | ID=19131a9c | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:48:42 | INFO | request | dispatch | 요청완료 | ID=19131a9c | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 12:49:11 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:49:11 | INFO | request | dispatch | 요청시작 | ID=40ed8a93 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:49:11 | INFO | request | dispatch | 요청완료 | ID=40ed8a93 | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 12:49:39 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:49:39 | INFO | request | dispatch | 요청시작 | ID=b6b8a5e4 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:49:39 | INFO | request | dispatch | 요청완료 | ID=b6b8a5e4 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 12:50:07 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:50:07 | INFO | request | dispatch | 요청시작 | ID=7cccd047 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:50:07 | INFO | request | dispatch | 요청완료 | ID=7cccd047 | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 12:50:36 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:50:36 | INFO | request | dispatch | 요청시작 | ID=19421e6c | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:50:36 | INFO | request | dispatch | 요청완료 | ID=19421e6c | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 12:51:04 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:51:04 | INFO | request | dispatch | 요청시작 | ID=f7003773 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:51:04 | INFO | request | dispatch | 요청완료 | ID=f7003773 | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 12:51:32 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:51:32 | INFO | request | dispatch | 요청시작 | ID=8df21ad7 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:51:32 | INFO | request | dispatch | 요청완료 | ID=8df21ad7 | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 12:52:00 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:52:00 | INFO | request | dispatch | 요청시작 | ID=c8e4d033 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:52:00 | INFO | request | dispatch | 요청완료 | ID=c8e4d033 | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 12:52:29 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:52:29 | INFO | request | dispatch | 요청시작 | ID=b971b82a | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:52:29 | INFO | request | dispatch | 요청완료 | ID=b971b82a | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 12:52:57 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:52:57 | INFO | request | dispatch | 요청시작 | ID=b98fec41 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:52:57 | INFO | request | dispatch | 요청완료 | ID=b98fec41 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 12:53:25 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:53:25 | INFO | request | dispatch | 요청시작 | ID=ff6f79e1 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:53:25 | INFO | request | dispatch | 요청완료 | ID=ff6f79e1 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 12:53:54 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:53:54 | INFO | request | dispatch | 요청시작 | ID=7a6fda0b | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:53:54 | INFO | request | dispatch | 요청완료 | ID=7a6fda0b | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 12:54:32 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:54:32 | INFO | request | dispatch | 요청시작 | ID=499866e0 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:54:32 | INFO | request | dispatch | 요청완료 | ID=499866e0 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 12:55:01 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:55:01 | INFO | request | dispatch | 요청시작 | ID=298b33ba | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:55:01 | INFO | request | dispatch | 요청완료 | ID=298b33ba | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 12:55:29 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:55:29 | INFO | request | dispatch | 요청시작 | ID=fdc9f4e6 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:55:29 | INFO | request | dispatch | 요청완료 | ID=fdc9f4e6 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 12:55:57 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:55:57 | INFO | request | dispatch | 요청시작 | ID=67ec0216 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:55:57 | INFO | request | dispatch | 요청완료 | ID=67ec0216 | GET /health | Status=200 | 처리시간=0.002초
+2025-12-21 12:56:04 | INFO | request | log_request_info | 요청 | GET /dashboard | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 12:56:04 | INFO | request | dispatch | 요청시작 | ID=29ad6f03 | GET /dashboard | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 12:56:04 | INFO | request | dispatch | 요청완료 | ID=29ad6f03 | GET /dashboard | Status=200 | 처리시간=0.016초
+2025-12-21 12:56:05 | INFO | request | log_request_info | 요청 | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 12:56:05 | INFO | request | dispatch | 요청시작 | ID=f6b26341 | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 12:56:05 | INFO | request | dispatch | 요청완료 | ID=f6b26341 | GET /api/v1/auth/me | Status=200 | 처리시간=0.080초
+2025-12-21 12:56:05 | INFO | request | log_request_info | 요청 | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 12:56:05 | INFO | request | dispatch | 요청시작 | ID=1a635c77 | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 12:56:05 | INFO | request | dispatch | 요청완료 | ID=1a635c77 | GET /api/v1/auth/me | Status=200 | 처리시간=0.004초
+2025-12-21 12:56:05 | INFO | request | log_request_info | 요청 | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 12:56:05 | INFO | request | dispatch | 요청시작 | ID=aaa01708 | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 12:56:05 | INFO | request | dispatch | 요청완료 | ID=aaa01708 | GET /api/v1/auth/me | Status=200 | 처리시간=0.003초
+2025-12-21 12:56:14 | INFO | request | log_request_info | 요청 | GET /categories | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 12:56:14 | INFO | request | dispatch | 요청시작 | ID=697a15b7 | GET /categories | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 12:56:14 | INFO | request | dispatch | 요청완료 | ID=697a15b7 | GET /categories | Status=200 | 처리시간=0.049초
+2025-12-21 12:56:25 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:56:25 | INFO | request | dispatch | 요청시작 | ID=ebd12b50 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:56:25 | INFO | request | dispatch | 요청완료 | ID=ebd12b50 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 12:56:29 | INFO | request | log_request_info | 요청 | GET /categories/tree | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 12:56:29 | INFO | request | dispatch | 요청시작 | ID=1a601a42 | GET /categories/tree | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 12:56:29 | INFO | request | dispatch | 요청완료 | ID=1a601a42 | GET /categories/tree | Status=200 | 처리시간=0.020초
+2025-12-21 12:56:29 | INFO | request | log_request_info | 요청 | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 12:56:29 | INFO | request | dispatch | 요청시작 | ID=8d06450d | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 12:56:29 | INFO | request | dispatch | 요청완료 | ID=8d06450d | GET /api/v1/auth/me | Status=200 | 처리시간=0.005초
+2025-12-21 12:56:49 | INFO | request | log_request_info | 요청 | POST /api/v1/categories/topics | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 12:56:49 | INFO | request | dispatch | 요청시작 | ID=feb361de | POST /api/v1/categories/topics | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 12:56:49 | INFO | request | dispatch | 요청완료 | ID=feb361de | POST /api/v1/categories/topics | Status=401 | 처리시간=0.002초
+2025-12-21 12:56:52 | INFO | request | log_request_info | 요청 | POST /api/v1/categories/topics | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 12:56:52 | INFO | request | dispatch | 요청시작 | ID=b6d8be52 | POST /api/v1/categories/topics | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 12:56:52 | INFO | request | dispatch | 요청완료 | ID=b6d8be52 | POST /api/v1/categories/topics | Status=401 | 처리시간=0.001초
+2025-12-21 12:56:54 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:56:54 | INFO | request | dispatch | 요청시작 | ID=7cec593b | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:56:54 | INFO | request | dispatch | 요청완료 | ID=7cec593b | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 12:57:22 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:57:22 | INFO | request | dispatch | 요청시작 | ID=d5e22383 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:57:22 | INFO | request | dispatch | 요청완료 | ID=d5e22383 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 12:57:50 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:57:50 | INFO | request | dispatch | 요청시작 | ID=2f23d7ab | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:57:50 | INFO | request | dispatch | 요청완료 | ID=2f23d7ab | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 12:58:19 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:58:19 | INFO | request | dispatch | 요청시작 | ID=a7c6dd98 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:58:19 | INFO | request | dispatch | 요청완료 | ID=a7c6dd98 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 12:58:47 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:58:47 | INFO | request | dispatch | 요청시작 | ID=b5e770d8 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:58:47 | INFO | request | dispatch | 요청완료 | ID=b5e770d8 | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 12:59:15 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:59:15 | INFO | request | dispatch | 요청시작 | ID=22e0b3a0 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:59:15 | INFO | request | dispatch | 요청완료 | ID=22e0b3a0 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 12:59:44 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:59:44 | INFO | request | dispatch | 요청시작 | ID=1b7db029 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 12:59:44 | INFO | request | dispatch | 요청완료 | ID=1b7db029 | GET /health | Status=200 | 처리시간=0.004초
+2025-12-21 13:00:12 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:00:12 | INFO | request | dispatch | 요청시작 | ID=b1750154 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:00:12 | INFO | request | dispatch | 요청완료 | ID=b1750154 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:00:40 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:00:40 | INFO | request | dispatch | 요청시작 | ID=cb7c3d6c | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:00:40 | INFO | request | dispatch | 요청완료 | ID=cb7c3d6c | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 13:01:08 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:01:08 | INFO | request | dispatch | 요청시작 | ID=93f3a419 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:01:08 | INFO | request | dispatch | 요청완료 | ID=93f3a419 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:01:37 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:01:37 | INFO | request | dispatch | 요청시작 | ID=06101c08 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:01:37 | INFO | request | dispatch | 요청완료 | ID=06101c08 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:02:05 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:02:05 | INFO | request | dispatch | 요청시작 | ID=ec74ac30 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:02:05 | INFO | request | dispatch | 요청완료 | ID=ec74ac30 | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 13:02:33 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:02:33 | INFO | request | dispatch | 요청시작 | ID=6bfff45a | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:02:33 | INFO | request | dispatch | 요청완료 | ID=6bfff45a | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:03:02 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:03:02 | INFO | request | dispatch | 요청시작 | ID=c999ee96 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:03:02 | INFO | request | dispatch | 요청완료 | ID=c999ee96 | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 13:03:30 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:03:30 | INFO | request | dispatch | 요청시작 | ID=27612055 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:03:30 | INFO | request | dispatch | 요청완료 | ID=27612055 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:03:58 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:03:58 | INFO | request | dispatch | 요청시작 | ID=0e970634 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:03:58 | INFO | request | dispatch | 요청완료 | ID=0e970634 | GET /health | Status=200 | 처리시간=0.002초
+2025-12-21 13:04:27 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:04:27 | INFO | request | dispatch | 요청시작 | ID=5377ffbe | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:04:27 | INFO | request | dispatch | 요청완료 | ID=5377ffbe | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:04:55 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:04:55 | INFO | request | dispatch | 요청시작 | ID=2d1c8003 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:04:55 | INFO | request | dispatch | 요청완료 | ID=2d1c8003 | GET /health | Status=200 | 처리시간=0.002초
+2025-12-21 13:05:23 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:05:23 | INFO | request | dispatch | 요청시작 | ID=434d063c | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:05:23 | INFO | request | dispatch | 요청완료 | ID=434d063c | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 13:05:51 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:05:51 | INFO | request | dispatch | 요청시작 | ID=f794d9e2 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:05:51 | INFO | request | dispatch | 요청완료 | ID=f794d9e2 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:06:20 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:06:20 | INFO | request | dispatch | 요청시작 | ID=4e20a003 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:06:20 | INFO | request | dispatch | 요청완료 | ID=4e20a003 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:06:48 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:06:48 | INFO | request | dispatch | 요청시작 | ID=49624c3a | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:06:48 | INFO | request | dispatch | 요청완료 | ID=49624c3a | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:07:16 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:07:16 | INFO | request | dispatch | 요청시작 | ID=70d4ce1b | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:07:16 | INFO | request | dispatch | 요청완료 | ID=70d4ce1b | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:07:45 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:07:45 | INFO | request | dispatch | 요청시작 | ID=1e70da04 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:07:45 | INFO | request | dispatch | 요청완료 | ID=1e70da04 | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 13:08:13 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:08:13 | INFO | request | dispatch | 요청시작 | ID=44cd20d8 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:08:13 | INFO | request | dispatch | 요청완료 | ID=44cd20d8 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:08:41 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:08:41 | INFO | request | dispatch | 요청시작 | ID=36f6a801 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:08:41 | INFO | request | dispatch | 요청완료 | ID=36f6a801 | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 13:09:09 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:09:09 | INFO | request | dispatch | 요청시작 | ID=a50c9648 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:09:09 | INFO | request | dispatch | 요청완료 | ID=a50c9648 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:09:38 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:09:38 | INFO | request | dispatch | 요청시작 | ID=0ea377e5 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:09:38 | INFO | request | dispatch | 요청완료 | ID=0ea377e5 | GET /health | Status=200 | 처리시간=0.003초
+2025-12-21 13:10:06 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:10:06 | INFO | request | dispatch | 요청시작 | ID=70d788dd | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:10:06 | INFO | request | dispatch | 요청완료 | ID=70d788dd | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:10:34 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:10:34 | INFO | request | dispatch | 요청시작 | ID=15b81ea1 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:10:34 | INFO | request | dispatch | 요청완료 | ID=15b81ea1 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:11:03 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:11:03 | INFO | request | dispatch | 요청시작 | ID=97f60ccc | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:11:03 | INFO | request | dispatch | 요청완료 | ID=97f60ccc | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:11:31 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:11:31 | INFO | request | dispatch | 요청시작 | ID=ae7339d1 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:11:31 | INFO | request | dispatch | 요청완료 | ID=ae7339d1 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:11:59 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:11:59 | INFO | request | dispatch | 요청시작 | ID=8988cad7 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:11:59 | INFO | request | dispatch | 요청완료 | ID=8988cad7 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:12:28 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:12:28 | INFO | request | dispatch | 요청시작 | ID=5c4e205f | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:12:28 | INFO | request | dispatch | 요청완료 | ID=5c4e205f | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:12:56 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:12:56 | INFO | request | dispatch | 요청시작 | ID=1eef4e11 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:12:56 | INFO | request | dispatch | 요청완료 | ID=1eef4e11 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:13:24 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:13:24 | INFO | request | dispatch | 요청시작 | ID=2e00e8ae | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:13:24 | INFO | request | dispatch | 요청완료 | ID=2e00e8ae | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 13:13:53 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:13:53 | INFO | request | dispatch | 요청시작 | ID=ba397698 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:13:53 | INFO | request | dispatch | 요청완료 | ID=ba397698 | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 13:14:21 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:14:21 | INFO | request | dispatch | 요청시작 | ID=ab04ee3b | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:14:21 | INFO | request | dispatch | 요청완료 | ID=ab04ee3b | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:14:49 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:14:49 | INFO | request | dispatch | 요청시작 | ID=e3c08e82 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:14:49 | INFO | request | dispatch | 요청완료 | ID=e3c08e82 | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 13:15:17 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:15:17 | INFO | request | dispatch | 요청시작 | ID=a14d4c05 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:15:17 | INFO | request | dispatch | 요청완료 | ID=a14d4c05 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:15:46 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:15:46 | INFO | request | dispatch | 요청시작 | ID=40a0abd0 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:15:46 | INFO | request | dispatch | 요청완료 | ID=40a0abd0 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:16:14 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:16:14 | INFO | request | dispatch | 요청시작 | ID=9a7b449c | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:16:14 | INFO | request | dispatch | 요청완료 | ID=9a7b449c | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:16:42 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:16:42 | INFO | request | dispatch | 요청시작 | ID=3788ab46 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:16:42 | INFO | request | dispatch | 요청완료 | ID=3788ab46 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:17:11 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:17:11 | INFO | request | dispatch | 요청시작 | ID=302fc6cb | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:17:11 | INFO | request | dispatch | 요청완료 | ID=302fc6cb | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:17:39 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:17:39 | INFO | request | dispatch | 요청시작 | ID=8190bea3 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:17:39 | INFO | request | dispatch | 요청완료 | ID=8190bea3 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:18:07 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:18:07 | INFO | request | dispatch | 요청시작 | ID=40effaf1 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:18:07 | INFO | request | dispatch | 요청완료 | ID=40effaf1 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:18:35 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:18:35 | INFO | request | dispatch | 요청시작 | ID=bb6a34a6 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:18:35 | INFO | request | dispatch | 요청완료 | ID=bb6a34a6 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:19:04 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:19:04 | INFO | request | dispatch | 요청시작 | ID=abb33e91 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:19:04 | INFO | request | dispatch | 요청완료 | ID=abb33e91 | GET /health | Status=200 | 처리시간=0.003초
+2025-12-21 13:19:32 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:19:32 | INFO | request | dispatch | 요청시작 | ID=293c77c1 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:19:32 | INFO | request | dispatch | 요청완료 | ID=293c77c1 | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 13:20:00 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:20:00 | INFO | request | dispatch | 요청시작 | ID=fda51538 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:20:00 | INFO | request | dispatch | 요청완료 | ID=fda51538 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:20:29 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:20:29 | INFO | request | dispatch | 요청시작 | ID=1a7bdb5e | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:20:29 | INFO | request | dispatch | 요청완료 | ID=1a7bdb5e | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:20:57 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:20:57 | INFO | request | dispatch | 요청시작 | ID=e58ecf41 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:20:57 | INFO | request | dispatch | 요청완료 | ID=e58ecf41 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:21:38 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:21:38 | INFO | request | dispatch | 요청시작 | ID=4792def7 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:21:38 | INFO | request | dispatch | 요청완료 | ID=4792def7 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:22:05 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:22:05 | INFO | request | dispatch | 요청시작 | ID=5ffd81a8 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:22:05 | INFO | request | dispatch | 요청완료 | ID=5ffd81a8 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:22:33 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:22:33 | INFO | request | dispatch | 요청시작 | ID=594ee7d4 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:22:33 | INFO | request | dispatch | 요청완료 | ID=594ee7d4 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:23:02 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:23:02 | INFO | request | dispatch | 요청시작 | ID=fce0ab60 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:23:02 | INFO | request | dispatch | 요청완료 | ID=fce0ab60 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:23:30 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:23:30 | INFO | request | dispatch | 요청시작 | ID=8975be7b | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:23:30 | INFO | request | dispatch | 요청완료 | ID=8975be7b | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:23:58 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:23:58 | INFO | request | dispatch | 요청시작 | ID=765908cf | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:23:58 | INFO | request | dispatch | 요청완료 | ID=765908cf | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:24:01 | INFO | request | log_request_info | 요청 | GET /categories | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 13:24:01 | INFO | request | dispatch | 요청시작 | ID=0f49f448 | GET /categories | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 13:24:02 | INFO | request | dispatch | 요청완료 | ID=0f49f448 | GET /categories | Status=200 | 처리시간=0.115초
+2025-12-21 13:24:12 | INFO | request | log_request_info | 요청 | POST /api/v1/categories/topics | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 13:24:12 | INFO | request | dispatch | 요청시작 | ID=7280b3f2 | POST /api/v1/categories/topics | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 13:24:12 | INFO | request | dispatch | 요청완료 | ID=7280b3f2 | POST /api/v1/categories/topics | Status=201 | 처리시간=0.023초
+2025-12-21 13:24:12 | INFO | request | log_request_info | 요청 | GET /categories | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 13:24:12 | INFO | request | dispatch | 요청시작 | ID=4f9f879f | GET /categories | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 13:24:12 | INFO | request | dispatch | 요청완료 | ID=4f9f879f | GET /categories | Status=200 | 처리시간=0.027초
+2025-12-21 13:24:12 | INFO | request | log_request_info | 요청 | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 13:24:12 | INFO | request | dispatch | 요청시작 | ID=e5840b80 | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 13:24:12 | INFO | request | dispatch | 요청완료 | ID=e5840b80 | GET /api/v1/auth/me | Status=200 | 처리시간=0.014초
+2025-12-21 13:24:26 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:24:26 | INFO | request | dispatch | 요청시작 | ID=26ba7b74 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:24:26 | INFO | request | dispatch | 요청완료 | ID=26ba7b74 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:24:34 | INFO | request | log_request_info | 요청 | GET /categories | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 13:24:34 | INFO | request | dispatch | 요청시작 | ID=17801f24 | GET /categories | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 13:24:34 | INFO | request | dispatch | 요청완료 | ID=17801f24 | GET /categories | Status=200 | 처리시간=0.013초
+2025-12-21 13:24:34 | INFO | request | log_request_info | 요청 | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 13:24:34 | INFO | request | dispatch | 요청시작 | ID=50f3a509 | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 13:24:34 | INFO | request | dispatch | 요청완료 | ID=50f3a509 | GET /api/v1/auth/me | Status=200 | 처리시간=0.005초
+2025-12-21 13:24:55 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:24:55 | INFO | request | dispatch | 요청시작 | ID=cb44f337 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:24:55 | INFO | request | dispatch | 요청완료 | ID=cb44f337 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:25:23 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:25:23 | INFO | request | dispatch | 요청시작 | ID=05840033 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:25:23 | INFO | request | dispatch | 요청완료 | ID=05840033 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:25:51 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:25:51 | INFO | request | dispatch | 요청시작 | ID=4c29f73e | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:25:51 | INFO | request | dispatch | 요청완료 | ID=4c29f73e | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:26:20 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:26:20 | INFO | request | dispatch | 요청시작 | ID=2c495648 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:26:20 | INFO | request | dispatch | 요청완료 | ID=2c495648 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:26:48 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:26:48 | INFO | request | dispatch | 요청시작 | ID=8f1e42f7 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:26:48 | INFO | request | dispatch | 요청완료 | ID=8f1e42f7 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:27:16 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:27:16 | INFO | request | dispatch | 요청시작 | ID=c932ce04 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:27:16 | INFO | request | dispatch | 요청완료 | ID=c932ce04 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:27:17 | INFO | request | log_request_info | 요청 | GET /.well-known/appspecific/com.chrome.devtools.json | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 13:27:17 | INFO | request | dispatch | 요청시작 | ID=90fa8790 | GET /.well-known/appspecific/com.chrome.devtools.json | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 13:27:17 | INFO | request | dispatch | 요청완료 | ID=90fa8790 | GET /.well-known/appspecific/com.chrome.devtools.json | Status=404 | 처리시간=0.009초
+2025-12-21 13:27:45 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:27:45 | INFO | request | dispatch | 요청시작 | ID=6f0171cd | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:27:45 | INFO | request | dispatch | 요청완료 | ID=6f0171cd | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 13:28:09 | INFO | request | log_request_info | 요청 | GET /categories | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 13:28:09 | INFO | request | dispatch | 요청시작 | ID=4d1f4a5a | GET /categories | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 13:28:09 | INFO | request | dispatch | 요청완료 | ID=4d1f4a5a | GET /categories | Status=200 | 처리시간=0.023초
+2025-12-21 13:28:09 | INFO | request | log_request_info | 요청 | GET /.well-known/appspecific/com.chrome.devtools.json | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 13:28:09 | INFO | request | dispatch | 요청시작 | ID=ecf79b17 | GET /.well-known/appspecific/com.chrome.devtools.json | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 13:28:09 | INFO | request | dispatch | 요청완료 | ID=ecf79b17 | GET /.well-known/appspecific/com.chrome.devtools.json | Status=404 | 처리시간=0.001초
+2025-12-21 13:28:10 | INFO | request | log_request_info | 요청 | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 13:28:10 | INFO | request | dispatch | 요청시작 | ID=ad919dcb | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 13:28:10 | INFO | request | dispatch | 요청완료 | ID=ad919dcb | GET /api/v1/auth/me | Status=200 | 처리시간=0.004초
+2025-12-21 13:28:11 | INFO | request | log_request_info | 요청 | GET /categories | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 13:28:11 | INFO | request | dispatch | 요청시작 | ID=9deb5139 | GET /categories | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 13:28:11 | INFO | request | dispatch | 요청완료 | ID=9deb5139 | GET /categories | Status=200 | 처리시간=0.017초
+2025-12-21 13:28:12 | INFO | request | log_request_info | 요청 | GET /.well-known/appspecific/com.chrome.devtools.json | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 13:28:12 | INFO | request | dispatch | 요청시작 | ID=8c55b15e | GET /.well-known/appspecific/com.chrome.devtools.json | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 13:28:12 | INFO | request | dispatch | 요청완료 | ID=8c55b15e | GET /.well-known/appspecific/com.chrome.devtools.json | Status=404 | 처리시간=0.001초
+2025-12-21 13:28:12 | INFO | request | log_request_info | 요청 | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 13:28:12 | INFO | request | dispatch | 요청시작 | ID=19450737 | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 13:28:12 | INFO | request | dispatch | 요청완료 | ID=19450737 | GET /api/v1/auth/me | Status=200 | 처리시간=0.005초
+2025-12-21 13:28:13 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:28:13 | INFO | request | dispatch | 요청시작 | ID=0003411a | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:28:13 | INFO | request | dispatch | 요청완료 | ID=0003411a | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:28:41 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:28:41 | INFO | request | dispatch | 요청시작 | ID=258a0428 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:28:41 | INFO | request | dispatch | 요청완료 | ID=258a0428 | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 13:29:10 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:29:10 | INFO | request | dispatch | 요청시작 | ID=579bb771 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:29:10 | INFO | request | dispatch | 요청완료 | ID=579bb771 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:29:38 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:29:38 | INFO | request | dispatch | 요청시작 | ID=279b6ee2 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:29:38 | INFO | request | dispatch | 요청완료 | ID=279b6ee2 | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 13:30:06 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:30:06 | INFO | request | dispatch | 요청시작 | ID=d63881db | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:30:06 | INFO | request | dispatch | 요청완료 | ID=d63881db | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 13:30:34 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:30:34 | INFO | request | dispatch | 요청시작 | ID=99a1eb8c | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:30:34 | INFO | request | dispatch | 요청완료 | ID=99a1eb8c | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:31:03 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:31:03 | INFO | request | dispatch | 요청시작 | ID=06fea2e4 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:31:03 | INFO | request | dispatch | 요청완료 | ID=06fea2e4 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:31:31 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:31:31 | INFO | request | dispatch | 요청시작 | ID=10569afb | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:31:31 | INFO | request | dispatch | 요청완료 | ID=10569afb | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:31:59 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:31:59 | INFO | request | dispatch | 요청시작 | ID=3e284263 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:31:59 | INFO | request | dispatch | 요청완료 | ID=3e284263 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:32:28 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:32:28 | INFO | request | dispatch | 요청시작 | ID=8c0844a1 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:32:28 | INFO | request | dispatch | 요청완료 | ID=8c0844a1 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:32:56 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:32:56 | INFO | request | dispatch | 요청시작 | ID=d254bdab | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:32:56 | INFO | request | dispatch | 요청완료 | ID=d254bdab | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:33:24 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:33:24 | INFO | request | dispatch | 요청시작 | ID=66799181 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:33:24 | INFO | request | dispatch | 요청완료 | ID=66799181 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:33:53 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:33:53 | INFO | request | dispatch | 요청시작 | ID=21396146 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:33:53 | INFO | request | dispatch | 요청완료 | ID=21396146 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:34:21 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:34:21 | INFO | request | dispatch | 요청시작 | ID=0da4270b | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:34:21 | INFO | request | dispatch | 요청완료 | ID=0da4270b | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:34:49 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:34:49 | INFO | request | dispatch | 요청시작 | ID=5903d74f | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:34:49 | INFO | request | dispatch | 요청완료 | ID=5903d74f | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:35:17 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:35:17 | INFO | request | dispatch | 요청시작 | ID=075893a0 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:35:17 | INFO | request | dispatch | 요청완료 | ID=075893a0 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:35:46 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:35:46 | INFO | request | dispatch | 요청시작 | ID=6230f556 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:35:46 | INFO | request | dispatch | 요청완료 | ID=6230f556 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:36:14 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:36:14 | INFO | request | dispatch | 요청시작 | ID=7cdf5caa | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:36:14 | INFO | request | dispatch | 요청완료 | ID=7cdf5caa | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 13:36:42 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:36:42 | INFO | request | dispatch | 요청시작 | ID=1512f87c | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:36:42 | INFO | request | dispatch | 요청완료 | ID=1512f87c | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:37:11 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:37:11 | INFO | request | dispatch | 요청시작 | ID=73661320 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:37:11 | INFO | request | dispatch | 요청완료 | ID=73661320 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:37:39 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:37:39 | INFO | request | dispatch | 요청시작 | ID=6b0c62ae | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:37:39 | INFO | request | dispatch | 요청완료 | ID=6b0c62ae | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:38:07 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:38:07 | INFO | request | dispatch | 요청시작 | ID=72e84071 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:38:07 | INFO | request | dispatch | 요청완료 | ID=72e84071 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:38:36 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:38:36 | INFO | request | dispatch | 요청시작 | ID=f4484911 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:38:36 | INFO | request | dispatch | 요청완료 | ID=f4484911 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:39:04 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:39:04 | INFO | request | dispatch | 요청시작 | ID=ed17303e | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:39:04 | INFO | request | dispatch | 요청완료 | ID=ed17303e | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:39:32 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:39:32 | INFO | request | dispatch | 요청시작 | ID=2f94fe06 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:39:32 | INFO | request | dispatch | 요청완료 | ID=2f94fe06 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:40:00 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:40:00 | INFO | request | dispatch | 요청시작 | ID=aef38f60 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:40:00 | INFO | request | dispatch | 요청완료 | ID=aef38f60 | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 13:40:29 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:40:29 | INFO | request | dispatch | 요청시작 | ID=cba01be0 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:40:29 | INFO | request | dispatch | 요청완료 | ID=cba01be0 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:40:57 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:40:57 | INFO | request | dispatch | 요청시작 | ID=8a67ce20 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:40:57 | INFO | request | dispatch | 요청완료 | ID=8a67ce20 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:41:25 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:41:25 | INFO | request | dispatch | 요청시작 | ID=86ff712f | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:41:25 | INFO | request | dispatch | 요청완료 | ID=86ff712f | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:41:53 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:41:53 | INFO | request | dispatch | 요청시작 | ID=b9713fe7 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:41:53 | INFO | request | dispatch | 요청완료 | ID=b9713fe7 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:42:22 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:42:22 | INFO | request | dispatch | 요청시작 | ID=d85e1573 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:42:22 | INFO | request | dispatch | 요청완료 | ID=d85e1573 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:42:50 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:42:50 | INFO | request | dispatch | 요청시작 | ID=874d23a3 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:42:50 | INFO | request | dispatch | 요청완료 | ID=874d23a3 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:42:53 | INFO | request | log_request_info | 요청 | GET /categories | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 13:42:53 | INFO | request | dispatch | 요청시작 | ID=d71650a2 | GET /categories | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 13:42:53 | INFO | request | dispatch | 요청완료 | ID=d71650a2 | GET /categories | Status=200 | 처리시간=0.020초
+2025-12-21 13:42:54 | INFO | request | log_request_info | 요청 | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 13:42:54 | INFO | request | dispatch | 요청시작 | ID=d40d08b9 | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 13:42:54 | INFO | request | dispatch | 요청완료 | ID=d40d08b9 | GET /api/v1/auth/me | Status=200 | 처리시간=0.004초
+2025-12-21 13:42:54 | INFO | request | log_request_info | 요청 | GET /favicon.ico | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 13:42:54 | INFO | request | dispatch | 요청시작 | ID=7ef2688e | GET /favicon.ico | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 13:42:54 | INFO | request | dispatch | 요청완료 | ID=7ef2688e | GET /favicon.ico | Status=404 | 처리시간=0.001초
+2025-12-21 13:42:58 | INFO | request | log_request_info | 요청 | POST /api/v1/auth/logout | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 13:42:58 | INFO | request | dispatch | 요청시작 | ID=641a23c2 | POST /api/v1/auth/logout | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 13:42:58 | INFO | request | dispatch | 요청완료 | ID=641a23c2 | POST /api/v1/auth/logout | Status=200 | 처리시간=0.006초
+2025-12-21 13:42:59 | INFO | request | log_request_info | 요청 | GET /login | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 13:42:59 | INFO | request | dispatch | 요청시작 | ID=d25dcf4c | GET /login | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 13:42:59 | INFO | request | dispatch | 요청완료 | ID=d25dcf4c | GET /login | Status=200 | 처리시간=0.006초
+2025-12-21 13:42:59 | INFO | request | log_request_info | 요청 | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 13:42:59 | INFO | request | dispatch | 요청시작 | ID=8e60060d | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 13:42:59 | INFO | request | dispatch | 요청완료 | ID=8e60060d | GET /api/v1/auth/me | Status=401 | 처리시간=0.001초
+2025-12-21 13:43:01 | INFO | request | log_request_info | 요청 | POST /api/v1/auth/login | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 13:43:01 | INFO | request | dispatch | 요청시작 | ID=d98bb521 | POST /api/v1/auth/login | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 13:43:01 | INFO | request | dispatch | 요청완료 | ID=d98bb521 | POST /api/v1/auth/login | Status=200 | 처리시간=0.294초
+2025-12-21 13:43:02 | INFO | request | log_request_info | 요청 | GET /dashboard | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 13:43:02 | INFO | request | dispatch | 요청시작 | ID=1833ec96 | GET /dashboard | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 13:43:02 | INFO | request | dispatch | 요청완료 | ID=1833ec96 | GET /dashboard | Status=200 | 처리시간=0.008초
+2025-12-21 13:43:02 | INFO | request | log_request_info | 요청 | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 13:43:02 | INFO | request | dispatch | 요청시작 | ID=67255dba | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 13:43:02 | INFO | request | dispatch | 요청완료 | ID=67255dba | GET /api/v1/auth/me | Status=200 | 처리시간=0.004초
+2025-12-21 13:43:02 | INFO | request | log_request_info | 요청 | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 13:43:02 | INFO | request | dispatch | 요청시작 | ID=677911ee | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 13:43:02 | INFO | request | dispatch | 요청완료 | ID=677911ee | GET /api/v1/auth/me | Status=200 | 처리시간=0.004초
+2025-12-21 13:43:02 | INFO | request | log_request_info | 요청 | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 13:43:02 | INFO | request | dispatch | 요청시작 | ID=f69a2f36 | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 13:43:02 | INFO | request | dispatch | 요청완료 | ID=f69a2f36 | GET /api/v1/auth/me | Status=200 | 처리시간=0.004초
+2025-12-21 13:43:14 | INFO | request | log_request_info | 요청 | GET /categories | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 13:43:14 | INFO | request | dispatch | 요청시작 | ID=54d22fc9 | GET /categories | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 13:43:14 | INFO | request | dispatch | 요청완료 | ID=54d22fc9 | GET /categories | Status=200 | 처리시간=0.011초
+2025-12-21 13:43:14 | INFO | request | log_request_info | 요청 | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 13:43:14 | INFO | request | dispatch | 요청시작 | ID=9bc3e3f9 | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 13:43:14 | INFO | request | dispatch | 요청완료 | ID=9bc3e3f9 | GET /api/v1/auth/me | Status=200 | 처리시간=0.005초
+2025-12-21 13:43:16 | INFO | request | log_request_info | 요청 | GET /.well-known/appspecific/com.chrome.devtools.json | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 13:43:16 | INFO | request | dispatch | 요청시작 | ID=86b68ffd | GET /.well-known/appspecific/com.chrome.devtools.json | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 13:43:16 | INFO | request | dispatch | 요청완료 | ID=86b68ffd | GET /.well-known/appspecific/com.chrome.devtools.json | Status=404 | 처리시간=0.001초
+2025-12-21 13:43:18 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:43:18 | INFO | request | dispatch | 요청시작 | ID=6d90881f | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:43:18 | INFO | request | dispatch | 요청완료 | ID=6d90881f | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:43:21 | INFO | request | log_request_info | 요청 | GET /categories | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 13:43:21 | INFO | request | dispatch | 요청시작 | ID=fce25d75 | GET /categories | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 13:43:21 | INFO | request | dispatch | 요청완료 | ID=fce25d75 | GET /categories | Status=200 | 처리시간=0.013초
+2025-12-21 13:43:21 | INFO | request | log_request_info | 요청 | GET /.well-known/appspecific/com.chrome.devtools.json | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 13:43:21 | INFO | request | dispatch | 요청시작 | ID=93231945 | GET /.well-known/appspecific/com.chrome.devtools.json | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 13:43:21 | INFO | request | dispatch | 요청완료 | ID=93231945 | GET /.well-known/appspecific/com.chrome.devtools.json | Status=404 | 처리시간=0.001초
+2025-12-21 13:43:21 | INFO | request | log_request_info | 요청 | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 13:43:21 | INFO | request | dispatch | 요청시작 | ID=d646c9fb | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 13:43:21 | INFO | request | dispatch | 요청완료 | ID=d646c9fb | GET /api/v1/auth/me | Status=200 | 처리시간=0.004초
+2025-12-21 13:43:46 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:43:46 | INFO | request | dispatch | 요청시작 | ID=b8eb067b | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:43:46 | INFO | request | dispatch | 요청완료 | ID=b8eb067b | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:44:15 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:44:15 | INFO | request | dispatch | 요청시작 | ID=f2178c7a | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:44:15 | INFO | request | dispatch | 요청완료 | ID=f2178c7a | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:44:43 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:44:43 | INFO | request | dispatch | 요청시작 | ID=e7a07af2 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:44:43 | INFO | request | dispatch | 요청완료 | ID=e7a07af2 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:45:11 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:45:11 | INFO | request | dispatch | 요청시작 | ID=4b162a16 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:45:11 | INFO | request | dispatch | 요청완료 | ID=4b162a16 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:45:40 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:45:40 | INFO | request | dispatch | 요청시작 | ID=3be4147c | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:45:40 | INFO | request | dispatch | 요청완료 | ID=3be4147c | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:46:08 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:46:08 | INFO | request | dispatch | 요청시작 | ID=d49d2c67 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:46:08 | INFO | request | dispatch | 요청완료 | ID=d49d2c67 | GET /health | Status=200 | 처리시간=0.004초
+2025-12-21 13:46:36 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:46:36 | INFO | request | dispatch | 요청시작 | ID=09f7d59d | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:46:36 | INFO | request | dispatch | 요청완료 | ID=09f7d59d | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:46:49 | INFO | request | log_request_info | 요청 | GET /categories | IP=172.18.0.1 | UA=curl/7.81.0
+2025-12-21 13:46:49 | INFO | request | dispatch | 요청시작 | ID=9adb1e45 | GET /categories | IP=172.18.0.1 | UA=curl/7.81.0
+2025-12-21 13:46:49 | INFO | request | dispatch | 요청완료 | ID=9adb1e45 | GET /categories | Status=401 | 처리시간=0.001초
+2025-12-21 13:47:04 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:47:04 | INFO | request | dispatch | 요청시작 | ID=1c9c1127 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:47:04 | INFO | request | dispatch | 요청완료 | ID=1c9c1127 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:47:33 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:47:33 | INFO | request | dispatch | 요청시작 | ID=beb5c116 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:47:33 | INFO | request | dispatch | 요청완료 | ID=beb5c116 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:48:01 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:48:01 | INFO | request | dispatch | 요청시작 | ID=15185640 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:48:01 | INFO | request | dispatch | 요청완료 | ID=15185640 | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 13:48:29 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:48:29 | INFO | request | dispatch | 요청시작 | ID=23f3b49f | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:48:29 | INFO | request | dispatch | 요청완료 | ID=23f3b49f | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:48:58 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:48:58 | INFO | request | dispatch | 요청시작 | ID=07322142 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:48:58 | INFO | request | dispatch | 요청완료 | ID=07322142 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:49:26 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:49:26 | INFO | request | dispatch | 요청시작 | ID=adc374b7 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:49:26 | INFO | request | dispatch | 요청완료 | ID=adc374b7 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:49:54 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:49:54 | INFO | request | dispatch | 요청시작 | ID=2811d2a7 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:49:54 | INFO | request | dispatch | 요청완료 | ID=2811d2a7 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:50:22 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:50:22 | INFO | request | dispatch | 요청시작 | ID=09c1c3bd | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:50:22 | INFO | request | dispatch | 요청완료 | ID=09c1c3bd | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:50:51 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:50:51 | INFO | request | dispatch | 요청시작 | ID=11ccb165 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:50:51 | INFO | request | dispatch | 요청완료 | ID=11ccb165 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:51:19 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:51:19 | INFO | request | dispatch | 요청시작 | ID=709f0f82 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:51:19 | INFO | request | dispatch | 요청완료 | ID=709f0f82 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:51:47 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:51:47 | INFO | request | dispatch | 요청시작 | ID=d1faa00c | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:51:47 | INFO | request | dispatch | 요청완료 | ID=d1faa00c | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:52:15 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:52:15 | INFO | request | dispatch | 요청시작 | ID=f2847dc5 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:52:15 | INFO | request | dispatch | 요청완료 | ID=f2847dc5 | GET /health | Status=200 | 처리시간=0.002초
+2025-12-21 13:52:44 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:52:44 | INFO | request | dispatch | 요청시작 | ID=b8dc1a6e | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:52:44 | INFO | request | dispatch | 요청완료 | ID=b8dc1a6e | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:53:12 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:53:12 | INFO | request | dispatch | 요청시작 | ID=4bb1f141 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:53:12 | INFO | request | dispatch | 요청완료 | ID=4bb1f141 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:53:40 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:53:40 | INFO | request | dispatch | 요청시작 | ID=bc4db91a | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:53:40 | INFO | request | dispatch | 요청완료 | ID=bc4db91a | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:54:09 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:54:09 | INFO | request | dispatch | 요청시작 | ID=1afdc041 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:54:09 | INFO | request | dispatch | 요청완료 | ID=1afdc041 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:54:37 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:54:37 | INFO | request | dispatch | 요청시작 | ID=9cbe575a | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:54:37 | INFO | request | dispatch | 요청완료 | ID=9cbe575a | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:55:05 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:55:05 | INFO | request | dispatch | 요청시작 | ID=e9b62b6d | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:55:05 | INFO | request | dispatch | 요청완료 | ID=e9b62b6d | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:55:33 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:55:33 | INFO | request | dispatch | 요청시작 | ID=fd3fe9a6 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:55:33 | INFO | request | dispatch | 요청완료 | ID=fd3fe9a6 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 13:56:02 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:56:02 | INFO | request | dispatch | 요청시작 | ID=2b810b9e | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 13:56:02 | INFO | request | dispatch | 요청완료 | ID=2b810b9e | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:00:00 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:00:00 | INFO | request | dispatch | 요청시작 | ID=70636768 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:00:00 | INFO | request | dispatch | 요청완료 | ID=70636768 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:00:07 | INFO | request | log_request_info | 요청 | GET /categories | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 14:00:07 | INFO | request | dispatch | 요청시작 | ID=a2099ab6 | GET /categories | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 14:00:07 | INFO | request | dispatch | 요청완료 | ID=a2099ab6 | GET /categories | Status=200 | 처리시간=0.130초
+2025-12-21 14:00:07 | INFO | request | log_request_info | 요청 | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 14:00:07 | INFO | request | dispatch | 요청시작 | ID=43026951 | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 14:00:07 | INFO | request | dispatch | 요청완료 | ID=43026951 | GET /api/v1/auth/me | Status=200 | 처리시간=0.011초
+2025-12-21 14:00:29 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:00:29 | INFO | request | dispatch | 요청시작 | ID=8b5d0a66 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:00:29 | INFO | request | dispatch | 요청완료 | ID=8b5d0a66 | GET /health | Status=200 | 처리시간=0.002초
+2025-12-21 14:00:57 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:00:57 | INFO | request | dispatch | 요청시작 | ID=ddb9bfa1 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:00:57 | INFO | request | dispatch | 요청완료 | ID=ddb9bfa1 | GET /health | Status=200 | 처리시간=0.002초
+2025-12-21 14:01:25 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:01:25 | INFO | request | dispatch | 요청시작 | ID=3cfa598e | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:01:25 | INFO | request | dispatch | 요청완료 | ID=3cfa598e | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:01:53 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:01:53 | INFO | request | dispatch | 요청시작 | ID=d7115d36 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:01:53 | INFO | request | dispatch | 요청완료 | ID=d7115d36 | GET /health | Status=200 | 처리시간=0.002초
+2025-12-21 14:02:11 | INFO | request | log_request_info | 요청 | GET /categories | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 14:02:11 | INFO | request | dispatch | 요청시작 | ID=1aec19c9 | GET /categories | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 14:02:11 | INFO | request | dispatch | 요청완료 | ID=1aec19c9 | GET /categories | Status=200 | 처리시간=0.028초
+2025-12-21 14:02:11 | INFO | request | log_request_info | 요청 | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 14:02:11 | INFO | request | dispatch | 요청시작 | ID=582dc723 | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 14:02:11 | INFO | request | dispatch | 요청완료 | ID=582dc723 | GET /api/v1/auth/me | Status=200 | 처리시간=0.005초
+2025-12-21 14:02:22 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:02:22 | INFO | request | dispatch | 요청시작 | ID=2fc1c2b5 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:02:22 | INFO | request | dispatch | 요청완료 | ID=2fc1c2b5 | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 14:02:50 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:02:50 | INFO | request | dispatch | 요청시작 | ID=9df40c83 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:02:50 | INFO | request | dispatch | 요청완료 | ID=9df40c83 | GET /health | Status=200 | 처리시간=0.004초
+2025-12-21 14:03:18 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:03:18 | INFO | request | dispatch | 요청시작 | ID=7843bb5a | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:03:18 | INFO | request | dispatch | 요청완료 | ID=7843bb5a | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:03:47 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:03:47 | INFO | request | dispatch | 요청시작 | ID=61372121 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:03:47 | INFO | request | dispatch | 요청완료 | ID=61372121 | GET /health | Status=200 | 처리시간=0.003초
+2025-12-21 14:04:15 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:04:15 | INFO | request | dispatch | 요청시작 | ID=54eb1cd2 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:04:15 | INFO | request | dispatch | 요청완료 | ID=54eb1cd2 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:04:43 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:04:43 | INFO | request | dispatch | 요청시작 | ID=7af70131 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:04:43 | INFO | request | dispatch | 요청완료 | ID=7af70131 | GET /health | Status=200 | 처리시간=0.002초
+2025-12-21 14:05:11 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:05:11 | INFO | request | dispatch | 요청시작 | ID=63b3fcc2 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:05:11 | INFO | request | dispatch | 요청완료 | ID=63b3fcc2 | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 14:05:40 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:05:40 | INFO | request | dispatch | 요청시작 | ID=cebfcb16 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:05:40 | INFO | request | dispatch | 요청완료 | ID=cebfcb16 | GET /health | Status=200 | 처리시간=0.003초
+2025-12-21 14:06:08 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:06:08 | INFO | request | dispatch | 요청시작 | ID=9e502871 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:06:08 | INFO | request | dispatch | 요청완료 | ID=9e502871 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:06:36 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:06:36 | INFO | request | dispatch | 요청시작 | ID=d14a34ce | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:06:36 | INFO | request | dispatch | 요청완료 | ID=d14a34ce | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:07:04 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:07:04 | INFO | request | dispatch | 요청시작 | ID=25da92ab | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:07:04 | INFO | request | dispatch | 요청완료 | ID=25da92ab | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:07:33 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:07:33 | INFO | request | dispatch | 요청시작 | ID=ad7c09a0 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:07:33 | INFO | request | dispatch | 요청완료 | ID=ad7c09a0 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:08:01 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:08:01 | INFO | request | dispatch | 요청시작 | ID=cd84752c | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:08:01 | INFO | request | dispatch | 요청완료 | ID=cd84752c | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:08:29 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:08:29 | INFO | request | dispatch | 요청시작 | ID=bb9be730 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:08:29 | INFO | request | dispatch | 요청완료 | ID=bb9be730 | GET /health | Status=200 | 처리시간=0.002초
+2025-12-21 14:08:58 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:08:58 | INFO | request | dispatch | 요청시작 | ID=ecae0230 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:08:58 | INFO | request | dispatch | 요청완료 | ID=ecae0230 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:09:26 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:09:26 | INFO | request | dispatch | 요청시작 | ID=3fb9dba4 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:09:26 | INFO | request | dispatch | 요청완료 | ID=3fb9dba4 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:09:54 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:09:54 | INFO | request | dispatch | 요청시작 | ID=6e56c9ad | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:09:54 | INFO | request | dispatch | 요청완료 | ID=6e56c9ad | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:10:25 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:10:25 | INFO | request | dispatch | 요청시작 | ID=ab47bf10 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:10:25 | INFO | request | dispatch | 요청완료 | ID=ab47bf10 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:10:53 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:10:53 | INFO | request | dispatch | 요청시작 | ID=837eef98 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:10:53 | INFO | request | dispatch | 요청완료 | ID=837eef98 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:11:22 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:11:22 | INFO | request | dispatch | 요청시작 | ID=4cf2565a | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:11:22 | INFO | request | dispatch | 요청완료 | ID=4cf2565a | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:11:25 | INFO | request | log_request_info | 요청 | GET /categories | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 14:11:25 | INFO | request | dispatch | 요청시작 | ID=92cd6540 | GET /categories | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 14:11:25 | INFO | request | dispatch | 요청완료 | ID=92cd6540 | GET /categories | Status=200 | 처리시간=0.108초
+2025-12-21 14:11:44 | INFO | request | log_request_info | 요청 | POST /api/v1/categories/topics | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 14:11:44 | INFO | request | dispatch | 요청시작 | ID=ebfcdbb8 | POST /api/v1/categories/topics | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 14:11:44 | INFO | request | dispatch | 요청완료 | ID=ebfcdbb8 | POST /api/v1/categories/topics | Status=201 | 처리시간=0.025초
+2025-12-21 14:11:44 | INFO | request | log_request_info | 요청 | GET /categories | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 14:11:44 | INFO | request | dispatch | 요청시작 | ID=40b988f0 | GET /categories | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 14:11:44 | INFO | request | dispatch | 요청완료 | ID=40b988f0 | GET /categories | Status=200 | 처리시간=0.019초
+2025-12-21 14:11:50 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:11:50 | INFO | request | dispatch | 요청시작 | ID=5c1295d2 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:11:50 | INFO | request | dispatch | 요청완료 | ID=5c1295d2 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:12:16 | INFO | request | log_request_info | 요청 | GET /categories/tree | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 14:12:16 | INFO | request | dispatch | 요청시작 | ID=ade0a8f2 | GET /categories/tree | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 14:12:16 | INFO | request | dispatch | 요청완료 | ID=ade0a8f2 | GET /categories/tree | Status=200 | 처리시간=0.039초
+2025-12-21 14:12:16 | INFO | request | log_request_info | 요청 | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 14:12:16 | INFO | request | dispatch | 요청시작 | ID=9851d48c | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 14:12:16 | INFO | request | dispatch | 요청완료 | ID=9851d48c | GET /api/v1/auth/me | Status=200 | 처리시간=0.015초
+2025-12-21 14:12:18 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:12:18 | INFO | request | dispatch | 요청시작 | ID=e33df359 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:12:18 | INFO | request | dispatch | 요청완료 | ID=e33df359 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:12:47 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:12:47 | INFO | request | dispatch | 요청시작 | ID=5dffc700 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:12:47 | INFO | request | dispatch | 요청완료 | ID=5dffc700 | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 14:13:15 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:13:15 | INFO | request | dispatch | 요청시작 | ID=b9bd4940 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:13:15 | INFO | request | dispatch | 요청완료 | ID=b9bd4940 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:13:32 | INFO | request | log_request_info | 요청 | DELETE /api/v1/categories/topics/2 | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 14:13:32 | INFO | request | dispatch | 요청시작 | ID=78466664 | DELETE /api/v1/categories/topics/2 | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 14:13:32 | INFO | request | dispatch | 요청완료 | ID=78466664 | DELETE /api/v1/categories/topics/2 | Status=200 | 처리시간=0.015초
+2025-12-21 14:13:32 | INFO | request | log_request_info | 요청 | GET /categories | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 14:13:32 | INFO | request | dispatch | 요청시작 | ID=6dd8c9d9 | GET /categories | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 14:13:32 | INFO | request | dispatch | 요청완료 | ID=6dd8c9d9 | GET /categories | Status=200 | 처리시간=0.010초
+2025-12-21 14:13:43 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:13:43 | INFO | request | dispatch | 요청시작 | ID=feeda3c4 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:13:43 | INFO | request | dispatch | 요청완료 | ID=feeda3c4 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:14:11 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:14:11 | INFO | request | dispatch | 요청시작 | ID=dc349dac | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:14:11 | INFO | request | dispatch | 요청완료 | ID=dc349dac | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:14:18 | INFO | request | log_request_info | 요청 | GET /categories/tree | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 14:14:18 | INFO | request | dispatch | 요청시작 | ID=535a258d | GET /categories/tree | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 14:14:18 | INFO | request | dispatch | 요청완료 | ID=535a258d | GET /categories/tree | Status=200 | 처리시간=0.019초
+2025-12-21 14:14:18 | INFO | request | log_request_info | 요청 | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0
+2025-12-21 14:14:18 | INFO | request | dispatch | 요청시작 | ID=2638d01d | GET /api/v1/auth/me | IP=172.18.0.1 | UA=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb...
+2025-12-21 14:14:18 | INFO | request | dispatch | 요청완료 | ID=2638d01d | GET /api/v1/auth/me | Status=200 | 처리시간=0.004초
+2025-12-21 14:14:40 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:14:40 | INFO | request | dispatch | 요청시작 | ID=b6ab4d85 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:14:40 | INFO | request | dispatch | 요청완료 | ID=b6ab4d85 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:15:08 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:15:08 | INFO | request | dispatch | 요청시작 | ID=e6bbf327 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:15:08 | INFO | request | dispatch | 요청완료 | ID=e6bbf327 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:15:36 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:15:36 | INFO | request | dispatch | 요청시작 | ID=75846702 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:15:36 | INFO | request | dispatch | 요청완료 | ID=75846702 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:16:04 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:16:04 | INFO | request | dispatch | 요청시작 | ID=15da6e45 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:16:04 | INFO | request | dispatch | 요청완료 | ID=15da6e45 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:16:33 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:16:33 | INFO | request | dispatch | 요청시작 | ID=813c7d82 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:16:33 | INFO | request | dispatch | 요청완료 | ID=813c7d82 | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 14:17:01 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:17:01 | INFO | request | dispatch | 요청시작 | ID=e1f6f5f9 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:17:01 | INFO | request | dispatch | 요청완료 | ID=e1f6f5f9 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:17:29 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:17:29 | INFO | request | dispatch | 요청시작 | ID=59597e6e | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:17:29 | INFO | request | dispatch | 요청완료 | ID=59597e6e | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:17:57 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:17:57 | INFO | request | dispatch | 요청시작 | ID=88c79438 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:17:57 | INFO | request | dispatch | 요청완료 | ID=88c79438 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:18:26 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:18:26 | INFO | request | dispatch | 요청시작 | ID=6157a6d5 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:18:26 | INFO | request | dispatch | 요청완료 | ID=6157a6d5 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:18:54 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:18:54 | INFO | request | dispatch | 요청시작 | ID=864b8d3d | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:18:54 | INFO | request | dispatch | 요청완료 | ID=864b8d3d | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:19:22 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:19:22 | INFO | request | dispatch | 요청시작 | ID=4df877bb | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:19:22 | INFO | request | dispatch | 요청완료 | ID=4df877bb | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:19:50 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:19:50 | INFO | request | dispatch | 요청시작 | ID=ad7c9171 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:19:50 | INFO | request | dispatch | 요청완료 | ID=ad7c9171 | GET /health | Status=200 | 처리시간=0.002초
+2025-12-21 14:20:19 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:20:19 | INFO | request | dispatch | 요청시작 | ID=6f6f9eb9 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:20:19 | INFO | request | dispatch | 요청완료 | ID=6f6f9eb9 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:20:47 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:20:47 | INFO | request | dispatch | 요청시작 | ID=17fc8a23 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:20:47 | INFO | request | dispatch | 요청완료 | ID=17fc8a23 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:21:15 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:21:15 | INFO | request | dispatch | 요청시작 | ID=5da1f651 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:21:15 | INFO | request | dispatch | 요청완료 | ID=5da1f651 | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 14:21:43 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:21:43 | INFO | request | dispatch | 요청시작 | ID=93f4e3d2 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:21:43 | INFO | request | dispatch | 요청완료 | ID=93f4e3d2 | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 14:22:12 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:22:12 | INFO | request | dispatch | 요청시작 | ID=ed360969 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:22:12 | INFO | request | dispatch | 요청완료 | ID=ed360969 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:22:40 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:22:40 | INFO | request | dispatch | 요청시작 | ID=ac3b0787 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:22:40 | INFO | request | dispatch | 요청완료 | ID=ac3b0787 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:23:08 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:23:08 | INFO | request | dispatch | 요청시작 | ID=b79cfb81 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:23:08 | INFO | request | dispatch | 요청완료 | ID=b79cfb81 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:23:36 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:23:36 | INFO | request | dispatch | 요청시작 | ID=69f01504 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:23:36 | INFO | request | dispatch | 요청완료 | ID=69f01504 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:24:05 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:24:05 | INFO | request | dispatch | 요청시작 | ID=fab4391c | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:24:05 | INFO | request | dispatch | 요청완료 | ID=fab4391c | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:24:33 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:24:33 | INFO | request | dispatch | 요청시작 | ID=b3107905 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:24:33 | INFO | request | dispatch | 요청완료 | ID=b3107905 | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 14:25:01 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:25:01 | INFO | request | dispatch | 요청시작 | ID=e5a1937c | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:25:01 | INFO | request | dispatch | 요청완료 | ID=e5a1937c | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 14:25:30 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:25:30 | INFO | request | dispatch | 요청시작 | ID=852ef49a | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:25:30 | INFO | request | dispatch | 요청완료 | ID=852ef49a | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 14:25:58 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:25:58 | INFO | request | dispatch | 요청시작 | ID=fb05524a | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:25:58 | INFO | request | dispatch | 요청완료 | ID=fb05524a | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 14:26:26 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:26:26 | INFO | request | dispatch | 요청시작 | ID=412006dd | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:26:26 | INFO | request | dispatch | 요청완료 | ID=412006dd | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:26:54 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:26:54 | INFO | request | dispatch | 요청시작 | ID=79f350db | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:26:54 | INFO | request | dispatch | 요청완료 | ID=79f350db | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:27:23 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:27:23 | INFO | request | dispatch | 요청시작 | ID=033191b7 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:27:23 | INFO | request | dispatch | 요청완료 | ID=033191b7 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:27:51 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:27:51 | INFO | request | dispatch | 요청시작 | ID=2b757b89 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:27:51 | INFO | request | dispatch | 요청완료 | ID=2b757b89 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:28:19 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:28:19 | INFO | request | dispatch | 요청시작 | ID=6f03a931 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:28:19 | INFO | request | dispatch | 요청완료 | ID=6f03a931 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:28:47 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:28:47 | INFO | request | dispatch | 요청시작 | ID=dbbf9ff7 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:28:47 | INFO | request | dispatch | 요청완료 | ID=dbbf9ff7 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:29:16 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:29:16 | INFO | request | dispatch | 요청시작 | ID=0ae32bd8 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:29:16 | INFO | request | dispatch | 요청완료 | ID=0ae32bd8 | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 14:29:44 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:29:44 | INFO | request | dispatch | 요청시작 | ID=9e99a61a | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:29:44 | INFO | request | dispatch | 요청완료 | ID=9e99a61a | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 14:30:12 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:30:12 | INFO | request | dispatch | 요청시작 | ID=3ce461b7 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:30:12 | INFO | request | dispatch | 요청완료 | ID=3ce461b7 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:30:41 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:30:41 | INFO | request | dispatch | 요청시작 | ID=5ab8f9ab | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:30:41 | INFO | request | dispatch | 요청완료 | ID=5ab8f9ab | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:31:09 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:31:09 | INFO | request | dispatch | 요청시작 | ID=c40c1d1d | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:31:09 | INFO | request | dispatch | 요청완료 | ID=c40c1d1d | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:31:37 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:31:37 | INFO | request | dispatch | 요청시작 | ID=cf948f2c | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:31:37 | INFO | request | dispatch | 요청완료 | ID=cf948f2c | GET /health | Status=200 | 처리시간=0.000초
+2025-12-21 14:32:05 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:32:05 | INFO | request | dispatch | 요청시작 | ID=0dfb1d0f | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:32:05 | INFO | request | dispatch | 요청완료 | ID=0dfb1d0f | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:32:34 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:32:34 | INFO | request | dispatch | 요청시작 | ID=aca0ecf4 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:32:34 | INFO | request | dispatch | 요청완료 | ID=aca0ecf4 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:33:01 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:33:01 | INFO | request | dispatch | 요청시작 | ID=9b00162d | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:33:01 | INFO | request | dispatch | 요청완료 | ID=9b00162d | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:33:29 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:33:29 | INFO | request | dispatch | 요청시작 | ID=31ec6067 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:33:29 | INFO | request | dispatch | 요청완료 | ID=31ec6067 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:33:58 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:33:58 | INFO | request | dispatch | 요청시작 | ID=20f86cf9 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:33:58 | INFO | request | dispatch | 요청완료 | ID=20f86cf9 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:34:25 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:34:25 | INFO | request | dispatch | 요청시작 | ID=fc5129b7 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:34:25 | INFO | request | dispatch | 요청완료 | ID=fc5129b7 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:34:53 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:34:53 | INFO | request | dispatch | 요청시작 | ID=83730b46 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:34:53 | INFO | request | dispatch | 요청완료 | ID=83730b46 | GET /health | Status=200 | 처리시간=0.001초
+2025-12-21 14:35:21 | INFO | request | log_request_info | 요청 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:35:21 | INFO | request | dispatch | 요청시작 | ID=8a8da858 | GET /health | IP=127.0.0.1 | UA=curl/8.14.1
+2025-12-21 14:35:21 | INFO | request | dispatch | 요청완료 | ID=8a8da858 | GET /health | Status=200 | 처리시간=0.001초

@@ -27,3 +27,17 @@ updated_at
 2025-12-21 02:31:29 | ERROR | jwt | verify_token | JWT 토큰 검증 실패: Signature verification failed.
 2025-12-21 02:43:50 | ERROR | blog_router | blog_settings_page | 블로그 설정 페이지 오류 | 블로그ID=1 | 사용자=1 | 오류=blogs/settings.html
 2025-12-21 02:56:03 | ERROR | blog_router | blog_settings_page | 블로그 설정 페이지 오류 | 블로그ID=1 | 사용자=1 | 오류=blogs/settings.html
+2025-12-21 12:56:29 | ERROR | category_router | categories_tree_page | 카테고리 트리 페이지 오류 | 사용자=1 | 오류=categories/tree.html
+2025-12-21 12:56:49 | ERROR | jwt | verify_token | JWT 토큰 검증 실패: Not enough segments
+2025-12-21 12:56:52 | ERROR | jwt | verify_token | JWT 토큰 검증 실패: Not enough segments
+2025-12-21 13:24:12 | ERROR | category_router | categories_page | 카테고리 관리 페이지 오류 | 사용자=1 | 오류='app.schemas.category.TopicResponse object' has no attribute 'to_json'
+2025-12-21 13:24:34 | ERROR | category_router | categories_page | 카테고리 관리 페이지 오류 | 사용자=1 | 오류='app.schemas.category.TopicResponse object' has no attribute 'to_json'
+2025-12-21 13:28:09 | ERROR | category_router | categories_page | 카테고리 관리 페이지 오류 | 사용자=1 | 오류='app.schemas.category.TopicResponse object' has no attribute 'to_json'
+2025-12-21 13:28:11 | ERROR | category_router | categories_page | 카테고리 관리 페이지 오류 | 사용자=1 | 오류='app.schemas.category.TopicResponse object' has no attribute 'to_json'
+2025-12-21 13:42:53 | ERROR | category_router | categories_page | 카테고리 관리 페이지 오류 | 사용자=1 | 오류='app.schemas.category.TopicResponse object' has no attribute 'to_json'
+2025-12-21 13:43:14 | ERROR | category_router | categories_page | 카테고리 관리 페이지 오류 | 사용자=1 | 오류='app.schemas.category.TopicResponse object' has no attribute 'to_json'
+2025-12-21 13:43:21 | ERROR | category_router | categories_page | 카테고리 관리 페이지 오류 | 사용자=1 | 오류='app.schemas.category.TopicResponse object' has no attribute 'to_json'
+2025-12-21 14:00:07 | ERROR | category_router | categories_page | 카테고리 관리 페이지 오류 | 사용자=1 | 오류='app.schemas.category.TopicResponse object' has no attribute 'to_json'
+2025-12-21 14:02:11 | ERROR | category_router | categories_page | 카테고리 관리 페이지 오류 | 사용자=1 | 오류='app.schemas.category.TopicResponse object' has no attribute 'to_json'
+2025-12-21 14:12:16 | ERROR | category_router | categories_tree_page | 카테고리 트리 페이지 오류 | 사용자=1 | 오류=categories/tree.html
+2025-12-21 14:14:18 | ERROR | category_router | categories_tree_page | 카테고리 트리 페이지 오류 | 사용자=1 | 오류=categories/tree.html

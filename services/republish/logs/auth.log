@@ -47,3 +47,7 @@ updated_at
 2025-12-21 02:32:01 | INFO | auth_service | register_user | 회원가입 시도 | 이메일=gooooooooodz@naver.com | IP=172.18.0.1
 2025-12-21 02:32:02 | INFO | auth_service | log_auth_attempt | 인증시도 | 성공 | 사용자=gooooooooodz@naver.com | IP=172.18.0.1
 2025-12-21 02:32:02 | INFO | auth_router | register | 회원가입 완료 | 사용자=gooooooooodz@naver.com | IP=172.18.0.1
+2025-12-21 13:42:58 | INFO | auth_router | logout | 로그아웃 완료 | 사용자=gooooooooodz@naver.com | IP=172.18.0.1
+2025-12-21 13:43:01 | INFO | auth_service | login_user | 로그인 시도 | 이메일=gooooooooodz@naver.com | IP=172.18.0.1
+2025-12-21 13:43:01 | INFO | auth_service | log_auth_attempt | 인증시도 | 성공 | 사용자=gooooooooodz@naver.com | IP=172.18.0.1
+2025-12-21 13:43:01 | INFO | auth_router | login | 로그인 완료 | 사용자=gooooooooodz@naver.com | IP=172.18.0.1

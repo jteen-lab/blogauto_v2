@@ -78,7 +78,56 @@
         </div>
 
         <!-- 기능 카드들 -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <!-- 블로그 관리 -->
+            <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-indigo-500">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-indigo-100 rounded-md flex items-center justify-center">
+                            <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9.5a2.5 2.5 0 00-2.5-2.5H15"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-lg font-medium text-gray-900">블로그 관리</h3>
+                        <p class="text-sm text-gray-600">블로그 등록 및 설정</p>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <a href="/blogs" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded-md text-sm transition-colors block text-center">
+                        블로그 관리하기
+                    </a>
+                </div>
+                <div class="mt-2 text-xs text-green-500">
+                    ✅ 사용 가능
+                </div>
+            </div>
+
+            <!-- 카테고리 관리 -->
+            <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-orange-500">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 bg-orange-100 rounded-md flex items-center justify-center">
+                            <svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-lg font-medium text-gray-900">카테고리 관리</h3>
+                        <p class="text-sm text-gray-600">3계층 카테고리 시스템</p>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <a href="/categories" class="w-full bg-orange-600 hover:bg-orange-700 text-white py-2 px-4 rounded-md text-sm transition-colors block text-center">
+                        카테고리 관리하기
+                    </a>
+                </div>
+                <div class="mt-2 text-xs text-green-500">
+                    ✅ 사용 가능
+                </div>
+            </div>
             <!-- 재발행 서비스 -->
             <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500">
                 <div class="flex items-center">
@@ -161,14 +210,14 @@
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div class="text-center">
-                    <div class="text-2xl font-bold text-blue-600">Phase 1</div>
+                    <div class="text-2xl font-bold text-blue-600">Phase 3</div>
                     <div class="text-sm text-gray-600">현재 단계</div>
-                    <div class="text-xs text-gray-500 mt-1">기반 시스템 + 인증</div>
+                    <div class="text-xs text-gray-500 mt-1">카테고리 관리 완료</div>
                 </div>
 
                 <div class="text-center">
                     <div class="text-2xl font-bold text-green-600">100%</div>
-                    <div class="text-sm text-gray-600">인증 시스템</div>
+                    <div class="text-sm text-gray-600">인증 + 블로그 + 카테고리</div>
                     <div class="text-xs text-gray-500 mt-1">완료</div>
                 </div>
 

@@ -192,3 +192,101 @@
 2025-12-21 02:56:10 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
 2025-12-21 02:56:10 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
 2025-12-21 07:49:37 | WARNING | main | not_found_handler | 404 에러 | 경로=/favicon.ico | IP=172.18.0.1
+2025-12-21 12:54:20 | INFO | database | close | 데이터베이스 연결 종료
+2025-12-21 12:54:20 | INFO | main | lifespan | BlogAuto V2 애플리케이션 종료
+2025-12-21 12:54:29 | INFO | security | _init_encryption | 암호화 시스템 초기화 완료
+2025-12-21 12:54:29 | INFO | main | lifespan | BlogAuto V2 애플리케이션 시작
+2025-12-21 12:54:29 | INFO | database | initialize | 데이터베이스 연결 초기화 시작
+2025-12-21 12:54:29 | INFO | database | _test_connection | 데이터베이스 연결 테스트 성공
+2025-12-21 12:54:29 | INFO | database | initialize | 데이터베이스 연결 초기화 완료
+2025-12-21 12:54:29 | INFO | database | create_tables | 데이터베이스 테이블 생성 완료
+2025-12-21 12:54:29 | INFO | main | lifespan | 개발환경 - 데이터베이스 테이블 생성
+2025-12-21 12:56:05 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 12:56:05 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 12:56:05 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 12:56:14 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 12:56:29 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 12:56:29 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 12:56:49 | ERROR | jwt | verify_token | JWT 토큰 검증 실패: Not enough segments
+2025-12-21 12:56:52 | ERROR | jwt | verify_token | JWT 토큰 검증 실패: Not enough segments
+2025-12-21 13:21:25 | INFO | database | close | 데이터베이스 연결 종료
+2025-12-21 13:21:25 | INFO | main | lifespan | BlogAuto V2 애플리케이션 종료
+2025-12-21 13:21:35 | INFO | security | _init_encryption | 암호화 시스템 초기화 완료
+2025-12-21 13:21:35 | INFO | main | lifespan | BlogAuto V2 애플리케이션 시작
+2025-12-21 13:21:35 | INFO | database | initialize | 데이터베이스 연결 초기화 시작
+2025-12-21 13:21:35 | INFO | database | _test_connection | 데이터베이스 연결 테스트 성공
+2025-12-21 13:21:35 | INFO | database | initialize | 데이터베이스 연결 초기화 완료
+2025-12-21 13:21:35 | INFO | database | create_tables | 데이터베이스 테이블 생성 완료
+2025-12-21 13:21:35 | INFO | main | lifespan | 개발환경 - 데이터베이스 테이블 생성
+2025-12-21 13:24:01 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 13:24:12 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 13:24:12 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 13:24:12 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 13:24:34 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 13:24:34 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 13:27:17 | WARNING | main | not_found_handler | 404 에러 | 경로=/.well-known/appspecific/com.chrome.devtools.json | IP=172.18.0.1
+2025-12-21 13:28:09 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 13:28:09 | WARNING | main | not_found_handler | 404 에러 | 경로=/.well-known/appspecific/com.chrome.devtools.json | IP=172.18.0.1
+2025-12-21 13:28:10 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 13:28:11 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 13:28:12 | WARNING | main | not_found_handler | 404 에러 | 경로=/.well-known/appspecific/com.chrome.devtools.json | IP=172.18.0.1
+2025-12-21 13:28:12 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 13:42:53 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 13:42:54 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 13:42:54 | WARNING | main | not_found_handler | 404 에러 | 경로=/favicon.ico | IP=172.18.0.1
+2025-12-21 13:42:58 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 13:42:58 | INFO | jwt | blacklist_token | 토큰 블랙리스트 추가 | 사용자=1
+2025-12-21 13:43:01 | INFO | password | verify_password | 비밀번호 검증 | 결과=True | 소요시간=0.269초
+2025-12-21 13:43:01 | INFO | jwt | create_access_token | JWT 토큰 생성 | 사용자=1 | 만료=2025-12-22T13:43:01.498434
+2025-12-21 13:43:02 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 13:43:02 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 13:43:02 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 13:43:14 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 13:43:14 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 13:43:16 | WARNING | main | not_found_handler | 404 에러 | 경로=/.well-known/appspecific/com.chrome.devtools.json | IP=172.18.0.1
+2025-12-21 13:43:21 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 13:43:21 | WARNING | main | not_found_handler | 404 에러 | 경로=/.well-known/appspecific/com.chrome.devtools.json | IP=172.18.0.1
+2025-12-21 13:43:21 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 13:56:14 | INFO | database | close | 데이터베이스 연결 종료
+2025-12-21 13:56:14 | INFO | main | lifespan | BlogAuto V2 애플리케이션 종료
+2025-12-21 13:56:24 | INFO | security | _init_encryption | 암호화 시스템 초기화 완료
+2025-12-21 13:56:24 | INFO | security | _init_encryption | 암호화 시스템 초기화 완료
+2025-12-21 13:56:26 | INFO | security | _init_encryption | 암호화 시스템 초기화 완료
+2025-12-21 13:56:28 | INFO | security | _init_encryption | 암호화 시스템 초기화 완료
+2025-12-21 13:56:31 | INFO | security | _init_encryption | 암호화 시스템 초기화 완료
+2025-12-21 13:56:34 | INFO | security | _init_encryption | 암호화 시스템 초기화 완료
+2025-12-21 13:56:39 | INFO | security | _init_encryption | 암호화 시스템 초기화 완료
+2025-12-21 13:56:47 | INFO | security | _init_encryption | 암호화 시스템 초기화 완료
+2025-12-21 13:57:00 | INFO | security | _init_encryption | 암호화 시스템 초기화 완료
+2025-12-21 13:57:25 | INFO | security | _init_encryption | 암호화 시스템 초기화 완료
+2025-12-21 13:58:16 | INFO | security | _init_encryption | 암호화 시스템 초기화 완료
+2025-12-21 13:59:12 | INFO | security | _init_encryption | 암호화 시스템 초기화 완료
+2025-12-21 13:59:56 | INFO | security | _init_encryption | 암호화 시스템 초기화 완료
+2025-12-21 13:59:56 | INFO | main | lifespan | BlogAuto V2 애플리케이션 시작
+2025-12-21 13:59:56 | INFO | database | initialize | 데이터베이스 연결 초기화 시작
+2025-12-21 13:59:57 | INFO | database | _test_connection | 데이터베이스 연결 테스트 성공
+2025-12-21 13:59:57 | INFO | database | initialize | 데이터베이스 연결 초기화 완료
+2025-12-21 13:59:57 | INFO | database | create_tables | 데이터베이스 테이블 생성 완료
+2025-12-21 13:59:57 | INFO | main | lifespan | 개발환경 - 데이터베이스 테이블 생성
+2025-12-21 14:00:07 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 14:00:07 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 14:02:11 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 14:02:11 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 14:10:12 | INFO | database | close | 데이터베이스 연결 종료
+2025-12-21 14:10:12 | INFO | main | lifespan | BlogAuto V2 애플리케이션 종료
+2025-12-21 14:10:22 | INFO | security | _init_encryption | 암호화 시스템 초기화 완료
+2025-12-21 14:10:22 | INFO | main | lifespan | BlogAuto V2 애플리케이션 시작
+2025-12-21 14:10:22 | INFO | database | initialize | 데이터베이스 연결 초기화 시작
+2025-12-21 14:10:22 | INFO | database | _test_connection | 데이터베이스 연결 테스트 성공
+2025-12-21 14:10:22 | INFO | database | initialize | 데이터베이스 연결 초기화 완료
+2025-12-21 14:10:22 | INFO | database | create_tables | 데이터베이스 테이블 생성 완료
+2025-12-21 14:10:22 | INFO | main | lifespan | 개발환경 - 데이터베이스 테이블 생성
+2025-12-21 14:11:25 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 14:11:44 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 14:11:44 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 14:12:16 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 14:12:16 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 14:13:32 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 14:13:32 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 14:14:18 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 14:14:18 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1

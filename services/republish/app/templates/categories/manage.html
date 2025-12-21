@@ -75,7 +75,7 @@
                     <div
                         class="p-3 border rounded-lg mb-2 cursor-pointer hover:bg-gray-50"
                         :class="selectedTopic?.id === {{ topic.id }} ? 'border-blue-500 bg-blue-50' : 'border-gray-200'"
-                        @click="selectTopic({{ topic.to_json() | safe }})"
+                        @click="selectTopic({{ topic.model_dump_json() | safe }})"
                     >
                         <h3 class="font-medium text-gray-900">{{ topic.name }}</h3>
                         {% if topic.description %}
@@ -87,7 +87,7 @@
                             </div>
                             <div class="flex space-x-1">
                                 <button
-                                    @click.stop="editTopic({{ topic.to_json() | safe }})"
+                                    @click.stop="editTopic({{ topic.model_dump_json() | safe }})"
                                     class="text-blue-600 hover:text-blue-800 text-xs"
                                 >
                                     수정
@@ -483,8 +483,9 @@
                 try {
                     const response = await fetch(`/api/v1/categories/topics/${topicId}/subtopics`, {
                         headers: {
-                            'Authorization': `Bearer ${this.getAuthToken()}`
-                        }
+                            'Content-Type': 'application/json'
+                        },
+			credentials: 'include'
                     });
                     if (response.ok) {
                         this.subtopics = await response.json();
@@ -499,8 +500,9 @@
                 try {
                     const response = await fetch(`/api/v1/categories/subtopics/${subtopicId}/keywords`, {
                         headers: {
-                            'Authorization': `Bearer ${this.getAuthToken()}`
-                        }
+                            'Content-Type': 'application/json'
+                        },
+			credentials: 'include'
                     });
                     if (response.ok) {
                         this.keywords = await response.json();
@@ -516,9 +518,9 @@
                     const response = await fetch('/api/v1/categories/topics', {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${this.getAuthToken()}`
+                            'Content-Type': 'application/json'
                         },
+                        credentials: 'include',
                         body: JSON.stringify(this.topicForm)
                     });
 
@@ -545,9 +547,9 @@
                     const response = await fetch(`/api/v1/categories/topics/${this.topicForm.id}`, {
                         method: 'PUT',
                         headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${this.getAuthToken()}`
+                            'Content-Type': 'application/json'
                         },
+                        credentials: 'include',
                         body: JSON.stringify({
                             name: this.topicForm.name,
                             description: this.topicForm.description,
@@ -574,8 +576,9 @@
                     const response = await fetch(`/api/v1/categories/topics/${topicId}`, {
                         method: 'DELETE',
                         headers: {
-                            'Authorization': `Bearer ${this.getAuthToken()}`
-                        }
+                            'Content-Type': 'application/json'
+                        },
+                        credentials: 'include'
                     });
 
                     if (response.ok) {
@@ -597,9 +600,9 @@
                     const response = await fetch('/api/v1/categories/subtopics', {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${this.getAuthToken()}`
+                            'Content-Type': 'application/json'
                         },
+                        credentials: 'include',
                         body: JSON.stringify(this.subTopicForm)
                     });
 
@@ -624,9 +627,9 @@
                     const response = await fetch('/api/v1/categories/keywords', {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${this.getAuthToken()}`
+                            'Content-Type': 'application/json'
                         },
+                        credentials: 'include',
                         body: JSON.stringify(this.keywordForm)
                     });
 
