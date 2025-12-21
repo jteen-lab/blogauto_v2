@@ -65,6 +65,8 @@ class Blog(Base):
 
     # 관계 설정
     user = relationship("User", back_populates="blogs")
+    profile_links = relationship("BlogProfileLink", back_populates="blog")
+    publish_strategy = relationship("BlogPublishStrategy", back_populates="blog", uselist=False)
 
     def __repr__(self) -> str:
         return f"<Blog(id={self.id}, name={self.name}, platform={self.platform.value})>"

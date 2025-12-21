@@ -18,9 +18,13 @@ from .core.config import settings
 from .core.database import init_database, close_database, db_manager
 from .core.logger import get_logger
 from .middleware.logging_middleware import LoggingMiddleware
+from .scheduler import get_scheduler, republish_job
 from .routers.auth import router as auth_router
 from .routers.blogs import router as blogs_router, page_router as blogs_page_router
 from .routers.categories import router as categories_router, page_router as categories_page_router
+from .routers.profiles import router as profiles_router, page_router as profiles_page_router
+from .routers.strategies import router as strategies_router, page_router as strategies_page_router
+from .routers.republish import router as republish_router, page_router as republish_page_router
 
 logger = get_logger("main", "app.log")
 
@@ -38,9 +42,37 @@ async def lifespan(app: FastAPI):
         await db_manager.create_tables()
         logger.info("개발환경 - 데이터베이스 테이블 생성")
 
+    # 스케줄러 시작
+    try:
+        scheduler = await get_scheduler()
+        await scheduler.start()
+        logger.info("스케줄러 시작됨")
+
+        # 재발행 Job 등록 (1분마다 실행)
+        scheduler.add_job(
+            republish_job,
+            "interval",
+            minutes=1,
+            id="republish_job",
+            name="재발행 작업",
+            replace_existing=True
+        )
+        logger.info("재발행 Job 등록됨")
+
+    except Exception as e:
+        logger.error(f"스케줄러 시작 실패: {e}")
+        # 스케줄러 실패시에도 앱은 시작되도록 함
+
     yield
 
     # 종료 시
+    try:
+        scheduler = await get_scheduler()
+        await scheduler.shutdown()
+        logger.info("스케줄러 종료됨")
+    except Exception as e:
+        logger.error(f"스케줄러 종료 실패: {e}")
+
     await close_database()
     logger.info("BlogAuto V2 애플리케이션 종료")
 
@@ -73,10 +105,16 @@ app.add_middleware(LoggingMiddleware)
 app.include_router(auth_router, prefix=settings.api_v1_prefix)
 app.include_router(blogs_router, prefix=settings.api_v1_prefix)
 app.include_router(categories_router, prefix=settings.api_v1_prefix)
+app.include_router(profiles_router, prefix=settings.api_v1_prefix)
+app.include_router(strategies_router, prefix=settings.api_v1_prefix)
+app.include_router(republish_router, prefix=settings.api_v1_prefix)
 
 # 페이지 라우터 등록
 app.include_router(blogs_page_router)
 app.include_router(categories_page_router)
+app.include_router(profiles_page_router)
+app.include_router(strategies_page_router)
+app.include_router(republish_page_router)
 
 # 정적 파일 서빙 (개발환경)
 if settings.is_development:
