@@ -41,3 +41,6 @@ updated_at
 2025-12-21 14:02:11 | ERROR | category_router | categories_page | 카테고리 관리 페이지 오류 | 사용자=1 | 오류='app.schemas.category.TopicResponse object' has no attribute 'to_json'
 2025-12-21 14:12:16 | ERROR | category_router | categories_tree_page | 카테고리 트리 페이지 오류 | 사용자=1 | 오류=categories/tree.html
 2025-12-21 14:14:18 | ERROR | category_router | categories_tree_page | 카테고리 트리 페이지 오류 | 사용자=1 | 오류=categories/tree.html
+2025-12-21 14:51:04 | ERROR | category_router | categories_page | 카테고리 관리 페이지 오류 | 사용자=1 | 오류=Object of type datetime is not JSON serializable
+2025-12-21 14:51:09 | ERROR | category_router | categories_page | 카테고리 관리 페이지 오류 | 사용자=1 | 오류=Object of type datetime is not JSON serializable
+2025-12-21 14:51:23 | ERROR | category_router | categories_page | 카테고리 관리 페이지 오류 | 사용자=1 | 오류=Object of type datetime is not JSON serializable

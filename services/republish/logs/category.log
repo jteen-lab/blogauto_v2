@@ -40,3 +40,10 @@
 2025-12-21 14:38:46 | INFO | category_service | get_user_topics | 주제 목록 조회 | 사용자=1 | 개수=1
 2025-12-21 14:38:55 | INFO | category_service | get_user_topics | 주제 목록 조회 | 사용자=1 | 개수=1
 2025-12-21 14:38:59 | INFO | category_service | get_user_topics | 주제 목록 조회 | 사용자=1 | 개수=1
+2025-12-21 14:51:04 | INFO | category_service | get_user_topics | 주제 목록 조회 | 사용자=1 | 개수=1
+2025-12-21 14:51:04 | ERROR | category_router | categories_page | 카테고리 관리 페이지 오류 | 사용자=1 | 오류=Object of type datetime is not JSON serializable
+2025-12-21 14:51:09 | INFO | category_service | get_user_topics | 주제 목록 조회 | 사용자=1 | 개수=1
+2025-12-21 14:51:09 | ERROR | category_router | categories_page | 카테고리 관리 페이지 오류 | 사용자=1 | 오류=Object of type datetime is not JSON serializable
+2025-12-21 14:51:23 | INFO | category_service | get_user_topics | 주제 목록 조회 | 사용자=1 | 개수=1
+2025-12-21 14:51:23 | ERROR | category_router | categories_page | 카테고리 관리 페이지 오류 | 사용자=1 | 오류=Object of type datetime is not JSON serializable
+2025-12-21 14:53:00 | INFO | category_service | get_user_topics | 주제 목록 조회 | 사용자=1 | 개수=1

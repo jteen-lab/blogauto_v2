@@ -10,3 +10,4 @@
 2025-12-21 02:43:46 | INFO | blog_service | test_blog_connection | 블로그 연결 테스트 완료 | 블로그ID=1 | 결과=True
 2025-12-21 02:43:50 | ERROR | blog_router | blog_settings_page | 블로그 설정 페이지 오류 | 블로그ID=1 | 사용자=1 | 오류=blogs/settings.html
 2025-12-21 02:56:03 | ERROR | blog_router | blog_settings_page | 블로그 설정 페이지 오류 | 블로그ID=1 | 사용자=1 | 오류=blogs/settings.html
+2025-12-21 14:51:28 | INFO | blog_service | get_user_blogs | 블로그 목록 조회 | 사용자=1 | 개수=1
