@@ -47,6 +47,7 @@ class User(Base):
 
     # 관계 설정
     blogs = relationship("Blog", back_populates="user", lazy="dynamic")
+    topics = relationship("Topic", back_populates="user", lazy="dynamic")
 
     def __repr__(self) -> str:
         return f"<User(id={self.id}, email={self.email}, tier={self.tier.value})>"

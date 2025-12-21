@@ -10,3 +10,20 @@ updated_at
 2025-12-21 06:35:24 | ERROR | auth_service | register_user | 회원가입 실패 | 이메일=test4@example.com | 오류=greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)
 2025-12-21 06:35:59 | ERROR | auth_service | register_user | 회원가입 실패 | 이메일=success@example.com | 오류=greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)
 2025-12-21 06:41:49 | ERROR | auth_service | register_user | 회원가입 실패 | 이메일=gooooooooodz@naver.com | 오류=greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)
+2025-12-21 02:23:54 | ERROR | database | initialize | 데이터베이스 연결 실패: No module named 'psycopg2'
+2025-12-21 02:23:57 | ERROR | database | initialize | 데이터베이스 연결 실패: No module named 'psycopg2'
+2025-12-21 02:24:01 | ERROR | database | initialize | 데이터베이스 연결 실패: No module named 'psycopg2'
+2025-12-21 02:24:04 | ERROR | database | initialize | 데이터베이스 연결 실패: No module named 'psycopg2'
+2025-12-21 02:24:07 | ERROR | database | initialize | 데이터베이스 연결 실패: No module named 'psycopg2'
+2025-12-21 02:24:10 | ERROR | database | initialize | 데이터베이스 연결 실패: No module named 'psycopg2'
+2025-12-21 02:24:15 | ERROR | database | initialize | 데이터베이스 연결 실패: No module named 'psycopg2'
+2025-12-21 02:24:24 | ERROR | database | initialize | 데이터베이스 연결 실패: No module named 'psycopg2'
+2025-12-21 02:24:39 | ERROR | database | initialize | 데이터베이스 연결 실패: No module named 'psycopg2'
+2025-12-21 02:25:06 | ERROR | database | initialize | 데이터베이스 연결 실패: No module named 'psycopg2'
+2025-12-21 02:25:57 | ERROR | database | initialize | 데이터베이스 연결 실패: No module named 'psycopg2'
+2025-12-21 02:26:57 | ERROR | database | initialize | 데이터베이스 연결 실패: No module named 'psycopg2'
+2025-12-21 02:27:59 | ERROR | database | initialize | 데이터베이스 연결 실패: No module named 'psycopg2'
+2025-12-21 02:28:59 | ERROR | database | initialize | 데이터베이스 연결 실패: No module named 'psycopg2'
+2025-12-21 02:31:29 | ERROR | jwt | verify_token | JWT 토큰 검증 실패: Signature verification failed.
+2025-12-21 02:43:50 | ERROR | blog_router | blog_settings_page | 블로그 설정 페이지 오류 | 블로그ID=1 | 사용자=1 | 오류=blogs/settings.html
+2025-12-21 02:56:03 | ERROR | blog_router | blog_settings_page | 블로그 설정 페이지 오류 | 블로그ID=1 | 사용자=1 | 오류=blogs/settings.html
