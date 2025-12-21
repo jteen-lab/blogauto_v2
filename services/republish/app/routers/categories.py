@@ -20,7 +20,7 @@ from ..schemas.category import (
     SubTopicCreateRequest, SubTopicUpdateRequest, SubTopicResponse,
     KeywordCreateRequest, KeywordUpdateRequest, KeywordResponse,
     BlogCategoryCreateRequest, BlogCategoryUpdateRequest, BlogCategoryResponse,
-    CategoryTreeResponse, CategoryStatsResponse,
+    CategoryStatsResponse,
     ErrorResponse
 )
 from ..models.user import User
@@ -237,24 +237,104 @@ async def get_keywords_by_subtopic(
     return await category_service.get_keywords_by_subtopic(current_user, subtopic_id)
 
 
+@router.put(
+    "/subtopics/{subtopic_id}",
+    response_model=SubTopicResponse,
+    summary="하위 주제 수정",
+    description="하위 주제 정보를 수정합니다",
+    responses=responses
+)
+async def update_subtopic(
+    subtopic_id: int,
+    request: SubTopicUpdateRequest,
+    http_request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session)
+) -> SubTopicResponse:
+    """하위 주제 수정"""
+    client_ip = _get_client_ip(http_request)
+
+    logger.info(f"하위 주제 수정 API 요청 | 하위주제ID={subtopic_id} | 사용자={current_user.id} | IP={client_ip}")
+
+    category_service = CategoryService(db)
+    return await category_service.update_subtopic(current_user, subtopic_id, request)
+
+
+@router.delete(
+    "/subtopics/{subtopic_id}",
+    summary="하위 주제 삭제",
+    description="하위 주제를 삭제합니다 (소프트 삭제)",
+    responses={
+        **responses,
+        200: {"description": "삭제 성공"}
+    }
+)
+async def delete_subtopic(
+    subtopic_id: int,
+    http_request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """하위 주제 삭제"""
+    client_ip = _get_client_ip(http_request)
+
+    logger.info(f"하위 주제 삭제 API 요청 | 하위주제ID={subtopic_id} | 사용자={current_user.id} | IP={client_ip}")
+
+    category_service = CategoryService(db)
+    return await category_service.delete_subtopic(current_user, subtopic_id)
+
+
+@router.put(
+    "/keywords/{keyword_id}",
+    response_model=KeywordResponse,
+    summary="키워드 수정",
+    description="키워드 정보를 수정합니다",
+    responses=responses
+)
+async def update_keyword(
+    keyword_id: int,
+    request: KeywordUpdateRequest,
+    http_request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session)
+) -> KeywordResponse:
+    """키워드 수정"""
+    client_ip = _get_client_ip(http_request)
+
+    logger.info(f"키워드 수정 API 요청 | 키워드ID={keyword_id} | 사용자={current_user.id} | IP={client_ip}")
+
+    category_service = CategoryService(db)
+    return await category_service.update_keyword(current_user, keyword_id, request)
+
+
+@router.delete(
+    "/keywords/{keyword_id}",
+    summary="키워드 삭제",
+    description="키워드를 삭제합니다 (소프트 삭제)",
+    responses={
+        **responses,
+        200: {"description": "삭제 성공"}
+    }
+)
+async def delete_keyword(
+    keyword_id: int,
+    http_request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """키워드 삭제"""
+    client_ip = _get_client_ip(http_request)
+
+    logger.info(f"키워드 삭제 API 요청 | 키워드ID={keyword_id} | 사용자={current_user.id} | IP={client_ip}")
+
+    category_service = CategoryService(db)
+    return await category_service.delete_keyword(current_user, keyword_id)
+
+
 # =================================
 # 계층적 조회 API 엔드포인트
 # =================================
 
-@router.get(
-    "/tree",
-    response_model=List[CategoryTreeResponse],
-    summary="카테고리 트리 조회",
-    description="계층적 카테고리 구조를 조회합니다",
-    responses=responses
-)
-async def get_category_tree(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db_session)
-) -> List[CategoryTreeResponse]:
-    """카테고리 트리 조회"""
-    category_service = CategoryService(db)
-    return await category_service.get_category_tree(current_user)
 
 
 @router.get(
@@ -314,37 +394,6 @@ async def categories_page(
         )
 
 
-@page_router.get("/categories/tree", response_class=HTMLResponse)
-async def categories_tree_page(
-    request: Request,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db_session)
-):
-    """카테고리 트리 보기 페이지"""
-    try:
-        category_service = CategoryService(db)
-        tree = await category_service.get_category_tree(current_user)
-        stats = await category_service.get_category_stats(current_user)
-
-        return templates.TemplateResponse(
-            "categories/tree.html",
-            {
-                "request": request,
-                "user": current_user,
-                "tree": tree,
-                "stats": stats
-            }
-        )
-    except Exception as e:
-        logger.error(f"카테고리 트리 페이지 오류 | 사용자={current_user.id} | 오류={e}")
-        return templates.TemplateResponse(
-            "error.html",
-            {
-                "request": request,
-                "user": current_user,
-                "error_message": "카테고리 트리를 불러올 수 없습니다"
-            }
-        )
 
 
 # =================================

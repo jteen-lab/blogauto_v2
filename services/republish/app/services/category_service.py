@@ -1,5 +1,5 @@
 """
-카테고리 관리 비즈니스 로직
+카테고리 관리 비즈니스 로직 (Async Optimized)
 
 Features:
 - 3계층 카테고리 CRUD 작업
@@ -9,9 +9,10 @@ Features:
 """
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, desc, asc, func
+from sqlalchemy.orm import selectinload
 from fastapi import HTTPException, status
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 from ..models.category import Topic, SubTopic, Keyword, BlogCategory
 from ..models.user import User
@@ -21,7 +22,7 @@ from ..schemas.category import (
     SubTopicCreateRequest, SubTopicUpdateRequest, SubTopicResponse,
     KeywordCreateRequest, KeywordUpdateRequest, KeywordResponse,
     BlogCategoryCreateRequest, BlogCategoryUpdateRequest, BlogCategoryResponse,
-    CategoryTreeResponse, CategoryStatsResponse
+    CategoryStatsResponse
 )
 from ..core.logger import get_logger
 
@@ -104,7 +105,7 @@ class CategoryService:
         if not include_deleted:
             query = query.where(Topic.is_deleted == False)
 
-        query = query.order_by(asc(Topic.order), desc(Topic.created_at))
+        query = query.order_by(asc(Topic.name))
 
         result = await self.db.execute(query)
         topics = result.scalars().all()
@@ -271,7 +272,7 @@ class CategoryService:
         if not include_deleted:
             query = query.where(SubTopic.is_deleted == False)
 
-        query = query.order_by(asc(SubTopic.order), desc(SubTopic.created_at))
+        query = query.order_by(asc(SubTopic.name))
 
         result = await self.db.execute(query)
         subtopics = result.scalars().all()
@@ -319,13 +320,18 @@ class CategoryService:
             logger.info(f"키워드 생성 완료 | 키워드ID={keyword.id} | 사용자={user.id}")
 
             # 응답 데이터 생성 (상위 정보 포함)
-            keyword_data = keyword.to_dict()
-            keyword_data.update({
-                "subtopic_name": subtopic.name,
-                "topic_name": subtopic.topic.name if subtopic.topic else None
-            })
-
-            return KeywordResponse(**keyword_data)
+            return KeywordResponse(
+                id=keyword.id,
+                subtopic_id=keyword.subtopic_id,
+                name=keyword.name,
+                description=keyword.description,
+                order=keyword.order,
+                search_volume=keyword.search_volume,
+                difficulty=keyword.difficulty,
+                is_deleted=keyword.is_deleted,
+                created_at=keyword.created_at,
+                updated_at=keyword.updated_at
+            )
 
         except Exception as e:
             await self.db.rollback()
@@ -345,7 +351,7 @@ class CategoryService:
         if not include_deleted:
             query = query.where(Keyword.is_deleted == False)
 
-        query = query.order_by(asc(Keyword.order), desc(Keyword.search_volume))
+        query = query.order_by(asc(Keyword.name))
 
         result = await self.db.execute(query)
         keywords = result.scalars().all()
@@ -353,13 +359,18 @@ class CategoryService:
         # 응답 데이터 생성
         keyword_responses = []
         for keyword in keywords:
-            keyword_data = keyword.to_dict()
-            keyword_data.update({
-                "subtopic_name": subtopic.name,
-                "topic_name": subtopic.topic.name if subtopic.topic else None
-            })
-
-            keyword_responses.append(KeywordResponse(**keyword_data))
+            keyword_responses.append(KeywordResponse(
+                id=keyword.id,
+                subtopic_id=keyword.subtopic_id,
+                name=keyword.name,
+                description=keyword.description,
+                order=keyword.order,
+                search_volume=keyword.search_volume,
+                difficulty=keyword.difficulty,
+                is_deleted=keyword.is_deleted,
+                created_at=keyword.created_at,
+                updated_at=keyword.updated_at
+            ))
 
         return keyword_responses
 
@@ -367,29 +378,6 @@ class CategoryService:
     # 계층적 조회 메서드
     # ===============================
 
-    async def get_category_tree(self, user: User) -> List[CategoryTreeResponse]:
-        """카테고리 트리 구조 조회"""
-        topics = await self.get_user_topics(user)
-        tree_responses = []
-
-        for topic in topics:
-            # 하위 주제들 조회
-            subtopics = await self.get_subtopics_by_topic(user, topic.id)
-
-            # 각 하위 주제의 키워드들 조회
-            subtopic_data = []
-            for subtopic in subtopics:
-                keywords = await self.get_keywords_by_subtopic(user, subtopic.id)
-                subtopic_dict = subtopic.dict()
-                subtopic_dict["keywords"] = [kw.dict() for kw in keywords]
-                subtopic_data.append(subtopic_dict)
-
-            tree_responses.append(CategoryTreeResponse(
-                topic=topic,
-                subtopics=subtopic_data
-            ))
-
-        return tree_responses
 
     async def get_category_stats(self, user: User) -> CategoryStatsResponse:
         """카테고리 통계 조회"""
@@ -461,7 +449,7 @@ class CategoryService:
 
     async def _get_user_subtopic(self, user: User, subtopic_id: int) -> SubTopic:
         """사용자 하위주제 조회 (상위 주제 포함)"""
-        query = select(SubTopic).join(Topic).where(
+        query = select(SubTopic).options(selectinload(SubTopic.topic)).join(Topic).where(
             and_(
                 SubTopic.id == subtopic_id,
                 Topic.user_id == user.id,
@@ -558,3 +546,207 @@ class CategoryService:
 
         for keyword in keywords:
             keyword.soft_delete()
+
+    # ===============================
+    # 하위 주제 CRUD 메서드
+    # ===============================
+
+    async def update_subtopic(self, user: User, subtopic_id: int, request: SubTopicUpdateRequest) -> SubTopicResponse:
+        """하위 주제 수정"""
+        try:
+            # 하위 주제 조회
+            subtopic = await self._get_user_subtopic(user, subtopic_id)
+
+            # 중복 확인 (같은 주제 내에서)
+            await self._check_duplicate_subtopic_name(subtopic.topic_id, request.name, exclude_id=subtopic_id)
+
+            # 업데이트
+            subtopic.name = request.name
+            subtopic.description = request.description
+            subtopic.updated_at = datetime.now(timezone.utc)
+
+            await self.db.commit()
+            await self.db.refresh(subtopic)
+
+            # 키워드 개수 계산
+            keyword_count = await self._count_keywords_by_subtopic(subtopic.id)
+
+            logger.info(f"하위 주제 수정 성공 | 하위주제ID={subtopic.id} | 사용자={user.id}")
+
+            return SubTopicResponse(
+                id=subtopic.id,
+                topic_id=subtopic.topic_id,
+                name=subtopic.name,
+                description=subtopic.description,
+                order=subtopic.order,
+                is_deleted=subtopic.is_deleted,
+                created_at=subtopic.created_at,
+                updated_at=subtopic.updated_at,
+                topic_name=subtopic.topic.name if subtopic.topic else None,
+                keyword_count=keyword_count
+            )
+
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"하위 주제 수정 실패 | 하위주제ID={subtopic_id} | 사용자={user.id} | 오류={e}")
+            raise
+
+    async def delete_subtopic(self, user: User, subtopic_id: int) -> dict:
+        """하위 주제 삭제 (소프트 삭제)"""
+        try:
+            # 하위 주제 조회
+            subtopic = await self._get_user_subtopic(user, subtopic_id)
+
+            # 연관된 키워드들 소프트 삭제
+            await self._soft_delete_keywords_by_subtopic(subtopic_id)
+
+            # 하위 주제 소프트 삭제
+            subtopic.soft_delete()
+
+            await self.db.commit()
+
+            logger.info(f"하위 주제 삭제 성공 | 하위주제ID={subtopic_id} | 사용자={user.id}")
+
+            return {"message": "하위 주제가 삭제되었습니다", "subtopic_id": subtopic_id}
+
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"하위 주제 삭제 실패 | 하위주제ID={subtopic_id} | 사용자={user.id} | 오류={e}")
+            raise
+
+    # ===============================
+    # 키워드 CRUD 메서드
+    # ===============================
+
+    async def update_keyword(self, user: User, keyword_id: int, request: KeywordUpdateRequest) -> KeywordResponse:
+        """키워드 수정"""
+        try:
+            # 키워드 조회
+            keyword = await self._get_user_keyword(user, keyword_id)
+
+            # 중복 확인 (같은 하위 주제 내에서)
+            await self._check_duplicate_keyword_name(keyword.subtopic_id, request.name, exclude_id=keyword_id)
+
+            # 업데이트
+            keyword.name = request.name
+            keyword.description = request.description
+            keyword.search_volume = request.search_volume
+            keyword.difficulty = request.difficulty
+            keyword.updated_at = datetime.now(timezone.utc)
+
+            await self.db.commit()
+            await self.db.refresh(keyword)
+
+            logger.info(f"키워드 수정 성공 | 키워드ID={keyword.id} | 사용자={user.id}")
+
+            return KeywordResponse(
+                id=keyword.id,
+                subtopic_id=keyword.subtopic_id,
+                name=keyword.name,
+                description=keyword.description,
+                order=keyword.order,
+                search_volume=keyword.search_volume,
+                difficulty=keyword.difficulty,
+                is_deleted=keyword.is_deleted,
+                created_at=keyword.created_at,
+                updated_at=keyword.updated_at
+            )
+
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"키워드 수정 실패 | 키워드ID={keyword_id} | 사용자={user.id} | 오류={e}")
+            raise
+
+    async def delete_keyword(self, user: User, keyword_id: int) -> dict:
+        """키워드 삭제 (소프트 삭제)"""
+        try:
+            # 키워드 조회
+            keyword = await self._get_user_keyword(user, keyword_id)
+
+            # 소프트 삭제
+            keyword.soft_delete()
+
+            await self.db.commit()
+
+            logger.info(f"키워드 삭제 성공 | 키워드ID={keyword_id} | 사용자={user.id}")
+
+            return {"message": "키워드가 삭제되었습니다", "keyword_id": keyword_id}
+
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"키워드 삭제 실패 | 키워드ID={keyword_id} | 사용자={user.id} | 오류={e}")
+            raise
+
+    # ===============================
+    # 추가 헬퍼 메서드
+    # ===============================
+
+    async def _get_user_keyword(self, user: User, keyword_id: int) -> Keyword:
+        """사용자 키워드 조회 (상위 구조 포함)"""
+        query = select(Keyword).options(selectinload(Keyword.subtopic).selectinload(SubTopic.topic)).join(SubTopic).join(Topic).where(
+            and_(
+                Keyword.id == keyword_id,
+                Topic.user_id == user.id,
+                Topic.is_deleted == False,
+                SubTopic.is_deleted == False,
+                Keyword.is_deleted == False
+            )
+        )
+
+        result = await self.db.execute(query)
+        keyword = result.scalar_one_or_none()
+
+        if not keyword:
+            logger.warning(f"키워드 없음 | 키워드ID={keyword_id} | 사용자={user.id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="키워드를 찾을 수 없습니다"
+            )
+
+        return keyword
+
+    async def _check_duplicate_subtopic_name(self, topic_id: int, name: str, exclude_id: Optional[int] = None) -> None:
+        """하위 주제명 중복 확인"""
+        query = select(SubTopic).where(
+            and_(
+                SubTopic.topic_id == topic_id,
+                SubTopic.name == name,
+                SubTopic.is_deleted == False
+            )
+        )
+
+        if exclude_id:
+            query = query.where(SubTopic.id != exclude_id)
+
+        result = await self.db.execute(query)
+        existing_subtopic = result.scalar_one_or_none()
+
+        if existing_subtopic:
+            logger.warning(f"하위 주제명 중복 | 주제ID={topic_id} | 이름={name}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="이미 존재하는 하위 주제명입니다"
+            )
+
+    async def _check_duplicate_keyword_name(self, subtopic_id: int, name: str, exclude_id: Optional[int] = None) -> None:
+        """키워드명 중복 확인"""
+        query = select(Keyword).where(
+            and_(
+                Keyword.subtopic_id == subtopic_id,
+                Keyword.name == name,
+                Keyword.is_deleted == False
+            )
+        )
+
+        if exclude_id:
+            query = query.where(Keyword.id != exclude_id)
+
+        result = await self.db.execute(query)
+        existing_keyword = result.scalar_one_or_none()
+
+        if existing_keyword:
+            logger.warning(f"키워드명 중복 | 하위주제ID={subtopic_id} | 이름={name}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="이미 존재하는 키워드명입니다"
+            )
