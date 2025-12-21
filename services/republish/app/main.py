@@ -19,6 +19,7 @@ from .core.database import init_database, close_database, db_manager
 from .core.logger import get_logger
 from .middleware.logging_middleware import LoggingMiddleware
 from .routers.auth import router as auth_router
+from .routers.blogs import router as blogs_router, page_router as blogs_page_router
 
 logger = get_logger("main", "app.log")
 
@@ -69,6 +70,10 @@ app.add_middleware(LoggingMiddleware)
 
 # API 라우터 등록
 app.include_router(auth_router, prefix=settings.api_v1_prefix)
+app.include_router(blogs_router, prefix=settings.api_v1_prefix)
+
+# 페이지 라우터 등록
+app.include_router(blogs_page_router)
 
 # 정적 파일 서빙 (개발환경)
 if settings.is_development:
