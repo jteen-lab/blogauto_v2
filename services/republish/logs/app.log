@@ -290,3 +290,16 @@
 2025-12-21 14:13:32 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
 2025-12-21 14:14:18 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
 2025-12-21 14:14:18 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 14:36:48 | INFO | database | close | 데이터베이스 연결 종료
+2025-12-21 14:36:48 | INFO | main | lifespan | BlogAuto V2 애플리케이션 종료
+2025-12-21 14:36:58 | INFO | security | _init_encryption | 암호화 시스템 초기화 완료
+2025-12-21 14:36:58 | INFO | main | lifespan | BlogAuto V2 애플리케이션 시작
+2025-12-21 14:36:58 | INFO | database | initialize | 데이터베이스 연결 초기화 시작
+2025-12-21 14:36:58 | INFO | database | _test_connection | 데이터베이스 연결 테스트 성공
+2025-12-21 14:36:58 | INFO | database | initialize | 데이터베이스 연결 초기화 완료
+2025-12-21 14:36:58 | INFO | database | create_tables | 데이터베이스 테이블 생성 완료
+2025-12-21 14:36:58 | INFO | main | lifespan | 개발환경 - 데이터베이스 테이블 생성
+2025-12-21 14:38:46 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 14:38:55 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 14:38:59 | INFO | jwt | verify_token | JWT 토큰 검증 성공 | 사용자=1
+2025-12-21 14:40:53 | WARNING | main | not_found_handler | 404 에러 | 경로=/.well-known/appspecific/com.chrome.devtools.json | IP=172.18.0.1

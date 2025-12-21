@@ -6,6 +6,11 @@
     <title>카테고리 관리 - BlogAuto V2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+
+    <!-- Topics 데이터를 JavaScript 변수로 전달 -->
+    <script>
+        window.topicsData = {{ topics_dict | tojson | safe }};
+    </script>
 </head>
 <body class="bg-gray-100 min-h-screen">
     <!-- 네비게이션 -->
@@ -75,7 +80,7 @@
                     <div
                         class="p-3 border rounded-lg mb-2 cursor-pointer hover:bg-gray-50"
                         :class="selectedTopic?.id === {{ topic.id }} ? 'border-blue-500 bg-blue-50' : 'border-gray-200'"
-                        @click="selectTopic({{ topic.model_dump_json() | safe }})"
+                        @click="selectTopicById({{ topic.id }})"
                     >
                         <h3 class="font-medium text-gray-900">{{ topic.name }}</h3>
                         {% if topic.description %}
@@ -87,7 +92,7 @@
                             </div>
                             <div class="flex space-x-1">
                                 <button
-                                    @click.stop="editTopic({{ topic.model_dump_json() | safe }})"
+                                    @click.stop="editTopicById({{ topic.id }})"
                                     class="text-blue-600 hover:text-blue-800 text-xs"
                                 >
                                     수정
@@ -464,7 +469,18 @@
                 return localStorage.getItem('access_token');
             },
 
-            // 주제 선택
+            // ID로 주제 선택
+            async selectTopicById(topicId) {
+                const topic = window.topicsData.find(t => t.id === topicId);
+                if (topic) {
+                    this.selectedTopic = topic;
+                    this.selectedSubTopic = null;
+                    this.keywords = [];
+                    await this.loadSubTopics(topic.id);
+                }
+            },
+
+            // 주제 선택 (기존 함수도 유지)
             async selectTopic(topic) {
                 this.selectedTopic = topic;
                 this.selectedSubTopic = null;
@@ -533,6 +549,14 @@
                 } catch (error) {
                     console.error('주제 생성 실패:', error);
                     alert('주제 생성 중 오류가 발생했습니다.');
+                }
+            },
+
+            // ID로 주제 편집
+            editTopicById(topicId) {
+                const topic = window.topicsData.find(t => t.id === topicId);
+                if (topic) {
+                    this.editTopic(topic);
                 }
             },
 

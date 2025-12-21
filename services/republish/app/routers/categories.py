@@ -289,12 +289,16 @@ async def categories_page(
         topics = await category_service.get_user_topics(current_user)
         stats = await category_service.get_category_stats(current_user)
 
+        # Pydantic 객체를 딕셔너리로 변환 (JSON 직렬화를 위해)
+        topics_dict = [topic.model_dump() for topic in topics]
+
         return templates.TemplateResponse(
             "categories/manage.html",
             {
                 "request": request,
                 "user": current_user,
-                "topics": topics,
+                "topics": topics,  # HTML 렌더링용
+                "topics_dict": topics_dict,  # JSON 직렬화용
                 "stats": stats
             }
         )
