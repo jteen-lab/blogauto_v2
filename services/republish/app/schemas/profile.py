@@ -92,6 +92,8 @@ class ProfileListResponse(BaseModel):
     interval_mode: str
     priority: int
     created_at: datetime
+    linked_blogs_count: int = 0
+    total_published: int = 0
 
     class Config:
         from_attributes = True

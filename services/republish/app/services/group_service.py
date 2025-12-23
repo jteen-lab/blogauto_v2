@@ -67,6 +67,9 @@ class GroupService:
         await self.db.commit()
         await self.db.refresh(group)
 
+        # 관계 데이터 로딩
+        await self.db.refresh(group, ['profile_links', 'blog_links'])
+
         logger.info(f"[GROUP] 생성 완료 | user={user.id} | group={group.id} | profiles={len(profile_ids)} | blogs={len(blog_ids)}")
         return group
     

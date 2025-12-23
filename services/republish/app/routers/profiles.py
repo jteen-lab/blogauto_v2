@@ -79,7 +79,7 @@ async def create_profile(
         # 응답 데이터 구성
         response_data = {
             **profile.__dict__,
-            "linked_blogs_count": 0,
+            "linked_blogs_count": await profile_service.get_linked_blogs_count(profile.id),
             "total_published": 0
         }
 
@@ -115,7 +115,7 @@ async def get_profiles(
     try:
         profile_service = ProfileService(db)
         profiles_raw = await profile_service.get_user_profiles(current_user)
-        
+
         # 프로파일에 추가 정보 첨부
         profiles = []
         for p in profiles_raw:
@@ -131,15 +131,13 @@ async def get_profiles(
                 "auto_daily_count": p.auto_daily_count,
                 "priority": p.priority,
                 "created_at": p.created_at,
-                "linked_blogs_count": 0,  # TODO: 실제 연동 블로그 수
+                "linked_blogs_count": await profile_service.get_linked_blogs_count(p.id),
                 "total_published": 0  # TODO: 실제 발행 수
             }
-            profiles.append(type("Profile", (), profile_dict)())
-        
-        stats = await profile_service.get_profile_stats(current_user)
+            profiles.append(ProfileListResponse(**profile_dict))
 
-        logger.info(f"프로파일 통계 조회 | 사용자={current_user.id}")
-        return stats
+        logger.info(f"프로파일 목록 조회 | 사용자={current_user.id} | 프로파일수={len(profiles)}")
+        return profiles
 
     except Exception as e:
         logger.error(f"프로파일 통계 조회 실패 | 사용자={current_user.id} | 오류={e}")
@@ -213,7 +211,7 @@ async def profiles_page(
                 "auto_daily_count": p.auto_daily_count,
                 "priority": p.priority,
                 "created_at": p.created_at,
-                "linked_blogs_count": 0,  # TODO: 실제 연동 블로그 수
+                "linked_blogs_count": await profile_service.get_linked_blogs_count(p.id),
                 "total_published": 0  # TODO: 실제 발행 수
             }
             profiles.append(type("Profile", (), profile_dict)())
@@ -389,7 +387,7 @@ async def update_profile(
         # 응답 데이터 구성
         response_data = {
             **profile.__dict__,
-            "linked_blogs_count": 0,
+            "linked_blogs_count": await profile_service.get_linked_blogs_count(profile.id),
             "total_published": 0
         }
 

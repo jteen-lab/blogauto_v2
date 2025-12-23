@@ -36,7 +36,7 @@ async def republish_job():
     4. 포스트 선택 및 발행/재발행 실행
     5. 다음 실행 시간 업데이트
     """
-    async with get_db_session() as db:
+    async for db in get_db_session():
         try:
             logger.info("[JOB] 재발행 Job 시작")
 

@@ -10,7 +10,7 @@ Features:
 
 from typing import List, Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_, delete
+from sqlalchemy import select, and_, or_, delete, func, distinct
 from sqlalchemy.orm import selectinload
 
 from ..models.publish_profile import PublishProfile
@@ -473,8 +473,33 @@ class ProfileService:
             
             logger.info(f"프로파일 복사 완료 | 원본={profile_id} | 복사본={new_profile.id}")
             return new_profile
-            
+
         except Exception as e:
             await self.db.rollback()
             logger.error(f"프로파일 복사 실패 | profile_id={profile_id} | 오류={e}")
             raise
+
+    async def get_linked_blogs_count(self, profile_id: int) -> int:
+        """프로파일과 연동된 블로그 수 조회 (그룹을 통해)"""
+        try:
+            from ..models.group_profile_link import GroupProfileLink
+            from ..models.blog_group_link import BlogGroupLink
+
+            # 프로파일이 속한 그룹들의 블로그 수 합계
+            query = select(func.count(distinct(BlogGroupLink.blog_id))).where(
+                BlogGroupLink.group_id.in_(
+                    select(GroupProfileLink.group_id).where(
+                        GroupProfileLink.profile_id == profile_id
+                    )
+                )
+            )
+            result = await self.db.execute(query)
+            count = result.scalar() or 0
+
+            logger.debug(f"프로파일 연동 블로그 수 조회 | 프로파일ID={profile_id} | 블로그수={count}")
+            return count
+
+        except Exception as e:
+            logger.warning(f"프로파일 연동 블로그 수 조회 실패 | 프로파일ID={profile_id} | 오류={e}")
+            # 오류 발생 시 0 반환
+            return 0

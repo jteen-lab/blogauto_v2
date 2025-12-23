@@ -103,7 +103,7 @@ async def create_group(
         description=group.description,
         is_active=group.is_active,
         profile_count=len(group.profile_links) if group.profile_links else 0,
-        blog_count=0,
+        blog_count=len(group.blog_links) if group.blog_links else 0,
         created_at=group.created_at,
         updated_at=group.updated_at
     )
