@@ -114,280 +114,28 @@ async def get_profiles(
     """프로파일 목록 조회"""
     try:
         profile_service = ProfileService(db)
-        profiles = await profile_service.get_user_profiles(current_user)
-
-        logger.info(f"프로파일 목록 조회 | 사용자={current_user.id} | 개수={len(profiles)}")
-        return profiles
-
-    except Exception as e:
-        logger.error(f"프로파일 목록 조회 실패 | 사용자={current_user.id} | 오류={e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="프로파일 목록 조회 중 오류가 발생했습니다"
-        )
-
-
-@router.get(
-    "/{profile_id}",
-    response_model=ProfileResponse,
-    summary="프로파일 상세 조회",
-    description="특정 프로파일의 상세 정보를 조회합니다",
-    responses=responses
-)
-async def get_profile(
-    profile_id: int,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db_session)
-) -> ProfileResponse:
-    """프로파일 상세 조회"""
-    try:
-        profile_service = ProfileService(db)
-        profile = await profile_service.get_profile_by_id(current_user, profile_id)
-
-        logger.info(f"프로파일 상세 조회 | 프로파일ID={profile_id} | 사용자={current_user.id}")
-        return profile
-
-    except ValueError as e:
-        logger.warning(f"프로파일 조회 실패 - 권한 없음 | 프로파일ID={profile_id} | 사용자={current_user.id}")
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="프로파일을 찾을 수 없습니다"
-        )
-    except Exception as e:
-        logger.error(f"프로파일 상세 조회 실패 | 프로파일ID={profile_id} | 사용자={current_user.id} | 오류={e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="프로파일 조회 중 오류가 발생했습니다"
-        )
-
-
-@router.put(
-    "/{profile_id}",
-    response_model=ProfileResponse,
-    summary="프로파일 수정",
-    description="프로파일 정보를 수정합니다",
-    responses=responses
-)
-async def update_profile(
-    profile_id: int,
-    request: ProfileUpdateRequest,
-    http_request: Request,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db_session)
-) -> ProfileResponse:
-    """프로파일 수정"""
-    client_ip = _get_client_ip(http_request)
-
-    logger.info(f"프로파일 수정 API 요청 | 프로파일ID={profile_id} | 사용자={current_user.id} | IP={client_ip}")
-
-    try:
-        profile_service = ProfileService(db)
-        update_data = request.model_dump(exclude_unset=True)
-        profile = await profile_service.update_profile(current_user, profile_id, update_data)
-
-        logger.info(f"프로파일 수정 성공 | 프로파일ID={profile_id} | 사용자={current_user.id}")
-        return profile
-
-    except ValueError as e:
-        logger.warning(f"프로파일 수정 실패 - 유효성 검증 오류 | 프로파일ID={profile_id} | 사용자={current_user.id} | 오류={e}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-    except Exception as e:
-        logger.error(f"프로파일 수정 실패 | 프로파일ID={profile_id} | 사용자={current_user.id} | 오류={e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="프로파일 수정 중 오류가 발생했습니다"
-        )
-
-
-@router.delete(
-    "/{profile_id}",
-    summary="프로파일 삭제",
-    description="프로파일을 삭제합니다 (소프트 삭제)",
-    responses={
-        **responses,
-        200: {"description": "삭제 성공"}
-    }
-)
-async def delete_profile(
-    profile_id: int,
-    http_request: Request,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db_session)
-) -> dict:
-    """프로파일 삭제"""
-    client_ip = _get_client_ip(http_request)
-
-    logger.info(f"프로파일 삭제 API 요청 | 프로파일ID={profile_id} | 사용자={current_user.id} | IP={client_ip}")
-
-    try:
-        profile_service = ProfileService(db)
-        await profile_service.delete_profile(current_user, profile_id)
-
-        logger.info(f"프로파일 삭제 성공 | 프로파일ID={profile_id} | 사용자={current_user.id}")
-        return {"message": "프로파일이 삭제되었습니다"}
-
-    except ValueError as e:
-        logger.warning(f"프로파일 삭제 실패 - 권한 없음 | 프로파일ID={profile_id} | 사용자={current_user.id}")
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="프로파일을 찾을 수 없습니다"
-        )
-    except Exception as e:
-        logger.error(f"프로파일 삭제 실패 | 프로파일ID={profile_id} | 사용자={current_user.id} | 오류={e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="프로파일 삭제 중 오류가 발생했습니다"
-        )
-
-
-# ===========================================
-# 블로그 연동 API
-# ===========================================
-
-@router.post(
-    "/{profile_id}/link/{blog_id}",
-    response_model=BlogLinkResponse,
-    summary="블로그 연동",
-    description="프로파일에 블로그를 연동합니다",
-    responses=responses
-)
-async def link_blog(
-    profile_id: int,
-    blog_id: int,
-    http_request: Request,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db_session)
-) -> BlogLinkResponse:
-    """블로그 연동"""
-    client_ip = _get_client_ip(http_request)
-
-    logger.info(f"블로그 연동 API 요청 | 프로파일ID={profile_id} | 블로그ID={blog_id} | 사용자={current_user.id} | IP={client_ip}")
-
-    try:
-        profile_service = ProfileService(db)
-        result = await profile_service.link_blog(current_user, profile_id, blog_id)
-
-        response = BlogLinkResponse(
-            profile_id=profile_id,
-            blog_id=blog_id,
-            message="블로그가 성공적으로 연동되었습니다",
-            success=True
-        )
-
-        logger.info(f"블로그 연동 성공 | 프로파일ID={profile_id} | 블로그ID={blog_id} | 사용자={current_user.id}")
-        return response
-
-    except ValueError as e:
-        logger.warning(f"블로그 연동 실패 - 유효성 검증 오류 | 프로파일ID={profile_id} | 블로그ID={blog_id} | 사용자={current_user.id} | 오류={e}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-    except Exception as e:
-        logger.error(f"블로그 연동 실패 | 프로파일ID={profile_id} | 블로그ID={blog_id} | 사용자={current_user.id} | 오류={e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="블로그 연동 중 오류가 발생했습니다"
-        )
-
-
-@router.delete(
-    "/{profile_id}/unlink/{blog_id}",
-    summary="블로그 연동 해제",
-    description="프로파일에서 블로그 연동을 해제합니다",
-    responses={
-        **responses,
-        200: {"description": "연동 해제 성공"}
-    }
-)
-async def unlink_blog(
-    profile_id: int,
-    blog_id: int,
-    http_request: Request,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db_session)
-) -> dict:
-    """블로그 연동 해제"""
-    client_ip = _get_client_ip(http_request)
-
-    logger.info(f"블로그 연동 해제 API 요청 | 프로파일ID={profile_id} | 블로그ID={blog_id} | 사용자={current_user.id} | IP={client_ip}")
-
-    try:
-        profile_service = ProfileService(db)
-        await profile_service.unlink_blog(current_user, profile_id, blog_id)
-
-        logger.info(f"블로그 연동 해제 성공 | 프로파일ID={profile_id} | 블로그ID={blog_id} | 사용자={current_user.id}")
-        return {"message": "블로그 연동이 해제되었습니다"}
-
-    except ValueError as e:
-        logger.warning(f"블로그 연동 해제 실패 - 권한 없음 | 프로파일ID={profile_id} | 블로그ID={blog_id} | 사용자={current_user.id}")
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="연동 정보를 찾을 수 없습니다"
-        )
-    except Exception as e:
-        logger.error(f"블로그 연동 해제 실패 | 프로파일ID={profile_id} | 블로그ID={blog_id} | 사용자={current_user.id} | 오류={e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="블로그 연동 해제 중 오류가 발생했습니다"
-        )
-
-
-@router.get(
-    "/{profile_id}/blogs",
-    response_model=List[LinkedBlogResponse],
-    summary="연동된 블로그 목록",
-    description="프로파일에 연동된 블로그 목록을 조회합니다",
-    responses=responses
-)
-async def get_linked_blogs(
-    profile_id: int,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db_session)
-) -> List[LinkedBlogResponse]:
-    """연동된 블로그 목록 조회"""
-    try:
-        profile_service = ProfileService(db)
-        blogs = await profile_service.get_linked_blogs(current_user, profile_id)
-
-        logger.info(f"연동된 블로그 목록 조회 | 프로파일ID={profile_id} | 사용자={current_user.id} | 개수={len(blogs)}")
-        return blogs
-
-    except ValueError as e:
-        logger.warning(f"연동된 블로그 목록 조회 실패 - 권한 없음 | 프로파일ID={profile_id} | 사용자={current_user.id}")
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="프로파일을 찾을 수 없습니다"
-        )
-    except Exception as e:
-        logger.error(f"연동된 블로그 목록 조회 실패 | 프로파일ID={profile_id} | 사용자={current_user.id} | 오류={e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="연동된 블로그 목록 조회 중 오류가 발생했습니다"
-        )
-
-
-# ===========================================
-# 통계 API
-# ===========================================
-
-@router.get(
-    "/stats/summary",
-    response_model=ProfileStatsResponse,
-    summary="프로파일 통계 조회",
-    description="사용자의 프로파일 전체 통계를 조회합니다",
-    responses=responses
-)
-async def get_profile_stats(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db_session)
-) -> ProfileStatsResponse:
-    """프로파일 통계 조회"""
-    try:
-        profile_service = ProfileService(db)
+        profiles_raw = await profile_service.get_user_profiles(current_user)
+        
+        # 프로파일에 추가 정보 첨부
+        profiles = []
+        for p in profiles_raw:
+            profile_dict = {
+                "id": p.id,
+                "name": p.name,
+                "is_active": p.is_active,
+                "min_post_count": p.min_post_count,
+                "post_range_start": p.post_range_start,
+                "post_range_end": p.post_range_end,
+                "interval_mode": p.interval_mode,
+                "manual_interval_minutes": p.manual_interval_minutes,
+                "auto_daily_count": p.auto_daily_count,
+                "priority": p.priority,
+                "created_at": p.created_at,
+                "linked_blogs_count": 0,  # TODO: 실제 연동 블로그 수
+                "total_published": 0  # TODO: 실제 발행 수
+            }
+            profiles.append(type("Profile", (), profile_dict)())
+        
         stats = await profile_service.get_profile_stats(current_user)
 
         logger.info(f"프로파일 통계 조회 | 사용자={current_user.id}")
@@ -448,7 +196,28 @@ async def profiles_page(
     """프로파일 목록 페이지"""
     try:
         profile_service = ProfileService(db)
-        profiles = await profile_service.get_user_profiles(current_user)
+        profiles_raw = await profile_service.get_user_profiles(current_user)
+        
+        # 프로파일에 추가 정보 첨부
+        profiles = []
+        for p in profiles_raw:
+            profile_dict = {
+                "id": p.id,
+                "name": p.name,
+                "is_active": p.is_active,
+                "min_post_count": p.min_post_count,
+                "post_range_start": p.post_range_start,
+                "post_range_end": p.post_range_end,
+                "interval_mode": p.interval_mode,
+                "manual_interval_minutes": p.manual_interval_minutes,
+                "auto_daily_count": p.auto_daily_count,
+                "priority": p.priority,
+                "created_at": p.created_at,
+                "linked_blogs_count": 0,  # TODO: 실제 연동 블로그 수
+                "total_published": 0  # TODO: 실제 발행 수
+            }
+            profiles.append(type("Profile", (), profile_dict)())
+        
         stats = await profile_service.get_profile_stats(current_user)
 
         return templates.TemplateResponse(
@@ -487,3 +256,227 @@ def _get_client_ip(request: Request) -> str:
         return real_ip.strip()
 
     return request.client.host if request.client else "unknown"
+
+@page_router.get("/profiles/new", response_class=HTMLResponse)
+async def profile_create_page(
+    request: Request,
+    current_user: User = Depends(get_current_user)
+):
+    """프로파일 생성 페이지"""
+    return templates.TemplateResponse(
+        "profiles/form.html",
+        {
+            "request": request,
+            "user": current_user,
+            "profile": None
+        }
+    )
+
+
+@page_router.get("/profiles/{profile_id}/edit", response_class=HTMLResponse)
+async def profile_edit_page(
+    profile_id: int,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """프로파일 수정 페이지"""
+    try:
+        profile_service = ProfileService(db)
+        profile = await profile_service.get_profile_by_id(current_user, profile_id)
+        return templates.TemplateResponse(
+            "profiles/form.html",
+            {
+                "request": request,
+                "user": current_user,
+                "profile": profile
+            }
+        )
+    except ValueError:
+        return templates.TemplateResponse(
+            "error.html",
+            {
+                "request": request,
+                "user": current_user,
+                "error_message": "프로파일을 찾을 수 없습니다"
+            }
+        )
+    except Exception as e:
+        logger.error(f"프로파일 수정 페이지 오류 | 프로파일ID={profile_id} | 사용자={current_user.id} | 오류={e}")
+        return templates.TemplateResponse(
+            "error.html",
+            {
+                "request": request,
+                "user": current_user,
+                "error_message": "프로파일 정보를 불러올 수 없습니다"
+            }
+        )
+
+
+@page_router.get("/profiles/{profile_id}/stats", response_class=HTMLResponse)
+async def profile_stats_page(
+    profile_id: int,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """프로파일 통계 페이지"""
+    try:
+        profile_service = ProfileService(db)
+        profile = await profile_service.get_profile_by_id(current_user, profile_id)
+        # 간단한 통계 데이터
+        stats = {
+            "profile": profile,
+            "total_published": 0,
+            "success_rate": 0.0,
+            "linked_blogs": []
+        }
+        return templates.TemplateResponse(
+            "profiles/stats.html",
+            {
+                "request": request,
+                "user": current_user,
+                "profile": profile,
+                "stats": stats
+            }
+        )
+    except ValueError:
+        return templates.TemplateResponse(
+            "error.html",
+            {
+                "request": request,
+                "user": current_user,
+                "error_message": "프로파일을 찾을 수 없습니다"
+            }
+        )
+    except Exception as e:
+        logger.error(f"프로파일 통계 페이지 오류 | 프로파일ID={profile_id} | 사용자={current_user.id} | 오류={e}")
+        return templates.TemplateResponse(
+            "error.html",
+            {
+                "request": request,
+                "user": current_user,
+                "error_message": "프로파일 통계를 불러올 수 없습니다"
+            }
+        )
+
+
+@router.put(
+    "/{profile_id}",
+    response_model=ProfileResponse,
+    summary="프로파일 수정",
+    description="기존 프로파일을 수정합니다",
+    responses=responses
+)
+async def update_profile(
+    profile_id: int,
+    request: ProfileUpdateRequest,
+    http_request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session)
+) -> ProfileResponse:
+    """프로파일 수정"""
+    client_ip = _get_client_ip(http_request)
+
+    logger.info(f"프로파일 수정 API 요청 | 프로파일ID={profile_id} | 사용자={current_user.id} | IP={client_ip}")
+
+    try:
+        profile_service = ProfileService(db)
+        update_data = request.model_dump(exclude_unset=True)
+        logger.info(f"프로파일 수정 요청 데이터 | update_data={update_data}")
+        profile = await profile_service.update_profile(current_user, profile_id, update_data)
+
+        # 응답 데이터 구성
+        response_data = {
+            **profile.__dict__,
+            "linked_blogs_count": 0,
+            "total_published": 0
+        }
+
+        logger.info(f"프로파일 수정 성공 | 프로파일ID={profile_id} | 사용자={current_user.id}")
+        return ProfileResponse(**response_data)
+
+    except ValueError as e:
+        error_msg = str(e)
+        # 중복 이름 오류인지 확인
+        if "이미" in error_msg and "이름의 프로파일이 존재합니다" in error_msg:
+            logger.warning(f"프로파일 수정 실패 - 중복 이름 | 프로파일ID={profile_id} | 사용자={current_user.id} | 오류={error_msg}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_msg
+            )
+        else:
+            logger.warning(f"프로파일 수정 실패 - 권한 없음 | 프로파일ID={profile_id} | 사용자={current_user.id} | 오류={error_msg}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="프로파일을 찾을 수 없습니다"
+            )
+    except Exception as e:
+        logger.error(f"프로파일 수정 실패 | 프로파일ID={profile_id} | 사용자={current_user.id} | 오류={e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="프로파일 수정 중 오류가 발생했습니다"
+        )
+
+
+@router.delete(
+    "/{profile_id}",
+    summary="프로파일 삭제",
+    description="프로파일을 삭제합니다",
+    responses=responses
+)
+async def delete_profile(
+    profile_id: int,
+    http_request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """프로파일 삭제 API"""
+    client_ip = _get_client_ip(http_request)
+
+    logger.info(f"프로파일 삭제 API 요청 | 프로파일ID={profile_id} | 사용자={current_user.id} | IP={client_ip}")
+
+    try:
+        profile_service = ProfileService(db)
+        result = await profile_service.delete_profile(current_user, profile_id)
+
+        logger.info(f"프로파일 삭제 성공 | 프로파일ID={profile_id} | 사용자={current_user.id}")
+        return {
+            "success": True,
+            "message": result.get("message", "프로파일이 삭제되었습니다")
+        }
+
+    except ValueError as e:
+        logger.warning(f"프로파일 삭제 실패 - 권한 없음 | 프로파일ID={profile_id} | 사용자={current_user.id}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="프로파일을 찾을 수 없습니다"
+        )
+    except Exception as e:
+        logger.error(f"프로파일 삭제 실패 | 프로파일ID={profile_id} | 사용자={current_user.id} | 오류={e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="프로파일 삭제 중 오류가 발생했습니다"
+        )
+
+
+@router.post("/{profile_id}/copy")
+async def copy_profile(
+    profile_id: int,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_user)
+):
+    """프로파일 복사 API"""
+    try:
+        profile_service = ProfileService(db)
+        new_profile = await profile_service.copy_profile(profile_id, current_user)
+        return {
+            "success": True,
+            "message": "프로파일이 복사되었습니다",
+            "profile_id": new_profile.id
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"프로파일 복사 실패 | profile_id={profile_id} | 오류={e}")
+        raise HTTPException(status_code=500, detail="프로파일 복사에 실패했습니다")

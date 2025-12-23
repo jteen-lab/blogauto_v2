@@ -17,7 +17,6 @@ from sqlalchemy.orm import selectinload
 
 from ..core.database import get_db_session
 from ..models import Blog, Post, PublishProfile, BlogProfileLink
-from ..services.strategy_service import StrategyService
 from ..services.publish_service import PublishService
 from ..services.platform_limiter import PlatformLimiter
 from ..core.logger import get_logger
@@ -102,7 +101,6 @@ async def _process_link(db: AsyncSession, link: BlogProfileLink):
         logger.info(f"[PROCESS] 링크 처리 시작 | 블로그={blog.name} | 프로파일={profile.name}")
 
         # 서비스 초기화
-        strategy_service = StrategyService(db)
         publish_service = PublishService(db)
         platform_limiter = PlatformLimiter(db)
 
@@ -118,9 +116,8 @@ async def _process_link(db: AsyncSession, link: BlogProfileLink):
             return
 
         # 발행 vs 재발행 결정
-        action, reason = await strategy_service.should_publish_or_republish(
-            blog.user, blog.id
-        )
+        # 현재는 재발행 전용 (발행 프로파일 추가 시 분기 로직 구현 예정)
+        action, reason = "republish", "재발행 프로파일"
 
         logger.info(f"[PROCESS] 전략 결정 | 액션={action} | 이유={reason}")
 

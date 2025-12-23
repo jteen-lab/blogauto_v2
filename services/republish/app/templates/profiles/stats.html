@@ -2,401 +2,68 @@
 
 {% block title %}프로파일 통계 - BlogAuto V2{% endblock %}
 
-{% block extra_css %}
-<style>
-    .stats-card {
-        @apply bg-white overflow-hidden shadow rounded-lg;
-        transition: all 0.3s ease;
-    }
-
-    .stats-card:hover {
-        @apply shadow-lg;
-    }
-
-    .stat-icon {
-        @apply h-8 w-8;
-    }
-
-    .chart-container {
-        @apply bg-white p-6 rounded-lg shadow;
-        min-height: 300px;
-    }
-
-    .blog-item {
-        @apply flex items-center justify-between p-4 bg-gray-50 rounded-lg;
-        transition: all 0.2s ease;
-    }
-
-    .blog-item:hover {
-        @apply bg-gray-100;
-    }
-
-    .activity-item {
-        @apply flex items-start space-x-3 py-3 border-b border-gray-200 last:border-b-0;
-    }
-
-    .activity-icon {
-        @apply h-6 w-6 text-gray-400;
-    }
-
-    .badge-success {
-        @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800;
-    }
-
-    .badge-warning {
-        @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800;
-    }
-
-    .badge-error {
-        @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800;
-    }
-</style>
-{% endblock %}
-
 {% block content %}
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" x-data="profileStatsApp()">
-    <!-- 헤더 -->
+<div class="max-w-4xl mx-auto px-4 py-8">
     <div class="mb-8">
-        <nav class="flex" aria-label="Breadcrumb">
-            <ol class="flex items-center space-x-4">
-                <li>
-                    <a href="/profiles" class="text-gray-400 hover:text-gray-500">
-                        <span>프로파일</span>
-                    </a>
-                </li>
-                <li>
-                    <svg class="flex-shrink-0 h-5 w-5 text-gray-300" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                        <path d="M5.555 17.776l8-16 .894.448-8 16-.894-.448z" />
-                    </svg>
-                    <span class="text-gray-500">통계</span>
-                </li>
-            </ol>
-        </nav>
-        <h1 class="mt-2 text-2xl font-bold text-gray-900">{{ stats.profile_name }} - 통계</h1>
-        <p class="mt-1 text-sm text-gray-500">프로파일의 발행 성과와 활동 내역을 확인하세요</p>
+        <a href="/profiles" class="text-blue-600 hover:underline text-sm">← 프로파일 목록으로</a>
+        <h1 class="mt-2 text-2xl font-bold text-gray-900">{{ profile.name }} - 통계</h1>
     </div>
 
-    <!-- 요약 통계 -->
-    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
-        <!-- 총 발행 횟수 -->
-        <div class="stats-card">
-            <div class="p-5">
-                <div class="flex items-center">
-                    <div class="flex-shrink-0">
-                        <svg class="stat-icon text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
-                        </svg>
-                    </div>
-                    <div class="ml-5 w-0 flex-1">
-                        <dl>
-                            <dt class="text-sm font-medium text-gray-500 truncate">총 발행 횟수</dt>
-                            <dd class="text-lg font-medium text-gray-900">{{ stats.total_published }}</dd>
-                        </dl>
-                    </div>
-                </div>
-            </div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="text-sm text-gray-500">총 발행 횟수</div>
+            <div class="text-2xl font-bold text-blue-600">{{ stats.total_published }}</div>
         </div>
-
-        <!-- 성공한 발행 -->
-        <div class="stats-card">
-            <div class="p-5">
-                <div class="flex items-center">
-                    <div class="flex-shrink-0">
-                        <svg class="stat-icon text-green-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                    </div>
-                    <div class="ml-5 w-0 flex-1">
-                        <dl>
-                            <dt class="text-sm font-medium text-gray-500 truncate">성공한 발행</dt>
-                            <dd class="text-lg font-medium text-gray-900">{{ stats.successful_publishes }}</dd>
-                        </dl>
-                    </div>
-                </div>
-            </div>
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="text-sm text-gray-500">성공률</div>
+            <div class="text-2xl font-bold text-green-600">{{ "%.1f"|format(stats.success_rate) }}%</div>
         </div>
-
-        <!-- 실패한 발행 -->
-        <div class="stats-card">
-            <div class="p-5">
-                <div class="flex items-center">
-                    <div class="flex-shrink-0">
-                        <svg class="stat-icon text-red-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                    </div>
-                    <div class="ml-5 w-0 flex-1">
-                        <dl>
-                            <dt class="text-sm font-medium text-gray-500 truncate">실패한 발행</dt>
-                            <dd class="text-lg font-medium text-gray-900">{{ stats.failed_publishes }}</dd>
-                        </dl>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 성공률 -->
-        <div class="stats-card">
-            <div class="p-5">
-                <div class="flex items-center">
-                    <div class="flex-shrink-0">
-                        <svg class="stat-icon text-purple-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                        </svg>
-                    </div>
-                    <div class="ml-5 w-0 flex-1">
-                        <dl>
-                            <dt class="text-sm font-medium text-gray-500 truncate">성공률</dt>
-                            <dd class="text-lg font-medium text-gray-900">{{ "%.1f"|format(stats.success_rate) }}%</dd>
-                        </dl>
-                    </div>
-                </div>
-            </div>
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="text-sm text-gray-500">연동 블로그</div>
+            <div class="text-2xl font-bold text-purple-600">{{ stats.linked_blogs|length }}</div>
         </div>
     </div>
 
-    <!-- 차트 섹션 -->
-    <div class="grid grid-cols-1 gap-6 lg:grid-cols-2 mb-8">
-        <!-- 시간대별 발행 통계 -->
-        <div class="chart-container">
-            <h3 class="text-lg font-medium text-gray-900 mb-4">시간대별 발행 통계</h3>
-            <canvas id="hourlyChart"></canvas>
-        </div>
-
-        <!-- 일별 발행 통계 -->
-        <div class="chart-container">
-            <h3 class="text-lg font-medium text-gray-900 mb-4">일별 발행 통계 (최근 30일)</h3>
-            <canvas id="dailyChart"></canvas>
-        </div>
+    <div class="bg-white rounded-lg shadow p-6">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">프로파일 설정</h3>
+        <dl class="grid grid-cols-2 gap-4 text-sm">
+            <div>
+                <dt class="text-gray-500">최소 포스트 수</dt>
+                <dd class="font-medium">{{ profile.min_post_count }}개</dd>
+            </div>
+            <div>
+                <dt class="text-gray-500">적용 범위</dt>
+                <dd class="font-medium">{{ profile.post_range_start }} ~ {{ profile.post_range_end or '무제한' }}</dd>
+            </div>
+            <div>
+                <dt class="text-gray-500">간격 모드</dt>
+                <dd class="font-medium">{{ '수동' if profile.interval_mode == 'manual' else '자동' }}</dd>
+            </div>
+            <div>
+                <dt class="text-gray-500">재발행 간격</dt>
+                <dd class="font-medium">
+                    {% if profile.interval_mode == 'manual' %}
+                        {{ profile.manual_interval_minutes }}분
+                    {% else %}
+                        하루 {{ profile.auto_daily_count }}회
+                    {% endif %}
+                </dd>
+            </div>
+            <div>
+                <dt class="text-gray-500">활성 시간대</dt>
+                <dd class="font-medium">{{ profile.active_hours_start }} ~ {{ profile.active_hours_end }}</dd>
+            </div>
+            <div>
+                <dt class="text-gray-500">쿨다운</dt>
+                <dd class="font-medium">{{ profile.cooldown_days }}일</dd>
+            </div>
+        </dl>
     </div>
 
-    <!-- 연동된 블로그 현황 -->
-    <div class="bg-white shadow overflow-hidden sm:rounded-lg mb-8">
-        <div class="px-4 py-5 sm:p-6">
-            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">연동된 블로그 현황</h3>
-
-            {% if stats.linked_blogs %}
-            <div class="space-y-4">
-                {% for blog in stats.linked_blogs %}
-                <div class="blog-item">
-                    <div class="flex items-center flex-1">
-                        <div class="flex-shrink-0">
-                            {% if blog.blog_platform == "wordpress" %}
-                            <div class="h-10 w-10 bg-blue-500 rounded-full flex items-center justify-center">
-                                <span class="text-white font-medium text-sm">WP</span>
-                            </div>
-                            {% elif blog.blog_platform == "blogger" %}
-                            <div class="h-10 w-10 bg-orange-500 rounded-full flex items-center justify-center">
-                                <span class="text-white font-medium text-sm">BL</span>
-                            </div>
-                            {% else %}
-                            <div class="h-10 w-10 bg-gray-500 rounded-full flex items-center justify-center">
-                                <span class="text-white font-medium text-sm">기타</span>
-                            </div>
-                            {% endif %}
-                        </div>
-                        <div class="ml-4">
-                            <p class="text-sm font-medium text-gray-900">{{ blog.blog_name }}</p>
-                            <p class="text-xs text-gray-500">{{ blog.blog_url }}</p>
-                        </div>
-                    </div>
-
-                    <div class="flex items-center space-x-4">
-                        <div class="text-right">
-                            <p class="text-sm font-medium text-gray-900">{{ blog.total_published }}개 발행</p>
-                            <p class="text-xs text-gray-500">
-                                {% if blog.last_published_at %}
-                                최근: {{ blog.last_published_at.strftime('%Y-%m-%d %H:%M') }}
-                                {% else %}
-                                발행 이력 없음
-                                {% endif %}
-                            </p>
-                        </div>
-
-                        <div>
-                            {% if blog.total_published > 0 %}
-                            <span class="badge-success">활발</span>
-                            {% else %}
-                            <span class="badge-warning">대기중</span>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-            {% else %}
-            <div class="text-center py-8">
-                <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                    <path d="M34 40h10v-4a6 6 0 00-10.712-3.714M34 40H14m20 0v-4a9.971 9.971 0 00-.712-3.714M14 40H4v-4a6 6 0 0110.713-3.714M14 40v-4c0-1.313.253-2.566.713-3.714m0 0A10.003 10.003 0 0124 26c4.21 0 7.813 2.602 9.288 6.286" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
-                </svg>
-                <h3 class="mt-2 text-sm font-medium text-gray-900">연동된 블로그가 없습니다</h3>
-                <p class="mt-1 text-sm text-gray-500">프로파일에 블로그를 연동해야 재발행이 가능합니다.</p>
-            </div>
-            {% endif %}
-        </div>
-    </div>
-
-    <!-- 최근 활동 내역 -->
-    {% if stats.recent_activity %}
-    <div class="bg-white shadow overflow-hidden sm:rounded-lg">
-        <div class="px-4 py-5 sm:p-6">
-            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">최근 활동 내역</h3>
-
-            <div class="flow-root">
-                <ul class="-my-3 divide-y divide-gray-200">
-                    {% for activity in stats.recent_activity %}
-                    <li class="activity-item">
-                        <div class="flex-shrink-0">
-                            {% if activity.type == "publish_success" %}
-                            <svg class="activity-icon text-green-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            {% elif activity.type == "publish_failed" %}
-                            <svg class="activity-icon text-red-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            {% else %}
-                            <svg class="activity-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            {% endif %}
-                        </div>
-                        <div class="min-w-0 flex-1">
-                            <p class="text-sm font-medium text-gray-900">{{ activity.title }}</p>
-                            <p class="text-sm text-gray-500">{{ activity.description }}</p>
-                        </div>
-                        <div class="text-right">
-                            <p class="text-xs text-gray-500">{{ activity.timestamp.strftime('%Y-%m-%d %H:%M') }}</p>
-                            {% if activity.type == "publish_success" %}
-                            <span class="badge-success">성공</span>
-                            {% elif activity.type == "publish_failed" %}
-                            <span class="badge-error">실패</span>
-                            {% endif %}
-                        </div>
-                    </li>
-                    {% endfor %}
-                </ul>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
-    <!-- 액션 버튼 -->
-    <div class="mt-8 flex justify-center space-x-4">
-        <button
-            @click="window.history.back()"
-            class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-        >
-            돌아가기
-        </button>
-
-        <a
-            href="/profiles/{{ stats.profile_id }}/edit"
-            class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-        >
-            프로파일 수정
-        </a>
+    <div class="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <p class="text-blue-700 text-sm">
+            📊 상세 통계 기능은 추후 업데이트될 예정입니다.
+        </p>
     </div>
 </div>
-
-<script>
-function profileStatsApp() {
-    return {
-        mounted() {
-            this.initCharts();
-        },
-
-        initCharts() {
-            this.initHourlyChart();
-            this.initDailyChart();
-        },
-
-        initHourlyChart() {
-            const ctx = document.getElementById('hourlyChart').getContext('2d');
-            const hourlyData = {{ stats.hourly_stats | tojson }};
-
-            new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: hourlyData.map(item => item.hour + ':00'),
-                    datasets: [{
-                        label: '발행 횟수',
-                        data: hourlyData.map(item => item.count),
-                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                        borderColor: 'rgb(59, 130, 246)',
-                        borderWidth: 2,
-                        fill: true,
-                        tension: 0.4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                stepSize: 1
-                            }
-                        }
-                    },
-                    plugins: {
-                        legend: {
-                            display: false
-                        }
-                    }
-                }
-            });
-        },
-
-        initDailyChart() {
-            const ctx = document.getElementById('dailyChart').getContext('2d');
-            const dailyData = {{ stats.daily_stats | tojson }};
-
-            new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: dailyData.map(item => item.date),
-                    datasets: [
-                        {
-                            label: '성공',
-                            data: dailyData.map(item => item.success),
-                            backgroundColor: 'rgba(34, 197, 94, 0.8)',
-                        },
-                        {
-                            label: '실패',
-                            data: dailyData.map(item => item.failed),
-                            backgroundColor: 'rgba(239, 68, 68, 0.8)',
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        x: {
-                            stacked: true
-                        },
-                        y: {
-                            stacked: true,
-                            beginAtZero: true,
-                            ticks: {
-                                stepSize: 1
-                            }
-                        }
-                    },
-                    plugins: {
-                        legend: {
-                            position: 'top'
-                        }
-                    }
-                }
-            });
-        }
-    }
-}
-</script>
-
-<!-- Chart.js 라이브러리 -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 {% endblock %}

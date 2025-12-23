@@ -5,282 +5,276 @@
 {% block extra_css %}
 <style>
     .form-section {
-        @apply bg-white shadow rounded-lg p-6 mb-6;
+        background: white;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
     }
-
     .form-section h3 {
-        @apply text-lg font-medium text-gray-900 mb-4 pb-2 border-b border-gray-200;
+        font-size: 1.125rem;
+        font-weight: 500;
+        color: #1f2937;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid #e5e7eb;
     }
-
-    .form-group {
-        @apply mb-4;
-    }
-
+    .form-group { margin-bottom: 1rem; }
     .form-label {
-        @apply block text-sm font-medium text-gray-700 mb-1;
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #374151;
+        margin-bottom: 0.25rem;
     }
-
-    .form-input {
-        @apply mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500;
+    .form-input, .form-select {
+        width: 100%;
+        padding: 0.5rem 0.75rem;
+        border: 1px solid #d1d5db;
+        border-radius: 0.375rem;
+        font-size: 0.875rem;
     }
-
-    .form-select {
-        @apply mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500;
+    .form-input:focus, .form-select:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
     }
-
-    .form-textarea {
-        @apply mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500;
-    }
-
-    .form-checkbox {
-        @apply h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded;
-    }
-
-    .error-input {
-        @apply border-red-300 text-red-900 placeholder-red-300 focus:ring-red-500 focus:border-red-500;
-    }
-
-    .error-message {
-        @apply mt-1 text-sm text-red-600;
-    }
-
     .help-text {
-        @apply mt-1 text-sm text-gray-500;
+        margin-top: 0.25rem;
+        font-size: 0.75rem;
+        color: #6b7280;
+    }
+    .inline-input {
+        width: 80px;
+        display: inline-block;
+        text-align: center;
+    }
+    .calculated-value {
+        display: inline-block;
+        padding: 0.25rem 0.5rem;
+        background: #f3f4f6;
+        border-radius: 0.25rem;
+        font-weight: 500;
+        color: #059669;
+    }
+    .radio-group {
+        display: flex;
+        gap: 1.5rem;
+        margin-bottom: 1rem;
+    }
+    .radio-label {
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+    }
+    .radio-label input[type="radio"] { margin-right: 0.5rem; }
+    .schedule-table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 0.75rem;
+    }
+    .schedule-table th, .schedule-table td {
+        border: 1px solid #e5e7eb;
+        padding: 0;
+        text-align: center;
+    }
+    .schedule-table th {
+        background: #f9fafb;
+        padding: 0.5rem 0.25rem;
+        font-weight: 500;
+    }
+    .time-btn {
+        width: 100%;
+        height: 28px;
+        border: none;
+        cursor: pointer;
+        transition: background-color 0.15s;
+        background: #f3f4f6;
+    }
+    .time-btn:hover { background: #e5e7eb; }
+    .time-btn.active { background: #3b82f6; color: white; }
+    .day-header { cursor: pointer; user-select: none; }
+    .day-header:hover { background: #e5e7eb; }
+    .quick-btns {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .quick-btn {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        cursor: pointer;
+        border: none;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8" x-data="profileFormApp()">
-    <!-- 헤더 -->
+<div class="max-w-4xl mx-auto px-4 py-8" x-data="profileFormApp()">
     <div class="mb-8">
-        <nav class="flex" aria-label="Breadcrumb">
-            <ol class="flex items-center space-x-4">
-                <li>
-                    <a href="/profiles" class="text-gray-400 hover:text-gray-500">
-                        <span>프로파일</span>
-                    </a>
-                </li>
-                <li>
-                    <svg class="flex-shrink-0 h-5 w-5 text-gray-300" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                        <path d="M5.555 17.776l8-16 .894.448-8 16-.894-.448z" />
-                    </svg>
-                    <span class="text-gray-500">{% if profile %}수정{% else %}생성{% endif %}</span>
-                </li>
-            </ol>
-        </nav>
+        <a href="/profiles" class="text-blue-600 hover:underline text-sm">← 프로파일 목록으로</a>
         <h1 class="mt-2 text-2xl font-bold text-gray-900">
             {% if profile %}프로파일 수정{% else %}새 프로파일 생성{% endif %}
         </h1>
-        <p class="mt-1 text-sm text-gray-500">
-            {% if profile %}
-            "{{ profile.name }}" 프로파일의 설정을 수정합니다
-            {% else %}
-            새로운 재발행 프로파일을 생성합니다
-            {% endif %}
-        </p>
+        <p class="mt-1 text-sm text-gray-500">재발행 프로파일의 조건을 설정합니다</p>
     </div>
 
     <form @submit.prevent="submitForm()">
-        <!-- 기본 정보 섹션 -->
+        <!-- 기본 정보 -->
         <div class="form-section">
-            <h3>기본 정보</h3>
+            <h3>📝 기본 정보</h3>
+            <div class="form-group">
+                <label class="form-label">프로파일 이름 <span class="text-red-500">*</span></label>
+                <input type="text" x-model="form.name" required maxlength="100" 
+                       class="form-input" placeholder="예: 초기 포스트 재발행">
+                <p class="help-text">프로파일을 구분할 수 있는 이름을 입력하세요</p>
+            </div>
+            <div class="form-group">
+                <label class="form-label">활성 상태</label>
+                <select x-model="form.is_active" class="form-select" style="width: auto;">
+                    <option value="true">활성</option>
+                    <option value="false">비활성</option>
+                </select>
+            </div>
+        </div>
 
-            <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                <div class="form-group sm:col-span-2">
-                    <label for="name" class="form-label">프로파일 이름 <span class="text-red-500">*</span></label>
-                    <input
-                        type="text"
-                        id="name"
-                        x-model="form.name"
-                        required
-                        maxlength="100"
-                        class="form-input"
-                        :class="errors.name ? 'error-input' : ''"
-                        placeholder="예: 2023년 상반기 포스트"
-                    >
-                    <div x-show="errors.name" class="error-message" x-text="errors.name"></div>
-                    <p class="help-text">프로파일을 식별할 수 있는 이름을 입력하세요</p>
+        <!-- 재발행 조건 -->
+        <div class="form-section">
+            <h3>🎯 재발행 조건</h3>
+            <div class="form-group">
+                <label class="form-label">재발행 가능 최소 포스트 수</label>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <input type="number" x-model="form.min_post_count" min="1" max="1000"
+                           class="form-input inline-input">
+                    <span class="text-gray-500">개 이상일 때 재발행 시작</span>
                 </div>
-
-                <div class="form-group sm:col-span-2">
-                    <label for="description" class="form-label">설명</label>
-                    <textarea
-                        id="description"
-                        x-model="form.description"
-                        rows="3"
-                        maxlength="500"
-                        class="form-textarea"
-                        placeholder="프로파일에 대한 설명을 입력하세요 (선택사항)"
-                    ></textarea>
-                    <p class="help-text">프로파일의 목적이나 특징을 설명하세요</p>
+                <p class="help-text">블로그에 최소 이만큼의 포스트가 누적되어야 재발행이 활성화됩니다</p>
+            </div>
+            <div class="form-group">
+                <label class="form-label">재발행 적용 구간 (누적 포스트 수 기준)</label>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-gray-500">시작</span>
+                    <input type="number" x-model="form.post_range_start" min="1"
+                           class="form-input inline-input">
+                    <span class="text-gray-500">~</span>
+                    <span class="text-gray-500">종료</span>
+                    <input type="number" x-model="form.post_range_end" min="1"
+                           class="form-input inline-input" placeholder="무제한">
+                    <span class="text-gray-400 text-sm">(비워두면 무제한)</span>
                 </div>
+                <p class="help-text">블로그에 누적된 포스트 수가 해당 범위일 때만 프로파일이 적용됩니다. 예: 누적 포스트가 1~100인 블로그에만 적용, 초과 시 미적용</p>
+            </div>
+        </div>
 
-                <div class="form-group">
-                    <label for="status" class="form-label">상태</label>
-                    <select id="status" x-model="form.status" class="form-select">
-                        <option value="active">활성</option>
-                        <option value="paused">일시정지</option>
-                        <option value="inactive">비활성</option>
-                    </select>
+        <!-- 스케줄러 설정 -->
+        <div class="form-section">
+            <h3>⏱️ 스케줄러 설정</h3>
+            
+            <!-- 활성 시간대 테이블 -->
+            <div class="form-group">
+                <label class="form-label">활성 시간대 (클릭하여 설정)</label>
+                
+                <!-- 빠른 설정 버튼 및 현재 활성 시간 - 테이블 위 좌측 -->
+                <div class="flex justify-between items-center mb-2 flex-wrap gap-2">
+                    <div class="quick-btns">
+                        <button type="button" @click="selectAllHours()" class="quick-btn bg-blue-500 text-white hover:bg-blue-600 shadow-sm border border-blue-600 rounded-md px-3 py-1.5 font-medium">전체 선택</button>
+                        <button type="button" @click="clearAllHours()" class="quick-btn bg-gray-500 text-white hover:bg-gray-600 shadow-sm border border-gray-600 rounded-md px-3 py-1.5 font-medium">전체 해제</button>
+                        <button type="button" @click="selectWorkingHours()" class="quick-btn bg-green-500 text-white hover:bg-green-600 shadow-sm border border-green-600 rounded-md px-3 py-1.5 font-medium">업무시간 (09~22시)</button>
+                        <span class="text-sm text-gray-500">|</span>
+                        <span class="text-sm">현재 활성: <span class="calculated-value" x-text="activeHoursCount + '시간/주'"></span></span>
+                    </div>
+                </div>
+                
+                <p class="help-text mb-2">파란색 = 활성, 회색 = 비활성 | 요일 클릭 시 해당 요일 전체 선택/해제</p>
+                <div class="overflow-x-auto">
+                    <table class="schedule-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 60px;">시간</th>
+                                <template x-for="(day, dayIdx) in days" :key="dayIdx">
+                                    <th class="day-header" @click="toggleDay(dayIdx)" x-text="day"></th>
+                                </template>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="hour in 24" :key="hour">
+                                <tr>
+                                    <td class="text-xs py-1" x-text="(hour-1).toString().padStart(2,'0') + ':00'"></td>
+                                    <template x-for="(day, dayIdx) in days" :key="dayIdx + '-' + hour">
+                                        <td>
+                                            <button type="button" 
+                                                    class="time-btn"
+                                                    :class="schedule[dayIdx][hour-1] ? 'active' : ''"
+                                                    @click="toggleHour(dayIdx, hour-1)">
+                                            </button>
+                                        </td>
+                                    </template>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 재발행 간격 설정 -->
+            <div class="form-group mt-6">
+                <label class="form-label">재발행 간격 설정 (하루 기준)</label>
+                <div class="radio-group">
+                    <label class="radio-label">
+                        <input type="radio" x-model="form.interval_mode" value="manual">
+                        <span>시간으로 설정</span>
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" x-model="form.interval_mode" value="auto">
+                        <span>횟수로 설정</span>
+                    </label>
+                </div>
+                
+                <div x-show="form.interval_mode === 'manual'" class="p-4 bg-gray-50 rounded-lg">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="text-gray-700">재발행 간격:</span>
+                        <input type="number" x-model="form.manual_interval_minutes" min="1" max="1440"
+                               class="form-input inline-input" @input="calculateFromInterval()">
+                        <span class="text-gray-500">분</span>
+                        <span class="text-gray-400">/</span>
+                        <span class="text-gray-500">하루 최대:</span>
+                        <span class="calculated-value" x-text="calculatedDailyCount + '회'"></span>
+                    </div>
+                    <p class="help-text mt-2">활성 시간대 기준으로 계산됩니다 (오늘 활성 시간: <span x-text="todayActiveHours"></span>시간)</p>
+                </div>
+                
+                <div x-show="form.interval_mode === 'auto'" class="p-4 bg-gray-50 rounded-lg">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="text-gray-700">하루 목표:</span>
+                        <input type="number" x-model="form.auto_daily_count" min="1" max="100"
+                               class="form-input inline-input" @input="calculateFromDailyCount()">
+                        <span class="text-gray-500">회</span>
+                        <span class="text-gray-400">/</span>
+                        <span class="text-gray-500">최소 간격:</span>
+                        <span class="calculated-value" x-text="calculatedInterval + '분'"></span>
+                    </div>
+                    <p class="help-text mt-2">활성 시간대 기준으로 간격이 자동 계산됩니다 (오늘 활성 시간: <span x-text="todayActiveHours"></span>시간)</p>
                 </div>
             </div>
         </div>
 
-        <!-- 포스트 범위 섹션 -->
-        <div class="form-section">
-            <h3>포스트 범위 설정</h3>
-
-            <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                <div class="form-group">
-                    <label for="start_post_id" class="form-label">시작 포스트 ID <span class="text-red-500">*</span></label>
-                    <input
-                        type="number"
-                        id="start_post_id"
-                        x-model="form.start_post_id"
-                        min="1"
-                        required
-                        class="form-input"
-                        :class="errors.start_post_id ? 'error-input' : ''"
-                    >
-                    <div x-show="errors.start_post_id" class="error-message" x-text="errors.start_post_id"></div>
-                </div>
-
-                <div class="form-group">
-                    <label for="end_post_id" class="form-label">종료 포스트 ID <span class="text-red-500">*</span></label>
-                    <input
-                        type="number"
-                        id="end_post_id"
-                        x-model="form.end_post_id"
-                        min="1"
-                        required
-                        class="form-input"
-                        :class="errors.end_post_id ? 'error-input' : ''"
-                    >
-                    <div x-show="errors.end_post_id" class="error-message" x-text="errors.end_post_id"></div>
-                </div>
-
-                <div class="form-group sm:col-span-2">
-                    <div class="flex items-center">
-                        <input
-                            id="is_sequential"
-                            type="checkbox"
-                            x-model="form.is_sequential"
-                            class="form-checkbox"
-                        >
-                        <label for="is_sequential" class="ml-2 block text-sm text-gray-900">
-                            순차적 발행
-                        </label>
-                    </div>
-                    <p class="help-text">체크하면 포스트 ID 순서대로 발행됩니다</p>
-                </div>
-            </div>
-
-            <div class="mt-4 p-4 bg-blue-50 rounded-md">
-                <div class="flex">
-                    <div class="flex-shrink-0">
-                        <svg class="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
-                        </svg>
-                    </div>
-                    <div class="ml-3">
-                        <h3 class="text-sm font-medium text-blue-800">포스트 범위 설정 안내</h3>
-                        <div class="mt-2 text-sm text-blue-700">
-                            <p>• 시작 포스트 ID는 종료 포스트 ID보다 작아야 합니다</p>
-                            <p>• 다른 프로파일과 포스트 범위가 중복되지 않도록 주의하세요</p>
-                            <p>• 포스트 ID는 실제 존재하는 포스트의 ID를 입력하세요</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 발행 조건 섹션 -->
-        <div class="form-section">
-            <h3>발행 조건 설정</h3>
-
-            <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                <div class="form-group">
-                    <label for="hours_between_posts" class="form-label">포스트간 간격 (시간) <span class="text-red-500">*</span></label>
-                    <input
-                        type="number"
-                        id="hours_between_posts"
-                        x-model="form.hours_between_posts"
-                        min="1"
-                        max="168"
-                        required
-                        class="form-input"
-                    >
-                    <p class="help-text">1시간 ~ 168시간 (7일) 사이로 설정하세요</p>
-                </div>
-
-                <div class="form-group">
-                    <label for="max_posts_per_day" class="form-label">일일 최대 포스트 수</label>
-                    <input
-                        type="number"
-                        id="max_posts_per_day"
-                        x-model="form.max_posts_per_day"
-                        min="1"
-                        max="10"
-                        class="form-input"
-                    >
-                    <p class="help-text">하루에 발행할 수 있는 최대 포스트 개수</p>
-                </div>
-
-                <div class="form-group">
-                    <label for="time_condition_type" class="form-label">시간 조건 타입</label>
-                    <select id="time_condition_type" x-model="form.time_condition_type" class="form-select">
-                        <option value="interval_hours">간격 기준</option>
-                        <option value="specific_hours">특정 시간대</option>
-                        <option value="weekdays_only">평일만</option>
-                    </select>
-                </div>
-
-                <div class="form-group" x-show="form.time_condition_type === 'specific_hours'">
-                    <label class="form-label">특정 시간대 선택</label>
-                    <div class="mt-2 grid grid-cols-6 gap-2">
-                        <template x-for="hour in 24" :key="hour">
-                            <label class="flex items-center">
-                                <input
-                                    type="checkbox"
-                                    :value="hour - 1"
-                                    x-model="form.specific_hours"
-                                    class="form-checkbox"
-                                >
-                                <span class="ml-1 text-sm" x-text="(hour - 1).toString().padStart(2, '0') + ':00'"></span>
-                            </label>
-                        </template>
-                    </div>
-                    <p class="help-text mt-2">포스트가 발행될 시간대를 선택하세요</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- 액션 버튼 -->
-        <div class="flex justify-end space-x-4">
-            <button
-                type="button"
-                @click="window.history.back()"
-                class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-                취소
-            </button>
-
-            <button
-                type="submit"
-                :disabled="submitting"
-                class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-            >
+        <!-- 버튼 -->
+        <div class="flex justify-end gap-4">
+            <button type="button" @click="window.history.back()"
+                    class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">취소</button>
+            <button type="submit" :disabled="submitting"
+                    class="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50">
                 <span x-show="!submitting">{% if profile %}수정{% else %}생성{% endif %}</span>
-                <span x-show="submitting">{% if profile %}수정{% else %}생성{% endif %} 중...</span>
+                <span x-show="submitting">처리 중...</span>
             </button>
         </div>
     </form>
 
-    <!-- 알림 메시지 -->
     <div x-show="message" x-transition
-         :class="messageType === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'"
-         class="fixed top-4 right-4 border rounded-md p-4 shadow-lg z-50">
+         :class="messageType === 'success' ? 'bg-green-50 border-green-400 text-green-800' : 'bg-red-50 border-red-400 text-red-800'"
+         class="fixed top-4 right-4 border rounded-lg p-4 shadow-lg z-50">
         <p x-text="message"></p>
     </div>
 </div>
@@ -291,104 +285,155 @@ function profileFormApp() {
         submitting: false,
         message: '',
         messageType: 'success',
-        errors: {},
+        calculatedDailyCount: 0,
+        calculatedInterval: 60,
+        activeHoursCount: 0,
+        todayActiveHours: 0,
+        days: ['월', '화', '수', '목', '금', '토', '일'],
+        
+        schedule: [
+            {% if profile and profile.schedule_matrix %}
+            ...JSON.parse('{{ profile.schedule_matrix | safe }}')
+            {% else %}
+            [false,false,false,false,false,false,false,false,false,true,true,true,true,true,true,true,true,true,true,true,true,true,false,false],
+            [false,false,false,false,false,false,false,false,false,true,true,true,true,true,true,true,true,true,true,true,true,true,false,false],
+            [false,false,false,false,false,false,false,false,false,true,true,true,true,true,true,true,true,true,true,true,true,true,false,false],
+            [false,false,false,false,false,false,false,false,false,true,true,true,true,true,true,true,true,true,true,true,true,true,false,false],
+            [false,false,false,false,false,false,false,false,false,true,true,true,true,true,true,true,true,true,true,true,true,true,false,false],
+            [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false],
+            [false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false]
+            {% endif %}
+        ],
 
         form: {
-            name: {% if profile %}'{{ profile.name }}'{% else %}''{% endif %},
-            description: {% if profile %}'{{ profile.description or "" }}'{% else %}''{% endif %},
-            status: {% if profile %}'{{ profile.status }}'{% else %}'active'{% endif %},
-            start_post_id: {% if profile %}{{ profile.start_post_id }}{% else %}1{% endif %},
-            end_post_id: {% if profile %}{{ profile.end_post_id }}{% else %}100{% endif %},
-            hours_between_posts: {% if profile %}{{ profile.hours_between_posts }}{% else %}24{% endif %},
-            time_condition_type: {% if profile %}'{{ profile.time_condition_type }}'{% else %}'interval_hours'{% endif %},
-            specific_hours: {% if profile and profile.specific_hours %}{{ profile.specific_hours | tojson }}{% else %}[]{% endif %},
-            max_posts_per_day: {% if profile %}{{ profile.max_posts_per_day }}{% else %}5{% endif %},
-            is_sequential: {% if profile %}{{ profile.is_sequential | tojson }}{% else %}true{% endif %}
+            name: '{{ profile.name if profile else "" }}',
+            is_active: '{{ "true" if (profile and profile.is_active) or not profile else "false" }}',
+            min_post_count: {{ profile.min_post_count if profile else 10 }},
+            post_range_start: {{ profile.post_range_start if profile else 1 }},
+            post_range_end: {{ profile.post_range_end if profile and profile.post_range_end else 'null' }},
+            interval_mode: '{{ profile.interval_mode if profile else "manual" }}',
+            manual_interval_minutes: {{ profile.manual_interval_minutes if profile and profile.manual_interval_minutes else 60 }},
+            auto_daily_count: {{ profile.auto_daily_count if profile and profile.auto_daily_count else 10 }}
+        },
+
+        init() {
+            this.updateActiveHoursCount();
+            this.calculateFromInterval();
+        },
+
+        toggleHour(dayIdx, hourIdx) {
+            this.schedule[dayIdx][hourIdx] = !this.schedule[dayIdx][hourIdx];
+            this.updateActiveHoursCount();
+            this.calculateFromInterval();
+        },
+
+        toggleDay(dayIdx) {
+            const allActive = this.schedule[dayIdx].every(h => h);
+            this.schedule[dayIdx] = this.schedule[dayIdx].map(() => !allActive);
+            this.updateActiveHoursCount();
+            this.calculateFromInterval();
+        },
+
+        selectAllHours() {
+            this.schedule = this.schedule.map(day => day.map(() => true));
+            this.updateActiveHoursCount();
+            this.calculateFromInterval();
+        },
+
+        clearAllHours() {
+            this.schedule = this.schedule.map(day => day.map(() => false));
+            this.updateActiveHoursCount();
+            this.calculateFromInterval();
+        },
+
+        selectWorkingHours() {
+            this.schedule = this.schedule.map((day, idx) => {
+                return day.map((_, hour) => idx < 5 && hour >= 9 && hour <= 21);
+            });
+            this.updateActiveHoursCount();
+            this.calculateFromInterval();
+        },
+
+        updateActiveHoursCount() {
+            let count = 0;
+            this.schedule.forEach(day => {
+                day.forEach(hour => { if (hour) count++; });
+            });
+            this.activeHoursCount = count;
+            
+            // 오늘 요일 기준 활성 시간 계산
+            const todayIdx = (new Date().getDay() + 6) % 7; // 월=0, 일=6
+            this.todayActiveHours = this.schedule[todayIdx].filter(h => h).length;
+        },
+
+        calculateFromInterval() {
+            const interval = parseInt(this.form.manual_interval_minutes) || 60;
+            const activeMinutes = this.todayActiveHours * 60;
+            this.calculatedDailyCount = activeMinutes > 0 ? Math.floor(activeMinutes / interval) : 0;
+        },
+
+        calculateFromDailyCount() {
+            const count = parseInt(this.form.auto_daily_count) || 10;
+            const activeMinutes = this.todayActiveHours * 60;
+            this.calculatedInterval = activeMinutes > 0 ? Math.floor(activeMinutes / count) : 0;
         },
 
         async submitForm() {
             this.submitting = true;
-            this.errors = {};
-
-            // 클라이언트 사이드 유효성 검증
-            if (!this.validateForm()) {
+            if (!this.form.name.trim()) {
+                this.showMessage('프로파일 이름을 입력하세요', 'error');
                 this.submitting = false;
                 return;
             }
 
+            const submitData = {
+                name: this.form.name,
+                is_active: this.form.is_active === 'true' || this.form.is_active === true,
+                min_post_count: parseInt(this.form.min_post_count),
+                post_range_start: parseInt(this.form.post_range_start),
+                post_range_end: this.form.post_range_end ? parseInt(this.form.post_range_end) : null,
+                interval_mode: this.form.interval_mode,
+                manual_interval_minutes: this.form.interval_mode === 'manual' ? parseInt(this.form.manual_interval_minutes) : null,
+                auto_daily_count: this.form.interval_mode === 'auto' ? parseInt(this.form.auto_daily_count) : null,
+                jitter_enabled: false,
+                jitter_min_percent: 0,
+                jitter_max_percent: 0,
+                active_hours_start: '00:00',
+                active_hours_end: '23:59',
+                cooldown_days: 7,
+                priority: 1,
+                schedule_matrix: JSON.stringify(this.schedule)
+            };
+
             try {
                 const url = {% if profile %}'/api/v1/profiles/{{ profile.id }}'{% else %}'/api/v1/profiles'{% endif %};
                 const method = {% if profile %}'PUT'{% else %}'POST'{% endif %};
-
                 const response = await fetch(url, {
                     method: method,
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                     credentials: 'include',
-                    body: JSON.stringify(this.form)
+                    body: JSON.stringify(submitData)
                 });
-
                 const data = await response.json();
-
                 if (response.ok) {
-                    this.showMessage({% if profile %}'프로파일이 수정되었습니다'{% else %}'프로파일이 생성되었습니다'{% endif %}, 'success');
-                    setTimeout(() => {
-                        window.location.href = '/profiles';
-                    }, 1500);
+                    this.showMessage('프로파일이 저장되었습니다', 'success');
+                    setTimeout(() => { window.location.href = '/profiles'; }, 1500);
                 } else {
-                    if (data.detail && typeof data.detail === 'object') {
-                        this.errors = data.detail;
-                    } else {
-                        throw new Error(data.detail || {% if profile %}'프로파일 수정에 실패했습니다'{% else %}'프로파일 생성에 실패했습니다'{% endif %});
-                    }
+                    const errorMsg = data.detail || '저장에 실패했습니다';
+                    throw new Error(typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : errorMsg);
                 }
             } catch (error) {
+                console.error('Submit error:', error);
                 this.showMessage(error.message, 'error');
             } finally {
                 this.submitting = false;
             }
         },
 
-        validateForm() {
-            this.errors = {};
-
-            // 프로파일 이름 검증
-            if (!this.form.name.trim()) {
-                this.errors.name = '프로파일 이름을 입력하세요';
-            } else if (this.form.name.length > 100) {
-                this.errors.name = '프로파일 이름은 100자 이하로 입력하세요';
-            }
-
-            // 포스트 범위 검증
-            if (this.form.start_post_id < 1) {
-                this.errors.start_post_id = '시작 포스트 ID는 1 이상이어야 합니다';
-            }
-
-            if (this.form.end_post_id < 1) {
-                this.errors.end_post_id = '종료 포스트 ID는 1 이상이어야 합니다';
-            }
-
-            if (this.form.end_post_id <= this.form.start_post_id) {
-                this.errors.end_post_id = '종료 포스트 ID는 시작 포스트 ID보다 커야 합니다';
-            }
-
-            // 특정 시간대 검증
-            if (this.form.time_condition_type === 'specific_hours' && this.form.specific_hours.length === 0) {
-                this.showMessage('특정 시간대를 최소 1개 이상 선택하세요', 'error');
-                return false;
-            }
-
-            return Object.keys(this.errors).length === 0;
-        },
-
         showMessage(text, type = 'success') {
             this.message = text;
             this.messageType = type;
-            setTimeout(() => {
-                this.message = '';
-            }, 5000);
+            setTimeout(() => { this.message = ''; }, 5000);
         }
     }
 }

@@ -9,7 +9,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
 
     <!-- Alpine.js for interactivity -->
-    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.3/cdn.min.js"></script>
 
     <!-- 커스텀 CSS -->
     <style>
@@ -72,33 +72,27 @@
 <body class="bg-gray-50 min-h-screen">
     <!-- 메인 컨테이너 -->
     <div class="min-h-screen flex flex-col">
-        <!-- 헤더 (로그인 페이지에서는 숨김) -->
+        <!-- 네비게이션 (로그인 페이지에서는 숨김) -->
         {% if request.url.path != '/login' %}
-        <header class="bg-white shadow-sm border-b border-gray-200">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div class="flex justify-between items-center h-16">
-                    <div class="flex items-center">
-                        <h1 class="text-xl font-bold text-gray-900">BlogAuto V2</h1>
-                    </div>
-
-                    <div class="flex items-center space-x-4">
-                        <div class="text-sm text-gray-600" x-data="{ user: null }" x-init="fetchUser()">
-                            <span x-text="user ? `안녕하세요, ${user.display_name}님` : '로딩 중...'"></span>
-                        </div>
-                        <button
-                            onclick="logout()"
-                            class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md text-sm transition-colors"
-                        >
-                            로그아웃
-                        </button>
-                    </div>
+        <nav class="bg-blue-600 text-white p-4">
+            <div class="container mx-auto flex justify-between items-center">
+                <h1 class="text-xl font-bold">BlogAuto V2</h1>
+                <div class="flex items-center space-x-4" x-data="{ user: null }" x-init="fetchUser()">
+                    <span x-text="user ? user.display_name : '로딩 중...'"></span>
+                    <a href="/blogs" class="bg-blue-700 px-3 py-2 rounded hover:bg-blue-800 transition-colors">블로그 관리</a>
+                    <a href="/profiles" class="bg-blue-700 px-3 py-2 rounded hover:bg-blue-800 transition-colors">프로파일 관리</a>
+                    <a href="/groups" class="bg-blue-700 px-3 py-2 rounded hover:bg-blue-800 transition-colors">그룹 관리</a>
+                    <a href="/categories" class="bg-blue-700 px-3 py-2 rounded hover:bg-blue-800 transition-colors">카테고리 관리</a>
+                    <a href="/dashboard" class="bg-blue-700 px-3 py-2 rounded hover:bg-blue-800 transition-colors">대시보드</a>
+                    <button onclick="logout()" class="bg-red-600 px-3 py-2 rounded hover:bg-red-700 transition-colors">로그아웃</button>
                 </div>
             </div>
-        </header>
+        </nav>
         {% endif %}
 
         <!-- 메인 콘텐츠 -->
         <main class="flex-1">
+
             {% block content %}{% endblock %}
         </main>
 

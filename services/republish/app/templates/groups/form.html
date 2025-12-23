@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+
+{% block title %}{{ "그룹 수정" if group else "새 그룹" }}{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto" x-data="groupForm()">
+    <!-- 헤더 -->
+    <div class="mb-6">
+        <a href="/groups" class="text-blue-600 hover:text-blue-800 flex items-center gap-1 mb-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+            </svg>
+            그룹 목록
+        </a>
+        <h1 class="text-2xl font-bold text-gray-900">{{ "그룹 수정" if group else "새 그룹 만들기" }}</h1>
+    </div>
+
+    <!-- 폼 -->
+    <form @submit.prevent="submitForm" class="space-y-6">
+        <!-- 기본 정보 -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4">기본 정보</h2>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">그룹명 <span class="text-red-500">*</span></label>
+                    <input type="text" x-model="form.name" required
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="예: 초기 블로그 패턴">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">설명</label>
+                    <textarea x-model="form.description" rows="3"
+                              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              placeholder="이 그룹의 용도를 설명해주세요"></textarea>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" x-model="form.is_active" id="is_active"
+                           class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                    <label for="is_active" class="text-sm text-gray-700">활성화</label>
+                </div>
+            </div>
+        </div>
+
+        <!-- 프로파일 선택 -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4">프로파일 선택</h2>
+            <p class="text-sm text-gray-500 mb-4">이 그룹에 포함할 프로파일을 선택하세요. 그룹에 블로그를 연결하면 선택된 모든 프로파일이 적용됩니다.</p>
+
+            {% if profiles %}
+            <div class="space-y-2 max-h-64 overflow-y-auto">
+                {% for profile in profiles %}
+                <label class="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                    <input type="checkbox" value="{{ profile.id }}" x-model="form.profile_ids"
+                           class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                    <div class="flex-1">
+                        <span class="font-medium text-gray-900">{{ profile.name }}</span>
+                        <span class="text-sm text-gray-500 ml-2">
+                            ({{ profile.post_range_start or 1 }} ~ {{ profile.post_range_end or "무제한" }})
+                        </span>
+                    </div>
+                    <span class="px-2 py-1 text-xs rounded-full {% if profile.is_active %}bg-green-100 text-green-800{% else %}bg-gray-100 text-gray-600{% endif %}">
+                        {{ "활성" if profile.is_active else "비활성" }}
+                    </span>
+                </label>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-8 text-gray-500">
+                <p>등록된 프로파일이 없습니다</p>
+                <a href="/profiles/new" class="text-blue-600 hover:text-blue-800 mt-2 inline-block">프로파일 만들기 →</a>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- 블로그 연결 -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4">블로그 연결 (선택사항)</h2>
+            <p class="text-sm text-gray-500 mb-4">이 그룹을 적용할 블로그를 선택하세요. 나중에 블로그 관리에서도 설정할 수 있습니다.</p>
+
+            {% if blogs %}
+            <div class="space-y-2 max-h-64 overflow-y-auto">
+                {% for blog in blogs %}
+                <label class="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                    <input type="checkbox" value="{{ blog.id }}" x-model="form.blog_ids"
+                           class="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500">
+                    <div class="flex-1">
+                        <span class="font-medium text-gray-900">{{ blog.name }}</span>
+                        <span class="text-sm text-gray-500 ml-2">({{ blog.platform.title() }})</span>
+                        {% if blog.url %}
+                        <div class="text-xs text-gray-400 mt-1">{{ blog.url }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="flex gap-2">
+                        <span class="px-2 py-1 text-xs rounded-full {% if blog.is_active %}bg-green-100 text-green-800{% else %}bg-gray-100 text-gray-600{% endif %}">
+                            {{ "활성" if blog.is_active else "비활성" }}
+                        </span>
+                        {% if blog.auto_publish %}
+                        <span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">자동발행</span>
+                        {% endif %}
+                    </div>
+                </label>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-8 text-gray-500">
+                <p>등록된 블로그가 없습니다</p>
+                <a href="/blogs/new" class="text-blue-600 hover:text-blue-800 mt-2 inline-block">블로그 등록하기 →</a>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- 버튼 -->
+        <div class="flex gap-3">
+            <button type="submit" :disabled="loading"
+                    class="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium">
+                <span x-show="!loading">{{ "수정" if group else "생성" }}</span>
+                <span x-show="loading">처리 중...</span>
+            </button>
+            <a href="/groups" class="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium">
+                취소
+            </a>
+        </div>
+    </form>
+</div>
+
+<script>
+function groupForm() {
+    return {
+        loading: false,
+        form: {
+            name: '{{ group.name if group else "" }}',
+            description: '{{ group.description if group else "" }}',
+            is_active: {{ 'true' if (group and group.is_active) or not group else 'false' }},
+            profile_ids: [{% if group %}{% for link in group.profile_links %}'{{ link.profile_id }}'{% if not loop.last %},{% endif %}{% endfor %}{% endif %}],
+            blog_ids: [{% if group %}{% for link in group.blog_links %}'{{ link.blog_id }}'{% if not loop.last %},{% endif %}{% endfor %}{% endif %}]
+        },
+        
+        async submitForm() {
+            if (!this.form.name.trim()) {
+                alert('그룹명을 입력해주세요');
+                return;
+            }
+            
+            this.loading = true;
+            
+            try {
+                const url = '{{ "/api/v1/groups/" ~ group.id if group else "/api/v1/groups" }}';
+                const method = '{{ "PUT" if group else "POST" }}';
+                
+                // profile_ids를 숫자 배열로 변환
+                const data = {
+                    ...this.form,
+                    profile_ids: this.form.profile_ids.map(id => parseInt(id))
+                };
+                
+                const response = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                if (response.ok) {
+                    window.location.href = '/groups';
+                } else {
+                    const error = await response.json();
+                    alert(error.detail || '저장에 실패했습니다');
+                }
+            } catch (error) {
+                alert('오류가 발생했습니다');
+            } finally {
+                this.loading = false;
+            }
+        }
+    }
+}
+</script>
+{% endblock %}

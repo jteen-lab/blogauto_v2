@@ -54,6 +54,7 @@ class PublishProfile(Base):
 
     # 플랫폼별 제한 오버라이드
     platform_overrides = Column(JSON, default={}, comment="플랫폼별 설정 오버라이드")
+    schedule_matrix = Column(Text, nullable=True, comment="7x24 스케줄 매트릭스 JSON")
 
     # 상태 및 메타
     is_active = Column(Boolean, default=True, comment="활성 상태")
@@ -62,6 +63,7 @@ class PublishProfile(Base):
 
     # 관계
     blog_links = relationship("BlogProfileLink", back_populates="profile")
+    group_links = relationship("GroupProfileLink", back_populates="profile", cascade="all, delete-orphan")
 
     @property
     def calculated_interval_minutes(self) -> int:

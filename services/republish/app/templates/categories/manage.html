@@ -1,29 +1,16 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>카테고리 관리 - BlogAuto V2</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+{% extends "base.html" %}
 
-    <!-- Topics 데이터를 JavaScript 변수로 전달 -->
-    <script>
-        window.topicsData = {{ topics_dict | tojson | safe }};
-    </script>
-</head>
-<body class="bg-gray-100 min-h-screen">
-    <!-- 네비게이션 -->
-    <nav class="bg-blue-600 text-white p-4">
-        <div class="container mx-auto flex justify-between items-center">
-            <h1 class="text-xl font-bold">BlogAuto V2</h1>
-            <div class="flex items-center space-x-4">
-                <span>{{ user.display_name }}</span>
-                <a href="/blogs" class="bg-blue-700 px-3 py-2 rounded hover:bg-blue-800">블로그 관리</a>
-                <a href="/dashboard" class="bg-blue-700 px-3 py-2 rounded hover:bg-blue-800">대시보드</a>
-            </div>
-        </div>
-    </nav>
+{% block title %}카테고리 관리{% endblock %}
 
+{% block extra_css %}
+<!-- Topics 데이터를 JavaScript 변수로 전달 -->
+<script>
+    window.topicsData = {{ topics_dict | tojson | safe }};
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="bg-gray-100 min-h-screen">
     <div class="container mx-auto p-6" x-data="categoryManager()" x-init="init()">
         <!-- 헤더 -->
         <div class="bg-white rounded-lg shadow p-6 mb-6">
@@ -379,8 +366,9 @@
             </div>
         </div>
     </div>
+</div>
 
-    <script>
+<script>
     function categoryManager() {
         return {
             // 초기화
@@ -828,9 +816,5 @@
             }
         };
     }
-    </script>
-
-    <!-- Alpine.js 로드 -->
-    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
-</body>
-</html>
+</script>
+{% endblock %}

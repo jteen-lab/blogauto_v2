@@ -41,6 +41,9 @@ class ProfileService:
     ) -> PublishProfile:
         """프로파일 생성"""
         try:
+            # 프로파일명 중복 체크
+            await self._check_duplicate_name(user, profile_data.get("name", ""))
+
             # 프로파일 생성
             profile = PublishProfile(
                 user_id=user.id,
@@ -92,9 +95,15 @@ class ProfileService:
         update_data: Dict[str, Any]
     ) -> PublishProfile:
         """프로파일 수정"""
-        try:
-            profile = await self.get_profile_by_id(user, profile_id)
+        profile = await self.get_profile_by_id(user, profile_id)
 
+        # 이름이 변경되는 경우 중복 체크 (try 블록 밖에서 실행하여 ValueError 전파)
+        if "name" in update_data:
+            logger.info(f"프로파일명 중복 체크 시작 | 새이름={update_data['name']} | exclude_id={profile_id}")
+            await self._check_duplicate_name(user, update_data["name"], exclude_id=profile_id)
+            logger.info(f"프로파일명 중복 체크 통과 | 새이름={update_data['name']}")
+
+        try:
             # 업데이트
             for key, value in update_data.items():
                 if hasattr(profile, key):
@@ -367,3 +376,105 @@ class ProfileService:
 
         # 범위 중복 확인
         return not (end1 < start2 or end2 < start1)
+
+    async def _check_duplicate_name(self, user: User, name: str, exclude_id: Optional[int] = None) -> None:
+        """프로파일명 중복 체크"""
+        logger.info(f"중복체크 실행 | user_id={user.id} | name={name.strip()} | exclude_id={exclude_id}")
+
+        query = select(PublishProfile).where(
+            PublishProfile.user_id == user.id,
+            PublishProfile.name == name.strip()
+        )
+        if exclude_id:
+            query = query.where(PublishProfile.id != exclude_id)
+
+        result = await self.db.execute(query)
+        existing = result.scalar_one_or_none()
+
+        if existing:
+            logger.info(f"중복 발견 | existing_id={existing.id} | existing_name={existing.name}")
+            raise ValueError(f"이미 '{name}' 이름의 프로파일이 존재합니다")
+        else:
+            logger.info(f"중복 없음 | name={name} 사용 가능")
+
+    async def _generate_unique_copy_name(self, user: User, original_name: str) -> str:
+        """고유한 복사본 이름 생성"""
+        base_name = f"{original_name} (복사)"
+        candidate_name = base_name
+        counter = 1
+
+        while True:
+            try:
+                await self._check_duplicate_name(user, candidate_name)
+                # 중복이 없으면 이 이름을 사용
+                return candidate_name
+            except ValueError:
+                # 중복이 있으면 번호를 추가하여 다시 시도
+                counter += 1
+                candidate_name = f"{base_name} {counter}"
+
+    async def get_profile_stats(self, user: User) -> Dict[str, Any]:
+        """사용자 프로파일 통계 조회"""
+        try:
+            # 프로파일 목록 조회
+            profiles = await self.get_user_profiles(user)
+            
+            total_profiles = len(profiles)
+            active_profiles = sum(1 for p in profiles if p.is_active)
+            
+            return {
+                "total_profiles": total_profiles,
+                "active_profiles": active_profiles,
+                "inactive_profiles": total_profiles - active_profiles
+            }
+        except Exception as e:
+            logger.error(f"프로파일 통계 조회 실패 | 사용자={user.id} | 오류={e}")
+            return {
+                "total_profiles": 0,
+                "active_profiles": 0,
+                "inactive_profiles": 0
+            }
+
+    async def copy_profile(self, profile_id: int, user: User) -> PublishProfile:
+        """프로파일 복사"""
+        try:
+            # 원본 프로파일 조회
+            original = await self.get_profile_by_id(user, profile_id)
+            if not original:
+                raise ValueError("프로파일을 찾을 수 없습니다")
+            
+            # 고유한 복사본 이름 생성
+            copy_name = await self._generate_unique_copy_name(user, original.name)
+
+            # 새 프로파일 생성
+            new_profile = PublishProfile(
+                user_id=user.id,
+                name=copy_name,
+                min_post_count=original.min_post_count,
+                post_range_start=original.post_range_start,
+                post_range_end=original.post_range_end,
+                interval_mode=original.interval_mode,
+                manual_interval_minutes=original.manual_interval_minutes,
+                auto_daily_count=original.auto_daily_count,
+                jitter_enabled=original.jitter_enabled,
+                jitter_min_percent=original.jitter_min_percent,
+                jitter_max_percent=original.jitter_max_percent,
+                active_hours_start=original.active_hours_start,
+                active_hours_end=original.active_hours_end,
+                blackout_days=original.blackout_days,
+                cooldown_days=original.cooldown_days,
+                priority=original.priority,
+                is_active=False  # 복사본은 비활성 상태로 시작
+            )
+            
+            self.db.add(new_profile)
+            await self.db.commit()
+            await self.db.refresh(new_profile)
+            
+            logger.info(f"프로파일 복사 완료 | 원본={profile_id} | 복사본={new_profile.id}")
+            return new_profile
+            
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"프로파일 복사 실패 | profile_id={profile_id} | 오류={e}")
+            raise
