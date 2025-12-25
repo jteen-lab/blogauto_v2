@@ -7,7 +7,7 @@ Features:
 - 주간 스케줄링 지원
 - 슬롯 충돌 방지
 """
-from sqlalchemy import Column, Integer, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, ForeignKey, UniqueConstraint, DateTime
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from datetime import datetime
