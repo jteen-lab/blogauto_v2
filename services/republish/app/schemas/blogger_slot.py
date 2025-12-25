@@ -151,3 +151,89 @@ class SlotRecommendation(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# 추가 스키마들
+
+class SlotInfo(BaseModel):
+    """슬롯 정보"""
+    day_of_week: int
+    hour: int
+    minute: int
+    blog_id: Optional[int] = None
+    blog_name: Optional[str] = None
+    group_id: Optional[int] = None
+    group_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class SlotConflict(BaseModel):
+    """슬롯 충돌 정보"""
+    day_of_week: int
+    hour: int
+    minute: int
+    profile_name: str
+    conflicting_blog_name: str
+    conflicting_group_name: str
+    alternatives: List[int]  # 가용한 분(minute) 목록
+
+    class Config:
+        from_attributes = True
+
+
+class SlotSuggestion(BaseModel):
+    """슬롯 제안"""
+    hour: int
+    available_minutes: List[int]
+    recommendation: str
+
+    class Config:
+        from_attributes = True
+
+
+class ValidationResult(BaseModel):
+    """슬롯 검증 결과"""
+    valid: bool
+    conflicts: List[SlotConflict]
+    reservable: List[SlotInfo]
+    suggestions: List[SlotSuggestion]
+
+    class Config:
+        from_attributes = True
+
+
+class AddBlogResult(BaseModel):
+    """블로그 추가 결과"""
+    success: bool
+    message: str
+    conflicts: Optional[List[SlotConflict]] = None
+    reserved_slots: Optional[List[SlotInfo]] = None
+    suggestions: Optional[List[SlotSuggestion]] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ScheduleInfo(BaseModel):
+    """스케줄 정보"""
+    profile_id: int
+    profile_name: str
+    day_of_week: int
+    hour: int
+    minute: int
+
+    class Config:
+        from_attributes = True
+
+
+class SlotReservation(BaseModel):
+    """슬롯 예약 요청"""
+    profile_id: int
+    day_of_week: int
+    hour: int
+    minute: int
+
+    class Config:
+        from_attributes = True
