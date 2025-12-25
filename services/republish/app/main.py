@@ -25,6 +25,7 @@ from .routers.categories import router as categories_router, page_router as cate
 from .routers.profiles import router as profiles_router, page_router as profiles_page_router
 from .routers.republish import router as republish_router, page_router as republish_page_router
 from .routers.groups import router as groups_router, page_router as groups_page_router
+from .routers.blogger_slots import router as blogger_slots_router
 
 logger = get_logger("main", "app.log")
 
@@ -108,6 +109,7 @@ app.include_router(categories_router, prefix=settings.api_v1_prefix)
 app.include_router(profiles_router, prefix=settings.api_v1_prefix)
 app.include_router(republish_router, prefix=settings.api_v1_prefix)
 app.include_router(groups_router, prefix=settings.api_v1_prefix)
+app.include_router(blogger_slots_router, prefix=settings.api_v1_prefix)
 
 # 페이지 라우터 등록
 app.include_router(blogs_page_router)

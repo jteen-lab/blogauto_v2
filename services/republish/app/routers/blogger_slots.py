@@ -11,7 +11,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional, Dict, Any
 
-from ..core.dependencies import get_db, get_current_user
+from ..core.database import get_db_session
+from .auth import get_current_user
 from ..models import User
 from ..services.blogger_slot_service import BloggerGlobalSlotManager
 from ..services.google_credential_service import GoogleCredentialService
@@ -26,7 +27,7 @@ from ..core.logger import get_logger
 
 logger = get_logger("blogger_slots_api", "app.log")
 
-router = APIRouter(prefix="/api/blogger-slots", tags=["blogger-slots"])
+router = APIRouter(prefix="/blogger-slots", tags=["blogger-slots"])
 
 
 @router.get("/{credential_id}", response_model=List[BloggerSlotResponse])
@@ -34,7 +35,7 @@ async def get_all_slots(
     credential_id: int,
     day_of_week: Optional[int] = Query(None, description="요일 필터 (0=월요일)"),
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db_session)
 ):
     """Google 계정의 모든 예약된 슬롯 조회"""
     logger.info(f"[GET_ALL_SLOTS] credential_id={credential_id}, user_id={current_user.id}")
@@ -81,7 +82,7 @@ async def get_day_slots(
     credential_id: int,
     day_of_week: int,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db_session)
 ):
     """특정 요일의 시간대별 슬롯 현황"""
     if not 0 <= day_of_week <= 6:
@@ -112,7 +113,7 @@ async def get_available_slots(
     day: int = Query(..., description="요일 (0=월요일)"),
     hour: int = Query(..., description="시간 (0-23)"),
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db_session)
 ):
     """특정 시간의 가용 슬롯 분(minute) 목록"""
     if not 0 <= day <= 6:
@@ -144,7 +145,7 @@ async def validate_schedules(
     credential_id: int,
     request_data: Dict[str, Any],
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db_session)
 ):
     """스케줄 목록 슬롯 예약 가능 여부 검증 (dry-run)"""
     logger.info(f"[VALIDATE_SCHEDULES] credential_id={credential_id}")
@@ -195,7 +196,7 @@ async def suggest_alternative_slots(
     day: int = Query(..., description="요일 (0=월요일)"),
     hours: str = Query(..., description="선호 시간대 (예: 9,10,11)"),
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db_session)
 ):
     """대체 슬롯 추천"""
     if not 0 <= day <= 6:
