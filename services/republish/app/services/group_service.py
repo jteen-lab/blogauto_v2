@@ -5,9 +5,13 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy import select, and_, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+import json
 
 from ..models import User, ProfileGroup, GroupProfileLink, BlogGroupLink, PublishProfile, Blog
+from ..models.blogger_global_slot import BloggerGlobalSlot
+from ..schemas.blogger_slot import AddBlogResult, SlotInfo, SlotConflict, ScheduleInfo, SlotReservation
 from ..core.logger import get_logger
+from .blogger_slot_service import BloggerGlobalSlotManager
 
 logger = get_logger("group_service", "app.log")
 
@@ -171,3 +175,230 @@ class GroupService:
         
         logger.info(f"[GROUP] 복사 완료 | original={group_id} | new={new_group.id}")
         return new_group
+
+    async def add_blog_with_slot_validation(
+        self,
+        user: User,
+        group_id: int,
+        blog_id: int
+    ) -> AddBlogResult:
+        """
+        블로그 추가 시 슬롯 검증 포함
+
+        Returns:
+            AddBlogResult: 성공/실패 결과와 충돌 정보
+        """
+        logger.info(f"[ADD_BLOG_WITH_SLOT] group_id={group_id}, blog_id={blog_id}")
+
+        # 그룹 및 블로그 검증
+        group = await self.get_group_by_id(user, group_id)
+        if not group:
+            return AddBlogResult(
+                success=False,
+                message=f"그룹을 찾을 수 없습니다: {group_id}"
+            )
+
+        blog_query = select(Blog).where(
+            and_(Blog.id == blog_id, Blog.user_id == user.id)
+        )
+        blog_result = await self.db.execute(blog_query)
+        blog = blog_result.scalar_one_or_none()
+
+        if not blog:
+            return AddBlogResult(
+                success=False,
+                message=f"블로그를 찾을 수 없습니다: {blog_id}"
+            )
+
+        # WordPress 블로그는 바로 추가
+        if blog.platform.value != "blogger":
+            await self._add_blog_direct(group_id, blog_id)
+            return AddBlogResult(
+                success=True,
+                message=f"{blog.platform.value} 블로그가 성공적으로 추가되었습니다"
+            )
+
+        # Blogger 블로그는 슬롯 검증 필요
+        if not blog.google_credential_id:
+            return AddBlogResult(
+                success=False,
+                message="Blogger 블로그에 Google 계정이 연결되지 않았습니다"
+            )
+
+        return await self._add_blogger_blog_with_slot_check(group, blog)
+
+    async def remove_blog_with_slot_release(
+        self,
+        user: User,
+        group_id: int,
+        blog_id: int
+    ) -> bool:
+        """블로그 제거 시 슬롯 해제 포함"""
+        logger.info(f"[REMOVE_BLOG_WITH_SLOT] group_id={group_id}, blog_id={blog_id}")
+
+        # 그룹 검증
+        group = await self.get_group_by_id(user, group_id)
+        if not group:
+            raise ValueError(f"그룹을 찾을 수 없습니다: {group_id}")
+
+        # 블로그 정보 조회
+        blog_query = select(Blog).where(Blog.id == blog_id)
+        blog_result = await self.db.execute(blog_query)
+        blog = blog_result.scalar_one_or_none()
+
+        # 블로그-그룹 연결 해제
+        await self.db.execute(
+            delete(BlogGroupLink).where(
+                and_(
+                    BlogGroupLink.group_id == group_id,
+                    BlogGroupLink.blog_id == blog_id
+                )
+            )
+        )
+
+        # Blogger 블로그이고 Google 계정이 있다면 슬롯 해제
+        if blog and blog.platform.value == "blogger" and blog.google_credential_id:
+            slot_manager = BloggerGlobalSlotManager(self.db, blog.google_credential_id)
+            await slot_manager.release_slots_by_blog(blog_id, group_id)
+
+        await self.db.commit()
+        logger.info(f"[REMOVE_BLOG_WITH_SLOT] 완료: group_id={group_id}, blog_id={blog_id}")
+        return True
+
+    async def _add_blog_direct(self, group_id: int, blog_id: int) -> None:
+        """블로그 직접 추가 (WordPress 등)"""
+        # 기존 연결 확인
+        existing_query = select(BlogGroupLink).where(
+            and_(
+                BlogGroupLink.group_id == group_id,
+                BlogGroupLink.blog_id == blog_id
+            )
+        )
+        result = await self.db.execute(existing_query)
+        if result.scalar_one_or_none():
+            logger.info(f"[ADD_BLOG_DIRECT] 이미 연결됨: group_id={group_id}, blog_id={blog_id}")
+            return
+
+        # 새 연결 생성
+        link = BlogGroupLink(group_id=group_id, blog_id=blog_id)
+        self.db.add(link)
+        await self.db.commit()
+
+    async def _add_blogger_blog_with_slot_check(
+        self,
+        group: ProfileGroup,
+        blog: Blog
+    ) -> AddBlogResult:
+        """Blogger 블로그 슬롯 검증 후 추가"""
+        slot_manager = BloggerGlobalSlotManager(self.db, blog.google_credential_id)
+
+        try:
+            # 그룹의 프로파일 스케줄 분석
+            schedules = await self._extract_group_schedules(group)
+
+            if not schedules:
+                # 스케줄이 없으면 바로 추가
+                await self._add_blog_direct(group.id, blog.id)
+                return AddBlogResult(
+                    success=True,
+                    message="스케줄이 없는 그룹에 블로그가 추가되었습니다"
+                )
+
+            # 슬롯 검증
+            validation_result = await slot_manager.validate_blog_schedules(blog.id, schedules)
+
+            if validation_result.valid:
+                # 모든 슬롯 예약 가능 - 실제 예약 진행
+                reservations = [
+                    SlotReservation(
+                        profile_id=schedule.profile_id,
+                        day_of_week=schedule.day_of_week,
+                        hour=schedule.hour,
+                        minute=schedule.minute
+                    )
+                    for schedule in schedules
+                ]
+
+                reserved_slots = await slot_manager.reserve_multiple_slots(
+                    blog_id=blog.id,
+                    group_id=group.id,
+                    reservations=reservations
+                )
+
+                # 블로그-그룹 연결
+                await self._add_blog_direct(group.id, blog.id)
+
+                return AddBlogResult(
+                    success=True,
+                    message=f"블로그가 성공적으로 추가되었습니다 ({len(reserved_slots)}개 슬롯 예약)",
+                    reserved_slots=[
+                        SlotInfo(
+                            day_of_week=slot.day_of_week,
+                            hour=slot.hour,
+                            minute=slot.minute,
+                            blog_id=blog.id,
+                            blog_name=blog.name,
+                            group_id=group.id
+                        )
+                        for slot in reserved_slots
+                    ]
+                )
+
+            else:
+                # 충돌 발생
+                return AddBlogResult(
+                    success=False,
+                    message=f"시간 슬롯 충돌 ({len(validation_result.conflicts)}개)",
+                    conflicts=validation_result.conflicts,
+                    suggestions=validation_result.suggestions
+                )
+
+        except Exception as e:
+            logger.error(f"[ADD_BLOGGER_BLOG] 오류: {e}")
+            return AddBlogResult(
+                success=False,
+                message=f"블로그 추가 중 오류 발생: {str(e)}"
+            )
+
+    async def _extract_group_schedules(self, group: ProfileGroup) -> List[ScheduleInfo]:
+        """그룹의 프로파일 스케줄 추출"""
+        schedules = []
+
+        for profile_link in group.profile_links:
+            # 프로파일 정보 로딩
+            profile_query = select(PublishProfile).where(
+                PublishProfile.id == profile_link.profile_id
+            )
+            profile_result = await self.db.execute(profile_query)
+            profile = profile_result.scalar_one_or_none()
+
+            if not profile or not profile.schedule_matrix:
+                continue
+
+            try:
+                # schedule_matrix는 JSON 문자열로 저장됨
+                matrix_data = json.loads(profile.schedule_matrix) if isinstance(profile.schedule_matrix, str) else profile.schedule_matrix
+
+                # 7x24 매트릭스에서 활성 스케줄 추출
+                for day in range(7):  # 월요일=0 ~ 일요일=6
+                    day_str = str(day)
+                    if day_str in matrix_data:
+                        for hour_str, is_active in matrix_data[day_str].items():
+                            if is_active:
+                                hour = int(hour_str)
+                                # 기본 분은 0분으로 설정 (필요시 프로파일 설정에서 추출)
+                                schedule = ScheduleInfo(
+                                    profile_id=profile.id,
+                                    profile_name=profile.name,
+                                    day_of_week=day,
+                                    hour=hour,
+                                    minute=0  # 기본값, 향후 프로파일 세밀 설정으로 확장 가능
+                                )
+                                schedules.append(schedule)
+
+            except (json.JSONDecodeError, KeyError, ValueError) as e:
+                logger.warning(f"[EXTRACT_SCHEDULES] 프로파일 스케줄 파싱 오류: profile_id={profile.id}, error={e}")
+                continue
+
+        logger.debug(f"[EXTRACT_SCHEDULES] group_id={group.id}, schedule_count={len(schedules)}")
+        return schedules
