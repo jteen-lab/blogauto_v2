@@ -47,6 +47,7 @@ class User(Base):
 
     # 관계 설정
     blogs = relationship("Blog", back_populates="user", lazy="dynamic")
+    google_credentials = relationship("GoogleCredential", back_populates="user", lazy="dynamic")
     topics = relationship("Topic", back_populates="user", lazy="dynamic")
     profile_groups = relationship("ProfileGroup", back_populates="user", lazy="dynamic")
 
