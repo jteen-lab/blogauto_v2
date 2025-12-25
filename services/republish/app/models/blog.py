@@ -33,6 +33,14 @@ class Blog(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
 
+    # Google 계정 연결 (Blogger용)
+    google_credential_id = Column(
+        Integer,
+        ForeignKey("google_credentials.id"),
+        nullable=True,
+        comment="Google 계정 ID (Blogger용)"
+    )
+
     # 블로그 정보
     name = Column(String(100), nullable=False, comment="블로그 이름")
     url = Column(String(255), nullable=False, comment="블로그 URL")
@@ -65,6 +73,7 @@ class Blog(Base):
 
     # 관계 설정
     user = relationship("User", back_populates="blogs")
+    google_credential = relationship("GoogleCredential", back_populates="blogs")
     profile_links = relationship("BlogProfileLink", back_populates="blog")
     group_links = relationship("BlogGroupLink", back_populates="blog", cascade="all, delete-orphan")
 
@@ -92,6 +101,8 @@ class Blog(Base):
     @property
     def has_api_credentials(self) -> bool:
         """API 인증 정보 보유 여부"""
+        if self.is_blogger:
+            return bool(self.google_credential_id)
         return bool(self.api_key_encrypted or self.oauth_token_encrypted)
 
     @property
@@ -128,6 +139,7 @@ class Blog(Base):
         return {
             "id": self.id,
             "user_id": self.user_id,
+            "google_credential_id": self.google_credential_id,
             "name": self.name,
             "url": self.url,
             "platform": self.platform.value,
