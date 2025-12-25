@@ -7,7 +7,7 @@ Features:
 - 안전 모드 및 간격 제한
 - 계정별 정책 커스터마이징
 """
-from sqlalchemy import Column, Integer, Boolean, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, Boolean, ForeignKey, UniqueConstraint, DateTime
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from datetime import datetime
