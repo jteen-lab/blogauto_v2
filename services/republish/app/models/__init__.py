@@ -17,6 +17,12 @@ from .profile_group import ProfileGroup
 from .group_profile_link import GroupProfileLink
 from .blog_group_link import BlogGroupLink
 
+# Phase 5-1: Google/Blogger models
+from .google_credential import GoogleCredential
+from .google_account_policy import GoogleAccountPolicy
+from .blogger_global_slot import BloggerGlobalSlot
+from .daily_publish_counter import DailyPublishCounter
+
 __all__ = [
     # Core models
     "User",
@@ -34,4 +40,9 @@ __all__ = [
     "ProfileGroup",
     "GroupProfileLink",
     "BlogGroupLink",
+    # Phase 5-1: Google/Blogger models
+    "GoogleCredential",
+    "GoogleAccountPolicy",
+    "BloggerGlobalSlot",
+    "DailyPublishCounter",
 ]
