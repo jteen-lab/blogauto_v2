@@ -426,24 +426,44 @@ class GroupService:
                 # schedule_matrix는 JSON 문자열로 저장됨
                 matrix_data = json.loads(profile.schedule_matrix) if isinstance(profile.schedule_matrix, str) else profile.schedule_matrix
 
-                # 7x24 매트릭스에서 활성 스케줄 추출
-                for day in range(7):  # 월요일=0 ~ 일요일=6
-                    day_str = str(day)
-                    if day_str in matrix_data:
-                        for hour_str, is_active in matrix_data[day_str].items():
-                            if is_active:
-                                hour = int(hour_str)
-                                # 기본 분은 0분으로 설정 (필요시 프로파일 설정에서 추출)
-                                schedule = ScheduleInfo(
-                                    profile_id=profile.id,
-                                    profile_name=profile.name,
-                                    day_of_week=day,
-                                    hour=hour,
-                                    minute=0  # 기본값, 향후 프로파일 세밀 설정으로 확장 가능
-                                )
-                                schedules.append(schedule)
+                # 2D 배열 형식과 딕셔너리 형식 모두 지원
+                if isinstance(matrix_data, list):
+                    # 2D 배열 형식: [[false,false,false,true,true,...], [false,false,...], ...]
+                    for day in range(min(7, len(matrix_data))):
+                        day_schedule = matrix_data[day]
+                        if isinstance(day_schedule, list):
+                            for hour in range(min(24, len(day_schedule))):
+                                if day_schedule[hour]:  # true인 경우
+                                    schedule = ScheduleInfo(
+                                        profile_id=profile.id,
+                                        profile_name=profile.name,
+                                        day_of_week=day,
+                                        hour=hour,
+                                        minute=0  # 기본값
+                                    )
+                                    schedules.append(schedule)
 
-            except (json.JSONDecodeError, KeyError, ValueError) as e:
+                elif isinstance(matrix_data, dict):
+                    # 딕셔너리 형식: {"0": {"9": true, "10": true}, ...} (기존 형식)
+                    for day in range(7):  # 월요일=0 ~ 일요일=6
+                        day_str = str(day)
+                        if day_str in matrix_data:
+                            for hour_str, is_active in matrix_data[day_str].items():
+                                if is_active:
+                                    hour = int(hour_str)
+                                    schedule = ScheduleInfo(
+                                        profile_id=profile.id,
+                                        profile_name=profile.name,
+                                        day_of_week=day,
+                                        hour=hour,
+                                        minute=0
+                                    )
+                                    schedules.append(schedule)
+
+                else:
+                    logger.warning(f"[EXTRACT_SCHEDULES] 지원하지 않는 schedule_matrix 형식: profile_id={profile.id}, type={type(matrix_data)}")
+
+            except (json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
                 logger.warning(f"[EXTRACT_SCHEDULES] 프로파일 스케줄 파싱 오류: profile_id={profile.id}, error={e}")
                 continue
 
