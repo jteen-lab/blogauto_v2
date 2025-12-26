@@ -101,7 +101,7 @@ class Blog(Base):
     @property
     def has_api_credentials(self) -> bool:
         """API 인증 정보 보유 여부"""
-        if self.is_blogger:
+        if self.is_blogger and not (self.api_key_encrypted or self.oauth_token_encrypted):
             return bool(self.google_credential_id)
         return bool(self.api_key_encrypted or self.oauth_token_encrypted)
 
