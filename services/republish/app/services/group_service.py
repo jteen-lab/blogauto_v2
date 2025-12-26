@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 import json
 
 from ..models import User, ProfileGroup, GroupProfileLink, BlogGroupLink, PublishProfile, Blog
+from ..models.blog import BlogPlatform
 from ..models.blogger_global_slot import BloggerGlobalSlot
 from ..schemas.blogger_slot import AddBlogResult, SlotInfo, SlotConflict, ScheduleInfo, SlotReservation
 from ..core.logger import get_logger
@@ -63,10 +64,14 @@ class GroupService:
             link = GroupProfileLink(group_id=group.id, profile_id=pid)
             self.db.add(link)
 
-        # 블로그 연결
-        for bid in blog_ids:
-            link = BlogGroupLink(group_id=group.id, blog_id=bid)
-            self.db.add(link)
+        await self.db.commit()  # 프로파일 연결 먼저 커밋
+
+        # 블로그 연결 (슬롯 검증 포함)
+        blog_results = {"success_count": 0, "failed_blogs": [], "warnings": []}
+        if blog_ids:
+            # 관계 데이터 로딩 (스케줄 추출을 위해)
+            await self.db.refresh(group, ['profile_links'])
+            blog_results = await self._add_blogs_with_validation(user, group, blog_ids)
 
         await self.db.commit()
         await self.db.refresh(group)
@@ -74,7 +79,23 @@ class GroupService:
         # 관계 데이터 로딩
         await self.db.refresh(group, ['profile_links', 'blog_links'])
 
-        logger.info(f"[GROUP] 생성 완료 | user={user.id} | group={group.id} | profiles={len(profile_ids)} | blogs={len(blog_ids)}")
+        # 로그 기록
+        total_requested = len(blog_ids)
+        success_count = blog_results["success_count"]
+        failed_count = len(blog_results["failed_blogs"])
+
+        log_message = f"[GROUP] 생성 완료 | user={user.id} | group={group.id} | profiles={len(profile_ids)} | blogs={success_count}/{total_requested} 성공"
+        if blog_results["warnings"]:
+            log_message += f" | 경고: {'; '.join(blog_results['warnings'])}"
+        if blog_results["failed_blogs"]:
+            log_message += f" | 실패: {failed_count}개"
+
+        logger.info(log_message)
+
+        # 실패한 블로그가 있으면 경고 로그
+        for failed in blog_results["failed_blogs"]:
+            logger.warning(f"[GROUP] 블로그 추가 실패: {failed}")
+
         return group
     
     async def update_group(self, user: User, group_id: int, data: Dict[str, Any]) -> ProfileGroup:
@@ -100,19 +121,45 @@ class GroupService:
                 link = GroupProfileLink(group_id=group_id, profile_id=pid)
                 self.db.add(link)
 
-        # 블로그 연결 업데이트
+        # 블로그 연결 업데이트 (슬롯 검증 포함)
+        blog_results = {"success_count": 0, "failed_blogs": [], "warnings": []}
         if blog_ids is not None:
+            # 기존 Blogger 블로그들의 슬롯 해제
+            await self._release_existing_blogger_slots(group_id)
+
+            # 기존 연결 삭제
             await self.db.execute(
                 delete(BlogGroupLink).where(BlogGroupLink.group_id == group_id)
             )
-            for bid in blog_ids:
-                link = BlogGroupLink(group_id=group_id, blog_id=bid)
-                self.db.add(link)
+            await self.db.commit()  # 프로파일 변경사항 먼저 적용
+
+            if blog_ids:  # 새 블로그들 추가
+                # 관계 데이터 새로고침
+                await self.db.refresh(group, ['profile_links'])
+                blog_results = await self._add_blogs_with_validation(user, group, blog_ids)
 
         await self.db.commit()
         await self.db.refresh(group)
 
-        logger.info(f"[GROUP] 수정 완료 | group={group_id} | profiles={len(profile_ids) if profile_ids else '변경없음'} | blogs={len(blog_ids) if blog_ids else '변경없음'}")
+        # 로그 기록
+        blog_log = "변경없음"
+        if blog_ids is not None:
+            total_requested = len(blog_ids)
+            success_count = blog_results["success_count"]
+            failed_count = len(blog_results["failed_blogs"])
+            blog_log = f"{success_count}/{total_requested} 성공"
+
+            if blog_results["warnings"]:
+                blog_log += f" (경고: {len(blog_results['warnings'])}개)"
+            if failed_count > 0:
+                blog_log += f" (실패: {failed_count}개)"
+
+        logger.info(f"[GROUP] 수정 완료 | group={group_id} | profiles={len(profile_ids) if profile_ids else '변경없음'} | blogs={blog_log}")
+
+        # 실패한 블로그가 있으면 경고 로그
+        for failed in blog_results["failed_blogs"]:
+            logger.warning(f"[GROUP] 블로그 수정 실패: {failed}")
+
         return group
     
     async def delete_group(self, user: User, group_id: int) -> bool:
@@ -402,3 +449,88 @@ class GroupService:
 
         logger.debug(f"[EXTRACT_SCHEDULES] group_id={group.id}, schedule_count={len(schedules)}")
         return schedules
+
+    async def _add_blogs_with_validation(
+        self,
+        user: User,
+        group: ProfileGroup,
+        blog_ids: List[int]
+    ) -> Dict[str, Any]:
+        """블로그 목록을 플랫폼별로 검증하여 추가"""
+        results = {
+            "success_count": 0,
+            "failed_blogs": [],
+            "warnings": []
+        }
+
+        for blog_id in blog_ids:
+            try:
+                # 블로그 정보 조회
+                blog_query = select(Blog).where(
+                    and_(Blog.id == blog_id, Blog.user_id == user.id)
+                )
+                blog_result = await self.db.execute(blog_query)
+                blog = blog_result.scalar_one_or_none()
+
+                if not blog:
+                    results["failed_blogs"].append({
+                        "blog_id": blog_id,
+                        "reason": "블로그를 찾을 수 없습니다"
+                    })
+                    continue
+
+                # Blogger 플랫폼인 경우 슬롯 검증
+                if blog.is_blogger:
+                    add_result = await self._add_blogger_blog_with_slot_check(group, blog)
+                    if not add_result.success:
+                        results["failed_blogs"].append({
+                            "blog_id": blog_id,
+                            "blog_name": blog.name,
+                            "reason": add_result.message,
+                            "conflicts": add_result.conflicts
+                        })
+                        logger.warning(f"[ADD_BLOGS] Blogger 블로그 추가 실패: {blog.name} - {add_result.message}")
+                        continue
+
+                    if add_result.reserved_slots:
+                        results["warnings"].append(f"블로그 '{blog.name}': {len(add_result.reserved_slots)}개 슬롯 예약")
+
+                else:
+                    # WordPress 등 다른 플랫폼은 바로 추가
+                    await self._add_blog_direct(group.id, blog_id)
+
+                results["success_count"] += 1
+
+            except Exception as e:
+                logger.error(f"[ADD_BLOGS] 블로그 추가 오류: blog_id={blog_id}, error={e}")
+                results["failed_blogs"].append({
+                    "blog_id": blog_id,
+                    "reason": f"처리 중 오류: {str(e)}"
+                })
+
+        return results
+
+    async def _release_existing_blogger_slots(self, group_id: int) -> None:
+        """그룹의 기존 Blogger 블로그 슬롯 해제"""
+        # 그룹에 연결된 Blogger 블로그들 조회
+        query = select(Blog).join(BlogGroupLink).where(
+            and_(
+                BlogGroupLink.group_id == group_id,
+                Blog.platform == BlogPlatform.BLOGGER,
+                Blog.google_credential_id.isnot(None)
+            )
+        )
+        result = await self.db.execute(query)
+        blogger_blogs = result.scalars().all()
+
+        # 각 블로그의 슬롯 해제
+        for blog in blogger_blogs:
+            try:
+                slot_manager = BloggerGlobalSlotManager(self.db, blog.google_credential_id)
+                await slot_manager.release_slots_by_blog(blog.id, group_id)
+                logger.debug(f"[RELEASE_SLOTS] 해제 완료: blog_id={blog.id}, group_id={group_id}")
+            except Exception as e:
+                logger.error(f"[RELEASE_SLOTS] 해제 실패: blog_id={blog.id}, error={e}")
+
+        if blogger_blogs:
+            logger.info(f"[RELEASE_SLOTS] 그룹 {group_id}: {len(blogger_blogs)}개 Blogger 블로그 슬롯 해제")
