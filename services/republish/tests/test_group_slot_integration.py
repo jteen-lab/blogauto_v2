@@ -12,6 +12,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 from unittest.mock import patch
 from typing import List, Dict, Any
+import json
 
 from ..models.user import User
 from ..models.blog import Blog, BlogPlatform
@@ -85,11 +86,23 @@ class TestGroupSlotIntegration:
         )
         db_session.add(blogger_blog2)
 
-        # 테스트 프로파일 (스케줄 포함)
+        # 테스트 프로파일 (2D 배열 형식 스케줄 포함)
+        # 화요일(1): 10시, 14시 활성
+        # 수요일(2): 10시 활성
+        matrix_2d = []
+        for day in range(7):
+            day_schedule = [False] * 24
+            if day == 1:  # 화요일
+                day_schedule[10] = True
+                day_schedule[14] = True
+            elif day == 2:  # 수요일
+                day_schedule[10] = True
+            matrix_2d.append(day_schedule)
+
         profile = PublishProfile(
             user_id=user.id,
             name="Test Profile",
-            schedule_matrix='{"1": {"10": true, "14": true}, "2": {"10": true}}'
+            schedule_matrix=json.dumps(matrix_2d)
         )
         db_session.add(profile)
         await db_session.flush()
