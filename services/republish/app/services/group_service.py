@@ -351,8 +351,13 @@ class GroupService:
                     message="스케줄이 없는 그룹에 블로그가 추가되었습니다"
                 )
 
+            # 동일 시간대 스케줄에 대한 분 단위 분산 적용
+            adjusted_schedules = await self._add_slot_distribution_logic(
+                schedules, blog.google_credential_id
+            )
+
             # 슬롯 검증
-            validation_result = await slot_manager.validate_blog_schedules(blog.id, schedules)
+            validation_result = await slot_manager.validate_blog_schedules(blog.id, adjusted_schedules)
 
             if validation_result.valid:
                 # 모든 슬롯 예약 가능 - 실제 예약 진행
@@ -363,7 +368,7 @@ class GroupService:
                         hour=schedule.hour,
                         minute=schedule.minute
                     )
-                    for schedule in schedules
+                    for schedule in adjusted_schedules
                 ]
 
                 reserved_slots = await slot_manager.reserve_multiple_slots(
@@ -426,6 +431,9 @@ class GroupService:
                 # schedule_matrix는 JSON 문자열로 저장됨
                 matrix_data = json.loads(profile.schedule_matrix) if isinstance(profile.schedule_matrix, str) else profile.schedule_matrix
 
+                # 프로파일 간격 계산
+                profile_interval = profile.calculated_interval_minutes
+
                 # 2D 배열 형식과 딕셔너리 형식 모두 지원
                 if isinstance(matrix_data, list):
                     # 2D 배열 형식: [[false,false,false,true,true,...], [false,false,...], ...]
@@ -434,12 +442,16 @@ class GroupService:
                         if isinstance(day_schedule, list):
                             for hour in range(min(24, len(day_schedule))):
                                 if day_schedule[hour]:  # true인 경우
+                                    # 프로파일 간격에 따른 분 단위 배치
+                                    minute = await self._calculate_optimal_minute(
+                                        profile.id, day, hour, profile_interval
+                                    )
                                     schedule = ScheduleInfo(
                                         profile_id=profile.id,
                                         profile_name=profile.name,
                                         day_of_week=day,
                                         hour=hour,
-                                        minute=0  # 기본값
+                                        minute=minute
                                     )
                                     schedules.append(schedule)
 
@@ -451,12 +463,16 @@ class GroupService:
                             for hour_str, is_active in matrix_data[day_str].items():
                                 if is_active:
                                     hour = int(hour_str)
+                                    # 프로파일 간격에 따른 분 단위 배치
+                                    minute = await self._calculate_optimal_minute(
+                                        profile.id, day, hour, profile_interval
+                                    )
                                     schedule = ScheduleInfo(
                                         profile_id=profile.id,
                                         profile_name=profile.name,
                                         day_of_week=day,
                                         hour=hour,
-                                        minute=0
+                                        minute=minute
                                     )
                                     schedules.append(schedule)
 
@@ -554,3 +570,95 @@ class GroupService:
 
         if blogger_blogs:
             logger.info(f"[RELEASE_SLOTS] 그룹 {group_id}: {len(blogger_blogs)}개 Blogger 블로그 슬롯 해제")
+
+    async def _calculate_optimal_minute(
+        self,
+        profile_id: int,
+        day_of_week: int,
+        hour: int,
+        profile_interval_minutes: int
+    ) -> int:
+        """프로파일 간격에 따른 최적 분 단위 계산"""
+        # 프로파일 ID를 기반으로 일관된 분 할당
+        # 같은 프로파일은 항상 같은 패턴으로 분이 배정됨
+
+        # 최소 간격을 기준으로 시간당 가능한 슬롯 수 계산
+        min_interval = max(15, profile_interval_minutes)  # 최소 15분 간격 보장
+
+        # 시간당 슬롯 수 (15분 단위로 정규화)
+        # 15분=4슬롯, 30분=2슬롯, 60분=1슬롯
+        normalized_interval = max(15, (min_interval // 15) * 15)  # 15분 단위로 반올림
+        slots_per_hour = 60 // normalized_interval
+
+        if slots_per_hour <= 1:
+            # 시간당 1슬롯만 가능하면 항상 0분
+            return 0
+
+        # 프로파일 ID 기반 해시로 일관된 분 선택
+        # 같은 프로파일은 항상 같은 슬롯을 선택하도록
+        profile_hash = hash(f"{profile_id}_{day_of_week}_{hour}") % slots_per_hour
+        minute = profile_hash * normalized_interval
+
+        # 시간 경계 확인
+        if minute >= 60:
+            minute = 0
+
+        logger.debug(f"[CALC_MINUTE] profile_id={profile_id}, interval={min_interval}, "
+                    f"slots_per_hour={slots_per_hour}, minute={minute}")
+
+        return minute
+
+    async def _add_slot_distribution_logic(
+        self,
+        schedules: List[ScheduleInfo],
+        google_credential_id: int
+    ) -> List[ScheduleInfo]:
+        """
+        같은 Google 계정의 여러 블로그가 동일 시간대 사용 시 분 단위 분산
+
+        Args:
+            schedules: 스케줄 정보 리스트
+            google_credential_id: Google 계정 ID
+
+        Returns:
+            분 단위가 조정된 스케줄 정보 리스트
+        """
+        # 시간대별로 스케줄 그룹화
+        time_groups = {}
+        for schedule in schedules:
+            time_key = f"{schedule.day_of_week}_{schedule.hour}"
+            if time_key not in time_groups:
+                time_groups[time_key] = []
+            time_groups[time_key].append(schedule)
+
+        adjusted_schedules = []
+
+        for time_key, time_schedules in time_groups.items():
+            if len(time_schedules) == 1:
+                # 단일 스케줄은 그대로 사용
+                adjusted_schedules.extend(time_schedules)
+                continue
+
+            # 동일 시간대의 여러 스케줄 분산 처리
+            day_of_week, hour = map(int, time_key.split('_'))
+
+            # 15분 단위 슬롯 계산 (0, 15, 30, 45분)
+            available_minutes = [0, 15, 30, 45]
+
+            for i, schedule in enumerate(time_schedules):
+                # 라운드 로빈 방식으로 분 배정
+                assigned_minute = available_minutes[i % len(available_minutes)]
+
+                # 새로운 스케줄 정보 생성
+                adjusted_schedule = ScheduleInfo(
+                    profile_id=schedule.profile_id,
+                    profile_name=schedule.profile_name,
+                    day_of_week=schedule.day_of_week,
+                    hour=schedule.hour,
+                    minute=assigned_minute
+                )
+                adjusted_schedules.append(adjusted_schedule)
+
+                logger.debug(f"[SLOT_DISTRIBUTION] {time_key}시간대 {i+1}번째 스케줄: minute={assigned_minute}")
+
+        return adjusted_schedules
