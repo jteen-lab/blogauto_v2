@@ -351,59 +351,93 @@ class GroupService:
                     message="스케줄이 없는 그룹에 블로그가 추가되었습니다"
                 )
 
-            # 동일 시간대 스케줄에 대한 분 단위 분산 적용
-            adjusted_schedules = await self._add_slot_distribution_logic(
-                schedules, blog.google_credential_id
+            # Google 정책 조회
+            from ..models.google_account_policy import GoogleAccountPolicy
+            from sqlalchemy import select
+
+            policy_query = select(GoogleAccountPolicy).where(
+                GoogleAccountPolicy.google_credential_id == blog.google_credential_id
             )
+            policy_result = await self.db.execute(policy_query)
+            policy = policy_result.scalar_one_or_none()
 
-            # 슬롯 검증
-            validation_result = await slot_manager.validate_blog_schedules(blog.id, adjusted_schedules)
-
-            if validation_result.valid:
-                # 모든 슬롯 예약 가능 - 실제 예약 진행
-                reservations = [
-                    SlotReservation(
-                        profile_id=schedule.profile_id,
-                        day_of_week=schedule.day_of_week,
-                        hour=schedule.hour,
-                        minute=schedule.minute
-                    )
-                    for schedule in adjusted_schedules
-                ]
-
-                reserved_slots = await slot_manager.reserve_multiple_slots(
-                    blog_id=blog.id,
-                    group_id=group.id,
-                    reservations=reservations
-                )
-
-                # 블로그-그룹 연결
-                await self._add_blog_direct(group.id, blog.id)
-
-                return AddBlogResult(
-                    success=True,
-                    message=f"블로그가 성공적으로 추가되었습니다 ({len(reserved_slots)}개 슬롯 예약)",
-                    reserved_slots=[
-                        SlotInfo(
-                            day_of_week=slot.day_of_week,
-                            hour=slot.hour,
-                            minute=slot.minute,
-                            blog_id=blog.id,
-                            blog_name=blog.name,
-                            group_id=group.id
-                        )
-                        for slot in reserved_slots
-                    ]
-                )
-
-            else:
-                # 충돌 발생
+            if not policy:
                 return AddBlogResult(
                     success=False,
-                    message=f"시간 슬롯 충돌 ({len(validation_result.conflicts)}개)",
-                    conflicts=validation_result.conflicts,
-                    suggestions=validation_result.suggestions
+                    message="Google 계정 정책을 찾을 수 없습니다"
                 )
+
+            # 각 스케줄에 대해 가용 minute 자동 할당
+            adjusted_schedules = []
+            conflicts = []
+
+            for schedule in schedules:
+                available_minute = await self._find_available_minute(
+                    blog.google_credential_id,
+                    schedule.day_of_week,
+                    schedule.hour,
+                    policy.min_interval_minutes
+                )
+
+                if available_minute is None:
+                    # 이 시간대는 모든 슬롯 점유됨 - 충돌 기록
+                    conflicts.append(f"[{schedule.day_of_week}일 {schedule.hour:02d}시] 모든 슬롯 점유됨")
+                else:
+                    # 가용 minute으로 스케줄 업데이트
+                    adjusted_schedule = ScheduleInfo(
+                        profile_id=schedule.profile_id,
+                        profile_name=schedule.profile_name,
+                        day_of_week=schedule.day_of_week,
+                        hour=schedule.hour,
+                        minute=available_minute
+                    )
+                    adjusted_schedules.append(adjusted_schedule)
+
+                    logger.info(f"[AUTO_SLOT_ALLOCATION] 블로그 {blog.id}: {schedule.day_of_week}일 {schedule.hour:02d}:{available_minute:02d} 할당")
+
+            # 충돌이 발생한 경우
+            if conflicts:
+                return AddBlogResult(
+                    success=False,
+                    message=f"시간 슬롯 충돌 ({len(conflicts)}개): " + ", ".join(conflicts),
+                    conflicts=conflicts
+                )
+
+            # 가용 슬롯을 찾았으므로 직접 예약 진행 (이미 충돌 검사 완료)
+            reservations = [
+                SlotReservation(
+                    profile_id=schedule.profile_id,
+                    day_of_week=schedule.day_of_week,
+                    hour=schedule.hour,
+                    minute=schedule.minute
+                )
+                for schedule in adjusted_schedules
+            ]
+
+            reserved_slots = await slot_manager.reserve_multiple_slots(
+                blog_id=blog.id,
+                group_id=group.id,
+                reservations=reservations
+            )
+
+            # 블로그-그룹 연결
+            await self._add_blog_direct(group.id, blog.id)
+
+            return AddBlogResult(
+                success=True,
+                message=f"블로그가 성공적으로 추가되었습니다 ({len(reserved_slots)}개 슬롯 자동 할당)",
+                reserved_slots=[
+                    SlotInfo(
+                        day_of_week=slot.day_of_week,
+                        hour=slot.hour,
+                        minute=slot.minute,
+                        blog_id=blog.id,
+                        blog_name=blog.name,
+                        group_id=group.id
+                    )
+                    for slot in reserved_slots
+                ]
+            )
 
         except Exception as e:
             logger.error(f"[ADD_BLOGGER_BLOG] 오류: {e}")
@@ -662,3 +696,65 @@ class GroupService:
                 logger.debug(f"[SLOT_DISTRIBUTION] {time_key}시간대 {i+1}번째 스케줄: minute={assigned_minute}")
 
         return adjusted_schedules
+
+    async def _get_existing_slots(
+        self,
+        google_credential_id: int,
+        day_of_week: int,
+        hour: int
+    ) -> List[BloggerGlobalSlot]:
+        """특정 시간대에 이미 예약된 슬롯 조회"""
+        from ..models.blogger_global_slot import BloggerGlobalSlot
+        from sqlalchemy import select, and_
+
+        query = select(BloggerGlobalSlot).where(
+            and_(
+                BloggerGlobalSlot.google_credential_id == google_credential_id,
+                BloggerGlobalSlot.day_of_week == day_of_week,
+                BloggerGlobalSlot.hour == hour
+            )
+        )
+        result = await self.db.execute(query)
+        return result.scalars().all()
+
+    async def _find_available_minute(
+        self,
+        google_credential_id: int,
+        day_of_week: int,
+        hour: int,
+        min_interval_minutes: int
+    ) -> Optional[int]:
+        """
+        해당 시간대에서 사용 가능한 minute 찾기
+
+        Args:
+            google_credential_id: Google 계정 ID
+            day_of_week: 요일 (0=월요일)
+            hour: 시간 (0-23)
+            min_interval_minutes: 최소 간격 (분)
+
+        Returns:
+            사용 가능한 minute (0-59) 또는 None (모든 슬롯 점유됨)
+        """
+        # 최소 간격을 15분 단위로 정규화
+        normalized_interval = max(15, (min_interval_minutes // 15) * 15)
+        slots_per_hour = 60 // normalized_interval
+
+        # 가용 minute 목록 생성 (0, 15, 30, 45 등)
+        available_minutes = [i * normalized_interval for i in range(slots_per_hour)]
+
+        # 이미 예약된 슬롯 조회
+        existing_slots = await self._get_existing_slots(
+            google_credential_id, day_of_week, hour
+        )
+        occupied_minutes = {slot.minute for slot in existing_slots}
+
+        # 사용 가능한 첫 번째 minute 반환
+        for minute in available_minutes:
+            if minute not in occupied_minutes:
+                logger.debug(f"[FIND_MINUTE] {day_of_week}일 {hour}시: minute={minute} 가용")
+                return minute
+
+        # 모든 슬롯이 점유됨
+        logger.warning(f"[FIND_MINUTE] {day_of_week}일 {hour}시: 모든 슬롯 점유됨 (occupied: {occupied_minutes})")
+        return None
