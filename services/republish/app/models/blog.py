@@ -76,6 +76,7 @@ class Blog(Base):
     google_credential = relationship("GoogleCredential", back_populates="blogs")
     profile_links = relationship("BlogProfileLink", back_populates="blog")
     group_links = relationship("BlogGroupLink", back_populates="blog", cascade="all, delete-orphan")
+    flow_links = relationship("FlowBlog", back_populates="blog", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
         return f"<Blog(id={self.id}, name={self.name}, platform={self.platform.value})>"
