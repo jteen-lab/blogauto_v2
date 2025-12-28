@@ -26,6 +26,7 @@ class FlowCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255, description="플로우 이름")
     description: Optional[str] = Field(None, max_length=500, description="플로우 설명")
     status: FlowStatus = Field(FlowStatus.INACTIVE, description="초기 상태")
+    priority: int = Field(100, ge=1, le=1000, description="우선순위 (1-1000)")
 
     # 초기 모듈/블로그 설정 (선택사항)
     module_ids: List[int] = Field(default_factory=list, description="초기 모듈 ID 목록")
@@ -33,9 +34,10 @@ class FlowCreateRequest(BaseModel):
 
 
 class FlowUpdateRequest(BaseModel):
-    """플로우 기본 정보 수정 요청 (이름, 설명만)"""
+    """플로우 기본 정보 수정 요청 (이름, 설명, 우선순위만)"""
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = Field(None, max_length=500)
+    priority: Optional[int] = Field(None, ge=1, le=1000, description="우선순위")
     # status는 별도 API에서 관리 (autorun API)
 
 
@@ -95,6 +97,7 @@ class FlowResponse(BaseModel):
     name: str
     description: Optional[str]
     status: FlowStatus
+    priority: int = 100
 
     # 개수 정보
     module_count: int = 0
@@ -131,8 +134,19 @@ class FlowListResponse(BaseModel):
     has_next: bool
 
 
-class FlowBlogAddResult(BaseModel):
+class BlogAddResult(BaseModel):
     """플로우 블로그 추가 결과"""
+    success_count: int
+    total_requested: int
+    failed_blogs: List[Dict[str, Any]] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
+
+    # Blogger 슬롯 예약 정보
+    reserved_slots: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class FlowBlogAddResult(BaseModel):
+    """플로우 블로그 추가 결과 (하위 호환성)"""
     success_count: int
     failed_blogs: List[Dict[str, Any]] = Field(default_factory=list)
     warnings: List[str] = Field(default_factory=list)
