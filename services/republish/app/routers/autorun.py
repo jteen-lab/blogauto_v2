@@ -18,6 +18,8 @@ from ..models import User
 from ..models.flow import Flow
 from ..models.flow_module import FlowModule
 from ..models.flow_blog import FlowBlog
+from ..services.autorun_service import AutorunService
+from ..services.scheduler_manager import scheduler_manager
 from ..schemas.autorun import (
     AutorunFlowListResponse,
     AutorunStatusSummary,
@@ -45,91 +47,13 @@ router = APIRouter(prefix="/autorun", tags=["autorun"])
     description="상태별로 분류된 플로우 목록과 실행 정보를 조회합니다."
 )
 async def get_autorun_flows(
+    include_inactive: bool = Query(True, description="비활성 플로우 포함 여부"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session)
 ) -> AutorunFlowListResponse:
     """오토런 플로우 목록 조회"""
-    try:
-        logger.info(f"[GET_AUTORUN] 사용자 {current_user.id} 오토런 목록 조회")
-
-        # 플로우 목록 조회 (관계 포함)
-        query = (
-            select(Flow)
-            .options(
-                selectinload(Flow.module_links),
-                selectinload(Flow.blog_links)
-            )
-            .where(Flow.user_id == current_user.id)
-            .order_by(Flow.updated_at.desc())
-        )
-        result = await db.execute(query)
-        flows = result.scalars().all()
-
-        # 상태별 분류
-        active_flows = []
-        paused_flows = []
-        inactive_flows = []
-
-        total_flows = len(flows)
-        active_count = 0
-        paused_count = 0
-
-        for flow in flows:
-            execution_info = FlowExecutionInfo(
-                id=flow.id,
-                name=flow.name,
-                status=FlowStatus(flow.status),
-                module_count=len(flow.module_links) if flow.module_links else 0,
-                blog_count=len(flow.blog_links) if flow.blog_links else 0,
-                # TODO: 실제 실행 정보는 스케줄러에서 계산
-                next_execution=None,
-                last_execution=None,
-                execution_count=0,
-                success_rate=0.0
-            )
-
-            if flow.status == "active":
-                active_flows.append(execution_info)
-                active_count += 1
-            elif flow.status == "paused":
-                paused_flows.append(execution_info)
-                paused_count += 1
-            else:  # inactive
-                inactive_flows.append(execution_info)
-
-        # 요약 정보
-        summary = AutorunStatusSummary(
-            total_flows=total_flows,
-            active_flows=active_count,
-            paused_flows=paused_count,
-            inactive_flows=total_flows - active_count - paused_count,
-            # TODO: 실제 실행 통계는 실행 로그에서 계산
-            total_executions_today=0,
-            successful_executions_today=0,
-            failed_executions_today=0,
-            next_execution=None,
-            next_execution_flow_name=None
-        )
-
-        logger.info(
-            f"[GET_AUTORUN] 플로우 분류 완료: "
-            f"활성={active_count}, 일시정지={paused_count}, "
-            f"비활성={len(inactive_flows)}"
-        )
-
-        return AutorunFlowListResponse(
-            active_flows=active_flows,
-            paused_flows=paused_flows,
-            inactive_flows=inactive_flows,
-            summary=summary
-        )
-
-    except Exception as e:
-        logger.error(f"[GET_AUTORUN] 오류: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="오토런 목록을 조회하는 중 오류가 발생했습니다"
-        )
+    service = AutorunService(db)
+    return await service.get_autorun_status(current_user, include_inactive)
 
 
 @router.post(
@@ -145,9 +69,14 @@ async def start_flow(
     db: AsyncSession = Depends(get_db_session)
 ) -> FlowActionResult:
     """플로우 시작"""
-    return await _execute_flow_action(
-        flow_id, "start", "active", request, current_user, db
-    )
+    service = AutorunService(db)
+    result = await service.execute_flow_action(current_user, flow_id, request)
+
+    # 성공 시 스케줄러에 등록
+    if result.success and result.current_status == FlowStatus.ACTIVE:
+        await scheduler_manager.register_flow_schedule(flow_id)
+
+    return result
 
 
 @router.post(
@@ -163,9 +92,14 @@ async def pause_flow(
     db: AsyncSession = Depends(get_db_session)
 ) -> FlowActionResult:
     """플로우 일시정지"""
-    return await _execute_flow_action(
-        flow_id, "pause", "paused", request, current_user, db
-    )
+    service = AutorunService(db)
+    result = await service.execute_flow_action(current_user, flow_id, request)
+
+    # 성공 시 스케줄러에서 제거
+    if result.success and result.current_status == FlowStatus.PAUSED:
+        await scheduler_manager.unregister_flow_schedule(flow_id)
+
+    return result
 
 
 @router.post(
@@ -181,9 +115,14 @@ async def resume_flow(
     db: AsyncSession = Depends(get_db_session)
 ) -> FlowActionResult:
     """플로우 재개"""
-    return await _execute_flow_action(
-        flow_id, "resume", "active", request, current_user, db
-    )
+    service = AutorunService(db)
+    result = await service.execute_flow_action(current_user, flow_id, request)
+
+    # 성공 시 스케줄러에 등록
+    if result.success and result.current_status == FlowStatus.ACTIVE:
+        await scheduler_manager.register_flow_schedule(flow_id)
+
+    return result
 
 
 @router.post(
@@ -199,9 +138,14 @@ async def stop_flow(
     db: AsyncSession = Depends(get_db_session)
 ) -> FlowActionResult:
     """플로우 중지"""
-    return await _execute_flow_action(
-        flow_id, "stop", "inactive", request, current_user, db
-    )
+    service = AutorunService(db)
+    result = await service.execute_flow_action(current_user, flow_id, request)
+
+    # 성공 시 스케줄러에서 제거
+    if result.success and result.current_status == FlowStatus.INACTIVE:
+        await scheduler_manager.unregister_flow_schedule(flow_id)
+
+    return result
 
 
 @router.post(
@@ -216,83 +160,18 @@ async def bulk_flow_action(
     db: AsyncSession = Depends(get_db_session)
 ) -> BulkFlowActionResult:
     """다중 플로우 액션"""
-    try:
-        logger.info(
-            f"[BULK_ACTION] 사용자 {current_user.id} "
-            f"{len(request.flow_ids)}개 플로우에 {request.action} 실행"
-        )
+    service = AutorunService(db)
+    result = await service.execute_bulk_flow_action(current_user, request)
 
-        # 액션에 따른 목표 상태 결정
-        action_to_status = {
-            "start": "active",
-            "resume": "active",
-            "pause": "paused",
-            "stop": "inactive"
-        }
+    # 스케줄러 연동 처리
+    for flow_result in result.results:
+        if flow_result.success:
+            if flow_result.current_status == FlowStatus.ACTIVE:
+                await scheduler_manager.register_flow_schedule(flow_result.flow_id)
+            else:
+                await scheduler_manager.unregister_flow_schedule(flow_result.flow_id)
 
-        target_status = action_to_status.get(request.action.value)
-        if not target_status:
-            raise HTTPException(
-                status_code=400,
-                detail=f"지원하지 않는 액션: {request.action}"
-            )
-
-        results = []
-        successful_count = 0
-        failed_count = 0
-
-        for flow_id in request.flow_ids:
-            try:
-                action_request = FlowActionRequest(
-                    action=request.action,
-                    reason=request.reason
-                )
-
-                result = await _execute_flow_action(
-                    flow_id, request.action.value, target_status,
-                    action_request, current_user, db
-                )
-
-                results.append(result)
-                if result.success:
-                    successful_count += 1
-                else:
-                    failed_count += 1
-
-            except Exception as e:
-                failed_count += 1
-                results.append(FlowActionResult(
-                    success=False,
-                    message=f"플로우 {flow_id} 액션 실패: {str(e)}",
-                    flow_id=flow_id,
-                    previous_status=FlowStatus.INACTIVE,
-                    current_status=FlowStatus.INACTIVE,
-                    error_code="BULK_ACTION_ERROR"
-                ))
-
-        summary_message = (
-            f"총 {len(request.flow_ids)}개 플로우 중 "
-            f"{successful_count}개 성공, {failed_count}개 실패"
-        )
-
-        logger.info(f"[BULK_ACTION] 완료: {summary_message}")
-
-        return BulkFlowActionResult(
-            total_requested=len(request.flow_ids),
-            successful_count=successful_count,
-            failed_count=failed_count,
-            results=results,
-            summary_message=summary_message
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"[BULK_ACTION] 오류: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="다중 플로우 액션을 실행하는 중 오류가 발생했습니다"
-        )
+    return result
 
 
 @router.get(
@@ -301,58 +180,14 @@ async def bulk_flow_action(
     summary="전체 실행 상태 요약",
     description="오토런 시스템의 전체 실행 상태를 요약하여 조회합니다."
 )
-async def get_autorun_status(
+async def get_autorun_status_summary(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session)
 ) -> AutorunStatusSummary:
     """전체 실행 상태 요약"""
-    try:
-        logger.info(f"[GET_STATUS] 사용자 {current_user.id} 오토런 상태 요약 조회")
-
-        # 플로우 상태별 집계
-        status_query = (
-            select(
-                Flow.status,
-                func.count(Flow.id).label('count')
-            )
-            .where(Flow.user_id == current_user.id)
-            .group_by(Flow.status)
-        )
-        status_result = await db.execute(status_query)
-        status_counts = {row.status: row.count for row in status_result}
-
-        total_flows = sum(status_counts.values())
-        active_flows = status_counts.get('active', 0)
-        paused_flows = status_counts.get('paused', 0)
-        inactive_flows = status_counts.get('inactive', 0)
-
-        # TODO: 실제 실행 통계는 실행 로그 테이블에서 조회
-        # 현재는 더미 데이터
-        today = datetime.now().date()
-
-        logger.info(
-            f"[GET_STATUS] 상태 요약: 총={total_flows}, "
-            f"활성={active_flows}, 일시정지={paused_flows}, 비활성={inactive_flows}"
-        )
-
-        return AutorunStatusSummary(
-            total_flows=total_flows,
-            active_flows=active_flows,
-            paused_flows=paused_flows,
-            inactive_flows=inactive_flows,
-            total_executions_today=0,
-            successful_executions_today=0,
-            failed_executions_today=0,
-            next_execution=None,
-            next_execution_flow_name=None
-        )
-
-    except Exception as e:
-        logger.error(f"[GET_STATUS] 오류: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="오토런 상태를 조회하는 중 오류가 발생했습니다"
-        )
+    service = AutorunService(db)
+    response = await service.get_autorun_status(current_user, include_inactive=True)
+    return response.summary
 
 
 @router.get(
@@ -376,14 +211,15 @@ async def get_system_health(
         active_count_result = await db.execute(active_count_query)
         active_flows_count = active_count_result.scalar()
 
-        # TODO: 실제 시스템 리소스는 psutil 등으로 조회
-        # 현재는 더미 데이터
+        # 스케줄러 상태 조회
+        scheduler_status = scheduler_manager.get_scheduler_status()
+
         health = SystemHealthCheck(
             status="healthy",
             timestamp=datetime.now(),
-            cpu_usage_percent=25.5,
-            memory_usage_percent=45.2,
-            disk_usage_percent=32.1,
+            cpu_usage_percent=25.5,  # TODO: psutil로 실제 조회
+            memory_usage_percent=45.2,  # TODO: psutil로 실제 조회
+            disk_usage_percent=32.1,  # TODO: psutil로 실제 조회
             database_status="connected",
             redis_status="connected",
             active_flows_count=active_flows_count,
@@ -393,15 +229,19 @@ async def get_system_health(
             errors=[]
         )
 
+        # 스케줄러 상태 체크
+        if not scheduler_status["is_running"]:
+            health.errors.append("스케줄러가 실행 중이지 않습니다")
+            health.status = "error"
+
         # 경고 조건 체크
         if active_flows_count > 20:
             health.warnings.append(f"활성 플로우가 많습니다: {active_flows_count}개")
 
-        if health.warnings:
+        if health.warnings and health.status == "healthy":
             health.status = "warning"
 
         logger.info(f"[HEALTH_CHECK] 상태: {health.status}")
-
         return health
 
     except Exception as e:
@@ -412,115 +252,47 @@ async def get_system_health(
         )
 
 
-async def _execute_flow_action(
-    flow_id: int,
-    action: str,
-    target_status: str,
-    request: FlowActionRequest,
-    current_user: User,
-    db: AsyncSession
-) -> FlowActionResult:
-    """플로우 액션 실행 헬퍼"""
-    try:
-        logger.info(
-            f"[FLOW_ACTION] 사용자 {current_user.id} 플로우 {flow_id} "
-            f"액션: {action} → {target_status}"
-        )
+@router.get(
+    "/scheduler/status",
+    summary="스케줄러 상태 조회",
+    description="APScheduler 스케줄러의 상태와 작업 목록을 조회합니다."
+)
+async def get_scheduler_status():
+    """스케줄러 상태 조회"""
+    return scheduler_manager.get_scheduler_status()
 
-        # 플로우 조회 (소유권 확인)
-        query = select(Flow).where(
-            and_(Flow.id == flow_id, Flow.user_id == current_user.id)
-        )
-        result = await db.execute(query)
-        flow = result.scalar_one_or_none()
 
-        if not flow:
-            raise HTTPException(
-                status_code=404,
-                detail="플로우를 찾을 수 없습니다"
-            )
-
-        previous_status = FlowStatus(flow.status)
-
-        # 상태 변경 유효성 검사
-        if not _is_valid_status_transition(flow.status, target_status):
-            raise HTTPException(
-                status_code=400,
-                detail=f"'{flow.status}'에서 '{target_status}'로 변경할 수 없습니다"
-            )
-
-        # 모듈과 블로그가 있는지 확인 (start/resume 액션 시)
-        if target_status == "active":
-            if not flow.module_links:
-                raise HTTPException(
-                    status_code=400,
-                    detail="실행할 모듈이 없습니다. 먼저 모듈을 추가해주세요."
-                )
-            if not flow.blog_links:
-                raise HTTPException(
-                    status_code=400,
-                    detail="대상 블로그가 없습니다. 먼저 블로그를 추가해주세요."
-                )
-
-        # 상태 변경
-        flow.status = target_status
-        await db.commit()
-
-        # TODO: 실제 스케줄러 연동
-        # - 활성화 시: 스케줄 등록
-        # - 비활성화 시: 스케줄 제거
-        # - 일시정지 시: 스케줄 일시정지
-
-        next_execution = None
-        if target_status == "active":
-            # TODO: 다음 실행 시간 계산
-            next_execution = datetime.now() + timedelta(minutes=30)
-
-        message = f"플로우가 {_get_status_message(target_status)}되었습니다"
-        if request.reason:
-            message += f" (사유: {request.reason})"
-
-        logger.info(f"[FLOW_ACTION] 완료: {flow_id} {previous_status} → {target_status}")
-
-        return FlowActionResult(
-            success=True,
-            message=message,
-            flow_id=flow_id,
-            previous_status=previous_status,
-            current_status=FlowStatus(target_status),
-            next_execution=next_execution
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"[FLOW_ACTION] 오류: {e}")
-        return FlowActionResult(
-            success=False,
-            message=f"액션 실행 중 오류가 발생했습니다: {str(e)}",
-            flow_id=flow_id,
-            previous_status=FlowStatus.INACTIVE,
-            current_status=FlowStatus.INACTIVE,
-            error_code="ACTION_EXECUTION_ERROR",
-            error_details={"exception": str(e)}
+@router.post(
+    "/scheduler/start",
+    summary="스케줄러 시작",
+    description="APScheduler 스케줄러를 시작합니다."
+)
+async def start_scheduler():
+    """스케줄러 시작"""
+    success = await scheduler_manager.start()
+    if success:
+        return {"success": True, "message": "스케줄러가 시작되었습니다"}
+    else:
+        raise HTTPException(
+            status_code=500,
+            detail="스케줄러 시작에 실패했습니다"
         )
 
 
-def _is_valid_status_transition(current: str, target: str) -> bool:
-    """상태 전환 유효성 검사"""
-    valid_transitions = {
-        "inactive": ["active"],
-        "active": ["paused", "inactive"],
-        "paused": ["active", "inactive"]
-    }
-    return target in valid_transitions.get(current, [])
+@router.post(
+    "/scheduler/stop",
+    summary="스케줄러 중지",
+    description="APScheduler 스케줄러를 중지합니다."
+)
+async def stop_scheduler():
+    """스케줄러 중지"""
+    success = await scheduler_manager.stop()
+    if success:
+        return {"success": True, "message": "스케줄러가 중지되었습니다"}
+    else:
+        raise HTTPException(
+            status_code=500,
+            detail="스케줄러 중지에 실패했습니다"
+        )
 
 
-def _get_status_message(status: str) -> str:
-    """상태별 메시지"""
-    messages = {
-        "active": "시작",
-        "paused": "일시정지",
-        "inactive": "중지"
-    }
-    return messages.get(status, status)
