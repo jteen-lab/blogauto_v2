@@ -35,7 +35,7 @@ from ..core.logger import get_logger
 
 logger = get_logger("autorun_router", "app.log")
 
-router = APIRouter(prefix="/api/v1/autorun", tags=["autorun"])
+router = APIRouter(prefix="/autorun", tags=["autorun"])
 
 
 @router.get(

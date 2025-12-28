@@ -36,7 +36,7 @@ from ..core.logger import get_logger
 
 logger = get_logger("flows_router", "app.log")
 
-router = APIRouter(prefix="/api/v1/flows", tags=["flows"])
+router = APIRouter(prefix="/flows", tags=["flows"])
 
 
 @router.get(

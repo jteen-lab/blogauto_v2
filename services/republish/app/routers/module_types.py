@@ -17,7 +17,7 @@ from ..core.logger import get_logger
 
 logger = get_logger("module_types_router", "app.log")
 
-router = APIRouter(prefix="/api/v1/module-types", tags=["module-types"])
+router = APIRouter(prefix="/module-types", tags=["module-types"])
 
 
 @router.get(
