@@ -1,0 +1,197 @@
+<!--
+SelectionPopup 컴포넌트
+무엇을 추가할지 선택하는 팝업
+
+사용법:
+{% include "components/selection_popup.html" with {
+  "id": "addSelection",
+  "title": "무엇을 추가하시겠습니까?",
+  "options": [
+    {"text": "모듈", "icon": "📦", "action": "addModule"},
+    {"text": "블로그", "icon": "📝", "action": "addBlog"}
+  ]
+} %}
+-->
+
+{% set popup_id = id or "selectionPopup" %}
+{% set popup_title = title or "선택하세요" %}
+{% set popup_options = options or [] %}
+
+<!-- 백드롭 -->
+<div id="{{ popup_id }}-backdrop"
+     class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden transition-opacity duration-200"
+     onclick="closeSelectionPopup('{{ popup_id }}')">
+</div>
+
+<!-- 팝업 모달 -->
+<div id="{{ popup_id }}"
+     class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden">
+
+  <!-- 팝업 내용 -->
+  <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full transform scale-95 transition-transform duration-200"
+       onclick="event.stopPropagation()">
+
+    <!-- 헤더 -->
+    <div class="p-6 pb-4">
+      <div class="flex justify-between items-center">
+        <h3 class="text-xl font-semibold text-gray-900">{{ popup_title }}</h3>
+        <button onclick="closeSelectionPopup('{{ popup_id }}')"
+                class="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- 옵션 그리드 -->
+    <div class="px-6 pb-6">
+      {% if popup_options %}
+        <div class="grid grid-cols-2 gap-3">
+          {% for option in popup_options %}
+          <button onclick="selectOption('{{ popup_id }}', '{{ option.action }}', '{{ option.text }}')"
+                  class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all duration-200 group">
+            <span class="text-3xl mb-2 group-hover:scale-110 transition-transform duration-200">{{ option.icon or "📋" }}</span>
+            <span class="font-medium text-gray-900 group-hover:text-blue-700">{{ option.text }}</span>
+            {% if option.description %}
+            <span class="text-xs text-gray-500 mt-1">{{ option.description }}</span>
+            {% endif %}
+          </button>
+          {% endfor %}
+        </div>
+      {% else %}
+        <!-- 기본 옵션들 -->
+        <div class="grid grid-cols-2 gap-3">
+          <button onclick="selectOption('{{ popup_id }}', 'option1', '옵션 1')"
+                  class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all duration-200 group">
+            <span class="text-3xl mb-2 group-hover:scale-110 transition-transform duration-200">📋</span>
+            <span class="font-medium text-gray-900 group-hover:text-blue-700">옵션 1</span>
+          </button>
+          <button onclick="selectOption('{{ popup_id }}', 'option2', '옵션 2')"
+                  class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all duration-200 group">
+            <span class="text-3xl mb-2 group-hover:scale-110 transition-transform duration-200">📝</span>
+            <span class="font-medium text-gray-900 group-hover:text-blue-700">옵션 2</span>
+          </button>
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- 취소 버튼 (선택적) -->
+    <div class="px-6 pb-6">
+      <button onclick="closeSelectionPopup('{{ popup_id }}')"
+              class="w-full py-3 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+        취소
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// SelectionPopup 관련 함수들
+window.selectionPopupInstances = window.selectionPopupInstances || {};
+
+function openSelectionPopup(popupId, options) {
+  const popup = document.getElementById(popupId);
+  const backdrop = document.getElementById(popupId + '-backdrop');
+
+  if (!popup) return;
+
+  // 옵션 업데이트 (동적으로 전달된 경우)
+  if (options && Array.isArray(options)) {
+    updateSelectionPopupOptions(popupId, options);
+  }
+
+  // 백드롭과 팝업 표시
+  if (backdrop) {
+    backdrop.classList.remove('hidden');
+    setTimeout(() => {
+      backdrop.style.opacity = '1';
+    }, 10);
+  }
+
+  popup.classList.remove('hidden');
+
+  // 팝업 애니메이션
+  const content = popup.querySelector('div > div');
+  if (content) {
+    setTimeout(() => {
+      content.classList.remove('scale-95');
+      content.classList.add('scale-100');
+    }, 10);
+  }
+
+  // 스크롤 방지
+  document.body.style.overflow = 'hidden';
+
+  // 인스턴스 저장
+  window.selectionPopupInstances[popupId] = {
+    element: popup,
+    backdrop: backdrop,
+    isOpen: true
+  };
+}
+
+function closeSelectionPopup(popupId) {
+  const instance = window.selectionPopupInstances[popupId];
+  if (!instance || !instance.isOpen) return;
+
+  const popup = instance.element;
+  const backdrop = instance.backdrop;
+  const content = popup.querySelector('div > div');
+
+  // 팝업 애니메이션
+  if (content) {
+    content.classList.remove('scale-100');
+    content.classList.add('scale-95');
+  }
+
+  // 백드롭 숨기기
+  if (backdrop) {
+    backdrop.style.opacity = '0';
+  }
+
+  setTimeout(() => {
+    popup.classList.add('hidden');
+    if (backdrop) {
+      backdrop.classList.add('hidden');
+    }
+  }, 200);
+
+  // 스크롤 복원
+  document.body.style.overflow = '';
+
+  // 상태 업데이트
+  instance.isOpen = false;
+}
+
+function selectOption(popupId, action, text) {
+  // 커스텀 이벤트 발생
+  const event = new CustomEvent('selectionPopup:select', {
+    detail: {
+      popupId: popupId,
+      action: action,
+      text: text
+    }
+  });
+  document.dispatchEvent(event);
+
+  // 팝업 닫기
+  closeSelectionPopup(popupId);
+}
+
+
+// ESC 키로 닫기
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    // 열려있는 모든 셀렉션 팝업 닫기
+    for (const [popupId, instance] of Object.entries(window.selectionPopupInstances)) {
+      if (instance.isOpen) {
+        closeSelectionPopup(popupId);
+      }
+    }
+  }
+});
+
+</script>
+

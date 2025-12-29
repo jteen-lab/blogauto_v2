@@ -1,0 +1,123 @@
+<!--
+CheckboxList 컴포넌트 - 다중 선택 체크박스 목록
+
+사용법:
+{% include "components/checkbox_list.html" with {
+  "id": "modulesList",
+  "title": "모듈 선택",
+  "items": [
+    {"id": 1, "name": "모듈 1", "description": "설명", "checked": false},
+    {"id": 2, "name": "모듈 2", "description": "설명", "checked": true}
+  ],
+  "name": "selected_modules",
+  "show_search": true,
+  "show_select_all": true,
+  "compact": false
+} %}
+-->
+
+{% set list_id = id or "checkboxList" %}
+{% set list_title = title or "항목 선택" %}
+{% set list_items = items or [] %}
+{% set field_name = name or "selected_items" %}
+{% set show_search = show_search if show_search is defined else true %}
+{% set show_select_all = show_select_all if show_select_all is defined else true %}
+{% set compact_mode = compact if compact is defined else false %}
+
+<div class="checkbox-list-container" data-list-id="{{ list_id }}">
+  <!-- 헤더 -->
+  <div class="flex items-center justify-between mb-4">
+    <h3 class="text-lg font-semibold text-gray-900">{{ list_title }}</h3>
+    <span class="text-sm text-gray-500">
+      <span class="selected-count">0</span>개 선택됨
+    </span>
+  </div>
+
+  <!-- 검색 및 전체 선택 -->
+  <div class="mb-4 space-y-3">
+    {% if show_search %}
+    <div class="relative">
+      <input type="text"
+             class="search-input w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+             placeholder="검색...">
+      <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+        <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+        </svg>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if show_select_all %}
+    <div class="flex items-center justify-between">
+      <label class="flex items-center gap-2 cursor-pointer">
+        <input type="checkbox" class="select-all-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
+        <span class="text-sm font-medium text-gray-700">전체 선택</span>
+      </label>
+      <button type="button" class="clear-selection-btn text-sm text-gray-500 hover:text-gray-700">
+        선택 해제
+      </button>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- 체크박스 목록 -->
+  <div class="checkbox-list max-h-64 overflow-y-auto border border-gray-200 rounded-lg">
+    {% if list_items %}
+      {% for item in list_items %}
+      <label class="checkbox-item flex items-center p-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 cursor-pointer"
+             data-item-id="{{ item.id }}"
+             data-item-name="{{ item.name }}"
+             data-searchable="{{ item.name|lower }} {{ item.description|lower if item.description }}">
+
+        <input type="checkbox"
+               name="{{ field_name }}"
+               value="{{ item.id }}"
+               class="item-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 mr-3"
+               {% if item.checked %}checked{% endif %}>
+
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            {% if item.icon %}
+            <span class="text-lg">{{ item.icon }}</span>
+            {% endif %}
+            <span class="font-medium text-gray-900 truncate">{{ item.name }}</span>
+            {% if item.badge %}
+            <span class="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">{{ item.badge }}</span>
+            {% endif %}
+          </div>
+
+          {% if item.description and not compact_mode %}
+          <p class="text-sm text-gray-500 mt-1 truncate">{{ item.description }}</p>
+          {% endif %}
+        </div>
+
+        {% if item.status %}
+        <div class="ml-2">
+          {% include "components/status_badge.html" with {
+            "status": item.status,
+            "size": "xs"
+          } %}
+        </div>
+        {% endif %}
+      </label>
+      {% endfor %}
+    {% else %}
+      <div class="p-8 text-center text-gray-500">
+        <svg class="w-12 h-12 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+        </svg>
+        <p class="text-lg font-medium">항목이 없습니다</p>
+        <p class="text-sm">선택할 수 있는 항목이 없습니다.</p>
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- 하단 정보 -->
+  <div class="mt-3 flex items-center justify-between text-xs text-gray-500">
+    <span class="total-count">전체 {{ list_items|length }}개</span>
+    <span class="filtered-info" style="display: none;">필터된 결과</span>
+  </div>
+</div>
+
+

@@ -1,0 +1,87 @@
+<!--
+StatusBadge 컴포넌트
+상태에 따른 뱃지 표시
+
+사용법:
+{% include "components/status_badge.html" with {
+  "status": "active",
+  "text": "활성",
+  "size": "sm",
+  "with_icon": true
+} %}
+-->
+
+{% set badge_status = status or "inactive" %}
+{% set badge_text = text or (status_map[badge_status] if status_map else badge_status) %}
+{% set badge_size = size or "sm" %}
+{% set with_icon = with_icon if with_icon is defined else false %}
+
+{% set status_map = {
+  "active": "활성",
+  "inactive": "비활성",
+  "paused": "일시정지",
+  "running": "실행중",
+  "stopped": "중지됨",
+  "pending": "대기중",
+  "completed": "완료",
+  "error": "오류",
+  "success": "성공",
+  "warning": "주의",
+  "failed": "실패"
+} %}
+
+{% set status_colors = {
+  "active": "bg-green-100 text-green-800 border-green-200",
+  "inactive": "bg-gray-100 text-gray-600 border-gray-200",
+  "paused": "bg-yellow-100 text-yellow-800 border-yellow-200",
+  "running": "bg-blue-100 text-blue-800 border-blue-200",
+  "stopped": "bg-gray-100 text-gray-600 border-gray-200",
+  "pending": "bg-orange-100 text-orange-800 border-orange-200",
+  "completed": "bg-green-100 text-green-800 border-green-200",
+  "error": "bg-red-100 text-red-800 border-red-200",
+  "success": "bg-green-100 text-green-800 border-green-200",
+  "warning": "bg-yellow-100 text-yellow-800 border-yellow-200",
+  "failed": "bg-red-100 text-red-800 border-red-200"
+} %}
+
+{% set status_icons = {
+  "active": "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z",
+  "inactive": "M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z",
+  "paused": "M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z",
+  "running": "M14.828 14.828a4 4 0 01-5.656 0M9 10h1.586a1 1 0 01.707.293l2.414 2.414a1 1 0 00.707.293H15M9 10v4a2 2 0 002 2h2a2 2 0 002-2v-4M9 10V6a2 2 0 012-2h2a2 2 0 012 2v4",
+  "stopped": "M21 12a9 9 0 11-18 0 9 9 0 0118 0z M15 12a3 3 0 11-6 0 3 3 0 016 0z",
+  "pending": "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z",
+  "completed": "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z",
+  "error": "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z",
+  "success": "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z",
+  "warning": "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z",
+  "failed": "M6 18L18 6M6 6l12 12"
+} %}
+
+{% set size_classes = {
+  "xs": "px-2 py-1 text-xs",
+  "sm": "px-2 py-1 text-xs",
+  "md": "px-3 py-1 text-sm",
+  "lg": "px-4 py-2 text-base"
+} %}
+
+{% set icon_sizes = {
+  "xs": "w-3 h-3",
+  "sm": "w-3 h-3",
+  "md": "w-4 h-4",
+  "lg": "w-5 h-5"
+} %}
+
+<span class="inline-flex items-center gap-1 rounded-full font-medium border
+           {{ size_classes[badge_size] or size_classes['sm'] }}
+           {{ status_colors[badge_status] or status_colors['inactive'] }}">
+  {% if with_icon and status_icons[badge_status] %}
+    <svg class="{{ icon_sizes[badge_size] or icon_sizes['sm'] }}"
+         fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="{{ status_icons[badge_status] }}"/>
+    </svg>
+  {% endif %}
+
+  <span>{{ badge_text }}</span>
+</span>

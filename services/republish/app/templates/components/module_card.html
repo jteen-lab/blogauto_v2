@@ -1,0 +1,132 @@
+<!--
+ModuleCard 컴포넌트 - 모듈 정보 카드
+-->
+
+{% set card_module = module %}
+{% set show_actions = show_actions if show_actions is defined else true %}
+{% set compact_mode = compact if compact is defined else false %}
+{% set is_selectable = selectable if selectable is defined else false %}
+
+{% if card_module %}
+  {% set module_icons = {"prompt": "💭", "generate": "🤖", "publish": "📤", "republish": "🔄"} %}
+
+  <!-- 모듈 카드 -->
+  <div class="bg-white rounded-lg border p-4 hover:shadow-md transition-shadow group
+              {% if compact_mode %}p-3{% endif %}
+              {% if is_selectable %}cursor-pointer hover:border-blue-300{% endif %}"
+       data-module-id="{{ card_module.id }}">
+
+    <div class="flex items-start justify-between">
+      <div class="flex items-center gap-3 flex-1 min-w-0">
+        <span class="text-2xl">{{ module_icons[card_module.type_code] or "📦" }}</span>
+        <div class="flex-1 min-w-0">
+          <h4 class="font-medium text-gray-900 truncate">{{ card_module.name }}</h4>
+          {% if card_module.description and not compact_mode %}
+          <p class="text-sm text-gray-500 mt-1 line-clamp-2">{{ card_module.description }}</p>
+          {% endif %}
+          <div class="flex items-center gap-3 mt-1 text-xs text-gray-500">
+            <span>{{ card_module.type_code }}</span>
+            {% if card_module.manual_interval_minutes %}
+            <span>{{ card_module.manual_interval_minutes }}분</span>
+            {% endif %}
+            {% if card_module.schedule_matrix %}<span>스케줄됨</span>{% endif %}
+          </div>
+        </div>
+      </div>
+
+      {% if show_actions %}
+      <div class="flex gap-1">
+        <button onclick="editModule({{ card_module.id }})" class="p-1 text-gray-400 hover:text-blue-600" title="수정">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+          </svg>
+        </button>
+        <button onclick="deleteModule({{ card_module.id }})" class="p-1 text-gray-400 hover:text-red-600" title="삭제">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+          </svg>
+        </button>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- 선택 체크박스 (선택 모드일 때만) -->
+    {% if is_selectable %}
+    <div class="flex items-center justify-between pt-3 border-t border-gray-100">
+      <label class="flex items-center gap-2 cursor-pointer">
+        <input type="checkbox" name="selected_modules" value="{{ card_module.id }}"
+               class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
+        <span class="text-sm text-gray-600">선택</span>
+      </label>
+    </div>
+    {% endif %}
+
+
+  </div>
+
+{% else %}
+  <!-- 빈 카드 (로딩 상태 등) -->
+  <div class="bg-white rounded-lg border border-gray-200 p-4 animate-pulse">
+    <div class="flex items-start gap-3">
+      <div class="w-8 h-8 bg-gray-300 rounded"></div>
+      <div class="flex-1 space-y-2">
+        <div class="h-4 bg-gray-300 rounded w-3/4"></div>
+        <div class="h-3 bg-gray-300 rounded w-1/2"></div>
+      </div>
+    </div>
+  </div>
+{% endif %}
+
+<script>
+// 모듈 카드 관련 함수들
+function selectModule(moduleId) {
+  // 모듈 선택 이벤트
+  const event = new CustomEvent('module:select', {
+    detail: { moduleId }
+  });
+  document.dispatchEvent(event);
+}
+
+function editModule(moduleId) {
+  // 모듈 수정
+  window.location.href = `/modules/${moduleId}/edit`;
+}
+
+function viewModule(moduleId) {
+  // 모듈 상세보기
+  window.location.href = `/modules/${moduleId}`;
+}
+
+
+function deleteModule(moduleId) {
+  // 모듈 삭제
+  if (confirm('정말로 이 모듈을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+    fetch(`/api/v1/modules/${moduleId}`, {
+      method: 'DELETE',
+      credentials: 'include'
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        showSuccessMessage('모듈이 삭제되었습니다.');
+        // 카드 제거 애니메이션
+        const card = document.querySelector(`[data-module-id="${moduleId}"]`);
+        if (card) {
+          card.style.transition = 'all 0.3s ease-out';
+          card.style.opacity = '0';
+          card.style.transform = 'scale(0.95)';
+          setTimeout(() => {
+            card.remove();
+          }, 300);
+        }
+      } else {
+        throw new Error(data.message || '삭제에 실패했습니다.');
+      }
+    })
+    .catch(error => {
+      showErrorMessage(error.message);
+    });
+  }
+}
+</script>
+

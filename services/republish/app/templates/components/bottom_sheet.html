@@ -1,0 +1,197 @@
+<!--
+BottomSheet 컴포넌트
+모바일에서 하단에서 올라오는 시트
+
+사용법:
+{% include "components/bottom_sheet.html" with {
+  "id": "myBottomSheet",
+  "title": "옵션 선택",
+  "content": "내용 HTML",
+  "show_handle": true,
+  "backdrop_dismiss": true
+} %}
+-->
+
+{% set sheet_id = id or "bottomSheet" %}
+{% set sheet_title = title or "" %}
+{% set show_handle = show_handle if show_handle is defined else true %}
+{% set backdrop_dismiss = backdrop_dismiss if backdrop_dismiss is defined else true %}
+
+<!-- 백드롭 -->
+<div id="{{ sheet_id }}-backdrop"
+     class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden transition-opacity duration-300"
+     {% if backdrop_dismiss %}onclick="closeBottomSheet('{{ sheet_id }}')"{% endif %}>
+</div>
+
+<!-- 바텀 시트 -->
+<div id="{{ sheet_id }}"
+     class="fixed inset-x-0 bottom-0 bg-white rounded-t-2xl shadow-2xl z-50
+            transform translate-y-full transition-transform duration-300 ease-out">
+
+  <!-- 핸들 바 -->
+  {% if show_handle %}
+  <div class="flex justify-center pt-3 pb-2">
+    <div class="w-12 h-1 bg-gray-300 rounded-full"></div>
+  </div>
+  {% endif %}
+
+  <!-- 헤더 -->
+  {% if sheet_title %}
+  <div class="flex justify-between items-center px-4 py-3 border-b border-gray-200">
+    <h3 class="text-lg font-semibold text-gray-900">{{ sheet_title }}</h3>
+    <button onclick="closeBottomSheet('{{ sheet_id }}')"
+            class="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+    </button>
+  </div>
+  {% endif %}
+
+  <!-- 내용 영역 -->
+  <div class="p-4 max-h-96 overflow-y-auto">
+    {% if content %}
+      {{ content|safe }}
+    {% else %}
+      <!-- 기본 슬롯 내용 -->
+      <div id="{{ sheet_id }}-content">
+        <!-- 여기에 동적 내용이 들어갑니다 -->
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- 하단 안전 영역 (iOS) -->
+  <div class="h-safe-area-inset-bottom"></div>
+</div>
+
+<script>
+// BottomSheet 관련 함수들
+window.bottomSheetInstances = window.bottomSheetInstances || {};
+
+function openBottomSheet(sheetId, content) {
+  const sheet = document.getElementById(sheetId);
+  const backdrop = document.getElementById(sheetId + '-backdrop');
+
+  if (!sheet) return;
+
+  // 동적 내용 설정
+  if (content) {
+    const contentArea = document.getElementById(sheetId + '-content');
+    if (contentArea) {
+      contentArea.innerHTML = content;
+    }
+  }
+
+  // 백드롭 표시
+  if (backdrop) {
+    backdrop.classList.remove('hidden');
+    setTimeout(() => {
+      backdrop.style.opacity = '1';
+    }, 10);
+  }
+
+  // 시트 표시
+  sheet.classList.remove('translate-y-full');
+
+  // 스크롤 방지
+  document.body.style.overflow = 'hidden';
+
+  // 인스턴스 저장
+  window.bottomSheetInstances[sheetId] = {
+    element: sheet,
+    backdrop: backdrop,
+    isOpen: true
+  };
+}
+
+function closeBottomSheet(sheetId) {
+  const instance = window.bottomSheetInstances[sheetId];
+  if (!instance || !instance.isOpen) return;
+
+  const sheet = instance.element;
+  const backdrop = instance.backdrop;
+
+  // 시트 숨기기
+  sheet.classList.add('translate-y-full');
+
+  // 백드롭 숨기기
+  if (backdrop) {
+    backdrop.style.opacity = '0';
+    setTimeout(() => {
+      backdrop.classList.add('hidden');
+    }, 300);
+  }
+
+  // 스크롤 복원
+  document.body.style.overflow = '';
+
+  // 상태 업데이트
+  instance.isOpen = false;
+}
+
+function toggleBottomSheet(sheetId, content) {
+  const instance = window.bottomSheetInstances[sheetId];
+
+  if (instance && instance.isOpen) {
+    closeBottomSheet(sheetId);
+  } else {
+    openBottomSheet(sheetId, content);
+  }
+}
+
+// 스와이프로 닫기 기능
+function initBottomSheetSwipe(sheetId) {
+  const sheet = document.getElementById(sheetId);
+  if (!sheet) return;
+
+  let startY = 0;
+  let currentY = 0;
+  let isDragging = false;
+
+  sheet.addEventListener('touchstart', (e) => {
+    startY = e.touches[0].clientY;
+    isDragging = true;
+  }, { passive: true });
+
+  sheet.addEventListener('touchmove', (e) => {
+    if (!isDragging) return;
+
+    currentY = e.touches[0].clientY;
+    const deltaY = currentY - startY;
+
+    // 아래로 드래그할 때만
+    if (deltaY > 0) {
+      sheet.style.transform = `translateY(${deltaY}px)`;
+    }
+  }, { passive: true });
+
+  sheet.addEventListener('touchend', (e) => {
+    if (!isDragging) return;
+
+    isDragging = false;
+    const deltaY = currentY - startY;
+
+    // 일정 거리 이상 드래그하면 닫기
+    if (deltaY > 100) {
+      closeBottomSheet(sheetId);
+    } else {
+      // 원래 위치로 복원
+      sheet.style.transform = '';
+    }
+  });
+}
+
+// ESC 키로 닫기
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    // 열려있는 모든 바텀시트 닫기
+    for (const [sheetId, instance] of Object.entries(window.bottomSheetInstances)) {
+      if (instance.isOpen) {
+        closeBottomSheet(sheetId);
+      }
+    }
+  }
+});
+
+</script>
+
