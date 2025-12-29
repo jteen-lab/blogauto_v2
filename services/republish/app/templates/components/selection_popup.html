@@ -3,14 +3,14 @@ SelectionPopup 컴포넌트
 무엇을 추가할지 선택하는 팝업
 
 사용법:
-{% include "components/selection_popup.html" with {
+{# {% include "components/selection_popup.html" with {
   "id": "addSelection",
   "title": "무엇을 추가하시겠습니까?",
   "options": [
     {"text": "모듈", "icon": "📦", "action": "addModule"},
     {"text": "블로그", "icon": "📝", "action": "addBlog"}
   ]
-} %}
+} %} #}
 -->
 
 {% set popup_id = id or "selectionPopup" %}

@@ -120,7 +120,7 @@
     <!-- 모듈 목록 -->
     <div x-show="!loading && filteredModules.length > 0" class="module-grid">
         <template x-for="module in filteredModules" :key="module.id">
-            {% include "modules/_card.html" with {"module_var": "module"} %}
+            {% include "modules/_card.html" %}
         </template>
     </div>
 
@@ -144,27 +144,21 @@
 
     <!-- 모바일 FAB -->
     <div class="md:hidden">
-        {% include "components/fab_button.html" with {
-            "id": "moduleFab",
-            "icon": "plus",
-            "position": "bottom-right",
-            "onclick": "moduleListApp().showModuleTypeSelector()"
-        } %}
+        {% with id="moduleFab", icon="plus", position="bottom-right", onclick="moduleListApp().showModuleTypeSelector()" %}
+            {% include "components/fab_button.html" %}
+        {% endwith %}
     </div>
 </div>
 
 <!-- 모듈 타입 선택 팝업 -->
-{% include "components/selection_popup.html" with {
-    "id": "moduleTypeSelector",
-    "title": "모듈 타입 선택"
-} %}
+{% with id="moduleTypeSelector", title="모듈 타입 선택" %}
+    {% include "components/selection_popup.html" %}
+{% endwith %}
 
 <!-- 모듈 생성/수정 폼 (Bottom Sheet) -->
-{% include "components/bottom_sheet.html" with {
-    "id": "moduleForm",
-    "title": "모듈 설정",
-    "size": "large"
-} %}
+{% with id="moduleForm", title="모듈 설정", size="large" %}
+    {% include "components/bottom_sheet.html" %}
+{% endwith %}
 
 <script src="/static/js/modules/list.js"></script>
 {% endblock %}

@@ -2,12 +2,12 @@
 FlowCard 컴포넌트 - 플로우 정보 카드
 
 사용법:
-{% include "components/flow_card.html" with {
+{# {% include "components/flow_card.html" with {
   "flow": flow_object,
   "show_actions": true,
   "compact": false,
   "selectable": false
-} %}
+} %} #}
 -->
 
 {% set card_flow = flow %}
@@ -27,10 +27,10 @@ FlowCard 컴포넌트 - 플로우 정보 카드
         <!-- 플로우 아이콘과 상태 -->
         <div class="relative">
           <span class="text-2xl">🔄</span>
-          {% include "components/status_badge.html" with {
+          {# {% include "components/status_badge.html" with {
             "status": card_flow.status,
             "size": "xs"
-          } %}
+          } %} #}
         </div>
 
         <div class="flex-1 min-w-0">
