@@ -4,20 +4,26 @@
  */
 
 function moduleFormApp(module = null, moduleType = null) {
+    // 모듈 데이터 초기화
+    const initialModule = module || {};
+    const initialType = moduleType || { code: 'republish', name: '재발행' };
+
     return {
         // 폼 상태
         loading: false,
-        isEdit: !!module,
-        moduleType: moduleType,
+        isEdit: !!initialModule?.id,
+        module: initialModule,
+        moduleType: initialType,
 
         // 폼 데이터
         formData: {
-            name: module?.name || '',
-            type_code: moduleType?.code || 'republish',
-            description: module?.description || '',
-            manual_interval_minutes: module?.manual_interval_minutes || 25,
-            settings: module?.settings || {},
-            is_active: module?.is_active ?? true
+            name: initialModule?.name || '',
+            type_code: initialType?.code || 'republish',
+            description: initialModule?.description || '',
+            manual_interval_minutes: initialModule?.manual_interval_minutes || 25,
+            settings: initialModule?.settings || {},
+            schedule_matrix: initialModule?.schedule_matrix || null,
+            is_active: initialModule?.is_active ?? true
         },
 
         // 스케줄 매트릭스 (재발행 모듈용)
@@ -35,13 +41,19 @@ function moduleFormApp(module = null, moduleType = null) {
             this.initializeSchedule();
             this.initializeSettings();
             this.calculateStats();
+
+            // 형식 값 갱신
+            this.$nextTick(() => {
+                this.updateActiveHoursCount();
+                this.calculateExpectedPosts();
+            });
         },
 
         // 스케줄 매트릭스 초기화
         initializeSchedule() {
             if (this.formData.type_code === 'republish') {
-                if (this.module && this.module.schedule_matrix) {
-                    this.schedule = JSON.parse(JSON.stringify(this.module.schedule_matrix));
+                if (this.isEdit && this.formData.schedule_matrix) {
+                    this.schedule = JSON.parse(JSON.stringify(this.formData.schedule_matrix));
                 } else {
                     // 기본 평일 9-21시 스케줄
                     this.schedule = Array(7).fill().map((_, dayIdx) =>
@@ -51,17 +63,25 @@ function moduleFormApp(module = null, moduleType = null) {
                     );
                 }
                 this.updateActiveHoursCount();
+            } else {
+                this.schedule = Array(7).fill().map(() => Array(24).fill(false));
             }
         },
 
         // 설정 JSON 초기화
         initializeSettings() {
-            if (this.formData.type_code !== 'republish' && this.formData.settings) {
+            if (this.formData.type_code !== 'republish') {
                 try {
-                    this.settingsJson = JSON.stringify(this.formData.settings, null, 2);
+                    const settings = this.formData.settings || {};
+                    this.settingsJson = JSON.stringify(settings, null, 2);
+                    if (this.settingsJson === '{}' && !this.isEdit) {
+                        this.settingsJson = '';
+                    }
                 } catch (e) {
-                    this.settingsJson = '{}';
+                    this.settingsJson = '';
                 }
+            } else {
+                this.settingsJson = '';
             }
         },
 
@@ -155,7 +175,7 @@ function moduleFormApp(module = null, moduleType = null) {
                 const requestData = this.prepareRequestData();
 
                 const url = this.isEdit
-                    ? `/api/v1/modules/${this.module.id}`
+                    ? `/api/v1/modules/${this.formData.id || this.module.id}`
                     : '/api/v1/modules';
 
                 const method = this.isEdit ? 'PUT' : 'POST';
@@ -182,7 +202,6 @@ function moduleFormApp(module = null, moduleType = null) {
                 // 목록 새로고침
                 if (window.moduleListAppInstance) {
                     await window.moduleListAppInstance.loadModules();
-                    window.moduleListAppInstance.filterModules();
                 }
 
                 // 폼 닫기
@@ -256,7 +275,9 @@ function moduleFormApp(module = null, moduleType = null) {
 
         // 폼 닫기
         closeForm() {
-            closeBottomSheet('moduleForm');
+            if (window.closeBottomSheet) {
+                window.closeBottomSheet('moduleForm');
+            }
         },
 
         // 알림 메시지

@@ -77,7 +77,118 @@ function moduleListApp() {
         // 모듈 타입 이름 반환
         getModuleTypeName(typeCode) {
             const type = this.moduleTypes.find(t => t.code === typeCode);
-            return type ? type.name : typeCode;
+            if (type) return type.name;
+
+            // 폴백 이름
+            const fallbackNames = {
+                'prompt': '프롬프트',
+                'generate': '생성',
+                'publish': '발행',
+                'republish': '재발행'
+            };
+            return fallbackNames[typeCode] || typeCode;
+        },
+
+
+        // 전체 폼 템플릿
+        getFullFormTemplate() {
+            return `
+                <form @submit.prevent="submitForm()">
+                    <!-- 기본 정보 -->
+                    <div class="space-y-6">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                모듈 이름 <span class="text-red-500">*</span>
+                            </label>
+                            <input type="text"
+                                   x-model="formData.name"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                   placeholder="예: 재발행 모듈 A"
+                                   required>
+                            <p class="mt-1 text-xs text-gray-500">모듈을 구분할 수 있는 이름을 입력하세요</p>
+                        </div>
+
+                        <!-- 재발행 모듈 전용 설정 -->
+                        <div x-show="formData.type_code === 'republish'">
+                            <!-- 재발행 간격 설정 -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    재발행 간격 (분) <span class="text-red-500">*</span>
+                                </label>
+                                <input type="number"
+                                       x-model.number="formData.manual_interval_minutes"
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                       min="15"
+                                       placeholder="25"
+                                       required>
+                                <div class="mt-1 flex items-center gap-2 text-xs text-blue-600">
+                                    <span>최소 15분 이상 설정해주세요. 권장: 25-60분</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 다른 모듈 타입 -->
+                        <div x-show="formData.type_code !== 'republish'">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">설정 정보 (JSON)</label>
+                                <textarea x-model="settingsJson"
+                                          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+                                          rows="4"
+                                          placeholder='{"key": "value"}'>
+                                </textarea>
+                                <p class="mt-1 text-xs text-gray-500">모듈별 설정을 JSON 형태로 입력하세요</p>
+                            </div>
+                        </div>
+
+                        <!-- 설명 -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">설명 (선택)</label>
+                            <textarea x-model="formData.description"
+                                      class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                      rows="3"
+                                      placeholder="모듈에 대한 설명을 입력하세요...">
+                            </textarea>
+                        </div>
+
+                        <!-- 활성화 상태 -->
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <span class="text-sm font-medium text-gray-700">모듈 활성화</span>
+                                <p class="text-xs text-gray-500">생성 후 바로 동작하려면 활성화하세요</p>
+                            </div>
+                            <button type="button"
+                                    @click="formData.is_active = !formData.is_active"
+                                    class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                                    :class="formData.is_active ? 'bg-blue-600' : 'bg-gray-200'">
+                                <span class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+                                      :class="formData.is_active ? 'translate-x-5' : 'translate-x-0'">
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 폼 액션 -->
+                    <div class="flex gap-3 pt-6 border-t border-gray-200 mt-8">
+                        <button type="button"
+                                @click="closeForm()"
+                                class="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+                            취소
+                        </button>
+                        <button type="submit"
+                                :disabled="loading"
+                                class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <span x-show="!loading" x-text="isEdit ? '수정' : '생성'"></span>
+                            <span x-show="loading" class="flex items-center justify-center">
+                                <svg class="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                처리중...
+                            </span>
+                        </button>
+                    </div>
+                </form>
+            `;
         },
 
         // 상태별 CSS 클래스 반환
@@ -129,25 +240,23 @@ function moduleListApp() {
         // 모듈 생성
         async createModule(typeCode) {
             try {
-                const selectedType = this.moduleTypes.find(t => t.code === typeCode);
-                if (!selectedType) {
-                    this.showError('선택한 모듈 타입을 찾을 수 없습니다');
-                    return;
-                }
-
-                // 폼 데이터 준비
-                const formContent = await this.loadModuleForm(null, selectedType);
-
-                // 바텀시트에 폼 로드
-                const bottomSheet = document.querySelector('#moduleForm .bottom-sheet-body');
-                if (bottomSheet) {
-                    bottomSheet.innerHTML = formContent;
-                }
+                const selectedType = this.moduleTypes.find(t => t.code === typeCode) || {
+                    code: typeCode,
+                    name: this.getModuleTypeName(typeCode),
+                    description: ''
+                };
 
                 // 바텀시트 제목 업데이트
-                const title = document.querySelector('#moduleForm .bottom-sheet-title');
+                const title = document.getElementById('moduleFormTitle');
                 if (title) {
                     title.textContent = `${selectedType.name} 생성`;
+                }
+
+                // 폼 내용 로드
+                const formContent = await this.loadModuleForm(null, selectedType);
+                const contentArea = document.getElementById('moduleFormContent');
+                if (contentArea) {
+                    contentArea.innerHTML = formContent;
                 }
 
                 // 바텀시트 표시
@@ -168,19 +277,23 @@ function moduleListApp() {
                     return;
                 }
 
-                const moduleType = this.moduleTypes.find(t => t.code === module.type_code);
-                const formContent = await this.loadModuleForm(module, moduleType);
-
-                // 바텀시트에 폼 로드
-                const bottomSheet = document.querySelector('#moduleForm .bottom-sheet-body');
-                if (bottomSheet) {
-                    bottomSheet.innerHTML = formContent;
-                }
+                const moduleType = this.moduleTypes.find(t => t.code === module.type_code) || {
+                    code: module.type_code,
+                    name: this.getModuleTypeName(module.type_code),
+                    description: ''
+                };
 
                 // 바텀시트 제목 업데이트
-                const title = document.querySelector('#moduleForm .bottom-sheet-title');
+                const title = document.getElementById('moduleFormTitle');
                 if (title) {
                     title.textContent = `${module.name} 수정`;
+                }
+
+                // 폼 내용 로드
+                const formContent = await this.loadModuleForm(module, moduleType);
+                const contentArea = document.getElementById('moduleFormContent');
+                if (contentArea) {
+                    contentArea.innerHTML = formContent;
                 }
 
                 // 바텀시트 표시
@@ -292,23 +405,19 @@ function moduleListApp() {
 
         // 모듈 폼 로드 (HTML 템플릿)
         async loadModuleForm(module, moduleType) {
-            // 실제로는 서버에서 렌더링된 폼 HTML을 가져올 수 있지만
-            // 여기서는 클라이언트 사이드에서 생성
-            const formTemplate = await fetch('/static/js/modules/form-template.js')
-                .then(response => response.text())
-                .catch(() => {
-                    // 폴백: 기본 폼 HTML
-                    return this.getDefaultFormHTML(module, moduleType);
-                });
-
-            return formTemplate;
+            // 기본 폼 HTML 반환
+            return this.getDefaultFormHTML(module, moduleType);
         },
+
 
         // 기본 폼 HTML 생성
         getDefaultFormHTML(module, moduleType) {
+            const moduleJson = module ? JSON.stringify(module) : 'null';
+            const typeJson = moduleType ? JSON.stringify(moduleType) : 'null';
+
             return `
-                <div x-data="moduleFormApp(${JSON.stringify(module)}, ${JSON.stringify(moduleType)})">
-                    ${this.getFormTemplate()}
+                <div x-data="moduleFormApp(${moduleJson}, ${typeJson})" x-init="init()">
+                    ${this.getFullFormTemplate()}
                 </div>
             `;
         },
@@ -452,5 +561,49 @@ window.toggleModuleStatus = function(moduleId) {
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         closeSelectionPopup('moduleTypeSelector');
+        closeBottomSheet('moduleForm');
     }
 });
+
+// 바텀시트 관련 함수들
+window.openBottomSheet = function(sheetId) {
+    const sheet = document.getElementById(sheetId);
+    const backdrop = document.getElementById(sheetId + '-backdrop');
+
+    if (!sheet) return;
+
+    // 백드롭 표시
+    if (backdrop) {
+        backdrop.classList.remove('hidden');
+        setTimeout(() => {
+            backdrop.style.opacity = '1';
+        }, 10);
+    }
+
+    // 시트 표시
+    sheet.classList.remove('translate-y-full');
+
+    // 스크롤 방지
+    document.body.style.overflow = 'hidden';
+};
+
+window.closeBottomSheet = function(sheetId) {
+    const sheet = document.getElementById(sheetId);
+    const backdrop = document.getElementById(sheetId + '-backdrop');
+
+    // 시트 숨기기
+    if (sheet) {
+        sheet.classList.add('translate-y-full');
+    }
+
+    // 백드롭 숨기기
+    if (backdrop) {
+        backdrop.style.opacity = '0';
+        setTimeout(() => {
+            backdrop.classList.add('hidden');
+        }, 300);
+    }
+
+    // 스크롤 복원
+    document.body.style.overflow = '';
+};
