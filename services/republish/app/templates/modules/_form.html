@@ -1,0 +1,182 @@
+<!--
+모듈 생성/수정 폼 템플릿
+Alpine.js 데이터 바인딩 사용
+-->
+
+<form x-data="moduleFormApp()" @submit.prevent="submitForm()">
+    <!-- 기본 정보 -->
+    <div class="space-y-6">
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+                모듈 이름 <span class="text-red-500">*</span>
+            </label>
+            <input type="text"
+                   x-model="formData.name"
+                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                   placeholder="예: 재발행 모듈 A"
+                   required>
+            <p class="mt-1 text-xs text-gray-500">모듈을 구분할 수 있는 이름을 입력하세요</p>
+        </div>
+
+        <!-- 타입별 설정 -->
+        <div x-show="formData.type_code === 'republish'">
+            <!-- 재발행 간격 설정 -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    재발행 간격 (분) <span class="text-red-500">*</span>
+                </label>
+                <input type="number"
+                       x-model.number="formData.manual_interval_minutes"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                       min="15"
+                       placeholder="25"
+                       required>
+                <div class="mt-1 flex items-center gap-2 text-xs text-blue-600">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <span>최소 15분 이상 설정해주세요. 권장: 25-60분</span>
+                </div>
+            </div>
+
+            <!-- 스케줄 매트릭스 -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">스케줄 설정</label>
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <!-- 빠른 설정 버튼 -->
+                    <div class="flex flex-wrap gap-2 mb-4">
+                        <button type="button"
+                                @click="selectAllHours()"
+                                class="px-3 py-1 text-xs bg-blue-100 text-blue-800 rounded-full hover:bg-blue-200">
+                            전체 선택
+                        </button>
+                        <button type="button"
+                                @click="clearAllHours()"
+                                class="px-3 py-1 text-xs bg-gray-100 text-gray-800 rounded-full hover:bg-gray-200">
+                            전체 해제
+                        </button>
+                        <button type="button"
+                                @click="selectWorkingHours()"
+                                class="px-3 py-1 text-xs bg-green-100 text-green-800 rounded-full hover:bg-green-200">
+                            평일 9-21시
+                        </button>
+                    </div>
+
+                    <p class="text-xs text-gray-500 mb-3">
+                        파란색 = 활성, 회색 = 비활성 | 요일 헤더 클릭으로 전체 선택/해제
+                    </p>
+
+                    <!-- 스케줄 테이블 -->
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs border-collapse">
+                            <thead>
+                                <tr>
+                                    <th class="border border-gray-300 bg-gray-100 p-2 text-center w-12">시간</th>
+                                    <template x-for="(day, dayIdx) in days" :key="dayIdx">
+                                        <th class="border border-gray-300 bg-gray-100 p-2 text-center cursor-pointer hover:bg-gray-200 w-8"
+                                            @click="toggleDay(dayIdx)"
+                                            x-text="day">
+                                        </th>
+                                    </template>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="hour in 24" :key="hour">
+                                    <tr>
+                                        <td class="border border-gray-300 bg-gray-50 p-1 text-center font-medium"
+                                            x-text="String(hour-1).padStart(2, '0') + '시'">
+                                        </td>
+                                        <template x-for="(day, dayIdx) in days" :key="dayIdx + '-' + hour">
+                                            <td class="border border-gray-300 p-0">
+                                                <button type="button"
+                                                        class="w-full h-7 border-none cursor-pointer transition-colors duration-150"
+                                                        :class="schedule[dayIdx][hour-1] ? 'bg-blue-500 hover:bg-blue-600' : 'bg-gray-100 hover:bg-gray-200'"
+                                                        @click="toggleHour(dayIdx, hour-1)">
+                                                </button>
+                                            </td>
+                                        </template>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- 활성 시간 요약 -->
+                    <div class="mt-4 p-3 bg-blue-50 rounded-lg">
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="text-blue-800 font-medium">
+                                활성 시간: <span x-text="activeHoursCount"></span>시간/주
+                            </span>
+                            <span class="text-blue-600" x-show="todayActiveHours > 0">
+                                오늘: <span x-text="todayActiveHours"></span>시간
+                            </span>
+                        </div>
+                        <p class="text-xs text-blue-600 mt-1" x-show="expectedDailyPosts > 0">
+                            예상 일일 발행: 약 <span x-text="expectedDailyPosts"></span>회
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 기타 타입 설정 -->
+        <div x-show="formData.type_code !== 'republish'">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">설정 정보 (JSON)</label>
+                <textarea x-model="settingsJson"
+                          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+                          rows="6"
+                          placeholder='{"key": "value"}'>
+                </textarea>
+                <p class="mt-1 text-xs text-gray-500">모듈별 설정을 JSON 형태로 입력하세요</p>
+            </div>
+        </div>
+
+        <!-- 설명 -->
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">설명 (선택)</label>
+            <textarea x-model="formData.description"
+                      class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      rows="3"
+                      placeholder="모듈에 대한 설명을 입력하세요...">
+            </textarea>
+        </div>
+
+        <!-- 활성화 상태 -->
+        <div class="flex items-center justify-between">
+            <div>
+                <span class="text-sm font-medium text-gray-700">모듈 활성화</span>
+                <p class="text-xs text-gray-500">생성 후 바로 동작하려면 활성화하세요</p>
+            </div>
+            <button type="button"
+                    @click="formData.is_active = !formData.is_active"
+                    class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    :class="formData.is_active ? 'bg-blue-600' : 'bg-gray-200'">
+                <span class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+                      :class="formData.is_active ? 'translate-x-5' : 'translate-x-0'">
+                </span>
+            </button>
+        </div>
+    </div>
+
+    <!-- 폼 액션 -->
+    <div class="flex gap-3 pt-6 border-t border-gray-200 mt-8">
+        <button type="button"
+                @click="closeForm()"
+                class="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+            취소
+        </button>
+        <button type="submit"
+                :disabled="loading"
+                class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed">
+            <span x-show="!loading" x-text="isEdit ? '수정' : '생성'"></span>
+            <span x-show="loading" class="flex items-center justify-center">
+                <svg class="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                처리중...
+            </span>
+        </button>
+    </div>
+</form>

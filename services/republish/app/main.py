@@ -30,6 +30,7 @@ from .routers.module_types import router as module_types_router
 from .routers.modules import router as modules_router
 from .routers.flows import router as flows_router
 from .routers.autorun import router as autorun_router
+from .routers.modules_pages import router as modules_page_router
 
 logger = get_logger("main", "app.log")
 
@@ -125,6 +126,7 @@ app.include_router(categories_page_router)
 app.include_router(profiles_page_router)
 app.include_router(republish_page_router)
 app.include_router(groups_page_router)
+app.include_router(modules_page_router)
 
 # 정적 파일 서빙 (개발환경)
 if settings.is_development:

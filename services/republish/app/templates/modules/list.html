@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+
+{% block title %}모듈 관리 - BlogAuto V2{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="/static/css/components.css">
+<style>
+    .module-type-tabs {
+        display: flex;
+        border-bottom: 1px solid #e5e7eb;
+        margin-bottom: 2rem;
+        overflow-x: auto;
+    }
+
+    .module-type-tab {
+        padding: 0.75rem 1rem;
+        border: none;
+        background: none;
+        color: #6b7280;
+        font-weight: 500;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        transition: all 0.2s ease;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    .module-type-tab:hover {
+        color: #3b82f6;
+        background-color: #f9fafb;
+    }
+
+    .module-type-tab.active {
+        color: #3b82f6;
+        border-bottom-color: #3b82f6;
+    }
+
+    .module-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 1.5rem;
+    }
+
+    @media (max-width: 768px) {
+        .module-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .loading-skeleton {
+        background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+        background-size: 200% 100%;
+        animation: loading 1.5s infinite;
+    }
+
+    @keyframes loading {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4" x-data="moduleListApp()">
+    <!-- 헤더 -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
+        <div class="flex-1 min-w-0 mb-4 md:mb-0">
+            <h2 class="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl">
+                📦 모듈 관리
+            </h2>
+            <p class="mt-1 text-sm text-gray-500">
+                재발행, 생성, 발행 등의 모듈을 생성하고 관리하세요
+            </p>
+        </div>
+
+        <!-- PC 버튼 -->
+        <div class="hidden md:block">
+            <button @click="showModuleTypeSelector"
+                    class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+                </svg>
+                모듈 생성
+            </button>
+        </div>
+    </div>
+
+    <!-- 타입 필터 탭 -->
+    <div class="module-type-tabs" x-show="moduleTypes.length > 0">
+        <button class="module-type-tab" :class="{ active: currentFilter === 'all' }" @click="filterByType('all')">
+            전체 <span x-show="modules.length > 0" class="ml-1 text-xs" x-text="`(${modules.length})`"></span>
+        </button>
+        <template x-for="type in moduleTypes" :key="type.code">
+            <button class="module-type-tab"
+                    :class="{ active: currentFilter === type.code }"
+                    @click="filterByType(type.code)">
+                <span x-text="type.icon + ' ' + type.name"></span>
+                <span x-show="getModuleCountByType(type.code) > 0"
+                      class="ml-1 text-xs"
+                      x-text="`(${getModuleCountByType(type.code)})`"></span>
+            </button>
+        </template>
+    </div>
+
+    <!-- 로딩 상태 -->
+    <div x-show="loading" class="module-grid">
+        <template x-for="i in 6" :key="i">
+            <div class="bg-white rounded-lg border p-4">
+                <div class="flex items-start gap-3">
+                    <div class="w-8 h-8 loading-skeleton rounded"></div>
+                    <div class="flex-1 space-y-2">
+                        <div class="h-4 loading-skeleton rounded w-3/4"></div>
+                        <div class="h-3 loading-skeleton rounded w-1/2"></div>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </div>
+
+    <!-- 모듈 목록 -->
+    <div x-show="!loading && filteredModules.length > 0" class="module-grid">
+        <template x-for="module in filteredModules" :key="module.id">
+            {% include "modules/_card.html" with {"module_var": "module"} %}
+        </template>
+    </div>
+
+    <!-- 빈 상태 -->
+    <div x-show="!loading && filteredModules.length === 0" class="text-center py-12">
+        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+        </svg>
+        <h3 class="mt-4 text-lg font-medium text-gray-900">모듈이 없습니다</h3>
+        <p class="mt-1 text-sm text-gray-500" x-text="currentFilter === 'all' ? '첫 번째 모듈을 생성해보세요' : '해당 타입의 모듈이 없습니다'"></p>
+        <div class="mt-4">
+            <button @click="showModuleTypeSelector"
+                    class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                <svg class="-ml-1 mr-2 h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+                </svg>
+                모듈 생성
+            </button>
+        </div>
+    </div>
+
+    <!-- 모바일 FAB -->
+    <div class="md:hidden">
+        {% include "components/fab_button.html" with {
+            "id": "moduleFab",
+            "icon": "plus",
+            "position": "bottom-right",
+            "onclick": "moduleListApp().showModuleTypeSelector()"
+        } %}
+    </div>
+</div>
+
+<!-- 모듈 타입 선택 팝업 -->
+{% include "components/selection_popup.html" with {
+    "id": "moduleTypeSelector",
+    "title": "모듈 타입 선택"
+} %}
+
+<!-- 모듈 생성/수정 폼 (Bottom Sheet) -->
+{% include "components/bottom_sheet.html" with {
+    "id": "moduleForm",
+    "title": "모듈 설정",
+    "size": "large"
+} %}
+
+<script src="/static/js/modules/list.js"></script>
+{% endblock %}
