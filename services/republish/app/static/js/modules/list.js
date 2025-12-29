@@ -177,7 +177,9 @@ function moduleListApp() {
                         <button type="submit"
                                 :disabled="loading"
                                 class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed">
-                            <span x-show="!loading" x-text="isEdit ? '수정' : '생성'"></span>
+                            <span x-show="!loading">
+                                <span x-text="isEdit ? '수정' : '생성'"></span>
+                            </span>
                             <span x-show="loading" class="flex items-center justify-center">
                                 <svg class="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
                                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -277,6 +279,24 @@ function moduleListApp() {
                 if (contentArea) {
                     contentArea.innerHTML = formContent;
                     console.log('폼 내용 로드 완료');
+
+                    // Alpine.js 다시 초기화 (동적 컨텐츠를 위해)
+                    setTimeout(() => {
+                        if (typeof Alpine !== 'undefined') {
+                            console.log('Alpine.js 객체:', Alpine);
+                            if (Alpine.initTree) {
+                                Alpine.initTree(contentArea);
+                                console.log('Alpine.js initTree 완료');
+                            } else if (Alpine.start) {
+                                // Alpine.js v3에서는 start() 메소드 사용
+                                console.log('Alpine.js 다시 시작 시도...');
+                            } else {
+                                console.log('Alpine.js 버전이 다름. 수동 초기화 필요');
+                            }
+                        } else {
+                            console.warn('Alpine.js가 로드되지 않았습니다');
+                        }
+                    }, 50);
                 } else {
                     console.warn('모듈 폼 컨텐츠 엘리먼트를 찾을 수 없습니다');
                 }
@@ -441,11 +461,16 @@ function moduleListApp() {
 
         // 기본 폼 HTML 생성
         getDefaultFormHTML(module, moduleType) {
-            const moduleJson = module ? JSON.stringify(module) : 'null';
-            const typeJson = moduleType ? JSON.stringify(moduleType) : 'null';
+            // 전역 변수를 통한 데이터 전달 (더 안전한 방법)
+            const moduleId = 'moduleData_' + Date.now();
+            const typeId = 'typeData_' + Date.now();
+
+            // 전역 변수에 데이터 저장
+            window[moduleId] = module;
+            window[typeId] = moduleType;
 
             return `
-                <div x-data="moduleFormApp(${moduleJson}, ${typeJson})" x-init="init()">
+                <div x-data="moduleFormApp(window.${moduleId}, window.${typeId})" x-init="init(); delete window.${moduleId}; delete window.${typeId};">
                     ${this.getFullFormTemplate()}
                 </div>
             `;

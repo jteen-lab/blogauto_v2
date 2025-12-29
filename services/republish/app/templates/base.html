@@ -79,12 +79,7 @@
                 <h1 class="text-xl font-bold">BlogAuto V2</h1>
                 <div class="flex items-center space-x-4" x-data="{ user: null }" x-init="fetchUser()">
                     <span x-text="user ? user.display_name : '로딩 중...'"></span>
-                    <a href="/modules" class="bg-blue-700 px-3 py-2 rounded hover:bg-blue-800 transition-colors flex items-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-                        </svg>
-                        모듈 관리
-                    </a>
+                    <a href="/modules" class="bg-blue-700 px-3 py-2 rounded hover:bg-blue-800 transition-colors">모듈 관리</a>
                     <a href="/blogs" class="bg-blue-700 px-3 py-2 rounded hover:bg-blue-800 transition-colors">블로그 관리</a>
                     <a href="/profiles" class="bg-blue-700 px-3 py-2 rounded hover:bg-blue-800 transition-colors">프로파일 관리</a>
                     <a href="/groups" class="bg-blue-700 px-3 py-2 rounded hover:bg-blue-800 transition-colors">그룹 관리</a>

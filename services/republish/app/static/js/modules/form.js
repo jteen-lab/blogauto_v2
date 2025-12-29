@@ -38,15 +38,32 @@ function moduleFormApp(module = null, moduleType = null) {
 
         // 초기화
         init() {
+            console.log('moduleFormApp init 시작', {
+                module: this.module,
+                moduleType: this.moduleType,
+                formData: this.formData,
+                isEdit: this.isEdit
+            });
+
             this.initializeSchedule();
             this.initializeSettings();
             this.calculateStats();
 
-            // 형식 값 갱신
-            this.$nextTick(() => {
-                this.updateActiveHoursCount();
-                this.calculateExpectedPosts();
-            });
+            // Alpine.js $nextTick이 사용 가능한지 확인
+            if (this.$nextTick) {
+                this.$nextTick(() => {
+                    this.updateActiveHoursCount();
+                    this.calculateExpectedPosts();
+                    console.log('moduleFormApp init 완료');
+                });
+            } else {
+                // $nextTick이 없으면 setTimeout 사용
+                setTimeout(() => {
+                    this.updateActiveHoursCount();
+                    this.calculateExpectedPosts();
+                    console.log('moduleFormApp init 완료 (fallback)');
+                }, 100);
+            }
         },
 
         // 스케줄 매트릭스 초기화
