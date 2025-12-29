@@ -50,17 +50,17 @@ function moduleListApp() {
             }
 
             const data = await response.json();
-            this.modules = data.items || [];
+            this.modules = data.modules || [];
         },
 
         // 타입별 모듈 목록 반환
         getModulesByType(typeCode) {
-            return this.modules.filter(module => module.type_code === typeCode);
+            return this.modules.filter(module => module.module_type.code === typeCode);
         },
 
         // 타입별 모듈 개수 계산
         getModuleCountByType(typeCode) {
-            return this.modules.filter(module => module.type_code === typeCode).length;
+            return this.modules.filter(module => module.module_type.code === typeCode).length;
         },
 
         // 모듈 아이콘 반환
@@ -326,9 +326,9 @@ function moduleListApp() {
                     return;
                 }
 
-                const moduleType = this.moduleTypes.find(t => t.code === module.type_code) || {
-                    code: module.type_code,
-                    name: this.getModuleTypeName(module.type_code),
+                const moduleType = this.moduleTypes.find(t => t.code === module.module_type.code) || {
+                    code: module.module_type.code,
+                    name: this.getModuleTypeName(module.module_type.code),
                     description: ''
                 };
 
@@ -419,38 +419,6 @@ function moduleListApp() {
             }
         },
 
-        // 모듈 활성화/비활성화 토글
-        async toggleModuleStatus(moduleId) {
-            try {
-                const module = this.modules.find(m => m.id === moduleId);
-                if (!module) return;
-
-                const response = await fetch(`/api/v1/modules/${moduleId}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    credentials: 'include',
-                    body: JSON.stringify({
-                        is_active: !module.is_active
-                    })
-                });
-
-                if (!response.ok) {
-                    throw new Error('모듈 상태 변경 실패');
-                }
-
-                // 로컬 상태 업데이트
-                module.is_active = !module.is_active;
-
-                const statusText = module.is_active ? '활성화' : '비활성화';
-                this.showSuccess(`모듈이 ${statusText}되었습니다`);
-
-            } catch (error) {
-                this.showError('모듈 상태 변경 중 오류가 발생했습니다');
-                console.error('모듈 상태 변경 오류:', error);
-            }
-        },
 
         // 모듈 폼 로드 (HTML 템플릿)
         async loadModuleForm(module, moduleType) {
@@ -605,11 +573,6 @@ window.deleteModule = function(moduleId) {
     }
 };
 
-window.toggleModuleStatus = function(moduleId) {
-    if (window.moduleListAppInstance) {
-        window.moduleListAppInstance.toggleModuleStatus(moduleId);
-    }
-};
 
 // 바텀시트 관련 함수들 (모듈 로드 전에 정의)
 if (typeof window.openBottomSheet === 'undefined') {

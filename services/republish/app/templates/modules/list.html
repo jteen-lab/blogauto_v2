@@ -5,15 +5,50 @@
 {% block extra_css %}
 <link rel="stylesheet" href="/static/css/components.css">
 <style>
+    /* PC: 4열 레이아웃 */
     .module-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
         gap: 1.5rem;
     }
 
-    @media (max-width: 768px) {
+    /* 데스크탑: 4열 */
+    @media (min-width: 1280px) {
+        .module-grid {
+            grid-template-columns: repeat(4, 1fr);
+        }
+    }
+
+    /* 태블릿: 2열 */
+    @media (min-width: 768px) and (max-width: 1279px) {
+        .module-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    /* 모바일: 1열 (탭 모드에서) */
+    @media (max-width: 767px) {
         .module-grid {
             grid-template-columns: 1fr;
+        }
+
+        /* 모바일에서 섹션별 레이아웃을 탭으로 변경 */
+        .desktop-sections {
+            display: none;
+        }
+
+        .mobile-tabs {
+            display: block;
+        }
+    }
+
+    /* 데스크탑에서는 탭 숨기기 */
+    @media (min-width: 768px) {
+        .mobile-tabs {
+            display: none;
+        }
+
+        .desktop-sections {
+            display: block;
         }
     }
 
@@ -54,6 +89,27 @@
         border-radius: 0.375rem;
         font-size: 0.75rem;
         font-weight: 500;
+    }
+
+    /* 모바일 탭 스타일 */
+    .mobile-tab {
+        @apply flex items-center justify-center px-4 py-3 text-sm font-medium border-b-2 transition-colors duration-200;
+    }
+
+    .mobile-tab.active {
+        @apply border-blue-500 text-blue-600 bg-blue-50;
+    }
+
+    .mobile-tab.inactive {
+        @apply border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300;
+    }
+
+    .mobile-tab-content {
+        @apply mt-4;
+    }
+
+    .mobile-tab-content.hidden {
+        @apply hidden;
     }
 </style>
 {% endblock %}
@@ -109,8 +165,8 @@
         <p class="text-sm text-gray-500 mb-6">첫 번째 모듈을 생성해보세요</p>
     </div>
 
-    <!-- 모듈 목록 (타입별 섹션으로 구분) -->
-    <div x-show="!loading && modules.length > 0">
+    <!-- 데스크탑: 모듈 목록 (타입별 섹션으로 구분) -->
+    <div x-show="!loading && modules.length > 0" class="desktop-sections">
         <!-- 프롬프트 섹션 -->
         <div x-show="getModulesByType('prompt').length > 0" class="module-section">
             <div class="section-header">
@@ -160,6 +216,78 @@
                 <h3 class="section-title">재발행 모듈</h3>
                 <span class="section-count" x-text="getModulesByType('republish').length"></span>
             </div>
+            <div class="module-grid">
+                <template x-for="module in getModulesByType('republish')" :key="module.id">
+                    {% include "modules/_card.html" %}
+                </template>
+            </div>
+        </div>
+    </div>
+
+    <!-- 모바일: 탭 레이아웃 -->
+    <div x-show="!loading && modules.length > 0" class="mobile-tabs" x-data="{ activeTab: 'prompt' }">
+        <!-- 탭 헤더 -->
+        <div class="flex border-b border-gray-200 overflow-x-auto">
+            <button @click="activeTab = 'prompt'"
+                    class="mobile-tab"
+                    :class="activeTab === 'prompt' ? 'active' : 'inactive'"
+                    x-show="getModulesByType('prompt').length > 0">
+                <span class="text-lg mr-2">📝</span>
+                프롬프트
+                <span class="ml-2 px-2 py-0.5 bg-gray-200 text-xs rounded-full" x-text="getModulesByType('prompt').length"></span>
+            </button>
+            <button @click="activeTab = 'generate'"
+                    class="mobile-tab"
+                    :class="activeTab === 'generate' ? 'active' : 'inactive'"
+                    x-show="getModulesByType('generate').length > 0">
+                <span class="text-lg mr-2">✨</span>
+                생성
+                <span class="ml-2 px-2 py-0.5 bg-gray-200 text-xs rounded-full" x-text="getModulesByType('generate').length"></span>
+            </button>
+            <button @click="activeTab = 'publish'"
+                    class="mobile-tab"
+                    :class="activeTab === 'publish' ? 'active' : 'inactive'"
+                    x-show="getModulesByType('publish').length > 0">
+                <span class="text-lg mr-2">📤</span>
+                발행
+                <span class="ml-2 px-2 py-0.5 bg-gray-200 text-xs rounded-full" x-text="getModulesByType('publish').length"></span>
+            </button>
+            <button @click="activeTab = 'republish'"
+                    class="mobile-tab"
+                    :class="activeTab === 'republish' ? 'active' : 'inactive'"
+                    x-show="getModulesByType('republish').length > 0">
+                <span class="text-lg mr-2">🔄</span>
+                재발행
+                <span class="ml-2 px-2 py-0.5 bg-gray-200 text-xs rounded-full" x-text="getModulesByType('republish').length"></span>
+            </button>
+        </div>
+
+        <!-- 탭 콘텐츠 -->
+        <div class="mobile-tab-content" x-show="activeTab === 'prompt'">
+            <div class="module-grid">
+                <template x-for="module in getModulesByType('prompt')" :key="module.id">
+                    {% include "modules/_card.html" %}
+                </template>
+            </div>
+        </div>
+
+        <div class="mobile-tab-content" x-show="activeTab === 'generate'">
+            <div class="module-grid">
+                <template x-for="module in getModulesByType('generate')" :key="module.id">
+                    {% include "modules/_card.html" %}
+                </template>
+            </div>
+        </div>
+
+        <div class="mobile-tab-content" x-show="activeTab === 'publish'">
+            <div class="module-grid">
+                <template x-for="module in getModulesByType('publish')" :key="module.id">
+                    {% include "modules/_card.html" %}
+                </template>
+            </div>
+        </div>
+
+        <div class="mobile-tab-content" x-show="activeTab === 'republish'">
             <div class="module-grid">
                 <template x-for="module in getModulesByType('republish')" :key="module.id">
                     {% include "modules/_card.html" %}

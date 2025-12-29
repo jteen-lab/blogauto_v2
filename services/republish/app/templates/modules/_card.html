@@ -10,7 +10,7 @@ Alpine.js 데이터 바인딩 사용
         <div class="flex items-center gap-3 flex-1 min-w-0">
             <!-- 모듈 아이콘과 상태 -->
             <div class="relative">
-                <span class="text-2xl" x-text="getModuleIcon(module.type_code)"></span>
+                <span class="text-2xl" x-text="getModuleIcon(module.module_type.code)"></span>
                 <div class="absolute -top-1 -right-1">
                     <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
                           :class="getStatusClass(module.is_active)">
@@ -25,13 +25,13 @@ Alpine.js 데이터 바인딩 사용
 
                 <!-- 모듈 정보 -->
                 <div class="flex items-center gap-3 mt-2 text-xs text-gray-500">
-                    <span x-text="getModuleTypeName(module.type_code)"></span>
+                    <span x-text="getModuleTypeName(module.module_type.code)"></span>
                     <span x-show="module.manual_interval_minutes" x-text="module.manual_interval_minutes + '분'"></span>
                     <span x-show="hasSchedule(module)" class="text-blue-600">스케줄됨</span>
                 </div>
 
                 <!-- 실행 정보 (재발행 모듈인 경우) -->
-                <div x-show="module.type_code === 'republish'" class="flex items-center gap-3 mt-1 text-xs text-gray-400">
+                <div x-show="module.module_type.code === 'republish'" class="flex items-center gap-3 mt-1 text-xs text-gray-400">
                     <span x-show="module.total_executions" x-text="`실행 ${module.total_executions}회`"></span>
                     <span x-show="module.last_execution" x-text="`최근 ${formatTimeAgo(module.last_execution)}`"></span>
                 </div>
@@ -69,7 +69,7 @@ Alpine.js 데이터 바인딩 사용
     </div>
 
     <!-- 스케줄 정보 (재발행 모듈이고 스케줄이 있는 경우) -->
-    <div x-show="module.type_code === 'republish' && hasSchedule(module)"
+    <div x-show="module.module_type.code === 'republish' && hasSchedule(module)"
          class="mt-3 pt-3 border-t border-gray-100">
         <div class="text-xs text-gray-500 space-y-1">
             <div x-show="module.schedule_summary">
@@ -84,7 +84,7 @@ Alpine.js 데이터 바인딩 사용
     </div>
 
     <!-- 설정 정보 (기타 타입) -->
-    <div x-show="module.type_code !== 'republish' && module.settings && Object.keys(module.settings).length > 0"
+    <div x-show="module.module_type.code !== 'republish' && module.settings && Object.keys(module.settings).length > 0"
          class="mt-3 pt-3 border-t border-gray-100">
         <details class="text-xs text-gray-500">
             <summary class="cursor-pointer font-medium text-gray-700 hover:text-gray-900">설정 정보</summary>
@@ -99,16 +99,16 @@ Alpine.js 데이터 바인딩 사용
         </details>
     </div>
 
-    <!-- 상태 토글 (재발행 모듈인 경우) -->
-    <div x-show="module.type_code === 'republish'" class="mt-3 pt-3 border-t border-gray-100">
+    <!-- 모듈 타입 정보 -->
+    <div class="mt-3 pt-3 border-t border-gray-100">
         <div class="flex items-center justify-between">
-            <span class="text-sm font-medium text-gray-700">자동 재발행</span>
-            <button @click="toggleModuleStatus(module.id)"
-                    class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                    :class="module.is_active ? 'bg-blue-600' : 'bg-gray-200'">
-                <span class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
-                      :class="module.is_active ? 'translate-x-5' : 'translate-x-0'"></span>
-            </button>
+            <div class="flex items-center gap-2">
+                <span class="text-lg" x-text="getModuleIcon(module.module_type.code)"></span>
+                <span class="text-sm font-medium text-gray-700" x-text="getModuleTypeName(module.module_type.code)"></span>
+                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600"
+                      x-text="module.module_type.code.toUpperCase()"></span>
+            </div>
+            <span class="text-xs text-gray-500" x-text="module.created_at ? new Date(module.created_at).toLocaleDateString() : ''"></span>
         </div>
     </div>
 </div>

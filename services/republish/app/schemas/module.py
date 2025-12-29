@@ -65,6 +65,8 @@ class ModuleCreateRequest(BaseModel):
     # 기타 설정
     cooldown_days: int = Field(7, ge=1, le=365, description="재발행 금지 일수")
     priority: int = Field(1, ge=1, le=10, description="우선순위")
+    is_active: bool = True  # 기본값 (플로우 레벨에서 실제 관리)
+    type_code: Optional[str] = None  # module_type.code 복사본
     platform_overrides: Dict[str, Any] = Field(default_factory=dict)
 
     # 타입별 추가 설정
@@ -136,6 +138,8 @@ class ModuleResponse(BaseModel):
     manual_interval_minutes: Optional[int]
     interval_mode: str
     priority: int
+    is_active: bool = True  # 기본값 (플로우 레벨에서 실제 관리)
+    type_code: Optional[str] = None  # module_type.code 복사본
 
     # 메타 정보
     created_at: datetime

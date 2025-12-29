@@ -240,6 +240,21 @@ function moduleFormApp(module = null, moduleType = null) {
                 return false;
             }
 
+            // 동일 타입 내 중복 이름 검증
+            if (window.moduleListAppInstance) {
+                const existingModules = window.moduleListAppInstance.getModulesByType(this.formData.type_code);
+                const duplicateModule = existingModules.find(module =>
+                    module.name === this.formData.name.trim() &&
+                    (!this.isEdit || module.id !== (this.formData.id || this.module.id))
+                );
+
+                if (duplicateModule) {
+                    const typeName = window.moduleListAppInstance.getModuleTypeName(this.formData.type_code);
+                    this.showError(`${typeName} 모듈에 이미 '${this.formData.name.trim()}' 이름이 존재합니다`);
+                    return false;
+                }
+            }
+
             // 재발행 모듈 검증
             if (this.formData.type_code === 'republish') {
                 if (!this.formData.manual_interval_minutes || this.formData.manual_interval_minutes < 15) {
@@ -270,9 +285,8 @@ function moduleFormApp(module = null, moduleType = null) {
         prepareRequestData() {
             const data = {
                 name: this.formData.name.trim(),
-                type_code: this.formData.type_code,
+                module_type_code: this.formData.type_code,
                 description: this.formData.description?.trim() || null,
-                is_active: this.formData.is_active
             };
 
             if (this.formData.type_code === 'republish') {
@@ -281,9 +295,9 @@ function moduleFormApp(module = null, moduleType = null) {
             } else {
                 // 설정 JSON 파싱
                 try {
-                    data.settings = this.settingsJson ? JSON.parse(this.settingsJson) : {};
+                    // settings 필드 제거 (스키마에 없음)
                 } catch (e) {
-                    data.settings = {};
+                    // 제거됨
                 }
             }
 
