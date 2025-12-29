@@ -9,8 +9,6 @@ function moduleListApp() {
         loading: false,
         modules: [],
         moduleTypes: [],
-        currentFilter: 'all',
-        filteredModules: [],
 
         // 초기화
         async init() {
@@ -20,7 +18,6 @@ function moduleListApp() {
                     this.loadModuleTypes(),
                     this.loadModules()
                 ]);
-                this.filterModules();
             } catch (error) {
                 this.showError('데이터를 불러오는 중 오류가 발생했습니다');
                 console.error('초기화 오류:', error);
@@ -56,21 +53,9 @@ function moduleListApp() {
             this.modules = data.items || [];
         },
 
-        // 타입별 필터링
-        filterByType(typeCode) {
-            this.currentFilter = typeCode;
-            this.filterModules();
-        },
-
-        // 모듈 필터링 로직
-        filterModules() {
-            if (this.currentFilter === 'all') {
-                this.filteredModules = this.modules;
-            } else {
-                this.filteredModules = this.modules.filter(module =>
-                    module.type_code === this.currentFilter
-                );
-            }
+        // 타입별 모듈 목록 반환
+        getModulesByType(typeCode) {
+            return this.modules.filter(module => module.type_code === typeCode);
         },
 
         // 타입별 모듈 개수 계산
@@ -137,17 +122,7 @@ function moduleListApp() {
 
         // 모듈 타입 선택 팝업 표시
         async showModuleTypeSelector() {
-            const options = this.moduleTypes.map(type => ({
-                icon: this.getModuleIcon(type.code),
-                text: type.name,
-                action: type.code,
-                description: type.description
-            }));
-
-            // 옵션 업데이트
-            updateSelectionPopupOptions('moduleTypeSelector', options);
-
-            // 팝업 표시
+            // 팝업 표시 (옵션은 템플릿에 하드코딩되어 있음)
             openSelectionPopup('moduleTypeSelector');
         },
 
@@ -233,7 +208,6 @@ function moduleListApp() {
 
                 this.showSuccess('모듈이 복사되었습니다');
                 await this.loadModules();
-                this.filterModules();
 
             } catch (error) {
                 this.showError('모듈 복사 중 오류가 발생했습니다');
@@ -262,7 +236,6 @@ function moduleListApp() {
 
                 // 리스트에서 제거
                 this.modules = this.modules.filter(m => m.id !== moduleId);
-                this.filterModules();
 
                 // 카드 애니메이션 제거
                 const card = document.querySelector(`[data-module-id="${moduleId}"]`);
@@ -369,6 +342,76 @@ document.addEventListener('selectionPopup:select', async (e) => {
     }
 });
 
+// 팝업 관련 함수들 (selection_popup 컴포넌트와 호환)
+window.openSelectionPopup = function(popupId) {
+    const popup = document.getElementById(popupId);
+    const backdrop = document.getElementById(popupId + '-backdrop');
+
+    if (!popup) return;
+
+    // 백드롭과 팝업 표시
+    if (backdrop) {
+        backdrop.classList.remove('hidden');
+        setTimeout(() => {
+            backdrop.style.opacity = '1';
+        }, 10);
+    }
+
+    popup.classList.remove('hidden');
+
+    // 팝업 애니메이션
+    const content = popup.querySelector('div > div');
+    if (content) {
+        setTimeout(() => {
+            content.classList.remove('scale-95');
+            content.classList.add('scale-100');
+        }, 10);
+    }
+
+    // 스크롤 방지
+    document.body.style.overflow = 'hidden';
+};
+
+window.closeSelectionPopup = function(popupId) {
+    const popup = document.getElementById(popupId);
+    const backdrop = document.getElementById(popupId + '-backdrop');
+    const content = popup ? popup.querySelector('div > div') : null;
+
+    // 팝업 애니메이션
+    if (content) {
+        content.classList.remove('scale-100');
+        content.classList.add('scale-95');
+    }
+
+    // 백드롭 숨기기
+    if (backdrop) {
+        backdrop.style.opacity = '0';
+    }
+
+    setTimeout(() => {
+        if (popup) popup.classList.add('hidden');
+        if (backdrop) backdrop.classList.add('hidden');
+    }, 200);
+
+    // 스크롤 복원
+    document.body.style.overflow = '';
+};
+
+window.selectOption = function(popupId, action, text) {
+    // 커스텀 이벤트 발생
+    const event = new CustomEvent('selectionPopup:select', {
+        detail: {
+            popupId: popupId,
+            action: action,
+            text: text
+        }
+    });
+    document.dispatchEvent(event);
+
+    // 팝업 닫기
+    closeSelectionPopup(popupId);
+};
+
 // 전역 인스턴스 저장
 document.addEventListener('DOMContentLoaded', () => {
     // Alpine.js가 초기화된 후에 인스턴스를 저장
@@ -404,3 +447,10 @@ window.toggleModuleStatus = function(moduleId) {
         window.moduleListAppInstance.toggleModuleStatus(moduleId);
     }
 };
+
+// ESC 키로 팝업 닫기
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closeSelectionPopup('moduleTypeSelector');
+    }
+});

@@ -5,36 +5,6 @@
 {% block extra_css %}
 <link rel="stylesheet" href="/static/css/components.css">
 <style>
-    .module-type-tabs {
-        display: flex;
-        border-bottom: 1px solid #e5e7eb;
-        margin-bottom: 2rem;
-        overflow-x: auto;
-    }
-
-    .module-type-tab {
-        padding: 0.75rem 1rem;
-        border: none;
-        background: none;
-        color: #6b7280;
-        font-weight: 500;
-        cursor: pointer;
-        border-bottom: 2px solid transparent;
-        transition: all 0.2s ease;
-        white-space: nowrap;
-        flex-shrink: 0;
-    }
-
-    .module-type-tab:hover {
-        color: #3b82f6;
-        background-color: #f9fafb;
-    }
-
-    .module-type-tab.active {
-        color: #3b82f6;
-        border-bottom-color: #3b82f6;
-    }
-
     .module-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -57,15 +27,43 @@
         0% { background-position: 200% 0; }
         100% { background-position: -200% 0; }
     }
+
+    .module-section {
+        margin-bottom: 2rem;
+    }
+
+    .section-header {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .section-title {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: #374151;
+    }
+
+    .section-count {
+        background: #f3f4f6;
+        color: #6b7280;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.375rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4" x-data="moduleListApp()">
     <!-- 헤더 -->
-    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
-        <div class="flex-1 min-w-0 mb-4 md:mb-0">
-            <h2 class="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl">
+    <div class="flex items-center justify-between mb-8">
+        <div class="flex-1">
+            <h2 class="text-2xl font-bold text-gray-900">
                 📦 모듈 관리
             </h2>
             <p class="mt-1 text-sm text-gray-500">
@@ -73,8 +71,8 @@
             </p>
         </div>
 
-        <!-- PC 버튼 -->
-        <div class="hidden md:block">
+        <!-- + 버튼 (우측 상단에만) -->
+        <div>
             <button @click="showModuleTypeSelector"
                     class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                 <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -83,23 +81,6 @@
                 모듈 생성
             </button>
         </div>
-    </div>
-
-    <!-- 타입 필터 탭 -->
-    <div class="module-type-tabs" x-show="moduleTypes.length > 0">
-        <button class="module-type-tab" :class="{ active: currentFilter === 'all' }" @click="filterByType('all')">
-            전체 <span x-show="modules.length > 0" class="ml-1 text-xs" x-text="`(${modules.length})`"></span>
-        </button>
-        <template x-for="type in moduleTypes" :key="type.code">
-            <button class="module-type-tab"
-                    :class="{ active: currentFilter === type.code }"
-                    @click="filterByType(type.code)">
-                <span x-text="type.icon + ' ' + type.name"></span>
-                <span x-show="getModuleCountByType(type.code) > 0"
-                      class="ml-1 text-xs"
-                      x-text="`(${getModuleCountByType(type.code)})`"></span>
-            </button>
-        </template>
     </div>
 
     <!-- 로딩 상태 -->
@@ -117,43 +98,143 @@
         </template>
     </div>
 
-    <!-- 모듈 목록 -->
-    <div x-show="!loading && filteredModules.length > 0" class="module-grid">
-        <template x-for="module in filteredModules" :key="module.id">
-            {% include "modules/_card.html" %}
-        </template>
-    </div>
-
-    <!-- 빈 상태 -->
-    <div x-show="!loading && filteredModules.length === 0" class="text-center py-12">
-        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-        </svg>
-        <h3 class="mt-4 text-lg font-medium text-gray-900">모듈이 없습니다</h3>
-        <p class="mt-1 text-sm text-gray-500" x-text="currentFilter === 'all' ? '첫 번째 모듈을 생성해보세요' : '해당 타입의 모듈이 없습니다'"></p>
-        <div class="mt-4">
-            <button @click="showModuleTypeSelector"
-                    class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
-                <svg class="-ml-1 mr-2 h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
-                </svg>
-                모듈 생성
-            </button>
+    <!-- 빈 상태 (모듈이 전혀 없을 때) -->
+    <div x-show="!loading && modules.length === 0" class="text-center py-16">
+        <div class="mx-auto w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-6">
+            <svg class="w-12 h-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+            </svg>
         </div>
+        <h3 class="text-lg font-medium text-gray-900 mb-2">아직 모듈이 없습니다</h3>
+        <p class="text-sm text-gray-500 mb-6">첫 번째 모듈을 생성해보세요</p>
     </div>
 
-    <!-- 모바일 FAB -->
-    <div class="md:hidden">
-        {% with id="moduleFab", icon="plus", position="bottom-right", onclick="moduleListApp().showModuleTypeSelector()" %}
-            {% include "components/fab_button.html" %}
-        {% endwith %}
+    <!-- 모듈 목록 (타입별 섹션으로 구분) -->
+    <div x-show="!loading && modules.length > 0">
+        <!-- 프롬프트 섹션 -->
+        <div x-show="getModulesByType('prompt').length > 0" class="module-section">
+            <div class="section-header">
+                <span class="text-2xl">📝</span>
+                <h3 class="section-title">프롬프트 모듈</h3>
+                <span class="section-count" x-text="getModulesByType('prompt').length"></span>
+            </div>
+            <div class="module-grid">
+                <template x-for="module in getModulesByType('prompt')" :key="module.id">
+                    {% include "modules/_card.html" %}
+                </template>
+            </div>
+        </div>
+
+        <!-- 생성 섹션 -->
+        <div x-show="getModulesByType('generate').length > 0" class="module-section">
+            <div class="section-header">
+                <span class="text-2xl">✨</span>
+                <h3 class="section-title">생성 모듈</h3>
+                <span class="section-count" x-text="getModulesByType('generate').length"></span>
+            </div>
+            <div class="module-grid">
+                <template x-for="module in getModulesByType('generate')" :key="module.id">
+                    {% include "modules/_card.html" %}
+                </template>
+            </div>
+        </div>
+
+        <!-- 발행 섹션 -->
+        <div x-show="getModulesByType('publish').length > 0" class="module-section">
+            <div class="section-header">
+                <span class="text-2xl">📤</span>
+                <h3 class="section-title">발행 모듈</h3>
+                <span class="section-count" x-text="getModulesByType('publish').length"></span>
+            </div>
+            <div class="module-grid">
+                <template x-for="module in getModulesByType('publish')" :key="module.id">
+                    {% include "modules/_card.html" %}
+                </template>
+            </div>
+        </div>
+
+        <!-- 재발행 섹션 -->
+        <div x-show="getModulesByType('republish').length > 0" class="module-section">
+            <div class="section-header">
+                <span class="text-2xl">🔄</span>
+                <h3 class="section-title">재발행 모듈</h3>
+                <span class="section-count" x-text="getModulesByType('republish').length"></span>
+            </div>
+            <div class="module-grid">
+                <template x-for="module in getModulesByType('republish')" :key="module.id">
+                    {% include "modules/_card.html" %}
+                </template>
+            </div>
+        </div>
     </div>
 </div>
 
 <!-- 모듈 타입 선택 팝업 -->
-{% with id="moduleTypeSelector", title="모듈 타입 선택" %}
-    {% include "components/selection_popup.html" %}
-{% endwith %}
+<div id="moduleTypeSelector-backdrop"
+     class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden transition-opacity duration-200"
+     onclick="closeSelectionPopup('moduleTypeSelector')">
+</div>
+
+<div id="moduleTypeSelector"
+     class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden">
+  <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full transform scale-95 transition-transform duration-200"
+       onclick="event.stopPropagation()">
+
+    <!-- 헤더 -->
+    <div class="p-6 pb-4">
+      <div class="flex justify-between items-center">
+        <h3 class="text-xl font-semibold text-gray-900">어떤 모듈을 생성하시겠습니까?</h3>
+        <button onclick="closeSelectionPopup('moduleTypeSelector')"
+                class="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- 옵션 그리드 -->
+    <div class="px-6 pb-6">
+      <div class="grid grid-cols-2 gap-3">
+        <button onclick="selectOption('moduleTypeSelector', 'prompt', '프롬프트')"
+                class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all duration-200 group">
+          <span class="text-3xl mb-2 group-hover:scale-110 transition-transform duration-200">📝</span>
+          <span class="font-medium text-gray-900 group-hover:text-blue-700">프롬프트</span>
+          <span class="text-xs text-gray-500 mt-1">텍스트 프롬프트 생성</span>
+        </button>
+
+        <button onclick="selectOption('moduleTypeSelector', 'generate', '생성')"
+                class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all duration-200 group">
+          <span class="text-3xl mb-2 group-hover:scale-110 transition-transform duration-200">✨</span>
+          <span class="font-medium text-gray-900 group-hover:text-blue-700">생성</span>
+          <span class="text-xs text-gray-500 mt-1">콘텐츠 자동 생성</span>
+        </button>
+
+        <button onclick="selectOption('moduleTypeSelector', 'publish', '발행')"
+                class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all duration-200 group">
+          <span class="text-3xl mb-2 group-hover:scale-110 transition-transform duration-200">📤</span>
+          <span class="font-medium text-gray-900 group-hover:text-blue-700">발행</span>
+          <span class="text-xs text-gray-500 mt-1">콘텐츠 발행 관리</span>
+        </button>
+
+        <button onclick="selectOption('moduleTypeSelector', 'republish', '재발행')"
+                class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all duration-200 group">
+          <span class="text-3xl mb-2 group-hover:scale-110 transition-transform duration-200">🔄</span>
+          <span class="font-medium text-gray-900 group-hover:text-blue-700">재발행</span>
+          <span class="text-xs text-gray-500 mt-1">기존 글 재발행</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 취소 버튼 -->
+    <div class="px-6 pb-6">
+      <button onclick="closeSelectionPopup('moduleTypeSelector')"
+              class="w-full py-3 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+        취소
+      </button>
+    </div>
+  </div>
+</div>
 
 <!-- 모듈 생성/수정 폼 (Bottom Sheet) -->
 {% with id="moduleForm", title="모듈 설정", size="large" %}
