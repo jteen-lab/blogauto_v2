@@ -233,38 +233,67 @@ function moduleListApp() {
 
         // 모듈 타입 선택 팝업 표시
         async showModuleTypeSelector() {
-            // 팝업 표시 (옵션은 템플릿에 하드코딩되어 있음)
-            openSelectionPopup('moduleTypeSelector');
+            try {
+                console.log('모듈 타입 선택 팝업 열기 시도...');
+                // 팝업 표시 (옵션은 템플릿에 하드코딩되어 있음)
+                if (typeof window.openSelectionPopup === 'function') {
+                    window.openSelectionPopup('moduleTypeSelector');
+                    console.log('모듈 타입 선택 팝업 열기 완료');
+                } else {
+                    console.error('openSelectionPopup 함수가 정의되지 않았습니다');
+                    this.showError('모듈 타입 선택 팝업을 열 수 없습니다. 페이지를 새로고침해주세요.');
+                }
+            } catch (error) {
+                console.error('모듈 타입 선택 팝업 오류:', error);
+                this.showError('모듈 타입 선택 팝업을 열 수 없습니다.');
+            }
         },
 
         // 모듈 생성
         async createModule(typeCode) {
             try {
+                console.log(`모듈 생성 시작: ${typeCode}`);
+
                 const selectedType = this.moduleTypes.find(t => t.code === typeCode) || {
                     code: typeCode,
                     name: this.getModuleTypeName(typeCode),
                     description: ''
                 };
 
+                console.log('선택된 모듈 타입:', selectedType);
+
                 // 바텀시트 제목 업데이트
                 const title = document.getElementById('moduleFormTitle');
                 if (title) {
                     title.textContent = `${selectedType.name} 생성`;
+                } else {
+                    console.warn('모듈 폼 제목 엘리먼트를 찾을 수 없습니다');
                 }
 
                 // 폼 내용 로드
+                console.log('폼 내용 로드 시작...');
                 const formContent = await this.loadModuleForm(null, selectedType);
                 const contentArea = document.getElementById('moduleFormContent');
                 if (contentArea) {
                     contentArea.innerHTML = formContent;
+                    console.log('폼 내용 로드 완료');
+                } else {
+                    console.warn('모듈 폼 컨텐츠 엘리먼트를 찾을 수 없습니다');
                 }
 
                 // 바텀시트 표시
-                openBottomSheet('moduleForm');
+                console.log('바텀시트 열기 시도...');
+                if (typeof window.openBottomSheet === 'function') {
+                    window.openBottomSheet('moduleForm');
+                    console.log('바텀시트 열기 완료');
+                } else {
+                    console.error('openBottomSheet 함수가 정의되지 않았습니다');
+                    this.showError('모듈 폼을 열 수 없습니다. 페이지를 새로고침해주세요.');
+                }
 
             } catch (error) {
-                this.showError('모듈 생성 폼을 불러오는 중 오류가 발생했습니다');
-                console.error('모듈 생성 오류:', error);
+                console.error('모듈 생성 전체 오류:', error);
+                this.showError('모듈 생성 폼을 불러오는 중 오류가 발생했습니다: ' + error.message);
             }
         },
 
@@ -557,53 +586,64 @@ window.toggleModuleStatus = function(moduleId) {
     }
 };
 
+// 바텀시트 관련 함수들 (모듈 로드 전에 정의)
+if (typeof window.openBottomSheet === 'undefined') {
+    window.openBottomSheet = function(sheetId) {
+        const sheet = document.getElementById(sheetId);
+        const backdrop = document.getElementById(sheetId + '-backdrop');
+
+        if (!sheet) {
+            console.warn(`Bottom sheet '${sheetId}' not found`);
+            return;
+        }
+
+        // 백드롭 표시
+        if (backdrop) {
+            backdrop.classList.remove('hidden');
+            setTimeout(() => {
+                backdrop.style.opacity = '1';
+            }, 10);
+        }
+
+        // 시트 표시
+        sheet.classList.remove('translate-y-full');
+
+        // 스크롤 방지
+        document.body.style.overflow = 'hidden';
+    };
+}
+
+if (typeof window.closeBottomSheet === 'undefined') {
+    window.closeBottomSheet = function(sheetId) {
+        const sheet = document.getElementById(sheetId);
+        const backdrop = document.getElementById(sheetId + '-backdrop');
+
+        // 시트 숨기기
+        if (sheet) {
+            sheet.classList.add('translate-y-full');
+        }
+
+        // 백드롭 숨기기
+        if (backdrop) {
+            backdrop.style.opacity = '0';
+            setTimeout(() => {
+                backdrop.classList.add('hidden');
+            }, 300);
+        }
+
+        // 스크롤 복원
+        document.body.style.overflow = '';
+    };
+}
+
 // ESC 키로 팝업 닫기
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-        closeSelectionPopup('moduleTypeSelector');
-        closeBottomSheet('moduleForm');
+        if (typeof closeSelectionPopup !== 'undefined') {
+            closeSelectionPopup('moduleTypeSelector');
+        }
+        if (typeof closeBottomSheet !== 'undefined') {
+            closeBottomSheet('moduleForm');
+        }
     }
 });
-
-// 바텀시트 관련 함수들
-window.openBottomSheet = function(sheetId) {
-    const sheet = document.getElementById(sheetId);
-    const backdrop = document.getElementById(sheetId + '-backdrop');
-
-    if (!sheet) return;
-
-    // 백드롭 표시
-    if (backdrop) {
-        backdrop.classList.remove('hidden');
-        setTimeout(() => {
-            backdrop.style.opacity = '1';
-        }, 10);
-    }
-
-    // 시트 표시
-    sheet.classList.remove('translate-y-full');
-
-    // 스크롤 방지
-    document.body.style.overflow = 'hidden';
-};
-
-window.closeBottomSheet = function(sheetId) {
-    const sheet = document.getElementById(sheetId);
-    const backdrop = document.getElementById(sheetId + '-backdrop');
-
-    // 시트 숨기기
-    if (sheet) {
-        sheet.classList.add('translate-y-full');
-    }
-
-    // 백드롭 숨기기
-    if (backdrop) {
-        backdrop.style.opacity = '0';
-        setTimeout(() => {
-            backdrop.classList.add('hidden');
-        }, 300);
-    }
-
-    // 스크롤 복원
-    document.body.style.overflow = '';
-};
