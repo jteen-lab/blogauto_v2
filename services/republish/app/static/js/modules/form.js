@@ -6,7 +6,7 @@
 function moduleFormApp(module = null, moduleType = null) {
     // 모듈 데이터 초기화
     const initialModule = module || {};
-    const initialType = moduleType || { code: 'republish', name: '재발행' };
+    const initialType = moduleType || { code: null, name: '' };
 
     return {
         // 폼 상태
@@ -18,7 +18,7 @@ function moduleFormApp(module = null, moduleType = null) {
         // 폼 데이터
         formData: {
             name: initialModule?.name || '',
-            type_code: initialType?.code || 'republish',
+            type_code: initialType?.code || null,
             description: initialModule?.description || '',
             manual_interval_minutes: initialModule?.manual_interval_minutes || 25,
             settings: initialModule?.settings || {},
