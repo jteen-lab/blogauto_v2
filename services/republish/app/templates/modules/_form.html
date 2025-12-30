@@ -20,22 +20,117 @@ Alpine.js 데이터 바인딩 사용
 
         <!-- 타입별 설정 -->
         <div x-show="formData.type_code === 'republish'">
+            <!-- 재발행 조건 -->
+            <div class="space-y-4 mb-6">
+                <h3 class="text-base font-semibold text-gray-900 flex items-center">
+                    🎯 재발행 조건
+                </h3>
+
+                <!-- 재발행 가능 최소 포스트 수 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        재발행 가능 최소 포스트 수
+                    </label>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <input type="number"
+                               x-model.number="formData.min_post_count"
+                               min="1"
+                               max="1000"
+                               class="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <span class="text-gray-500 text-sm">개 이상일 때 재발행 시작</span>
+                    </div>
+                    <p class="mt-1 text-xs text-gray-500">블로그에 최소 이만큼의 포스트가 누적되어야 재발행이 활성화됩니다</p>
+                </div>
+
+                <!-- 재발행 적용 구간 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        재발행 적용 구간 (누적 포스트 수 기준)
+                    </label>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="text-gray-500 text-sm">시작</span>
+                        <input type="number"
+                               x-model.number="formData.post_range_start"
+                               min="1"
+                               class="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <span class="text-gray-500">~</span>
+                        <span class="text-gray-500 text-sm">종료</span>
+                        <input type="number"
+                               x-model.number="formData.post_range_end"
+                               min="1"
+                               class="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                               placeholder="무제한">
+                        <span class="text-gray-400 text-xs">(비워두면 무제한)</span>
+                    </div>
+                    <p class="mt-1 text-xs text-gray-500">블로그에 누적된 포스트 수가 해당 범위일 때만 프로파일이 적용됩니다. 예: 누적 포스트가 1~100인 블로그에만 적용, 초과 시 미적용</p>
+                </div>
+            </div>
+
             <!-- 재발행 간격 설정 -->
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">
-                    재발행 간격 (분) <span class="text-red-500">*</span>
+                <label class="block text-sm font-semibold text-gray-900 mb-3">
+                    재발행 간격 설정 (하루 기준)
                 </label>
-                <input type="number"
-                       x-model.number="formData.manual_interval_minutes"
-                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                       min="15"
-                       placeholder="25"
-                       required>
-                <div class="mt-1 flex items-center gap-2 text-xs text-blue-600">
+
+                <!-- 간격 설정 모드 선택 -->
+                <div class="flex gap-4 mb-4">
+                    <label class="flex items-center cursor-pointer">
+                        <input type="radio"
+                               x-model="formData.interval_mode"
+                               value="manual"
+                               class="text-blue-600 focus:ring-blue-500 h-4 w-4">
+                        <span class="ml-2 text-sm text-gray-700">시간으로 설정</span>
+                    </label>
+                    <label class="flex items-center cursor-pointer">
+                        <input type="radio"
+                               x-model="formData.interval_mode"
+                               value="auto"
+                               class="text-blue-600 focus:ring-blue-500 h-4 w-4">
+                        <span class="ml-2 text-sm text-gray-700">횟수로 설정</span>
+                    </label>
+                </div>
+
+                <!-- Manual 모드: 간격(분) 입력 -->
+                <div x-show="formData.interval_mode === 'manual'" class="p-4 bg-gray-50 rounded-lg">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="text-gray-700 text-sm">재발행 간격:</span>
+                        <input type="number"
+                               x-model.number="formData.manual_interval_minutes"
+                               min="15"
+                               max="1440"
+                               class="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                               @input="calculateFromInterval()">
+                        <span class="text-gray-500 text-sm">분</span>
+                        <span class="text-gray-400">/</span>
+                        <span class="text-gray-500 text-sm">하루 최대:</span>
+                        <span class="font-semibold text-blue-600" x-text="calculatedDailyCount + '회'"></span>
+                    </div>
+                    <p class="mt-2 text-xs text-gray-500">활성 시간대 기준으로 계산됩니다 (오늘 활성 시간: <span x-text="todayActiveHours"></span>시간)</p>
+                </div>
+
+                <!-- Auto 모드: 하루 목표 횟수 입력 -->
+                <div x-show="formData.interval_mode === 'auto'" class="p-4 bg-gray-50 rounded-lg">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="text-gray-700 text-sm">하루 목표:</span>
+                        <input type="number"
+                               x-model.number="formData.auto_daily_count"
+                               min="1"
+                               max="100"
+                               class="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                               @input="calculateFromDailyCount()">
+                        <span class="text-gray-500 text-sm">회</span>
+                        <span class="text-gray-400">/</span>
+                        <span class="text-gray-500 text-sm">최소 간격:</span>
+                        <span class="font-semibold text-blue-600" x-text="calculatedInterval + '분'"></span>
+                    </div>
+                    <p class="mt-2 text-xs text-gray-500">활성 시간대 기준으로 간격이 자동 계산됩니다 (오늘 활성 시간: <span x-text="todayActiveHours"></span>시간)</p>
+                </div>
+
+                <div class="mt-2 flex items-center gap-2 text-xs text-blue-600">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
-                    <span>최소 15분 이상 설정해주세요. 권장: 25-60분</span>
+                    <span>최소 15분 이상 간격이 유지되도록 설정됩니다</span>
                 </div>
             </div>
 

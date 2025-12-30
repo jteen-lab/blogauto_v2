@@ -23,7 +23,14 @@ function moduleFormApp(module = null, moduleType = null) {
             manual_interval_minutes: initialModule?.manual_interval_minutes || 25,
             settings: initialModule?.settings || {},
             schedule_matrix: initialModule?.schedule_matrix || null,
-            is_active: initialModule?.is_active ?? true
+            is_active: initialModule?.is_active ?? true,
+            // 새로운 재발행 조건 필드들
+            min_post_count: initialModule?.min_post_count || 10,
+            post_range_start: initialModule?.post_range_start || 1,
+            post_range_end: initialModule?.post_range_end || null,
+            // 새로운 간격 설정 필드들
+            interval_mode: initialModule?.interval_mode || 'manual',
+            auto_daily_count: initialModule?.auto_daily_count || 5
         },
 
         // 스케줄 매트릭스 (재발행 모듈용)
@@ -32,6 +39,10 @@ function moduleFormApp(module = null, moduleType = null) {
         activeHoursCount: 0,
         todayActiveHours: 0,
         expectedDailyPosts: 0,
+
+        // 간격 설정 계산 관련
+        calculatedDailyCount: 0,
+        calculatedInterval: 0,
 
         // 설정 JSON (기타 타입용)
         settingsJson: '',
@@ -106,6 +117,13 @@ function moduleFormApp(module = null, moduleType = null) {
         calculateStats() {
             this.updateActiveHoursCount();
             this.calculateExpectedPosts();
+
+            // 간격 설정 모드에 따라 계산
+            if (this.formData.interval_mode === 'manual') {
+                this.calculateFromInterval();
+            } else if (this.formData.interval_mode === 'auto') {
+                this.calculateFromDailyCount();
+            }
         },
 
         // 스케줄 매트릭스 조작
@@ -114,8 +132,7 @@ function moduleFormApp(module = null, moduleType = null) {
                 this.schedule[dayIdx] = Array(24).fill(false);
             }
             this.schedule[dayIdx][hourIdx] = !this.schedule[dayIdx][hourIdx];
-            this.updateActiveHoursCount();
-            this.calculateExpectedPosts();
+            this.calculateStats();
         },
 
         toggleDay(dayIdx) {
@@ -124,20 +141,17 @@ function moduleFormApp(module = null, moduleType = null) {
             }
             const allActive = this.schedule[dayIdx].every(h => h);
             this.schedule[dayIdx] = this.schedule[dayIdx].map(() => !allActive);
-            this.updateActiveHoursCount();
-            this.calculateExpectedPosts();
+            this.calculateStats();
         },
 
         selectAllHours() {
             this.schedule = Array(7).fill().map(() => Array(24).fill(true));
-            this.updateActiveHoursCount();
-            this.calculateExpectedPosts();
+            this.calculateStats();
         },
 
         clearAllHours() {
             this.schedule = Array(7).fill().map(() => Array(24).fill(false));
-            this.updateActiveHoursCount();
-            this.calculateExpectedPosts();
+            this.calculateStats();
         },
 
         selectWorkingHours() {
@@ -146,8 +160,7 @@ function moduleFormApp(module = null, moduleType = null) {
                     dayIdx < 5 && hour >= 9 && hour <= 21
                 )
             );
-            this.updateActiveHoursCount();
-            this.calculateExpectedPosts();
+            this.calculateStats();
         },
 
         // 활성 시간 수 계산
@@ -176,6 +189,29 @@ function moduleFormApp(module = null, moduleType = null) {
                 this.expectedDailyPosts = Math.round(this.todayActiveHours * postsPerHour * 10) / 10;
             } else {
                 this.expectedDailyPosts = 0;
+            }
+        },
+
+        // 간격에서 일일 발행 수 계산 (Manual 모드)
+        calculateFromInterval() {
+            if (this.formData.manual_interval_minutes && this.todayActiveHours > 0) {
+                const postsPerHour = 60 / this.formData.manual_interval_minutes;
+                this.calculatedDailyCount = Math.round(this.todayActiveHours * postsPerHour * 10) / 10;
+            } else {
+                this.calculatedDailyCount = 0;
+            }
+        },
+
+        // 일일 발행 수에서 간격 계산 (Auto 모드)
+        calculateFromDailyCount() {
+            if (this.formData.auto_daily_count && this.todayActiveHours > 0) {
+                const requiredInterval = (this.todayActiveHours * 60) / this.formData.auto_daily_count;
+                this.calculatedInterval = Math.max(15, Math.round(requiredInterval));
+
+                // 실제 manual_interval_minutes 업데이트
+                this.formData.manual_interval_minutes = this.calculatedInterval;
+            } else {
+                this.calculatedInterval = 15;
             }
         },
 
@@ -267,6 +303,36 @@ function moduleFormApp(module = null, moduleType = null) {
 
             // 재발행 모듈 검증
             if (this.formData.type_code === 'republish') {
+                // 재발행 조건 검증
+                if (!this.formData.min_post_count || this.formData.min_post_count < 1) {
+                    this.showError('재발행 가능 최소 포스트 수는 1개 이상이어야 합니다');
+                    return false;
+                }
+
+                if (!this.formData.post_range_start || this.formData.post_range_start < 1) {
+                    this.showError('재발행 적용 구간 시작값은 1 이상이어야 합니다');
+                    return false;
+                }
+
+                if (this.formData.post_range_end && this.formData.post_range_end < this.formData.post_range_start) {
+                    this.showError('재발행 적용 구간 종료값은 시작값보다 커야 합니다');
+                    return false;
+                }
+
+                // 간격 설정 모드 검증
+                if (!this.formData.interval_mode) {
+                    this.showError('간격 설정 모드를 선택해주세요');
+                    return false;
+                }
+
+                if (this.formData.interval_mode === 'auto') {
+                    if (!this.formData.auto_daily_count || this.formData.auto_daily_count < 1) {
+                        this.showError('하루 목표 발행 횟수는 1회 이상이어야 합니다');
+                        return false;
+                    }
+                }
+
+                // 간격 검증
                 if (!this.formData.manual_interval_minutes || this.formData.manual_interval_minutes < 15) {
                     this.showError('재발행 간격은 최소 15분 이상이어야 합니다');
                     return false;
@@ -306,6 +372,15 @@ function moduleFormApp(module = null, moduleType = null) {
             if (this.formData.type_code === 'republish') {
                 data.manual_interval_minutes = this.formData.manual_interval_minutes;
                 data.schedule_matrix = this.schedule;
+
+                // 재발행 조건 필드들
+                data.min_post_count = this.formData.min_post_count;
+                data.post_range_start = this.formData.post_range_start;
+                data.post_range_end = this.formData.post_range_end || null;
+
+                // 간격 설정 필드들
+                data.interval_mode = this.formData.interval_mode;
+                data.auto_daily_count = this.formData.auto_daily_count;
             } else {
                 // 설정 JSON 파싱
                 try {
