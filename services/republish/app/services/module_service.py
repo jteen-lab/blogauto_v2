@@ -262,6 +262,60 @@ class ModuleService:
                 detail="모듈을 수정하는 중 오류가 발생했습니다"
             )
 
+    async def copy_module(
+        self,
+        user: User,
+        module_id: int
+    ) -> Optional[Module]:
+        """모듈 복사"""
+        try:
+            logger.info(f"[COPY_MODULE] 사용자 {user.id} 모듈 복사: {module_id}")
+
+            # 원본 모듈 조회 (소유권 확인 포함)
+            original_module = await self.get_module(user, module_id)
+            if not original_module:
+                return None
+
+            # 복사본 생성을 위한 요청 데이터 구성
+            copy_request = ModuleCreateRequest(
+                name=f"{original_module.name} (복사본)",
+                module_type_code=original_module.module_type.code,
+                description=original_module.description,
+                schedule_matrix=original_module.schedule_matrix,
+                manual_interval_minutes=original_module.manual_interval_minutes,
+                min_post_count=original_module.min_post_count,
+                post_range_start=original_module.post_range_start,
+                post_range_end=original_module.post_range_end,
+                interval_mode=original_module.interval_mode,
+                auto_daily_count=original_module.auto_daily_count,
+                jitter_enabled=original_module.jitter_enabled,
+                jitter_min_percent=original_module.jitter_min_percent,
+                jitter_max_percent=original_module.jitter_max_percent,
+                active_hours_start=original_module.active_hours_start,
+                active_hours_end=original_module.active_hours_end,
+                blackout_days=original_module.blackout_days or [],
+                cooldown_days=original_module.cooldown_days,
+                priority=original_module.priority,
+                platform_overrides=original_module.platform_overrides,
+                settings=original_module.settings
+            )
+
+            # create_module 메소드를 재사용하여 복사본 생성
+            copied_module = await self.create_module(user, copy_request)
+
+            logger.info(f"[COPY_MODULE] 모듈 복사 완료: {original_module.id} -> {copied_module.id}")
+            return copied_module
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"[COPY_MODULE] 오류: {e}")
+            await self.db.rollback()
+            raise HTTPException(
+                status_code=500,
+                detail="모듈을 복사하는 중 오류가 발생했습니다"
+            )
+
     async def delete_module(self, user: User, module_id: int) -> bool:
         """모듈 삭제"""
         try:

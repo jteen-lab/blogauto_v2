@@ -11,12 +11,6 @@ Alpine.js 데이터 바인딩 사용
             <!-- 모듈 아이콘과 상태 -->
             <div class="relative">
                 <span class="text-2xl" x-text="getModuleIcon(module.module_type.code)"></span>
-                <div class="absolute -top-1 -right-1">
-                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium"
-                          :class="getStatusClass(module.is_active)">
-                        <span x-text="module.is_active ? '활성' : '비활성'"></span>
-                    </span>
-                </div>
             </div>
 
             <div class="flex-1 min-w-0">

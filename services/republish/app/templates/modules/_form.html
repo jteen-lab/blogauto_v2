@@ -141,22 +141,6 @@ Alpine.js 데이터 바인딩 사용
                       placeholder="모듈에 대한 설명을 입력하세요...">
             </textarea>
         </div>
-
-        <!-- 활성화 상태 -->
-        <div class="flex items-center justify-between">
-            <div>
-                <span class="text-sm font-medium text-gray-700">모듈 활성화</span>
-                <p class="text-xs text-gray-500">생성 후 바로 동작하려면 활성화하세요</p>
-            </div>
-            <button type="button"
-                    @click="formData.is_active = !formData.is_active"
-                    class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                    :class="formData.is_active ? 'bg-blue-600' : 'bg-gray-200'">
-                <span class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
-                      :class="formData.is_active ? 'translate-x-5' : 'translate-x-0'">
-                </span>
-            </button>
-        </div>
     </div>
 
     <!-- 폼 액션 -->

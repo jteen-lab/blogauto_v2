@@ -185,6 +185,12 @@ function moduleFormApp(module = null, moduleType = null) {
                 return;
             }
 
+            // 중복 제출 방지
+            if (this.loading) {
+                console.log('[submitForm] 이미 처리 중입니다. 중복 제출 방지');
+                return;
+            }
+
             this.loading = true;
 
             try {
@@ -219,6 +225,10 @@ function moduleFormApp(module = null, moduleType = null) {
                 // 목록 새로고침
                 if (window.moduleListAppInstance) {
                     await window.moduleListAppInstance.loadModules();
+                    // 동적 레이아웃 재적용
+                    setTimeout(() => {
+                        window.moduleListAppInstance.applyDynamicLayout();
+                    }, 100);
                 }
 
                 // 폼 닫기
@@ -288,6 +298,10 @@ function moduleFormApp(module = null, moduleType = null) {
                 module_type_code: this.formData.type_code,
                 description: this.formData.description?.trim() || null,
             };
+
+            // 디버깅: 요청 데이터 로깅
+            console.log('[prepareRequestData] 모듈 타입:', this.formData.type_code);
+            console.log('[prepareRequestData] 전송 데이터:', data);
 
             if (this.formData.type_code === 'republish') {
                 data.manual_interval_minutes = this.formData.manual_interval_minutes;

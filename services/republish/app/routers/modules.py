@@ -125,6 +125,35 @@ async def update_module(
     return response_data
 
 
+@router.post(
+    "/{module_id}/copy",
+    response_model=ModuleDetailResponse,
+    status_code=201,
+    summary="모듈 복사",
+    description="기존 모듈을 복사하여 새로운 모듈을 생성합니다."
+)
+async def copy_module(
+    module_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session)
+) -> ModuleDetailResponse:
+    """모듈 복사"""
+    service = ModuleService(db)
+    module = await service.copy_module(current_user, module_id)
+
+    if not module:
+        raise HTTPException(
+            status_code=404,
+            detail="복사할 모듈을 찾을 수 없습니다"
+        )
+
+    # 응답용 데이터 구성
+    response_data = ModuleDetailResponse.model_validate(module)
+    response_data.calculated_interval_minutes = module.calculated_interval_minutes
+
+    return response_data
+
+
 @router.delete(
     "/{module_id}",
     status_code=204,

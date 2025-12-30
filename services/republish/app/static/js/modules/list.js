@@ -51,6 +51,11 @@ function moduleListApp() {
 
             const data = await response.json();
             this.modules = data.modules || [];
+
+            // 로딩 완료 후 동적 레이아웃 적용
+            setTimeout(() => {
+                this.applyDynamicLayout();
+            }, 100);
         },
 
         // 타입별 모듈 목록 반환
@@ -61,6 +66,34 @@ function moduleListApp() {
         // 타입별 모듈 개수 계산
         getModuleCountByType(typeCode) {
             return this.modules.filter(module => module.module_type.code === typeCode).length;
+        },
+
+        // 동적 섹션 레이아웃 적용
+        applyDynamicLayout() {
+            const moduleTypes = ['prompt', 'generate', 'publish', 'republish'];
+            const visibleSections = moduleTypes.filter(type => this.getModulesByType(type).length > 0);
+            const sectionCount = visibleSections.length;
+
+            console.log(`[applyDynamicLayout] 표시할 섹션 수: ${sectionCount}`);
+
+            // 데스크탑 섹션 컨테이너 찾기
+            const desktopSections = document.querySelector('.desktop-sections');
+            if (!desktopSections) return;
+
+            // 기존 클래스 제거
+            desktopSections.classList.remove('sections-1', 'sections-2', 'sections-3', 'sections-4');
+
+            // 섹션 수에 따른 클래스 추가
+            desktopSections.classList.add(`sections-${sectionCount}`);
+
+            // 각 섹션의 모듈 그리드에도 클래스 적용
+            visibleSections.forEach(type => {
+                const moduleGrid = document.querySelector(`[x-show*="getModulesByType('${type}')"] .module-grid`);
+                if (moduleGrid) {
+                    moduleGrid.classList.remove('grid-1', 'grid-2', 'grid-3', 'grid-4');
+                    moduleGrid.classList.add(`grid-${sectionCount}`);
+                }
+            });
         },
 
         // 모듈 아이콘 반환
