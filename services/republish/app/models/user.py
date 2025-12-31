@@ -49,7 +49,7 @@ class User(Base):
     blogs = relationship("Blog", back_populates="user", lazy="dynamic")
     google_credentials = relationship("GoogleCredential", back_populates="user", lazy="dynamic")
     topics = relationship("Topic", back_populates="user", lazy="dynamic")
-    profile_groups = relationship("ProfileGroup", back_populates="user", lazy="dynamic")
+    # ProfileGroup은 제거됨 (새로운 Flow 시스템으로 교체)
 
     def __repr__(self) -> str:
         return f"<User(id={self.id}, email={self.email}, tier={self.tier.value})>"

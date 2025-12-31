@@ -22,13 +22,12 @@ from .scheduler import get_scheduler, republish_job
 from .routers.auth import router as auth_router
 from .routers.blogs import router as blogs_router, page_router as blogs_page_router
 from .routers.categories import router as categories_router, page_router as categories_page_router
-from .routers.profiles import router as profiles_router, page_router as profiles_page_router
 from .routers.republish import router as republish_router, page_router as republish_page_router
-from .routers.groups import router as groups_router, page_router as groups_page_router
-from .routers.blogger_slots import router as blogger_slots_router
+# from .routers.groups import router as groups_router, page_router as groups_page_router  # 임시 비활성화
+# from .routers.blogger_slots import router as blogger_slots_router  # 임시 비활성화
 from .routers.module_types import router as module_types_router
 from .routers.modules import router as modules_router
-from .routers.flows import router as flows_router
+# from .routers.flows import router as flows_router  # 임시 비활성화
 from .routers.autorun import router as autorun_router
 from .routers.modules_pages import router as modules_page_router
 
@@ -111,21 +110,19 @@ app.add_middleware(LoggingMiddleware)
 app.include_router(auth_router, prefix=settings.api_v1_prefix)
 app.include_router(blogs_router, prefix=settings.api_v1_prefix)
 app.include_router(categories_router, prefix=settings.api_v1_prefix)
-app.include_router(profiles_router, prefix=settings.api_v1_prefix)
 app.include_router(republish_router, prefix=settings.api_v1_prefix)
-app.include_router(groups_router, prefix=settings.api_v1_prefix)
-app.include_router(blogger_slots_router, prefix=settings.api_v1_prefix)
+# app.include_router(groups_router, prefix=settings.api_v1_prefix)  # 임시 비활성화
+# app.include_router(blogger_slots_router, prefix=settings.api_v1_prefix)  # 임시 비활성화
 app.include_router(module_types_router, prefix=settings.api_v1_prefix)
 app.include_router(modules_router, prefix=settings.api_v1_prefix)
-app.include_router(flows_router, prefix=settings.api_v1_prefix)
+# app.include_router(flows_router, prefix=settings.api_v1_prefix)  # 임시 비활성화
 app.include_router(autorun_router, prefix=settings.api_v1_prefix)
 
 # 페이지 라우터 등록
 app.include_router(blogs_page_router)
 app.include_router(categories_page_router)
-app.include_router(profiles_page_router)
 app.include_router(republish_page_router)
-app.include_router(groups_page_router)
+# app.include_router(groups_page_router)  # 임시 비활성화
 app.include_router(modules_page_router)
 
 # 정적 파일 서빙 (개발환경)

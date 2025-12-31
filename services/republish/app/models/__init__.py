@@ -7,15 +7,11 @@ from .blog import Blog, BlogPlatform
 from .category import Topic, SubTopic, Keyword
 
 # Phase 4 models
-from .publish_profile import PublishProfile
-from .blog_profile_link import BlogProfileLink
 from .post import Post
 from .publish_log import PublishLog
 
-# Group models
-from .profile_group import ProfileGroup
-from .group_profile_link import GroupProfileLink
-from .blog_group_link import BlogGroupLink
+# Group models (레거시)
+# from .blog_group_link import BlogGroupLink  # 제거됨 (Flow 시스템으로 교체)
 
 # Phase 5-1: Google/Blogger models
 from .google_credential import GoogleCredential
@@ -39,14 +35,10 @@ __all__ = [
     "SubTopic",
     "Keyword",
     # Phase 4 models
-    "PublishProfile",
-    "BlogProfileLink",
     "Post",
     "PublishLog",
-    # Group models
-    "ProfileGroup",
-    "GroupProfileLink",
-    "BlogGroupLink",
+    # Group models (레거시)
+    # "BlogGroupLink",  # 제거됨
     # Phase 5-1: Google/Blogger models
     "GoogleCredential",
     "GoogleAccountPolicy",

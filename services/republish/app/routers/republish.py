@@ -17,7 +17,8 @@ from typing import Optional
 
 from ..core.database import get_db_session
 from ..services.publish_service import PublishService
-from ..services.profile_service import ProfileService
+# TODO: 프로파일 시스템에서 모듈 시스템으로 전환 중
+# from ..services.profile_service import ProfileService
 from ..schemas.republish import (
     ConnectionTestResponse,
     ManualRepublishRequest,
@@ -250,7 +251,7 @@ async def get_republish_dashboard(
     """재발행 대시보드 데이터 조회"""
     try:
         publish_service = PublishService(db)
-        profile_service = ProfileService(db)
+        # profile_service = ProfileService(db)
 
         # 대시보드 데이터 수집
         dashboard_data = await publish_service.get_dashboard_data(current_user)
@@ -279,11 +280,12 @@ async def republish_dashboard_page(
     """재발행 대시보드 페이지"""
     try:
         publish_service = PublishService(db)
-        profile_service = ProfileService(db)
+        # profile_service = ProfileService(db)
 
         # 대시보드 데이터 수집
         dashboard_data = await publish_service.get_dashboard_data(current_user)
-        profiles = await profile_service.get_user_profiles(current_user)
+        # profiles = await profile_service.get_user_profiles(current_user)
+        profiles = []  # 임시: 빈 목록
 
         return templates.TemplateResponse(
             "republish/dashboard.html",

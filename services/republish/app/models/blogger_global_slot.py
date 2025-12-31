@@ -55,18 +55,21 @@ class BloggerGlobalSlot(Base):
         nullable=True,
         comment="할당된 블로그 ID"
     )
-    group_id = Column(
+    module_id = Column(
         Integer,
-        ForeignKey("profile_groups.id", ondelete="CASCADE"),
+        ForeignKey("modules.id", ondelete="CASCADE"),
         nullable=True,
-        comment="할당된 그룹 ID"
+        comment="할당된 모듈 ID (새 시스템)"
     )
-    profile_id = Column(
+    flow_id = Column(
         Integer,
-        ForeignKey("publish_profiles.id", ondelete="CASCADE"),
+        ForeignKey("flows.id", ondelete="CASCADE"),
         nullable=True,
-        comment="할당된 프로파일 ID"
+        comment="할당된 플로우 ID (새 시스템)"
     )
+    # 레거시 참조 제거됨
+    # group_id = Column(Integer, ForeignKey("profile_groups.id", ondelete="CASCADE"), nullable=True)  # 제거됨
+    # profile_id = Column(Integer, ForeignKey("publish_profiles.id", ondelete="CASCADE"), nullable=True)  # 제거됨
 
     # 타임스탬프
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -82,8 +85,11 @@ class BloggerGlobalSlot(Base):
     # 관계 설정
     google_credential = relationship("GoogleCredential", back_populates="blogger_slots")
     blog = relationship("Blog")
-    group = relationship("ProfileGroup")
-    profile = relationship("PublishProfile")
+    module = relationship("Module")
+    flow = relationship("Flow")
+    # 레거시 relationship 제거됨
+    # group = relationship("ProfileGroup")  # 제거됨 (Flow 시스템으로 교체)
+    # profile = relationship("PublishProfile")  # 제거됨 (Module 시스템으로 교체)
 
     def __repr__(self) -> str:
         return (f"<BloggerGlobalSlot(id={self.id}, credential_id={self.google_credential_id}, "
@@ -116,10 +122,10 @@ class BloggerGlobalSlot(Base):
         """할당 타입 반환"""
         if self.blog_id:
             return "blog"
-        elif self.group_id:
-            return "group"
-        elif self.profile_id:
-            return "profile"
+        elif self.module_id:
+            return "module"
+        elif self.flow_id:
+            return "flow"
         return None
 
     @property
@@ -127,10 +133,10 @@ class BloggerGlobalSlot(Base):
         """할당 대상 ID 반환"""
         if self.blog_id:
             return self.blog_id
-        elif self.group_id:
-            return self.group_id
-        elif self.profile_id:
-            return self.profile_id
+        elif self.module_id:
+            return self.module_id
+        elif self.flow_id:
+            return self.flow_id
         return None
 
     @property
@@ -148,21 +154,32 @@ class BloggerGlobalSlot(Base):
         self.clear_assignment()
         self.blog_id = blog_id
 
-    def assign_to_group(self, group_id: int) -> None:
-        """그룹에 할당"""
+    def assign_to_module(self, module_id: int) -> None:
+        """모듈에 할당 (새 시스템)"""
         self.clear_assignment()
-        self.group_id = group_id
+        self.module_id = module_id
+
+    def assign_to_flow(self, flow_id: int) -> None:
+        """플로우에 할당 (새 시스템)"""
+        self.clear_assignment()
+        self.flow_id = flow_id
+
+    # 레거시 메소드들 (호환성을 위해 유지, 새 시스템으로 리디렉션)
+    def assign_to_group(self, group_id: int) -> None:
+        """그룹에 할당 (레거시 - 플로우로 리디렉션)"""
+        # 레거시 호환성: 그룹 ID를 플로우 ID로 처리
+        self.assign_to_flow(group_id)
 
     def assign_to_profile(self, profile_id: int) -> None:
-        """프로파일에 할당"""
-        self.clear_assignment()
-        self.profile_id = profile_id
+        """프로파일에 할당 (레거시 - 모듈로 리디렉션)"""
+        # 레거시 호환성: 프로파일 ID를 모듈 ID로 처리
+        self.assign_to_module(profile_id)
 
     def clear_assignment(self) -> None:
         """할당 해제"""
         self.blog_id = None
-        self.group_id = None
-        self.profile_id = None
+        self.module_id = None
+        self.flow_id = None
 
     def is_same_time(self, day_of_week: int, hour: int, minute: int) -> bool:
         """동일한 시간 슬롯인지 확인"""
@@ -186,8 +203,11 @@ class BloggerGlobalSlot(Base):
             "assignment_type": self.assignment_type,
             "assignment_id": self.assignment_id,
             "blog_id": self.blog_id,
-            "group_id": self.group_id,
-            "profile_id": self.profile_id,
+            "module_id": self.module_id,
+            "flow_id": self.flow_id,
+            # 레거시 필드는 제거됨
+            # "group_id": self.group_id,  # 제거됨
+            # "profile_id": self.profile_id,  # 제거됨
             "is_weekend": self.is_weekend,
             "is_business_hour": self.is_business_hour,
             "created_at": self.created_at

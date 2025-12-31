@@ -129,6 +129,7 @@ class Settings(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = False
+        extra = "allow"  # .env 파일의 추가 변수 허용
 
 
 def get_settings() -> Settings:

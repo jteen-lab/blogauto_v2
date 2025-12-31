@@ -10,6 +10,10 @@ function moduleListApp() {
         modules: [],
         moduleTypes: [],
 
+        // 캐시 시스템
+        intervalTextCache: {},
+        scheduleSummaryCache: {},
+
         // 초기화
         async init() {
             this.loading = true;
@@ -51,6 +55,10 @@ function moduleListApp() {
 
             const data = await response.json();
             this.modules = data.modules || [];
+
+            // 캐시 초기화
+            this.intervalTextCache = {};
+            this.scheduleSummaryCache = {};
 
             // 로딩 완료 후 동적 레이아웃 적용
             setTimeout(() => {
@@ -94,6 +102,11 @@ function moduleListApp() {
                     moduleGrid.classList.add(`grid-${sectionCount}`);
                 }
             });
+
+            // 레이아웃 적용 완료 후 표시
+            setTimeout(() => {
+                desktopSections.classList.add('layout-ready');
+            }, 50);
         },
 
         // 모듈 아이콘 반환
@@ -419,7 +432,13 @@ function moduleListApp() {
 
         // 재발행 간격 텍스트 반환
         getIntervalText(module) {
-            console.log('[getIntervalText] 모듈 데이터:', module);
+            // 캐시 확인
+            const cacheKey = `${module.id}_${module.updated_at || module.created_at}`;
+            if (this.intervalTextCache[cacheKey]) {
+                return this.intervalTextCache[cacheKey];
+            }
+
+            console.log(`[getIntervalText] 캐시 미스 - 모듈 ID: ${module.id}, 이름: ${module.name}`);
             console.log('[getIntervalText] interval_mode:', module.interval_mode);
             console.log('[getIntervalText] auto_daily_count:', module.auto_daily_count);
             console.log('[getIntervalText] manual_interval_minutes:', module.manual_interval_minutes);
@@ -430,19 +449,23 @@ function moduleListApp() {
             const activeMinutes = this.calculateActiveMinutes(module);
             console.log('[getIntervalText] 활성 시간:', activeMinutes, '분');
 
+            let result;
+
             if (mode === 'auto' && module.auto_daily_count) {
                 // 자동 모드: "5회/일 (최소 144분 간격)"
                 const minInterval = Math.ceil(activeMinutes / module.auto_daily_count);
-                return `${module.auto_daily_count}회/일 (최소 ${minInterval}분 간격)`;
-            }
-
-            if (module.manual_interval_minutes) {
+                result = `${module.auto_daily_count}회/일 (최소 ${minInterval}분 간격)`;
+            } else if (module.manual_interval_minutes) {
                 // 수동 모드: "25분마다 (최대 28회/일)"
                 const maxDaily = Math.floor(activeMinutes / module.manual_interval_minutes);
-                return `${module.manual_interval_minutes}분마다 (최대 ${maxDaily}회/일)`;
+                result = `${module.manual_interval_minutes}분마다 (최대 ${maxDaily}회/일)`;
+            } else {
+                result = "설정 없음";
             }
 
-            return "설정 없음";
+            // 결과를 캐시에 저장
+            this.intervalTextCache[cacheKey] = result;
+            return result;
         },
 
         // 활성 시간 계산 (분 단위)
@@ -471,14 +494,22 @@ function moduleListApp() {
 
         // 스케줄 요약 텍스트 반환
         getScheduleSummary(module) {
-            console.log('[getScheduleSummary] 모듈 데이터:', module);
+            // 캐시 확인
+            const cacheKey = `${module.id}_${module.updated_at || module.created_at}`;
+            if (this.scheduleSummaryCache[cacheKey]) {
+                return this.scheduleSummaryCache[cacheKey];
+            }
+
+            console.log(`[getScheduleSummary] 캐시 미스 - 모듈 ID: ${module.id}, 이름: ${module.name}`);
             console.log('[getScheduleSummary] schedule_matrix:', module.schedule_matrix);
             console.log('[getScheduleSummary] schedule_matrix 타입:', typeof module.schedule_matrix);
             console.log('[getScheduleSummary] schedule_matrix isArray:', Array.isArray(module.schedule_matrix));
 
             if (!module.schedule_matrix || !Array.isArray(module.schedule_matrix)) {
                 console.log('[getScheduleSummary] schedule_matrix가 유효하지 않음');
-                return "설정 없음";
+                const result = "설정 없음";
+                this.scheduleSummaryCache[cacheKey] = result;
+                return result;
             }
 
             const schedule = module.schedule_matrix;
@@ -497,7 +528,9 @@ function moduleListApp() {
             }
 
             if (Object.keys(dayRanges).length === 0) {
-                return "설정 없음";
+                const result = "설정 없음";
+                this.scheduleSummaryCache[cacheKey] = result;
+                return result;
             }
 
             // 동일한 시간대를 가진 요일들을 그룹화
@@ -517,7 +550,9 @@ function moduleListApp() {
                 groupTexts.push(`${dayText}(${timeRange})`);
             }
 
-            return groupTexts.join('\n');
+            const result = groupTexts.join('\n');
+            this.scheduleSummaryCache[cacheKey] = result;
+            return result;
         },
 
         // 시간대 범위 추출

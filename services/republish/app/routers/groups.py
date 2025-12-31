@@ -222,13 +222,15 @@ async def new_group_page(
     db: AsyncSession = Depends(get_db_session)
 ):
     """그룹 생성 페이지"""
-    from ..services.profile_service import ProfileService
+    # TODO: 프로파일 시스템에서 모듈 시스템으로 전환 중
+    # from ..services.profile_service import ProfileService
     from ..services.blog_service import BlogService
 
-    profile_service = ProfileService(db)
+    # profile_service = ProfileService(db)
     blog_service = BlogService(db)
 
-    profiles = await profile_service.get_user_profiles(current_user)
+    # profiles = await profile_service.get_user_profiles(current_user)
+    profiles = []  # 임시: 빈 목록
     blogs = await blog_service.get_user_blogs(current_user)
 
     return templates.TemplateResponse(
@@ -245,7 +247,8 @@ async def edit_group_page(
     db: AsyncSession = Depends(get_db_session)
 ):
     """그룹 수정 페이지"""
-    from ..services.profile_service import ProfileService
+    # TODO: 프로파일 시스템에서 모듈 시스템으로 전환 중
+    # from ..services.profile_service import ProfileService
     from ..services.blog_service import BlogService
 
     service = GroupService(db)
@@ -254,10 +257,11 @@ async def edit_group_page(
     if not group:
         raise HTTPException(status_code=404, detail="그룹을 찾을 수 없습니다")
 
-    profile_service = ProfileService(db)
+    # profile_service = ProfileService(db)
     blog_service = BlogService(db)
 
-    profiles = await profile_service.get_user_profiles(current_user)
+    # profiles = await profile_service.get_user_profiles(current_user)
+    profiles = []  # 임시: 빈 목록
     blogs = await blog_service.get_user_blogs(current_user)
 
     return templates.TemplateResponse(

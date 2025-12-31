@@ -51,10 +51,22 @@
         }
 
         .desktop-sections {
-            display: block;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem;
             max-width: 7xl;
             margin: 0 auto;
             padding: 0 2rem;
+            /* 초기 상태에서 숨김 */
+            opacity: 0;
+            visibility: hidden;
+        }
+
+        /* 레이아웃 준비 완료 후 표시 */
+        .desktop-sections.layout-ready {
+            opacity: 1;
+            visibility: visible;
+            transition: opacity 0.2s ease-in;
         }
 
         /* 동적 섹션 레이아웃 */

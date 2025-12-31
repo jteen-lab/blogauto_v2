@@ -24,7 +24,8 @@ class PublishLog(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     blog_id = Column(Integer, ForeignKey("blogs.id"), nullable=False, index=True)
     post_id = Column(Integer, ForeignKey("posts.id"), nullable=False, index=True)
-    profile_id = Column(Integer, ForeignKey("publish_profiles.id"), nullable=True, index=True)
+    # profile_id = Column(Integer, ForeignKey("publish_profiles.id"), nullable=True, index=True)  # 제거됨 (Flow 시스템으로 교체)
+    module_id = Column(Integer, ForeignKey("modules.id"), nullable=True, index=True, comment="연관된 모듈 ID")
 
     # 작업 정보
     action = Column(String(20), nullable=False, comment="작업: publish/republish", index=True)
@@ -46,7 +47,8 @@ class PublishLog(Base):
     user = relationship("User")
     blog = relationship("Blog")
     post = relationship("Post", back_populates="publish_logs")
-    profile = relationship("PublishProfile")
+    # profile = relationship("PublishProfile")  # 제거됨 (Flow 시스템으로 교체)
+    module = relationship("Module")
 
     @property
     def is_success(self) -> bool:
@@ -78,14 +80,14 @@ class PublishLog(Base):
         platform: str,
         remote_id: str,
         response_time_ms: int = None,
-        profile_id: int = None
+        module_id: int = None
     ) -> "PublishLog":
         """성공 로그 생성"""
         return cls(
             user_id=user_id,
             blog_id=blog_id,
             post_id=post_id,
-            profile_id=profile_id,
+            module_id=module_id,
             action=action,
             platform=platform,
             status="success",
@@ -103,7 +105,7 @@ class PublishLog(Base):
         platform: str,
         error_message: str,
         retry_count: int = 0,
-        profile_id: int = None
+        module_id: int = None
     ) -> "PublishLog":
         """실패 로그 생성"""
         # API 키/토큰 마스킹
@@ -113,7 +115,7 @@ class PublishLog(Base):
             user_id=user_id,
             blog_id=blog_id,
             post_id=post_id,
-            profile_id=profile_id,
+            module_id=module_id,
             action=action,
             platform=platform,
             status="failed",

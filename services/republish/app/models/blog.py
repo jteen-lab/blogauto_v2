@@ -74,8 +74,8 @@ class Blog(Base):
     # 관계 설정
     user = relationship("User", back_populates="blogs")
     google_credential = relationship("GoogleCredential", back_populates="blogs")
-    profile_links = relationship("BlogProfileLink", back_populates="blog")
-    group_links = relationship("BlogGroupLink", back_populates="blog", cascade="all, delete-orphan")
+    # profile_links는 제거됨 (새로운 Flow 시스템으로 교체)
+    # group_links = relationship("BlogGroupLink", back_populates="blog", cascade="all, delete-orphan")  # 제거됨 (Flow 시스템으로 교체)
     flow_links = relationship("FlowBlog", back_populates="blog", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
