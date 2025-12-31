@@ -5,7 +5,7 @@ Alpine.js 데이터 바인딩 사용
 
 <div class="bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow duration-200 overflow-hidden"
      :data-module-id="module.id"
-     x-data="{ expanded: false }"
+     x-data="{ expanded: false, needsExpand: false }"
 
     <!-- 상단 헤더 영역 (컬러 배경) -->
     <div class="px-4 py-2 flex items-center justify-between text-gray-700"
@@ -92,7 +92,6 @@ Alpine.js 데이터 바인딩 사용
 
         <!-- 더보기/접기 버튼 -->
         <div class="mt-2 flex justify-end"
-             x-data="{ needsExpand: false }"
              x-init="$nextTick(() => {
                  const contentDiv = $el.previousElementSibling;
                  needsExpand = contentDiv.scrollHeight > 128;
