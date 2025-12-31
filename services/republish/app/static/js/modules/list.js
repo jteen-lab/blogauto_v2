@@ -126,9 +126,10 @@ function moduleListApp() {
         // 전체 폼 템플릿
         getFullFormTemplate() {
             return `
-                <form @submit.prevent="submitForm()">
-                    <!-- 기본 정보 -->
-                    <div class="space-y-6">
+                <div class="max-w-6xl mx-auto">
+                    <form @submit.prevent="submitForm()">
+                        <!-- 기본 정보 -->
+                        <div class="space-y-6">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">
                                 모듈 이름 <span class="text-red-500">*</span>
@@ -141,38 +142,6 @@ function moduleListApp() {
                             <p class="mt-1 text-xs text-gray-500">모듈을 구분할 수 있는 이름을 입력하세요</p>
                         </div>
 
-                        <!-- 재발행 모듈 전용 설정 -->
-                        <div x-show="formData.type_code === 'republish'">
-                            <!-- 재발행 간격 설정 -->
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-2">
-                                    재발행 간격 (분) <span class="text-red-500">*</span>
-                                </label>
-                                <input type="number"
-                                       x-model.number="formData.manual_interval_minutes"
-                                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                       min="15"
-                                       placeholder="25"
-                                       required>
-                                <div class="mt-1 flex items-center gap-2 text-xs text-blue-600">
-                                    <span>최소 15분 이상 설정해주세요. 권장: 25-60분</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- 다른 모듈 타입 -->
-                        <div x-show="formData.type_code !== 'republish'">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-2">설정 정보 (JSON)</label>
-                                <textarea x-model="settingsJson"
-                                          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
-                                          rows="4"
-                                          placeholder='{"key": "value"}'>
-                                </textarea>
-                                <p class="mt-1 text-xs text-gray-500">모듈별 설정을 JSON 형태로 입력하세요</p>
-                            </div>
-                        </div>
-
                         <!-- 설명 -->
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">설명 (선택)</label>
@@ -181,6 +150,215 @@ function moduleListApp() {
                                       rows="3"
                                       placeholder="모듈에 대한 설명을 입력하세요...">
                             </textarea>
+                        </div>
+
+                        <!-- 타입별 설정 -->
+                        <div x-show="formData.type_code === 'republish'">
+                            <!-- 재발행 조건 -->
+                            <div class="space-y-4 mb-6">
+                                <h3 class="text-base font-semibold text-gray-900 flex items-center">
+                                    🎯 재발행 조건
+                                </h3>
+
+                                <!-- 재발행 가능 최소 포스트 수 -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                                        재발행 가능 최소 포스트 수
+                                    </label>
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <input type="number"
+                                               x-model.number="formData.min_post_count"
+                                               min="1"
+                                               max="1000"
+                                               class="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                        <span class="text-gray-500 text-sm">개 이상일 때 재발행 시작</span>
+                                    </div>
+                                    <p class="mt-1 text-xs text-gray-500">블로그에 최소 이만큼의 포스트가 누적되어야 재발행이 활성화됩니다</p>
+                                </div>
+
+                                <!-- 재발행 적용 구간 -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                                        재발행 적용 구간 (누적 포스트 수 기준)
+                                    </label>
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <span class="text-gray-500 text-sm">시작</span>
+                                        <input type="number"
+                                               x-model.number="formData.post_range_start"
+                                               min="1"
+                                               class="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                        <span class="text-gray-500">~</span>
+                                        <span class="text-gray-500 text-sm">종료</span>
+                                        <input type="number"
+                                               x-model.number="formData.post_range_end"
+                                               min="1"
+                                               class="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                               placeholder="무제한">
+                                        <span class="text-gray-400 text-xs">(비워두면 무제한)</span>
+                                    </div>
+                                    <p class="mt-1 text-xs text-gray-500">블로그에 누적된 포스트 수가 해당 범위일 때만 프로파일이 적용됩니다. 예: 누적 포스트가 1~100인 블로그에만 적용, 초과 시 미적용</p>
+                                </div>
+                            </div>
+
+                            <!-- 재발행 간격 설정 -->
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-900 mb-3">
+                                    재발행 간격 설정 (하루 기준)
+                                </label>
+
+                                <!-- 간격 설정 모드 선택 -->
+                                <div class="flex gap-4 mb-4">
+                                    <label class="flex items-center cursor-pointer">
+                                        <input type="radio"
+                                               x-model="formData.interval_mode"
+                                               value="manual"
+                                               class="text-blue-600 focus:ring-blue-500 h-4 w-4">
+                                        <span class="ml-2 text-sm text-gray-700">시간으로 설정</span>
+                                    </label>
+                                    <label class="flex items-center cursor-pointer">
+                                        <input type="radio"
+                                               x-model="formData.interval_mode"
+                                               value="auto"
+                                               class="text-blue-600 focus:ring-blue-500 h-4 w-4">
+                                        <span class="ml-2 text-sm text-gray-700">횟수로 설정</span>
+                                    </label>
+                                </div>
+
+                                <!-- Manual 모드: 간격(분) 입력 -->
+                                <div x-show="formData.interval_mode === 'manual'" class="p-4 bg-gray-50 rounded-lg">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <span class="text-gray-700 text-sm">재발행 간격:</span>
+                                        <input type="number"
+                                               x-model.number="formData.manual_interval_minutes"
+                                               min="15"
+                                               max="1440"
+                                               class="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                               @input="calculateFromInterval()">
+                                        <span class="text-gray-500 text-sm">분</span>
+                                        <span class="text-gray-400">/</span>
+                                        <span class="text-gray-500 text-sm">하루 최대:</span>
+                                        <span class="font-semibold text-blue-600" x-text="calculatedDailyCount + '회'"></span>
+                                    </div>
+                                    <p class="mt-2 text-xs text-gray-500">활성 시간대 기준으로 계산됩니다 (오늘 활성 시간: <span x-text="todayActiveHours"></span>시간)</p>
+                                </div>
+
+                                <!-- Auto 모드: 하루 목표 횟수 입력 -->
+                                <div x-show="formData.interval_mode === 'auto'" class="p-4 bg-gray-50 rounded-lg">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <span class="text-gray-700 text-sm">하루 목표:</span>
+                                        <input type="number"
+                                               x-model.number="formData.auto_daily_count"
+                                               min="1"
+                                               max="100"
+                                               class="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                               @input="calculateFromDailyCount()">
+                                        <span class="text-gray-500 text-sm">회</span>
+                                        <span class="text-gray-400">/</span>
+                                        <span class="text-gray-500 text-sm">최소 간격:</span>
+                                        <span class="font-semibold text-blue-600" x-text="calculatedInterval + '분'"></span>
+                                    </div>
+                                    <p class="mt-2 text-xs text-gray-500">활성 시간대 기준으로 간격이 자동 계산됩니다 (오늘 활성 시간: <span x-text="todayActiveHours"></span>시간)</p>
+                                </div>
+
+                                <div class="mt-2 flex items-center gap-2 text-xs text-blue-600">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                    <span>최소 15분 이상 간격이 유지되도록 설정됩니다</span>
+                                </div>
+                            </div>
+
+                            <!-- 스케줄 매트릭스 -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">스케줄 설정</label>
+                                <div class="bg-gray-50 rounded-lg p-4">
+                                    <!-- 빠른 설정 버튼과 통계 -->
+                                    <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+                                        <div class="flex flex-wrap gap-2">
+                                            <button type="button"
+                                                    @click="selectAllHours()"
+                                                    class="px-3 py-1 text-xs bg-blue-100 text-blue-800 rounded-full hover:bg-blue-200">
+                                                전체 선택
+                                            </button>
+                                            <button type="button"
+                                                    @click="clearAllHours()"
+                                                    class="px-3 py-1 text-xs bg-gray-100 text-gray-800 rounded-full hover:bg-gray-200">
+                                                전체 해제
+                                            </button>
+                                            <button type="button"
+                                                    @click="selectWorkingHours()"
+                                                    class="px-3 py-1 text-xs bg-green-100 text-green-800 rounded-full hover:bg-green-200">
+                                                평일 9-21시
+                                            </button>
+                                        </div>
+
+                                        <!-- 활성 시간 요약 (간단) -->
+                                        <div class="flex items-center gap-4 text-sm">
+                                            <span class="text-blue-800 font-medium">
+                                                활성: <span x-text="activeHoursCount"></span>시간/주
+                                            </span>
+                                            <span class="text-blue-600" x-show="todayActiveHours > 0">
+                                                오늘: <span x-text="todayActiveHours"></span>시간
+                                            </span>
+                                            <span class="text-blue-600" x-show="expectedDailyPosts > 0">
+                                                예상 일일 발행: 약 <span x-text="expectedDailyPosts"></span>회
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <p class="text-xs text-gray-500 mb-3">
+                                        파란색 = 활성, 회색 = 비활성 | 요일 헤더 클릭으로 전체 선택/해제
+                                    </p>
+
+                                    <!-- 스케줄 테이블 -->
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full text-xs border-collapse">
+                                            <thead>
+                                                <tr>
+                                                    <th class="border border-gray-300 bg-gray-100 p-2 text-center w-12">시간</th>
+                                                    <template x-for="(day, dayIdx) in days" :key="dayIdx">
+                                                        <th class="border border-gray-300 bg-gray-100 p-2 text-center cursor-pointer hover:bg-gray-200 w-8"
+                                                            @click="toggleDay(dayIdx)"
+                                                            x-text="day">
+                                                        </th>
+                                                    </template>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <template x-for="hour in 24" :key="hour">
+                                                    <tr>
+                                                        <td class="border border-gray-300 bg-gray-50 p-1 text-center font-medium"
+                                                            x-text="String(hour-1).padStart(2, '0') + '시'">
+                                                        </td>
+                                                        <template x-for="(day, dayIdx) in days" :key="dayIdx + '-' + hour">
+                                                            <td class="border border-gray-300 p-0">
+                                                                <button type="button"
+                                                                        class="w-full h-7 border-none cursor-pointer transition-colors duration-150"
+                                                                        :class="schedule[dayIdx][hour-1] ? 'bg-blue-500 hover:bg-blue-600' : 'bg-gray-100 hover:bg-gray-200'"
+                                                                        @click="toggleHour(dayIdx, hour-1)">
+                                                                </button>
+                                                            </td>
+                                                        </template>
+                                                    </tr>
+                                                </template>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 기타 타입 설정 -->
+                        <div x-show="formData.type_code !== 'republish'">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">설정 정보 (JSON)</label>
+                                <textarea x-model="settingsJson"
+                                          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+                                          rows="6"
+                                          placeholder='{"key": "value"}'>
+                                </textarea>
+                                <p class="mt-1 text-xs text-gray-500">모듈별 설정을 JSON 형태로 입력하세요</p>
+                            </div>
                         </div>
                     </div>
 
@@ -194,9 +372,7 @@ function moduleListApp() {
                         <button type="submit"
                                 :disabled="loading"
                                 class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed">
-                            <span x-show="!loading">
-                                <span x-text="isEdit ? '수정' : '생성'"></span>
-                            </span>
+                            <span x-show="!loading" x-text="isEdit ? '수정' : '생성'"></span>
                             <span x-show="loading" class="flex items-center justify-center">
                                 <svg class="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
                                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -207,6 +383,7 @@ function moduleListApp() {
                         </button>
                     </div>
                 </form>
+            </div>
             `;
         },
 
@@ -215,6 +392,175 @@ function moduleListApp() {
             return isActive
                 ? 'bg-green-100 text-green-800 border-green-200'
                 : 'bg-gray-100 text-gray-600 border-gray-200';
+        },
+
+        // 모듈 타입별 배경색 반환
+        getModuleColor(typeCode) {
+            const colors = {
+                'republish': 'bg-sky-200',
+                'prompt': 'bg-green-200',
+                'generate': 'bg-amber-200',
+                'publish': 'bg-rose-200'
+            };
+            return colors[typeCode] || 'bg-gray-200';
+        },
+
+        // 재발행 적용 구간 텍스트 반환
+        getPostRangeText(module) {
+            const start = module.post_range_start || 1;
+            const end = module.post_range_end;
+
+            if (!end) {
+                return `${start}~무제한 (누적 포스트)`;
+            }
+
+            return `${start}~${end} (누적 포스트)`;
+        },
+
+        // 재발행 간격 텍스트 반환
+        getIntervalText(module) {
+            console.log('[getIntervalText] 모듈 데이터:', module);
+            console.log('[getIntervalText] interval_mode:', module.interval_mode);
+            console.log('[getIntervalText] auto_daily_count:', module.auto_daily_count);
+            console.log('[getIntervalText] manual_interval_minutes:', module.manual_interval_minutes);
+
+            const mode = module.interval_mode || 'manual';
+
+            // 활성 시간 계산 (스케줄 매트릭스에서)
+            const activeMinutes = this.calculateActiveMinutes(module);
+            console.log('[getIntervalText] 활성 시간:', activeMinutes, '분');
+
+            if (mode === 'auto' && module.auto_daily_count) {
+                // 자동 모드: "5회/일 (최소 144분 간격)"
+                const minInterval = Math.ceil(activeMinutes / module.auto_daily_count);
+                return `${module.auto_daily_count}회/일 (최소 ${minInterval}분 간격)`;
+            }
+
+            if (module.manual_interval_minutes) {
+                // 수동 모드: "25분마다 (최대 28회/일)"
+                const maxDaily = Math.floor(activeMinutes / module.manual_interval_minutes);
+                return `${module.manual_interval_minutes}분마다 (최대 ${maxDaily}회/일)`;
+            }
+
+            return "설정 없음";
+        },
+
+        // 활성 시간 계산 (분 단위)
+        calculateActiveMinutes(module) {
+            if (!module.schedule_matrix || !Array.isArray(module.schedule_matrix)) {
+                // 기본값: 12시간 (평일 9-21시)
+                return 720; // 12 * 60
+            }
+
+            const schedule = module.schedule_matrix;
+            let totalActiveMinutes = 0;
+
+            // 각 요일별 활성 시간 계산
+            for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
+                const daySchedule = schedule[dayIdx];
+                if (Array.isArray(daySchedule)) {
+                    const activeHours = daySchedule.filter(hour => hour === true).length;
+                    totalActiveMinutes += activeHours * 60;
+                }
+            }
+
+            // 평균 일일 활성 시간 (주 7일 기준)
+            const avgDailyMinutes = Math.round(totalActiveMinutes / 7);
+            return avgDailyMinutes || 720; // 기본값 12시간
+        },
+
+        // 스케줄 요약 텍스트 반환
+        getScheduleSummary(module) {
+            console.log('[getScheduleSummary] 모듈 데이터:', module);
+            console.log('[getScheduleSummary] schedule_matrix:', module.schedule_matrix);
+            console.log('[getScheduleSummary] schedule_matrix 타입:', typeof module.schedule_matrix);
+            console.log('[getScheduleSummary] schedule_matrix isArray:', Array.isArray(module.schedule_matrix));
+
+            if (!module.schedule_matrix || !Array.isArray(module.schedule_matrix)) {
+                console.log('[getScheduleSummary] schedule_matrix가 유효하지 않음');
+                return "설정 없음";
+            }
+
+            const schedule = module.schedule_matrix;
+            const days = ['월', '화', '수', '목', '금', '토', '일'];
+
+            // 각 요일의 활성 시간대 범위 추출
+            const dayRanges = {};
+            for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
+                const daySchedule = schedule[dayIdx];
+                if (Array.isArray(daySchedule) && daySchedule.some(hour => hour === true)) {
+                    const timeRange = this.extractTimeRange(daySchedule);
+                    if (timeRange) {
+                        dayRanges[dayIdx] = timeRange;
+                    }
+                }
+            }
+
+            if (Object.keys(dayRanges).length === 0) {
+                return "설정 없음";
+            }
+
+            // 동일한 시간대를 가진 요일들을 그룹화
+            const timeGroups = {};
+            for (const [dayIdx, timeRange] of Object.entries(dayRanges)) {
+                const timeKey = timeRange;
+                if (!timeGroups[timeKey]) {
+                    timeGroups[timeKey] = [];
+                }
+                timeGroups[timeKey].push(parseInt(dayIdx));
+            }
+
+            // 각 그룹별로 요일 범위 텍스트 생성
+            const groupTexts = [];
+            for (const [timeRange, dayIndices] of Object.entries(timeGroups)) {
+                const dayText = this.formatDayRange(dayIndices, days);
+                groupTexts.push(`${dayText}(${timeRange})`);
+            }
+
+            return groupTexts.join('\n');
+        },
+
+        // 시간대 범위 추출
+        extractTimeRange(daySchedule) {
+            let startHour = -1;
+            let endHour = -1;
+
+            for (let hour = 0; hour < 24; hour++) {
+                if (daySchedule[hour]) {
+                    if (startHour === -1) startHour = hour;
+                    endHour = hour;
+                }
+            }
+
+            if (startHour === -1) return null;
+
+            return `${String(startHour).padStart(2, '0')}~${String(endHour + 1).padStart(2, '0')}`;
+        },
+
+        // 요일 범위 포맷팅
+        formatDayRange(dayIndices, days) {
+            if (dayIndices.length === 1) {
+                return days[dayIndices[0]];
+            }
+
+            // 연속된 요일인지 확인
+            dayIndices.sort((a, b) => a - b);
+            let ranges = [];
+            let start = dayIndices[0];
+            let end = start;
+
+            for (let i = 1; i < dayIndices.length; i++) {
+                if (dayIndices[i] === end + 1) {
+                    end = dayIndices[i];
+                } else {
+                    ranges.push(start === end ? days[start] : `${days[start]}~${days[end]}`);
+                    start = dayIndices[i];
+                    end = start;
+                }
+            }
+            ranges.push(start === end ? days[start] : `${days[start]}~${days[end]}`);
+
+            return ranges.join(', ');
         },
 
         // 스케줄 여부 확인

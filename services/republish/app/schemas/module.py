@@ -141,6 +141,13 @@ class ModuleResponse(BaseModel):
     is_active: bool = True  # 기본값 (플로우 레벨에서 실제 관리)
     type_code: Optional[str] = None  # module_type.code 복사본
 
+    # 편집을 위한 상세 필드들 (Optional)
+    schedule_matrix: Optional[Union[List[List[bool]], Dict[str, Any]]] = None
+    min_post_count: Optional[int] = None
+    post_range_start: Optional[int] = None
+    post_range_end: Optional[int] = None
+    auto_daily_count: Optional[int] = None
+
     # 메타 정보
     created_at: datetime
     updated_at: datetime
@@ -151,14 +158,7 @@ class ModuleResponse(BaseModel):
 
 class ModuleDetailResponse(ModuleResponse):
     """모듈 상세 응답"""
-    # 스케줄 설정
-    schedule_matrix: Optional[Union[List[List[bool]], Dict[str, Any]]]
-
-    # 재발행 설정
-    min_post_count: int
-    post_range_start: int
-    post_range_end: Optional[int]
-    auto_daily_count: Optional[int]
+    # 상속받지 않는 추가 상세 필드들
 
     # 불규칙 간격 설정
     jitter_enabled: bool

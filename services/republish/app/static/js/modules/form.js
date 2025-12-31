@@ -208,8 +208,8 @@ function moduleFormApp(module = null, moduleType = null) {
                 const requiredInterval = (this.todayActiveHours * 60) / this.formData.auto_daily_count;
                 this.calculatedInterval = Math.max(15, Math.round(requiredInterval));
 
-                // 실제 manual_interval_minutes 업데이트
-                this.formData.manual_interval_minutes = this.calculatedInterval;
+                // manual_interval_minutes는 독립적으로 유지 (덮어쓰지 않음)
+                // calculatedInterval은 표시용으로만 사용
             } else {
                 this.calculatedInterval = 15;
             }
@@ -370,7 +370,6 @@ function moduleFormApp(module = null, moduleType = null) {
             console.log('[prepareRequestData] 전송 데이터:', data);
 
             if (this.formData.type_code === 'republish') {
-                data.manual_interval_minutes = this.formData.manual_interval_minutes;
                 data.schedule_matrix = this.schedule;
 
                 // 재발행 조건 필드들
@@ -378,8 +377,9 @@ function moduleFormApp(module = null, moduleType = null) {
                 data.post_range_start = this.formData.post_range_start;
                 data.post_range_end = this.formData.post_range_end || null;
 
-                // 간격 설정 필드들
+                // 간격 설정 필드들 (항상 둘 다 저장)
                 data.interval_mode = this.formData.interval_mode;
+                data.manual_interval_minutes = this.formData.manual_interval_minutes;
                 data.auto_daily_count = this.formData.auto_daily_count;
             } else {
                 // 설정 JSON 파싱

@@ -249,7 +249,7 @@ class ModuleService:
                     setattr(module, field, value)
 
             await self.db.commit()
-            await self.db.refresh(module, ["module_type"])
+            await self.db.refresh(module, ["module_type", "created_at", "updated_at"])
 
             logger.info(f"[UPDATE_MODULE] 모듈 수정 완료: {module_id}")
             return module

@@ -3,57 +3,39 @@
 Alpine.js 데이터 바인딩 사용
 -->
 
-<div class="bg-white rounded-lg border p-4 hover:shadow-md transition-shadow group"
-     :data-module-id="module.id">
+<div class="bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow duration-200 overflow-hidden"
+     :data-module-id="module.id"
+     x-data="{ expanded: false }"
 
-    <div class="flex items-start justify-between">
-        <div class="flex items-center gap-3 flex-1 min-w-0">
-            <!-- 모듈 아이콘과 상태 -->
-            <div class="relative">
-                <span class="text-2xl" x-text="getModuleIcon(module.module_type.code)"></span>
-            </div>
+    <!-- 상단 헤더 영역 (컬러 배경) -->
+    <div class="px-4 py-2 flex items-center justify-between text-gray-700"
+         :class="getModuleColor(module.module_type.code)">
 
-            <div class="flex-1 min-w-0">
-                <h4 class="font-medium text-gray-900 truncate" x-text="module.name"></h4>
-                <div x-show="module.description" class="text-sm text-gray-500 mt-1 line-clamp-2" x-text="module.description"></div>
-
-                <!-- 모듈 정보 -->
-                <div class="flex items-center gap-3 mt-2 text-xs text-gray-500">
-                    <span x-text="getModuleTypeName(module.module_type.code)"></span>
-                    <span x-show="module.manual_interval_minutes" x-text="module.manual_interval_minutes + '분'"></span>
-                    <span x-show="hasSchedule(module)" class="text-blue-600">스케줄됨</span>
-                </div>
-
-                <!-- 실행 정보 (재발행 모듈인 경우) -->
-                <div x-show="module.module_type.code === 'republish'" class="flex items-center gap-3 mt-1 text-xs text-gray-400">
-                    <span x-show="module.total_executions" x-text="`실행 ${module.total_executions}회`"></span>
-                    <span x-show="module.last_execution" x-text="`최근 ${formatTimeAgo(module.last_execution)}`"></span>
-                </div>
-            </div>
+        <!-- 모듈명 (좌측으로 정렬) -->
+        <div class="flex-1">
+            <h4 class="font-semibold truncate" x-text="module.name"></h4>
         </div>
 
-        <!-- 액션 버튼 -->
+        <!-- 우측: 액션 버튼들 -->
         <div class="flex gap-1">
             <button @click="editModule(module.id)"
-                    class="p-1 text-gray-400 hover:text-blue-600"
+                    class="p-1.5 text-gray-600 hover:text-gray-800 hover:bg-gray-300/50 rounded-lg transition-colors"
                     title="수정">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                 </svg>
             </button>
 
-            <!-- 복사 버튼 -->
             <button @click="copyModule(module.id)"
-                    class="p-1 text-gray-400 hover:text-green-600"
+                    class="p-1.5 text-gray-600 hover:text-gray-800 hover:bg-gray-300/50 rounded-lg transition-colors"
                     title="복사">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
                 </svg>
             </button>
 
-            <!-- 삭제 버튼 -->
             <button @click="deleteModule(module.id)"
-                    class="p-1 text-gray-400 hover:text-red-600"
+                    class="p-1.5 text-gray-600 hover:text-red-700 hover:bg-red-200/50 rounded-lg transition-colors"
                     title="삭제">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
@@ -62,47 +44,65 @@ Alpine.js 데이터 바인딩 사용
         </div>
     </div>
 
-    <!-- 스케줄 정보 (재발행 모듈이고 스케줄이 있는 경우) -->
-    <div x-show="module.module_type.code === 'republish' && hasSchedule(module)"
-         class="mt-3 pt-3 border-t border-gray-100">
-        <div class="text-xs text-gray-500 space-y-1">
-            <div x-show="module.schedule_summary">
-                <span class="font-medium">스케줄:</span>
-                <span x-text="module.schedule_summary"></span>
-            </div>
-            <div class="flex items-center gap-4">
-                <span x-show="module.active_hours" x-text="`활성 시간: ${module.active_hours}`"></span>
-                <span x-show="module.active_days" x-text="`활성 요일: ${module.active_days}`"></span>
-            </div>
-        </div>
-    </div>
+    <!-- 하단 내용 영역 (흰색 배경) -->
+    <div class="px-4 py-4">
 
-    <!-- 설정 정보 (기타 타입) -->
-    <div x-show="module.module_type.code !== 'republish' && module.settings && Object.keys(module.settings).length > 0"
-         class="mt-3 pt-3 border-t border-gray-100">
-        <details class="text-xs text-gray-500">
-            <summary class="cursor-pointer font-medium text-gray-700 hover:text-gray-900">설정 정보</summary>
-            <div class="mt-2 space-y-1">
-                <template x-for="(value, key) in module.settings" :key="key">
-                    <div class="flex justify-between">
-                        <span x-text="key"></span>
-                        <span x-text="value" class="font-mono"></span>
-                    </div>
-                </template>
-            </div>
-        </details>
-    </div>
+        <!-- 내용 영역 (높이 제한 적용) -->
+        <div :class="expanded ? '' : 'max-h-32 overflow-hidden'">
 
-    <!-- 모듈 타입 정보 -->
-    <div class="mt-3 pt-3 border-t border-gray-100">
-        <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2">
-                <span class="text-lg" x-text="getModuleIcon(module.module_type.code)"></span>
-                <span class="text-sm font-medium text-gray-700" x-text="getModuleTypeName(module.module_type.code)"></span>
-                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600"
-                      x-text="module.module_type.code.toUpperCase()"></span>
+            <!-- 재발행 모듈 내용 -->
+            <div x-show="module.module_type.code === 'republish'" class="space-y-3">
+
+                <!-- 적용 구간 -->
+                <div class="flex items-center gap-2 text-sm">
+                    <span class="text-gray-500 font-medium">적용구간:</span>
+                    <span class="text-gray-700" x-text="getPostRangeText(module)"></span>
+                </div>
+
+                <!-- 재발행 간격 -->
+                <div class="flex items-center gap-2 text-sm">
+                    <span class="text-gray-500 font-medium">재발행 간격:</span>
+                    <span class="text-gray-700" x-text="getIntervalText(module)"></span>
+                </div>
+
+                <!-- 스케줄 -->
+                <div class="text-sm">
+                    <div class="text-gray-500 font-medium mb-1">스케줄:</div>
+                    <div class="text-gray-700 whitespace-pre-line" x-text="getScheduleSummary(module)"></div>
+                </div>
+
+                <!-- 설명 (있는 경우) -->
+                <div x-show="module.description" class="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
+                    <span x-text="module.description"></span>
+                </div>
             </div>
-            <span class="text-xs text-gray-500" x-text="module.created_at ? new Date(module.created_at).toLocaleDateString() : ''"></span>
+
+            <!-- 기타 모듈 내용 -->
+            <div x-show="module.module_type.code !== 'republish'" class="text-center py-8">
+                <span class="text-6xl" x-text="getModuleIcon(module.module_type.code)"></span>
+                <div x-show="module.description" class="text-sm text-gray-600 mt-4 p-3 bg-gray-50 rounded-lg">
+                    <span x-text="module.description"></span>
+                </div>
+                <div x-show="!module.description" class="text-sm text-gray-400 mt-4">
+                    <span x-text="getModuleTypeName(module.module_type.code) + ' 모듈'"></span>
+                </div>
+            </div>
+
         </div>
+
+        <!-- 더보기/접기 버튼 -->
+        <div class="mt-2 flex justify-end"
+             x-data="{ needsExpand: false }"
+             x-init="$nextTick(() => {
+                 const contentDiv = $el.previousElementSibling;
+                 needsExpand = contentDiv.scrollHeight > 128;
+             })">
+            <button x-show="needsExpand"
+                    @click="expanded = !expanded"
+                    class="text-xs text-gray-500 hover:text-gray-700 py-1 px-3 rounded-md hover:bg-gray-100 transition-colors">
+                <span x-text="expanded ? '접기>>' : '더보기>>'"></span>
+            </button>
+        </div>
+
     </div>
 </div>
