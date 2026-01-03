@@ -1,0 +1,321 @@
+{% extends "base.html" %}
+
+{% block title %}플로우 관리 - BlogAuto V2{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="/static/css/components.css">
+<style>
+    /* 플로우 카드 그리드 레이아웃 */
+    .flow-grid {
+        display: grid;
+        gap: 1.5rem;
+        grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    }
+
+    /* 모바일: 1열 */
+    @media (max-width: 767px) {
+        .flow-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* 태블릿: 2열 */
+    @media (min-width: 768px) and (max-width: 1279px) {
+        .flow-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    /* 데스크탑: 3열까지 */
+    @media (min-width: 1280px) {
+        .flow-grid {
+            grid-template-columns: repeat(3, 1fr);
+        }
+    }
+
+    .loading-skeleton {
+        background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+        background-size: 200% 100%;
+        animation: loading 1.5s infinite;
+    }
+
+    @keyframes loading {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+
+    /* 플로우 상태 배지 */
+    .status-badge {
+        @apply inline-flex items-center px-2 py-1 text-xs font-medium rounded-full;
+    }
+
+    .status-active {
+        @apply bg-green-100 text-green-800;
+    }
+
+    .status-inactive {
+        @apply bg-gray-100 text-gray-800;
+    }
+
+    /* 모듈/블로그 목록 스타일 */
+    .item-list {
+        @apply space-y-2;
+    }
+
+    .item-row {
+        @apply flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg;
+    }
+
+    .item-info {
+        @apply flex items-center gap-2 flex-1;
+    }
+
+    .item-remove-btn {
+        @apply p-1 text-gray-400 hover:text-red-600 hover:bg-red-100 rounded transition-colors;
+    }
+
+    /* 추가 버튼 */
+    .add-btn {
+        @apply w-full py-3 px-4 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-colors font-medium;
+    }
+
+    /* 액션 버튼 그룹 */
+    .action-buttons {
+        @apply flex gap-2 justify-end;
+    }
+
+    .action-btn {
+        @apply px-3 py-1.5 text-xs font-medium rounded-md transition-colors;
+    }
+
+    .action-btn.primary {
+        @apply bg-blue-600 text-white hover:bg-blue-700;
+    }
+
+    .action-btn.secondary {
+        @apply bg-gray-100 text-gray-700 hover:bg-gray-200;
+    }
+
+    .action-btn.danger {
+        @apply bg-red-100 text-red-700 hover:bg-red-200;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4" x-data="flowListApp()">
+    <!-- 헤더 -->
+    <div class="flex items-center justify-between mb-8">
+        <div class="flex-1">
+            <h2 class="text-2xl font-bold text-gray-900">
+                🔀 플로우 관리
+            </h2>
+            <p class="mt-1 text-sm text-gray-500">
+                모듈과 블로그를 조합하여 자동화 플로우를 구성하세요
+            </p>
+        </div>
+
+        <!-- 플로우 생성 버튼 -->
+        <div>
+            <button @click="showFlowForm()"
+                    class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+                </svg>
+                플로우 생성
+            </button>
+        </div>
+    </div>
+
+    <!-- 로딩 상태 -->
+    <div x-show="loading" class="flow-grid">
+        <template x-for="i in 6" :key="i">
+            <div class="bg-white rounded-lg border p-6">
+                <div class="flex items-start justify-between mb-4">
+                    <div class="flex items-center gap-3 flex-1">
+                        <div class="w-8 h-8 loading-skeleton rounded"></div>
+                        <div class="flex-1 space-y-2">
+                            <div class="h-4 loading-skeleton rounded w-3/4"></div>
+                            <div class="h-3 loading-skeleton rounded w-1/2"></div>
+                        </div>
+                    </div>
+                    <div class="w-16 h-6 loading-skeleton rounded-full"></div>
+                </div>
+                <div class="space-y-3">
+                    <div class="h-3 loading-skeleton rounded w-full"></div>
+                    <div class="h-3 loading-skeleton rounded w-2/3"></div>
+                </div>
+            </div>
+        </template>
+    </div>
+
+    <!-- 빈 상태 (플로우가 전혀 없을 때) -->
+    <div x-show="!loading && flows.length === 0" class="text-center py-16">
+        <div class="mx-auto w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-6">
+            <svg class="w-12 h-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2H9a2 2 0 00-2 2v10z"/>
+            </svg>
+        </div>
+        <h3 class="text-lg font-medium text-gray-900 mb-2">아직 플로우가 없습니다</h3>
+        <p class="text-sm text-gray-500 mb-6">첫 번째 플로우를 생성해보세요</p>
+    </div>
+
+    <!-- 플로우 목록 -->
+    <div x-show="!loading && flows.length > 0" class="flow-grid">
+        <template x-for="flow in flows" :key="flow.id">
+            {% include "flows/_card.html" %}
+        </template>
+    </div>
+</div>
+
+<!-- 플로우 생성/수정 폼 (Bottom Sheet) -->
+<div id="flowForm-backdrop"
+     class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden transition-opacity duration-300"
+     onclick="closeBottomSheet('flowForm')">
+</div>
+
+<div id="flowForm"
+     class="fixed inset-x-0 bottom-0 bg-white rounded-t-2xl shadow-2xl z-50
+            transform translate-y-full transition-transform duration-300 ease-out">
+
+    <!-- 핸들 바 -->
+    <div class="flex justify-center pt-3 pb-2">
+        <div class="w-12 h-1 bg-gray-300 rounded-full"></div>
+    </div>
+
+    <!-- 헤더 -->
+    <div class="flex justify-between items-center px-4 py-3 border-b border-gray-200">
+        <h3 id="flowFormTitle" class="text-lg font-semibold text-gray-900">플로우 생성</h3>
+        <button onclick="closeBottomSheet('flowForm')"
+                class="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+        </button>
+    </div>
+
+    <!-- 내용 영역 -->
+    <div id="flowFormContent" class="p-4 max-h-[calc(100vh-120px)] overflow-y-auto">
+        {% include "flows/_form.html" %}
+    </div>
+
+    <!-- 하단 안전 영역 (iOS) -->
+    <div class="h-safe-area-inset-bottom"></div>
+</div>
+
+<!-- 추가 선택 팝업 (모듈/블로그 선택) -->
+<div id="addSelector-backdrop"
+     class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden transition-opacity duration-200"
+     onclick="closeSelectionPopup('addSelector')">
+</div>
+
+<div id="addSelector"
+     class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full transform scale-95 transition-transform duration-200"
+         onclick="event.stopPropagation()">
+
+        <!-- 헤더 -->
+        <div class="p-6 pb-4">
+            <div class="flex justify-between items-center">
+                <h3 class="text-xl font-semibold text-gray-900">무엇을 추가하시겠습니까?</h3>
+                <button onclick="closeSelectionPopup('addSelector')"
+                        class="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- 선택 옵션 -->
+        <div class="px-6 pb-6">
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="selectAddType('module')"
+                        class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all duration-200 group">
+                    <span class="text-3xl mb-2 group-hover:scale-110 transition-transform duration-200">📦</span>
+                    <span class="font-medium text-gray-900 group-hover:text-blue-700">모듈</span>
+                    <span class="text-xs text-gray-500 mt-1">기존 모듈 연결</span>
+                </button>
+
+                <button onclick="selectAddType('blog')"
+                        class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all duration-200 group">
+                    <span class="text-3xl mb-2 group-hover:scale-110 transition-transform duration-200">📝</span>
+                    <span class="font-medium text-gray-900 group-hover:text-blue-700">블로그</span>
+                    <span class="text-xs text-gray-500 mt-1">기존 블로그 연결</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 취소 버튼 -->
+        <div class="px-6 pb-6">
+            <button onclick="closeSelectionPopup('addSelector')"
+                    class="w-full py-3 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                취소
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- 모듈/블로그 선택 하단 시트 -->
+<div id="itemSelector-backdrop"
+     class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden transition-opacity duration-300"
+     onclick="closeBottomSheet('itemSelector')">
+</div>
+
+<div id="itemSelector"
+     class="fixed inset-x-0 bottom-0 bg-white rounded-t-2xl shadow-2xl z-50
+            transform translate-y-full transition-transform duration-300 ease-out">
+
+    <!-- 핸들 바 -->
+    <div class="flex justify-center pt-3 pb-2">
+        <div class="w-12 h-1 bg-gray-300 rounded-full"></div>
+    </div>
+
+    <!-- 헤더 -->
+    <div class="flex justify-between items-center px-4 py-3 border-b border-gray-200">
+        <div class="flex items-center gap-2">
+            <button onclick="closeBottomSheet('itemSelector')"
+                    class="p-1 text-gray-400 hover:text-gray-600 rounded">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                </svg>
+            </button>
+            <h3 id="itemSelectorTitle" class="text-lg font-semibold text-gray-900">항목 선택</h3>
+        </div>
+        <button onclick="closeBottomSheet('itemSelector')"
+                class="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+        </button>
+    </div>
+
+    <!-- 선택 목록 영역 -->
+    <div id="itemSelectorContent" class="p-4 max-h-[calc(100vh-200px)] overflow-y-auto">
+        <!-- 동적으로 로드됨 -->
+    </div>
+
+    <!-- 하단 버튼 -->
+    <div class="px-4 py-4 border-t border-gray-200 bg-gray-50">
+        <div class="flex gap-3">
+            <button onclick="closeBottomSheet('itemSelector')"
+                    class="flex-1 py-3 px-4 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                취소
+            </button>
+            <button id="addSelectedItems"
+                    onclick="addSelectedItems()"
+                    class="flex-1 py-3 px-4 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                    disabled>
+                <span id="addButtonText">추가 (0)</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- 하단 안전 영역 (iOS) -->
+    <div class="h-safe-area-inset-bottom"></div>
+</div>
+
+<!-- 스크립트 로드 순서: form.js 먼저, list.js 나중 -->
+<script src="/static/js/flows/form.js"></script>
+<script src="/static/js/flows/list.js"></script>
+{% endblock %}

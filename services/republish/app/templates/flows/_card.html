@@ -1,0 +1,144 @@
+<!--
+플로우 카드 부분 템플릿
+Alpine.js 데이터 바인딩 사용
+-->
+
+<div class="bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow duration-200 overflow-hidden border"
+     :data-flow-id="flow.id"
+     x-data="{ expanded: false, needsExpand: false }">
+
+    <!-- 상단 헤더 영역 -->
+    <div class="px-6 py-4 bg-gradient-to-r from-blue-50 to-blue-100 border-b border-blue-200">
+        <div class="flex items-center justify-between">
+            <!-- 플로우 이름과 상태 -->
+            <div class="flex items-center gap-3 flex-1">
+                <div class="text-2xl">📁</div>
+                <div>
+                    <h4 class="font-semibold text-gray-900" x-text="flow.name"></h4>
+                    <p x-show="flow.description"
+                       class="text-sm text-gray-600 mt-1"
+                       x-text="flow.description"></p>
+                </div>
+            </div>
+
+            <!-- 상태 배지 -->
+            <div class="flex items-center gap-2">
+                <span class="status-badge"
+                      :class="flow.is_active ? 'status-active' : 'status-inactive'">
+                    <span x-text="flow.is_active ? '🟢 활성' : '⚪ 비활성'"></span>
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 내용 영역 -->
+    <div class="px-6 py-4 space-y-4">
+
+        <!-- 모듈 섹션 -->
+        <div>
+            <div class="flex items-center justify-between mb-2">
+                <h5 class="text-sm font-medium text-gray-700">모듈:</h5>
+                <span class="text-xs text-gray-500"
+                      x-text="`${getFlowModules(flow).length}개`"></span>
+            </div>
+
+            <!-- 모듈 목록 -->
+            <div x-show="getFlowModules(flow).length > 0" class="item-list">
+                <template x-for="flowModule in getFlowModules(flow)" :key="flowModule.id">
+                    <div class="item-row">
+                        <div class="item-info">
+                            <span class="text-lg"
+                                  x-text="getModuleIcon(flowModule.module.module_type.code)"></span>
+                            <span class="text-sm font-medium text-gray-900"
+                                  x-text="flowModule.module.name"></span>
+                            <span class="text-xs text-gray-500"
+                                  x-text="getModuleTypeLabel(flowModule.module.module_type.code)"></span>
+                        </div>
+                        <button @click="removeModuleFromFlow(flow.id, flowModule.id)"
+                                class="item-remove-btn"
+                                title="모듈 제거">
+                            ✕
+                        </button>
+                    </div>
+                </template>
+            </div>
+
+            <!-- 모듈 없음 -->
+            <div x-show="getFlowModules(flow).length === 0"
+                 class="text-sm text-gray-500 py-2">
+                모듈이 없습니다
+            </div>
+        </div>
+
+        <!-- 구분선 -->
+        <hr class="border-gray-200">
+
+        <!-- 블로그 섹션 -->
+        <div>
+            <div class="flex items-center justify-between mb-2">
+                <h5 class="text-sm font-medium text-gray-700">블로그:</h5>
+                <span class="text-xs text-gray-500"
+                      x-text="`${getFlowBlogs(flow).length}개`"></span>
+            </div>
+
+            <!-- 블로그 목록 -->
+            <div x-show="getFlowBlogs(flow).length > 0" class="item-list">
+                <template x-for="flowBlog in getFlowBlogs(flow)" :key="flowBlog.id">
+                    <div class="item-row">
+                        <div class="item-info">
+                            <span class="text-lg"
+                                  x-text="getBlogIcon(flowBlog.blog.platform)"></span>
+                            <span class="text-sm font-medium text-gray-900"
+                                  x-text="flowBlog.blog.name"></span>
+                            <span class="text-xs text-gray-500"
+                                  x-text="getBlogPlatformLabel(flowBlog.blog.platform)"></span>
+                        </div>
+                        <button @click="removeBlogFromFlow(flow.id, flowBlog.id)"
+                                class="item-remove-btn"
+                                title="블로그 제거">
+                            ✕
+                        </button>
+                    </div>
+                </template>
+            </div>
+
+            <!-- 블로그 없음 -->
+            <div x-show="getFlowBlogs(flow).length === 0"
+                 class="text-sm text-gray-500 py-2">
+                블로그가 없습니다
+            </div>
+        </div>
+
+        <!-- 구분선 -->
+        <hr class="border-gray-200">
+
+        <!-- 추가 버튼 -->
+        <button @click="showAddSelector(flow.id)"
+                class="add-btn">
+            <span>+ 추가</span>
+        </button>
+
+        <!-- 하단 액션 버튼들 -->
+        <div class="action-buttons">
+            <!-- 활성화/비활성화 버튼 -->
+            <button @click="toggleFlowStatus(flow.id)"
+                    class="action-btn"
+                    :class="flow.is_active ? 'secondary' : 'primary'">
+                <span x-text="flow.is_active ? '⏸ 중지' : '▶ 시작'"></span>
+            </button>
+
+            <!-- 수정 버튼 -->
+            <button @click="editFlow(flow.id)"
+                    class="action-btn secondary">
+                수정
+            </button>
+
+            <!-- 삭제 버튼 -->
+            <button @click="deleteFlow(flow.id)"
+                    class="action-btn danger">
+                삭제
+            </button>
+        </div>
+
+    </div>
+</div>

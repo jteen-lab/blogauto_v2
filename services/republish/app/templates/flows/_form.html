@@ -1,0 +1,158 @@
+<!--
+플로우 생성/수정 폼 템플릿
+모듈 관리 폼 스타일 계승
+-->
+
+<form id="flowFormElement" x-data="flowFormData()">
+    <!-- 플로우 기본 정보 -->
+    <div class="space-y-6">
+
+        <!-- 플로우 이름 -->
+        <div>
+            <label for="flow_name" class="block text-sm font-medium text-gray-700 mb-2">
+                플로우 이름 <span class="text-red-500">*</span>
+            </label>
+            <input type="text"
+                   id="flow_name"
+                   name="name"
+                   x-model="formData.name"
+                   required
+                   maxlength="100"
+                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                   placeholder="플로우를 구분할 수 있는 이름을 입력하세요">
+            <p class="mt-1 text-xs text-gray-500">
+                플로우를 구분할 수 있는 이름을 입력하세요
+            </p>
+        </div>
+
+        <!-- 플로우 설명 -->
+        <div>
+            <label for="flow_description" class="block text-sm font-medium text-gray-700 mb-2">
+                설명 (선택)
+            </label>
+            <textarea id="flow_description"
+                      name="description"
+                      x-model="formData.description"
+                      rows="3"
+                      maxlength="500"
+                      class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                      placeholder="플로우에 대한 설명을 입력하세요 (선택사항)"></textarea>
+            <div class="mt-1 flex justify-between items-center">
+                <p class="text-xs text-gray-500">
+                    플로우의 목적이나 사용법을 간단히 설명하세요
+                </p>
+                <span class="text-xs text-gray-400"
+                      x-text="`${(formData.description || '').length}/500`"></span>
+            </div>
+        </div>
+
+        <!-- 생성 후 활성화 여부 -->
+        <div>
+            <label class="flex items-center gap-3 cursor-pointer">
+                <input type="checkbox"
+                       id="flow_is_active"
+                       name="is_active"
+                       x-model="formData.is_active"
+                       class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2">
+                <div>
+                    <span class="text-sm font-medium text-gray-700">생성 후 바로 활성화</span>
+                    <p class="text-xs text-gray-500">체크하면 플로우 생성과 동시에 활성화됩니다</p>
+                </div>
+            </label>
+        </div>
+
+    </div>
+
+    <!-- 폼 하단 버튼들 -->
+    <div class="mt-8 pt-6 border-t border-gray-200">
+        <div class="flex gap-3">
+            <button type="button"
+                    onclick="closeBottomSheet('flowForm')"
+                    class="flex-1 py-3 px-4 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium">
+                취소
+            </button>
+            <button type="submit"
+                    :disabled="!isFormValid()"
+                    class="flex-1 py-3 px-4 text-white rounded-lg font-medium transition-colors"
+                    :class="isFormValid() ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-400 cursor-not-allowed'">
+                <span x-show="!saving">
+                    <span x-text="isEditMode ? '수정' : '생성'"></span>
+                </span>
+                <span x-show="saving" class="flex items-center justify-center gap-2">
+                    <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span x-text="isEditMode ? '수정 중...' : '생성 중...'"></span>
+                </span>
+            </button>
+        </div>
+    </div>
+
+    <!-- 숨겨진 필드 -->
+    <input type="hidden" id="flow_id" name="id" x-model="formData.id">
+</form>
+
+<!-- 알림 메시지 -->
+<div x-show="message.text"
+     x-transition:enter="transition ease-out duration-300"
+     x-transition:enter-start="opacity-0 transform translate-y-2"
+     x-transition:enter-end="opacity-100 transform translate-y-0"
+     x-transition:leave="transition ease-in duration-200"
+     x-transition:leave-start="opacity-100 transform translate-y-0"
+     x-transition:leave-end="opacity-0 transform translate-y-2"
+     class="fixed top-4 right-4 z-60 max-w-sm"
+     x-init="$watch('message.text', (value) => {
+         if (value && message.type !== 'error') {
+             setTimeout(() => { message.text = ''; }, 3000);
+         }
+     })">
+
+    <div class="bg-white rounded-lg shadow-lg border-l-4 p-4"
+         :class="{
+             'border-green-400 bg-green-50': message.type === 'success',
+             'border-red-400 bg-red-50': message.type === 'error',
+             'border-blue-400 bg-blue-50': message.type === 'info'
+         }">
+
+        <div class="flex items-start">
+            <div class="flex-shrink-0">
+                <div x-show="message.type === 'success'"
+                     class="w-5 h-5 text-green-400">
+                    <svg fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                    </svg>
+                </div>
+                <div x-show="message.type === 'error'"
+                     class="w-5 h-5 text-red-400">
+                    <svg fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                    </svg>
+                </div>
+                <div x-show="message.type === 'info'"
+                     class="w-5 h-5 text-blue-400">
+                    <svg fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                    </svg>
+                </div>
+            </div>
+
+            <div class="ml-3 flex-1">
+                <p class="text-sm font-medium"
+                   :class="{
+                       'text-green-800': message.type === 'success',
+                       'text-red-800': message.type === 'error',
+                       'text-blue-800': message.type === 'info'
+                   }"
+                   x-text="message.text"></p>
+            </div>
+
+            <button @click="message.text = ''"
+                    class="ml-4 text-gray-400 hover:text-gray-600">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+</div>
