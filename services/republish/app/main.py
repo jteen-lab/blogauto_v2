@@ -27,9 +27,10 @@ from .routers.republish import router as republish_router, page_router as republ
 # from .routers.blogger_slots import router as blogger_slots_router  # 임시 비활성화
 from .routers.module_types import router as module_types_router
 from .routers.modules import router as modules_router
-# from .routers.flows import router as flows_router  # 임시 비활성화
+from .routers.flows import router as flows_router
 from .routers.autorun import router as autorun_router
 from .routers.modules_pages import router as modules_page_router
+from .routers.flows_pages import router as flows_page_router
 
 logger = get_logger("main", "app.log")
 
@@ -115,7 +116,7 @@ app.include_router(republish_router, prefix=settings.api_v1_prefix)
 # app.include_router(blogger_slots_router, prefix=settings.api_v1_prefix)  # 임시 비활성화
 app.include_router(module_types_router, prefix=settings.api_v1_prefix)
 app.include_router(modules_router, prefix=settings.api_v1_prefix)
-# app.include_router(flows_router, prefix=settings.api_v1_prefix)  # 임시 비활성화
+app.include_router(flows_router, prefix=settings.api_v1_prefix)
 app.include_router(autorun_router, prefix=settings.api_v1_prefix)
 
 # 페이지 라우터 등록
@@ -124,6 +125,7 @@ app.include_router(categories_page_router)
 app.include_router(republish_page_router)
 # app.include_router(groups_page_router)  # 임시 비활성화
 app.include_router(modules_page_router)
+app.include_router(flows_page_router)
 
 # 정적 파일 서빙 (개발환경)
 if settings.is_development:

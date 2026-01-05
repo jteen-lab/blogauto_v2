@@ -79,6 +79,7 @@
                 <h1 class="text-xl font-bold">BlogAuto V2</h1>
                 <div class="flex items-center space-x-4" x-data="{ user: null }" x-init="fetchUser()">
                     <span x-text="user ? user.display_name : '로딩 중...'"></span>
+                    <a href="/flows" class="bg-blue-700 px-3 py-2 rounded hover:bg-blue-800 transition-colors">플로우 관리</a>
                     <a href="/modules" class="bg-blue-700 px-3 py-2 rounded hover:bg-blue-800 transition-colors">모듈 관리</a>
                     <a href="/blogs" class="bg-blue-700 px-3 py-2 rounded hover:bg-blue-800 transition-colors">블로그 관리</a>
                     <a href="/categories" class="bg-blue-700 px-3 py-2 rounded hover:bg-blue-800 transition-colors">카테고리 관리</a>
