@@ -9,13 +9,13 @@
     .flow-grid {
         display: grid;
         gap: 1.5rem;
-        grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+        align-items: start;
     }
 
-    /* 모바일: 1열 */
-    @media (max-width: 767px) {
+    /* 데스크탑: 4열 */
+    @media (min-width: 1280px) {
         .flow-grid {
-            grid-template-columns: 1fr;
+            grid-template-columns: repeat(4, 1fr);
         }
     }
 
@@ -26,10 +26,10 @@
         }
     }
 
-    /* 데스크탑: 3열까지 */
-    @media (min-width: 1280px) {
+    /* 모바일: 1열 */
+    @media (max-width: 767px) {
         .flow-grid {
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: 1fr;
         }
     }
 
@@ -175,7 +175,7 @@
 </div>
 
 <div id="flowForm"
-     class="fixed inset-x-0 bottom-0 bg-white rounded-t-2xl shadow-2xl z-50
+     class="fixed inset-x-0 bottom-0 h-[calc(100vh-70px)] bg-white rounded-t-2xl shadow-2xl z-50
             transform translate-y-full transition-transform duration-300 ease-out">
 
     <!-- 핸들 바 -->
@@ -195,7 +195,7 @@
     </div>
 
     <!-- 내용 영역 -->
-    <div id="flowFormContent" class="p-4 max-h-[calc(100vh-120px)] overflow-y-auto">
+    <div id="flowFormContent" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 max-h-[calc(100vh-120px)] overflow-y-auto">
         {% include "flows/_form.html" %}
     </div>
 
@@ -263,7 +263,7 @@
 </div>
 
 <div id="itemSelector"
-     class="fixed inset-x-0 bottom-0 bg-white rounded-t-2xl shadow-2xl z-50
+     class="fixed inset-x-0 bottom-0 h-[calc(100vh-70px)] bg-white rounded-t-2xl shadow-2xl z-50
             transform translate-y-full transition-transform duration-300 ease-out">
 
     <!-- 핸들 바 -->

@@ -3,7 +3,8 @@
 모듈 관리 폼 스타일 계승
 -->
 
-<form id="flowFormElement" x-data="flowFormData()">
+<div x-data="flowFormData()" x-init="init()">
+<form id="flowFormElement" @submit.prevent="submitForm()">
     <!-- 플로우 기본 정보 -->
     <div class="space-y-6">
 
@@ -46,19 +47,187 @@
             </div>
         </div>
 
-        <!-- 생성 후 활성화 여부 -->
+        <!-- 모듈 선택 -->
         <div>
-            <label class="flex items-center gap-3 cursor-pointer">
-                <input type="checkbox"
-                       id="flow_is_active"
-                       name="is_active"
-                       x-model="formData.is_active"
-                       class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2">
-                <div>
-                    <span class="text-sm font-medium text-gray-700">생성 후 바로 활성화</span>
-                    <p class="text-xs text-gray-500">체크하면 플로우 생성과 동시에 활성화됩니다</p>
-                </div>
+            <label class="block text-sm font-medium text-gray-700 mb-3">
+                📦 포함할 모듈 선택 (선택)
             </label>
+
+            <div class="border border-gray-200 rounded-lg">
+                <div class="flex border-b border-gray-200">
+                    <button type="button"
+                            @click="activeModuleTab = 'republish'"
+                            :class="activeModuleTab === 'republish' ? 'bg-blue-50 text-blue-700 border-blue-500' : 'bg-white text-gray-500 hover:text-gray-700'"
+                            class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors">
+                        <span class="mr-2">🔄</span>재발행
+                    </button>
+                    <button type="button"
+                            @click="activeModuleTab = 'publish'"
+                            :class="activeModuleTab === 'publish' ? 'bg-blue-50 text-blue-700 border-blue-500' : 'bg-white text-gray-500 hover:text-gray-700'"
+                            class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors">
+                        <span class="mr-2">📤</span>발행
+                    </button>
+                    <button type="button"
+                            @click="activeModuleTab = 'generate'"
+                            :class="activeModuleTab === 'generate' ? 'bg-blue-50 text-blue-700 border-blue-500' : 'bg-white text-gray-500 hover:text-gray-700'"
+                            class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors">
+                        <span class="mr-2">✨</span>생성
+                    </button>
+                    <button type="button"
+                            @click="activeModuleTab = 'prompt'"
+                            :class="activeModuleTab === 'prompt' ? 'bg-blue-50 text-blue-700 border-blue-500' : 'bg-white text-gray-500 hover:text-gray-700'"
+                            class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors">
+                        <span class="mr-2">📝</span>프롬프트
+                    </button>
+                </div>
+
+                <div class="p-4 max-h-80 overflow-y-auto">
+                    <div x-show="modulesLoading" class="flex items-center justify-center py-8">
+                        <svg class="animate-spin h-5 w-5 text-gray-400 mr-2" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span class="text-sm text-gray-500">모듈 목록을 불러오는 중...</span>
+                    </div>
+
+                    <div x-show="!modulesLoading && getModulesByType(activeModuleTab).length > 0" class="space-y-3">
+                        <template x-for="module in getModulesByType(activeModuleTab)" :key="module.id">
+                            <label class="block cursor-pointer"
+                                   :class="isModuleSelected(module.id) ? 'ring-2 ring-blue-500 rounded-xl' : ''">
+                                <div class="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow overflow-hidden"
+                                     :class="isModuleSelected(module.id) ? 'border-blue-500' : ''">
+                                    <div class="px-4 py-2 flex items-center justify-between text-gray-700"
+                                         :class="getModuleColor(module.module_type.code)">
+                                        <div class="flex items-center gap-2">
+                                            <input type="checkbox"
+                                                   :value="module.id"
+                                                   x-model="formData.selectedModules"
+                                                   class="w-4 h-4 text-blue-600 bg-white border-gray-300 rounded focus:ring-blue-500">
+                                            <h4 class="font-semibold text-sm" x-text="module.name"></h4>
+                                        </div>
+                                    </div>
+                                    <div class="px-4 py-3">
+                                        <template x-if="module.module_type.code === 'republish'">
+                                            <div class="space-y-2 text-xs">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="text-gray-500 font-medium">적용구간:</span>
+                                                    <span class="text-gray-700" x-text="getPostRangeText(module)"></span>
+                                                </div>
+                                                <div class="flex items-center gap-2">
+                                                    <span class="text-gray-500 font-medium">재발행 간격:</span>
+                                                    <span class="text-gray-700" x-text="getIntervalText(module)"></span>
+                                                </div>
+                                                <div class="text-xs">
+                                                    <div class="text-gray-500 font-medium mb-1">스케줄:</div>
+                                                    <div class="text-gray-700 whitespace-pre-line" x-text="getScheduleSummary(module)"></div>
+                                                </div>
+                                                <div x-show="module.description" class="text-gray-600 bg-gray-50 p-2 rounded">
+                                                    <span x-text="module.description"></span>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        <template x-if="module.module_type.code !== 'republish'">
+                                            <div class="text-center py-2">
+                                                <span class="text-3xl" x-text="getModuleIcon(module.module_type.code)"></span>
+                                                <div x-show="module.description" class="text-xs text-gray-600 mt-2 p-2 bg-gray-50 rounded">
+                                                    <span x-text="module.description"></span>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </label>
+                        </template>
+                    </div>
+
+                    <div x-show="!modulesLoading && getModulesByType(activeModuleTab).length === 0"
+                         class="text-center py-8 text-gray-500">
+                        <span class="text-2xl mb-2 block" x-text="getModuleIcon(activeModuleTab)"></span>
+                        <p class="text-sm">생성된 <span x-text="getModuleTypeName(activeModuleTab)"></span> 모듈이 없습니다</p>
+                    </div>
+                </div>
+            </div>
+
+            <div x-show="formData.selectedModules.length > 0" class="mt-2 text-xs text-blue-600">
+                <span x-text="formData.selectedModules.length"></span>개 모듈이 선택되었습니다
+            </div>
+        </div>
+
+        <!-- 블로그 선택 -->
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-3">
+                📝 포함할 블로그 선택 (선택)
+            </label>
+
+            <div class="border border-gray-200 rounded-lg">
+                <div class="flex border-b border-gray-200">
+                    <button type="button"
+                            @click="activeBlogTab = 'blogger'"
+                            :class="activeBlogTab === 'blogger' ? 'bg-blue-50 text-blue-700 border-blue-500' : 'bg-white text-gray-500 hover:text-gray-700'"
+                            class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors">
+                        <span class="mr-2">📙</span>Blogger
+                    </button>
+                    <button type="button"
+                            @click="activeBlogTab = 'wordpress'"
+                            :class="activeBlogTab === 'wordpress' ? 'bg-blue-50 text-blue-700 border-blue-500' : 'bg-white text-gray-500 hover:text-gray-700'"
+                            class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors">
+                        <span class="mr-2">🌐</span>WordPress
+                    </button>
+                </div>
+
+                <div class="p-4 max-h-80 overflow-y-auto">
+                    <div x-show="blogsLoading" class="flex items-center justify-center py-8">
+                        <svg class="animate-spin h-5 w-5 text-gray-400 mr-2" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span class="text-sm text-gray-500">블로그 목록을 불러오는 중...</span>
+                    </div>
+
+                    <div x-show="!blogsLoading && getBlogsByPlatform(activeBlogTab).length > 0" class="space-y-3">
+                        <template x-for="blog in getBlogsByPlatform(activeBlogTab)" :key="blog.id">
+                            <label class="block cursor-pointer"
+                                   :class="isBlogSelected(blog.id) ? 'ring-2 ring-blue-500 rounded-xl' : ''">
+                                <div class="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow overflow-hidden"
+                                     :class="isBlogSelected(blog.id) ? 'border-blue-500' : ''">
+                                    <div class="px-4 py-2 flex items-center justify-between text-gray-700"
+                                         :class="blog.platform === 'blogger' ? 'bg-orange-100' : 'bg-blue-100'">
+                                        <div class="flex items-center gap-2">
+                                            <input type="checkbox"
+                                                   :value="blog.id"
+                                                   x-model="formData.selectedBlogs"
+                                                   class="w-4 h-4 text-blue-600 bg-white border-gray-300 rounded focus:ring-blue-500">
+                                            <span class="text-lg" x-text="blog.platform === 'blogger' ? '📙' : '🌐'"></span>
+                                            <h4 class="font-semibold text-sm" x-text="blog.name"></h4>
+                                        </div>
+                                    </div>
+                                    <div class="px-4 py-3">
+                                        <div class="space-y-1 text-xs">
+                                            <div class="flex items-center gap-2">
+                                                <span class="text-gray-500 font-medium">URL:</span>
+                                                <span class="text-gray-700 truncate" x-text="blog.url || '-'"></span>
+                                            </div>
+                                            <div x-show="blog.description" class="text-gray-600 bg-gray-50 p-2 rounded mt-2">
+                                                <span x-text="blog.description"></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </label>
+                        </template>
+                    </div>
+
+                    <div x-show="!blogsLoading && getBlogsByPlatform(activeBlogTab).length === 0"
+                         class="text-center py-8 text-gray-500">
+                        <span class="text-2xl mb-2 block" x-text="activeBlogTab === 'blogger' ? '📙' : '🌐'"></span>
+                        <p class="text-sm">등록된 <span x-text="activeBlogTab === 'blogger' ? 'Blogger' : 'WordPress'"></span> 블로그가 없습니다</p>
+                    </div>
+                </div>
+            </div>
+
+            <div x-show="formData.selectedBlogs.length > 0" class="mt-2 text-xs text-blue-600">
+                <span x-text="formData.selectedBlogs.length"></span>개 블로그가 선택되었습니다
+            </div>
         </div>
 
     </div>
@@ -155,4 +324,4 @@
             </button>
         </div>
     </div>
-</div>
+</div></div>
