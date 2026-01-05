@@ -1,6 +1,7 @@
 """
 Models Package
 """
+
 # Core models
 from .user import User
 from .blog import Blog, BlogPlatform
@@ -11,7 +12,9 @@ from .post import Post
 from .publish_log import PublishLog
 
 # Group models (레거시)
-# from .blog_group_link import BlogGroupLink  # 제거됨 (Flow 시스템으로 교체)
+from .blog_group_link import BlogGroupLink
+from .profile_group import ProfileGroup, GroupProfileLink
+from .publish_profile import PublishProfile
 
 # Phase 5-1: Google/Blogger models
 from .google_credential import GoogleCredential
@@ -38,7 +41,10 @@ __all__ = [
     "Post",
     "PublishLog",
     # Group models (레거시)
-    # "BlogGroupLink",  # 제거됨
+    "BlogGroupLink",
+    "ProfileGroup",
+    "GroupProfileLink",
+    "PublishProfile",
     # Phase 5-1: Google/Blogger models
     "GoogleCredential",
     "GoogleAccountPolicy",

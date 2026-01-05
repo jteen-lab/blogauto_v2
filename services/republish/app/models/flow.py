@@ -7,6 +7,7 @@ Features:
 - 상태 기반 오토런 관리 (active/inactive/paused)
 - is_active 필드를 status 필드로 대체
 """
+
 from datetime import datetime
 from typing import List, Optional
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
@@ -18,6 +19,7 @@ from ..core.database import Base
 
 class Flow(Base):
     """플로우 - 기존 ProfileGroup 대체"""
+
     __tablename__ = "flows"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -30,15 +32,13 @@ class Flow(Base):
         String(20),
         default="inactive",
         nullable=False,
-        comment="플로우 상태: active/inactive/paused"
+        comment="플로우 상태: active/inactive/paused",
     )
 
     # 타임스탬프
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        onupdate=func.now()
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # 관계
@@ -46,12 +46,10 @@ class Flow(Base):
         "FlowModule",
         back_populates="flow",
         cascade="all, delete-orphan",
-        order_by="FlowModule.execution_order"
+        order_by="FlowModule.execution_order",
     )
     blog_links = relationship(
-        "FlowBlog",
-        back_populates="flow",
-        cascade="all, delete-orphan"
+        "FlowBlog", back_populates="flow", cascade="all, delete-orphan"
     )
 
     @property
@@ -96,8 +94,13 @@ class Flow(Base):
         """연결된 블로그 수"""
         return len(self.blog_links)
 
+    @property
+    def module_count(self) -> int:
+        return len(self.module_links) if self.module_links else 0
+
+    @property
+    def blog_count(self) -> int:
+        return len(self.blog_links) if self.blog_links else 0
+
     def __repr__(self) -> str:
-        return (
-            f"<Flow(id={self.id}, name='{self.name}', "
-            f"status='{self.status}')>"
-        )
+        return f"<Flow(id={self.id}, name='{self.name}', status='{self.status}')>"
