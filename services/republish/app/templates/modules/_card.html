@@ -1,22 +1,23 @@
-<!--
-모듈 카드 부분 템플릿
-Alpine.js 데이터 바인딩 사용
--->
-
 <div class="bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow duration-200 overflow-hidden"
      :data-module-id="module.id"
-     x-data="{ expanded: false, needsExpand: false }"
+     x-data="{ 
+         expanded: false, 
+         needsExpand: false,
+         checkHeight() {
+             const content = this.$el.querySelector('.module-content-area');
+             if (content) {
+                 this.needsExpand = content.scrollHeight > 128;
+             }
+         }
+     }"
+     x-init="setTimeout(() => checkHeight(), 100)">
 
-    <!-- 상단 헤더 영역 (컬러 배경) -->
     <div class="px-4 py-2 flex items-center justify-between text-gray-700"
          :class="getModuleColor(module.module_type.code)">
-
-        <!-- 모듈명 (좌측으로 정렬) -->
         <div class="flex-1">
             <h4 class="font-semibold truncate" x-text="module.name"></h4>
         </div>
 
-        <!-- 우측: 액션 버튼들 -->
         <div class="flex gap-1">
             <button @click="editModule(module.id)"
                     class="p-1.5 text-gray-600 hover:text-gray-800 hover:bg-gray-300/50 rounded-lg transition-colors"
@@ -44,40 +45,30 @@ Alpine.js 데이터 바인딩 사용
         </div>
     </div>
 
-    <!-- 하단 내용 영역 (흰색 배경) -->
     <div class="px-4 py-4">
+        <div class="module-content-area" :class="expanded ? '' : 'max-h-32 overflow-hidden'">
 
-        <!-- 내용 영역 (높이 제한 적용) -->
-        <div :class="expanded ? '' : 'max-h-32 overflow-hidden'">
-
-            <!-- 재발행 모듈 내용 -->
             <div x-show="module.module_type.code === 'republish'" class="space-y-3">
-
-                <!-- 적용 구간 -->
                 <div class="flex items-center gap-2 text-sm">
                     <span class="text-gray-500 font-medium">적용구간:</span>
                     <span class="text-gray-700" x-text="getPostRangeText(module)"></span>
                 </div>
 
-                <!-- 재발행 간격 -->
                 <div class="flex items-center gap-2 text-sm">
                     <span class="text-gray-500 font-medium">재발행 간격:</span>
                     <span class="text-gray-700" x-text="getIntervalText(module)"></span>
                 </div>
 
-                <!-- 스케줄 -->
                 <div class="text-sm">
                     <div class="text-gray-500 font-medium mb-1">스케줄:</div>
                     <div class="text-gray-700 whitespace-pre-line" x-text="getScheduleSummary(module)"></div>
                 </div>
 
-                <!-- 설명 (있는 경우) -->
                 <div x-show="module.description" class="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
                     <span x-text="module.description"></span>
                 </div>
             </div>
 
-            <!-- 기타 모듈 내용 -->
             <div x-show="module.module_type.code !== 'republish'" class="text-center py-8">
                 <span class="text-6xl" x-text="getModuleIcon(module.module_type.code)"></span>
                 <div x-show="module.description" class="text-sm text-gray-600 mt-4 p-3 bg-gray-50 rounded-lg">
@@ -90,12 +81,7 @@ Alpine.js 데이터 바인딩 사용
 
         </div>
 
-        <!-- 더보기/접기 버튼 -->
-        <div class="mt-2 flex justify-end"
-             x-init="$nextTick(() => {
-                 const contentDiv = $el.previousElementSibling;
-                 needsExpand = contentDiv.scrollHeight > 128;
-             })">
+        <div class="mt-2 flex justify-end">
             <button x-show="needsExpand"
                     @click="expanded = !expanded"
                     class="text-xs text-gray-500 hover:text-gray-700 py-1 px-3 rounded-md hover:bg-gray-100 transition-colors">
