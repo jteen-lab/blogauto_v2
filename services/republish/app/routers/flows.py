@@ -127,6 +127,29 @@ async def create_flow(
     return FlowDetailResponse.model_validate(flow_with_relations)
 
 
+@router.post(
+    "/{flow_id}/copy",
+    response_model=FlowDetailResponse,
+    status_code=201,
+    summary="플로우 복사",
+    description="플로우를 복사합니다. 연결된 모듈과 블로그도 함께 복사됩니다.",
+)
+async def copy_flow(
+    flow_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> FlowDetailResponse:
+    """플로우 복사 (모듈, 블로그 포함)"""
+    service = FlowService(db)
+    new_flow = await service.copy_flow(current_user, flow_id)
+
+    if not new_flow:
+        raise HTTPException(status_code=404, detail="플로우를 찾을 수 없습니다")
+
+    flow_with_relations = await service.get_flow(current_user, new_flow.id)
+    return FlowDetailResponse.model_validate(flow_with_relations)
+
+
 @router.get(
     "/{flow_id}",
     response_model=FlowDetailResponse,

@@ -7,6 +7,7 @@ Features:
 - API 키 마스킹 처리
 - 응답 스키마 분리
 """
+
 from pydantic import BaseModel, Field, validator, HttpUrl
 from typing import Optional, Dict, Any, Union
 from datetime import datetime
@@ -15,6 +16,7 @@ from enum import Enum
 
 class BlogPlatform(str, Enum):
     """블로그 플랫폼"""
+
     WORDPRESS = "wordpress"
     BLOGGER = "blogger"
     OTHER = "other"
@@ -22,6 +24,7 @@ class BlogPlatform(str, Enum):
 
 class BlogCreateRequest(BaseModel):
     """블로그 등록 요청 스키마"""
+
     name: str = Field(..., min_length=1, max_length=100, description="블로그 이름")
     url: HttpUrl = Field(..., description="블로그 URL")
     platform: BlogPlatform = Field(..., description="플랫폼 타입")
@@ -33,12 +36,16 @@ class BlogCreateRequest(BaseModel):
 
     # 발행 설정
     auto_publish: bool = Field(False, description="자동 발행 여부")
-    republish_interval_hours: int = Field(24, ge=1, le=168, description="재발행 간격(시간)")
+    republish_interval_hours: int = Field(
+        24, ge=1, le=168, description="재발행 간격(시간)"
+    )
     daily_limit: int = Field(10, ge=1, le=100, description="일일 발행 제한")
 
     # 콘텐츠 설정
     editor_type: str = Field("classic", max_length=50, description="에디터 타입")
-    css_classes: Optional[Dict[str, str]] = Field(None, description="CSS 클래스 치환 규칙")
+    css_classes: Optional[Dict[str, str]] = Field(
+        None, description="CSS 클래스 치환 규칙"
+    )
 
     @validator("name")
     def validate_name(cls, v: str) -> str:
@@ -57,7 +64,9 @@ class BlogCreateRequest(BaseModel):
         return v
 
     @validator("api_key")
-    def validate_api_key_for_platform(cls, v: Optional[str], values: Dict[str, Any]) -> Optional[str]:
+    def validate_api_key_for_platform(
+        cls, v: Optional[str], values: Dict[str, Any]
+    ) -> Optional[str]:
         """플랫폼별 API 키 검증"""
         platform = values.get("platform")
 
@@ -80,14 +89,17 @@ class BlogCreateRequest(BaseModel):
                 "auto_publish": True,
                 "republish_interval_hours": 24,
                 "daily_limit": 10,
-                "editor_type": "classic"
+                "editor_type": "classic",
             }
         }
 
 
 class BlogUpdateRequest(BaseModel):
     """블로그 수정 요청 스키마"""
-    name: Optional[str] = Field(None, min_length=1, max_length=100, description="블로그 이름")
+
+    name: Optional[str] = Field(
+        None, min_length=1, max_length=100, description="블로그 이름"
+    )
     url: Optional[HttpUrl] = Field(None, description="블로그 URL")
 
     # API 인증 정보 (None이 아닌 경우만 업데이트)
@@ -97,12 +109,16 @@ class BlogUpdateRequest(BaseModel):
 
     # 발행 설정
     auto_publish: Optional[bool] = Field(None, description="자동 발행 여부")
-    republish_interval_hours: Optional[int] = Field(None, ge=1, le=168, description="재발행 간격(시간)")
+    republish_interval_hours: Optional[int] = Field(
+        None, ge=1, le=168, description="재발행 간격(시간)"
+    )
     daily_limit: Optional[int] = Field(None, ge=1, le=100, description="일일 발행 제한")
 
     # 콘텐츠 설정
     editor_type: Optional[str] = Field(None, max_length=50, description="에디터 타입")
-    css_classes: Optional[Dict[str, str]] = Field(None, description="CSS 클래스 치환 규칙")
+    css_classes: Optional[Dict[str, str]] = Field(
+        None, description="CSS 클래스 치환 규칙"
+    )
 
     @validator("name")
     def validate_name(cls, v: Optional[str]) -> Optional[str]:
@@ -116,6 +132,7 @@ class BlogUpdateRequest(BaseModel):
 
 class BlogResponse(BaseModel):
     """블로그 조회 응답 스키마"""
+
     id: int = Field(..., description="블로그 ID")
     user_id: int = Field(..., description="사용자 ID")
     name: str = Field(..., description="블로그 이름")
@@ -134,7 +151,9 @@ class BlogResponse(BaseModel):
 
     # 콘텐츠 설정
     editor_type: str = Field(..., description="에디터 타입")
-    css_classes: Optional[Dict[str, str]] = Field(None, description="CSS 클래스 치환 규칙")
+    css_classes: Optional[Dict[str, str]] = Field(
+        None, description="CSS 클래스 치환 규칙"
+    )
 
     # 메타 정보
     created_at: datetime = Field(..., description="생성일시")
@@ -145,7 +164,8 @@ class BlogResponse(BaseModel):
 
 
 class BlogListResponse(BaseModel):
-    """블로그 목록 응답 스키마"""
+    """블로그 목록 아이템 응답 스키마"""
+
     id: int = Field(..., description="블로그 ID")
     name: str = Field(..., description="블로그 이름")
     url: str = Field(..., description="블로그 URL")
@@ -158,8 +178,15 @@ class BlogListResponse(BaseModel):
         from_attributes = True
 
 
+class BlogListWrapper(BaseModel):
+    """블로그 목록 래퍼 응답 스키마"""
+
+    blogs: list[BlogListResponse] = Field(..., description="블로그 목록")
+
+
 class BlogConnectionTestResponse(BaseModel):
     """블로그 연결 테스트 응답 스키마"""
+
     success: bool = Field(..., description="연결 성공 여부")
     message: str = Field(..., description="결과 메시지")
     details: Optional[Dict[str, Any]] = Field(None, description="상세 정보")
@@ -167,6 +194,7 @@ class BlogConnectionTestResponse(BaseModel):
 
 class BlogStatsResponse(BaseModel):
     """블로그 통계 응답 스키마"""
+
     total_blogs: int = Field(..., description="총 블로그 수")
     active_blogs: int = Field(..., description="활성 블로그 수")
     auto_publish_enabled: int = Field(..., description="자동 발행 활성화 수")
@@ -175,6 +203,7 @@ class BlogStatsResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     """에러 응답 스키마"""
+
     error: str = Field(..., description="에러 코드")
     message: str = Field(..., description="에러 메시지")
     details: Optional[Dict[str, Any]] = Field(None, description="상세 정보")
@@ -184,6 +213,6 @@ class ErrorResponse(BaseModel):
             "example": {
                 "error": "VALIDATION_ERROR",
                 "message": "입력값이 올바르지 않습니다",
-                "details": {"field": "api_key", "error": "필수 입력값입니다"}
+                "details": {"field": "api_key", "error": "필수 입력값입니다"},
             }
         }

@@ -232,7 +232,12 @@ class ModuleService:
         module_id: int,
         request: ModuleUpdateRequest
     ) -> Optional[Module]:
-        """모듈 수정"""
+        """모듈 수정
+
+        Note:
+            - None 값은 업데이트에서 제외됨 (기존 값 유지)
+            - 빈 문자열("")은 명시적으로 설정됨 (필드 초기화)
+        """
         try:
             logger.info(f"[UPDATE_MODULE] 사용자 {user.id} 모듈 수정: {module_id}")
 
@@ -241,12 +246,22 @@ class ModuleService:
             if not module:
                 return None
 
-            # 업데이트 필드 적용 (None이 아닌 값만)
+            # 업데이트 필드 적용
+            # exclude_none=True: None은 제외, 빈 문자열("")은 포함
             update_data = request.model_dump(exclude_none=True)
+
+            logger.debug(f"[UPDATE_MODULE] 업데이트 필드: {list(update_data.keys())}")
 
             for field, value in update_data.items():
                 if hasattr(module, field):
+                    old_value = getattr(module, field, None)
                     setattr(module, field, value)
+                    # 빈 문자열로 변경되는 경우 로깅
+                    if value == "" and old_value:
+                        logger.info(
+                            f"[UPDATE_MODULE] 필드 '{field}' 초기화: "
+                            f"'{old_value}' -> ''"
+                        )
 
             await self.db.commit()
             await self.db.refresh(module, ["module_type", "created_at", "updated_at"])

@@ -232,7 +232,7 @@ class FlowService:
             if not flow:
                 return None
 
-            update_data = request.model_dump(exclude_none=True)
+            update_data = request.model_dump(exclude_unset=True)
 
             module_ids = update_data.pop("module_ids", None)
             blog_ids = update_data.pop("blog_ids", None)
@@ -240,6 +240,11 @@ class FlowService:
             if "is_active" in update_data:
                 is_active = update_data.pop("is_active")
                 update_data["status"] = "active" if is_active else "inactive"
+
+            # 빈 문자열을 None으로 변환 (description 등)
+            if "description" in update_data:
+                if not update_data["description"] or not update_data["description"].strip():
+                    update_data["description"] = None
 
             for field, value in update_data.items():
                 if hasattr(flow, field):
@@ -288,6 +293,76 @@ class FlowService:
             await self.db.rollback()
             raise HTTPException(
                 status_code=500, detail="플로우를 수정하는 중 오류가 발생했습니다"
+            )
+
+    async def copy_flow(self, user: User, flow_id: int) -> Optional[Flow]:
+        """플로우 복사 (모듈, 블로그 포함)"""
+        try:
+            logger.info(f"[COPY_FLOW] 사용자 {user.id} 플로우 복사: {flow_id}")
+
+            # 원본 플로우 조회
+            original_flow = await self.get_flow(user, flow_id)
+            if not original_flow:
+                return None
+
+            # 복사본 이름 생성 (중복 방지)
+            base_name = f"{original_flow.name} 사본"
+            copy_name = base_name
+            counter = 1
+
+            while True:
+                existing_query = select(Flow).where(
+                    and_(Flow.user_id == user.id, Flow.name == copy_name)
+                )
+                existing_result = await self.db.execute(existing_query)
+                if not existing_result.scalar_one_or_none():
+                    break
+                counter += 1
+                copy_name = f"{base_name} ({counter})"
+
+            # 새 플로우 생성
+            new_flow = Flow(
+                user_id=user.id,
+                name=copy_name,
+                description=f"{original_flow.description} (복사됨)" if original_flow.description else "복사된 플로우",
+                status="inactive",
+            )
+
+            self.db.add(new_flow)
+            await self.db.flush()
+
+            # 모듈 연결 복사
+            for module_link in original_flow.module_links:
+                new_link = FlowModule(
+                    flow_id=new_flow.id,
+                    module_id=module_link.module_id,
+                    execution_order=module_link.execution_order,
+                )
+                self.db.add(new_link)
+
+            logger.info(f"[COPY_FLOW] {len(original_flow.module_links)}개 모듈 복사")
+
+            # 블로그 연결 복사
+            for blog_link in original_flow.blog_links:
+                new_link = FlowBlog(
+                    flow_id=new_flow.id,
+                    blog_id=blog_link.blog_id,
+                )
+                self.db.add(new_link)
+
+            logger.info(f"[COPY_FLOW] {len(original_flow.blog_links)}개 블로그 복사")
+
+            await self.db.commit()
+            await self.db.refresh(new_flow)
+
+            logger.info(f"[COPY_FLOW] 플로우 복사 완료: {flow_id} -> {new_flow.id}")
+            return new_flow
+
+        except Exception as e:
+            logger.error(f"[COPY_FLOW] 오류: {e}")
+            await self.db.rollback()
+            raise HTTPException(
+                status_code=500, detail="플로우를 복사하는 중 오류가 발생했습니다"
             )
 
     async def delete_flow(self, user: User, flow_id: int) -> bool:

@@ -92,9 +92,14 @@ class ModuleCreateRequest(BaseModel):
 
 
 class ModuleUpdateRequest(BaseModel):
-    """모듈 수정 요청"""
+    """모듈 수정 요청
+
+    Note:
+        description 필드는 빈 문자열("")로 설정하면 설명을 삭제합니다.
+        None은 필드를 업데이트하지 않음을 의미합니다.
+    """
     name: Optional[str] = Field(None, min_length=1, max_length=255)
-    description: Optional[str] = Field(None, max_length=500)
+    description: Optional[str] = Field(None, max_length=500)  # ""는 삭제, None은 미변경
 
     # 스케줄 설정
     schedule_matrix: Optional[Union[List[List[bool]], str]] = None

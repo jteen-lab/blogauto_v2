@@ -17,8 +17,6 @@ from ..models.google_credential import GoogleCredential
 from ..models.google_account_policy import GoogleAccountPolicy
 from ..models.blogger_global_slot import BloggerGlobalSlot
 from ..models.blog import Blog
-from ..models.profile_group import ProfileGroup
-from ..models.publish_profile import PublishProfile
 from ..schemas.blogger_slot import (
     SlotInfo, SlotConflict, SlotSuggestion, ValidationResult,
     ScheduleInfo, SlotReservation, AddBlogResult
