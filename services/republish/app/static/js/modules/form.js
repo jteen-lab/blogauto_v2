@@ -359,10 +359,13 @@ function moduleFormApp(module = null, moduleType = null) {
 
         // 요청 데이터 준비
         prepareRequestData() {
+            // description: 빈 문자열도 명시적으로 전송 (null로 변환하지 않음)
+            const descriptionValue = this.formData.description?.trim();
+
             const data = {
                 name: this.formData.name.trim(),
                 module_type_code: this.formData.type_code,
-                description: this.formData.description?.trim() || null,
+                description: descriptionValue !== undefined ? descriptionValue : null,
             };
 
             // 디버깅: 요청 데이터 로깅

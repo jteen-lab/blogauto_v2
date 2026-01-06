@@ -144,7 +144,7 @@ function flowFormData() {
                 }
 
                 const data = await response.json();
-                this.blogs = data.blogs || [];
+                this.blogs = Array.isArray(data) ? data : (data.blogs || []);
                 console.log('블로그 목록 로드 완료:', this.blogs.length, '개');
 
             } catch (error) {
@@ -422,7 +422,7 @@ function flowFormData() {
                     credentials: 'include',
                     body: JSON.stringify({
                         name: this.formData.name.trim(),
-                        description: this.formData.description.trim() || null,
+                        description: this.formData.description.trim(),
                         is_active: false,
                         module_ids: this.formData.selectedModules,
                         blog_ids: this.formData.selectedBlogs

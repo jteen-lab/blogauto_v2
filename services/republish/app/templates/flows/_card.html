@@ -4,6 +4,7 @@
      x-data="flowCardState()"
      x-init="initCard($el)">
 
+    <!-- 카드 헤더 -->
     <div class="px-4 py-2 flex items-center justify-between text-gray-700 bg-blue-100">
         <div class="flex-1">
             <h4 class="font-semibold truncate" x-text="flow.name"></h4>
@@ -36,88 +37,157 @@
         </div>
     </div>
 
-    <div class="px-4 py-4">
-        <div class="flow-content-area" :class="expanded ? '' : 'max-h-32 overflow-hidden'">
+    <!-- 카드 본문 -->
+    <div class="px-4 py-3" x-data="{
+        expanded: false,
+        maxVisible: 3,
+        get allRows() {
+            const rows = [];
+            // 모듈 행 추가 (순서대로)
+            getFlowModules(flow).forEach(m => rows.push({ type: 'module', data: m }));
+            // 블로그 행 추가 (항상 마지막)
+            if (getFlowBlogs(flow).length > 0) {
+                rows.push({ type: 'blog', data: getFlowBlogs(flow) });
+            }
+            return rows;
+        },
+        get hiddenCount() {
+            return Math.max(0, this.allRows.length - this.maxVisible);
+        }
+    }">
+        <!-- 설명 -->
+        <div x-show="flow.description" class="text-xs text-gray-600 bg-gray-50 p-2 rounded-lg mb-3">
+            <span x-text="flow.description"></span>
+        </div>
 
-            <div x-show="flow.description" class="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg mb-3">
-                <span x-text="flow.description"></span>
+        <!-- 통합 행 렌더링 (모듈 + 블로그) -->
+        <div class="mb-3">
+            <div class="flex items-center mb-2">
+                <span class="text-xs font-medium text-gray-700">
+                    모듈 : <span x-text="getFlowModules(flow).length"></span>개 / 블로그 : <span x-text="getFlowBlogs(flow).length"></span>개
+                </span>
             </div>
 
-            <div class="mb-4">
-                <div class="flex items-center justify-between mb-2">
-                    <h5 class="text-sm font-medium text-gray-700">🔧 모듈:</h5>
-                    <span class="text-xs text-gray-500"
-                          x-text="`${getFlowModules(flow).length}개`"></span>
-                </div>
+            <!-- 행이 있는 경우: 통합 목록 -->
+            <template x-if="allRows.length > 0">
+                <div class="module-slide-list">
+                    <template x-for="(row, rowIndex) in allRows" :key="rowIndex">
+                        <!-- 행 표시 조건: 확장됨 OR 인덱스 < maxVisible -->
+                        <div x-show="expanded || rowIndex < maxVisible" x-transition>
 
-                <div x-show="getFlowModules(flow).length > 0" class="space-y-2">
-                    <template x-for="flowModule in getFlowModules(flow)" :key="flowModule.id">
-                        <div class="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg">
-                            <div class="flex items-center gap-2 flex-1">
-                                <span class="text-lg"
-                                      x-text="getModuleIcon(flowModule.module.module_type.code)"></span>
-                                <span class="text-sm font-medium text-gray-900"
-                                      x-text="flowModule.module.name"></span>
-                                <span class="text-xs text-gray-500"
-                                      x-text="getModuleTypeLabel(flowModule.module.module_type.code)"></span>
-                            </div>
-                            <button @click="removeModuleFromFlow(flow.id, flowModule.id)"
-                                    class="p-1 text-gray-400 hover:text-red-600 hover:bg-red-100 rounded transition-colors"
-                                    title="모듈 제거">
-                                ✕
-                            </button>
+                            <!-- 모듈 행 -->
+                            <template x-if="row.type === 'module'">
+                                <div class="module-slide-row"
+                                     :class="'type-' + row.data.module.module_type.code"
+                                     @touchstart="toggleSlideTouch($event, $el)"
+                                     x-init="$nextTick(() => initSlideCheck($el))">
+
+                                    <!-- 모듈 라벨 (고정 - 1/3 비율) -->
+                                    <div class="module-slide-label">
+                                        <span class="module-slide-icon" x-text="getModuleIcon(row.data.module.module_type.code)"></span>
+                                        <span class="module-slide-name" x-text="row.data.module.name" :title="row.data.module.name"></span>
+                                    </div>
+
+                                    <!-- 슬라이드 정보 영역 (2/3 비율) -->
+                                    <div class="module-slide-container">
+                                        <div class="module-slide-track"
+                                             :style="{ '--slide-duration': getModuleSlideDuration(row.data.module) + 's' }"
+                                             :class="{ 'no-slide': !needsModuleSlide(row.data.module) }">
+
+                                            <!-- 원본 정보 -->
+                                            <template x-for="(info, i) in getModuleInfoItems(row.data.module)" :key="'orig-' + i">
+                                                <span class="slide-info-item">
+                                                    <span class="slide-info-label" x-text="info.label + ':'"></span>
+                                                    <span class="slide-info-value" x-text="info.value"></span>
+                                                </span>
+                                            </template>
+
+                                            <!-- 구분자 (슬라이드 필요시만) -->
+                                            <template x-if="needsModuleSlide(row.data.module)">
+                                                <span class="slide-cycle-separator">◆</span>
+                                            </template>
+
+                                            <!-- 복제 정보 (무한 스크롤용 - 슬라이드 필요시만) -->
+                                            <template x-if="needsModuleSlide(row.data.module)">
+                                                <template x-for="(info, i) in getModuleInfoItems(row.data.module)" :key="'dup-' + i">
+                                                    <span class="slide-info-item" aria-hidden="true">
+                                                        <span class="slide-info-label" x-text="info.label + ':'"></span>
+                                                        <span class="slide-info-value" x-text="info.value"></span>
+                                                    </span>
+                                                </template>
+                                            </template>
+                                        </div>
+                                        <span class="slide-pause-hint">⏸</span>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- 블로그 행 -->
+                            <template x-if="row.type === 'blog'">
+                                <div class="blog-slide-section"
+                                     @touchstart="toggleSlideTouch($event, $el)"
+                                     x-init="$nextTick(() => initBlogSlideCheck($el, row.data.length))">
+                                    <!-- 블로그 라벨 -->
+                                    <div class="blog-slide-label">
+                                        <span class="blog-slide-icon">📝</span>
+                                        <span class="blog-slide-count">블로그</span>
+                                    </div>
+
+                                    <!-- 슬라이드 영역 -->
+                                    <div class="blog-slide-container">
+                                        <div class="blog-slide-track"
+                                             :style="{ '--blog-slide-duration': getBlogSlideDuration(row.data.length) + 's' }"
+                                             :class="{ 'no-slide': !needsBlogSlide(row.data.length) }">
+
+                                            <!-- 원본 블로그 목록 -->
+                                            <template x-for="(flowBlog, i) in row.data" :key="'blog-orig-' + flowBlog.id">
+                                                <span class="blog-slide-item">
+                                                    <span class="blog-platform-badge"
+                                                          :class="flowBlog.blog.platform === 'wordpress' ? 'blog-platform-wp' : 'blog-platform-bl'"
+                                                          x-text="flowBlog.blog.platform === 'wordpress' ? 'WP' : 'BL'"></span>
+                                                    <span class="blog-slide-name" x-text="flowBlog.blog.name"></span>
+                                                    <span x-show="i < row.data.length - 1" class="blog-slide-separator">·</span>
+                                                </span>
+                                            </template>
+
+                                            <!-- 구분자 (슬라이드 필요시만) -->
+                                            <template x-if="needsBlogSlide(row.data.length)">
+                                                <span class="slide-cycle-separator">◆</span>
+                                            </template>
+
+                                            <!-- 복제 블로그 목록 (무한 스크롤용 - 슬라이드 필요시만) -->
+                                            <template x-if="needsBlogSlide(row.data.length)">
+                                                <template x-for="(flowBlog, i) in row.data" :key="'blog-dup-' + flowBlog.id">
+                                                    <span class="blog-slide-item" aria-hidden="true">
+                                                        <span class="blog-platform-badge"
+                                                              :class="flowBlog.blog.platform === 'wordpress' ? 'blog-platform-wp' : 'blog-platform-bl'"
+                                                              x-text="flowBlog.blog.platform === 'wordpress' ? 'WP' : 'BL'"></span>
+                                                        <span class="blog-slide-name" x-text="flowBlog.blog.name"></span>
+                                                        <span x-show="i < row.data.length - 1" class="blog-slide-separator">·</span>
+                                                    </span>
+                                                </template>
+                                            </template>
+                                        </div>
+                                        <span class="blog-pause-hint">⏸</span>
+                                    </div>
+                                </div>
+                            </template>
                         </div>
                     </template>
                 </div>
+            </template>
 
-                <div x-show="getFlowModules(flow).length === 0"
-                     class="text-sm text-gray-400 py-2 text-center">
-                    연결된 모듈이 없습니다
-                </div>
+            <!-- 모듈과 블로그 모두 없음 -->
+            <div x-show="getFlowModules(flow).length === 0 && getFlowBlogs(flow).length === 0" class="module-empty-state">
+                연결된 모듈이 없습니다
             </div>
-
-            <div class="mb-4">
-                <div class="flex items-center justify-between mb-2">
-                    <h5 class="text-sm font-medium text-gray-700">📝 블로그:</h5>
-                    <span class="text-xs text-gray-500"
-                          x-text="`${getFlowBlogs(flow).length}개`"></span>
-                </div>
-
-                <div x-show="getFlowBlogs(flow).length > 0" class="space-y-2">
-                    <template x-for="flowBlog in getFlowBlogs(flow)" :key="flowBlog.id">
-                        <div class="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg">
-                            <div class="flex items-center gap-2 flex-1">
-                                <span class="text-lg"
-                                      x-text="getBlogIcon(flowBlog.blog.platform)"></span>
-                                <span class="text-sm font-medium text-gray-900"
-                                      x-text="flowBlog.blog.name"></span>
-                                <span class="text-xs text-gray-500"
-                                      x-text="getBlogPlatformLabel(flowBlog.blog.platform)"></span>
-                            </div>
-                            <button @click="removeBlogFromFlow(flow.id, flowBlog.id)"
-                                    class="p-1 text-gray-400 hover:text-red-600 hover:bg-red-100 rounded transition-colors"
-                                    title="블로그 제거">
-                                ✕
-                            </button>
-                        </div>
-                    </template>
-                </div>
-
-                <div x-show="getFlowBlogs(flow).length === 0"
-                     class="text-sm text-gray-400 py-2 text-center">
-                    연결된 블로그가 없습니다
-                </div>
-            </div>
-
         </div>
 
-        <div class="mt-2 flex justify-end">
-            <button x-show="needsExpand"
-                    @click="expanded = !expanded"
-                    class="text-xs text-gray-500 hover:text-gray-700 py-1 px-3 rounded-md hover:bg-gray-100 transition-colors">
-                <span x-text="expanded ? '접기>>' : '더보기>>'"></span>
-            </button>
-        </div>
-
+        <!-- 더보기/접기 버튼 (통합 행 기준) -->
+        <button x-show="hiddenCount > 0"
+                @click="expanded = !expanded"
+                class="card-expand-btn">
+            <span x-text="expanded ? '접기 ▲' : `더보기 (${hiddenCount}개 더) ▼`"></span>
+        </button>
     </div>
 </div>

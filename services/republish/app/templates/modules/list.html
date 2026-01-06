@@ -4,6 +4,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="/static/css/components.css">
+<link rel="stylesheet" href="/static/css/flow-card-slide.css">
 <style>
     /* PC: 4열 레이아웃 */
     .module-grid {
@@ -200,7 +201,7 @@
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4" x-data="moduleListApp()">
     <!-- 헤더 -->
-    <div class="flex items-center justify-between mb-8">
+    <div class="flex items-center justify-between mb-4">
         <div class="flex-1">
             <h2 class="text-2xl font-bold text-gray-900">
                 📦 모듈 관리
@@ -218,6 +219,43 @@
                     <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
                 </svg>
                 모듈 생성
+            </button>
+        </div>
+    </div>
+
+    <!-- 정렬 컨트롤 -->
+    <div class="flex items-center justify-between mb-6 bg-gray-50 rounded-lg px-4 py-3">
+        <div class="flex items-center gap-2 text-sm text-gray-600">
+            <span>총</span>
+            <span class="font-semibold text-gray-900" x-text="modules.length"></span>
+            <span>개의 모듈</span>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <!-- 정렬 기준 선택 -->
+            <div class="flex items-center gap-2">
+                <label class="text-sm text-gray-600">정렬:</label>
+                <select x-model="sortBy"
+                        @change="saveSortPreference()"
+                        class="text-sm border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 py-1.5 pr-8">
+                    <option value="name">이름순</option>
+                    <option value="created_at">생성일순</option>
+                    <option value="updated_at">수정일순</option>
+                    <option value="module_type">타입순</option>
+                </select>
+            </div>
+
+            <!-- 정렬 방향 토글 -->
+            <button @click="toggleSortOrder()"
+                    class="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded-md transition-colors"
+                    :title="sortOrder === 'asc' ? '오름차순' : '내림차순'">
+                <svg x-show="sortOrder === 'asc'" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
+                </svg>
+                <svg x-show="sortOrder === 'desc'" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4"/>
+                </svg>
+                <span x-text="sortOrder === 'asc' ? '오름차순' : '내림차순'"></span>
             </button>
         </div>
     </div>
@@ -249,7 +287,8 @@
     </div>
 
     <!-- 데스크탑: 모듈 목록 (타입별 섹션으로 구분) -->
-    <div x-show="!loading && modules.length > 0" class="desktop-sections">
+    <!-- sortBy, sortOrder를 참조하여 반응성 보장 -->
+    <div x-show="!loading && modules.length > 0" class="desktop-sections" :data-sort-key="sortBy + '-' + sortOrder">
         <!-- 프롬프트 섹션 -->
         <div x-show="getModulesByType('prompt').length > 0" class="module-section">
             <div class="section-header">
@@ -258,7 +297,7 @@
                 <span class="section-count" x-text="getModulesByType('prompt').length"></span>
             </div>
             <div class="module-grid">
-                <template x-for="module in getModulesByType('prompt')" :key="module.id">
+                <template x-for="module in getModulesByType('prompt')" :key="module.id + '-' + sortBy + '-' + sortOrder">
                     {% include "modules/_card.html" %}
                 </template>
             </div>
@@ -272,7 +311,7 @@
                 <span class="section-count" x-text="getModulesByType('generate').length"></span>
             </div>
             <div class="module-grid">
-                <template x-for="module in getModulesByType('generate')" :key="module.id">
+                <template x-for="module in getModulesByType('generate')" :key="module.id + '-' + sortBy + '-' + sortOrder">
                     {% include "modules/_card.html" %}
                 </template>
             </div>
@@ -286,7 +325,7 @@
                 <span class="section-count" x-text="getModulesByType('publish').length"></span>
             </div>
             <div class="module-grid">
-                <template x-for="module in getModulesByType('publish')" :key="module.id">
+                <template x-for="module in getModulesByType('publish')" :key="module.id + '-' + sortBy + '-' + sortOrder">
                     {% include "modules/_card.html" %}
                 </template>
             </div>
@@ -300,7 +339,7 @@
                 <span class="section-count" x-text="getModulesByType('republish').length"></span>
             </div>
             <div class="module-grid">
-                <template x-for="module in getModulesByType('republish')" :key="module.id">
+                <template x-for="module in getModulesByType('republish')" :key="module.id + '-' + sortBy + '-' + sortOrder">
                     {% include "modules/_card.html" %}
                 </template>
             </div>
@@ -308,7 +347,7 @@
     </div>
 
     <!-- 모바일: 탭 레이아웃 -->
-    <div x-show="!loading && modules.length > 0" class="mobile-tabs" x-data="{ activeTab: 'prompt' }">
+    <div x-show="!loading && modules.length > 0" class="mobile-tabs" x-data="{ activeTab: 'prompt' }" :data-sort-key="sortBy + '-' + sortOrder">
         <!-- 탭 헤더 -->
         <div class="flex border-b border-gray-200 overflow-x-auto">
             <button @click="activeTab = 'prompt'"
@@ -348,7 +387,7 @@
         <!-- 탭 콘텐츠 -->
         <div class="mobile-tab-content" x-show="activeTab === 'prompt'">
             <div class="module-grid">
-                <template x-for="module in getModulesByType('prompt')" :key="module.id">
+                <template x-for="module in getModulesByType('prompt')" :key="module.id + '-' + sortBy + '-' + sortOrder">
                     {% include "modules/_card.html" %}
                 </template>
             </div>
@@ -356,7 +395,7 @@
 
         <div class="mobile-tab-content" x-show="activeTab === 'generate'">
             <div class="module-grid">
-                <template x-for="module in getModulesByType('generate')" :key="module.id">
+                <template x-for="module in getModulesByType('generate')" :key="module.id + '-' + sortBy + '-' + sortOrder">
                     {% include "modules/_card.html" %}
                 </template>
             </div>
@@ -364,7 +403,7 @@
 
         <div class="mobile-tab-content" x-show="activeTab === 'publish'">
             <div class="module-grid">
-                <template x-for="module in getModulesByType('publish')" :key="module.id">
+                <template x-for="module in getModulesByType('publish')" :key="module.id + '-' + sortBy + '-' + sortOrder">
                     {% include "modules/_card.html" %}
                 </template>
             </div>
@@ -372,7 +411,7 @@
 
         <div class="mobile-tab-content" x-show="activeTab === 'republish'">
             <div class="module-grid">
-                <template x-for="module in getModulesByType('republish')" :key="module.id">
+                <template x-for="module in getModulesByType('republish')" :key="module.id + '-' + sortBy + '-' + sortOrder">
                     {% include "modules/_card.html" %}
                 </template>
             </div>

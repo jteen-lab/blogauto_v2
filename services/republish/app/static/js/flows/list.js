@@ -21,8 +21,95 @@ function flowListApp() {
         selectedItems: [],
         availableItems: [],
 
+        // 정렬 상태
+        sortBy: 'name',
+        sortOrder: 'asc',
+
+        // 정렬된 플로우 목록 (computed property)
+        get sortedFlows() {
+            if (!this.flows || this.flows.length === 0) {
+                return [];
+            }
+
+            const sorted = [...this.flows].sort((a, b) => {
+                let valueA, valueB;
+
+                switch (this.sortBy) {
+                    case 'name':
+                        valueA = (a.name || '').toLowerCase();
+                        valueB = (b.name || '').toLowerCase();
+                        return valueA.localeCompare(valueB, 'ko');
+
+                    case 'created_at':
+                        valueA = new Date(a.created_at || 0).getTime();
+                        valueB = new Date(b.created_at || 0).getTime();
+                        return valueA - valueB;
+
+                    case 'updated_at':
+                        valueA = new Date(a.updated_at || a.created_at || 0).getTime();
+                        valueB = new Date(b.updated_at || b.created_at || 0).getTime();
+                        return valueA - valueB;
+
+                    case 'module_count':
+                        valueA = this.getFlowModules(a).length;
+                        valueB = this.getFlowModules(b).length;
+                        return valueA - valueB;
+
+                    case 'blog_count':
+                        valueA = this.getFlowBlogs(a).length;
+                        valueB = this.getFlowBlogs(b).length;
+                        return valueA - valueB;
+
+                    default:
+                        return 0;
+                }
+            });
+
+            // 내림차순이면 역순
+            if (this.sortOrder === 'desc') {
+                sorted.reverse();
+            }
+
+            return sorted;
+        },
+
+        // 정렬 방향 토글
+        toggleSortOrder() {
+            this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
+            this.saveSortPreference();
+        },
+
+        // 정렬 설정 저장 (localStorage)
+        saveSortPreference() {
+            try {
+                localStorage.setItem('flowSortBy', this.sortBy);
+                localStorage.setItem('flowSortOrder', this.sortOrder);
+            } catch (e) {
+                console.warn('정렬 설정 저장 실패:', e);
+            }
+        },
+
+        // 정렬 설정 로드 (localStorage)
+        loadSortPreference() {
+            try {
+                const savedSortBy = localStorage.getItem('flowSortBy');
+                const savedSortOrder = localStorage.getItem('flowSortOrder');
+                if (savedSortBy) {
+                    this.sortBy = savedSortBy;
+                }
+                if (savedSortOrder) {
+                    this.sortOrder = savedSortOrder;
+                }
+            } catch (e) {
+                console.warn('정렬 설정 로드 실패:', e);
+            }
+        },
+
         // 초기화
         async init() {
+            // 저장된 정렬 설정 로드
+            this.loadSortPreference();
+
             this.loading = true;
             try {
                 await Promise.all([
@@ -66,7 +153,6 @@ function flowListApp() {
             this.modules = data.modules || [];
         },
 
-        // 블로그 목록 로드
         async loadBlogs() {
             const response = await fetch('/api/v1/blogs', {
                 credentials: 'include'
@@ -77,7 +163,7 @@ function flowListApp() {
             }
 
             const data = await response.json();
-            this.blogs = data.blogs || [];
+            this.blogs = Array.isArray(data) ? data : (data.blogs || []);
         },
 
         // 플로우 생성 폼 표시
@@ -107,20 +193,14 @@ function flowListApp() {
             const flow = this.flows.find(f => f.id === flowId);
             if (!flow) return;
 
-            const copyName = `${flow.name} 사본`;
-
             try {
-                const response = await fetch('/api/v1/flows', {
+                // 복사 API 호출 (모듈, 블로그 포함)
+                const response = await fetch(`/api/v1/flows/${flowId}/copy`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    credentials: 'include',
-                    body: JSON.stringify({
-                        name: copyName,
-                        description: flow.description ? `${flow.description} (복사됨)` : '복사된 플로우',
-                        is_active: false
-                    })
+                    credentials: 'include'
                 });
 
                 if (!response.ok) {
@@ -130,7 +210,7 @@ function flowListApp() {
 
                 // 목록 새로고침
                 await this.loadFlows();
-                this.showSuccess('플로우가 복사되었습니다');
+                this.showSuccess('플로우가 복사되었습니다 (모듈, 블로그 포함)');
 
             } catch (error) {
                 this.showError(error.message);
@@ -488,6 +568,287 @@ function flowListApp() {
                 wordpress: 'WordPress'
             };
             return labels[platform] || platform;
+        },
+
+        // 모듈 타입별 색상 반환
+        getModuleColor(typeCode) {
+            const colors = {
+                republish: 'bg-blue-100',
+                publish: 'bg-green-100',
+                generate: 'bg-purple-100',
+                prompt: 'bg-yellow-100'
+            };
+            return colors[typeCode] || 'bg-gray-100';
+        },
+
+        // 모듈 타입 이름 반환
+        getModuleTypeName(typeCode) {
+            const names = {
+                republish: '재발행',
+                publish: '발행',
+                generate: '생성',
+                prompt: '프롬프트'
+            };
+            return names[typeCode] || typeCode;
+        },
+
+        // 포스트 범위 텍스트 반환
+        getPostRangeText(module) {
+            const start = module.post_range_start || 1;
+            const end = module.post_range_end;
+            if (!end) {
+                return `${start}~무제한 (누적 포스트)`;
+            }
+            return `${start}~${end} (누적 포스트)`;
+        },
+
+        // 간격 텍스트 반환
+        getIntervalText(module) {
+            const mode = module.interval_mode || 'manual';
+            const activeMinutes = this.calculateActiveMinutes(module);
+
+            if (mode === 'auto' && module.auto_daily_count) {
+                const minInterval = Math.ceil(activeMinutes / module.auto_daily_count);
+                return `${module.auto_daily_count}회/일 (최소 ${minInterval}분 간격)`;
+            } else if (module.manual_interval_minutes) {
+                const maxDaily = Math.floor(activeMinutes / module.manual_interval_minutes);
+                return `${module.manual_interval_minutes}분마다 (최대 ${maxDaily}회/일)`;
+            }
+            return "설정 없음";
+        },
+
+        // 활성 시간 계산
+        calculateActiveMinutes(module) {
+            if (!module.schedule_matrix || !Array.isArray(module.schedule_matrix)) {
+                return 720;
+            }
+            let totalActiveMinutes = 0;
+            for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
+                const daySchedule = module.schedule_matrix[dayIdx];
+                if (Array.isArray(daySchedule)) {
+                    const activeHours = daySchedule.filter(hour => hour === true).length;
+                    totalActiveMinutes += activeHours * 60;
+                }
+            }
+            return Math.round(totalActiveMinutes / 7) || 720;
+        },
+
+        // 스케줄 요약 반환
+        getScheduleSummary(module) {
+            if (!module.schedule_matrix || !Array.isArray(module.schedule_matrix)) {
+                return "설정 없음";
+            }
+            const schedule = module.schedule_matrix;
+            const days = ['월', '화', '수', '목', '금', '토', '일'];
+            const dayRanges = {};
+
+            for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
+                const daySchedule = schedule[dayIdx];
+                if (Array.isArray(daySchedule) && daySchedule.some(hour => hour === true)) {
+                    const timeRange = this.extractTimeRange(daySchedule);
+                    if (timeRange) {
+                        dayRanges[dayIdx] = timeRange;
+                    }
+                }
+            }
+
+            if (Object.keys(dayRanges).length === 0) {
+                return "설정 없음";
+            }
+
+            const timeGroups = {};
+            for (const [dayIdx, timeRange] of Object.entries(dayRanges)) {
+                if (!timeGroups[timeRange]) {
+                    timeGroups[timeRange] = [];
+                }
+                timeGroups[timeRange].push(parseInt(dayIdx));
+            }
+
+            const groupTexts = [];
+            for (const [timeRange, dayIndices] of Object.entries(timeGroups)) {
+                const dayText = this.formatDayRange(dayIndices, days);
+                groupTexts.push(`${dayText}(${timeRange})`);
+            }
+            return groupTexts.join('\n');
+        },
+
+        // 시간 범위 추출
+        extractTimeRange(daySchedule) {
+            let startHour = -1;
+            let endHour = -1;
+            for (let hour = 0; hour < 24; hour++) {
+                if (daySchedule[hour]) {
+                    if (startHour === -1) startHour = hour;
+                    endHour = hour;
+                }
+            }
+            if (startHour === -1) return null;
+            return `${String(startHour).padStart(2, '0')}~${String(endHour + 1).padStart(2, '0')}`;
+        },
+
+        // 요일 범위 포맷
+        formatDayRange(dayIndices, days) {
+            if (dayIndices.length === 1) {
+                return days[dayIndices[0]];
+            }
+            dayIndices.sort((a, b) => a - b);
+            let ranges = [];
+            let start = dayIndices[0];
+            let end = start;
+
+            for (let i = 1; i < dayIndices.length; i++) {
+                if (dayIndices[i] === end + 1) {
+                    end = dayIndices[i];
+                } else {
+                    ranges.push(start === end ? days[start] : `${days[start]}~${days[end]}`);
+                    start = dayIndices[i];
+                    end = start;
+                }
+            }
+            ranges.push(start === end ? days[start] : `${days[start]}~${days[end]}`);
+            return ranges.join(', ');
+        },
+
+        // ========================================
+        // 슬라이드 UI 헬퍼 함수들
+        // ========================================
+
+        // 모듈 타입별 표시할 정보 아이템 반환
+        getModuleInfoItems(module) {
+            const items = [];
+            const typeCode = module.module_type?.code || '';
+
+            if (typeCode === 'republish') {
+                items.push({ label: '범위', value: this.getPostRangeText(module) });
+                items.push({ label: '간격', value: this.getIntervalText(module) });
+                const schedule = this.getScheduleSummary(module);
+                if (schedule !== '설정 없음') {
+                    items.push({ label: '스케줄', value: schedule });
+                }
+            } else if (typeCode === 'publish') {
+                items.push({ label: '간격', value: this.getIntervalText(module) });
+                const schedule = this.getScheduleSummary(module);
+                if (schedule !== '설정 없음') {
+                    items.push({ label: '스케줄', value: schedule });
+                }
+            } else if (typeCode === 'generate') {
+                if (module.ai_model) {
+                    items.push({ label: 'AI', value: module.ai_model });
+                }
+                if (module.prompt_template) {
+                    const promptPreview = module.prompt_template.substring(0, 30) + '...';
+                    items.push({ label: '프롬프트', value: promptPreview });
+                }
+            } else if (typeCode === 'prompt') {
+                if (module.prompt_name) {
+                    items.push({ label: '이름', value: module.prompt_name });
+                }
+                if (module.category) {
+                    items.push({ label: '카테고리', value: module.category });
+                }
+            }
+
+            // 기본 정보가 없으면 생성일 표시
+            if (items.length === 0 && module.created_at) {
+                const date = new Date(module.created_at).toLocaleDateString('ko-KR');
+                items.push({ label: '생성일', value: date });
+            }
+
+            return items;
+        },
+
+        // 모듈 정보 텍스트 길이에 따른 슬라이드 속도 계산 (초)
+        getModuleSlideDuration(module) {
+            const items = this.getModuleInfoItems(module);
+            // 모든 아이템의 텍스트 길이 합산
+            const totalLength = items.reduce((sum, item) => {
+                return sum + (item.label?.length || 0) + (item.value?.length || 0);
+            }, 0);
+            const baseSpeed = 12; // 기본 12초
+            const perChar = 0.25; // 글자당 0.25초 추가
+            const minDuration = 12; // 최소 12초
+            const maxDuration = 40; // 최대 40초
+            return Math.max(minDuration, Math.min(maxDuration, baseSpeed + (totalLength * perChar)));
+        },
+
+        // 블로그 개수에 따른 슬라이드 속도 계산 (초) - 20% 느림 적용
+        getBlogSlideDuration(count) {
+            const baseSpeed = 5.4; // 블로그당 기본 5.4초 (기존 4.5초의 1.2배)
+            const minDuration = 14; // 최소 14초 (기존 12초의 1.2배)
+            const maxDuration = 44; // 최대 44초 (기존 37초의 1.2배)
+            const duration = Math.max(minDuration, Math.min(maxDuration, count * baseSpeed));
+            return duration;
+        },
+
+        // 모듈 슬라이드 필요 여부 판단 (정보 아이템 3개 이상)
+        needsModuleSlide(module) {
+            const items = this.getModuleInfoItems(module);
+            return items.length >= 3;
+        },
+
+        // 블로그 슬라이드 필요 여부 판단 (4개 이상)
+        needsBlogSlide(count) {
+            return count >= 4;
+        },
+
+        // 모듈 슬라이드 초기화 체크 (DOM 기반)
+        initSlideCheck(element) {
+            const container = element.querySelector('.module-slide-container');
+            const track = element.querySelector('.module-slide-track');
+            if (!container || !track) return;
+
+            // 약간의 지연 후 너비 체크 (렌더링 완료 대기)
+            setTimeout(() => {
+                const containerWidth = container.clientWidth;
+                const trackWidth = track.scrollWidth / 2; // 복제된 콘텐츠 제외
+
+                if (trackWidth <= containerWidth) {
+                    track.classList.add('no-slide');
+                }
+            }, 100);
+        },
+
+        // 블로그 슬라이드 초기화 체크 (DOM 기반)
+        initBlogSlideCheck(element, count) {
+            if (count < 4) return;
+
+            const container = element.querySelector('.blog-slide-container');
+            const track = element.querySelector('.blog-slide-track');
+            if (!container || !track) return;
+
+            setTimeout(() => {
+                const containerWidth = container.clientWidth;
+                const trackWidth = track.scrollWidth / 2;
+
+                if (trackWidth <= containerWidth) {
+                    track.classList.add('no-slide');
+                }
+            }, 100);
+        },
+
+        // 터치 일시정지 토글 (모바일용)
+        toggleSlideTouch(event, element) {
+            // 터치 이벤트에서만 동작
+            if (event.type !== 'touchstart') return;
+
+            const track = element.querySelector('.module-slide-track, .blog-slide-track');
+            if (!track) return;
+
+            // 현재 상태 토글
+            const isPaused = track.classList.contains('paused');
+            if (isPaused) {
+                track.classList.remove('paused');
+                element.classList.remove('touch-paused');
+            } else {
+                track.classList.add('paused');
+                element.classList.add('touch-paused');
+
+                // 5초 후 자동 재개
+                setTimeout(() => {
+                    track.classList.remove('paused');
+                    element.classList.remove('touch-paused');
+                }, 5000);
+            }
         },
 
         // 성공 메시지 표시

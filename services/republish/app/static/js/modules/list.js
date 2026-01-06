@@ -14,8 +14,15 @@ function moduleListApp() {
         intervalTextCache: {},
         scheduleSummaryCache: {},
 
+        // 정렬 상태
+        sortBy: 'name',
+        sortOrder: 'asc',
+
         // 초기화
         async init() {
+            // 저장된 정렬 설정 로드
+            this.loadSortPreference();
+
             this.loading = true;
             try {
                 await Promise.all([
@@ -28,6 +35,82 @@ function moduleListApp() {
             } finally {
                 this.loading = false;
             }
+        },
+
+        // 정렬 방향 토글
+        toggleSortOrder() {
+            this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
+            this.saveSortPreference();
+        },
+
+        // 정렬 설정 저장 (localStorage)
+        saveSortPreference() {
+            try {
+                localStorage.setItem('moduleSortBy', this.sortBy);
+                localStorage.setItem('moduleSortOrder', this.sortOrder);
+            } catch (e) {
+                console.warn('정렬 설정 저장 실패:', e);
+            }
+        },
+
+        // 정렬 설정 로드 (localStorage)
+        loadSortPreference() {
+            try {
+                const savedSortBy = localStorage.getItem('moduleSortBy');
+                const savedSortOrder = localStorage.getItem('moduleSortOrder');
+                if (savedSortBy) {
+                    this.sortBy = savedSortBy;
+                }
+                if (savedSortOrder) {
+                    this.sortOrder = savedSortOrder;
+                }
+            } catch (e) {
+                console.warn('정렬 설정 로드 실패:', e);
+            }
+        },
+
+        // 정렬된 모듈 목록 반환
+        getSortedModules(moduleList) {
+            if (!moduleList || moduleList.length === 0) {
+                return [];
+            }
+
+            const sorted = [...moduleList].sort((a, b) => {
+                let valueA, valueB;
+
+                switch (this.sortBy) {
+                    case 'name':
+                        valueA = (a.name || '').toLowerCase();
+                        valueB = (b.name || '').toLowerCase();
+                        return valueA.localeCompare(valueB, 'ko');
+
+                    case 'created_at':
+                        valueA = new Date(a.created_at || 0).getTime();
+                        valueB = new Date(b.created_at || 0).getTime();
+                        return valueA - valueB;
+
+                    case 'updated_at':
+                        valueA = new Date(a.updated_at || a.created_at || 0).getTime();
+                        valueB = new Date(b.updated_at || b.created_at || 0).getTime();
+                        return valueA - valueB;
+
+                    case 'module_type':
+                        const typeOrder = { 'prompt': 1, 'generate': 2, 'publish': 3, 'republish': 4 };
+                        valueA = typeOrder[a.module_type?.code] || 99;
+                        valueB = typeOrder[b.module_type?.code] || 99;
+                        return valueA - valueB;
+
+                    default:
+                        return 0;
+                }
+            });
+
+            // 내림차순이면 역순
+            if (this.sortOrder === 'desc') {
+                sorted.reverse();
+            }
+
+            return sorted;
         },
 
         // 모듈 타입 목록 로드
@@ -66,9 +149,10 @@ function moduleListApp() {
             }, 100);
         },
 
-        // 타입별 모듈 목록 반환
+        // 타입별 모듈 목록 반환 (정렬 적용)
         getModulesByType(typeCode) {
-            return this.modules.filter(module => module.module_type.code === typeCode);
+            const filtered = this.modules.filter(module => module.module_type.code === typeCode);
+            return this.getSortedModules(filtered);
         },
 
         // 타입별 모듈 개수 계산
@@ -1016,3 +1100,292 @@ document.addEventListener('keydown', (e) => {
         }
     }
 });
+
+
+// ========================================
+// 모듈 카드 슬라이드 관련 함수
+// ========================================
+
+/**
+ * 모듈 카드 상태 (Alpine.js용)
+ */
+function moduleCardState() {
+    return {
+        initCard(el) {
+            // 카드 초기화 로직 (필요시 확장)
+        }
+    };
+}
+
+/**
+ * 모듈 타입별 표시할 정보 행 목록 반환
+ * @param {Object} module - 모듈 객체
+ * @returns {Array} - [{label, value}, ...]
+ */
+function getModuleInfoRows(module) {
+    if (!module) return [];
+
+    const rows = [];
+    const typeCode = module.module_type?.code || '';
+    const app = window.moduleListAppInstance;
+
+    if (typeCode === 'republish') {
+        // 재발행 모듈 - 적용 구간
+        const start = module.post_range_start || 1;
+        const end = module.post_range_end;
+        const rangeText = end ? `${start}~${end} (누적 포스트)` : `${start}~무제한 (누적 포스트)`;
+        rows.push({ label: '적용구간', value: rangeText });
+
+        // 재발행 간격
+        if (app && typeof app.getIntervalText === 'function') {
+            rows.push({ label: '재발행 간격', value: app.getIntervalText(module) });
+        } else if (module.manual_interval_minutes) {
+            rows.push({ label: '재발행 간격', value: `${module.manual_interval_minutes}분마다` });
+        } else if (module.auto_daily_count) {
+            rows.push({ label: '재발행 간격', value: `${module.auto_daily_count}회/일` });
+        }
+
+        // 스케줄
+        if (app && typeof app.getScheduleSummary === 'function') {
+            const schedule = app.getScheduleSummary(module);
+            if (schedule && schedule !== '설정 없음') {
+                rows.push({ label: '스케줄', value: schedule.replace(/\n/g, ' | ') });
+            }
+        } else if (module.schedule_matrix && Array.isArray(module.schedule_matrix)) {
+            // 폴백: app이 없을 때 직접 스케줄 파싱
+            const scheduleText = parseScheduleMatrix(module.schedule_matrix);
+            if (scheduleText && scheduleText !== '설정 없음') {
+                rows.push({ label: '스케줄', value: scheduleText });
+            }
+        }
+    } else if (typeCode === 'publish') {
+        // 발행 모듈
+        if (app && typeof app.getIntervalText === 'function') {
+            rows.push({ label: '간격', value: app.getIntervalText(module) });
+        }
+        if (app && typeof app.getScheduleSummary === 'function') {
+            const schedule = app.getScheduleSummary(module);
+            if (schedule && schedule !== '설정 없음') {
+                rows.push({ label: '스케줄', value: schedule.replace(/\n/g, ' | ') });
+            }
+        } else if (module.schedule_matrix && Array.isArray(module.schedule_matrix)) {
+            // 폴백: app이 없을 때 직접 스케줄 파싱
+            const scheduleText = parseScheduleMatrix(module.schedule_matrix);
+            if (scheduleText && scheduleText !== '설정 없음') {
+                rows.push({ label: '스케줄', value: scheduleText });
+            }
+        }
+    } else if (typeCode === 'generate') {
+        // AI 생성 모듈
+        if (module.ai_model) {
+            rows.push({ label: 'AI 모델', value: module.ai_model });
+        }
+        if (module.prompt_template) {
+            const preview = module.prompt_template.length > 40
+                ? module.prompt_template.substring(0, 40) + '...'
+                : module.prompt_template;
+            rows.push({ label: '프롬프트', value: preview });
+        }
+        if (module.settings) {
+            if (module.settings.max_tokens) {
+                rows.push({ label: '토큰 제한', value: `${module.settings.max_tokens}토큰` });
+            }
+            if (module.settings.temperature) {
+                rows.push({ label: '창의성', value: String(module.settings.temperature) });
+            }
+        }
+    } else if (typeCode === 'prompt') {
+        // 프롬프트 모듈
+        if (module.template_name || module.prompt_name) {
+            rows.push({ label: '템플릿', value: module.template_name || module.prompt_name });
+        }
+        if (module.category) {
+            rows.push({ label: '카테고리', value: module.category });
+        }
+        if (module.variables && Array.isArray(module.variables)) {
+            rows.push({ label: '변수', value: module.variables.join(', ') });
+        }
+        if (module.settings && module.settings.max_length) {
+            rows.push({ label: '길이 설정', value: `${module.settings.max_length}자` });
+        }
+    }
+
+    // 정보가 없으면 생성일 표시 (폴백)
+    if (rows.length === 0 && module.created_at) {
+        const date = new Date(module.created_at).toLocaleDateString('ko-KR');
+        rows.push({ label: '생성일', value: date });
+    }
+
+    return rows;
+}
+
+/**
+ * 슬라이드 필요 여부 판단 (값 길이 기준)
+ * @param {string} value - 표시할 값
+ * @returns {boolean}
+ */
+function needsModuleInfoSlide(value) {
+    if (!value) return false;
+    // 30자 이상이면 슬라이드
+    return value.length > 30;
+}
+
+/**
+ * 슬라이드 속도 계산 (초)
+ * @param {string} value - 표시할 값
+ * @returns {number}
+ */
+function getModuleInfoSlideDuration(value) {
+    if (!value) return 12;
+    const length = value.length;
+    const baseSpeed = 10; // 기본 10초 (플로우보다 약간 빠름)
+    const perChar = 0.2; // 글자당 0.2초 추가
+    const minDuration = 10; // 최소 10초
+    const maxDuration = 35; // 최대 35초
+    return Math.max(minDuration, Math.min(maxDuration, baseSpeed + (length * perChar)));
+}
+
+/**
+ * 슬라이드 초기화 체크 (DOM 기반)
+ * @param {HTMLElement} element - 행 요소
+ */
+function initModuleInfoSlideCheck(element) {
+    const container = element.querySelector('.module-info-container');
+    const track = element.querySelector('.module-info-track');
+    if (!container || !track) return;
+
+    // 렌더링 완료 후 너비 체크
+    setTimeout(() => {
+        const containerWidth = container.clientWidth;
+        const trackWidth = track.scrollWidth / 2; // 복제된 콘텐츠 제외
+
+        if (trackWidth <= containerWidth) {
+            track.classList.add('no-slide');
+        }
+    }, 100);
+}
+
+/**
+ * 터치 일시정지 토글 (모바일용)
+ * @param {Event} event - 터치 이벤트
+ * @param {HTMLElement} element - 행 요소
+ */
+function toggleModuleInfoTouch(event, element) {
+    if (event.type !== 'touchstart') return;
+
+    const track = element.querySelector('.module-info-track');
+    if (!track) return;
+
+    const isPaused = track.classList.contains('paused');
+    if (isPaused) {
+        track.classList.remove('paused');
+        element.classList.remove('touch-paused');
+    } else {
+        track.classList.add('paused');
+        element.classList.add('touch-paused');
+
+        // 5초 후 자동 재개
+        setTimeout(() => {
+            track.classList.remove('paused');
+            element.classList.remove('touch-paused');
+        }, 5000);
+    }
+}
+
+/**
+ * 확장/축소 시 슬라이드 재초기화
+ * @param {HTMLElement} container - 슬라이드 리스트 컨테이너
+ */
+function reinitModuleSlides(container) {
+    if (!container) return;
+
+    // 모든 module-info-row에 대해 슬라이드 체크 재실행
+    const rows = container.querySelectorAll('.module-info-row');
+    rows.forEach(row => {
+        const track = row.querySelector('.module-info-track');
+        if (track) {
+            // 기존 no-slide 클래스 제거 후 재체크
+            track.classList.remove('no-slide');
+            initModuleInfoSlideCheck(row);
+        }
+    });
+}
+
+/**
+ * 스케줄 매트릭스를 텍스트로 변환 (폴백용)
+ * @param {Array} scheduleMatrix - 7x24 스케줄 배열
+ * @returns {string} - 스케줄 요약 텍스트
+ */
+function parseScheduleMatrix(scheduleMatrix) {
+    if (!scheduleMatrix || !Array.isArray(scheduleMatrix)) {
+        return '설정 없음';
+    }
+
+    const days = ['월', '화', '수', '목', '금', '토', '일'];
+    const dayRanges = {};
+
+    // 각 요일의 활성 시간대 범위 추출
+    for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
+        const daySchedule = scheduleMatrix[dayIdx];
+        if (Array.isArray(daySchedule) && daySchedule.some(hour => hour === true)) {
+            let startHour = -1;
+            let endHour = -1;
+
+            for (let hour = 0; hour < 24; hour++) {
+                if (daySchedule[hour]) {
+                    if (startHour === -1) startHour = hour;
+                    endHour = hour;
+                }
+            }
+
+            if (startHour !== -1) {
+                dayRanges[dayIdx] = `${String(startHour).padStart(2, '0')}~${String(endHour + 1).padStart(2, '0')}`;
+            }
+        }
+    }
+
+    if (Object.keys(dayRanges).length === 0) {
+        return '설정 없음';
+    }
+
+    // 동일한 시간대를 가진 요일들을 그룹화
+    const timeGroups = {};
+    for (const [dayIdx, timeRange] of Object.entries(dayRanges)) {
+        if (!timeGroups[timeRange]) {
+            timeGroups[timeRange] = [];
+        }
+        timeGroups[timeRange].push(parseInt(dayIdx));
+    }
+
+    // 각 그룹별로 텍스트 생성
+    const groupTexts = [];
+    for (const [timeRange, dayIndices] of Object.entries(timeGroups)) {
+        dayIndices.sort((a, b) => a - b);
+
+        let dayText;
+        if (dayIndices.length === 1) {
+            dayText = days[dayIndices[0]];
+        } else if (dayIndices.length === 7) {
+            dayText = '매일';
+        } else {
+            // 연속 요일 체크
+            let isConsecutive = true;
+            for (let i = 1; i < dayIndices.length; i++) {
+                if (dayIndices[i] !== dayIndices[i-1] + 1) {
+                    isConsecutive = false;
+                    break;
+                }
+            }
+
+            if (isConsecutive && dayIndices.length > 2) {
+                dayText = `${days[dayIndices[0]]}~${days[dayIndices[dayIndices.length - 1]]}`;
+            } else {
+                dayText = dayIndices.map(idx => days[idx]).join(',');
+            }
+        }
+
+        groupTexts.push(`${dayText}(${timeRange})`);
+    }
+
+    return groupTexts.join(' | ');
+}

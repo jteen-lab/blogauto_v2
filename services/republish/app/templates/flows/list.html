@@ -4,6 +4,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="/static/css/components.css">
+<link rel="stylesheet" href="/static/css/flow-card-slide.css">
 <style>
     /* 플로우 카드 그리드 레이아웃 */
     .flow-grid {
@@ -105,7 +106,7 @@
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4" x-data="flowListApp()">
     <!-- 헤더 -->
-    <div class="flex items-center justify-between mb-8">
+    <div class="flex items-center justify-between mb-4">
         <div class="flex-1">
             <h2 class="text-2xl font-bold text-gray-900">
                 🔀 플로우 관리
@@ -123,6 +124,48 @@
                     <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
                 </svg>
                 플로우 생성
+            </button>
+        </div>
+    </div>
+
+    <!-- 정렬 컨트롤 -->
+    <div class="flex items-center justify-between mb-6 bg-gray-50 rounded-lg px-4 py-3">
+        <div class="flex items-center gap-2 text-sm text-gray-600">
+            <span>총</span>
+            <span class="font-semibold text-gray-900" x-text="flows.length"></span>
+            <span>개의 플로우</span>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <!-- 정렬 기준 선택 -->
+            <div class="flex items-center gap-2">
+                <label class="text-sm text-gray-600">정렬:</label>
+                <select x-model="sortBy"
+                        @change="saveSortPreference()"
+                        class="text-sm border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 py-1.5 pr-8">
+                    <option value="name">이름순</option>
+                    <option value="created_at">생성일순</option>
+                    <option value="updated_at">수정일순</option>
+                    <option value="module_count">모듈 개수</option>
+                    <option value="blog_count">블로그 개수</option>
+                </select>
+            </div>
+
+            <!-- 정렬 방향 토글 -->
+            <button @click="toggleSortOrder()"
+                    class="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded-md transition-colors"
+                    :title="sortOrder === 'asc' ? '오름차순' : '내림차순'">
+                <template x-if="sortOrder === 'asc'">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
+                    </svg>
+                </template>
+                <template x-if="sortOrder === 'desc'">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4"/>
+                    </svg>
+                </template>
+                <span x-text="sortOrder === 'asc' ? '오름차순' : '내림차순'"></span>
             </button>
         </div>
     </div>
@@ -162,7 +205,7 @@
 
     <!-- 플로우 목록 -->
     <div x-show="!loading && flows.length > 0" class="flow-grid">
-        <template x-for="flow in flows" :key="flow.id">
+        <template x-for="flow in sortedFlows" :key="flow.id">
             {% include "flows/_card.html" %}
         </template>
     </div>
