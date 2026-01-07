@@ -1312,6 +1312,44 @@ function reinitModuleSlides(container) {
 }
 
 /**
+ * 모바일 탭 전환 시 슬라이드 재초기화
+ * display: none 상태에서 너비가 0으로 계산되는 문제 해결
+ * @param {HTMLElement} tabContent - 탭 콘텐츠 요소
+ */
+function reinitMobileTabSlides(tabContent) {
+    if (!tabContent) return;
+
+    // 약간의 딜레이 후 실행 (display: block 적용 대기)
+    setTimeout(() => {
+        const rows = tabContent.querySelectorAll('.module-info-row');
+        rows.forEach(row => {
+            const container = row.querySelector('.module-info-container');
+            const track = row.querySelector('.module-info-track');
+            if (!container || !track) return;
+
+            // 기존 상태 초기화
+            track.classList.remove('no-slide');
+
+            // 너비 재계산
+            const containerWidth = container.clientWidth;
+            const trackWidth = track.scrollWidth / 2; // 복제된 콘텐츠 제외
+
+            if (trackWidth > containerWidth) {
+                // 슬라이드 필요 - 애니메이션 재시작
+                track.style.webkitAnimation = 'none';
+                track.style.animation = 'none';
+                track.offsetHeight; // reflow 트리거
+                track.style.webkitAnimation = '';
+                track.style.animation = '';
+            } else {
+                // 슬라이드 불필요
+                track.classList.add('no-slide');
+            }
+        });
+    }, 100);
+}
+
+/**
  * 스케줄 매트릭스를 텍스트로 변환 (폴백용)
  * @param {Array} scheduleMatrix - 7x24 스케줄 배열
  * @returns {string} - 스케줄 요약 텍스트

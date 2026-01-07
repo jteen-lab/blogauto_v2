@@ -385,7 +385,9 @@
         </div>
 
         <!-- 탭 콘텐츠 -->
-        <div class="mobile-tab-content" x-show="activeTab === 'prompt'">
+        <div class="mobile-tab-content"
+             x-show="activeTab === 'prompt'"
+             x-effect="if (activeTab === 'prompt') $nextTick(() => reinitMobileTabSlides($el))">
             <div class="module-grid">
                 <template x-for="module in getModulesByType('prompt')" :key="module.id + '-' + sortBy + '-' + sortOrder">
                     {% include "modules/_card.html" %}
@@ -393,7 +395,9 @@
             </div>
         </div>
 
-        <div class="mobile-tab-content" x-show="activeTab === 'generate'">
+        <div class="mobile-tab-content"
+             x-show="activeTab === 'generate'"
+             x-effect="if (activeTab === 'generate') $nextTick(() => reinitMobileTabSlides($el))">
             <div class="module-grid">
                 <template x-for="module in getModulesByType('generate')" :key="module.id + '-' + sortBy + '-' + sortOrder">
                     {% include "modules/_card.html" %}
@@ -401,7 +405,9 @@
             </div>
         </div>
 
-        <div class="mobile-tab-content" x-show="activeTab === 'publish'">
+        <div class="mobile-tab-content"
+             x-show="activeTab === 'publish'"
+             x-effect="if (activeTab === 'publish') $nextTick(() => reinitMobileTabSlides($el))">
             <div class="module-grid">
                 <template x-for="module in getModulesByType('publish')" :key="module.id + '-' + sortBy + '-' + sortOrder">
                     {% include "modules/_card.html" %}
@@ -409,7 +415,9 @@
             </div>
         </div>
 
-        <div class="mobile-tab-content" x-show="activeTab === 'republish'">
+        <div class="mobile-tab-content"
+             x-show="activeTab === 'republish'"
+             x-effect="if (activeTab === 'republish') $nextTick(() => reinitMobileTabSlides($el))">
             <div class="module-grid">
                 <template x-for="module in getModulesByType('republish')" :key="module.id + '-' + sortBy + '-' + sortOrder">
                     {% include "modules/_card.html" %}
