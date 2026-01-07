@@ -16,6 +16,17 @@
     }
 }
 
+@-webkit-keyframes slideInfo {
+    0% {
+        -webkit-transform: translateX(0);
+        transform: translateX(0);
+    }
+    100% {
+        -webkit-transform: translateX(-50%);
+        transform: translateX(-50%);
+    }
+}
+
 /* ========================================
    모듈 행 슬라이드
    ======================================== */
@@ -101,12 +112,14 @@
 .module-slide-track {
     display: inline-flex;
     white-space: nowrap;
+    -webkit-animation: slideInfo var(--slide-duration, 30s) linear infinite;
     animation: slideInfo var(--slide-duration, 30s) linear infinite;
     padding: 0.5rem 0;
 }
 
 /* 호버 시 일시정지 */
 .module-slide-row:hover .module-slide-track {
+    -webkit-animation-play-state: paused;
     animation-play-state: paused;
 }
 
@@ -201,11 +214,13 @@
 .blog-slide-track {
     display: inline-flex;
     white-space: nowrap;
+    -webkit-animation: slideInfo var(--blog-slide-duration, 22s) linear infinite;
     animation: slideInfo var(--blog-slide-duration, 22s) linear infinite;
 }
 
 /* 호버 시 일시정지 */
 .blog-slide-section:hover .blog-slide-track {
+    -webkit-animation-play-state: paused;
     animation-play-state: paused;
 }
 
@@ -317,6 +332,7 @@
 @media (prefers-reduced-motion: reduce) {
     .module-slide-track,
     .blog-slide-track {
+        -webkit-animation: none !important;
         animation: none !important;
     }
 
@@ -336,6 +352,7 @@
 
 .module-slide-track.paused,
 .blog-slide-track.paused {
+    -webkit-animation-play-state: paused !important;
     animation-play-state: paused !important;
 }
 
@@ -355,6 +372,7 @@
 
 .module-slide-track.no-slide,
 .blog-slide-track.no-slide {
+    -webkit-animation: none;
     animation: none;
 }
 
@@ -443,12 +461,14 @@
 .module-info-track {
     display: inline-flex;
     white-space: nowrap;
+    -webkit-animation: slideInfo var(--slide-duration, 30s) linear infinite;
     animation: slideInfo var(--slide-duration, 30s) linear infinite;
     padding: 0.5rem 0;
 }
 
 /* 호버 시 일시정지 */
 .module-info-row:hover .module-info-track {
+    -webkit-animation-play-state: paused;
     animation-play-state: paused;
 }
 
@@ -463,6 +483,7 @@
 
 /* 슬라이드 불필요 시 정적 표시 */
 .module-info-track.no-slide {
+    -webkit-animation: none;
     animation: none;
 }
 
@@ -483,6 +504,7 @@
 
 /* 터치 일시정지 상태 */
 .module-info-track.paused {
+    -webkit-animation-play-state: paused !important;
     animation-play-state: paused !important;
 }
 
@@ -494,6 +516,7 @@
 /* 접근성: 모션 감소 */
 @media (prefers-reduced-motion: reduce) {
     .module-info-track {
+        -webkit-animation: none !important;
         animation: none !important;
     }
 }
