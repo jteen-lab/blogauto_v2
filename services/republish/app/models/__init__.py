@@ -29,6 +29,9 @@ from .flow import Flow
 from .flow_module import FlowModule
 from .flow_blog import FlowBlog
 
+# Phase C-4: Autorun models
+from .autorun_log import AutorunLog
+
 __all__ = [
     # Core models
     "User",
@@ -56,4 +59,6 @@ __all__ = [
     "Flow",
     "FlowModule",
     "FlowBlog",
+    # Phase C-4: Autorun models
+    "AutorunLog",
 ]

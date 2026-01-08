@@ -10,7 +10,7 @@ Features:
 
 from datetime import datetime
 from typing import List, Optional
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
@@ -33,6 +33,19 @@ class Flow(Base):
         default="inactive",
         nullable=False,
         comment="플로우 상태: active/inactive/paused",
+    )
+
+    # 오토런 관련 필드
+    is_in_autorun = Column(
+        Boolean,
+        default=False,
+        nullable=False,
+        comment="오토런에 추가됨 여부",
+    )
+    added_to_autorun_at = Column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="오토런 추가 시간",
     )
 
     # 타임스탬프
@@ -78,6 +91,18 @@ class Flow(Base):
     def pause(self) -> None:
         """플로우 일시 정지"""
         self.status = "paused"
+
+    def add_to_autorun(self) -> None:
+        """오토런에 추가"""
+        self.is_in_autorun = True
+        self.added_to_autorun_at = datetime.now()
+        self.status = "active"
+
+    def remove_from_autorun(self) -> None:
+        """오토런에서 제외"""
+        self.is_in_autorun = False
+        self.added_to_autorun_at = None
+        self.status = "inactive"
 
     def get_modules_by_order(self) -> List["Module"]:
         """실행 순서대로 모듈 목록 반환"""
