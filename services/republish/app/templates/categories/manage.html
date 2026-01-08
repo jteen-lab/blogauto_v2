@@ -19,7 +19,7 @@
                     <h1 class="text-2xl font-bold text-gray-900">카테고리 관리</h1>
                     <p class="text-gray-600 mt-1">3계층 카테고리 구조로 블로그 콘텐츠를 체계화하세요</p>
                 </div>
-                <div class="flex space-x-2">
+                <div class="hidden md:flex space-x-2">
                     <button
                         @click="showCreateTopic = true"
                         class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
@@ -29,29 +29,193 @@
                 </div>
             </div>
 
-            <!-- 통계 -->
-            <div class="grid grid-cols-4 gap-4 mt-6">
+            <!-- 통계 (모바일: 2x2, PC: 4열) -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
                 <div class="bg-blue-50 p-4 rounded-lg">
-                    <h3 class="text-blue-700 font-semibold">주제</h3>
-                    <p class="text-2xl font-bold text-blue-900">{{ stats.total_topics }}</p>
+                    <h3 class="text-blue-700 font-semibold text-sm md:text-base">주제</h3>
+                    <p class="text-xl md:text-2xl font-bold text-blue-900">{{ stats.total_topics }}</p>
                 </div>
                 <div class="bg-green-50 p-4 rounded-lg">
-                    <h3 class="text-green-700 font-semibold">하위 주제</h3>
-                    <p class="text-2xl font-bold text-green-900">{{ stats.total_subtopics }}</p>
+                    <h3 class="text-green-700 font-semibold text-sm md:text-base">하위 주제</h3>
+                    <p class="text-xl md:text-2xl font-bold text-green-900">{{ stats.total_subtopics }}</p>
                 </div>
                 <div class="bg-yellow-50 p-4 rounded-lg">
-                    <h3 class="text-yellow-700 font-semibold">키워드</h3>
-                    <p class="text-2xl font-bold text-yellow-900">{{ stats.total_keywords }}</p>
+                    <h3 class="text-yellow-700 font-semibold text-sm md:text-base">키워드</h3>
+                    <p class="text-xl md:text-2xl font-bold text-yellow-900">{{ stats.total_keywords }}</p>
                 </div>
                 <div class="bg-purple-50 p-4 rounded-lg">
-                    <h3 class="text-purple-700 font-semibold">블로그 연결</h3>
-                    <p class="text-2xl font-bold text-purple-900">{{ stats.total_blog_connections }}</p>
+                    <h3 class="text-purple-700 font-semibold text-sm md:text-base">블로그 연결</h3>
+                    <p class="text-xl md:text-2xl font-bold text-purple-900">{{ stats.total_blog_connections }}</p>
                 </div>
             </div>
         </div>
 
-        <!-- 3분할 카테고리 관리 -->
-        <div class="grid grid-cols-3 gap-6">
+        <!-- 모바일: 탭 UI (md 미만) -->
+        <div class="md:hidden" x-data="{ activeTab: 'topics' }">
+            <div class="border border-gray-200 rounded-lg bg-white">
+                <div class="flex border-b border-gray-200">
+                    <button type="button"
+                            @click="activeTab = 'topics'"
+                            :class="activeTab === 'topics' ? 'bg-blue-50 text-blue-700 border-blue-500' : 'bg-white text-gray-500 hover:text-gray-700'"
+                            class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap">
+                        주제
+                    </button>
+                    <button type="button"
+                            @click="activeTab = 'subtopics'"
+                            :class="activeTab === 'subtopics' ? 'bg-blue-50 text-blue-700 border-blue-500' : 'bg-white text-gray-500 hover:text-gray-700'"
+                            class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap">
+                        하위 주제
+                    </button>
+                    <button type="button"
+                            @click="activeTab = 'keywords'"
+                            :class="activeTab === 'keywords' ? 'bg-blue-50 text-blue-700 border-blue-500' : 'bg-white text-gray-500 hover:text-gray-700'"
+                            class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap">
+                        키워드
+                    </button>
+                </div>
+
+                <!-- 주제 탭 콘텐츠 -->
+                <div x-show="activeTab === 'topics'" class="flex flex-col" style="height: 420px;">
+                    <!-- 고정 영역: 헤더 + 추가 버튼 -->
+                    <div class="flex-shrink-0 p-4 border-b border-gray-100">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h2 class="text-lg font-semibold text-gray-900">주제 (Topics)</h2>
+                                <p class="text-sm text-gray-600">1차 카테고리</p>
+                            </div>
+                            <button @click="showCreateTopic = true" class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700">+ 추가</button>
+                        </div>
+                    </div>
+                    <!-- 스크롤 영역: 주제 목록 -->
+                    <div class="flex-1 overflow-y-auto min-h-0 p-4">
+                        <template x-for="topic in topics" :key="topic.id">
+                            <div
+                                class="p-3 border rounded-lg mb-2 cursor-pointer hover:bg-gray-50"
+                                :class="selectedTopic?.id === topic.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'"
+                                @click="selectTopicById(topic.id); activeTab = 'subtopics'"
+                            >
+                                <h3 class="font-medium text-gray-900" x-text="topic.name + '(' + topic.subtopic_count + ')'"></h3>
+                                <p class="text-sm text-gray-600 mt-1" x-show="topic.description" x-text="topic.description"></p>
+                                <div class="flex justify-end items-center mt-2">
+                                    <div class="flex space-x-1">
+                                        <button @click.stop="editTopicById(topic.id)" class="text-blue-600 hover:text-blue-800 text-xs">수정</button>
+                                        <button @click.stop="deleteTopic(topic.id)" class="text-red-600 hover:text-red-800 text-xs">삭제</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                        <div x-show="topics.length === 0" class="text-center py-8 text-gray-500">
+                            <p>아직 주제가 없습니다</p>
+                            <button @click="showCreateTopic = true" class="text-blue-600 hover:text-blue-800 mt-2">첫 주제를 추가해보세요</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 하위 주제 탭 콘텐츠 -->
+                <div x-show="activeTab === 'subtopics'" class="flex flex-col" style="height: 420px;">
+                    <!-- 고정 영역: 트리뷰 + 헤더 + 추가 버튼 -->
+                    <div class="flex-shrink-0 p-4 border-b border-gray-100">
+                        <!-- 상위 카테고리 트리뷰 -->
+                        <div class="flex items-center text-sm mb-3 bg-gray-50 rounded-lg p-2">
+                            <button @click="activeTab = 'topics'" class="text-blue-600 hover:text-blue-800 font-medium">주제</button>
+                            <span class="mx-2 text-gray-400">/</span>
+                            <span x-show="selectedTopic" class="text-gray-700 font-medium truncate" x-text="selectedTopic?.name"></span>
+                            <span x-show="!selectedTopic" class="text-gray-400">선택 안됨</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h2 class="text-lg font-semibold text-gray-900">하위 주제 (SubTopics)</h2>
+                                <p class="text-sm text-gray-600">2차 카테고리</p>
+                            </div>
+                            <button @click="showCreateSubTopic = true" x-show="selectedTopic" class="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700">+ 추가</button>
+                        </div>
+                    </div>
+                    <!-- 스크롤 영역: 하위 주제 목록 -->
+                    <div class="flex-1 overflow-y-auto min-h-0 p-4">
+                        <div x-show="!selectedTopic" class="text-center py-8 text-gray-500">
+                            <p>주제 탭에서 주제를 선택하세요</p>
+                        </div>
+                        <template x-for="subtopic in subtopics" :key="subtopic.id">
+                            <div
+                                class="p-3 border rounded-lg mb-2 cursor-pointer hover:bg-gray-50"
+                                :class="selectedSubTopic?.id === subtopic.id ? 'border-green-500 bg-green-50' : 'border-gray-200'"
+                                @click="selectSubTopic(subtopic); activeTab = 'keywords'"
+                            >
+                                <h3 class="font-medium text-gray-900" x-text="subtopic.name + '(' + subtopic.keyword_count + ')'"></h3>
+                                <p class="text-sm text-gray-600 mt-1" x-show="subtopic.description" x-text="subtopic.description"></p>
+                                <div class="flex justify-end items-center mt-2">
+                                    <div class="flex space-x-1">
+                                        <button @click.stop="editSubTopic(subtopic)" class="text-green-600 hover:text-green-800 text-xs">수정</button>
+                                        <button @click.stop="deleteSubTopic(subtopic.id)" class="text-red-600 hover:text-red-800 text-xs">삭제</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                        <div x-show="selectedTopic && subtopics.length === 0" class="text-center py-8 text-gray-500">
+                            <p>아직 하위 주제가 없습니다</p>
+                            <button @click="showCreateSubTopic = true" class="text-green-600 hover:text-green-800 mt-2">첫 하위 주제를 추가해보세요</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 키워드 탭 콘텐츠 -->
+                <div x-show="activeTab === 'keywords'" class="flex flex-col" style="height: 420px;">
+                    <!-- 고정 영역: 트리뷰 + 헤더 + 추가 버튼 -->
+                    <div class="flex-shrink-0 p-4 border-b border-gray-100">
+                        <!-- 상위 카테고리 트리뷰 -->
+                        <div class="flex items-center text-sm mb-3 bg-gray-50 rounded-lg p-2">
+                            <button @click="activeTab = 'topics'" class="text-blue-600 hover:text-blue-800 font-medium">주제</button>
+                            <span class="mx-2 text-gray-400">/</span>
+                            <template x-if="selectedTopic">
+                                <button @click="activeTab = 'subtopics'" class="text-green-600 hover:text-green-800 font-medium truncate max-w-[80px]" x-text="selectedTopic.name"></button>
+                            </template>
+                            <span x-show="!selectedTopic" class="text-gray-400">선택 안됨</span>
+                            <template x-if="selectedTopic">
+                                <span class="mx-2 text-gray-400">/</span>
+                            </template>
+                            <span x-show="selectedSubTopic" class="text-gray-700 font-medium truncate max-w-[80px]" x-text="selectedSubTopic?.name"></span>
+                            <span x-show="selectedTopic && !selectedSubTopic" class="text-gray-400">선택 안됨</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h2 class="text-lg font-semibold text-gray-900">키워드 (Keywords)</h2>
+                                <p class="text-sm text-gray-600">3차 카테고리</p>
+                            </div>
+                            <button @click="showCreateKeyword = true" x-show="selectedSubTopic" class="bg-yellow-600 text-white px-3 py-1 rounded text-sm hover:bg-yellow-700">+ 추가</button>
+                        </div>
+                    </div>
+                    <!-- 스크롤 영역: 키워드 목록 -->
+                    <div class="flex-1 overflow-y-auto min-h-0 p-4">
+                        <div x-show="!selectedSubTopic" class="text-center py-8 text-gray-500">
+                            <p>하위 주제 탭에서 하위 주제를 선택하세요</p>
+                        </div>
+                        <template x-for="keyword in keywords" :key="keyword.id">
+                            <div class="p-3 border rounded-lg mb-2 border-gray-200 hover:bg-gray-50">
+                                <h3 class="font-medium text-gray-900" x-text="keyword.name"></h3>
+                                <p class="text-sm text-gray-600 mt-1" x-show="keyword.description" x-text="keyword.description"></p>
+                                <div class="flex justify-between items-center mt-2">
+                                    <div class="text-xs text-gray-500">
+                                        검색량: <span x-text="keyword.search_volume"></span> |
+                                        난이도: <span x-text="keyword.difficulty"></span>/10
+                                    </div>
+                                    <div class="flex space-x-1">
+                                        <button @click="editKeyword(keyword)" class="text-yellow-600 hover:text-yellow-800 text-xs">수정</button>
+                                        <button @click="deleteKeyword(keyword.id)" class="text-red-600 hover:text-red-800 text-xs">삭제</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                        <div x-show="selectedSubTopic && keywords.length === 0" class="text-center py-8 text-gray-500">
+                            <p>아직 키워드가 없습니다</p>
+                            <button @click="showCreateKeyword = true" class="text-yellow-600 hover:text-yellow-800 mt-2">첫 키워드를 추가해보세요</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PC: 3분할 카테고리 관리 (md 이상) -->
+        <div class="hidden md:grid md:grid-cols-3 gap-6">
             <!-- 1열: 주제 (Topics) -->
             <div class="bg-white rounded-lg shadow">
                 <div class="p-4 border-b border-gray-200">
