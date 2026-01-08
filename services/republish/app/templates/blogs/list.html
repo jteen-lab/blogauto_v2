@@ -3,198 +3,271 @@
 {% block title %}블로그 목록{% endblock %}
 
 {% block extra_css %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link rel="stylesheet" href="/static/css/components.css">
+<style>
+    /* 블로그 그리드 레이아웃 */
+    .blog-grid {
+        display: grid;
+        gap: 1rem;
+    }
+
+    /* 데스크탑: 2열 */
+    @media (min-width: 768px) {
+        .blog-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    /* 모바일: 1열 */
+    @media (max-width: 767px) {
+        .blog-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .blog-section {
+        margin-bottom: 1.5rem;
+    }
+
+    .section-header {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .section-title {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: #374151;
+    }
+
+    .section-count {
+        background: #f3f4f6;
+        color: #6b7280;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.375rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+
+    /* PC 섹션 레이아웃 */
+    @media (min-width: 768px) {
+        .desktop-sections {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 2rem;
+            align-items: start;
+        }
+
+        .mobile-tabs {
+            display: none;
+        }
+    }
+
+    /* 모바일 탭 레이아웃 */
+    @media (max-width: 767px) {
+        .desktop-sections {
+            display: none;
+        }
+
+        .mobile-tabs {
+            display: block;
+        }
+    }
+</style>
 {% endblock %}
 
 {% block content %}
-<div class="bg-gray-50" x-data="blogListApp()">
-    <div class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <!-- 헤더 -->
-        <div class="flex items-center justify-between mb-4">
-            <div class="flex-1">
-                <h2 class="text-2xl font-bold text-gray-900">
-                    📝 블로그 관리
-                </h2>
-                <p class="mt-1 text-sm text-gray-500">
-                    등록된 블로그를 관리하고 자동 발행 설정을 변경할 수 있습니다
-                </p>
-            </div>
-
-            <!-- PC 버튼 (md 이상에서만 표시) -->
-            <div class="hidden md:block">
-                <a href="/blogs/create"
-                   class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                    <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
-                    </svg>
-                    블로그 추가
-                </a>
-            </div>
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4" x-data="blogListApp()">
+    <!-- 헤더 -->
+    <div class="flex items-center justify-between mb-4">
+        <div class="flex-1">
+            <h2 class="text-2xl font-bold text-gray-900">
+                블로그 관리
+            </h2>
+            <p class="mt-1 text-sm text-gray-500">
+                등록된 블로그를 관리하고 자동 발행 설정을 변경할 수 있습니다
+            </p>
         </div>
 
-        <!-- 모바일 플로팅 버튼 (md 미만에서만 표시) -->
-        <a href="/blogs/create"
-           class="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl shadow-lg flex items-center justify-center text-2xl font-bold z-40 transition-colors">
-            +
-        </a>
+        <!-- PC 버튼 (md 이상에서만 표시) -->
+        <div class="hidden md:block">
+            <button @click="openCreateSheet()"
+                    class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+                </svg>
+                블로그 추가
+            </button>
+        </div>
+    </div>
 
-        <!-- 통계 카드 -->
-        <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-6">
-            <div class="bg-white overflow-hidden shadow rounded-lg">
-                <div class="p-5">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <svg class="h-6 w-6 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3v8m0 0V9a2 2 0 00-2-2H9m10 0V9a2 2 0 00-2-2H9" />
-                            </svg>
-                        </div>
-                        <div class="ml-5 w-0 flex-1">
-                            <dl>
-                                <dt class="text-sm font-medium text-gray-500 truncate">총 블로그</dt>
-                                <dd class="text-lg font-medium text-gray-900">{{ stats.total_blogs }}</dd>
-                            </dl>
-                        </div>
-                    </div>
+    <!-- 모바일 플로팅 버튼 (md 미만에서만 표시) -->
+    <button @click="openCreateSheet()"
+            class="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl shadow-lg flex items-center justify-center text-2xl font-bold z-40 transition-colors">
+        +
+    </button>
+
+    <!-- 통계 카드 (2x2 모바일, 4열 PC) -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white overflow-hidden shadow rounded-lg p-4">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <svg class="h-6 w-6 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3v8m0 0V9a2 2 0 00-2-2H9m10 0V9a2 2 0 00-2-2H9" />
+                    </svg>
                 </div>
-            </div>
-
-            <div class="bg-white overflow-hidden shadow rounded-lg">
-                <div class="p-5">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <svg class="h-6 w-6 text-green-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                        </div>
-                        <div class="ml-5 w-0 flex-1">
-                            <dl>
-                                <dt class="text-sm font-medium text-gray-500 truncate">활성 블로그</dt>
-                                <dd class="text-lg font-medium text-gray-900">{{ stats.active_blogs }}</dd>
-                            </dl>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="bg-white overflow-hidden shadow rounded-lg">
-                <div class="p-5">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <svg class="h-6 w-6 text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                        </div>
-                        <div class="ml-5 w-0 flex-1">
-                            <dl>
-                                <dt class="text-sm font-medium text-gray-500 truncate">자동 발행</dt>
-                                <dd class="text-lg font-medium text-gray-900">{{ stats.auto_publish_enabled }}</dd>
-                            </dl>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="bg-white overflow-hidden shadow rounded-lg">
-                <div class="p-5">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <svg class="h-6 w-6 text-purple-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
-                            </svg>
-                        </div>
-                        <div class="ml-5 w-0 flex-1">
-                            <dl>
-                                <dt class="text-sm font-medium text-gray-500 truncate">WordPress</dt>
-                                <dd class="text-lg font-medium text-gray-900">{{ stats.by_platform.wordpress or 0 }}</dd>
-                            </dl>
-                        </div>
-                    </div>
+                <div class="ml-4 flex-1">
+                    <dt class="text-sm font-medium text-gray-500 truncate">총 블로그</dt>
+                    <dd class="text-lg font-medium text-gray-900" x-text="blogs.length">0</dd>
                 </div>
             </div>
         </div>
 
-        <!-- 블로그 목록 -->
-        <div class="bg-white shadow overflow-hidden sm:rounded-md">
-            <div class="px-4 py-5 sm:p-6">
-                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">등록된 블로그</h3>
-
-                {% if blogs %}
-                <ul class="divide-y divide-gray-200">
-                    {% for blog in blogs %}
-                    <li class="py-4">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center">
-                                <div class="flex-shrink-0">
-                                    {% if blog.platform == "wordpress" %}
-                                    <div class="h-10 w-10 bg-blue-500 rounded-full flex items-center justify-center">
-                                        <span class="text-white font-medium text-sm">WP</span>
-                                    </div>
-                                    {% elif blog.platform == "blogger" %}
-                                    <div class="h-10 w-10 bg-orange-500 rounded-full flex items-center justify-center">
-                                        <span class="text-white font-medium text-sm">BL</span>
-                                    </div>
-                                    {% else %}
-                                    <div class="h-10 w-10 bg-gray-500 rounded-full flex items-center justify-center">
-                                        <span class="text-white font-medium text-sm">기타</span>
-                                    </div>
-                                    {% endif %}
-                                </div>
-                                <div class="ml-4">
-                                    <div class="flex items-center">
-                                        <p class="text-sm font-medium text-gray-900">{{ blog.name }}</p>
-                                        {% if blog.auto_publish %}
-                                        <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                            자동 발행
-                                        </span>
-                                        {% endif %}
-                                        {% if not blog.is_active %}
-                                        <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                            비활성
-                                        </span>
-                                        {% endif %}
-                                    </div>
-                                    <p class="text-sm text-gray-500">{{ blog.url }}</p>
-                                    <p class="text-xs text-gray-400">{{ blog.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
-                                </div>
-                            </div>
-                            <div class="flex items-center space-x-2">
-                                <button @click="testConnection({{ blog.id }})"
-                                        :disabled="testing === {{ blog.id }}"
-                                        class="inline-flex items-center px-3 py-1 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50">
-                                    <span x-show="testing !== {{ blog.id }}">연결 테스트</span>
-                                    <span x-show="testing === {{ blog.id }}">테스트 중...</span>
-                                </button>
-                                <a href="/blogs/{{ blog.id }}/settings"
-                                   class="inline-flex items-center px-3 py-1 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                                    설정
-                                </a>
-                                <button @click="deleteBlog({{ blog.id }}, '{{ blog.name }}')"
-                                        class="inline-flex items-center px-3 py-1 border border-red-300 shadow-sm text-xs font-medium rounded text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
-                                    삭제
-                                </button>
-                            </div>
-                        </div>
-                    </li>
-                    {% endfor %}
-                </ul>
-                {% else %}
-                <div class="text-center py-12">
-                    <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                        <path d="M34 40h10v-4a6 6 0 00-10.712-3.714M34 40H14m20 0v-4a9.971 9.971 0 00-.712-3.714M14 40H4v-4a6 6 0 0110.713-3.714M14 40v-4c0-1.313.253-2.566.713-3.714m0 0A10.003 10.003 0 0124 26c4.21 0 7.813 2.602 9.288 6.286" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
+        <div class="bg-white overflow-hidden shadow rounded-lg p-4">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <svg class="h-6 w-6 text-green-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <h3 class="mt-2 text-sm font-medium text-gray-900">등록된 블로그가 없습니다</h3>
-                    <p class="mt-1 text-sm text-gray-500">새 블로그를 등록하여 자동 발행을 시작하세요.</p>
-                    <div class="mt-6">
-                        <a href="/blogs/create"
-                           class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                            <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                                <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
-                            </svg>
-                            첫 블로그 등록하기
-                        </a>
+                </div>
+                <div class="ml-4 flex-1">
+                    <dt class="text-sm font-medium text-gray-500 truncate">활성 블로그</dt>
+                    <dd class="text-lg font-medium text-gray-900" x-text="blogs.filter(b => b.is_active).length">0</dd>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white overflow-hidden shadow rounded-lg p-4">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <svg class="h-6 w-6 text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </div>
+                <div class="ml-4 flex-1">
+                    <dt class="text-sm font-medium text-gray-500 truncate">자동 발행</dt>
+                    <dd class="text-lg font-medium text-gray-900" x-text="blogs.filter(b => b.auto_publish).length">0</dd>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white overflow-hidden shadow rounded-lg p-4">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <svg class="h-6 w-6 text-purple-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                    </svg>
+                </div>
+                <div class="ml-4 flex-1">
+                    <dt class="text-sm font-medium text-gray-500 truncate">WordPress</dt>
+                    <dd class="text-lg font-medium text-gray-900" x-text="getBlogsByPlatform('wordpress').length">0</dd>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 빈 상태 -->
+    <div x-show="blogs.length === 0" class="text-center py-16">
+        <div class="mx-auto w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-6">
+            <svg class="w-12 h-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7"/>
+            </svg>
+        </div>
+        <h3 class="text-lg font-medium text-gray-900 mb-2">등록된 블로그가 없습니다</h3>
+        <p class="text-sm text-gray-500 mb-6">새 블로그를 등록하여 자동 발행을 시작하세요</p>
+        <button @click="openCreateSheet()"
+                class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
+            <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+            </svg>
+            첫 블로그 등록하기
+        </button>
+    </div>
+
+    <!-- PC: 플랫폼별 섹션 (md 이상) -->
+    <div x-show="blogs.length > 0" class="desktop-sections">
+        <!-- WordPress 섹션 -->
+        <div class="blog-section" x-show="getBlogsByPlatform('wordpress').length > 0">
+            <div class="section-header">
+                <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                    <span class="text-white font-medium text-xs">WP</span>
+                </div>
+                <h3 class="section-title">WordPress</h3>
+                <span class="section-count" x-text="getBlogsByPlatform('wordpress').length"></span>
+            </div>
+            <div class="blog-grid">
+                <template x-for="blog in getBlogsByPlatform('wordpress')" :key="blog.id">
+                    {% include "blogs/_card.html" %}
+                </template>
+            </div>
+        </div>
+
+        <!-- Blogger 섹션 -->
+        <div class="blog-section" x-show="getBlogsByPlatform('blogger').length > 0">
+            <div class="section-header">
+                <div class="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center">
+                    <span class="text-white font-medium text-xs">BL</span>
+                </div>
+                <h3 class="section-title">Google Blogger</h3>
+                <span class="section-count" x-text="getBlogsByPlatform('blogger').length"></span>
+            </div>
+            <div class="blog-grid">
+                <template x-for="blog in getBlogsByPlatform('blogger')" :key="blog.id">
+                    {% include "blogs/_card.html" %}
+                </template>
+            </div>
+        </div>
+    </div>
+
+    <!-- 모바일: 탭 UI (md 미만) -->
+    <div x-show="blogs.length > 0" class="mobile-tabs" x-data="{ activeTab: 'wordpress' }">
+        <div class="border border-gray-200 rounded-lg bg-white">
+            <div class="flex border-b border-gray-200">
+                <button type="button"
+                        @click="activeTab = 'wordpress'"
+                        :class="activeTab === 'wordpress' ? 'bg-blue-50 text-blue-700 border-blue-500' : 'bg-white text-gray-500 hover:text-gray-700'"
+                        class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap">
+                    WordPress
+                    <span class="ml-1 text-xs" x-text="'(' + getBlogsByPlatform('wordpress').length + ')'"></span>
+                </button>
+                <button type="button"
+                        @click="activeTab = 'blogger'"
+                        :class="activeTab === 'blogger' ? 'bg-blue-50 text-blue-700 border-blue-500' : 'bg-white text-gray-500 hover:text-gray-700'"
+                        class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap">
+                    Google Blogger
+                    <span class="ml-1 text-xs" x-text="'(' + getBlogsByPlatform('blogger').length + ')'"></span>
+                </button>
+            </div>
+
+            <!-- 탭 콘텐츠 -->
+            <div class="p-4">
+                <!-- WordPress 탭 -->
+                <div x-show="activeTab === 'wordpress'">
+                    <div x-show="getBlogsByPlatform('wordpress').length === 0" class="text-center py-8 text-gray-500">
+                        <p>등록된 WordPress 블로그가 없습니다</p>
+                    </div>
+                    <div class="blog-grid">
+                        <template x-for="blog in getBlogsByPlatform('wordpress')" :key="blog.id">
+                            {% include "blogs/_card.html" %}
+                        </template>
                     </div>
                 </div>
-                {% endif %}
+
+                <!-- Blogger 탭 -->
+                <div x-show="activeTab === 'blogger'">
+                    <div x-show="getBlogsByPlatform('blogger').length === 0" class="text-center py-8 text-gray-500">
+                        <p>등록된 Google Blogger가 없습니다</p>
+                    </div>
+                    <div class="blog-grid">
+                        <template x-for="blog in getBlogsByPlatform('blogger')" :key="blog.id">
+                            {% include "blogs/_card.html" %}
+                        </template>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -207,62 +280,585 @@
     </div>
 </div>
 
+<!-- 블로그 생성 하단 시트 -->
+<div id="blogForm-backdrop"
+     class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden transition-opacity duration-300"
+     onclick="closeBottomSheet('blogForm')">
+</div>
+
+<div id="blogForm"
+     class="fixed inset-x-0 bottom-0 h-[calc(100vh-70px)] bg-white rounded-t-2xl shadow-2xl z-50
+            transform translate-y-full transition-transform duration-300 ease-out overflow-y-auto"
+     x-data="blogFormApp()">
+
+    <!-- 핸들 바 -->
+    <div class="flex justify-center pt-3 pb-2 sticky top-0 bg-white z-10">
+        <div class="w-12 h-1 bg-gray-300 rounded-full"></div>
+    </div>
+
+    <!-- 헤더 -->
+    <div class="flex justify-between items-center px-4 py-3 border-b border-gray-200 sticky top-6 bg-white z-10">
+        <h3 id="blogFormTitle" class="text-lg font-semibold text-gray-900">블로그 등록</h3>
+        <button onclick="closeBottomSheet('blogForm')"
+                class="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+        </button>
+    </div>
+
+    <!-- 내용 영역 -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <form @submit.prevent="submitForm()">
+            <!-- 플랫폼 선택 -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-3">블로그 플랫폼 선택</label>
+                <div class="grid grid-cols-2 gap-3">
+                    <button type="button"
+                            @click="form.platform = 'wordpress'; platformChanged()"
+                            :class="form.platform === 'wordpress' ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-500' : 'border-gray-200 hover:border-blue-300'"
+                            class="flex flex-col items-center p-4 border-2 rounded-xl transition-all duration-200">
+                        <div class="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center mb-2">
+                            <span class="text-white font-bold text-lg">WP</span>
+                        </div>
+                        <span class="font-medium text-gray-900">WordPress</span>
+                    </button>
+
+                    <button type="button"
+                            @click="form.platform = 'blogger'; platformChanged()"
+                            :class="form.platform === 'blogger' ? 'border-orange-500 bg-orange-50 ring-2 ring-orange-500' : 'border-gray-200 hover:border-orange-300'"
+                            class="flex flex-col items-center p-4 border-2 rounded-xl transition-all duration-200">
+                        <div class="w-12 h-12 bg-orange-500 rounded-full flex items-center justify-center mb-2">
+                            <span class="text-white font-bold text-lg">BL</span>
+                        </div>
+                        <span class="font-medium text-gray-900">Google Blogger</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 플랫폼 선택 후 표시되는 필드 -->
+            <div x-show="form.platform" x-transition class="space-y-4">
+                <!-- 기본 정보 -->
+                <div>
+                    <label for="blog_name" class="block text-sm font-medium text-gray-700">블로그 이름 *</label>
+                    <input type="text" id="blog_name" required
+                           x-model="form.name"
+                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="내 블로그">
+                </div>
+
+                <div>
+                    <label for="blog_url" class="block text-sm font-medium text-gray-700">블로그 URL *</label>
+                    <input type="url" id="blog_url" required
+                           x-model="form.url"
+                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="https://myblog.example.com">
+                </div>
+
+                <!-- WordPress 필드 -->
+                <template x-if="form.platform === 'wordpress'">
+                    <div class="space-y-4 border-t pt-4">
+                        <div class="bg-blue-50 border border-blue-200 rounded-md p-3">
+                            <p class="text-sm text-blue-700">WordPress Application Password가 필요합니다</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">사용자명 *</label>
+                            <input type="text" x-model="form.api_key"
+                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                   placeholder="WordPress 사용자명">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Application Password *</label>
+                            <input type="password" x-model="form.api_secret"
+                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                   placeholder="xxxx xxxx xxxx xxxx">
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Blogger 필드 -->
+                <template x-if="form.platform === 'blogger'">
+                    <div class="space-y-4 border-t pt-4">
+                        <div class="bg-orange-50 border border-orange-200 rounded-md p-3">
+                            <p class="text-sm text-orange-700">Google Cloud Console API 키가 필요합니다</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">API 키 *</label>
+                            <input type="text" x-model="form.api_key"
+                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                   placeholder="Google API 키">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">OAuth 토큰 *</label>
+                            <textarea x-model="form.oauth_token" rows="2"
+                                      class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                      placeholder="OAuth 2.0 Access Token"></textarea>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- 등록/수정 버튼 -->
+                <div class="pt-4 border-t mt-4">
+                    <div class="flex gap-3">
+                        <button type="button"
+                                onclick="closeBottomSheet('blogForm')"
+                                class="flex-1 py-3 px-4 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium">
+                            취소
+                        </button>
+                        <button type="submit"
+                                :disabled="loading"
+                                class="flex-1 py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50">
+                            <span x-show="!loading" x-text="isEditMode ? '수정' : '등록'"></span>
+                            <span x-show="loading" x-text="isEditMode ? '수정 중...' : '등록 중...'"></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 플랫폼 미선택 상태 -->
+            <div x-show="!form.platform" class="text-center py-8 text-gray-500">
+                <p>위에서 블로그 플랫폼을 선택하세요</p>
+            </div>
+        </form>
+    </div>
+
+    <!-- 하단 안전 영역 (iOS) -->
+    <div class="h-safe-area-inset-bottom"></div>
+</div>
+
+<!-- 블로그 설정 하단 시트 -->
+<div id="blogSettings-backdrop"
+     class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden transition-opacity duration-300"
+     onclick="closeBottomSheet('blogSettings')">
+</div>
+
+<div id="blogSettings"
+     class="fixed inset-x-0 bottom-0 h-[calc(100vh-70px)] bg-white rounded-t-2xl shadow-2xl z-50
+            transform translate-y-full transition-transform duration-300 ease-out overflow-y-auto"
+     x-data="blogSettingsApp()">
+
+    <!-- 핸들 바 -->
+    <div class="flex justify-center pt-3 pb-2 sticky top-0 bg-white z-10">
+        <div class="w-12 h-1 bg-gray-300 rounded-full"></div>
+    </div>
+
+    <!-- 헤더 -->
+    <div class="flex justify-between items-center px-4 py-3 border-b border-gray-200 sticky top-6 bg-white z-10">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full flex items-center justify-center"
+                 :class="selectedBlog?.platform === 'wordpress' ? 'bg-blue-500' : 'bg-orange-500'">
+                <span class="text-white font-medium text-xs" x-text="selectedBlog?.platform === 'wordpress' ? 'WP' : 'BL'"></span>
+            </div>
+            <div>
+                <h3 class="text-lg font-semibold text-gray-900" x-text="selectedBlog?.name || '블로그 설정'"></h3>
+                <p class="text-xs text-gray-500" x-text="selectedBlog?.url"></p>
+            </div>
+        </div>
+        <button onclick="closeBottomSheet('blogSettings')"
+                class="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+        </button>
+    </div>
+
+    <!-- 탭 네비게이션 -->
+    <div class="sticky top-[72px] bg-white z-10 border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex">
+                <button type="button"
+                        @click="activeTab = 'image'"
+                        :class="activeTab === 'image' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                        class="flex-1 py-3 px-1 text-center border-b-2 font-medium text-sm transition-colors">
+                    이미지
+                </button>
+                <button type="button"
+                        @click="activeTab = 'style'"
+                        :class="activeTab === 'style' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                        class="flex-1 py-3 px-1 text-center border-b-2 font-medium text-sm transition-colors">
+                    스타일
+                </button>
+                <button type="button"
+                        @click="activeTab = 'category'"
+                        :class="activeTab === 'category' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                        class="flex-1 py-3 px-1 text-center border-b-2 font-medium text-sm transition-colors">
+                    카테고리
+                </button>
+                <button type="button"
+                        @click="activeTab = 'replace'"
+                        :class="activeTab === 'replace' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                        class="flex-1 py-3 px-1 text-center border-b-2 font-medium text-sm transition-colors">
+                    치환자
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 탭 콘텐츠 -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <!-- 이미지 탭 -->
+        <div x-show="activeTab === 'image'" x-transition>
+            <div class="text-center py-16">
+                <div class="mx-auto w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                    <svg class="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-medium text-gray-900 mb-2">이미지 설정</h3>
+                <p class="text-sm text-gray-500">준비 중입니다</p>
+                <p class="text-xs text-gray-400 mt-2">대표 이미지, 썸네일 설정 등을 구성할 수 있습니다</p>
+            </div>
+        </div>
+
+        <!-- 스타일 탭 -->
+        <div x-show="activeTab === 'style'" x-transition>
+            <div class="text-center py-16">
+                <div class="mx-auto w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                    <svg class="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-medium text-gray-900 mb-2">스타일 설정</h3>
+                <p class="text-sm text-gray-500">준비 중입니다</p>
+                <p class="text-xs text-gray-400 mt-2">글 스타일, 에디터 설정 등을 구성할 수 있습니다</p>
+            </div>
+        </div>
+
+        <!-- 카테고리 탭 -->
+        <div x-show="activeTab === 'category'" x-transition>
+            <div class="text-center py-16">
+                <div class="mx-auto w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                    <svg class="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-medium text-gray-900 mb-2">카테고리 설정</h3>
+                <p class="text-sm text-gray-500">준비 중입니다</p>
+                <p class="text-xs text-gray-400 mt-2">블로그 카테고리 매핑을 설정할 수 있습니다</p>
+            </div>
+        </div>
+
+        <!-- 치환자 탭 -->
+        <div x-show="activeTab === 'replace'" x-transition>
+            <div class="text-center py-16">
+                <div class="mx-auto w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                    <svg class="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-medium text-gray-900 mb-2">치환자 설정</h3>
+                <p class="text-sm text-gray-500">준비 중입니다</p>
+                <p class="text-xs text-gray-400 mt-2">텍스트 치환 규칙을 설정할 수 있습니다</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 하단 안전 영역 (iOS) -->
+    <div class="h-safe-area-inset-bottom"></div>
+</div>
+
 <script>
-        function blogListApp() {
-            return {
-                testing: null,
-                message: '',
-                messageType: 'success',
+function blogListApp() {
+    return {
+        blogs: [],
+        testing: null,
+        message: '',
+        messageType: 'success',
 
-                testConnection(blogId) {
-                    this.testing = blogId;
+        init() {
+            this.loadBlogs();
+        },
 
-                    fetch(`/api/v1/blogs/${blogId}/test`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        }
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        this.testing = null;
-                        this.showMessage(data.message, data.success ? 'success' : 'error');
-                    })
-                    .catch(error => {
-                        this.testing = null;
-                        this.showMessage('연결 테스트 중 오류가 발생했습니다', 'error');
-                    });
+        async loadBlogs() {
+            try {
+                const response = await fetch('/api/v1/blogs', {
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    // API 응답이 { blogs: [...] } 형태
+                    this.blogs = data.blogs || [];
+                }
+            } catch (error) {
+                console.error('블로그 목록 로드 실패:', error);
+            }
+        },
+
+        getBlogsByPlatform(platform) {
+            return this.blogs.filter(b => b.platform === platform);
+        },
+
+        formatDate(dateStr) {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('ko-KR', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        },
+
+        openCreateSheet() {
+            // 폼 리셋 후 열기
+            const formEl = document.getElementById('blogForm');
+            if (formEl && formEl.__x) {
+                formEl.__x.$data.resetForm();
+            }
+            openBottomSheet('blogForm');
+        },
+
+        openEditSheet(blog) {
+            // 수정 모드로 폼 설정
+            const formEl = document.getElementById('blogForm');
+            if (formEl && formEl.__x) {
+                formEl.__x.$data.setEditMode(blog);
+            }
+            openBottomSheet('blogForm');
+        },
+
+        openSettingsSheet(blog) {
+            // 설정 시트에 블로그 정보 전달
+            const settingsEl = document.getElementById('blogSettings');
+            if (settingsEl && settingsEl.__x) {
+                settingsEl.__x.$data.setBlog(blog);
+            }
+            openBottomSheet('blogSettings');
+        },
+
+        testConnection(blogId) {
+            this.testing = blogId;
+
+            fetch(`/api/v1/blogs/${blogId}/test`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
                 },
+                credentials: 'include'
+            })
+            .then(response => response.json())
+            .then(data => {
+                this.testing = null;
+                this.showMessage(data.message, data.success ? 'success' : 'error');
+            })
+            .catch(error => {
+                this.testing = null;
+                this.showMessage('연결 테스트 중 오류가 발생했습니다', 'error');
+            });
+        },
 
-                deleteBlog(blogId, blogName) {
-                    if (!confirm(`정말로 "${blogName}" 블로그를 삭제하시겠습니까?`)) {
+        deleteBlog(blogId, blogName) {
+            if (!confirm(`정말로 "${blogName}" 블로그를 삭제하시겠습니까?`)) {
+                return;
+            }
+
+            fetch(`/api/v1/blogs/${blogId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'include'
+            })
+            .then(response => response.json())
+            .then(data => {
+                this.showMessage(data.message, 'success');
+                this.loadBlogs();
+            })
+            .catch(error => {
+                this.showMessage('삭제 중 오류가 발생했습니다', 'error');
+            });
+        },
+
+        showMessage(text, type = 'success') {
+            this.message = text;
+            this.messageType = type;
+            setTimeout(() => {
+                this.message = '';
+            }, 5000);
+        }
+    }
+}
+
+function blogFormApp() {
+    return {
+        loading: false,
+        isEditMode: false,
+        editingBlogId: null,
+        form: {
+            name: '',
+            url: '',
+            platform: '',
+            api_key: '',
+            api_secret: '',
+            oauth_token: ''
+        },
+
+        platformChanged() {
+            this.form.api_key = '';
+            this.form.api_secret = '';
+            this.form.oauth_token = '';
+        },
+
+        resetForm() {
+            this.isEditMode = false;
+            this.editingBlogId = null;
+            this.form = {
+                name: '',
+                url: '',
+                platform: '',
+                api_key: '',
+                api_secret: '',
+                oauth_token: ''
+            };
+            // 타이틀 업데이트
+            const title = document.getElementById('blogFormTitle');
+            if (title) title.textContent = '블로그 등록';
+        },
+
+        setEditMode(blog) {
+            this.isEditMode = true;
+            this.editingBlogId = blog.id;
+            this.form = {
+                name: blog.name || '',
+                url: blog.url || '',
+                platform: blog.platform || '',
+                api_key: blog.api_key || '',
+                api_secret: '',  // 보안상 빈값
+                oauth_token: ''   // 보안상 빈값
+            };
+            // 타이틀 업데이트
+            const title = document.getElementById('blogFormTitle');
+            if (title) title.textContent = '블로그 수정';
+        },
+
+        async submitForm() {
+            if (this.loading) return;
+
+            // 기본 검증
+            if (!this.form.name || !this.form.url || !this.form.platform) {
+                alert('필수 항목을 모두 입력해주세요');
+                return;
+            }
+
+            // 수정 모드가 아닐 때만 API 키 검증 (새 등록)
+            if (!this.isEditMode) {
+                if (this.form.platform === 'wordpress') {
+                    if (!this.form.api_key || !this.form.api_secret) {
+                        alert('WordPress 사용자명과 Application Password를 입력해주세요');
                         return;
                     }
-
-                    fetch(`/api/v1/blogs/${blogId}`, {
-                        method: 'DELETE',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        }
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        this.showMessage(data.message, 'success');
-                        setTimeout(() => location.reload(), 1500);
-                    })
-                    .catch(error => {
-                        this.showMessage('삭제 중 오류가 발생했습니다', 'error');
-                    });
-                },
-
-                showMessage(text, type = 'success') {
-                    this.message = text;
-                    this.messageType = type;
-                    setTimeout(() => {
-                        this.message = '';
-                    }, 5000);
+                } else if (this.form.platform === 'blogger') {
+                    if (!this.form.api_key || !this.form.oauth_token) {
+                        alert('Blogger API 키와 OAuth 토큰을 입력해주세요');
+                        return;
+                    }
                 }
             }
+
+            this.loading = true;
+
+            try {
+                const url = this.isEditMode
+                    ? `/api/v1/blogs/${this.editingBlogId}`
+                    : '/api/v1/blogs';
+                const method = this.isEditMode ? 'PUT' : 'POST';
+
+                // 수정 모드에서 빈 비밀번호/토큰은 전송하지 않음
+                const payload = { ...this.form };
+                if (this.isEditMode) {
+                    if (!payload.api_secret) delete payload.api_secret;
+                    if (!payload.oauth_token) delete payload.oauth_token;
+                }
+
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    closeBottomSheet('blogForm');
+                    const successMsg = this.isEditMode ? '블로그가 수정되었습니다!' : '블로그가 등록되었습니다!';
+                    this.resetForm();
+
+                    // 부모 앱의 loadBlogs 호출
+                    const listApp = document.querySelector('[x-data="blogListApp()"]');
+                    if (listApp && listApp.__x) {
+                        listApp.__x.$data.loadBlogs();
+                        listApp.__x.$data.showMessage(successMsg, 'success');
+                    } else {
+                        location.reload();
+                    }
+                } else {
+                    alert(data.detail || data.message || '처리 중 오류가 발생했습니다');
+                }
+            } catch (error) {
+                alert('네트워크 오류가 발생했습니다');
+            } finally {
+                this.loading = false;
+            }
         }
+    }
+}
+
+function blogSettingsApp() {
+    return {
+        selectedBlog: null,
+        activeTab: 'image',
+
+        setBlog(blog) {
+            this.selectedBlog = blog;
+            this.activeTab = 'image';  // 탭 초기화
+        },
+
+        reset() {
+            this.selectedBlog = null;
+            this.activeTab = 'image';
+        }
+    }
+}
+
+// 하단 시트 열기/닫기 함수
+function openBottomSheet(id) {
+    const backdrop = document.getElementById(id + '-backdrop');
+    const sheet = document.getElementById(id);
+
+    backdrop.classList.remove('hidden');
+    sheet.classList.remove('translate-y-full');
+
+    setTimeout(() => {
+        backdrop.style.opacity = '1';
+    }, 10);
+
+    document.body.style.overflow = 'hidden';
+}
+
+function closeBottomSheet(id) {
+    const backdrop = document.getElementById(id + '-backdrop');
+    const sheet = document.getElementById(id);
+
+    backdrop.style.opacity = '0';
+    sheet.classList.add('translate-y-full');
+
+    setTimeout(() => {
+        backdrop.classList.add('hidden');
+        // 닫을 때 폼/설정 리셋
+        if (sheet.__x) {
+            if (id === 'blogForm') {
+                sheet.__x.$data.resetForm();
+            } else if (id === 'blogSettings') {
+                sheet.__x.$data.reset();
+            }
+        }
+    }, 300);
+
+    document.body.style.overflow = '';
+}
 </script>
 {% endblock %}
