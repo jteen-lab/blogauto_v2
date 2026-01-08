@@ -97,8 +97,8 @@
             </p>
         </div>
 
-        <!-- 헤더 버튼 -->
-        <div class="flex items-center gap-2">
+        <!-- 헤더 버튼 (PC) -->
+        <div class="hidden md:flex items-center gap-2">
             <button @click="openLogSheet()"
                     class="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none">
                 <span class="mr-1">📋</span>
@@ -112,50 +112,65 @@
                 추가
             </button>
         </div>
+
+        <!-- 모바일 로그 버튼 (헤더에 표시) -->
+        <div class="md:hidden">
+            <button @click="openLogSheet()"
+                    class="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none">
+                <span>📋</span>
+            </button>
+        </div>
     </div>
 
-    <!-- 상태 요약 바 -->
+    <!-- 모바일 플로팅 버튼 (md 미만에서만 표시) -->
+    <button @click="openAddSheet()"
+            class="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl shadow-lg flex items-center justify-center text-2xl font-bold z-40 transition-colors">
+        +
+    </button>
+
+    <!-- 상태 요약 바 (항상 1줄 배치) -->
     <div class="flex items-center justify-between mb-6 bg-gray-50 rounded-lg px-4 py-3">
-        <div class="flex items-center gap-4 text-sm">
+        <!-- 카운팅 -->
+        <div class="flex items-center gap-2 text-sm">
             <span class="text-gray-600">
                 총 <span class="font-semibold text-gray-900" x-text="autorunFlows.length"></span>개
             </span>
             <span class="flex items-center gap-1">
                 <span class="w-2 h-2 rounded-full bg-green-500"></span>
-                활성 <span class="font-semibold" x-text="activeCount"></span>
+                <span class="font-semibold" x-text="activeCount"></span>
             </span>
             <span class="flex items-center gap-1">
                 <span class="w-2 h-2 rounded-full bg-yellow-500"></span>
-                일시정지 <span class="font-semibold" x-text="pausedCount"></span>
+                <span class="font-semibold" x-text="pausedCount"></span>
             </span>
         </div>
 
-        <!-- 일괄 액션 버튼 (항상 표시, 선택 없으면 비활성화) -->
-        <div class="flex items-center gap-2">
+        <!-- 일괄 액션 버튼 -->
+        <div class="flex items-center gap-1">
             <button @click="selectAll()"
-                    class="text-sm text-blue-600 hover:text-blue-800"
+                    class="text-xs sm:text-sm text-blue-600 hover:text-blue-800 px-1"
                     :class="autorunFlows.length === 0 ? 'opacity-50 cursor-not-allowed' : ''"
                     :disabled="autorunFlows.length === 0">
-                <span x-text="isAllSelected ? '전체 해제' : '전체 선택'"></span>
+                <span x-text="isAllSelected ? '해제' : '전체'"></span>
             </button>
             <span class="text-gray-300">|</span>
             <button @click="bulkPause()"
-                    class="action-btn pause"
+                    class="action-btn pause text-xs"
                     :class="selectedIds.length === 0 || !hasActiveSelected ? 'opacity-50 cursor-not-allowed' : ''"
                     :disabled="selectedIds.length === 0 || !hasActiveSelected">
-                ⏸ 일시정지
+                ⏸
             </button>
             <button @click="bulkResume()"
-                    class="action-btn resume"
+                    class="action-btn resume text-xs"
                     :class="selectedIds.length === 0 || !hasPausedSelected ? 'opacity-50 cursor-not-allowed' : ''"
                     :disabled="selectedIds.length === 0 || !hasPausedSelected">
-                ▶ 재개
+                ▶
             </button>
             <button @click="bulkRemove()"
-                    class="action-btn remove"
+                    class="action-btn remove text-xs"
                     :class="selectedIds.length === 0 ? 'opacity-50 cursor-not-allowed' : ''"
                     :disabled="selectedIds.length === 0">
-                ⏹ 제외
+                ⏹
             </button>
         </div>
     </div>

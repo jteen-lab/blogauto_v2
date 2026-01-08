@@ -116,8 +116,8 @@
             </p>
         </div>
 
-        <!-- 플로우 생성 버튼 -->
-        <div>
+        <!-- PC 버튼 (md 이상에서만 표시) -->
+        <div class="hidden md:block">
             <button @click="showFlowForm()"
                     class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                 <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -128,18 +128,24 @@
         </div>
     </div>
 
-    <!-- 정렬 컨트롤 -->
+    <!-- 모바일 플로팅 버튼 (md 미만에서만 표시) -->
+    <button @click="showFlowForm()"
+            class="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl shadow-lg flex items-center justify-center text-2xl font-bold z-40 transition-colors">
+        +
+    </button>
+
+    <!-- 정렬 컨트롤 (항상 1줄 배치) -->
     <div class="flex items-center justify-between mb-6 bg-gray-50 rounded-lg px-4 py-3">
-        <div class="flex items-center gap-2 text-sm text-gray-600">
-            <span>총</span>
-            <span class="font-semibold text-gray-900" x-text="flows.length"></span>
-            <span>개의 플로우</span>
+        <!-- 카운팅 -->
+        <div class="text-sm text-gray-600">
+            총 <span class="font-semibold text-gray-900" x-text="flows.length"></span>개
         </div>
 
-        <div class="flex items-center gap-3">
+        <!-- 정렬 -->
+        <div class="flex items-center gap-2">
             <!-- 정렬 기준 선택 -->
             <div class="flex items-center gap-2">
-                <label class="text-sm text-gray-600">정렬:</label>
+                <label class="text-sm text-gray-600 hidden sm:inline">정렬:</label>
                 <select x-model="sortBy"
                         @change="saveSortPreference()"
                         class="text-sm border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 py-1.5 pr-8">
@@ -153,7 +159,7 @@
 
             <!-- 정렬 방향 토글 -->
             <button @click="toggleSortOrder()"
-                    class="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded-md transition-colors"
+                    class="flex items-center gap-1 px-2 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded-md transition-colors"
                     :title="sortOrder === 'asc' ? '오름차순' : '내림차순'">
                 <template x-if="sortOrder === 'asc'">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -165,7 +171,7 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4"/>
                     </svg>
                 </template>
-                <span x-text="sortOrder === 'asc' ? '오름차순' : '내림차순'"></span>
+                <span class="hidden sm:inline" x-text="sortOrder === 'asc' ? '오름차순' : '내림차순'"></span>
             </button>
         </div>
     </div>
@@ -219,15 +225,15 @@
 
 <div id="flowForm"
      class="fixed inset-x-0 bottom-0 h-[calc(100vh-70px)] bg-white rounded-t-2xl shadow-2xl z-50
-            transform translate-y-full transition-transform duration-300 ease-out">
+            transform translate-y-full transition-transform duration-300 ease-out overflow-y-auto">
 
     <!-- 핸들 바 -->
-    <div class="flex justify-center pt-3 pb-2">
+    <div class="flex justify-center pt-3 pb-2 sticky top-0 bg-white z-10">
         <div class="w-12 h-1 bg-gray-300 rounded-full"></div>
     </div>
 
     <!-- 헤더 -->
-    <div class="flex justify-between items-center px-4 py-3 border-b border-gray-200">
+    <div class="flex justify-between items-center px-4 py-3 border-b border-gray-200 sticky top-6 bg-white z-10">
         <h3 id="flowFormTitle" class="text-lg font-semibold text-gray-900">플로우 생성</h3>
         <button onclick="closeBottomSheet('flowForm')"
                 class="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100">
@@ -238,7 +244,7 @@
     </div>
 
     <!-- 내용 영역 -->
-    <div id="flowFormContent" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 max-h-[calc(100vh-120px)] overflow-y-auto">
+    <div id="flowFormContent" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         {% include "flows/_form.html" %}
     </div>
 

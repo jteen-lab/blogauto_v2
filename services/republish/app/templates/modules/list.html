@@ -211,8 +211,8 @@
             </p>
         </div>
 
-        <!-- + 버튼 (우측 상단에만) -->
-        <div>
+        <!-- PC 버튼 (md 이상에서만 표시) -->
+        <div class="hidden md:block">
             <button @click="showModuleTypeSelector"
                     class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                 <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -223,18 +223,24 @@
         </div>
     </div>
 
-    <!-- 정렬 컨트롤 -->
+    <!-- 모바일 플로팅 버튼 (md 미만에서만 표시) -->
+    <button @click="showModuleTypeSelector"
+            class="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl shadow-lg flex items-center justify-center text-2xl font-bold z-40 transition-colors">
+        +
+    </button>
+
+    <!-- 정렬 컨트롤 (항상 1줄 배치) -->
     <div class="flex items-center justify-between mb-6 bg-gray-50 rounded-lg px-4 py-3">
-        <div class="flex items-center gap-2 text-sm text-gray-600">
-            <span>총</span>
-            <span class="font-semibold text-gray-900" x-text="modules.length"></span>
-            <span>개의 모듈</span>
+        <!-- 카운팅 -->
+        <div class="text-sm text-gray-600">
+            총 <span class="font-semibold text-gray-900" x-text="modules.length"></span>개
         </div>
 
-        <div class="flex items-center gap-3">
+        <!-- 정렬 -->
+        <div class="flex items-center gap-2">
             <!-- 정렬 기준 선택 -->
             <div class="flex items-center gap-2">
-                <label class="text-sm text-gray-600">정렬:</label>
+                <label class="text-sm text-gray-600 hidden sm:inline">정렬:</label>
                 <select x-model="sortBy"
                         @change="saveSortPreference()"
                         class="text-sm border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 py-1.5 pr-8">
@@ -247,7 +253,7 @@
 
             <!-- 정렬 방향 토글 -->
             <button @click="toggleSortOrder()"
-                    class="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded-md transition-colors"
+                    class="flex items-center gap-1 px-2 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded-md transition-colors"
                     :title="sortOrder === 'asc' ? '오름차순' : '내림차순'">
                 <svg x-show="sortOrder === 'asc'" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
@@ -255,7 +261,7 @@
                 <svg x-show="sortOrder === 'desc'" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4"/>
                 </svg>
-                <span x-text="sortOrder === 'asc' ? '오름차순' : '내림차순'"></span>
+                <span class="hidden sm:inline" x-text="sortOrder === 'asc' ? '오름차순' : '내림차순'"></span>
             </button>
         </div>
     </div>
@@ -501,7 +507,7 @@
 </div>
 
 <div id="moduleForm"
-     class="fixed inset-x-0 bottom-0 bg-white rounded-t-2xl shadow-2xl z-50
+     class="fixed inset-x-0 bottom-0 h-[calc(100vh-70px)] bg-white rounded-t-2xl shadow-2xl z-50
             transform translate-y-full transition-transform duration-300 ease-out">
 
   <!-- 핸들 바 -->
@@ -521,7 +527,7 @@
   </div>
 
   <!-- 내용 영역 -->
-  <div id="moduleFormContent" class="p-4 max-h-[calc(100vh-120px)] overflow-y-auto">
+  <div id="moduleFormContent" class="p-4 max-h-[calc(100vh-140px)] overflow-y-auto">
     <!-- 폼 내용이 여기에 동적으로 로드됨 -->
     <div class="flex justify-center items-center py-8">
       <svg class="animate-spin h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24">
