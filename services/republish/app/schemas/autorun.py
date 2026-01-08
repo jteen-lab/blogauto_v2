@@ -66,8 +66,8 @@ class FlowActionResult(BaseModel):
     """플로우 액션 결과"""
     success: bool
     message: str
-    flow_id: int
-    previous_status: FlowStatus
+    flow_id: Optional[int] = None
+    previous_status: Optional[FlowStatus] = None
     current_status: FlowStatus
 
     # 액션별 추가 정보

@@ -227,13 +227,18 @@ class FlowStatusUpdateRequest(BaseModel):
 
 
 class FlowExecutionInfo(BaseModel):
-    """플로우 실행 정보"""
+    """플로우 실행 정보 (오토런용)"""
 
     id: int
     name: str
+    description: Optional[str] = None
     status: FlowStatus
     module_count: int
     blog_count: int
+
+    # 모듈/블로그 연결 정보 (카드 표시용)
+    module_links: List[Dict[str, Any]] = Field(default_factory=list)
+    blog_links: List[Dict[str, Any]] = Field(default_factory=list)
 
     # 실행 관련 정보
     next_execution: Optional[datetime] = None

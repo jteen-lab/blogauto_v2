@@ -149,18 +149,31 @@ class AutorunService:
         module_links = []
         if flow.module_links:
             for link in flow.module_links:
-                module_links.append({
-                    "id": link.id,
-                    "execution_order": link.execution_order,
-                    "module": {
+                module_data = None
+                if link.module:
+                    module_data = {
                         "id": link.module.id,
                         "name": link.module.name,
                         "description": link.module.description,
                         "module_type": {
                             "code": link.module.module_type.code if link.module.module_type else "republish",
                             "name": link.module.module_type.name if link.module.module_type else "재발행"
-                        }
-                    } if link.module else None
+                        },
+                        # 슬라이드 정보에 필요한 필드들
+                        "post_range_start": link.module.post_range_start,
+                        "post_range_end": link.module.post_range_end,
+                        "interval_mode": link.module.interval_mode,
+                        "manual_interval_minutes": link.module.manual_interval_minutes,
+                        "auto_daily_count": link.module.auto_daily_count,
+                        "schedule_matrix": link.module.schedule_matrix,
+                        "settings": link.module.settings,
+                        # 생성일 (기본 정보가 없는 모듈용)
+                        "created_at": link.module.created_at.isoformat() if link.module.created_at else None
+                    }
+                module_links.append({
+                    "id": link.id,
+                    "execution_order": link.execution_order,
+                    "module": module_data
                 })
 
         # 블로그 링크 정보 구성
@@ -439,6 +452,19 @@ class AutorunService:
                     else:
                         failed_count += 1
 
+                except HTTPException as he:
+                    # HTTPException도 개별 실패로 처리 (전체 실패로 이어지지 않음)
+                    logger.warning(f"[BULK_FLOW_ACTION] 플로우 {flow_id} 액션 실패 (HTTP): {he.detail}")
+                    failed_result = FlowActionResult(
+                        success=False,
+                        message=f"액션 실행 실패: {he.detail}",
+                        flow_id=flow_id,
+                        current_status=FlowStatus.INACTIVE,
+                        error_code="HTTP_ERROR"
+                    )
+                    results.append(failed_result)
+                    failed_count += 1
+
                 except Exception as e:
                     # 개별 실패는 전체 실패로 이어지지 않음
                     logger.warning(f"[BULK_FLOW_ACTION] 플로우 {flow_id} 액션 실패: {e}")
@@ -446,7 +472,6 @@ class AutorunService:
                         success=False,
                         message=f"액션 실행 실패: {str(e)}",
                         flow_id=flow_id,
-                        previous_status=FlowStatus.INACTIVE,  # 기본값
                         current_status=FlowStatus.INACTIVE,
                         error_code="EXECUTION_ERROR"
                     )
