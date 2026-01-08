@@ -141,7 +141,7 @@ function flowFormData() {
             this.isEditMode = false;
             this.saving = false;
             this.message = { text: '', type: 'info' };
-            this.activeModuleTab = 'republish';
+            this.activeModuleTab = 'prompt';
             this.activeBlogTab = 'blogger';
         },
 

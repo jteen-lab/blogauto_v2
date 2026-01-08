@@ -354,80 +354,76 @@
 
     <!-- 모바일: 탭 레이아웃 -->
     <div x-show="!loading && modules.length > 0" class="mobile-tabs" x-data="{ activeTab: 'prompt' }" :data-sort-key="sortBy + '-' + sortOrder">
-        <!-- 탭 헤더 -->
-        <div class="flex border-b border-gray-200 overflow-x-auto">
-            <button @click="activeTab = 'prompt'"
-                    class="mobile-tab"
-                    :class="activeTab === 'prompt' ? 'active' : 'inactive'"
-                    x-show="getModulesByType('prompt').length > 0">
-                <span class="text-lg mr-2">📝</span>
-                프롬프트
-                <span class="ml-2 px-2 py-0.5 bg-gray-200 text-xs rounded-full" x-text="getModulesByType('prompt').length"></span>
-            </button>
-            <button @click="activeTab = 'generate'"
-                    class="mobile-tab"
-                    :class="activeTab === 'generate' ? 'active' : 'inactive'"
-                    x-show="getModulesByType('generate').length > 0">
-                <span class="text-lg mr-2">✨</span>
-                생성
-                <span class="ml-2 px-2 py-0.5 bg-gray-200 text-xs rounded-full" x-text="getModulesByType('generate').length"></span>
-            </button>
-            <button @click="activeTab = 'publish'"
-                    class="mobile-tab"
-                    :class="activeTab === 'publish' ? 'active' : 'inactive'"
-                    x-show="getModulesByType('publish').length > 0">
-                <span class="text-lg mr-2">📤</span>
-                발행
-                <span class="ml-2 px-2 py-0.5 bg-gray-200 text-xs rounded-full" x-text="getModulesByType('publish').length"></span>
-            </button>
-            <button @click="activeTab = 'republish'"
-                    class="mobile-tab"
-                    :class="activeTab === 'republish' ? 'active' : 'inactive'"
-                    x-show="getModulesByType('republish').length > 0">
-                <span class="text-lg mr-2">🔄</span>
-                재발행
-                <span class="ml-2 px-2 py-0.5 bg-gray-200 text-xs rounded-full" x-text="getModulesByType('republish').length"></span>
-            </button>
-        </div>
-
-        <!-- 탭 콘텐츠 -->
-        <div class="mobile-tab-content"
-             x-show="activeTab === 'prompt'"
-             x-effect="if (activeTab === 'prompt') $nextTick(() => reinitMobileTabSlides($el))">
-            <div class="module-grid">
-                <template x-for="module in getModulesByType('prompt')" :key="module.id + '-' + sortBy + '-' + sortOrder">
-                    {% include "modules/_card.html" %}
-                </template>
+        <!-- 탭 컨테이너 (플로우 폼과 동일한 스타일) -->
+        <div class="border border-gray-200 rounded-lg">
+            <div class="flex border-b border-gray-200">
+                <button type="button"
+                        @click="activeTab = 'prompt'"
+                        :class="activeTab === 'prompt' ? 'bg-blue-50 text-blue-700 border-blue-500' : 'bg-white text-gray-500 hover:text-gray-700'"
+                        class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap"
+                        x-show="getModulesByType('prompt').length > 0">
+                    프롬프트
+                </button>
+                <button type="button"
+                        @click="activeTab = 'generate'"
+                        :class="activeTab === 'generate' ? 'bg-blue-50 text-blue-700 border-blue-500' : 'bg-white text-gray-500 hover:text-gray-700'"
+                        class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap"
+                        x-show="getModulesByType('generate').length > 0">
+                    생성
+                </button>
+                <button type="button"
+                        @click="activeTab = 'publish'"
+                        :class="activeTab === 'publish' ? 'bg-blue-50 text-blue-700 border-blue-500' : 'bg-white text-gray-500 hover:text-gray-700'"
+                        class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap"
+                        x-show="getModulesByType('publish').length > 0">
+                    발행
+                </button>
+                <button type="button"
+                        @click="activeTab = 'republish'"
+                        :class="activeTab === 'republish' ? 'bg-blue-50 text-blue-700 border-blue-500' : 'bg-white text-gray-500 hover:text-gray-700'"
+                        class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap"
+                        x-show="getModulesByType('republish').length > 0">
+                    재발행
+                </button>
             </div>
-        </div>
 
-        <div class="mobile-tab-content"
-             x-show="activeTab === 'generate'"
-             x-effect="if (activeTab === 'generate') $nextTick(() => reinitMobileTabSlides($el))">
-            <div class="module-grid">
-                <template x-for="module in getModulesByType('generate')" :key="module.id + '-' + sortBy + '-' + sortOrder">
-                    {% include "modules/_card.html" %}
-                </template>
-            </div>
-        </div>
+            <!-- 탭 콘텐츠 영역 -->
+            <div class="p-4">
+                <div x-show="activeTab === 'prompt'"
+                     x-effect="if (activeTab === 'prompt') $nextTick(() => reinitMobileTabSlides($el))">
+                    <div class="module-grid">
+                        <template x-for="module in getModulesByType('prompt')" :key="module.id + '-' + sortBy + '-' + sortOrder">
+                            {% include "modules/_card.html" %}
+                        </template>
+                    </div>
+                </div>
 
-        <div class="mobile-tab-content"
-             x-show="activeTab === 'publish'"
-             x-effect="if (activeTab === 'publish') $nextTick(() => reinitMobileTabSlides($el))">
-            <div class="module-grid">
-                <template x-for="module in getModulesByType('publish')" :key="module.id + '-' + sortBy + '-' + sortOrder">
-                    {% include "modules/_card.html" %}
-                </template>
-            </div>
-        </div>
+                <div x-show="activeTab === 'generate'"
+                     x-effect="if (activeTab === 'generate') $nextTick(() => reinitMobileTabSlides($el))">
+                    <div class="module-grid">
+                        <template x-for="module in getModulesByType('generate')" :key="module.id + '-' + sortBy + '-' + sortOrder">
+                            {% include "modules/_card.html" %}
+                        </template>
+                    </div>
+                </div>
 
-        <div class="mobile-tab-content"
-             x-show="activeTab === 'republish'"
-             x-effect="if (activeTab === 'republish') $nextTick(() => reinitMobileTabSlides($el))">
-            <div class="module-grid">
-                <template x-for="module in getModulesByType('republish')" :key="module.id + '-' + sortBy + '-' + sortOrder">
-                    {% include "modules/_card.html" %}
-                </template>
+                <div x-show="activeTab === 'publish'"
+                     x-effect="if (activeTab === 'publish') $nextTick(() => reinitMobileTabSlides($el))">
+                    <div class="module-grid">
+                        <template x-for="module in getModulesByType('publish')" :key="module.id + '-' + sortBy + '-' + sortOrder">
+                            {% include "modules/_card.html" %}
+                        </template>
+                    </div>
+                </div>
+
+                <div x-show="activeTab === 'republish'"
+                     x-effect="if (activeTab === 'republish') $nextTick(() => reinitMobileTabSlides($el))">
+                    <div class="module-grid">
+                        <template x-for="module in getModulesByType('republish')" :key="module.id + '-' + sortBy + '-' + sortOrder">
+                            {% include "modules/_card.html" %}
+                        </template>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
