@@ -508,12 +508,20 @@ function toggleSlideTouch(event, el) {
     // 터치로 슬라이드 일시정지 토글
 }
 
+// 스크롤 위치 저장용 변수 (autorun)
+let autorunSavedScrollPosition = 0;
+
 // 하단 시트 관련
 function openBottomSheet(id) {
     const backdrop = document.getElementById(`${id}-backdrop`);
     const sheet = document.getElementById(id);
 
     if (backdrop && sheet) {
+        // 모바일에서 body 스크롤 고정
+        autorunSavedScrollPosition = window.pageYOffset;
+        document.body.classList.add('sheet-open');
+        document.body.style.top = `-${autorunSavedScrollPosition}px`;
+
         backdrop.classList.remove('hidden');
         setTimeout(() => {
             sheet.classList.remove('translate-y-full');
@@ -531,6 +539,11 @@ function closeBottomSheet(id) {
     if (backdrop) {
         setTimeout(() => {
             backdrop.classList.add('hidden');
+
+            // body 스크롤 복원
+            document.body.classList.remove('sheet-open');
+            document.body.style.top = '';
+            window.scrollTo(0, autorunSavedScrollPosition);
         }, 300);
     }
 }

@@ -214,6 +214,36 @@
   margin: 0.5rem auto;
 }
 
+/* 모바일 하단 시트 최적화 */
+@media (max-width: 767px) {
+  /* 하단 시트 모바일 폭 100% */
+  .fixed.inset-x-0.bottom-0,
+  [id$="Form"],
+  [id$="Sheet"],
+  [id$="Selector"]:not([id*="backdrop"]) {
+    max-width: 100vw !important;
+    width: 100% !important;
+  }
+
+  /* 하단 시트 내부 컨테이너도 100% */
+  .fixed.inset-x-0.bottom-0 > div,
+  [id$="Form"] > div,
+  [id$="Sheet"] > div {
+    max-width: 100% !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  /* 하단 시트 내부 스크롤 영역 */
+  .fixed.inset-x-0.bottom-0 .overflow-y-auto,
+  [id$="Form"] .overflow-y-auto,
+  [id$="Sheet"] .overflow-y-auto,
+  [id$="SheetContent"] {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+}
+
 /* SelectionPopup */
 .selection-popup-grid {
   display: grid;

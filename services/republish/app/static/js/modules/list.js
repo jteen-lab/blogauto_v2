@@ -1039,6 +1039,9 @@ window.deleteModule = function(moduleId) {
 };
 
 
+// 스크롤 위치 저장용 변수 (modules)
+let moduleSavedScrollPosition = 0;
+
 // 바텀시트 관련 함수들 (모듈 로드 전에 정의)
 if (typeof window.openBottomSheet === 'undefined') {
     window.openBottomSheet = function(sheetId) {
@@ -1050,6 +1053,11 @@ if (typeof window.openBottomSheet === 'undefined') {
             return;
         }
 
+        // 모바일에서 body 스크롤 고정
+        moduleSavedScrollPosition = window.pageYOffset;
+        document.body.classList.add('sheet-open');
+        document.body.style.top = `-${moduleSavedScrollPosition}px`;
+
         // 백드롭 표시
         if (backdrop) {
             backdrop.classList.remove('hidden');
@@ -1060,9 +1068,6 @@ if (typeof window.openBottomSheet === 'undefined') {
 
         // 시트 표시
         sheet.classList.remove('translate-y-full');
-
-        // 스크롤 방지
-        document.body.style.overflow = 'hidden';
     };
 }
 
@@ -1081,11 +1086,13 @@ if (typeof window.closeBottomSheet === 'undefined') {
             backdrop.style.opacity = '0';
             setTimeout(() => {
                 backdrop.classList.add('hidden');
+
+                // body 스크롤 복원
+                document.body.classList.remove('sheet-open');
+                document.body.style.top = '';
+                window.scrollTo(0, moduleSavedScrollPosition);
             }, 300);
         }
-
-        // 스크롤 복원
-        document.body.style.overflow = '';
     };
 }
 

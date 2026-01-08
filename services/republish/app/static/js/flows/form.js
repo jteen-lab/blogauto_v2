@@ -3,12 +3,20 @@
  * Alpine.js 기반 폼 관리 및 API 통신
  */
 
+// 스크롤 위치 저장용 변수
+let savedScrollPosition = 0;
+
 // Bottom Sheet 관리 함수들 (모듈 폼과 공통)
 function showBottomSheet(sheetId) {
     const backdrop = document.getElementById(sheetId + '-backdrop');
     const sheet = document.getElementById(sheetId);
 
     if (backdrop && sheet) {
+        // 모바일에서 body 스크롤 고정
+        savedScrollPosition = window.pageYOffset;
+        document.body.classList.add('sheet-open');
+        document.body.style.top = `-${savedScrollPosition}px`;
+
         backdrop.classList.remove('hidden');
         sheet.classList.remove('hidden');
 
@@ -30,6 +38,11 @@ function closeBottomSheet(sheetId) {
         setTimeout(() => {
             backdrop.classList.add('hidden');
             sheet.classList.add('hidden');
+
+            // body 스크롤 복원
+            document.body.classList.remove('sheet-open');
+            document.body.style.top = '';
+            window.scrollTo(0, savedScrollPosition);
 
             // 폼 리셋 (플로우 폼만)
             if (sheetId === 'flowForm' && window.flowFormApp) {
