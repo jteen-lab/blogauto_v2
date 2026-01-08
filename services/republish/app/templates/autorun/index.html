@@ -1,0 +1,314 @@
+{% extends "base.html" %}
+
+{% block title %}오토런 - BlogAuto V2{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="/static/css/components.css">
+<link rel="stylesheet" href="/static/css/flow-card-slide.css">
+<style>
+    /* 오토런 페이지 레이아웃 (플로우 관리와 동일) */
+    .autorun-grid {
+        display: grid;
+        gap: 1.5rem;
+        align-items: start;
+    }
+
+    /* 데스크탑: 4열 */
+    @media (min-width: 1280px) {
+        .autorun-grid {
+            grid-template-columns: repeat(4, 1fr);
+        }
+    }
+
+    /* 태블릿: 2열 */
+    @media (min-width: 768px) and (max-width: 1279px) {
+        .autorun-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    /* 모바일: 1열 */
+    @media (max-width: 767px) {
+        .autorun-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .loading-skeleton {
+        background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+        background-size: 200% 100%;
+        animation: loading 1.5s infinite;
+    }
+
+    @keyframes loading {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+
+    /* 상태 배지 */
+    .status-active {
+        @apply inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-800;
+    }
+
+    .status-paused {
+        @apply inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800;
+    }
+
+    /* 다중 선택 바 */
+    .selection-bar {
+        @apply fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg px-4 py-3 z-30;
+        transform: translateY(100%);
+        transition: transform 0.3s ease;
+    }
+
+    .selection-bar.visible {
+        transform: translateY(0);
+    }
+
+    /* 액션 버튼 */
+    .action-btn {
+        @apply px-3 py-1.5 text-xs font-medium rounded-md transition-colors;
+    }
+
+    .action-btn.pause {
+        @apply bg-yellow-100 text-yellow-700 hover:bg-yellow-200;
+    }
+
+    .action-btn.resume {
+        @apply bg-green-100 text-green-700 hover:bg-green-200;
+    }
+
+    .action-btn.remove {
+        @apply bg-red-100 text-red-700 hover:bg-red-200;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4" x-data="autorunApp()">
+    <!-- 헤더 -->
+    <div class="flex items-center justify-between mb-4">
+        <div class="flex-1">
+            <h2 class="text-2xl font-bold text-gray-900">
+                🎮 오토런
+            </h2>
+            <p class="mt-1 text-sm text-gray-500">
+                플로우를 실행하고 모니터링하세요
+            </p>
+        </div>
+
+        <!-- 헤더 버튼 -->
+        <div class="flex items-center gap-2">
+            <button @click="openLogSheet()"
+                    class="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none">
+                <span class="mr-1">📋</span>
+                로그
+            </button>
+            <button @click="openAddSheet()"
+                    class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none">
+                <svg class="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                추가
+            </button>
+        </div>
+    </div>
+
+    <!-- 상태 요약 바 -->
+    <div class="flex items-center justify-between mb-6 bg-gray-50 rounded-lg px-4 py-3">
+        <div class="flex items-center gap-4 text-sm">
+            <span class="text-gray-600">
+                총 <span class="font-semibold text-gray-900" x-text="autorunFlows.length"></span>개
+            </span>
+            <span class="flex items-center gap-1">
+                <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                활성 <span class="font-semibold" x-text="activeCount"></span>
+            </span>
+            <span class="flex items-center gap-1">
+                <span class="w-2 h-2 rounded-full bg-yellow-500"></span>
+                일시정지 <span class="font-semibold" x-text="pausedCount"></span>
+            </span>
+        </div>
+
+        <!-- 다중 선택 모드 시 표시 -->
+        <div x-show="selectedIds.length > 0" class="flex items-center gap-2">
+            <button @click="selectAll()"
+                    class="text-sm text-blue-600 hover:text-blue-800">
+                <span x-text="isAllSelected ? '전체 해제' : '전체 선택'"></span>
+            </button>
+            <span class="text-gray-300">|</span>
+            <button @click="bulkPause()"
+                    class="action-btn pause"
+                    x-show="hasActiveSelected">
+                ⏸ 일시정지
+            </button>
+            <button @click="bulkResume()"
+                    class="action-btn resume"
+                    x-show="hasPausedSelected">
+                ▶ 재개
+            </button>
+            <button @click="bulkRemove()"
+                    class="action-btn remove">
+                ⏹ 제외
+            </button>
+        </div>
+    </div>
+
+    <!-- 로딩 상태 -->
+    <div x-show="loading" class="autorun-grid">
+        <template x-for="i in 6" :key="i">
+            <div class="bg-white rounded-lg border p-6">
+                <div class="flex items-start justify-between mb-4">
+                    <div class="flex items-center gap-3 flex-1">
+                        <div class="w-8 h-8 loading-skeleton rounded"></div>
+                        <div class="flex-1 space-y-2">
+                            <div class="h-4 loading-skeleton rounded w-3/4"></div>
+                            <div class="h-3 loading-skeleton rounded w-1/2"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </div>
+
+    <!-- 빈 상태 -->
+    <div x-show="!loading && autorunFlows.length === 0">
+        {% include "autorun/_empty.html" %}
+    </div>
+
+    <!-- 오토런 플로우 목록 -->
+    <div x-show="!loading && autorunFlows.length > 0" class="autorun-grid">
+        <template x-for="flow in autorunFlows" :key="flow.id">
+            {% include "autorun/_card.html" %}
+        </template>
+    </div>
+</div>
+
+<!-- 플로우 추가 하단 시트 -->
+<div id="addSheet-backdrop"
+     class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden transition-opacity duration-300"
+     onclick="closeBottomSheet('addSheet')">
+</div>
+
+<div id="addSheet"
+     class="fixed inset-x-0 bottom-0 h-[calc(100vh-70px)] bg-white rounded-t-2xl shadow-2xl z-50
+            transform translate-y-full transition-transform duration-300 ease-out">
+
+    <!-- 핸들 바 -->
+    <div class="flex justify-center pt-3 pb-2">
+        <div class="w-12 h-1 bg-gray-300 rounded-full"></div>
+    </div>
+
+    <!-- 헤더 -->
+    <div class="flex justify-between items-center px-4 py-3 border-b border-gray-200">
+        <h3 class="text-lg font-semibold text-gray-900">플로우 추가</h3>
+        <button onclick="closeBottomSheet('addSheet')"
+                class="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+        </button>
+    </div>
+
+    <!-- 검색 -->
+    <div class="px-4 py-3 border-b border-gray-100">
+        <div class="relative">
+            <input type="text"
+                   id="searchAvailable"
+                   placeholder="플로우 검색..."
+                   class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            <svg class="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+        </div>
+    </div>
+
+    <!-- 목록 영역 -->
+    <div id="addSheetContent" class="p-4 max-h-[calc(100vh-280px)] overflow-y-auto">
+        <div class="text-center text-gray-500 py-8">로딩 중...</div>
+    </div>
+
+    <!-- 하단 버튼 -->
+    <div class="px-4 py-4 border-t border-gray-200 bg-gray-50">
+        <div class="flex gap-3">
+            <button onclick="closeBottomSheet('addSheet')"
+                    class="flex-1 py-3 px-4 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                취소
+            </button>
+            <button id="addSelectedFlows"
+                    onclick="addSelectedFlows()"
+                    class="flex-1 py-3 px-4 text-white bg-blue-600 rounded-lg hover:bg-blue-700 font-medium"
+                    disabled>
+                <span id="addButtonText">추가 (0)</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- 로그 하단 시트 -->
+<div id="logSheet-backdrop"
+     class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden transition-opacity duration-300"
+     onclick="closeBottomSheet('logSheet')">
+</div>
+
+<div id="logSheet"
+     class="fixed inset-x-0 bottom-0 h-[calc(100vh-70px)] bg-white rounded-t-2xl shadow-2xl z-50
+            transform translate-y-full transition-transform duration-300 ease-out">
+
+    <!-- 핸들 바 -->
+    <div class="flex justify-center pt-3 pb-2">
+        <div class="w-12 h-1 bg-gray-300 rounded-full"></div>
+    </div>
+
+    <!-- 헤더 -->
+    <div class="flex justify-between items-center px-4 py-3 border-b border-gray-200">
+        <h3 class="text-lg font-semibold text-gray-900">동작 로그</h3>
+        <div class="flex items-center gap-2">
+            <button onclick="refreshLogs()"
+                    class="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+            </button>
+            <button onclick="closeBottomSheet('logSheet')"
+                    class="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- 로그 목록 -->
+    <div id="logSheetContent" class="p-4 max-h-[calc(100vh-180px)] overflow-y-auto">
+        <div class="text-center text-gray-500 py-8">로그가 없습니다</div>
+    </div>
+</div>
+
+<!-- 확인 다이얼로그 -->
+<div id="confirmDialog"
+     class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden"
+     x-data="{ show: false }">
+    <div class="fixed inset-0 bg-black bg-opacity-50" onclick="closeConfirmDialog()"></div>
+    <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full z-10 transform scale-95">
+        <div class="p-6">
+            <h3 id="confirmTitle" class="text-lg font-semibold text-gray-900 mb-2">확인</h3>
+            <p id="confirmMessage" class="text-gray-600 mb-4">정말 실행하시겠습니까?</p>
+            <div id="confirmList" class="mb-4 max-h-32 overflow-y-auto"></div>
+            <p id="confirmWarning" class="text-sm text-yellow-600 mb-4"></p>
+        </div>
+        <div class="px-6 pb-6 flex gap-3">
+            <button onclick="closeConfirmDialog()"
+                    class="flex-1 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50">
+                취소
+            </button>
+            <button id="confirmAction"
+                    class="flex-1 py-2 text-white bg-red-600 rounded-lg hover:bg-red-700">
+                확인
+            </button>
+        </div>
+    </div>
+</div>
+
+<script src="/static/js/autorun/main.js"></script>
+{% endblock %}

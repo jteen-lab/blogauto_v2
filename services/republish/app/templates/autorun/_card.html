@@ -1,0 +1,218 @@
+<!-- 오토런 플로우 카드 (플로우 카드 기반 + 상태 제어 버튼) -->
+<div class="bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow duration-200 overflow-hidden"
+     :data-flow-id="flow.id"
+     :id="'autorun-card-' + flow.id"
+     x-data="autorunCardState()"
+     x-init="initCard($el)">
+
+    <!-- 카드 헤더 -->
+    <div class="px-4 py-2 flex items-center justify-between"
+         :class="flow.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'">
+
+        <!-- 체크박스 + 상태 아이콘 + 이름 -->
+        <div class="flex items-center gap-2 flex-1">
+            <input type="checkbox"
+                   :checked="isSelected(flow.id)"
+                   @change="toggleSelect(flow.id)"
+                   class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+
+            <span x-text="flow.status === 'active' ? '🟢' : '🟡'" class="text-sm"></span>
+            <h4 class="font-semibold truncate" x-text="flow.name"></h4>
+        </div>
+
+        <!-- 액션 버튼 -->
+        <div class="flex gap-1">
+            <!-- 일시정지/재개 버튼 -->
+            <template x-if="flow.status === 'active'">
+                <button @click="pauseFlow(flow.id)"
+                        class="p-1.5 text-yellow-600 hover:text-yellow-800 hover:bg-yellow-200/50 rounded-lg transition-colors"
+                        title="일시정지">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                    </svg>
+                </button>
+            </template>
+            <template x-if="flow.status === 'paused'">
+                <button @click="resumeFlow(flow.id)"
+                        class="p-1.5 text-green-600 hover:text-green-800 hover:bg-green-200/50 rounded-lg transition-colors"
+                        title="재개">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"/>
+                    </svg>
+                </button>
+            </template>
+
+            <!-- 제외 버튼 -->
+            <button @click="removeFlow(flow.id)"
+                    class="p-1.5 text-gray-500 hover:text-red-700 hover:bg-red-200/50 rounded-lg transition-colors"
+                    title="오토런에서 제외">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clip-rule="evenodd"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- 카드 본문 -->
+    <div class="px-4 py-3" x-data="{
+        expanded: false,
+        maxVisible: 3,
+        get allRows() {
+            const rows = [];
+            // 모듈 행 추가
+            if (flow.module_links) {
+                flow.module_links.forEach(m => rows.push({ type: 'module', data: m }));
+            }
+            // 블로그 행 추가
+            if (flow.blog_links && flow.blog_links.length > 0) {
+                rows.push({ type: 'blog', data: flow.blog_links });
+            }
+            return rows;
+        },
+        get hiddenCount() {
+            return Math.max(0, this.allRows.length - this.maxVisible);
+        }
+    }">
+        <!-- 설명 -->
+        <div x-show="flow.description" class="text-xs text-gray-600 bg-gray-50 p-2 rounded-lg mb-3">
+            <span x-text="flow.description"></span>
+        </div>
+
+        <!-- 상태 정보 표시 -->
+        <div class="flex items-center gap-3 text-xs text-gray-500 mb-3">
+            <template x-if="flow.status === 'active' && flow.next_execution">
+                <span class="flex items-center gap-1">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    다음: <span x-text="formatTime(flow.next_execution)" class="font-medium text-gray-700"></span>
+                </span>
+            </template>
+            <template x-if="flow.status === 'paused'">
+                <span class="flex items-center gap-1 text-yellow-600">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    일시정지됨
+                </span>
+            </template>
+        </div>
+
+        <!-- 모듈/블로그 정보 -->
+        <div class="mb-3">
+            <div class="flex items-center mb-2">
+                <span class="text-xs font-medium text-gray-700">
+                    모듈 : <span x-text="flow.module_count || 0"></span>개 / 블로그 : <span x-text="flow.blog_count || 0"></span>개
+                </span>
+            </div>
+
+            <!-- 행 목록 -->
+            <template x-if="allRows.length > 0">
+                <div class="module-slide-list">
+                    <template x-for="(row, rowIndex) in allRows" :key="rowIndex">
+                        <div x-show="expanded || rowIndex < maxVisible" x-transition>
+
+                            <!-- 모듈 행 -->
+                            <template x-if="row.type === 'module'">
+                                <div class="module-slide-row"
+                                     :class="'type-' + (row.data.module?.module_type?.code || 'republish')"
+                                     @touchstart="toggleSlideTouch($event, $el)"
+                                     x-init="$nextTick(() => initSlideCheck($el))">
+
+                                    <div class="module-slide-label">
+                                        <span class="module-slide-icon" x-text="getModuleIcon(row.data.module?.module_type?.code)"></span>
+                                        <span class="module-slide-name" x-text="row.data.module?.name" :title="row.data.module?.name"></span>
+                                    </div>
+
+                                    <div class="module-slide-container">
+                                        <div class="module-slide-track"
+                                             :style="{ '--slide-duration': getModuleSlideDuration(row.data.module) + 's' }"
+                                             :class="{ 'no-slide': !needsModuleSlide(row.data.module) }">
+
+                                            <template x-for="(info, i) in getModuleInfoItems(row.data.module)" :key="'orig-' + i">
+                                                <span class="slide-info-item">
+                                                    <span class="slide-info-label" x-text="info.label + ':'"></span>
+                                                    <span class="slide-info-value" x-text="info.value"></span>
+                                                </span>
+                                            </template>
+
+                                            <template x-if="needsModuleSlide(row.data.module)">
+                                                <span class="slide-cycle-separator">◆</span>
+                                            </template>
+
+                                            <template x-if="needsModuleSlide(row.data.module)">
+                                                <template x-for="(info, i) in getModuleInfoItems(row.data.module)" :key="'dup-' + i">
+                                                    <span class="slide-info-item" aria-hidden="true">
+                                                        <span class="slide-info-label" x-text="info.label + ':'"></span>
+                                                        <span class="slide-info-value" x-text="info.value"></span>
+                                                    </span>
+                                                </template>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- 블로그 행 -->
+                            <template x-if="row.type === 'blog'">
+                                <div class="blog-slide-section"
+                                     @touchstart="toggleSlideTouch($event, $el)"
+                                     x-init="$nextTick(() => initBlogSlideCheck($el, row.data.length))">
+                                    <div class="blog-slide-label">
+                                        <span class="blog-slide-icon">📝</span>
+                                        <span class="blog-slide-count">블로그</span>
+                                    </div>
+
+                                    <div class="blog-slide-container">
+                                        <div class="blog-slide-track"
+                                             :style="{ '--blog-slide-duration': getBlogSlideDuration(row.data.length) + 's' }"
+                                             :class="{ 'no-slide': !needsBlogSlide(row.data.length) }">
+
+                                            <template x-for="(flowBlog, i) in row.data" :key="'blog-orig-' + flowBlog.id">
+                                                <span class="blog-slide-item">
+                                                    <span class="blog-platform-badge"
+                                                          :class="flowBlog.blog.platform === 'wordpress' ? 'blog-platform-wp' : 'blog-platform-bl'"
+                                                          x-text="flowBlog.blog.platform === 'wordpress' ? 'WP' : 'BL'"></span>
+                                                    <span class="blog-slide-name" x-text="flowBlog.blog.name"></span>
+                                                    <span x-show="i < row.data.length - 1" class="blog-slide-separator">·</span>
+                                                </span>
+                                            </template>
+
+                                            <template x-if="needsBlogSlide(row.data.length)">
+                                                <span class="slide-cycle-separator">◆</span>
+                                            </template>
+
+                                            <template x-if="needsBlogSlide(row.data.length)">
+                                                <template x-for="(flowBlog, i) in row.data" :key="'blog-dup-' + flowBlog.id">
+                                                    <span class="blog-slide-item" aria-hidden="true">
+                                                        <span class="blog-platform-badge"
+                                                              :class="flowBlog.blog.platform === 'wordpress' ? 'blog-platform-wp' : 'blog-platform-bl'"
+                                                              x-text="flowBlog.blog.platform === 'wordpress' ? 'WP' : 'BL'"></span>
+                                                        <span class="blog-slide-name" x-text="flowBlog.blog.name"></span>
+                                                        <span x-show="i < row.data.length - 1" class="blog-slide-separator">·</span>
+                                                    </span>
+                                                </template>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </template>
+
+            <!-- 빈 상태 -->
+            <div x-show="allRows.length === 0" class="module-empty-state">
+                연결된 모듈이 없습니다
+            </div>
+        </div>
+
+        <!-- 더보기/접기 버튼 -->
+        <button x-show="hiddenCount > 0"
+                @click="expanded = !expanded"
+                class="card-expand-btn">
+            <span x-text="expanded ? '접기 ▲' : `더보기 (${hiddenCount}개 더) ▼`"></span>
+        </button>
+    </div>
+</div>
