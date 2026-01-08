@@ -31,6 +31,7 @@ from .routers.flows import router as flows_router
 from .routers.autorun import router as autorun_router
 from .routers.modules_pages import router as modules_page_router
 from .routers.flows_pages import router as flows_page_router
+from .routers.autorun_pages import router as autorun_page_router
 
 logger = get_logger("main", "app.log")
 
@@ -126,6 +127,7 @@ app.include_router(republish_page_router)
 # app.include_router(groups_page_router)  # 임시 비활성화
 app.include_router(modules_page_router)
 app.include_router(flows_page_router)
+app.include_router(autorun_page_router)
 
 # 정적 파일 서빙 (개발환경)
 if settings.is_development:
