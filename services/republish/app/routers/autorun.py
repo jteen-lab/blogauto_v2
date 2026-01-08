@@ -56,6 +56,57 @@ async def get_autorun_flows(
     return await service.get_autorun_status(current_user, include_inactive)
 
 
+@router.get(
+    "/available",
+    summary="오토런 미추가 플로우 목록",
+    description="오토런에 추가되지 않은 플로우 목록을 조회합니다."
+)
+async def get_available_flows(
+    search: Optional[str] = Query(None, description="검색어 (플로우명, 모듈명, 블로그명)"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """오토런 미추가 플로우 목록 조회"""
+    service = AutorunService(db)
+    return await service.get_available_flows(current_user, search)
+
+
+@router.post(
+    "/flows",
+    summary="플로우 다중 추가",
+    description="여러 플로우를 오토런에 추가합니다."
+)
+async def add_flows_to_autorun(
+    flow_ids: List[int],
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """플로우 다중 추가"""
+    service = AutorunService(db)
+    return await service.add_flows_to_autorun(current_user, flow_ids)
+
+
+@router.delete(
+    "/flows/{flow_id}",
+    summary="플로우 제외",
+    description="플로우를 오토런에서 제외합니다."
+)
+async def remove_flow_from_autorun(
+    flow_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """플로우 제외"""
+    service = AutorunService(db)
+    result = await service.remove_flow_from_autorun(current_user, flow_id)
+
+    # 성공 시 스케줄러에서 제거
+    if result.get("success"):
+        await scheduler_manager.unregister_flow_schedule(flow_id)
+
+    return result
+
+
 @router.post(
     "/flows/{flow_id}/start",
     response_model=FlowActionResult,
@@ -294,5 +345,33 @@ async def stop_scheduler():
             status_code=500,
             detail="스케줄러 중지에 실패했습니다"
         )
+
+
+# ===========================================
+# 로그 관련 엔드포인트
+# ===========================================
+
+@router.get(
+    "/logs",
+    summary="오토런 로그 조회",
+    description="오토런 실행 로그를 조회합니다."
+)
+async def get_autorun_logs(
+    flow_id: Optional[int] = Query(None, description="특정 플로우 ID로 필터링"),
+    action: Optional[str] = Query(None, description="액션 타입 필터 (started/completed/failed/paused/resumed)"),
+    limit: int = Query(50, ge=1, le=200, description="조회 개수"),
+    offset: int = Query(0, ge=0, description="시작 위치"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """오토런 로그 조회"""
+    service = AutorunService(db)
+    return await service.get_autorun_logs(
+        user=current_user,
+        flow_id=flow_id,
+        action=action,
+        limit=limit,
+        offset=offset
+    )
 
 

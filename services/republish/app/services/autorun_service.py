@@ -19,6 +19,7 @@ from ..models.flow_blog import FlowBlog
 from ..models.module import Module
 from ..models.blog import Blog
 from ..models.user import User
+from ..models.autorun_log import AutorunLog
 from ..schemas.flow import FlowStatus
 from ..schemas.autorun import (
     AutorunFlowListResponse,
@@ -57,20 +58,25 @@ class AutorunService:
         try:
             logger.info(f"[GET_AUTORUN_STATUS] 사용자 {user.id} 오토런 상태 조회")
 
-            # 플로우 목록 조회
+            # 오토런에 추가된 플로우만 조회
             query = (
                 select(Flow)
                 .options(
-                    selectinload(Flow.flow_modules).selectinload(FlowModule.module),
-                    selectinload(Flow.flow_blogs).selectinload(FlowBlog.blog)
+                    selectinload(Flow.module_links).selectinload(FlowModule.module).selectinload(Module.module_type),
+                    selectinload(Flow.blog_links).selectinload(FlowBlog.blog)
                 )
-                .where(Flow.user_id == user.id)
+                .where(
+                    and_(
+                        Flow.user_id == user.id,
+                        Flow.is_in_autorun == True
+                    )
+                )
             )
 
             if not include_inactive:
                 query = query.where(Flow.status != FlowStatus.INACTIVE)
 
-            query = query.order_by(Flow.priority.desc(), Flow.updated_at.desc())
+            query = query.order_by(Flow.updated_at.desc())
             result = await self.db.execute(query)
             flows = result.scalars().all()
 
@@ -119,8 +125,8 @@ class AutorunService:
         if active_flows > 0:
             active_flow_objs = [f for f in flows if f.status == FlowStatus.ACTIVE]
             if active_flow_objs:
-                # 가장 높은 우선순위의 활성 플로우
-                next_flow = max(active_flow_objs, key=lambda x: x.priority)
+                # 첫 번째 활성 플로우 (최근 업데이트 순)
+                next_flow = active_flow_objs[0]
                 next_execution_flow_name = next_flow.name
                 # 임시로 현재 시간 + 1시간 설정 (실제로는 스케줄러에서 계산)
                 next_execution = datetime.now() + timedelta(hours=1)
@@ -139,12 +145,47 @@ class AutorunService:
 
     def _flow_to_execution_info(self, flow: Flow) -> Dict[str, Any]:
         """Flow를 FlowExecutionInfo 형태로 변환"""
+        # 모듈 링크 정보 구성
+        module_links = []
+        if flow.module_links:
+            for link in flow.module_links:
+                module_links.append({
+                    "id": link.id,
+                    "execution_order": link.execution_order,
+                    "module": {
+                        "id": link.module.id,
+                        "name": link.module.name,
+                        "description": link.module.description,
+                        "module_type": {
+                            "code": link.module.module_type.code if link.module.module_type else "republish",
+                            "name": link.module.module_type.name if link.module.module_type else "재발행"
+                        }
+                    } if link.module else None
+                })
+
+        # 블로그 링크 정보 구성
+        blog_links = []
+        if flow.blog_links:
+            for link in flow.blog_links:
+                blog_links.append({
+                    "id": link.id,
+                    "blog": {
+                        "id": link.blog.id,
+                        "name": link.blog.name,
+                        "platform": link.blog.platform,
+                        "url": link.blog.url
+                    } if link.blog else None
+                })
+
         return {
             "id": flow.id,
             "name": flow.name,
+            "description": flow.description,
             "status": flow.status,
-            "module_count": len(flow.flow_modules) if flow.flow_modules else 0,
-            "blog_count": len(flow.flow_blogs) if flow.flow_blogs else 0,
+            "module_count": len(flow.module_links) if flow.module_links else 0,
+            "blog_count": len(flow.blog_links) if flow.blog_links else 0,
+            "module_links": module_links,
+            "blog_links": blog_links,
             "next_execution": None,  # 스케줄러에서 계산
             "last_execution": None,  # execution_log에서 조회
             "paused_at": None,  # 일시정지 시간
@@ -215,8 +256,8 @@ class AutorunService:
         query = (
             select(Flow)
             .options(
-                selectinload(Flow.flow_modules).selectinload(FlowModule.module),
-                selectinload(Flow.flow_blogs).selectinload(FlowBlog.blog)
+                selectinload(Flow.module_links).selectinload(FlowModule.module).selectinload(Module.module_type),
+                selectinload(Flow.blog_links).selectinload(FlowBlog.blog)
             )
             .where(
                 and_(
@@ -342,17 +383,17 @@ class AutorunService:
         warnings = []
 
         # 모듈 존재 확인
-        if not flow.flow_modules or len(flow.flow_modules) == 0:
+        if not flow.module_links or len(flow.module_links) == 0:
             errors.append("연결된 모듈이 없습니다")
 
         # 블로그 존재 확인
-        if not flow.flow_blogs or len(flow.flow_blogs) == 0:
+        if not flow.blog_links or len(flow.blog_links) == 0:
             errors.append("연결된 블로그가 없습니다")
 
         # 모듈 스케줄 확인
         has_schedules = False
-        if flow.flow_modules:
-            for flow_module in flow.flow_modules:
+        if flow.module_links:
+            for flow_module in flow.module_links:
                 if flow_module.module and flow_module.module.schedule_matrix:
                     has_schedules = True
                     break
@@ -432,3 +473,275 @@ class AutorunService:
                 status_code=500,
                 detail="일괄 액션을 실행하는 중 오류가 발생했습니다"
             )
+
+    # ===========================================
+    # 오토런 미추가 플로우 조회 및 추가
+    # ===========================================
+
+    async def get_available_flows(
+        self,
+        user: User,
+        search: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """오토런에 추가되지 않은 플로우 목록 조회"""
+        try:
+            logger.info(f"[GET_AVAILABLE_FLOWS] 사용자 {user.id} 미추가 플로우 조회")
+
+            # 오토런 미추가 플로우 조회 (is_in_autorun = False)
+            query = (
+                select(Flow)
+                .options(
+                    selectinload(Flow.module_links).selectinload(FlowModule.module).selectinload(Module.module_type),
+                    selectinload(Flow.blog_links).selectinload(FlowBlog.blog)
+                )
+                .where(
+                    and_(
+                        Flow.user_id == user.id,
+                        Flow.is_in_autorun == False
+                    )
+                )
+            )
+
+            # 검색어 필터링
+            if search:
+                search_pattern = f"%{search}%"
+                query = query.where(
+                    Flow.name.ilike(search_pattern)
+                )
+
+            query = query.order_by(Flow.updated_at.desc())
+            result = await self.db.execute(query)
+            flows = result.scalars().all()
+
+            logger.info(f"[GET_AVAILABLE_FLOWS] {len(flows)}개 미추가 플로우 조회됨")
+
+            return [self._flow_to_execution_info(f) for f in flows]
+
+        except Exception as e:
+            logger.error(f"[GET_AVAILABLE_FLOWS] 오류: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail="미추가 플로우 목록을 조회하는 중 오류가 발생했습니다"
+            )
+
+    async def add_flows_to_autorun(
+        self,
+        user: User,
+        flow_ids: List[int]
+    ) -> Dict[str, Any]:
+        """여러 플로우를 오토런에 추가"""
+        try:
+            logger.info(f"[ADD_FLOWS_TO_AUTORUN] 사용자 {user.id} 플로우 {len(flow_ids)}개 추가 요청")
+
+            success_count = 0
+            failed_count = 0
+            failed_ids = []
+
+            for flow_id in flow_ids:
+                try:
+                    # 플로우 조회
+                    query = select(Flow).where(
+                        and_(
+                            Flow.id == flow_id,
+                            Flow.user_id == user.id
+                        )
+                    )
+                    result = await self.db.execute(query)
+                    flow = result.scalar_one_or_none()
+
+                    if not flow:
+                        failed_count += 1
+                        failed_ids.append(flow_id)
+                        continue
+
+                    # 이미 추가된 경우 스킵
+                    if flow.is_in_autorun:
+                        continue
+
+                    # 오토런에 추가
+                    flow.add_to_autorun()
+                    success_count += 1
+
+                except Exception as e:
+                    logger.warning(f"[ADD_FLOWS_TO_AUTORUN] 플로우 {flow_id} 추가 실패: {e}")
+                    failed_count += 1
+                    failed_ids.append(flow_id)
+
+            await self.db.commit()
+
+            logger.info(f"[ADD_FLOWS_TO_AUTORUN] 완료: {success_count}개 성공, {failed_count}개 실패")
+
+            return {
+                "success": True,
+                "message": f"{success_count}개 플로우가 오토런에 추가되었습니다",
+                "success_count": success_count,
+                "failed_count": failed_count,
+                "failed_ids": failed_ids
+            }
+
+        except Exception as e:
+            logger.error(f"[ADD_FLOWS_TO_AUTORUN] 오류: {e}")
+            await self.db.rollback()
+            raise HTTPException(
+                status_code=500,
+                detail="플로우를 오토런에 추가하는 중 오류가 발생했습니다"
+            )
+
+    async def remove_flow_from_autorun(
+        self,
+        user: User,
+        flow_id: int
+    ) -> Dict[str, Any]:
+        """플로우를 오토런에서 제외"""
+        try:
+            logger.info(f"[REMOVE_FLOW_FROM_AUTORUN] 사용자 {user.id} 플로우 {flow_id} 제외 요청")
+
+            # 플로우 조회
+            query = select(Flow).where(
+                and_(
+                    Flow.id == flow_id,
+                    Flow.user_id == user.id
+                )
+            )
+            result = await self.db.execute(query)
+            flow = result.scalar_one_or_none()
+
+            if not flow:
+                raise HTTPException(
+                    status_code=404,
+                    detail="플로우를 찾을 수 없습니다"
+                )
+
+            if not flow.is_in_autorun:
+                return {
+                    "success": False,
+                    "message": "이미 오토런에서 제외된 플로우입니다"
+                }
+
+            # 오토런에서 제외
+            flow.remove_from_autorun()
+            await self.db.commit()
+
+            logger.info(f"[REMOVE_FLOW_FROM_AUTORUN] 플로우 {flow_id} 오토런에서 제외됨")
+
+            return {
+                "success": True,
+                "message": "플로우가 오토런에서 제외되었습니다"
+            }
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"[REMOVE_FLOW_FROM_AUTORUN] 오류: {e}")
+            await self.db.rollback()
+            raise HTTPException(
+                status_code=500,
+                detail="플로우를 오토런에서 제외하는 중 오류가 발생했습니다"
+            )
+
+    # ===========================================
+    # 로그 조회
+    # ===========================================
+
+    async def get_autorun_logs(
+        self,
+        user: User,
+        flow_id: Optional[int] = None,
+        action: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0
+    ) -> Dict[str, Any]:
+        """오토런 로그 조회"""
+        try:
+            logger.info(f"[GET_AUTORUN_LOGS] 사용자 {user.id} 로그 조회")
+
+            # 기본 쿼리
+            query = (
+                select(AutorunLog)
+                .options(selectinload(AutorunLog.flow))
+                .where(AutorunLog.user_id == user.id)
+            )
+
+            # 플로우 ID 필터
+            if flow_id:
+                query = query.where(AutorunLog.flow_id == flow_id)
+
+            # 액션 타입 필터
+            if action:
+                query = query.where(AutorunLog.action == action)
+
+            # 정렬 및 페이징
+            query = query.order_by(desc(AutorunLog.created_at)).offset(offset).limit(limit)
+
+            result = await self.db.execute(query)
+            logs = result.scalars().all()
+
+            # 전체 개수 조회
+            count_query = select(func.count(AutorunLog.id)).where(AutorunLog.user_id == user.id)
+            if flow_id:
+                count_query = count_query.where(AutorunLog.flow_id == flow_id)
+            if action:
+                count_query = count_query.where(AutorunLog.action == action)
+            count_result = await self.db.execute(count_query)
+            total = count_result.scalar()
+
+            logger.info(f"[GET_AUTORUN_LOGS] {len(logs)}개 로그 조회됨 (전체: {total})")
+
+            return {
+                "logs": [self._log_to_dict(log) for log in logs],
+                "total": total,
+                "limit": limit,
+                "offset": offset
+            }
+
+        except Exception as e:
+            logger.error(f"[GET_AUTORUN_LOGS] 오류: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail="로그를 조회하는 중 오류가 발생했습니다"
+            )
+
+    def _log_to_dict(self, log: AutorunLog) -> Dict[str, Any]:
+        """로그를 딕셔너리로 변환"""
+        return {
+            "id": log.id,
+            "flow_id": log.flow_id,
+            "flow_name": log.flow.name if log.flow else None,
+            "action": log.action,
+            "action_display": log.action_display,
+            "status": log.status,
+            "status_display": log.status_display,
+            "message": log.message,
+            "execution_duration_ms": log.execution_duration_ms,
+            "formatted_duration": log.formatted_duration,
+            "posts_processed": log.posts_processed,
+            "posts_success": log.posts_success,
+            "posts_failed": log.posts_failed,
+            "created_at": log.created_at.isoformat() if log.created_at else None
+        }
+
+    async def create_log(
+        self,
+        user_id: int,
+        flow_id: int,
+        action: str,
+        status: str = "success",
+        message: str = None
+    ) -> AutorunLog:
+        """로그 생성"""
+        try:
+            log = AutorunLog.create_action_log(
+                user_id=user_id,
+                flow_id=flow_id,
+                action=action,
+                status=status,
+                message=message
+            )
+            self.db.add(log)
+            await self.db.commit()
+            await self.db.refresh(log)
+            return log
+        except Exception as e:
+            logger.error(f"[CREATE_LOG] 오류: {e}")
+            await self.db.rollback()
+            return None
