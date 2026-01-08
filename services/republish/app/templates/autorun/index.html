@@ -130,25 +130,31 @@
             </span>
         </div>
 
-        <!-- 다중 선택 모드 시 표시 -->
-        <div x-show="selectedIds.length > 0" class="flex items-center gap-2">
+        <!-- 일괄 액션 버튼 (항상 표시, 선택 없으면 비활성화) -->
+        <div class="flex items-center gap-2">
             <button @click="selectAll()"
-                    class="text-sm text-blue-600 hover:text-blue-800">
+                    class="text-sm text-blue-600 hover:text-blue-800"
+                    :class="autorunFlows.length === 0 ? 'opacity-50 cursor-not-allowed' : ''"
+                    :disabled="autorunFlows.length === 0">
                 <span x-text="isAllSelected ? '전체 해제' : '전체 선택'"></span>
             </button>
             <span class="text-gray-300">|</span>
             <button @click="bulkPause()"
                     class="action-btn pause"
-                    x-show="hasActiveSelected">
+                    :class="selectedIds.length === 0 || !hasActiveSelected ? 'opacity-50 cursor-not-allowed' : ''"
+                    :disabled="selectedIds.length === 0 || !hasActiveSelected">
                 ⏸ 일시정지
             </button>
             <button @click="bulkResume()"
                     class="action-btn resume"
-                    x-show="hasPausedSelected">
+                    :class="selectedIds.length === 0 || !hasPausedSelected ? 'opacity-50 cursor-not-allowed' : ''"
+                    :disabled="selectedIds.length === 0 || !hasPausedSelected">
                 ▶ 재개
             </button>
             <button @click="bulkRemove()"
-                    class="action-btn remove">
+                    class="action-btn remove"
+                    :class="selectedIds.length === 0 ? 'opacity-50 cursor-not-allowed' : ''"
+                    :disabled="selectedIds.length === 0">
                 ⏹ 제외
             </button>
         </div>
@@ -194,53 +200,55 @@
      class="fixed inset-x-0 bottom-0 h-[calc(100vh-70px)] bg-white rounded-t-2xl shadow-2xl z-50
             transform translate-y-full transition-transform duration-300 ease-out">
 
-    <!-- 핸들 바 -->
-    <div class="flex justify-center pt-3 pb-2">
-        <div class="w-12 h-1 bg-gray-300 rounded-full"></div>
-    </div>
-
-    <!-- 헤더 -->
-    <div class="flex justify-between items-center px-4 py-3 border-b border-gray-200">
-        <h3 class="text-lg font-semibold text-gray-900">플로우 추가</h3>
-        <button onclick="closeBottomSheet('addSheet')"
-                class="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-            </svg>
-        </button>
-    </div>
-
-    <!-- 검색 -->
-    <div class="px-4 py-3 border-b border-gray-100">
-        <div class="relative">
-            <input type="text"
-                   id="searchAvailable"
-                   placeholder="플로우 검색..."
-                   class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-            <svg class="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-            </svg>
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex flex-col">
+        <!-- 핸들 바 -->
+        <div class="flex justify-center pt-3 pb-2">
+            <div class="w-12 h-1 bg-gray-300 rounded-full"></div>
         </div>
-    </div>
 
-    <!-- 목록 영역 -->
-    <div id="addSheetContent" class="p-4 max-h-[calc(100vh-280px)] overflow-y-auto">
-        <div class="text-center text-gray-500 py-8">로딩 중...</div>
-    </div>
-
-    <!-- 하단 버튼 -->
-    <div class="px-4 py-4 border-t border-gray-200 bg-gray-50">
-        <div class="flex gap-3">
+        <!-- 헤더 -->
+        <div class="flex justify-between items-center py-3 border-b border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-900">플로우 추가</h3>
             <button onclick="closeBottomSheet('addSheet')"
-                    class="flex-1 py-3 px-4 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
-                취소
+                    class="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
             </button>
-            <button id="addSelectedFlows"
-                    onclick="addSelectedFlows()"
-                    class="flex-1 py-3 px-4 text-white bg-blue-600 rounded-lg hover:bg-blue-700 font-medium"
-                    disabled>
-                <span id="addButtonText">추가 (0)</span>
-            </button>
+        </div>
+
+        <!-- 검색 -->
+        <div class="px-4 py-3 border-b border-gray-100">
+            <div class="relative">
+                <input type="text"
+                       id="searchAvailable"
+                       placeholder="플로우 검색..."
+                       class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <svg class="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+            </div>
+        </div>
+
+        <!-- 목록 영역 -->
+        <div id="addSheetContent" class="flex-1 p-4 overflow-y-auto">
+            <div class="text-center text-gray-500 py-8">로딩 중...</div>
+        </div>
+
+        <!-- 하단 버튼 -->
+        <div class="px-4 py-4 border-t border-gray-200 bg-gray-50">
+            <div class="flex gap-3">
+                <button onclick="closeBottomSheet('addSheet')"
+                        class="flex-1 py-3 px-4 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                    취소
+                </button>
+                <button id="addSelectedFlows"
+                        onclick="addSelectedFlows()"
+                        class="flex-1 py-3 px-4 text-white bg-blue-600 rounded-lg hover:bg-blue-700 font-medium"
+                        disabled>
+                    <span id="addButtonText">추가 (0)</span>
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -255,33 +263,35 @@
      class="fixed inset-x-0 bottom-0 h-[calc(100vh-70px)] bg-white rounded-t-2xl shadow-2xl z-50
             transform translate-y-full transition-transform duration-300 ease-out">
 
-    <!-- 핸들 바 -->
-    <div class="flex justify-center pt-3 pb-2">
-        <div class="w-12 h-1 bg-gray-300 rounded-full"></div>
-    </div>
-
-    <!-- 헤더 -->
-    <div class="flex justify-between items-center px-4 py-3 border-b border-gray-200">
-        <h3 class="text-lg font-semibold text-gray-900">동작 로그</h3>
-        <div class="flex items-center gap-2">
-            <button onclick="refreshLogs()"
-                    class="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                </svg>
-            </button>
-            <button onclick="closeBottomSheet('logSheet')"
-                    class="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
-            </button>
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex flex-col">
+        <!-- 핸들 바 -->
+        <div class="flex justify-center pt-3 pb-2">
+            <div class="w-12 h-1 bg-gray-300 rounded-full"></div>
         </div>
-    </div>
 
-    <!-- 로그 목록 -->
-    <div id="logSheetContent" class="p-4 max-h-[calc(100vh-180px)] overflow-y-auto">
-        <div class="text-center text-gray-500 py-8">로그가 없습니다</div>
+        <!-- 헤더 -->
+        <div class="flex justify-between items-center py-3 border-b border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-900">동작 로그</h3>
+            <div class="flex items-center gap-2">
+                <button onclick="refreshLogs()"
+                        class="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                </button>
+                <button onclick="closeBottomSheet('logSheet')"
+                        class="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- 로그 목록 -->
+        <div id="logSheetContent" class="flex-1 p-4 overflow-y-auto">
+            <div class="text-center text-gray-500 py-8">로그가 없습니다</div>
+        </div>
     </div>
 </div>
 

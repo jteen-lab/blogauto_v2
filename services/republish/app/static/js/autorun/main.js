@@ -141,30 +141,27 @@ function autorunApp() {
             const flow = this.autorunFlows.find(f => f.id === flowId);
             if (!flow) return;
 
-            showConfirmDialog(
-                '플로우 제외',
-                '선택한 플로우를 오토런에서 제외하시겠습니까?',
-                [flow.name],
-                '제외 시 예약된 스케줄이 해제됩니다.',
-                async () => {
-                    try {
-                        const response = await fetch(`/api/v1/autorun/flows/${flowId}`, {
-                            method: 'DELETE',
-                            credentials: 'include'
-                        });
+            // 네이티브 confirm() 사용 - this 컨텍스트 문제 해결
+            if (!confirm(`'${flow.name}' 플로우를 오토런에서 제외하시겠습니까?\n\n제외 시 예약된 스케줄이 해제됩니다.`)) {
+                return;
+            }
 
-                        if (!response.ok) {
-                            throw new Error('제외 실패');
-                        }
+            try {
+                const response = await fetch(`/api/v1/autorun/flows/${flowId}`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
 
-                        showSuccessMessage('플로우가 오토런에서 제외되었습니다');
-                        await this.loadAutorunFlows();
-                    } catch (error) {
-                        showErrorMessage('제외 중 오류가 발생했습니다');
-                        console.error('제외 오류:', error);
-                    }
+                if (!response.ok) {
+                    throw new Error('제외 실패');
                 }
-            );
+
+                showSuccessMessage('플로우가 오토런에서 제외되었습니다');
+                await this.loadAutorunFlows();
+            } catch (error) {
+                showErrorMessage('제외 중 오류가 발생했습니다');
+                console.error('제외 오류:', error);
+            }
         },
 
         // 일괄 액션
@@ -236,39 +233,40 @@ function autorunApp() {
             }
         },
 
-        bulkRemove() {
+        async bulkRemove() {
             if (this.selectedIds.length === 0) return;
 
             const names = this.selectedIds.map(id =>
                 this.autorunFlows.find(f => f.id === id)?.name || ''
             ).filter(Boolean);
 
-            showConfirmDialog(
-                '플로우 제외',
-                '선택한 플로우를 오토런에서 제외하시겠습니까?',
-                names,
-                '제외 시 예약된 스케줄이 해제됩니다.',
-                async () => {
-                    try {
-                        // 각 플로우에 대해 DELETE 호출
-                        let successCount = 0;
-                        for (const flowId of this.selectedIds) {
-                            const response = await fetch(`/api/v1/autorun/flows/${flowId}`, {
-                                method: 'DELETE',
-                                credentials: 'include'
-                            });
-                            if (response.ok) successCount++;
-                        }
+            // 네이티브 confirm() 사용 - this 컨텍스트 문제 해결
+            const confirmMsg = `다음 ${names.length}개 플로우를 오토런에서 제외하시겠습니까?\n\n` +
+                names.map(n => `• ${n}`).join('\n') +
+                '\n\n제외 시 예약된 스케줄이 해제됩니다.';
 
-                        showSuccessMessage(`${successCount}개 플로우가 제외되었습니다`);
-                        this.selectedIds = [];
-                        await this.loadAutorunFlows();
-                    } catch (error) {
-                        showErrorMessage('일괄 제외 중 오류가 발생했습니다');
-                        console.error('일괄 제외 오류:', error);
-                    }
+            if (!confirm(confirmMsg)) {
+                return;
+            }
+
+            try {
+                // 각 플로우에 대해 DELETE 호출
+                let successCount = 0;
+                for (const flowId of this.selectedIds) {
+                    const response = await fetch(`/api/v1/autorun/flows/${flowId}`, {
+                        method: 'DELETE',
+                        credentials: 'include'
+                    });
+                    if (response.ok) successCount++;
                 }
-            );
+
+                showSuccessMessage(`${successCount}개 플로우가 제외되었습니다`);
+                this.selectedIds = [];
+                await this.loadAutorunFlows();
+            } catch (error) {
+                showErrorMessage('일괄 제외 중 오류가 발생했습니다');
+                console.error('일괄 제외 오류:', error);
+            }
         },
 
         // 하단 시트 열기
@@ -284,14 +282,8 @@ function autorunApp() {
     };
 }
 
-// 카드 상태 관리
-function autorunCardState() {
-    return {
-        initCard(el) {
-            // 슬라이드 초기화
-        }
-    };
-}
+// autorunCardState() 함수 제거됨
+// 카드에서 x-data="autorunCardState()" 제거 후 부모 autorunApp() 스코프 직접 사용
 
 // 시간 포맷팅
 function formatTime(dateString) {
@@ -311,35 +303,197 @@ function getModuleIcon(code) {
     return icons[code] || '📦';
 }
 
+// 모듈 타입별 표시할 정보 아이템 반환 (flows/list.js와 동일)
 function getModuleInfoItems(module) {
     if (!module) return [];
     const items = [];
+    const typeCode = module.module_type?.code || '';
 
-    if (module.module_type?.name) {
-        items.push({ label: '타입', value: module.module_type.name });
+    if (typeCode === 'republish') {
+        items.push({ label: '범위', value: getPostRangeText(module) });
+        items.push({ label: '간격', value: getIntervalText(module) });
+        const schedule = getScheduleSummary(module);
+        if (schedule !== '설정 없음') {
+            items.push({ label: '스케줄', value: schedule });
+        }
+    } else if (typeCode === 'publish') {
+        items.push({ label: '간격', value: getIntervalText(module) });
+        const schedule = getScheduleSummary(module);
+        if (schedule !== '설정 없음') {
+            items.push({ label: '스케줄', value: schedule });
+        }
+    } else if (typeCode === 'generate') {
+        if (module.ai_model) {
+            items.push({ label: 'AI', value: module.ai_model });
+        }
+        if (module.prompt_template) {
+            const promptPreview = module.prompt_template.substring(0, 30) + '...';
+            items.push({ label: '프롬프트', value: promptPreview });
+        }
+    } else if (typeCode === 'prompt') {
+        if (module.prompt_name) {
+            items.push({ label: '이름', value: module.prompt_name });
+        }
+        if (module.category) {
+            items.push({ label: '카테고리', value: module.category });
+        }
     }
-    if (module.description) {
-        items.push({ label: '설명', value: module.description });
+
+    // 기본 정보가 없으면 생성일 표시
+    if (items.length === 0 && module.created_at) {
+        const date = new Date(module.created_at).toLocaleDateString('ko-KR');
+        items.push({ label: '생성일', value: date });
     }
 
     return items;
 }
 
+// 포스트 범위 텍스트 반환
+function getPostRangeText(module) {
+    const start = module.post_range_start || 1;
+    const end = module.post_range_end;
+    if (!end) {
+        return `${start}~무제한 (누적 포스트)`;
+    }
+    return `${start}~${end} (누적 포스트)`;
+}
+
+// 간격 텍스트 반환
+function getIntervalText(module) {
+    const mode = module.interval_mode || 'manual';
+    const activeMinutes = calculateActiveMinutes(module);
+
+    if (mode === 'auto' && module.auto_daily_count) {
+        const minInterval = Math.ceil(activeMinutes / module.auto_daily_count);
+        return `${module.auto_daily_count}회/일 (최소 ${minInterval}분 간격)`;
+    } else if (module.manual_interval_minutes) {
+        const maxDaily = Math.floor(activeMinutes / module.manual_interval_minutes);
+        return `${module.manual_interval_minutes}분마다 (최대 ${maxDaily}회/일)`;
+    }
+    return "설정 없음";
+}
+
+// 활성 시간 계산
+function calculateActiveMinutes(module) {
+    if (!module.schedule_matrix || !Array.isArray(module.schedule_matrix)) {
+        return 720;
+    }
+    let totalActiveMinutes = 0;
+    for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
+        const daySchedule = module.schedule_matrix[dayIdx];
+        if (Array.isArray(daySchedule)) {
+            const activeHours = daySchedule.filter(hour => hour === true).length;
+            totalActiveMinutes += activeHours * 60;
+        }
+    }
+    return Math.round(totalActiveMinutes / 7) || 720;
+}
+
+// 스케줄 요약 반환
+function getScheduleSummary(module) {
+    if (!module.schedule_matrix || !Array.isArray(module.schedule_matrix)) {
+        return "설정 없음";
+    }
+    const schedule = module.schedule_matrix;
+    const days = ['월', '화', '수', '목', '금', '토', '일'];
+    const dayRanges = {};
+
+    for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
+        const daySchedule = schedule[dayIdx];
+        if (Array.isArray(daySchedule) && daySchedule.some(hour => hour === true)) {
+            const timeRange = extractTimeRange(daySchedule);
+            if (timeRange) {
+                dayRanges[dayIdx] = timeRange;
+            }
+        }
+    }
+
+    if (Object.keys(dayRanges).length === 0) {
+        return "설정 없음";
+    }
+
+    const timeGroups = {};
+    for (const [dayIdx, timeRange] of Object.entries(dayRanges)) {
+        if (!timeGroups[timeRange]) {
+            timeGroups[timeRange] = [];
+        }
+        timeGroups[timeRange].push(parseInt(dayIdx));
+    }
+
+    const groupTexts = [];
+    for (const [timeRange, dayIndices] of Object.entries(timeGroups)) {
+        const dayText = formatDayRange(dayIndices, days);
+        groupTexts.push(`${dayText}(${timeRange})`);
+    }
+    return groupTexts.join('\n');
+}
+
+// 시간 범위 추출
+function extractTimeRange(daySchedule) {
+    let startHour = -1;
+    let endHour = -1;
+    for (let hour = 0; hour < 24; hour++) {
+        if (daySchedule[hour]) {
+            if (startHour === -1) startHour = hour;
+            endHour = hour;
+        }
+    }
+    if (startHour === -1) return null;
+    return `${String(startHour).padStart(2, '0')}~${String(endHour + 1).padStart(2, '0')}`;
+}
+
+// 요일 범위 포맷
+function formatDayRange(dayIndices, days) {
+    if (dayIndices.length === 1) {
+        return days[dayIndices[0]];
+    }
+    dayIndices.sort((a, b) => a - b);
+    let ranges = [];
+    let start = dayIndices[0];
+    let end = start;
+
+    for (let i = 1; i < dayIndices.length; i++) {
+        if (dayIndices[i] === end + 1) {
+            end = dayIndices[i];
+        } else {
+            ranges.push(start === end ? days[start] : `${days[start]}~${days[end]}`);
+            start = dayIndices[i];
+            end = start;
+        }
+    }
+    ranges.push(start === end ? days[start] : `${days[start]}~${days[end]}`);
+    return ranges.join(', ');
+}
+
+// 모듈 슬라이드 필요 여부 판단 (정보 아이템 3개 이상)
 function needsModuleSlide(module) {
-    return getModuleInfoItems(module).length > 2;
+    return getModuleInfoItems(module).length >= 3;
 }
 
+// 모듈 정보 텍스트 길이에 따른 슬라이드 속도 계산 (초)
 function getModuleSlideDuration(module) {
-    const itemCount = getModuleInfoItems(module).length;
-    return Math.max(15, itemCount * 5);
+    const items = getModuleInfoItems(module);
+    const totalLength = items.reduce((sum, item) => {
+        return sum + (item.label?.length || 0) + (item.value?.length || 0);
+    }, 0);
+    const baseSpeed = 12;
+    const perChar = 0.25;
+    const minDuration = 12;
+    const maxDuration = 40;
+    return Math.max(minDuration, Math.min(maxDuration, baseSpeed + (totalLength * perChar)));
 }
 
+// 블로그 슬라이드 필요 여부 판단 (4개 이상)
 function needsBlogSlide(blogCount) {
-    return blogCount > 3;
+    return blogCount >= 4;
 }
 
+// 블로그 개수에 따른 슬라이드 속도 계산 (초)
 function getBlogSlideDuration(blogCount) {
-    return Math.max(15, blogCount * 3);
+    const baseSpeed = 5.4;
+    const minDuration = 14;
+    const maxDuration = 44;
+    return Math.max(minDuration, Math.min(maxDuration, blogCount * baseSpeed));
 }
 
 function initSlideCheck(el) {

@@ -1,9 +1,7 @@
-<!-- 오토런 플로우 카드 (플로우 카드 기반 + 상태 제어 버튼) -->
+<!-- 오토런 플로우 카드 (x-data 제거 - 부모 autorunApp() 스코프 직접 사용) -->
 <div class="bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow duration-200 overflow-hidden"
      :data-flow-id="flow.id"
-     :id="'autorun-card-' + flow.id"
-     x-data="autorunCardState()"
-     x-init="initCard($el)">
+     :id="'autorun-card-' + flow.id">
 
     <!-- 카드 헤더 -->
     <div class="px-4 py-2 flex items-center justify-between"
@@ -20,9 +18,9 @@
             <h4 class="font-semibold truncate" x-text="flow.name"></h4>
         </div>
 
-        <!-- 액션 버튼 -->
+        <!-- 액션 버튼 (부모 함수 직접 호출) -->
         <div class="flex gap-1">
-            <!-- 일시정지/재개 버튼 -->
+            <!-- 일시정지 버튼 (활성 상태일 때만) -->
             <template x-if="flow.status === 'active'">
                 <button @click="pauseFlow(flow.id)"
                         class="p-1.5 text-yellow-600 hover:text-yellow-800 hover:bg-yellow-200/50 rounded-lg transition-colors"
@@ -32,6 +30,8 @@
                     </svg>
                 </button>
             </template>
+
+            <!-- 재개 버튼 (일시정지 상태일 때만) -->
             <template x-if="flow.status === 'paused'">
                 <button @click="resumeFlow(flow.id)"
                         class="p-1.5 text-green-600 hover:text-green-800 hover:bg-green-200/50 rounded-lg transition-colors"
@@ -53,7 +53,7 @@
         </div>
     </div>
 
-    <!-- 카드 본문 -->
+    <!-- 카드 본문 (인라인 x-data는 카드별 상태 관리용으로 유지) -->
     <div class="px-4 py-3" x-data="{
         expanded: false,
         maxVisible: 3,
@@ -115,9 +115,7 @@
                             <!-- 모듈 행 -->
                             <template x-if="row.type === 'module'">
                                 <div class="module-slide-row"
-                                     :class="'type-' + (row.data.module?.module_type?.code || 'republish')"
-                                     @touchstart="toggleSlideTouch($event, $el)"
-                                     x-init="$nextTick(() => initSlideCheck($el))">
+                                     :class="'type-' + (row.data.module?.module_type?.code || 'republish')">
 
                                     <div class="module-slide-label">
                                         <span class="module-slide-icon" x-text="getModuleIcon(row.data.module?.module_type?.code)"></span>
@@ -155,9 +153,7 @@
 
                             <!-- 블로그 행 -->
                             <template x-if="row.type === 'blog'">
-                                <div class="blog-slide-section"
-                                     @touchstart="toggleSlideTouch($event, $el)"
-                                     x-init="$nextTick(() => initBlogSlideCheck($el, row.data.length))">
+                                <div class="blog-slide-section">
                                     <div class="blog-slide-label">
                                         <span class="blog-slide-icon">📝</span>
                                         <span class="blog-slide-count">블로그</span>
