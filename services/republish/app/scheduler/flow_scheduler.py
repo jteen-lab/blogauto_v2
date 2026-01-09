@@ -8,9 +8,9 @@ Features:
 - schedule_matrix를 활성화 시간대로 해석
 - 개별 Job 등록/관리
 """
-import asyncio
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
+import pytz
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
@@ -28,6 +28,9 @@ from ..core.logger import get_logger
 from .scheduler import scheduler_instance
 
 logger = get_logger("flow_scheduler", "republish.log")
+
+# Timezone 설정
+KST = pytz.timezone('Asia/Seoul')
 
 # 전역 플로우 스케줄러 인스턴스
 _flow_scheduler: Optional["FlowScheduler"] = None
@@ -454,12 +457,12 @@ class FlowScheduler:
         """즉시 실행 스케줄 등록"""
         job_id = self._get_job_id(flow.id, module.id)
 
-        # 즉시 실행 (2초 후)
-        run_time = datetime.now() + timedelta(seconds=2)
+        # 즉시 실행 (3초 후) - timezone aware datetime 사용
+        run_time = datetime.now(KST) + timedelta(seconds=3)
 
         self.scheduler.add_job(
-            self._sync_execute_module_callback,  # 동기 래퍼 사용
-            DateTrigger(run_date=run_time),
+            self._execute_module_callback,  # AsyncIOExecutor가 async 함수 직접 지원
+            DateTrigger(run_date=run_time, timezone=KST),
             args=[flow.id, module.id],
             id=job_id,
             name=f"Immediate: Flow {flow.name} - Module {module.name}",
@@ -468,7 +471,7 @@ class FlowScheduler:
 
         logger.info(
             f"[FLOW_SCHEDULER] Scheduled immediate | FlowID={flow.id} | "
-            f"ModuleID={module.id} | RunTime={run_time}"
+            f"ModuleID={module.id} | RunTime={run_time.strftime('%Y-%m-%d %H:%M:%S %Z')}"
         )
 
     async def _schedule_next_execution(
@@ -502,13 +505,18 @@ class FlowScheduler:
         """특정 시간에 실행 스케줄 등록"""
         job_id = self._get_job_id(flow.id, module.id)
 
+        # timezone aware로 변환
+        now = datetime.now(KST)
+        if run_time.tzinfo is None:
+            run_time = KST.localize(run_time)
+
         # 이미 지난 시간이면 즉시 실행
-        if run_time <= datetime.now():
-            run_time = datetime.now() + timedelta(seconds=2)
+        if run_time <= now:
+            run_time = now + timedelta(seconds=3)
 
         self.scheduler.add_job(
-            self._sync_execute_module_callback,  # 동기 래퍼 사용
-            DateTrigger(run_date=run_time),
+            self._execute_module_callback,  # AsyncIOExecutor가 async 함수 직접 지원
+            DateTrigger(run_date=run_time, timezone=KST),
             args=[flow.id, module.id],
             id=job_id,
             name=f"Flow {flow.name} - Module {module.name}",
@@ -517,36 +525,8 @@ class FlowScheduler:
 
         logger.info(
             f"[FLOW_SCHEDULER] Scheduled | FlowID={flow.id} | "
-            f"ModuleID={module.id} | RunTime={run_time}"
+            f"ModuleID={module.id} | RunTime={run_time.strftime('%Y-%m-%d %H:%M:%S %Z')}"
         )
-
-    def _sync_execute_module_callback(
-        self,
-        flow_id: int,
-        module_id: int
-    ) -> None:
-        """동기 래퍼 - APScheduler가 호출하는 콜백"""
-        logger.info(
-            f"[FLOW_SCHEDULER] Sync callback triggered | FlowID={flow_id} | "
-            f"ModuleID={module_id}"
-        )
-        try:
-            # 현재 이벤트 루프 가져오기
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # 이벤트 루프가 실행 중이면 create_task 사용
-                asyncio.create_task(self._execute_module_callback(flow_id, module_id))
-            else:
-                # 이벤트 루프가 없으면 새로 실행
-                loop.run_until_complete(self._execute_module_callback(flow_id, module_id))
-        except RuntimeError:
-            # 이벤트 루프가 없는 경우 새로 생성
-            asyncio.run(self._execute_module_callback(flow_id, module_id))
-        except Exception as e:
-            logger.error(
-                f"[FLOW_SCHEDULER] Sync callback error | FlowID={flow_id} | "
-                f"ModuleID={module_id} | Error={e}"
-            )
 
     async def _execute_module_callback(
         self,
