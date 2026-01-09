@@ -24,7 +24,7 @@ def get_encryption_key() -> bytes:
     env_key = os.environ.get("ENCRYPTION_KEY")
 
     if env_key:
-        return base64.urlsafe_b64decode(env_key.encode())
+        return env_key.encode()  # Fernet은 base64 인코딩된 키를 기대
 
     # 키가 없으면 경고 로그 (개발 환경용 임시 키 사용)
     logger.warning("ENCRYPTION_KEY 환경변수가 설정되지 않았습니다. 임시 키를 사용합니다.")

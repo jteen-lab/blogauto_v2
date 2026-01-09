@@ -18,7 +18,7 @@ from .core.config import settings
 from .core.database import init_database, close_database, db_manager
 from .core.logger import get_logger
 from .middleware.logging_middleware import LoggingMiddleware
-from .scheduler import get_scheduler, republish_job
+from .scheduler import get_scheduler, republish_job, setup_flow_scheduler, shutdown_flow_scheduler
 from .routers.auth import router as auth_router
 from .routers.blogs import router as blogs_router, page_router as blogs_page_router
 from .routers.categories import router as categories_router, page_router as categories_page_router
@@ -34,6 +34,7 @@ from .routers.settings import router as settings_router
 from .routers.modules_pages import router as modules_page_router
 from .routers.flows_pages import router as flows_page_router
 from .routers.autorun_pages import router as autorun_page_router
+from .routers.engine import router as engine_router
 
 logger = get_logger("main", "app.log")
 
@@ -68,6 +69,10 @@ async def lifespan(app: FastAPI):
         )
         logger.info("재발행 Job 등록됨")
 
+        # 플로우 스케줄러 시작
+        await setup_flow_scheduler()
+        logger.info("플로우 스케줄러 시작됨")
+
     except Exception as e:
         logger.error(f"스케줄러 시작 실패: {e}")
         # 스케줄러 실패시에도 앱은 시작되도록 함
@@ -76,6 +81,10 @@ async def lifespan(app: FastAPI):
 
     # 종료 시
     try:
+        # 플로우 스케줄러 종료
+        await shutdown_flow_scheduler()
+        logger.info("플로우 스케줄러 종료됨")
+
         scheduler = await get_scheduler()
         await scheduler.shutdown()
         logger.info("스케줄러 종료됨")
@@ -123,6 +132,7 @@ app.include_router(flows_router, prefix=settings.api_v1_prefix)
 app.include_router(autorun_router, prefix=settings.api_v1_prefix)
 app.include_router(dashboard_router, prefix=settings.api_v1_prefix)
 app.include_router(settings_router, prefix=settings.api_v1_prefix)
+app.include_router(engine_router, prefix=settings.api_v1_prefix)
 
 # 페이지 라우터 등록
 app.include_router(blogs_page_router)
