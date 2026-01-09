@@ -9,11 +9,15 @@ Features:
 """
 from datetime import datetime
 from typing import Optional
+import pytz
 from sqlalchemy import Column, Integer, DateTime, ForeignKey, Boolean
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
 from ..core.database import Base
+
+# Timezone 설정
+KST = pytz.timezone('Asia/Seoul')
 
 
 class FlowExecutionState(Base):
@@ -93,8 +97,8 @@ class FlowExecutionState(Base):
     module = relationship("Module", backref="execution_states")
 
     def record_execution(self, success: bool) -> None:
-        """실행 기록"""
-        self.last_executed_at = datetime.now()
+        """실행 기록 (timezone aware)"""
+        self.last_executed_at = datetime.now(KST)
         self.total_executions += 1
         if success:
             self.successful_executions += 1
@@ -102,18 +106,22 @@ class FlowExecutionState(Base):
             self.failed_executions += 1
 
     def pause(self, remaining_seconds: int = None) -> None:
-        """일시정지"""
+        """일시정지 (timezone aware)"""
         self.is_paused = True
-        self.paused_at = datetime.now()
+        self.paused_at = datetime.now(KST)
         if remaining_seconds is not None:
             self.remaining_seconds = remaining_seconds
         elif self.next_execution_at:
-            # 다음 실행까지 남은 시간 계산
-            delta = self.next_execution_at - datetime.now()
+            # 다음 실행까지 남은 시간 계산 (timezone aware)
+            now = datetime.now(KST)
+            next_exec = self.next_execution_at
+            if next_exec.tzinfo is None:
+                next_exec = KST.localize(next_exec)
+            delta = next_exec - now
             self.remaining_seconds = max(0, int(delta.total_seconds()))
 
     def resume(self) -> Optional[datetime]:
-        """재개 - 다음 실행 시간 반환"""
+        """재개 - 다음 실행 시간 반환 (timezone aware)"""
         if not self.is_paused:
             return self.next_execution_at
 
@@ -123,7 +131,7 @@ class FlowExecutionState(Base):
         # 남은 시간이 있으면 그 시간 후로 설정
         if self.remaining_seconds and self.remaining_seconds > 0:
             from datetime import timedelta
-            self.next_execution_at = datetime.now() + timedelta(seconds=self.remaining_seconds)
+            self.next_execution_at = datetime.now(KST) + timedelta(seconds=self.remaining_seconds)
         self.remaining_seconds = None
 
         return self.next_execution_at
@@ -136,12 +144,21 @@ class FlowExecutionState(Base):
         jitter_min_percent: int = -20,
         jitter_max_percent: int = 30
     ) -> Optional[datetime]:
-        """다음 실행 시간 계산"""
+        """다음 실행 시간 계산 (timezone aware)"""
         from datetime import timedelta
         import random
 
-        now = datetime.now()
-        base_time = self.last_executed_at or now
+        # timezone aware datetime 사용
+        now = datetime.now(KST)
+
+        # base_time 설정 (timezone aware로 변환)
+        if self.last_executed_at:
+            if self.last_executed_at.tzinfo is None:
+                base_time = KST.localize(self.last_executed_at)
+            else:
+                base_time = self.last_executed_at
+        else:
+            base_time = now
 
         # 기본 간격 적용
         interval_seconds = interval_minutes * 60
@@ -216,11 +233,11 @@ class FlowExecutionState(Base):
         return proposed_time
 
     def is_in_active_window(self, schedule_matrix: list = None) -> bool:
-        """현재 시간이 활성화 시간대인지 확인"""
+        """현재 시간이 활성화 시간대인지 확인 (timezone aware)"""
         if not schedule_matrix:
             return True
 
-        now = datetime.now()
+        now = datetime.now(KST)
         day_of_week = now.weekday()
         hour = now.hour
 
