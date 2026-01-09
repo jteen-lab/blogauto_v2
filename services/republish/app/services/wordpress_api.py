@@ -55,8 +55,8 @@ class WordPressAPI:
         """인증 헤더 생성"""
         try:
             # API 키 복호화 (username:password 형태)
-            decrypted_key = decrypt_api_key(blog.api_key_encrypted)
-            username, password = decrypted_key.split(':', 1)
+            username = decrypt_api_key(blog.api_key_encrypted)
+            password = decrypt_api_key(blog.api_secret_encrypted)
 
             # Basic Auth 헤더
             import base64
