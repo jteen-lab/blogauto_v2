@@ -40,3 +40,9 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+
+# Windows Zone Identifier
+*:Zone.Identifier
+
+# Backup files
+*.bak
