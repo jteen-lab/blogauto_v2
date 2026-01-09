@@ -799,30 +799,67 @@ function renderLogs() {
         return;
     }
 
-    const logsHtml = logsData.logs.map(log => `
-        <div class="flex items-start gap-3 p-3 border-b border-gray-100 last:border-b-0">
-            <div class="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full ${getLogStatusBg(log.status)}">
-                <span class="text-sm">${getLogActionIcon(log.action)}</span>
-            </div>
-            <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2 mb-1">
-                    <span class="font-medium text-gray-900 truncate">${log.flow_name || '알 수 없는 플로우'}</span>
-                    <span class="text-xs px-1.5 py-0.5 rounded ${getLogStatusClass(log.status)}">${log.status_display}</span>
-                </div>
-                <div class="text-sm text-gray-600">${log.action_display}</div>
-                ${log.message ? `<div class="text-xs text-gray-500 mt-1">${log.message}</div>` : ''}
-                ${log.posts_processed ? `
-                    <div class="text-xs text-gray-500 mt-1">
-                        처리: ${log.posts_processed}개 (성공: ${log.posts_success}, 실패: ${log.posts_failed})
-                        ${log.formatted_duration !== '-' ? ` · ${log.formatted_duration}` : ''}
+    const logsHtml = logsData.logs.map(log => {
+        // 새 간결한 포맷 사용
+        const hasCompactData = log.flow_name && log.module_name;
+
+        if (hasCompactData) {
+            // 새 포맷: [플로우명][모듈명]-[포스트 제목][재발행 시간][결과]
+            const postTitle = log.post_title
+                ? (log.post_title.length > 25 ? log.post_title.substring(0, 25) + '...' : log.post_title)
+                : '';
+            const statusIcon = log.status === 'success' ? '✅' : '❌';
+
+            return `
+                <div class="flex items-start gap-3 p-3 border-b border-gray-100 last:border-b-0 hover:bg-gray-50">
+                    <div class="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-full ${getLogStatusBg(log.status)}">
+                        <span class="text-xs">${statusIcon}</span>
                     </div>
-                ` : ''}
-            </div>
-            <div class="text-xs text-gray-400 whitespace-nowrap">
-                ${formatLogTime(log.created_at)}
-            </div>
-        </div>
-    `).join('');
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-1 flex-wrap text-sm">
+                            <span class="font-medium text-blue-600">[${log.flow_name}]</span>
+                            <span class="text-gray-600">[${log.module_name}]</span>
+                            ${log.blog_name ? `<span class="text-gray-500 text-xs">(${log.blog_name})</span>` : ''}
+                        </div>
+                        ${postTitle ? `
+                            <div class="text-sm text-gray-800 mt-0.5 truncate">
+                                📄 ${postTitle}
+                            </div>
+                        ` : ''}
+                        <div class="flex items-center gap-2 mt-1 text-xs text-gray-500">
+                            ${log.action_time ? `<span>🕐 ${log.action_time}</span>` : ''}
+                            ${log.formatted_duration !== '-' ? `<span>⏱️ ${log.formatted_duration}</span>` : ''}
+                            <span class="${log.status === 'success' ? 'text-green-600' : 'text-red-600'}">${log.status_display}</span>
+                        </div>
+                        ${log.message && log.status === 'failed' ? `<div class="text-xs text-red-500 mt-1">${log.message}</div>` : ''}
+                    </div>
+                    <div class="text-xs text-gray-400 whitespace-nowrap">
+                        ${formatLogTime(log.created_at)}
+                    </div>
+                </div>
+            `;
+        } else {
+            // 이전 포맷 (호환성)
+            return `
+                <div class="flex items-start gap-3 p-3 border-b border-gray-100 last:border-b-0">
+                    <div class="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full ${getLogStatusBg(log.status)}">
+                        <span class="text-sm">${getLogActionIcon(log.action)}</span>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="font-medium text-gray-900 truncate">${log.flow_name || '알 수 없는 플로우'}</span>
+                            <span class="text-xs px-1.5 py-0.5 rounded ${getLogStatusClass(log.status)}">${log.status_display}</span>
+                        </div>
+                        <div class="text-sm text-gray-600">${log.action_display}</div>
+                        ${log.message ? `<div class="text-xs text-gray-500 mt-1">${log.message}</div>` : ''}
+                    </div>
+                    <div class="text-xs text-gray-400 whitespace-nowrap">
+                        ${formatLogTime(log.created_at)}
+                    </div>
+                </div>
+            `;
+        }
+    }).join('');
 
     const hasMore = logsData.offset < logsData.total;
 

@@ -727,11 +727,18 @@ class AutorunService:
             )
 
     def _log_to_dict(self, log: AutorunLog) -> Dict[str, Any]:
-        """로그를 딕셔너리로 변환"""
+        """로그를 딕셔너리로 변환 (새 간결한 포맷)"""
         return {
             "id": log.id,
             "flow_id": log.flow_id,
-            "flow_name": log.flow.name if log.flow else None,
+            # 새 간결한 포맷 필드
+            "flow_name": log.flow_name or (log.flow.name if log.flow else None),
+            "module_name": log.module_name,
+            "blog_name": log.blog_name,
+            "post_title": log.post_title,
+            "action_time": log.action_time,
+            "compact_display": log.compact_display,
+            # 기존 호환성 필드
             "action": log.action,
             "action_display": log.action_display,
             "status": log.status,

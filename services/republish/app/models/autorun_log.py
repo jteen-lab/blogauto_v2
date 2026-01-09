@@ -5,6 +5,7 @@ Features:
 - 플로우 실행 기록 (시작/완료/실패/일시정지)
 - 상태 변경 추적
 - 실행 통계 조회
+- 간결한 로그 포맷: [플로우명][모듈명]-[포스트제목][실행시간][결과]
 """
 
 from datetime import datetime
@@ -28,7 +29,7 @@ class AutorunLog(Base):
     action = Column(
         String(30),
         nullable=False,
-        comment="액션: started/completed/failed/paused/resumed/stopped/added/removed",
+        comment="액션: republish/publish/generate/paused/resumed/stopped/added/removed",
         index=True
     )
 
@@ -39,9 +40,16 @@ class AutorunLog(Base):
         comment="결과: success/failed/warning",
         index=True
     )
-    message = Column(Text, nullable=True, comment="상세 메시지")
 
-    # 실행 정보 (플로우 실행 시)
+    # 상세 정보 (새 필드)
+    flow_name = Column(String(100), nullable=True, comment="플로우명")
+    module_name = Column(String(100), nullable=True, comment="모듈명")
+    blog_name = Column(String(100), nullable=True, comment="블로그명")
+    post_title = Column(String(200), nullable=True, comment="포스트 제목")
+    action_time = Column(String(50), nullable=True, comment="액션 시간 (재발행 시간 등)")
+
+    # 기존 필드 (호환성)
+    message = Column(Text, nullable=True, comment="상세 메시지 (에러 등)")
     execution_duration_ms = Column(Integer, nullable=True, comment="실행 시간(ms)")
     posts_processed = Column(Integer, nullable=True, comment="처리된 포스트 수")
     posts_success = Column(Integer, nullable=True, comment="성공한 포스트 수")
@@ -75,16 +83,20 @@ class AutorunLog(Base):
 
     @property
     def action_display(self) -> str:
-        """액션 표시 문자열"""
+        """액션 표시 문자열 - 간결한 포맷"""
         action_map = {
-            "started": "🚀 실행 시작",
-            "completed": "✅ 실행 완료",
-            "failed": "❌ 실행 실패",
-            "paused": "⏸️ 일시정지",
-            "resumed": "▶️ 재개",
-            "stopped": "⏹️ 중지",
-            "added": "➕ 추가됨",
-            "removed": "➖ 제외됨"
+            "republish": "재발행",
+            "publish": "발행",
+            "generate": "생성",
+            "paused": "일시정지",
+            "resumed": "재개",
+            "stopped": "중지",
+            "added": "추가",
+            "removed": "제외",
+            # 이전 호환성
+            "started": "실행 시작",
+            "completed": "실행 완료",
+            "failed": "실행 실패"
         }
         return action_map.get(self.action, self.action)
 
@@ -98,6 +110,38 @@ class AutorunLog(Base):
         }
         return status_map.get(self.status, self.status)
 
+    @property
+    def compact_display(self) -> str:
+        """간결한 로그 표시 - [플로우][모듈]-[포스트][시간][결과]"""
+        parts = []
+
+        # 플로우명
+        if self.flow_name:
+            parts.append(f"[{self.flow_name}]")
+
+        # 모듈명
+        if self.module_name:
+            parts.append(f"[{self.module_name}]")
+
+        # 구분자
+        if parts:
+            parts.append("-")
+
+        # 포스트 제목 (30자 제한)
+        if self.post_title:
+            title = self.post_title[:30] + "..." if len(self.post_title) > 30 else self.post_title
+            parts.append(f"[{title}]")
+
+        # 액션 시간
+        if self.action_time:
+            parts.append(f"[{self.action_time}]")
+
+        # 처리 결과
+        status_icon = "✅" if self.status == "success" else "❌" if self.status == "failed" else "⚠️"
+        parts.append(f"[{status_icon}{self.status_display}]")
+
+        return "".join(parts)
+
     @classmethod
     def create_action_log(
         cls,
@@ -105,15 +149,25 @@ class AutorunLog(Base):
         flow_id: int,
         action: str,
         status: str = "success",
-        message: str = None
+        message: str = None,
+        flow_name: str = None,
+        module_name: str = None,
+        blog_name: str = None,
+        post_title: str = None,
+        action_time: str = None
     ) -> "AutorunLog":
-        """액션 로그 생성"""
+        """액션 로그 생성 (새 간결한 포맷)"""
         return cls(
             user_id=user_id,
             flow_id=flow_id,
             action=action,
             status=status,
-            message=message
+            message=message,
+            flow_name=flow_name,
+            module_name=module_name,
+            blog_name=blog_name,
+            post_title=post_title,
+            action_time=action_time
         )
 
     @classmethod
@@ -121,25 +175,29 @@ class AutorunLog(Base):
         cls,
         user_id: int,
         flow_id: int,
+        action: str,
         status: str,
+        flow_name: str = None,
+        module_name: str = None,
+        blog_name: str = None,
+        post_title: str = None,
+        action_time: str = None,
         duration_ms: int = None,
-        posts_processed: int = None,
-        posts_success: int = None,
-        posts_failed: int = None,
         message: str = None
     ) -> "AutorunLog":
-        """실행 완료 로그 생성"""
-        action = "completed" if status == "success" else "failed"
+        """실행 완료 로그 생성 (새 간결한 포맷)"""
         return cls(
             user_id=user_id,
             flow_id=flow_id,
             action=action,
             status=status,
-            message=message,
+            flow_name=flow_name,
+            module_name=module_name,
+            blog_name=blog_name,
+            post_title=post_title,
+            action_time=action_time,
             execution_duration_ms=duration_ms,
-            posts_processed=posts_processed,
-            posts_success=posts_success,
-            posts_failed=posts_failed
+            message=message
         )
 
     def __repr__(self) -> str:
