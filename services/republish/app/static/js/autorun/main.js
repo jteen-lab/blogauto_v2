@@ -801,14 +801,16 @@ function renderLogs() {
 
     const logsHtml = logsData.logs.map(log => {
         // 새 간결한 포맷 사용
-        const hasCompactData = log.flow_name && log.module_name;
+        const hasCompactData = log.module_name;
 
         if (hasCompactData) {
-            // 새 포맷: [플로우명][모듈명]-[포스트 제목][재발행 시간][결과]
-            const postTitle = log.post_title
-                ? (log.post_title.length > 25 ? log.post_title.substring(0, 25) + '...' : log.post_title)
-                : '';
+            // 새 포맷:
+            // 재발행 모듈[테스트모듈테스트모듈]
+            // (테스트01)📄 내용 증명 효력 및 작성 방법과 보내는 법 정리
+            // 🕐 2026/01/10/04:07:59 ⏱️ 1.6s 재발행 성공
+            const moduleType = log.module_type_name || log.action_display || '알 수 없음';
             const statusIcon = log.status === 'success' ? '✅' : '❌';
+            const statusColor = log.status === 'success' ? 'text-green-600' : 'text-red-600';
 
             return `
                 <div class="flex items-start gap-3 p-3 border-b border-gray-100 last:border-b-0 hover:bg-gray-50">
@@ -816,20 +818,21 @@ function renderLogs() {
                         <span class="text-xs">${statusIcon}</span>
                     </div>
                     <div class="flex-1 min-w-0">
-                        <div class="flex items-center gap-1 flex-wrap text-sm">
-                            <span class="font-medium text-blue-600">[${log.flow_name}]</span>
-                            <span class="text-gray-600">[${log.module_name}]</span>
-                            ${log.blog_name ? `<span class="text-gray-500 text-xs">(${log.blog_name})</span>` : ''}
+                        <!-- 1줄: 모듈 타입과 모듈명 -->
+                        <div class="text-sm font-medium text-gray-900">
+                            ${moduleType} 모듈<span class="text-blue-600">[${log.module_name}]</span>
                         </div>
-                        ${postTitle ? `
-                            <div class="text-sm text-gray-800 mt-0.5 truncate">
-                                📄 ${postTitle}
+                        <!-- 2줄: 블로그명과 포스트 제목 (전체 출력) -->
+                        ${log.blog_name || log.post_title ? `
+                            <div class="text-sm text-gray-800 mt-0.5">
+                                ${log.blog_name ? `<span class="text-gray-500">(${log.blog_name})</span>` : ''}${log.post_title ? `📄 ${log.post_title}` : ''}
                             </div>
                         ` : ''}
-                        <div class="flex items-center gap-2 mt-1 text-xs text-gray-500">
+                        <!-- 3줄: 시간, 작업시간, 작업종류, 결과 -->
+                        <div class="flex items-center gap-2 mt-1 text-xs text-gray-500 flex-wrap">
                             ${log.action_time ? `<span>🕐 ${log.action_time}</span>` : ''}
-                            ${log.formatted_duration !== '-' ? `<span>⏱️ ${log.formatted_duration}</span>` : ''}
-                            <span class="${log.status === 'success' ? 'text-green-600' : 'text-red-600'}">${log.status_display}</span>
+                            ${log.duration_formatted ? `<span>⏱️ ${log.duration_formatted}</span>` : ''}
+                            <span class="${statusColor} font-medium">${moduleType} ${log.status_display}</span>
                         </div>
                         ${log.message && log.status === 'failed' ? `<div class="text-xs text-red-500 mt-1">${log.message}</div>` : ''}
                     </div>

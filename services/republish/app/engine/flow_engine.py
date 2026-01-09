@@ -312,23 +312,24 @@ class FlowEngine:
             post_title = result.get("post_title", "")
 
             # 액션 시간 추출 (재발행: new_published/new_date)
+            # 형식: 년/월/일/시:분:초
             action_time = None
             if result.get("new_published"):
-                # Blogger: ISO 형식 → 간단 시간 형식
+                # Blogger: ISO 형식 → 년/월/일/시간 형식
                 try:
                     from datetime import datetime as dt
                     published = result["new_published"]
                     if "T" in published:
                         parsed = dt.fromisoformat(published.replace("Z", "+00:00"))
-                        action_time = parsed.strftime("%H:%M:%S")
+                        action_time = parsed.strftime("%Y/%m/%d/%H:%M:%S")
                 except Exception:
                     action_time = result.get("new_published", "")[:19]
             elif result.get("new_date"):
-                # WordPress: date 형식
+                # WordPress: date 형식 → 년/월/일/시간 형식
                 try:
                     from datetime import datetime as dt
                     parsed = dt.fromisoformat(result["new_date"].replace("Z", "+00:00"))
-                    action_time = parsed.strftime("%H:%M:%S")
+                    action_time = parsed.strftime("%Y/%m/%d/%H:%M:%S")
                 except Exception:
                     action_time = result.get("new_date", "")[:19]
 

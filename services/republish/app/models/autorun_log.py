@@ -111,36 +111,51 @@ class AutorunLog(Base):
         return status_map.get(self.status, self.status)
 
     @property
+    def module_type_name(self) -> str:
+        """모듈 타입명 (액션 기반)"""
+        type_map = {
+            "republish": "재발행",
+            "publish": "발행",
+            "generate": "생성",
+            "prompt": "프롬프트"
+        }
+        return type_map.get(self.action, self.action)
+
+    @property
     def compact_display(self) -> str:
-        """간결한 로그 표시 - [플로우][모듈]-[포스트][시간][결과]"""
-        parts = []
+        """간결한 로그 표시 - 새 포맷"""
+        # 형식: 재발행 모듈[모듈명]
+        #       (블로그명)📄 포스트 제목
+        #       🕐 년/월/일/시간 ⏱️ 시간 작업종류 결과
+        lines = []
 
-        # 플로우명
-        if self.flow_name:
-            parts.append(f"[{self.flow_name}]")
+        # 1줄: 모듈 타입과 모듈명
+        module_type = self.module_type_name
+        module_name = self.module_name or ""
+        lines.append(f"{module_type} 모듈[{module_name}]")
 
-        # 모듈명
-        if self.module_name:
-            parts.append(f"[{self.module_name}]")
+        # 2줄: 블로그명과 포스트 제목 (전체 출력)
+        blog_part = f"({self.blog_name})" if self.blog_name else ""
+        title_part = f"📄 {self.post_title}" if self.post_title else ""
+        if blog_part or title_part:
+            lines.append(f"{blog_part}{title_part}")
 
-        # 구분자
-        if parts:
-            parts.append("-")
-
-        # 포스트 제목 (30자 제한)
-        if self.post_title:
-            title = self.post_title[:30] + "..." if len(self.post_title) > 30 else self.post_title
-            parts.append(f"[{title}]")
-
-        # 액션 시간
+        # 3줄: 시간, 작업시간, 작업종류, 결과
+        time_parts = []
         if self.action_time:
-            parts.append(f"[{self.action_time}]")
+            time_parts.append(f"🕐 {self.action_time}")
+        if self.execution_duration_ms is not None:
+            # m/s 포맷
+            duration_sec = self.execution_duration_ms / 1000
+            time_parts.append(f"⏱️ {duration_sec:.1f}s")
+        # 작업 종류와 결과
+        status_text = self.status_display
+        time_parts.append(f"{module_type} {status_text}")
 
-        # 처리 결과
-        status_icon = "✅" if self.status == "success" else "❌" if self.status == "failed" else "⚠️"
-        parts.append(f"[{status_icon}{self.status_display}]")
+        if time_parts:
+            lines.append(" ".join(time_parts))
 
-        return "".join(parts)
+        return "\n".join(lines)
 
     @classmethod
     def create_action_log(

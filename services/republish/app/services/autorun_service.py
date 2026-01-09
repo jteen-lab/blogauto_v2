@@ -333,6 +333,12 @@ class AutorunService:
                 error_code="NOT_ACTIVE"
             )
 
+        # 스케줄러에서 일시정지 (남은 시간 보존)
+        from ..scheduler.flow_scheduler import get_flow_scheduler
+        scheduler = get_flow_scheduler()
+        if scheduler:
+            await scheduler.pause_flow(flow.id)
+
         # 상태 변경
         flow.status = FlowStatus.PAUSED
 
@@ -361,8 +367,20 @@ class AutorunService:
         # 상태 변경
         flow.status = FlowStatus.ACTIVE
 
-        # 다음 실행 시간 계산
-        next_execution = datetime.now() + timedelta(minutes=1)  # 임시
+        # 스케줄러에서 재개 (남은 시간으로 복원)
+        from ..scheduler.flow_scheduler import get_flow_scheduler
+        scheduler = get_flow_scheduler()
+        next_execution = None
+        if scheduler:
+            result = await scheduler.resume_flow(flow.id)
+            # 스케줄러에서 다음 실행 시간 받아오기
+            if result.get("success"):
+                schedule_info = await scheduler.get_flow_schedule_info(flow.id)
+                if schedule_info.get("modules"):
+                    for module_info in schedule_info["modules"]:
+                        if module_info.get("next_execution_at"):
+                            next_execution = datetime.fromisoformat(module_info["next_execution_at"])
+                            break
 
         return FlowActionResult(
             success=True,
@@ -585,6 +603,13 @@ class AutorunService:
 
                     # 오토런에 추가
                     flow.add_to_autorun()
+
+                    # 스케줄러에 등록 (즉시 실행)
+                    from ..scheduler.flow_scheduler import get_flow_scheduler
+                    scheduler = get_flow_scheduler()
+                    if scheduler:
+                        await scheduler.register_flow(flow_id, immediate_execution=True)
+
                     success_count += 1
 
                 except Exception as e:
@@ -642,6 +667,12 @@ class AutorunService:
                     "success": False,
                     "message": "이미 오토런에서 제외된 플로우입니다"
                 }
+
+            # 스케줄러에서 해제
+            from ..scheduler.flow_scheduler import get_flow_scheduler
+            scheduler = get_flow_scheduler()
+            if scheduler:
+                await scheduler.unregister_flow(flow_id)
 
             # 오토런에서 제외
             flow.remove_from_autorun()
@@ -728,12 +759,19 @@ class AutorunService:
 
     def _log_to_dict(self, log: AutorunLog) -> Dict[str, Any]:
         """로그를 딕셔너리로 변환 (새 간결한 포맷)"""
+        # 작업 시간 m/s 포맷
+        duration_formatted = None
+        if log.execution_duration_ms is not None:
+            duration_sec = log.execution_duration_ms / 1000
+            duration_formatted = f"{duration_sec:.1f}s"
+
         return {
             "id": log.id,
             "flow_id": log.flow_id,
             # 새 간결한 포맷 필드
             "flow_name": log.flow_name or (log.flow.name if log.flow else None),
             "module_name": log.module_name,
+            "module_type_name": log.module_type_name,  # 모듈 타입명 추가
             "blog_name": log.blog_name,
             "post_title": log.post_title,
             "action_time": log.action_time,
@@ -746,6 +784,7 @@ class AutorunService:
             "message": log.message,
             "execution_duration_ms": log.execution_duration_ms,
             "formatted_duration": log.formatted_duration,
+            "duration_formatted": duration_formatted,  # m/s 포맷 추가
             "posts_processed": log.posts_processed,
             "posts_success": log.posts_success,
             "posts_failed": log.posts_failed,
