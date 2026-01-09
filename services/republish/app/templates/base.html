@@ -151,43 +151,30 @@
 
         <!-- 글로벌 요약탭 (로그인 페이지 제외) -->
         {% if request.url.path != '/login' %}
-        <div x-data="globalSummary()" x-init="loadSummary()" class="bg-white border-b border-gray-200 shadow-sm relative">
-            <!-- 요약 바 (카드 형태, 1줄 배치) -->
+        <div x-data="globalSummary()" x-init="init()" class="bg-white border-b border-gray-200 shadow-sm relative">
+            <!-- 고정 요약탭 바 (가운데 정렬) -->
             <div @click="togglePanel()" class="cursor-pointer hover:bg-gray-50 transition-colors">
                 <div class="max-w-7xl mx-auto px-4 py-3">
-                    <div class="flex items-center justify-between">
-                        <!-- 4개 카드를 가로 1줄로 배치 -->
-                        <div class="flex items-center gap-3 md:gap-4 flex-1 overflow-x-auto scrollbar-hide">
-                            <!-- 활성 플로우 카드 -->
-                            <div class="flex items-center gap-2 bg-blue-50 rounded-lg px-3 py-2 whitespace-nowrap">
-                                <span class="text-blue-600 font-bold text-lg" x-text="summary.active_flows">-</span>
-                                <span class="text-blue-600 text-sm">플로우</span>
+                    <!-- 가운데 정렬: justify-center -->
+                    <div class="flex items-center justify-center gap-3 md:gap-4 overflow-x-auto scrollbar-hide">
+                        <!-- 선택된 고정 탭들만 표시 -->
+                        <template x-for="tab in pinnedTabs" :key="tab.key">
+                            <div class="flex items-center gap-2 rounded-lg px-3 py-2 whitespace-nowrap"
+                                 :class="tab.bgClass">
+                                <span class="font-bold text-lg" :class="tab.textClass"
+                                      x-text="stats[tab.key] ?? '-'"></span>
+                                <span class="text-sm" :class="tab.textClass" x-text="tab.label"></span>
                             </div>
-
-                            <!-- 활성 블로그 카드 -->
-                            <div class="flex items-center gap-2 bg-green-50 rounded-lg px-3 py-2 whitespace-nowrap">
-                                <span class="text-green-600 font-bold text-lg" x-text="summary.active_blogs">-</span>
-                                <span class="text-green-600 text-sm">블로그</span>
-                            </div>
-
-                            <!-- 오늘 생성 카드 -->
-                            <div class="flex items-center gap-2 bg-purple-50 rounded-lg px-3 py-2 whitespace-nowrap">
-                                <span class="text-purple-600 font-bold text-lg" x-text="summary.today_created">-</span>
-                                <span class="text-purple-600 text-sm">오늘 생성</span>
-                            </div>
-
-                            <!-- 오늘 발행 카드 -->
-                            <div class="flex items-center gap-2 bg-orange-50 rounded-lg px-3 py-2 whitespace-nowrap">
-                                <span class="text-orange-600 font-bold text-lg" x-text="summary.today_published">-</span>
-                                <span class="text-orange-600 text-sm">오늘 발행</span>
-                            </div>
-                        </div>
-
+                        </template>
+                        <!-- 기본 표시 (선택된 탭 없을 때) -->
+                        <template x-if="pinnedTabs.length === 0">
+                            <div class="text-gray-400 text-sm py-2">클릭하여 요약 보기</div>
+                        </template>
                     </div>
                 </div>
             </div>
 
-            <!-- 상단 슬라이드 다운 패널 (페이지를 덮는 방식) -->
+            <!-- 상단 슬라이드 다운 패널 -->
             <div x-show="panelOpen"
                  x-transition:enter="transition ease-out duration-300"
                  x-transition:enter-start="-translate-y-full"
@@ -199,56 +186,142 @@
                  class="fixed inset-x-0 top-0 z-50 bg-white shadow-2xl"
                  style="height: 100vh; max-height: 100vh;">
 
-                <!-- 슬라이드 패널 헤더 -->
+                <!-- 패널 헤더 -->
                 <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white sticky top-0">
                     <h3 class="text-lg font-bold text-gray-900">대시보드 요약</h3>
-                    <div class="flex items-center gap-2">
-                        <!-- 설정 아이콘 -->
-                        <button @click.stop="openSettings()"
-                                class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
-                                title="설정">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                            </svg>
-                        </button>
-                        <!-- 닫기 버튼 -->
-                        <button @click="togglePanel()"
-                                class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                            </svg>
-                        </button>
-                    </div>
+                    <button @click="closePanel()"
+                            class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
                 </div>
 
-                <!-- 슬라이드 패널 콘텐츠 -->
+                <!-- 패널 콘텐츠 -->
                 <div class="overflow-y-auto" style="height: calc(100vh - 60px);">
-                    <div class="max-w-4xl mx-auto px-4 py-6">
-                        <!-- 상세 통계 카드 (4열) -->
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                            <div class="bg-blue-50 rounded-xl p-4 text-center">
-                                <div class="text-3xl font-bold text-blue-600" x-text="stats.totals?.blogs ?? '-'"></div>
-                                <div class="text-sm text-blue-600 mt-1">전체 블로그</div>
-                                <div class="text-xs text-blue-400 mt-2">
-                                    WP <span class="font-medium" x-text="stats.blogs_by_platform?.wordpress ?? 0"></span> /
-                                    BL <span class="font-medium" x-text="stats.blogs_by_platform?.blogger ?? 0"></span>
-                                </div>
+                    <div class="max-w-5xl mx-auto px-4 py-6">
+                        <!-- 안내 메시지 -->
+                        <div class="mb-4 p-3 bg-blue-50 rounded-lg text-sm text-blue-700">
+                            체크박스를 선택하면 고정 요약탭에 표시됩니다. 패널을 닫으면 자동 저장됩니다.
+                        </div>
+
+                        <!-- 블로그 섹션 -->
+                        <div class="mb-6">
+                            <h4 class="text-sm font-bold text-gray-500 mb-3 uppercase tracking-wide">블로그</h4>
+                            <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                                <template x-for="tab in allTabs.filter(t => t.group === 'blog')" :key="tab.key">
+                                    <label class="relative flex items-center gap-2 p-3 rounded-xl cursor-pointer transition-all"
+                                           :class="isTabPinned(tab.key) ? 'bg-blue-100 ring-2 ring-blue-400' : 'bg-gray-50 hover:bg-gray-100'">
+                                        <input type="checkbox"
+                                               :checked="isTabPinned(tab.key)"
+                                               @change="togglePinTab(tab.key)"
+                                               class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                        <div class="flex-1 min-w-0">
+                                            <div class="text-xs text-gray-500 truncate" x-text="tab.label"></div>
+                                            <div class="text-xl font-bold text-gray-800" x-text="stats[tab.key] ?? 0"></div>
+                                        </div>
+                                    </label>
+                                </template>
                             </div>
-                            <div class="bg-green-50 rounded-xl p-4 text-center">
-                                <div class="text-3xl font-bold text-green-600" x-text="stats.totals?.modules ?? '-'"></div>
-                                <div class="text-sm text-green-600 mt-1">전체 모듈</div>
+                        </div>
+
+                        <!-- 카테고리 섹션 -->
+                        <div class="mb-6">
+                            <h4 class="text-sm font-bold text-gray-500 mb-3 uppercase tracking-wide">카테고리</h4>
+                            <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                <template x-for="tab in allTabs.filter(t => t.group === 'category')" :key="tab.key">
+                                    <label class="relative flex items-center gap-2 p-3 rounded-xl cursor-pointer transition-all"
+                                           :class="isTabPinned(tab.key) ? 'bg-green-100 ring-2 ring-green-400' : 'bg-gray-50 hover:bg-gray-100'">
+                                        <input type="checkbox"
+                                               :checked="isTabPinned(tab.key)"
+                                               @change="togglePinTab(tab.key)"
+                                               class="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500">
+                                        <div class="flex-1 min-w-0">
+                                            <div class="text-xs text-gray-500 truncate" x-text="tab.label"></div>
+                                            <div class="text-xl font-bold text-gray-800" x-text="stats[tab.key] ?? 0"></div>
+                                        </div>
+                                    </label>
+                                </template>
                             </div>
-                            <div class="bg-purple-50 rounded-xl p-4 text-center">
-                                <div class="text-3xl font-bold text-purple-600" x-text="stats.totals?.flows ?? '-'"></div>
-                                <div class="text-sm text-purple-600 mt-1">전체 플로우</div>
-                                <div class="text-xs text-purple-400 mt-2">
-                                    활성 <span class="font-medium" x-text="stats.active?.flows ?? 0"></span>
-                                </div>
+                        </div>
+
+                        <!-- 모듈 섹션 -->
+                        <div class="mb-6">
+                            <h4 class="text-sm font-bold text-gray-500 mb-3 uppercase tracking-wide">모듈</h4>
+                            <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                                <template x-for="tab in allTabs.filter(t => t.group === 'module')" :key="tab.key">
+                                    <label class="relative flex items-center gap-2 p-3 rounded-xl cursor-pointer transition-all"
+                                           :class="isTabPinned(tab.key) ? 'bg-purple-100 ring-2 ring-purple-400' : 'bg-gray-50 hover:bg-gray-100'">
+                                        <input type="checkbox"
+                                               :checked="isTabPinned(tab.key)"
+                                               @change="togglePinTab(tab.key)"
+                                               class="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500">
+                                        <div class="flex-1 min-w-0">
+                                            <div class="text-xs text-gray-500 truncate" x-text="tab.label"></div>
+                                            <div class="text-xl font-bold text-gray-800" x-text="stats[tab.key] ?? 0"></div>
+                                        </div>
+                                    </label>
+                                </template>
                             </div>
-                            <div class="bg-orange-50 rounded-xl p-4 text-center">
-                                <div class="text-3xl font-bold text-orange-600" x-text="(stats.week_created?.modules ?? 0) + (stats.week_created?.flows ?? 0)"></div>
-                                <div class="text-sm text-orange-600 mt-1">이번 주 생성</div>
+                        </div>
+
+                        <!-- 플로우 섹션 -->
+                        <div class="mb-6">
+                            <h4 class="text-sm font-bold text-gray-500 mb-3 uppercase tracking-wide">플로우</h4>
+                            <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                <template x-for="tab in allTabs.filter(t => t.group === 'flow')" :key="tab.key">
+                                    <label class="relative flex items-center gap-2 p-3 rounded-xl cursor-pointer transition-all"
+                                           :class="isTabPinned(tab.key) ? 'bg-cyan-100 ring-2 ring-cyan-400' : 'bg-gray-50 hover:bg-gray-100'">
+                                        <input type="checkbox"
+                                               :checked="isTabPinned(tab.key)"
+                                               @change="togglePinTab(tab.key)"
+                                               class="w-4 h-4 rounded border-gray-300 text-cyan-600 focus:ring-cyan-500">
+                                        <div class="flex-1 min-w-0">
+                                            <div class="text-xs text-gray-500 truncate" x-text="tab.label"></div>
+                                            <div class="text-xl font-bold text-gray-800" x-text="stats[tab.key] ?? 0"></div>
+                                        </div>
+                                    </label>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- 이번 주 통계 섹션 -->
+                        <div class="mb-6">
+                            <h4 class="text-sm font-bold text-gray-500 mb-3 uppercase tracking-wide">이번 주</h4>
+                            <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                <template x-for="tab in allTabs.filter(t => t.group === 'week')" :key="tab.key">
+                                    <label class="relative flex items-center gap-2 p-3 rounded-xl cursor-pointer transition-all"
+                                           :class="isTabPinned(tab.key) ? 'bg-orange-100 ring-2 ring-orange-400' : 'bg-gray-50 hover:bg-gray-100'">
+                                        <input type="checkbox"
+                                               :checked="isTabPinned(tab.key)"
+                                               @change="togglePinTab(tab.key)"
+                                               class="w-4 h-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500">
+                                        <div class="flex-1 min-w-0">
+                                            <div class="text-xs text-gray-500 truncate" x-text="tab.label"></div>
+                                            <div class="text-xl font-bold text-gray-800" x-text="stats[tab.key] ?? 0"></div>
+                                        </div>
+                                    </label>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- 오늘 통계 섹션 -->
+                        <div class="mb-6">
+                            <h4 class="text-sm font-bold text-gray-500 mb-3 uppercase tracking-wide">오늘</h4>
+                            <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                <template x-for="tab in allTabs.filter(t => t.group === 'today')" :key="tab.key">
+                                    <label class="relative flex items-center gap-2 p-3 rounded-xl cursor-pointer transition-all"
+                                           :class="isTabPinned(tab.key) ? 'bg-red-100 ring-2 ring-red-400' : 'bg-gray-50 hover:bg-gray-100'">
+                                        <input type="checkbox"
+                                               :checked="isTabPinned(tab.key)"
+                                               @change="togglePinTab(tab.key)"
+                                               class="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500">
+                                        <div class="flex-1 min-w-0">
+                                            <div class="text-xs text-gray-500 truncate" x-text="tab.label"></div>
+                                            <div class="text-xl font-bold text-gray-800" x-text="stats[tab.key] ?? 0"></div>
+                                        </div>
+                                    </label>
+                                </template>
                             </div>
                         </div>
 
@@ -279,7 +352,7 @@
                 </div>
             </div>
 
-            <!-- 백드롭 (슬라이드 패널 뒤) -->
+            <!-- 백드롭 -->
             <div x-show="panelOpen"
                  x-transition:enter="transition ease-out duration-300"
                  x-transition:enter-start="opacity-0"
@@ -287,7 +360,7 @@
                  x-transition:leave="transition ease-in duration-200"
                  x-transition:leave-start="opacity-100"
                  x-transition:leave-end="opacity-0"
-                 @click="togglePanel()"
+                 @click="closePanel()"
                  x-cloak
                  class="fixed inset-0 bg-black bg-opacity-50 z-40">
             </div>
@@ -410,94 +483,10 @@
             });
         });
 
-        // 글로벌 요약탭 컴포넌트
-        function globalSummary() {
-            return {
-                panelOpen: false,
-                summary: {
-                    active_flows: '-',
-                    active_blogs: '-',
-                    today_created: '-',
-                    today_published: '-'
-                },
-                stats: {},
-                activities: [],
-
-                async loadSummary() {
-                    try {
-                        // 요약 데이터 로드
-                        const summaryRes = await fetch(`${API_BASE}/dashboard/summary`, {
-                            credentials: 'include'
-                        });
-                        if (summaryRes.ok) {
-                            this.summary = await summaryRes.json();
-                        }
-                    } catch (error) {
-                        console.error('요약 데이터 로드 실패:', error);
-                    }
-                },
-
-                async togglePanel() {
-                    this.panelOpen = !this.panelOpen;
-
-                    // 패널이 열릴 때만 상세 데이터 로드
-                    if (this.panelOpen && Object.keys(this.stats).length === 0) {
-                        await this.loadDetailedStats();
-                    }
-                },
-
-                async loadDetailedStats() {
-                    try {
-                        // 상세 통계와 최근 활동 병렬 로드
-                        const [statsRes, activitiesRes] = await Promise.all([
-                            fetch(`${API_BASE}/dashboard/stats`, { credentials: 'include' }),
-                            fetch(`${API_BASE}/dashboard/activities?limit=5`, { credentials: 'include' })
-                        ]);
-
-                        if (statsRes.ok) {
-                            this.stats = await statsRes.json();
-                        }
-                        if (activitiesRes.ok) {
-                            const data = await activitiesRes.json();
-                            this.activities = data.activities || [];
-                        }
-                    } catch (error) {
-                        console.error('상세 통계 로드 실패:', error);
-                    }
-                },
-
-                formatTime(timestamp) {
-                    if (!timestamp) return '';
-                    const date = new Date(timestamp);
-                    const now = new Date();
-                    const diff = now - date;
-
-                    // 1시간 이내
-                    if (diff < 3600000) {
-                        const mins = Math.floor(diff / 60000);
-                        return mins <= 0 ? '방금' : `${mins}분 전`;
-                    }
-                    // 24시간 이내
-                    if (diff < 86400000) {
-                        const hours = Math.floor(diff / 3600000);
-                        return `${hours}시간 전`;
-                    }
-                    // 그 이상
-                    const days = Math.floor(diff / 86400000);
-                    return `${days}일 전`;
-                },
-
-                openSettings() {
-                    // 설정 모달 열기
-                    if (typeof openSettingsModal === 'function') {
-                        openSettingsModal();
-                    } else {
-                        console.error('설정 모달 함수가 정의되지 않았습니다');
-                    }
-                }
-            }
-        }
     </script>
+
+    <!-- 글로벌 요약탭 컴포넌트 -->
+    <script src="/static/js/components/GlobalSummary.js"></script>
 
     <!-- 설정 모달 -->
     {% include "settings/modal.html" %}
