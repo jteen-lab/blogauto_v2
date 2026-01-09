@@ -31,6 +31,7 @@ from .flow_blog import FlowBlog
 
 # Phase C-4: Autorun models
 from .autorun_log import AutorunLog
+from .flow_execution_state import FlowExecutionState
 
 # Phase S-1: Settings models
 from .user_settings import UserSettings
@@ -64,6 +65,7 @@ __all__ = [
     "FlowBlog",
     # Phase C-4: Autorun models
     "AutorunLog",
+    "FlowExecutionState",
     # Phase S-1: Settings models
     "UserSettings",
 ]
