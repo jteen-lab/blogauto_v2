@@ -162,16 +162,16 @@
             <div class="border border-gray-200 rounded-lg">
                 <div class="flex border-b border-gray-200">
                     <button type="button"
-                            @click="activeBlogTab = 'blogger'"
-                            :class="activeBlogTab === 'blogger' ? 'bg-blue-50 text-blue-700 border-blue-500' : 'bg-white text-gray-500 hover:text-gray-700'"
-                            class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap">
-                        Blogger
-                    </button>
-                    <button type="button"
                             @click="activeBlogTab = 'wordpress'"
                             :class="activeBlogTab === 'wordpress' ? 'bg-blue-50 text-blue-700 border-blue-500' : 'bg-white text-gray-500 hover:text-gray-700'"
                             class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap">
                         WordPress
+                    </button>
+                    <button type="button"
+                            @click="activeBlogTab = 'blogger'"
+                            :class="activeBlogTab === 'blogger' ? 'bg-blue-50 text-blue-700 border-blue-500' : 'bg-white text-gray-500 hover:text-gray-700'"
+                            class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap">
+                        Blogger
                     </button>
                 </div>
 

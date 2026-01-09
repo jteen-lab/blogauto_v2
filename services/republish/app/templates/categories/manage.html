@@ -11,42 +11,19 @@
 
 {% block content %}
 <div class="bg-gray-100 min-h-screen">
-    <div class="container mx-auto p-6" x-data="categoryManager()" x-init="init()">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4" x-data="categoryManager()" x-init="init()">
         <!-- 헤더 -->
-        <div class="bg-white rounded-lg shadow p-6 mb-6">
-            <div class="flex justify-between items-center">
-                <div>
-                    <h1 class="text-2xl font-bold text-gray-900">카테고리 관리</h1>
-                    <p class="text-gray-600 mt-1">3계층 카테고리 구조로 블로그 콘텐츠를 체계화하세요</p>
-                </div>
-                <div class="hidden md:flex space-x-2">
-                    <button
-                        @click="showCreateTopic = true"
-                        class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-                    >
-                        + 주제 추가
-                    </button>
-                </div>
+        <div class="flex items-center justify-between mb-4">
+            <div class="flex-1">
+                <h2 class="text-2xl font-bold text-gray-900">카테고리 관리</h2>
             </div>
-
-            <!-- 통계 (모바일: 2x2, PC: 4열) -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-                <div class="bg-blue-50 p-4 rounded-lg">
-                    <h3 class="text-blue-700 font-semibold text-sm md:text-base">주제</h3>
-                    <p class="text-xl md:text-2xl font-bold text-blue-900">{{ stats.total_topics }}</p>
-                </div>
-                <div class="bg-green-50 p-4 rounded-lg">
-                    <h3 class="text-green-700 font-semibold text-sm md:text-base">하위 주제</h3>
-                    <p class="text-xl md:text-2xl font-bold text-green-900">{{ stats.total_subtopics }}</p>
-                </div>
-                <div class="bg-yellow-50 p-4 rounded-lg">
-                    <h3 class="text-yellow-700 font-semibold text-sm md:text-base">키워드</h3>
-                    <p class="text-xl md:text-2xl font-bold text-yellow-900">{{ stats.total_keywords }}</p>
-                </div>
-                <div class="bg-purple-50 p-4 rounded-lg">
-                    <h3 class="text-purple-700 font-semibold text-sm md:text-base">블로그 연결</h3>
-                    <p class="text-xl md:text-2xl font-bold text-purple-900">{{ stats.total_blog_connections }}</p>
-                </div>
+            <div class="hidden md:flex space-x-2">
+                <button
+                    @click="showCreateTopic = true"
+                    class="inline-flex items-center px-4 py-2 border-2 border-blue-600 rounded-md text-sm font-bold text-blue-600 hover:bg-blue-50 focus:outline-none transition-colors"
+                >
+                    + 주제 추가
+                </button>
             </div>
         </div>
 
@@ -83,7 +60,7 @@
                                 <h2 class="text-lg font-semibold text-gray-900">주제 (Topics)</h2>
                                 <p class="text-sm text-gray-600">1차 카테고리</p>
                             </div>
-                            <button @click="showCreateTopic = true" class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700">+ 추가</button>
+                            <button @click="showCreateTopic = true" class="text-blue-600 hover:text-blue-800 px-3 py-1 rounded text-sm font-bold border-2 border-blue-500 hover:bg-blue-50">+ 추가</button>
                         </div>
                     </div>
                     <!-- 스크롤 영역: 주제 목록 -->
@@ -127,7 +104,7 @@
                                 <h2 class="text-lg font-semibold text-gray-900">하위 주제 (SubTopics)</h2>
                                 <p class="text-sm text-gray-600">2차 카테고리</p>
                             </div>
-                            <button @click="showCreateSubTopic = true" x-show="selectedTopic" class="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700">+ 추가</button>
+                            <button @click="showCreateSubTopic = true" x-show="selectedTopic" class="text-green-600 hover:text-green-800 px-3 py-1 rounded text-sm font-bold border-2 border-green-500 hover:bg-green-50">+ 추가</button>
                         </div>
                     </div>
                     <!-- 스크롤 영역: 하위 주제 목록 -->
@@ -181,7 +158,7 @@
                                 <h2 class="text-lg font-semibold text-gray-900">키워드 (Keywords)</h2>
                                 <p class="text-sm text-gray-600">3차 카테고리</p>
                             </div>
-                            <button @click="showCreateKeyword = true" x-show="selectedSubTopic" class="bg-yellow-600 text-white px-3 py-1 rounded text-sm hover:bg-yellow-700">+ 추가</button>
+                            <button @click="showCreateKeyword = true" x-show="selectedSubTopic" class="text-yellow-600 hover:text-yellow-800 px-3 py-1 rounded text-sm font-bold border-2 border-yellow-500 hover:bg-yellow-50">+ 추가</button>
                         </div>
                     </div>
                     <!-- 스크롤 영역: 키워드 목록 -->
@@ -273,7 +250,7 @@
                         <button
                             @click="showCreateSubTopic = true"
                             x-show="selectedTopic"
-                            class="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700"
+                            class="text-green-600 hover:text-green-800 px-3 py-1 rounded text-sm font-bold border-2 border-green-500 hover:bg-green-50"
                         >
                             + 추가
                         </button>
@@ -334,7 +311,7 @@
                         <button
                             @click="showCreateKeyword = true"
                             x-show="selectedSubTopic"
-                            class="bg-yellow-600 text-white px-3 py-1 rounded text-sm hover:bg-yellow-700"
+                            class="text-yellow-600 hover:text-yellow-800 px-3 py-1 rounded text-sm font-bold border-2 border-yellow-500 hover:bg-yellow-50"
                         >
                             + 추가
                         </button>

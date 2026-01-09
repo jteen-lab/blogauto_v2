@@ -116,7 +116,7 @@ function flowFormData() {
         // 블로그 관련 데이터
         blogs: [],
         blogsLoading: true,
-        activeBlogTab: 'blogger',
+        activeBlogTab: 'wordpress',
 
         // 메시지
         message: {
@@ -142,7 +142,7 @@ function flowFormData() {
             this.saving = false;
             this.message = { text: '', type: 'info' };
             this.activeModuleTab = 'prompt';
-            this.activeBlogTab = 'blogger';
+            this.activeBlogTab = 'wordpress';
         },
 
         async loadBlogs() {
