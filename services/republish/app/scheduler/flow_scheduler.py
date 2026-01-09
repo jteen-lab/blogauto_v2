@@ -8,6 +8,7 @@ Features:
 - schedule_matrix를 활성화 시간대로 해석
 - 개별 Job 등록/관리
 """
+import asyncio
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -457,7 +458,7 @@ class FlowScheduler:
         run_time = datetime.now() + timedelta(seconds=2)
 
         self.scheduler.add_job(
-            self._execute_module_callback,
+            self._sync_execute_module_callback,  # 동기 래퍼 사용
             DateTrigger(run_date=run_time),
             args=[flow.id, module.id],
             id=job_id,
@@ -465,7 +466,7 @@ class FlowScheduler:
             replace_existing=True
         )
 
-        logger.debug(
+        logger.info(
             f"[FLOW_SCHEDULER] Scheduled immediate | FlowID={flow.id} | "
             f"ModuleID={module.id} | RunTime={run_time}"
         )
@@ -506,7 +507,7 @@ class FlowScheduler:
             run_time = datetime.now() + timedelta(seconds=2)
 
         self.scheduler.add_job(
-            self._execute_module_callback,
+            self._sync_execute_module_callback,  # 동기 래퍼 사용
             DateTrigger(run_date=run_time),
             args=[flow.id, module.id],
             id=job_id,
@@ -514,17 +515,45 @@ class FlowScheduler:
             replace_existing=True
         )
 
-        logger.debug(
+        logger.info(
             f"[FLOW_SCHEDULER] Scheduled | FlowID={flow.id} | "
             f"ModuleID={module.id} | RunTime={run_time}"
         )
+
+    def _sync_execute_module_callback(
+        self,
+        flow_id: int,
+        module_id: int
+    ) -> None:
+        """동기 래퍼 - APScheduler가 호출하는 콜백"""
+        logger.info(
+            f"[FLOW_SCHEDULER] Sync callback triggered | FlowID={flow_id} | "
+            f"ModuleID={module_id}"
+        )
+        try:
+            # 현재 이벤트 루프 가져오기
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # 이벤트 루프가 실행 중이면 create_task 사용
+                asyncio.create_task(self._execute_module_callback(flow_id, module_id))
+            else:
+                # 이벤트 루프가 없으면 새로 실행
+                loop.run_until_complete(self._execute_module_callback(flow_id, module_id))
+        except RuntimeError:
+            # 이벤트 루프가 없는 경우 새로 생성
+            asyncio.run(self._execute_module_callback(flow_id, module_id))
+        except Exception as e:
+            logger.error(
+                f"[FLOW_SCHEDULER] Sync callback error | FlowID={flow_id} | "
+                f"ModuleID={module_id} | Error={e}"
+            )
 
     async def _execute_module_callback(
         self,
         flow_id: int,
         module_id: int
     ) -> None:
-        """모듈 실행 콜백 (스케줄러에서 호출)"""
+        """모듈 실행 콜백 (비동기 실제 로직)"""
         try:
             logger.info(
                 f"[FLOW_SCHEDULER] Executing | FlowID={flow_id} | ModuleID={module_id}"
@@ -763,8 +792,8 @@ async def setup_flow_scheduler() -> FlowScheduler:
     if _flow_scheduler is None:
         _flow_scheduler = FlowScheduler()
 
-    # 기본 스케줄러 시작
-    await scheduler_instance.start()
+    # 참고: 기본 스케줄러는 main.py에서 이미 시작됨
+    # scheduler_instance.start()를 여기서 호출하지 않음
 
     # 플로우 스케줄러 초기화
     await _flow_scheduler.initialize()
@@ -780,8 +809,8 @@ async def shutdown_flow_scheduler() -> None:
     if _flow_scheduler:
         await _flow_scheduler.shutdown()
 
-    # 기본 스케줄러 종료
-    await scheduler_instance.shutdown()
+    # 참고: 기본 스케줄러 종료는 main.py에서 처리
+    # scheduler_instance.shutdown()을 여기서 호출하지 않음
 
     logger.info("[FLOW_SCHEDULER] Shutdown complete")
 

@@ -579,6 +579,7 @@ class AutorunService:
             success_count = 0
             failed_count = 0
             failed_ids = []
+            added_flow_ids = []  # 스케줄러 등록용
 
             for flow_id in flow_ids:
                 try:
@@ -603,13 +604,7 @@ class AutorunService:
 
                     # 오토런에 추가
                     flow.add_to_autorun()
-
-                    # 스케줄러에 등록 (즉시 실행)
-                    from ..scheduler.flow_scheduler import get_flow_scheduler
-                    scheduler = get_flow_scheduler()
-                    if scheduler:
-                        await scheduler.register_flow(flow_id, immediate_execution=True)
-
+                    added_flow_ids.append(flow_id)
                     success_count += 1
 
                 except Exception as e:
@@ -617,7 +612,19 @@ class AutorunService:
                     failed_count += 1
                     failed_ids.append(flow_id)
 
+            # 먼저 커밋하여 DB에 반영 (중요: 스케줄러보다 먼저!)
             await self.db.commit()
+
+            # 커밋 후 스케줄러에 등록 (즉시 실행)
+            from ..scheduler.flow_scheduler import get_flow_scheduler
+            scheduler = get_flow_scheduler()
+            if scheduler:
+                for flow_id in added_flow_ids:
+                    try:
+                        await scheduler.register_flow(flow_id, immediate_execution=True)
+                        logger.info(f"[ADD_FLOWS_TO_AUTORUN] 스케줄러 등록 완료: {flow_id}")
+                    except Exception as e:
+                        logger.warning(f"[ADD_FLOWS_TO_AUTORUN] 스케줄러 등록 실패: {flow_id} | {e}")
 
             logger.info(f"[ADD_FLOWS_TO_AUTORUN] 완료: {success_count}개 성공, {failed_count}개 실패")
 
