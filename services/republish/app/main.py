@@ -30,6 +30,7 @@ from .routers.modules import router as modules_router
 from .routers.flows import router as flows_router
 from .routers.autorun import router as autorun_router
 from .routers.dashboard import router as dashboard_router
+from .routers.settings import router as settings_router
 from .routers.modules_pages import router as modules_page_router
 from .routers.flows_pages import router as flows_page_router
 from .routers.autorun_pages import router as autorun_page_router
@@ -121,6 +122,7 @@ app.include_router(modules_router, prefix=settings.api_v1_prefix)
 app.include_router(flows_router, prefix=settings.api_v1_prefix)
 app.include_router(autorun_router, prefix=settings.api_v1_prefix)
 app.include_router(dashboard_router, prefix=settings.api_v1_prefix)
+app.include_router(settings_router, prefix=settings.api_v1_prefix)
 
 # 페이지 라우터 등록
 app.include_router(blogs_page_router)

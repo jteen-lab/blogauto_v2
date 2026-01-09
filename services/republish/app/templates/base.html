@@ -183,12 +183,6 @@
                             </div>
                         </div>
 
-                        <!-- 확장 아이콘 -->
-                        <div class="text-gray-400 flex-shrink-0 ml-3">
-                            <svg :class="panelOpen ? 'rotate-180' : ''" class="w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                            </svg>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -208,12 +202,24 @@
                 <!-- 슬라이드 패널 헤더 -->
                 <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white sticky top-0">
                     <h3 class="text-lg font-bold text-gray-900">대시보드 요약</h3>
-                    <button @click="togglePanel()"
-                            class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                        </svg>
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <!-- 설정 아이콘 -->
+                        <button @click.stop="openSettings()"
+                                class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
+                                title="설정">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            </svg>
+                        </button>
+                        <!-- 닫기 버튼 -->
+                        <button @click="togglePanel()"
+                                class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
 
                 <!-- 슬라이드 패널 콘텐츠 -->
@@ -479,10 +485,22 @@
                     // 그 이상
                     const days = Math.floor(diff / 86400000);
                     return `${days}일 전`;
+                },
+
+                openSettings() {
+                    // 설정 모달 열기
+                    if (typeof openSettingsModal === 'function') {
+                        openSettingsModal();
+                    } else {
+                        console.error('설정 모달 함수가 정의되지 않았습니다');
+                    }
                 }
             }
         }
     </script>
+
+    <!-- 설정 모달 -->
+    {% include "settings/modal.html" %}
 
     {% block extra_js %}{% endblock %}
 </body>
