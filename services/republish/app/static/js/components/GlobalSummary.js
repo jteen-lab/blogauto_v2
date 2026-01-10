@@ -10,7 +10,7 @@
 function globalSummary() {
     return {
         panelOpen: false,
-        settingsMode: false,  // 설정 모드 상태
+        settingsSheetOpen: false,  // 설정 하단 시트 상태
         stats: {},
         activities: [],
         pinnedTabKeys: [],
@@ -106,21 +106,27 @@ function globalSummary() {
             this.panelOpen = !this.panelOpen;
             if (this.panelOpen) {
                 this.loadActivities();
-            } else {
-                // 패널 닫을 때 설정 모드 해제
-                this.settingsMode = false;
             }
         },
 
-        toggleSettings() {
-            // 설정 모드 토글 (패널 내에서 설정 탭 활성화)
-            this.settingsMode = !this.settingsMode;
+        openSettingsSheet() {
+            // 설정 하단 시트 열기
+            this.settingsSheetOpen = true;
+            // body 스크롤 고정
+            document.body.classList.add('sheet-open');
+        },
+
+        closeSettingsSheet() {
+            // 닫을 때 고정 탭 저장
+            this.savePinnedTabs();
+            this.settingsSheetOpen = false;
+            // body 스크롤 복원
+            document.body.classList.remove('sheet-open');
         },
 
         closePanel() {
-            // 닫을 때 고정 탭 저장 및 설정 모드 해제
+            // 닫을 때 고정 탭 저장
             this.savePinnedTabs();
-            this.settingsMode = false;
             this.panelOpen = false;
         },
 

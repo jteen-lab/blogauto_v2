@@ -380,8 +380,22 @@ class FlowService:
             if not flow:
                 return False
 
+            # 오토런에 추가된 플로우인 경우 스케줄러에서 먼저 해제
+            if flow.is_in_autorun:
+                try:
+                    from ..scheduler.flow_scheduler import get_flow_scheduler
+                    scheduler = get_flow_scheduler()
+                    if scheduler:
+                        await scheduler.unregister_flow(flow_id)
+                        logger.info(f"[DELETE_FLOW] 스케줄러에서 플로우 {flow_id} 해제 완료")
+                except Exception as sched_error:
+                    logger.warning(f"[DELETE_FLOW] 스케줄러 해제 실패 (무시): {sched_error}")
+
             # Blogger 블로그의 예약된 슬롯 해제
-            await self.slot_validator.release_flow_blogger_slots(flow_id)
+            try:
+                await self.slot_validator.release_flow_blogger_slots(flow_id)
+            except Exception as slot_error:
+                logger.warning(f"[DELETE_FLOW] 슬롯 해제 실패 (무시): {slot_error}")
 
             # 관련 데이터 삭제 (CASCADE 되지만 명시적으로)
             await self.db.execute(

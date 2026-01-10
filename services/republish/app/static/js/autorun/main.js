@@ -65,10 +65,11 @@ function autorunApp() {
 
             const data = await response.json();
 
-            // 활성 + 일시정지 플로우 합치기
+            // 활성 + 일시정지 + 비활성 플로우 모두 표시 (오토런에 추가된 모든 플로우)
             this.autorunFlows = [
                 ...(data.active_flows || []),
-                ...(data.paused_flows || [])
+                ...(data.paused_flows || []),
+                ...(data.inactive_flows || [])
             ];
         },
 
