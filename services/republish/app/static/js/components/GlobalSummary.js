@@ -10,6 +10,7 @@
 function globalSummary() {
     return {
         panelOpen: false,
+        settingsMode: false,  // 설정 모드 상태
         stats: {},
         activities: [],
         pinnedTabKeys: [],
@@ -105,12 +106,21 @@ function globalSummary() {
             this.panelOpen = !this.panelOpen;
             if (this.panelOpen) {
                 this.loadActivities();
+            } else {
+                // 패널 닫을 때 설정 모드 해제
+                this.settingsMode = false;
             }
         },
 
+        toggleSettings() {
+            // 설정 모드 토글 (패널 내에서 설정 탭 활성화)
+            this.settingsMode = !this.settingsMode;
+        },
+
         closePanel() {
-            // 닫을 때 고정 탭 저장
+            // 닫을 때 고정 탭 저장 및 설정 모드 해제
             this.savePinnedTabs();
+            this.settingsMode = false;
             this.panelOpen = false;
         },
 

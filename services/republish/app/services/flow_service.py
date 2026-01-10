@@ -237,9 +237,14 @@ class FlowService:
             module_ids = update_data.pop("module_ids", None)
             blog_ids = update_data.pop("blog_ids", None)
 
+            # 오토런에 추가된 플로우는 status를 변경하지 않음 (오토런 상태 보존)
             if "is_active" in update_data:
                 is_active = update_data.pop("is_active")
-                update_data["status"] = "active" if is_active else "inactive"
+                # 오토런에 추가된 플로우가 아닌 경우에만 status 변경
+                if not flow.is_in_autorun:
+                    update_data["status"] = "active" if is_active else "inactive"
+                else:
+                    logger.info(f"[UPDATE_FLOW] 플로우 {flow_id}는 오토런에 추가됨 - status 보존: {flow.status}")
 
             # 빈 문자열을 None으로 변환 (description 등)
             if "description" in update_data:

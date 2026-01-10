@@ -11,7 +11,7 @@
         </div>
 
         <div class="flex gap-1">
-            <button @click="editFlow(flow.id)"
+            <button @click="window.flowListApp?.editFlow(flow.id)"
                     class="p-1.5 text-gray-600 hover:text-gray-800 hover:bg-gray-300/50 rounded-lg transition-colors"
                     title="수정">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -19,7 +19,7 @@
                 </svg>
             </button>
 
-            <button @click="copyFlow(flow.id)"
+            <button @click="window.flowListApp?.copyFlow(flow.id)"
                     class="p-1.5 text-gray-600 hover:text-gray-800 hover:bg-gray-300/50 rounded-lg transition-colors"
                     title="복사">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -27,7 +27,7 @@
                 </svg>
             </button>
 
-            <button @click="deleteFlow(flow.id)"
+            <button @click="window.flowListApp?.deleteFlow(flow.id)"
                     class="p-1.5 text-gray-600 hover:text-red-700 hover:bg-red-200/50 rounded-lg transition-colors"
                     title="삭제">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

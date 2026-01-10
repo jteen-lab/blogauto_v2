@@ -227,7 +227,9 @@
 <div id="blogForm"
      class="fixed inset-x-0 bottom-0 h-[calc(100vh-70px)] bg-white rounded-t-2xl shadow-2xl z-50
             transform translate-y-full transition-transform duration-300 ease-out overflow-y-auto"
-     x-data="blogFormApp()">
+     x-data="blogFormApp()"
+     x-init="init()"
+     @blog-edit.window="setEditMode($event.detail.blog)">
 
     <!-- 핸들 바 -->
     <div class="flex justify-center pt-3 pb-2 sticky top-0 bg-white z-10">
@@ -556,16 +558,15 @@ function blogListApp() {
         },
 
         openEditSheet(blog) {
-            // 먼저 Bottom Sheet 열기
-            openBottomSheet('blogForm');
+            console.log('[openEditSheet] 블로그 수정 시작:', blog);
 
-            // DOM 업데이트 후 수정 모드 설정 (타이밍 보장)
-            requestAnimationFrame(() => {
-                const formEl = document.getElementById('blogForm');
-                if (formEl && formEl.__x) {
-                    formEl.__x.$data.setEditMode(blog);
-                }
-            });
+            // 전역 이벤트로 블로그 데이터 전달 (blogFormApp이 수신)
+            window.dispatchEvent(new CustomEvent('blog-edit', {
+                detail: { blog: blog }
+            }));
+
+            // Bottom Sheet 열기
+            openBottomSheet('blogForm');
         },
 
         openSettingsSheet(blog) {
@@ -642,6 +643,14 @@ function blogFormApp() {
             api_key: '',
             api_secret: '',
             oauth_token: ''
+        },
+
+        init() {
+            // 전역 이벤트 리스너 등록 (블로그 수정 이벤트)
+            window.addEventListener('blog-edit', (e) => {
+                console.log('[blogFormApp] blog-edit 이벤트 수신:', e.detail.blog);
+                this.setEditMode(e.detail.blog);
+            });
         },
 
         platformChanged() {
