@@ -237,6 +237,7 @@ class ModuleService:
         Note:
             - None 값은 업데이트에서 제외됨 (기존 값 유지)
             - 빈 문자열("")은 명시적으로 설정됨 (필드 초기화)
+            - nullable_fields에 있는 필드는 None도 유효한 값으로 처리
         """
         try:
             logger.info(f"[UPDATE_MODULE] 사용자 {user.id} 모듈 수정: {module_id}")
@@ -246,9 +247,19 @@ class ModuleService:
             if not module:
                 return None
 
+            # None도 유효한 값으로 처리해야 하는 필드 목록
+            nullable_fields = {'post_range_end', 'cooldown_days', 'description'}
+
             # 업데이트 필드 적용
             # exclude_none=True: None은 제외, 빈 문자열("")은 포함
             update_data = request.model_dump(exclude_none=True)
+
+            # nullable 필드는 별도로 처리 (None 값도 명시적으로 설정)
+            raw_data = request.model_dump()
+            for field in nullable_fields:
+                if field in raw_data and raw_data[field] is None:
+                    # 요청에 필드가 있고 값이 None이면 명시적으로 None 설정
+                    update_data[field] = None
 
             logger.debug(f"[UPDATE_MODULE] 업데이트 필드: {list(update_data.keys())}")
 
@@ -256,11 +267,11 @@ class ModuleService:
                 if hasattr(module, field):
                     old_value = getattr(module, field, None)
                     setattr(module, field, value)
-                    # 빈 문자열로 변경되는 경우 로깅
-                    if value == "" and old_value:
+                    # 값이 변경되는 경우 로깅
+                    if value != old_value:
                         logger.info(
-                            f"[UPDATE_MODULE] 필드 '{field}' 초기화: "
-                            f"'{old_value}' -> ''"
+                            f"[UPDATE_MODULE] 필드 '{field}' 변경: "
+                            f"'{old_value}' -> '{value}'"
                         )
 
             await self.db.commit()

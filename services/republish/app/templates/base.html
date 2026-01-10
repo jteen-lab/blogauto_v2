@@ -155,20 +155,33 @@
             <!-- 고정 요약탭 바 (가운데 정렬) -->
             <div @click="togglePanel()" class="cursor-pointer hover:bg-gray-50 transition-colors">
                 <div class="max-w-7xl mx-auto px-4 py-3">
-                    <!-- 가운데 정렬: justify-center -->
-                    <div class="flex items-center justify-center gap-3 md:gap-4 overflow-x-auto scrollbar-hide">
-                        <!-- 선택된 고정 탭들만 표시 -->
+                    <!-- PC: 가로 1행 정렬 / 모바일: 2열 그리드 -->
+                    <!-- PC -->
+                    <div class="hidden md:flex items-center justify-center gap-4 overflow-x-auto scrollbar-hide">
                         <template x-for="tab in pinnedTabs" :key="tab.key">
-                            <div class="flex items-center gap-2 rounded-lg px-3 py-2 whitespace-nowrap"
+                            <div class="flex items-center gap-2.5 rounded-xl px-4 py-2.5 whitespace-nowrap shadow-sm"
                                  :class="tab.bgClass">
-                                <span class="font-bold text-lg" :class="tab.textClass"
+                                <span class="text-sm font-medium" :class="tab.textClass" x-text="tab.label"></span>
+                                <span class="font-bold text-xl" :class="tab.textClass"
                                       x-text="stats[tab.key] ?? '-'"></span>
-                                <span class="text-sm" :class="tab.textClass" x-text="tab.label"></span>
                             </div>
                         </template>
-                        <!-- 기본 표시 (선택된 탭 없을 때) -->
                         <template x-if="pinnedTabs.length === 0">
                             <div class="text-gray-400 text-sm py-2">클릭하여 요약 보기</div>
+                        </template>
+                    </div>
+                    <!-- 모바일: 2열 그리드 -->
+                    <div class="md:hidden grid grid-cols-2 gap-2">
+                        <template x-for="tab in pinnedTabs" :key="tab.key">
+                            <div class="flex items-center justify-between gap-2 rounded-lg px-3 py-2 shadow-sm"
+                                 :class="tab.bgClass">
+                                <span class="text-xs font-medium truncate" :class="tab.textClass" x-text="tab.label"></span>
+                                <span class="font-bold text-lg flex-shrink-0" :class="tab.textClass"
+                                      x-text="stats[tab.key] ?? '-'"></span>
+                            </div>
+                        </template>
+                        <template x-if="pinnedTabs.length === 0">
+                            <div class="col-span-2 text-center text-gray-400 text-sm py-2">클릭하여 요약 보기</div>
                         </template>
                     </div>
                 </div>
@@ -189,12 +202,24 @@
                 <!-- 패널 헤더 -->
                 <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white sticky top-0">
                     <h3 class="text-lg font-bold text-gray-900">대시보드 요약</h3>
-                    <button @click="closePanel()"
-                            class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                        </svg>
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <!-- 설정 버튼 -->
+                        <a href="/dashboard"
+                           class="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+                           title="대시보드 설정">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            </svg>
+                        </a>
+                        <!-- 닫기 버튼 -->
+                        <button @click="closePanel()"
+                                class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
 
                 <!-- 패널 콘텐츠 -->
@@ -207,18 +232,18 @@
 
                         <!-- 블로그 섹션 -->
                         <div class="mb-6">
-                            <h4 class="text-sm font-bold text-gray-500 mb-3 uppercase tracking-wide">블로그</h4>
+                            <h4 class="text-sm font-bold text-blue-600 mb-3 uppercase tracking-wide">블로그</h4>
                             <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
                                 <template x-for="tab in allTabs.filter(t => t.group === 'blog')" :key="tab.key">
                                     <label class="relative flex items-center gap-2 p-3 rounded-xl cursor-pointer transition-all"
-                                           :class="isTabPinned(tab.key) ? 'bg-blue-100 ring-2 ring-blue-400' : 'bg-gray-50 hover:bg-gray-100'">
+                                           :class="isTabPinned(tab.key) ? 'bg-blue-100 ring-2 ring-blue-500 shadow-md' : 'bg-blue-50/50 hover:bg-blue-100/70'">
                                         <input type="checkbox"
                                                :checked="isTabPinned(tab.key)"
                                                @change="togglePinTab(tab.key)"
                                                class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
                                         <div class="flex-1 min-w-0">
-                                            <div class="text-xs text-gray-500 truncate" x-text="tab.label"></div>
-                                            <div class="text-xl font-bold text-gray-800" x-text="stats[tab.key] ?? 0"></div>
+                                            <div class="text-xs text-blue-600 truncate" x-text="tab.label"></div>
+                                            <div class="text-xl font-bold text-blue-800" x-text="stats[tab.key] ?? 0"></div>
                                         </div>
                                     </label>
                                 </template>
@@ -227,18 +252,18 @@
 
                         <!-- 카테고리 섹션 -->
                         <div class="mb-6">
-                            <h4 class="text-sm font-bold text-gray-500 mb-3 uppercase tracking-wide">카테고리</h4>
+                            <h4 class="text-sm font-bold text-green-600 mb-3 uppercase tracking-wide">카테고리</h4>
                             <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
                                 <template x-for="tab in allTabs.filter(t => t.group === 'category')" :key="tab.key">
                                     <label class="relative flex items-center gap-2 p-3 rounded-xl cursor-pointer transition-all"
-                                           :class="isTabPinned(tab.key) ? 'bg-green-100 ring-2 ring-green-400' : 'bg-gray-50 hover:bg-gray-100'">
+                                           :class="isTabPinned(tab.key) ? 'bg-green-100 ring-2 ring-green-500 shadow-md' : 'bg-green-50/50 hover:bg-green-100/70'">
                                         <input type="checkbox"
                                                :checked="isTabPinned(tab.key)"
                                                @change="togglePinTab(tab.key)"
                                                class="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500">
                                         <div class="flex-1 min-w-0">
-                                            <div class="text-xs text-gray-500 truncate" x-text="tab.label"></div>
-                                            <div class="text-xl font-bold text-gray-800" x-text="stats[tab.key] ?? 0"></div>
+                                            <div class="text-xs text-green-600 truncate" x-text="tab.label"></div>
+                                            <div class="text-xl font-bold text-green-800" x-text="stats[tab.key] ?? 0"></div>
                                         </div>
                                     </label>
                                 </template>
@@ -247,18 +272,18 @@
 
                         <!-- 모듈 섹션 -->
                         <div class="mb-6">
-                            <h4 class="text-sm font-bold text-gray-500 mb-3 uppercase tracking-wide">모듈</h4>
+                            <h4 class="text-sm font-bold text-purple-600 mb-3 uppercase tracking-wide">모듈</h4>
                             <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
                                 <template x-for="tab in allTabs.filter(t => t.group === 'module')" :key="tab.key">
                                     <label class="relative flex items-center gap-2 p-3 rounded-xl cursor-pointer transition-all"
-                                           :class="isTabPinned(tab.key) ? 'bg-purple-100 ring-2 ring-purple-400' : 'bg-gray-50 hover:bg-gray-100'">
+                                           :class="isTabPinned(tab.key) ? 'bg-purple-100 ring-2 ring-purple-500 shadow-md' : 'bg-purple-50/50 hover:bg-purple-100/70'">
                                         <input type="checkbox"
                                                :checked="isTabPinned(tab.key)"
                                                @change="togglePinTab(tab.key)"
                                                class="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500">
                                         <div class="flex-1 min-w-0">
-                                            <div class="text-xs text-gray-500 truncate" x-text="tab.label"></div>
-                                            <div class="text-xl font-bold text-gray-800" x-text="stats[tab.key] ?? 0"></div>
+                                            <div class="text-xs text-purple-600 truncate" x-text="tab.label"></div>
+                                            <div class="text-xl font-bold text-purple-800" x-text="stats[tab.key] ?? 0"></div>
                                         </div>
                                     </label>
                                 </template>
@@ -267,18 +292,18 @@
 
                         <!-- 플로우 섹션 -->
                         <div class="mb-6">
-                            <h4 class="text-sm font-bold text-gray-500 mb-3 uppercase tracking-wide">플로우</h4>
+                            <h4 class="text-sm font-bold text-cyan-600 mb-3 uppercase tracking-wide">플로우</h4>
                             <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
                                 <template x-for="tab in allTabs.filter(t => t.group === 'flow')" :key="tab.key">
                                     <label class="relative flex items-center gap-2 p-3 rounded-xl cursor-pointer transition-all"
-                                           :class="isTabPinned(tab.key) ? 'bg-cyan-100 ring-2 ring-cyan-400' : 'bg-gray-50 hover:bg-gray-100'">
+                                           :class="isTabPinned(tab.key) ? 'bg-cyan-100 ring-2 ring-cyan-500 shadow-md' : 'bg-cyan-50/50 hover:bg-cyan-100/70'">
                                         <input type="checkbox"
                                                :checked="isTabPinned(tab.key)"
                                                @change="togglePinTab(tab.key)"
                                                class="w-4 h-4 rounded border-gray-300 text-cyan-600 focus:ring-cyan-500">
                                         <div class="flex-1 min-w-0">
-                                            <div class="text-xs text-gray-500 truncate" x-text="tab.label"></div>
-                                            <div class="text-xl font-bold text-gray-800" x-text="stats[tab.key] ?? 0"></div>
+                                            <div class="text-xs text-cyan-600 truncate" x-text="tab.label"></div>
+                                            <div class="text-xl font-bold text-cyan-800" x-text="stats[tab.key] ?? 0"></div>
                                         </div>
                                     </label>
                                 </template>
@@ -287,18 +312,18 @@
 
                         <!-- 이번 주 통계 섹션 -->
                         <div class="mb-6">
-                            <h4 class="text-sm font-bold text-gray-500 mb-3 uppercase tracking-wide">이번 주</h4>
+                            <h4 class="text-sm font-bold text-orange-600 mb-3 uppercase tracking-wide">이번 주</h4>
                             <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
                                 <template x-for="tab in allTabs.filter(t => t.group === 'week')" :key="tab.key">
                                     <label class="relative flex items-center gap-2 p-3 rounded-xl cursor-pointer transition-all"
-                                           :class="isTabPinned(tab.key) ? 'bg-orange-100 ring-2 ring-orange-400' : 'bg-gray-50 hover:bg-gray-100'">
+                                           :class="isTabPinned(tab.key) ? 'bg-orange-100 ring-2 ring-orange-500 shadow-md' : 'bg-orange-50/50 hover:bg-orange-100/70'">
                                         <input type="checkbox"
                                                :checked="isTabPinned(tab.key)"
                                                @change="togglePinTab(tab.key)"
                                                class="w-4 h-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500">
                                         <div class="flex-1 min-w-0">
-                                            <div class="text-xs text-gray-500 truncate" x-text="tab.label"></div>
-                                            <div class="text-xl font-bold text-gray-800" x-text="stats[tab.key] ?? 0"></div>
+                                            <div class="text-xs text-orange-600 truncate" x-text="tab.label"></div>
+                                            <div class="text-xl font-bold text-orange-800" x-text="stats[tab.key] ?? 0"></div>
                                         </div>
                                     </label>
                                 </template>
@@ -307,18 +332,18 @@
 
                         <!-- 오늘 통계 섹션 -->
                         <div class="mb-6">
-                            <h4 class="text-sm font-bold text-gray-500 mb-3 uppercase tracking-wide">오늘</h4>
+                            <h4 class="text-sm font-bold text-red-600 mb-3 uppercase tracking-wide">오늘</h4>
                             <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
                                 <template x-for="tab in allTabs.filter(t => t.group === 'today')" :key="tab.key">
                                     <label class="relative flex items-center gap-2 p-3 rounded-xl cursor-pointer transition-all"
-                                           :class="isTabPinned(tab.key) ? 'bg-red-100 ring-2 ring-red-400' : 'bg-gray-50 hover:bg-gray-100'">
+                                           :class="isTabPinned(tab.key) ? 'bg-red-100 ring-2 ring-red-500 shadow-md' : 'bg-red-50/50 hover:bg-red-100/70'">
                                         <input type="checkbox"
                                                :checked="isTabPinned(tab.key)"
                                                @change="togglePinTab(tab.key)"
                                                class="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500">
                                         <div class="flex-1 min-w-0">
-                                            <div class="text-xs text-gray-500 truncate" x-text="tab.label"></div>
-                                            <div class="text-xl font-bold text-gray-800" x-text="stats[tab.key] ?? 0"></div>
+                                            <div class="text-xs text-red-600 truncate" x-text="tab.label"></div>
+                                            <div class="text-xl font-bold text-red-800" x-text="stats[tab.key] ?? 0"></div>
                                         </div>
                                     </label>
                                 </template>
