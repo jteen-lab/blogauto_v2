@@ -8,18 +8,18 @@
          :class="flow.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'">
 
         <!-- 체크박스 + 상태 아이콘 + 이름 -->
-        <div class="flex items-center gap-2 flex-1">
+        <div class="flex items-center gap-2 flex-1 min-w-0">
             <input type="checkbox"
                    :checked="isSelected(flow.id)"
                    @change="toggleSelect(flow.id)"
-                   class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                   class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0">
 
-            <span x-text="flow.status === 'active' ? '🟢' : '🟡'" class="text-sm"></span>
+            <span x-text="flow.status === 'active' ? '🟢' : '🟡'" class="text-sm flex-shrink-0"></span>
             <h4 class="font-semibold truncate" x-text="flow.name"></h4>
         </div>
 
         <!-- 액션 버튼 (부모 함수 직접 호출) -->
-        <div class="flex gap-1">
+        <div class="flex gap-1 flex-shrink-0">
             <!-- 일시정지 버튼 (활성 상태일 때만) -->
             <template x-if="flow.status === 'active'">
                 <button @click="pauseFlow(flow.id)"
