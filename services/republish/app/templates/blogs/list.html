@@ -615,10 +615,20 @@ function blogListApp() {
             .then(data => {
                 this.showMessage(data.message, 'success');
                 this.loadBlogs();
+                // GlobalSummary 통계 새로고침
+                this.refreshGlobalSummary();
             })
             .catch(error => {
                 this.showMessage('삭제 중 오류가 발생했습니다', 'error');
             });
+        },
+
+        refreshGlobalSummary() {
+            // GlobalSummary 컴포넌트의 loadStats 호출
+            const summaryEl = document.querySelector('[x-data="globalSummary()"]');
+            if (summaryEl && summaryEl.__x) {
+                summaryEl.__x.$data.loadStats();
+            }
         },
 
         showMessage(text, type = 'success') {
