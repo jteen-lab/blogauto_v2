@@ -110,7 +110,7 @@ function globalSummary() {
         },
 
         openSettingsSheet() {
-            // 설정 하단 시트 열기
+            // 고정 탭 설정 하단 시트 열기
             this.settingsSheetOpen = true;
             // body 스크롤 고정
             document.body.classList.add('sheet-open');
@@ -122,6 +122,13 @@ function globalSummary() {
             this.settingsSheetOpen = false;
             // body 스크롤 복원
             document.body.classList.remove('sheet-open');
+        },
+
+        openSettingsModal() {
+            // 사용자/AI/API 설정 모달 열기 (settings.js의 전역 함수 호출)
+            if (typeof window.openSettingsModal === 'function') {
+                window.openSettingsModal();
+            }
         },
 
         closePanel() {
