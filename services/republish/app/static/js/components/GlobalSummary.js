@@ -11,7 +11,15 @@ function globalSummary() {
     return {
         panelOpen: false,
         settingsSheetOpen: false,  // 설정 하단 시트 상태
-        stats: {},
+        stats: {
+            // 초기값 설정 (API 로드 전 0 표시)
+            total_blogs: 0, wordpress: 0, blogger: 0, active_blogs: 0, inactive_blogs: 0,
+            topics: 0, subtopics: 0, keywords: 0,
+            total_modules: 0, prompt_modules: 0, generate_modules: 0, publish_modules: 0, republish_modules: 0,
+            total_flows: 0, active_flows: 0, inactive_flows: 0,
+            week_generate: 0, week_publish: 0, week_republish: 0,
+            today_generate: 0, today_publish: 0, today_republish: 0
+        },
         activities: [],
         pinnedTabKeys: [],
 
@@ -93,12 +101,17 @@ function globalSummary() {
 
         async loadStats() {
             try {
-                const res = await fetch(`${API_BASE}/dashboard/stats`, { credentials: 'include' });
+                const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
+                const res = await fetch(`${apiBase}/dashboard/stats`, { credentials: 'include' });
                 if (res.ok) {
-                    this.stats = await res.json();
+                    const data = await res.json();
+                    // Alpine.js 반응형 업데이트를 위해 객체를 새로 할당
+                    Object.keys(data).forEach(key => {
+                        this.stats[key] = data[key];
+                    });
                 }
             } catch (error) {
-                console.error('통계 로드 실패:', error);
+                console.error('[GlobalSummary] 통계 로드 실패:', error);
             }
         },
 
@@ -139,7 +152,8 @@ function globalSummary() {
 
         async loadActivities() {
             try {
-                const res = await fetch(`${API_BASE}/dashboard/activities?limit=5`, { credentials: 'include' });
+                const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
+                const res = await fetch(`${apiBase}/dashboard/activities?limit=5`, { credentials: 'include' });
                 if (res.ok) {
                     const data = await res.json();
                     this.activities = data.activities || [];
