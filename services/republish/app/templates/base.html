@@ -11,6 +11,9 @@
     <!-- Alpine.js for interactivity -->
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.3/cdn.min.js"></script>
 
+    <!-- 글로벌 요약탭 컴포넌트 (Alpine.js 초기화 전 함수 정의) -->
+    <script src="/static/js/components/GlobalSummary.js?v=20260111"></script>
+
     <!-- 커스텀 CSS -->
     <style>
         /* 모바일 최적화: 전체 레이아웃 100vw 제한 */
@@ -271,9 +274,6 @@
         });
 
     </script>
-
-    <!-- 글로벌 요약탭 컴포넌트 -->
-    <script src="/static/js/components/GlobalSummary.js"></script>
 
     <!-- 설정 모달 -->
     {% include "settings/modal.html" %}
