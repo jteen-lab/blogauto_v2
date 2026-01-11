@@ -208,10 +208,11 @@ function moduleFormApp(module = null, moduleType = null) {
                 const requiredInterval = (this.todayActiveHours * 60) / this.formData.auto_daily_count;
                 this.calculatedInterval = Math.max(15, Math.round(requiredInterval));
 
-                // manual_interval_minutes는 독립적으로 유지 (덮어쓰지 않음)
-                // calculatedInterval은 표시용으로만 사용
+                // Auto 모드에서는 계산된 간격을 manual_interval_minutes에 반영
+                this.formData.manual_interval_minutes = this.calculatedInterval;
             } else {
                 this.calculatedInterval = 15;
+                this.formData.manual_interval_minutes = 15;
             }
         },
 
