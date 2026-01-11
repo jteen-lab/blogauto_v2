@@ -786,9 +786,9 @@ function flowListApp() {
             return items.length >= 3;
         },
 
-        // 블로그 슬라이드 필요 여부 판단 (4개 이상)
+        // 블로그 슬라이드 필요 여부 판단 (2개 이상이면 일단 슬라이드 활성화, 실제로는 initBlogSlideCheck에서 너비 기반 체크)
         needsBlogSlide(count) {
-            return count >= 4;
+            return count >= 2;
         },
 
         // 모듈 슬라이드 초기화 체크 (DOM 기반)
@@ -810,20 +810,68 @@ function flowListApp() {
 
         // 블로그 슬라이드 초기화 체크 (DOM 기반)
         initBlogSlideCheck(element, count) {
-            if (count < 4) return;
-
             const container = element.querySelector('.blog-slide-container');
             const track = element.querySelector('.blog-slide-track');
             if (!container || !track) return;
 
             setTimeout(() => {
                 const containerWidth = container.clientWidth;
-                const trackWidth = track.scrollWidth / 2;
+                // 슬라이드가 필요한 경우 복제된 콘텐츠 포함하여 너비 계산
+                // 슬라이드가 필요 없으면 원본 너비만 사용
+                const hasSlideClass = !track.classList.contains('no-slide');
+                const trackWidth = hasSlideClass ? track.scrollWidth / 2 : track.scrollWidth;
 
                 if (trackWidth <= containerWidth) {
                     track.classList.add('no-slide');
+                } else {
+                    track.classList.remove('no-slide');
                 }
             }, 100);
+        },
+
+        // 슬라이드 재초기화 (더보기 클릭 시 호출)
+        reinitSlides(containerEl) {
+            if (!containerEl) return;
+
+            // 모듈 슬라이드 재초기화
+            const moduleRows = containerEl.querySelectorAll('.module-slide-row');
+            moduleRows.forEach(row => {
+                const container = row.querySelector('.module-slide-container');
+                const track = row.querySelector('.module-slide-track');
+                if (!container || !track) return;
+
+                // no-slide 클래스 제거 후 다시 체크
+                track.classList.remove('no-slide');
+
+                setTimeout(() => {
+                    const containerWidth = container.clientWidth;
+                    const trackWidth = track.scrollWidth / 2;
+
+                    if (trackWidth <= containerWidth) {
+                        track.classList.add('no-slide');
+                    }
+                }, 100);
+            });
+
+            // 블로그 슬라이드 재초기화
+            const blogSections = containerEl.querySelectorAll('.blog-slide-section');
+            blogSections.forEach(section => {
+                const container = section.querySelector('.blog-slide-container');
+                const track = section.querySelector('.blog-slide-track');
+                if (!container || !track) return;
+
+                // no-slide 클래스 제거 후 다시 체크
+                track.classList.remove('no-slide');
+
+                setTimeout(() => {
+                    const containerWidth = container.clientWidth;
+                    const trackWidth = track.scrollWidth / 2;
+
+                    if (trackWidth <= containerWidth) {
+                        track.classList.add('no-slide');
+                    }
+                }, 100);
+            });
         },
 
         // 터치 일시정지 토글 (모바일용)
@@ -951,4 +999,97 @@ function addSelectedItems() {
     if (window.flowListApp) {
         window.flowListApp.addSelectedItems();
     }
+}
+
+// 슬라이드 재초기화 (전역 함수)
+function reinitSlides(containerEl) {
+    if (window.flowListApp) {
+        window.flowListApp.reinitSlides(containerEl);
+    }
+}
+
+// 모듈 슬라이드 체크 (전역 함수)
+function initSlideCheck(element) {
+    if (window.flowListApp) {
+        window.flowListApp.initSlideCheck(element);
+    }
+}
+
+// 블로그 슬라이드 체크 (전역 함수)
+function initBlogSlideCheck(element, count) {
+    if (window.flowListApp) {
+        window.flowListApp.initBlogSlideCheck(element, count);
+    }
+}
+
+// 슬라이드 터치 토글 (전역 함수)
+function toggleSlideTouch(event, element) {
+    if (window.flowListApp) {
+        window.flowListApp.toggleSlideTouch(event, element);
+    }
+}
+
+// 모듈 슬라이드 필요 여부 (전역 함수)
+function needsModuleSlide(module) {
+    if (window.flowListApp) {
+        return window.flowListApp.needsModuleSlide(module);
+    }
+    return false;
+}
+
+// 블로그 슬라이드 필요 여부 (전역 함수)
+function needsBlogSlide(count) {
+    if (window.flowListApp) {
+        return window.flowListApp.needsBlogSlide(count);
+    }
+    return false;
+}
+
+// 모듈 슬라이드 속도 (전역 함수)
+function getModuleSlideDuration(module) {
+    if (window.flowListApp) {
+        return window.flowListApp.getModuleSlideDuration(module);
+    }
+    return 30;
+}
+
+// 블로그 슬라이드 속도 (전역 함수)
+function getBlogSlideDuration(count) {
+    if (window.flowListApp) {
+        return window.flowListApp.getBlogSlideDuration(count);
+    }
+    return 22;
+}
+
+// 모듈 정보 아이템 (전역 함수)
+function getModuleInfoItems(module) {
+    if (window.flowListApp) {
+        return window.flowListApp.getModuleInfoItems(module);
+    }
+    return [];
+}
+
+// 플로우 모듈 목록 (전역 함수)
+function getFlowModules(flow) {
+    if (window.flowListApp) {
+        return window.flowListApp.getFlowModules(flow);
+    }
+    return flow.module_links || flow.flow_modules || [];
+}
+
+// 플로우 블로그 목록 (전역 함수)
+function getFlowBlogs(flow) {
+    if (window.flowListApp) {
+        return window.flowListApp.getFlowBlogs(flow);
+    }
+    return flow.blog_links || flow.flow_blogs || [];
+}
+
+// 모듈 아이콘 (전역 함수)
+function getModuleIcon(typeCode) {
+    if (window.flowListApp) {
+        return window.flowListApp.getModuleIcon(typeCode);
+    }
+    const icons = { republish: '🔄', publish: '📤', generate: '✨', prompt: '📝' };
+    return icons[typeCode] || '📦';
 }

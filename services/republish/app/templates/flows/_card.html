@@ -185,7 +185,7 @@
 
         <!-- 더보기/접기 버튼 (통합 행 기준) -->
         <button x-show="hiddenCount > 0"
-                @click="expanded = !expanded"
+                @click="expanded = !expanded; if(expanded) { $nextTick(() => reinitSlides($el.closest('.px-4'))) }"
                 class="card-expand-btn">
             <span x-text="expanded ? '접기 ▲' : `더보기 (${hiddenCount}개 더) ▼`"></span>
         </button>
