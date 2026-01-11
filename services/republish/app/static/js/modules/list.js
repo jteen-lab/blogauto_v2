@@ -864,6 +864,9 @@ function moduleListApp() {
                 // 리스트에서 제거
                 this.modules = this.modules.filter(m => m.id !== moduleId);
 
+                // GlobalSummary 통계 새로고침
+                this.refreshGlobalSummary();
+
                 // 카드 애니메이션 제거
                 const card = document.querySelector(`[data-module-id="${moduleId}"]`);
                 if (card) {
@@ -881,6 +884,14 @@ function moduleListApp() {
             } catch (error) {
                 this.showError('모듈 삭제 중 오류가 발생했습니다');
                 console.error('모듈 삭제 오류:', error);
+            }
+        },
+
+        // GlobalSummary 통계 새로고침
+        refreshGlobalSummary() {
+            const summaryEl = document.querySelector('[x-data="globalSummary()"]');
+            if (summaryEl && summaryEl.__x) {
+                summaryEl.__x.$data.loadStats();
             }
         },
 

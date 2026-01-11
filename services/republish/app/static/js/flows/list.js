@@ -242,9 +242,20 @@ function flowListApp() {
                 this.flows = this.flows.filter(f => f.id !== flowId);
                 this.showSuccess('플로우가 삭제되었습니다');
 
+                // GlobalSummary 통계 새로고침
+                this.refreshGlobalSummary();
+
             } catch (error) {
                 this.showError(error.message);
                 console.error('플로우 삭제 오류:', error);
+            }
+        },
+
+        // GlobalSummary 통계 새로고침
+        refreshGlobalSummary() {
+            const summaryEl = document.querySelector('[x-data="globalSummary()"]');
+            if (summaryEl && summaryEl.__x) {
+                summaryEl.__x.$data.loadStats();
             }
         },
 
