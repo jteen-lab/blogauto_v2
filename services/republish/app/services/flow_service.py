@@ -19,6 +19,7 @@ from ..models.flow import Flow
 from ..models.flow_module import FlowModule
 from ..models.flow_blog import FlowBlog
 from ..models.flow_execution_state import FlowExecutionState
+from ..models.autorun_log import AutorunLog
 from ..models.module import Module
 from ..models.module_type import ModuleType
 from ..models.blog import Blog, BlogPlatform
@@ -399,6 +400,9 @@ class FlowService:
                 logger.warning(f"[DELETE_FLOW] 슬롯 해제 실패 (무시): {slot_error}")
 
             # 관련 데이터 삭제 (CASCADE 되지만 명시적으로)
+            await self.db.execute(
+                delete(AutorunLog).where(AutorunLog.flow_id == flow_id)
+            )
             await self.db.execute(
                 delete(FlowExecutionState).where(FlowExecutionState.flow_id == flow_id)
             )
