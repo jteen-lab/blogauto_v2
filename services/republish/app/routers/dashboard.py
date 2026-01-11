@@ -8,8 +8,9 @@
 from datetime import datetime, timedelta
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
+from sqlalchemy import func, select
 from pydantic import BaseModel
 
 from ..core.database import get_db_session
@@ -31,7 +32,7 @@ class PinnedTabsRequest(BaseModel):
 
 
 @router.get("/summary")
-async def get_dashboard_summary(db: Session = Depends(get_db_session)):
+async def get_dashboard_summary(db: AsyncSession = Depends(get_db_session)):
     """
     글로벌 요약 데이터 (헤더 요약탭용)
     """
@@ -40,27 +41,38 @@ async def get_dashboard_summary(db: Session = Depends(get_db_session)):
         today_start = datetime.combine(today, datetime.min.time())
 
         # 활성 플로우 수 (status가 'active'인 플로우)
-        active_flows = db.query(func.count(Flow.id)).filter(
-            Flow.status == "active"
-        ).scalar() or 0
+        result = await db.execute(
+            select(func.count(Flow.id)).where(Flow.status == "active")
+        )
+        active_flows = result.scalar() or 0
 
-        # 활성 블로그 수
-        active_blogs = db.query(func.count(Blog.id)).filter(
-            Blog.is_active == True
-        ).scalar() or 0
+        # 활성 블로그 수 (삭제되지 않은 블로그만)
+        result = await db.execute(
+            select(func.count(Blog.id)).where(
+                Blog.is_active == True,
+                Blog.is_deleted == False
+            )
+        )
+        active_blogs = result.scalar() or 0
 
         # 오늘 생성된 항목 수 (모듈 + 플로우 + 블로그)
-        today_modules = db.query(func.count(Module.id)).filter(
-            Module.created_at >= today_start
-        ).scalar() or 0
+        result = await db.execute(
+            select(func.count(Module.id)).where(Module.created_at >= today_start)
+        )
+        today_modules = result.scalar() or 0
 
-        today_flows = db.query(func.count(Flow.id)).filter(
-            Flow.created_at >= today_start
-        ).scalar() or 0
+        result = await db.execute(
+            select(func.count(Flow.id)).where(Flow.created_at >= today_start)
+        )
+        today_flows = result.scalar() or 0
 
-        today_blogs = db.query(func.count(Blog.id)).filter(
-            Blog.created_at >= today_start
-        ).scalar() or 0
+        result = await db.execute(
+            select(func.count(Blog.id)).where(
+                Blog.created_at >= today_start,
+                Blog.is_deleted == False
+            )
+        )
+        today_blogs = result.scalar() or 0
 
         today_created = today_modules + today_flows + today_blogs
 
@@ -85,7 +97,7 @@ async def get_dashboard_summary(db: Session = Depends(get_db_session)):
 
 
 @router.get("/stats")
-async def get_dashboard_stats(db: Session = Depends(get_db_session)):
+async def get_dashboard_stats(db: AsyncSession = Depends(get_db_session)):
     """
     대시보드 상세 통계 (패널 확장 시)
     22개 요약탭 전체 카운팅 제공
@@ -95,41 +107,64 @@ async def get_dashboard_stats(db: Session = Depends(get_db_session)):
         today_start = datetime.combine(today, datetime.min.time())
         week_ago = today_start - timedelta(days=7)
 
-        # === 블로그 관련 ===
-        total_blogs = db.query(func.count(Blog.id)).scalar() or 0
-        active_blogs = db.query(func.count(Blog.id)).filter(
-            Blog.is_active == True
-        ).scalar() or 0
+        # === 블로그 관련 (삭제되지 않은 블로그만) ===
+        result = await db.execute(
+            select(func.count(Blog.id)).where(Blog.is_deleted == False)
+        )
+        total_blogs = result.scalar() or 0
+
+        result = await db.execute(
+            select(func.count(Blog.id)).where(
+                Blog.is_active == True,
+                Blog.is_deleted == False
+            )
+        )
+        active_blogs = result.scalar() or 0
         inactive_blogs = total_blogs - active_blogs
 
-        wordpress_count = db.query(func.count(Blog.id)).filter(
-            Blog.platform == BlogPlatform.WORDPRESS
-        ).scalar() or 0
-        blogger_count = db.query(func.count(Blog.id)).filter(
-            Blog.platform == BlogPlatform.BLOGGER
-        ).scalar() or 0
+        result = await db.execute(
+            select(func.count(Blog.id)).where(
+                Blog.platform == BlogPlatform.WORDPRESS,
+                Blog.is_deleted == False
+            )
+        )
+        wordpress_count = result.scalar() or 0
+
+        result = await db.execute(
+            select(func.count(Blog.id)).where(
+                Blog.platform == BlogPlatform.BLOGGER,
+                Blog.is_deleted == False
+            )
+        )
+        blogger_count = result.scalar() or 0
 
         # === 카테고리 관련 ===
-        total_topics = db.query(func.count(Topic.id)).filter(
-            Topic.is_deleted == False
-        ).scalar() or 0
-        total_subtopics = db.query(func.count(SubTopic.id)).filter(
-            SubTopic.is_deleted == False
-        ).scalar() or 0
-        total_keywords = db.query(func.count(Keyword.id)).filter(
-            Keyword.is_deleted == False
-        ).scalar() or 0
+        result = await db.execute(
+            select(func.count(Topic.id)).where(Topic.is_deleted == False)
+        )
+        total_topics = result.scalar() or 0
+
+        result = await db.execute(
+            select(func.count(SubTopic.id)).where(SubTopic.is_deleted == False)
+        )
+        total_subtopics = result.scalar() or 0
+
+        result = await db.execute(
+            select(func.count(Keyword.id)).where(Keyword.is_deleted == False)
+        )
+        total_keywords = result.scalar() or 0
 
         # === 모듈 관련 ===
-        total_modules = db.query(func.count(Module.id)).scalar() or 0
+        result = await db.execute(select(func.count(Module.id)))
+        total_modules = result.scalar() or 0
 
         # 모듈 타입별 카운트 (code 기준)
-        module_type_stats = db.query(
-            ModuleType.code,
-            func.count(Module.id)
-        ).join(Module, Module.module_type_id == ModuleType.id).group_by(
-            ModuleType.code
-        ).all()
+        result = await db.execute(
+            select(ModuleType.code, func.count(Module.id))
+            .join(Module, Module.module_type_id == ModuleType.id)
+            .group_by(ModuleType.code)
+        )
+        module_type_stats = result.all()
         module_by_code = {code: count for code, count in module_type_stats}
 
         prompt_modules = module_by_code.get("prompt", 0)
@@ -138,67 +173,74 @@ async def get_dashboard_stats(db: Session = Depends(get_db_session)):
         republish_modules = module_by_code.get("republish", 0)
 
         # === 플로우 관련 ===
-        total_flows = db.query(func.count(Flow.id)).scalar() or 0
-        active_flows = db.query(func.count(Flow.id)).filter(
-            Flow.status == "active"
-        ).scalar() or 0
+        result = await db.execute(select(func.count(Flow.id)))
+        total_flows = result.scalar() or 0
+
+        result = await db.execute(
+            select(func.count(Flow.id)).where(Flow.status == "active")
+        )
+        active_flows = result.scalar() or 0
         inactive_flows = total_flows - active_flows
 
         # === 이번 주 통계 ===
-        week_modules = db.query(func.count(Module.id)).filter(
-            Module.created_at >= week_ago
-        ).scalar() or 0
-        week_flows = db.query(func.count(Flow.id)).filter(
-            Flow.created_at >= week_ago
-        ).scalar() or 0
+        result = await db.execute(
+            select(func.count(Module.id)).where(Module.created_at >= week_ago)
+        )
+        week_modules = result.scalar() or 0
+
+        result = await db.execute(
+            select(func.count(Flow.id)).where(Flow.created_at >= week_ago)
+        )
+        week_flows = result.scalar() or 0
 
         # 이번 주 생성/발행/재발행 (임시: 모듈 생성 기준)
-        week_generate = db.query(func.count(Module.id)).join(
-            ModuleType, Module.module_type_id == ModuleType.id
-        ).filter(
-            ModuleType.code == "generate",
-            Module.created_at >= week_ago
-        ).scalar() or 0
+        result = await db.execute(
+            select(func.count(Module.id))
+            .join(ModuleType, Module.module_type_id == ModuleType.id)
+            .where(ModuleType.code == "generate", Module.created_at >= week_ago)
+        )
+        week_generate = result.scalar() or 0
 
-        week_publish = db.query(func.count(Module.id)).join(
-            ModuleType, Module.module_type_id == ModuleType.id
-        ).filter(
-            ModuleType.code == "publish",
-            Module.created_at >= week_ago
-        ).scalar() or 0
+        result = await db.execute(
+            select(func.count(Module.id))
+            .join(ModuleType, Module.module_type_id == ModuleType.id)
+            .where(ModuleType.code == "publish", Module.created_at >= week_ago)
+        )
+        week_publish = result.scalar() or 0
 
-        week_republish = db.query(func.count(Module.id)).join(
-            ModuleType, Module.module_type_id == ModuleType.id
-        ).filter(
-            ModuleType.code == "republish",
-            Module.created_at >= week_ago
-        ).scalar() or 0
+        result = await db.execute(
+            select(func.count(Module.id))
+            .join(ModuleType, Module.module_type_id == ModuleType.id)
+            .where(ModuleType.code == "republish", Module.created_at >= week_ago)
+        )
+        week_republish = result.scalar() or 0
 
         # === 오늘 통계 ===
-        today_modules = db.query(func.count(Module.id)).filter(
-            Module.created_at >= today_start
-        ).scalar() or 0
+        result = await db.execute(
+            select(func.count(Module.id)).where(Module.created_at >= today_start)
+        )
+        today_modules = result.scalar() or 0
 
-        today_generate = db.query(func.count(Module.id)).join(
-            ModuleType, Module.module_type_id == ModuleType.id
-        ).filter(
-            ModuleType.code == "generate",
-            Module.created_at >= today_start
-        ).scalar() or 0
+        result = await db.execute(
+            select(func.count(Module.id))
+            .join(ModuleType, Module.module_type_id == ModuleType.id)
+            .where(ModuleType.code == "generate", Module.created_at >= today_start)
+        )
+        today_generate = result.scalar() or 0
 
-        today_publish = db.query(func.count(Module.id)).join(
-            ModuleType, Module.module_type_id == ModuleType.id
-        ).filter(
-            ModuleType.code == "publish",
-            Module.created_at >= today_start
-        ).scalar() or 0
+        result = await db.execute(
+            select(func.count(Module.id))
+            .join(ModuleType, Module.module_type_id == ModuleType.id)
+            .where(ModuleType.code == "publish", Module.created_at >= today_start)
+        )
+        today_publish = result.scalar() or 0
 
-        today_republish = db.query(func.count(Module.id)).join(
-            ModuleType, Module.module_type_id == ModuleType.id
-        ).filter(
-            ModuleType.code == "republish",
-            Module.created_at >= today_start
-        ).scalar() or 0
+        result = await db.execute(
+            select(func.count(Module.id))
+            .join(ModuleType, Module.module_type_id == ModuleType.id)
+            .where(ModuleType.code == "republish", Module.created_at >= today_start)
+        )
+        today_republish = result.scalar() or 0
 
         return {
             # 블로그
@@ -269,7 +311,7 @@ async def get_dashboard_stats(db: Session = Depends(get_db_session)):
 @router.get("/activities")
 async def get_recent_activities(
     limit: int = 10,
-    db: Session = Depends(get_db_session)
+    db: AsyncSession = Depends(get_db_session)
 ):
     """
     최근 활동 로그
@@ -278,9 +320,10 @@ async def get_recent_activities(
         activities = []
 
         # 최근 블로그 (platform을 문자열로 변환)
-        recent_blogs = db.query(Blog).order_by(
-            Blog.created_at.desc()
-        ).limit(5).all()
+        result = await db.execute(
+            select(Blog).order_by(Blog.created_at.desc()).limit(5)
+        )
+        recent_blogs = result.scalars().all()
 
         for blog in recent_blogs:
             platform_str = blog.platform.value if blog.platform else None
@@ -292,12 +335,15 @@ async def get_recent_activities(
                 "timestamp": blog.created_at.isoformat() if blog.created_at else None
             })
 
-        # 최근 모듈 (joinedload로 module_type 미리 로드)
-        recent_modules = db.query(Module).options(
-            joinedload(Module.module_type)
-        ).order_by(
-            Module.created_at.desc()
-        ).limit(5).all()
+        # 최근 모듈 (selectinload로 module_type 미리 로드)
+        from sqlalchemy.orm import selectinload
+        result = await db.execute(
+            select(Module)
+            .options(selectinload(Module.module_type))
+            .order_by(Module.created_at.desc())
+            .limit(5)
+        )
+        recent_modules = result.scalars().all()
 
         for module in recent_modules:
             module_type_code = None
@@ -312,9 +358,10 @@ async def get_recent_activities(
             })
 
         # 최근 플로우
-        recent_flows = db.query(Flow).order_by(
-            Flow.created_at.desc()
-        ).limit(5).all()
+        result = await db.execute(
+            select(Flow).order_by(Flow.created_at.desc()).limit(5)
+        )
+        recent_flows = result.scalars().all()
 
         for flow in recent_flows:
             activities.append({
