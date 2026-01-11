@@ -596,11 +596,12 @@ class FlowScheduler:
                 if module.module_type:
                     action_type = module.module_type.code
 
-                # 플로우 실행
+                # 플로우 실행 (module_id 전달하여 정확한 모듈로 실행)
                 result = await self.flow_engine.execute(
                     db=db,
                     flow=flow,
-                    action_type=action_type
+                    action_type=action_type,
+                    module_id=module_id
                 )
 
                 # 실행 상태 업데이트

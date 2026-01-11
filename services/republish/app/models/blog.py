@@ -64,6 +64,10 @@ class Blog(Base):
     editor_type = Column(String(50), default="classic", nullable=False, comment="에디터 타입")
     css_classes = Column(JSON, nullable=True, comment="CSS 클래스 치환 규칙")
 
+    # 포스트 통계 (재발행 모듈 적용 구간 필터링용)
+    total_post_count = Column(Integer, nullable=True, comment="누적 포스트 수")
+    post_count_updated_at = Column(DateTime(timezone=True), nullable=True, comment="포스트 수 업데이트 시점")
+
     # 소프트 딜리트
     is_deleted = Column(Boolean, default=False, nullable=False)
 

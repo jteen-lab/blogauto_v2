@@ -345,3 +345,34 @@ class BloggerRepublishService:
                 "success": False,
                 "message": f"예상치 못한 오류: {e}"
             }
+
+    async def get_post_count(
+        self,
+        blog: Blog,
+        credential: GoogleCredential
+    ) -> int:
+        """
+        발행된 글 개수 조회
+
+        Args:
+            blog: 블로그 객체
+            credential: Google 인증 정보
+
+        Returns:
+            글 개수
+        """
+        try:
+            blogger_id = await self.get_blog_id(blog, credential)
+            headers = self._get_auth_headers(credential)
+
+            # 블로그 정보 조회 (totalPosts 포함)
+            url = f"{BLOGGER_API_BASE}/blogs/{blogger_id}"
+            result = await self._make_request("GET", url, headers)
+
+            total_posts = result.get("posts", {}).get("totalItems", 0)
+            logger.info(f"[BLOGGER] Post count | BlogID={blog.id} | Count={total_posts}")
+            return total_posts
+
+        except Exception as e:
+            logger.error(f"[BLOGGER] Failed to get post count | BlogID={blog.id} | Error={e}")
+            return 0
