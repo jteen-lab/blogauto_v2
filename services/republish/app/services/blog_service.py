@@ -175,20 +175,20 @@ class BlogService:
                 blog.url = str(request.url)
                 changed_fields.append("url")
 
-            # API 키 업데이트 (값이 제공된 경우만)
-            if request.api_key is not None:
+            # API 키 업데이트 (값이 제공되고 빈 문자열이 아닌 경우만)
+            if request.api_key is not None and request.api_key.strip():
                 blog.api_key_encrypted = await self._encrypt_api_credential(
                     request.api_key, "api_key"
                 )
                 changed_fields.append("api_key")
 
-            if request.api_secret is not None:
+            if request.api_secret is not None and request.api_secret.strip():
                 blog.api_secret_encrypted = await self._encrypt_api_credential(
                     request.api_secret, "api_secret"
                 )
                 changed_fields.append("api_secret")
 
-            if request.oauth_token is not None:
+            if request.oauth_token is not None and request.oauth_token.strip():
                 blog.oauth_token_encrypted = await self._encrypt_api_credential(
                     request.oauth_token, "oauth_token"
                 )
