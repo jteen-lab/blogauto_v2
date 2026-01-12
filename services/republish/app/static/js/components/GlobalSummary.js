@@ -10,7 +10,6 @@
 function globalSummary() {
     return {
         panelOpen: false,
-        settingsSheetOpen: false,  // 설정 하단 시트 상태
         stats: {
             // 초기값 설정 (API 로드 전 0 표시)
             total_blogs: 0, wordpress: 0, blogger: 0, active_blogs: 0, inactive_blogs: 0,
@@ -120,21 +119,6 @@ function globalSummary() {
             if (this.panelOpen) {
                 this.loadActivities();
             }
-        },
-
-        openSettingsSheet() {
-            // 고정 탭 설정 하단 시트 열기
-            this.settingsSheetOpen = true;
-            // body 스크롤 고정
-            document.body.classList.add('sheet-open');
-        },
-
-        closeSettingsSheet() {
-            // 닫을 때 고정 탭 저장
-            this.savePinnedTabs();
-            this.settingsSheetOpen = false;
-            // body 스크롤 복원
-            document.body.classList.remove('sheet-open');
         },
 
         openSettingsModal() {
