@@ -710,22 +710,27 @@ function blogListApp() {
 
         // 블로그 등록 시트 열기 (별도 컴포넌트)
         openCreateSheet() {
+            // 폼 초기화 후 시트 열기
+            const createEl = document.getElementById('blogCreateForm');
+            if (createEl && createEl._x_dataStack) {
+                createEl._x_dataStack[0].resetForm();
+            }
             openBottomSheet('blogCreateForm');
         },
 
         // 블로그 수정 시트 열기 (별도 컴포넌트)
         openEditSheet(blog) {
             const editEl = document.getElementById('blogEditForm');
-            if (editEl && editEl.__x) {
-                editEl.__x.$data.setBlog(blog);
+            if (editEl && editEl._x_dataStack) {
+                editEl._x_dataStack[0].setBlog(blog);
             }
             openBottomSheet('blogEditForm');
         },
 
         openSettingsSheet(blog) {
             const settingsEl = document.getElementById('blogSettings');
-            if (settingsEl && settingsEl.__x) {
-                settingsEl.__x.$data.setBlog(blog);
+            if (settingsEl && settingsEl._x_dataStack) {
+                settingsEl._x_dataStack[0].setBlog(blog);
             }
             openBottomSheet('blogSettings');
         },
@@ -772,8 +777,8 @@ function blogListApp() {
 
         refreshGlobalSummary() {
             const summaryEl = document.querySelector('[x-data="globalSummary()"]');
-            if (summaryEl && summaryEl.__x) {
-                summaryEl.__x.$data.loadStats();
+            if (summaryEl && summaryEl._x_dataStack && summaryEl._x_dataStack[0]) {
+                summaryEl._x_dataStack[0].loadStats();
             }
         },
 
@@ -844,10 +849,10 @@ function blogCreateApp() {
                     this.resetForm();
 
                     const listApp = document.querySelector('[x-data="blogListApp()"]');
-                    if (listApp && listApp.__x) {
-                        listApp.__x.$data.loadBlogs();
-                        listApp.__x.$data.showMessage('블로그가 등록되었습니다!', 'success');
-                        listApp.__x.$data.refreshGlobalSummary();
+                    if (listApp && listApp._x_dataStack && listApp._x_dataStack[0]) {
+                        listApp._x_dataStack[0].loadBlogs();
+                        listApp._x_dataStack[0].showMessage('블로그가 등록되었습니다!', 'success');
+                        listApp._x_dataStack[0].refreshGlobalSummary();
                     } else {
                         location.reload();
                     }
@@ -948,9 +953,9 @@ function blogEditApp() {
                     this.resetForm();
 
                     const listApp = document.querySelector('[x-data="blogListApp()"]');
-                    if (listApp && listApp.__x) {
-                        listApp.__x.$data.loadBlogs();
-                        listApp.__x.$data.showMessage('블로그가 수정되었습니다!', 'success');
+                    if (listApp && listApp._x_dataStack && listApp._x_dataStack[0]) {
+                        listApp._x_dataStack[0].loadBlogs();
+                        listApp._x_dataStack[0].showMessage('블로그가 수정되었습니다!', 'success');
                     } else {
                         location.reload();
                     }
@@ -1003,12 +1008,13 @@ function closeBottomSheet(id) {
     const backdrop = document.getElementById(id + '-backdrop');
     const sheet = document.getElementById(id);
 
-    // 폼 리셋
-    if (sheet && sheet.__x) {
-        if (typeof sheet.__x.$data.resetForm === 'function') {
-            sheet.__x.$data.resetForm();
-        } else if (typeof sheet.__x.$data.reset === 'function') {
-            sheet.__x.$data.reset();
+    // 폼 리셋 (Alpine.js 3.x 호환)
+    if (sheet && sheet._x_dataStack && sheet._x_dataStack[0]) {
+        const data = sheet._x_dataStack[0];
+        if (typeof data.resetForm === 'function') {
+            data.resetForm();
+        } else if (typeof data.reset === 'function') {
+            data.reset();
         }
     }
 
