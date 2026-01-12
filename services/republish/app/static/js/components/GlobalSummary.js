@@ -10,6 +10,7 @@
 function globalSummary() {
     return {
         panelOpen: false,
+        refreshInterval: null,
         stats: {
             // 초기값 설정 (API 로드 전 0 표시)
             total_blogs: 0, wordpress: 0, blogger: 0, active_blogs: 0, inactive_blogs: 0,
@@ -66,6 +67,22 @@ function globalSummary() {
             this.loadPinnedTabs();
             // 통계 데이터 로드
             await this.loadStats();
+            // 실시간 갱신 시작 (30초마다)
+            this.startAutoRefresh();
+        },
+
+        startAutoRefresh() {
+            // 30초마다 통계 갱신
+            this.refreshInterval = setInterval(() => {
+                this.loadStats();
+            }, 30000);
+        },
+
+        stopAutoRefresh() {
+            if (this.refreshInterval) {
+                clearInterval(this.refreshInterval);
+                this.refreshInterval = null;
+            }
         },
 
         loadPinnedTabs() {
