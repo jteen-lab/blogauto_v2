@@ -159,3 +159,32 @@ class Blog(Base):
             "created_at": self.created_at,
             "updated_at": self.updated_at
         }
+
+    def to_dict_with_credentials(self, decrypt_func) -> Dict[str, Any]:
+        """딕셔너리로 변환 (복호화된 인증정보 포함)"""
+        result = self.to_dict()
+
+        # 복호화된 인증정보 추가
+        result["api_key"] = ""
+        result["api_secret"] = ""
+        result["oauth_token"] = ""
+
+        try:
+            if self.api_key_encrypted:
+                result["api_key"] = decrypt_func(self.api_key_encrypted)
+        except Exception:
+            result["api_key"] = ""
+
+        try:
+            if self.api_secret_encrypted:
+                result["api_secret"] = decrypt_func(self.api_secret_encrypted)
+        except Exception:
+            result["api_secret"] = ""
+
+        try:
+            if self.oauth_token_encrypted:
+                result["oauth_token"] = decrypt_func(self.oauth_token_encrypted)
+        except Exception:
+            result["oauth_token"] = ""
+
+        return result
