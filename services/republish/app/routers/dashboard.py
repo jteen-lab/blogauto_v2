@@ -21,6 +21,7 @@ from ..models.module_type import ModuleType
 from ..models.flow import Flow
 from ..models.category import Topic, SubTopic, Keyword
 from ..models.flow_execution_state import FlowExecutionState
+from ..models.autorun_log import AutorunLog
 
 logger = get_logger("dashboard", "dashboard.log")
 
@@ -189,77 +190,71 @@ async def get_dashboard_stats(db: AsyncSession = Depends(get_db_session)):
         active_flows = result.scalar() or 0
         inactive_flows = total_flows - active_flows
 
-        # === 이번 주 통계 (실제 작업 수행 기준: 월요일 0시 ~ 일요일 24시) ===
-        # 이번주 실행된 작업 (모듈 타입별)
+        # === 이번 주 통계 (AutorunLog 기반: 월요일 0시 ~ 일요일 24시) ===
+        # 이번주 성공한 작업 수 (action별)
         result = await db.execute(
-            select(func.sum(FlowExecutionState.successful_executions))
-            .join(Module, FlowExecutionState.module_id == Module.id)
-            .join(ModuleType, Module.module_type_id == ModuleType.id)
+            select(func.count(AutorunLog.id))
             .where(
-                ModuleType.code == "generate",
-                FlowExecutionState.last_executed_at >= week_start,
-                FlowExecutionState.last_executed_at < week_end
+                AutorunLog.action == "generate",
+                AutorunLog.status == "success",
+                AutorunLog.created_at >= week_start,
+                AutorunLog.created_at < week_end
             )
         )
         week_generate = result.scalar() or 0
 
         result = await db.execute(
-            select(func.sum(FlowExecutionState.successful_executions))
-            .join(Module, FlowExecutionState.module_id == Module.id)
-            .join(ModuleType, Module.module_type_id == ModuleType.id)
+            select(func.count(AutorunLog.id))
             .where(
-                ModuleType.code == "publish",
-                FlowExecutionState.last_executed_at >= week_start,
-                FlowExecutionState.last_executed_at < week_end
+                AutorunLog.action == "publish",
+                AutorunLog.status == "success",
+                AutorunLog.created_at >= week_start,
+                AutorunLog.created_at < week_end
             )
         )
         week_publish = result.scalar() or 0
 
         result = await db.execute(
-            select(func.sum(FlowExecutionState.successful_executions))
-            .join(Module, FlowExecutionState.module_id == Module.id)
-            .join(ModuleType, Module.module_type_id == ModuleType.id)
+            select(func.count(AutorunLog.id))
             .where(
-                ModuleType.code == "republish",
-                FlowExecutionState.last_executed_at >= week_start,
-                FlowExecutionState.last_executed_at < week_end
+                AutorunLog.action == "republish",
+                AutorunLog.status == "success",
+                AutorunLog.created_at >= week_start,
+                AutorunLog.created_at < week_end
             )
         )
         week_republish = result.scalar() or 0
 
-        # === 오늘 통계 (실제 작업 수행 기준: 오늘 0시 ~ 24시) ===
+        # === 오늘 통계 (AutorunLog 기반: 오늘 0시 ~ 24시) ===
         result = await db.execute(
-            select(func.sum(FlowExecutionState.successful_executions))
-            .join(Module, FlowExecutionState.module_id == Module.id)
-            .join(ModuleType, Module.module_type_id == ModuleType.id)
+            select(func.count(AutorunLog.id))
             .where(
-                ModuleType.code == "generate",
-                FlowExecutionState.last_executed_at >= today_start,
-                FlowExecutionState.last_executed_at < today_end
+                AutorunLog.action == "generate",
+                AutorunLog.status == "success",
+                AutorunLog.created_at >= today_start,
+                AutorunLog.created_at < today_end
             )
         )
         today_generate = result.scalar() or 0
 
         result = await db.execute(
-            select(func.sum(FlowExecutionState.successful_executions))
-            .join(Module, FlowExecutionState.module_id == Module.id)
-            .join(ModuleType, Module.module_type_id == ModuleType.id)
+            select(func.count(AutorunLog.id))
             .where(
-                ModuleType.code == "publish",
-                FlowExecutionState.last_executed_at >= today_start,
-                FlowExecutionState.last_executed_at < today_end
+                AutorunLog.action == "publish",
+                AutorunLog.status == "success",
+                AutorunLog.created_at >= today_start,
+                AutorunLog.created_at < today_end
             )
         )
         today_publish = result.scalar() or 0
 
         result = await db.execute(
-            select(func.sum(FlowExecutionState.successful_executions))
-            .join(Module, FlowExecutionState.module_id == Module.id)
-            .join(ModuleType, Module.module_type_id == ModuleType.id)
+            select(func.count(AutorunLog.id))
             .where(
-                ModuleType.code == "republish",
-                FlowExecutionState.last_executed_at >= today_start,
-                FlowExecutionState.last_executed_at < today_end
+                AutorunLog.action == "republish",
+                AutorunLog.status == "success",
+                AutorunLog.created_at >= today_start,
+                AutorunLog.created_at < today_end
             )
         )
         today_republish = result.scalar() or 0
