@@ -218,18 +218,16 @@
     </div>
 </div>
 
-<!-- 블로그 생성 하단 시트 -->
-<div id="blogForm-backdrop"
+<!-- ========== 블로그 등록 하단 시트 (독립 컴포넌트) ========== -->
+<div id="blogCreateForm-backdrop"
      class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden transition-opacity duration-300"
-     onclick="closeBottomSheet('blogForm')">
+     onclick="closeBottomSheet('blogCreateForm')">
 </div>
 
-<div id="blogForm"
+<div id="blogCreateForm"
      class="fixed inset-x-0 bottom-0 h-[calc(100vh-70px)] bg-white rounded-t-2xl shadow-2xl z-50
             transform translate-y-full transition-transform duration-300 ease-out overflow-y-auto"
-     x-data="blogFormApp()"
-     x-init="init()"
-     @blog-edit.window="setEditMode($event.detail.blog)">
+     x-data="blogCreateApp()">
 
     <!-- 핸들 바 -->
     <div class="flex justify-center pt-3 pb-2 sticky top-0 bg-white z-10">
@@ -238,8 +236,8 @@
 
     <!-- 헤더 -->
     <div class="flex justify-between items-center px-4 py-3 border-b border-gray-200 sticky top-6 bg-white z-10">
-        <h3 id="blogFormTitle" class="text-lg font-semibold text-gray-900">블로그 등록</h3>
-        <button onclick="closeBottomSheet('blogForm')"
+        <h3 class="text-lg font-semibold text-gray-900">블로그 등록</h3>
+        <button onclick="closeBottomSheet('blogCreateForm')"
                 class="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -255,7 +253,7 @@
                 <label class="block text-sm font-medium text-gray-700 mb-3">블로그 플랫폼 선택</label>
                 <div class="grid grid-cols-2 gap-3">
                     <button type="button"
-                            @click="form.platform = 'wordpress'; platformChanged()"
+                            @click="form.platform = 'wordpress'"
                             :class="form.platform === 'wordpress' ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-500' : 'border-gray-200 hover:border-blue-300'"
                             class="flex flex-col items-center p-4 border-2 rounded-xl transition-all duration-200">
                         <div class="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center mb-2">
@@ -265,7 +263,7 @@
                     </button>
 
                     <button type="button"
-                            @click="form.platform = 'blogger'; platformChanged()"
+                            @click="form.platform = 'blogger'"
                             :class="form.platform === 'blogger' ? 'border-orange-500 bg-orange-50 ring-2 ring-orange-500' : 'border-gray-200 hover:border-orange-300'"
                             class="flex flex-col items-center p-4 border-2 rounded-xl transition-all duration-200">
                         <div class="w-12 h-12 bg-orange-500 rounded-full flex items-center justify-center mb-2">
@@ -280,16 +278,16 @@
             <div x-show="form.platform" x-transition class="space-y-4">
                 <!-- 기본 정보 -->
                 <div>
-                    <label for="blog_name" class="block text-sm font-medium text-gray-700">블로그 이름 *</label>
-                    <input type="text" id="blog_name" required
+                    <label class="block text-sm font-medium text-gray-700">블로그 이름 *</label>
+                    <input type="text" required
                            x-model="form.name"
                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                            placeholder="내 블로그">
                 </div>
 
                 <div>
-                    <label for="blog_url" class="block text-sm font-medium text-gray-700">블로그 URL *</label>
-                    <input type="url" id="blog_url" required
+                    <label class="block text-sm font-medium text-gray-700">블로그 URL *</label>
+                    <input type="url" required
                            x-model="form.url"
                            class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                            placeholder="https://myblog.example.com">
@@ -299,23 +297,19 @@
                 <template x-if="form.platform === 'wordpress'">
                     <div class="space-y-4 border-t pt-4">
                         <div class="bg-blue-50 border border-blue-200 rounded-md p-3">
-                            <p class="text-sm text-blue-700" x-text="isEditMode ? '변경이 필요한 경우에만 입력하세요' : 'WordPress Application Password가 필요합니다'"></p>
+                            <p class="text-sm text-blue-700">WordPress Application Password가 필요합니다</p>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700">
-                                사용자명 <span x-show="!isEditMode">*</span>
-                            </label>
+                            <label class="block text-sm font-medium text-gray-700">사용자명 *</label>
                             <input type="text" x-model="form.api_key"
                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                                   :placeholder="isEditMode ? '변경 시에만 입력' : 'WordPress 사용자명'">
+                                   placeholder="WordPress 사용자명">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700">
-                                Application Password <span x-show="!isEditMode">*</span>
-                            </label>
+                            <label class="block text-sm font-medium text-gray-700">Application Password *</label>
                             <input type="password" x-model="form.api_secret"
                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                                   :placeholder="isEditMode ? '변경 시에만 입력' : 'xxxx xxxx xxxx xxxx'">
+                                   placeholder="xxxx xxxx xxxx xxxx">
                         </div>
                     </div>
                 </template>
@@ -324,40 +318,36 @@
                 <template x-if="form.platform === 'blogger'">
                     <div class="space-y-4 border-t pt-4">
                         <div class="bg-orange-50 border border-orange-200 rounded-md p-3">
-                            <p class="text-sm text-orange-700" x-text="isEditMode ? '변경이 필요한 경우에만 입력하세요' : 'Google Cloud Console API 키가 필요합니다'"></p>
+                            <p class="text-sm text-orange-700">Google Cloud Console API 키가 필요합니다</p>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700">
-                                API 키 <span x-show="!isEditMode">*</span>
-                            </label>
+                            <label class="block text-sm font-medium text-gray-700">API 키 *</label>
                             <input type="text" x-model="form.api_key"
                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                                   :placeholder="isEditMode ? '변경 시에만 입력' : 'Google API 키'">
+                                   placeholder="Google API 키">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700">
-                                OAuth 토큰 <span x-show="!isEditMode">*</span>
-                            </label>
+                            <label class="block text-sm font-medium text-gray-700">OAuth 토큰 *</label>
                             <textarea x-model="form.oauth_token" rows="2"
                                       class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                                      :placeholder="isEditMode ? '변경 시에만 입력' : 'OAuth 2.0 Access Token'"></textarea>
+                                      placeholder="OAuth 2.0 Access Token"></textarea>
                         </div>
                     </div>
                 </template>
 
-                <!-- 등록/수정 버튼 -->
+                <!-- 등록 버튼 -->
                 <div class="pt-4 border-t mt-4">
                     <div class="flex gap-3">
                         <button type="button"
-                                onclick="closeBottomSheet('blogForm')"
+                                onclick="closeBottomSheet('blogCreateForm')"
                                 class="flex-1 py-3 px-4 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium">
                             취소
                         </button>
                         <button type="submit"
                                 :disabled="loading"
                                 class="flex-1 py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50">
-                            <span x-show="!loading" x-text="isEditMode ? '수정' : '등록'"></span>
-                            <span x-show="loading" x-text="isEditMode ? '수정 중...' : '등록 중...'"></span>
+                            <span x-show="!loading">등록</span>
+                            <span x-show="loading">등록 중...</span>
                         </button>
                     </div>
                 </div>
@@ -374,7 +364,181 @@
     <div class="h-safe-area-inset-bottom"></div>
 </div>
 
-<!-- 블로그 설정 하단 시트 -->
+<!-- ========== 블로그 수정 하단 시트 (독립 컴포넌트) ========== -->
+<div id="blogEditForm-backdrop"
+     class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden transition-opacity duration-300"
+     onclick="closeBottomSheet('blogEditForm')">
+</div>
+
+<div id="blogEditForm"
+     class="fixed inset-x-0 bottom-0 h-[calc(100vh-70px)] bg-white rounded-t-2xl shadow-2xl z-50
+            transform translate-y-full transition-transform duration-300 ease-out overflow-y-auto"
+     x-data="blogEditApp()">
+
+    <!-- 핸들 바 -->
+    <div class="flex justify-center pt-3 pb-2 sticky top-0 bg-white z-10">
+        <div class="w-12 h-1 bg-gray-300 rounded-full"></div>
+    </div>
+
+    <!-- 헤더 -->
+    <div class="flex justify-between items-center px-4 py-3 border-b border-gray-200 sticky top-6 bg-white z-10">
+        <h3 class="text-lg font-semibold text-gray-900">블로그 수정</h3>
+        <button onclick="closeBottomSheet('blogEditForm')"
+                class="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+        </button>
+    </div>
+
+    <!-- 내용 영역 -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <form @submit.prevent="submitForm()">
+            <!-- 플랫폼 표시 (수정 불가) -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-3">블로그 플랫폼</label>
+                <div class="grid grid-cols-2 gap-3">
+                    <div :class="form.platform === 'wordpress' ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-500' : 'border-gray-200 opacity-50'"
+                         class="flex flex-col items-center p-4 border-2 rounded-xl">
+                        <div class="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center mb-2">
+                            <span class="text-white font-bold text-lg">WP</span>
+                        </div>
+                        <span class="font-medium text-gray-900">WordPress</span>
+                    </div>
+
+                    <div :class="form.platform === 'blogger' ? 'border-orange-500 bg-orange-50 ring-2 ring-orange-500' : 'border-gray-200 opacity-50'"
+                         class="flex flex-col items-center p-4 border-2 rounded-xl">
+                        <div class="w-12 h-12 bg-orange-500 rounded-full flex items-center justify-center mb-2">
+                            <span class="text-white font-bold text-lg">BL</span>
+                        </div>
+                        <span class="font-medium text-gray-900">Google Blogger</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 기본 정보 -->
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">블로그 이름 *</label>
+                    <input type="text" required
+                           x-model="form.name"
+                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="내 블로그">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">블로그 URL *</label>
+                    <input type="url" required
+                           x-model="form.url"
+                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="https://myblog.example.com">
+                </div>
+
+                <!-- WordPress 필드 -->
+                <template x-if="form.platform === 'wordpress'">
+                    <div class="space-y-4 border-t pt-4">
+                        <div class="bg-blue-50 border border-blue-200 rounded-md p-3">
+                            <p class="text-sm text-blue-700">변경이 필요한 경우에만 입력하세요</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">사용자명</label>
+                            <div class="relative">
+                                <input :type="showApiKey ? 'text' : 'password'" x-model="form.api_key"
+                                       class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 pr-10"
+                                       :placeholder="hasExistingApiKey ? '••••••••' : '변경 시에만 입력'">
+                                <button type="button" @click="showApiKey = !showApiKey"
+                                        class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600">
+                                    <svg x-show="!showApiKey" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                    </svg>
+                                    <svg x-show="showApiKey" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Application Password</label>
+                            <div class="relative">
+                                <input :type="showApiSecret ? 'text' : 'password'" x-model="form.api_secret"
+                                       class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 pr-10"
+                                       :placeholder="hasExistingApiSecret ? '••••••••' : '변경 시에만 입력'">
+                                <button type="button" @click="showApiSecret = !showApiSecret"
+                                        class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600">
+                                    <svg x-show="!showApiSecret" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                    </svg>
+                                    <svg x-show="showApiSecret" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Blogger 필드 -->
+                <template x-if="form.platform === 'blogger'">
+                    <div class="space-y-4 border-t pt-4">
+                        <div class="bg-orange-50 border border-orange-200 rounded-md p-3">
+                            <p class="text-sm text-orange-700">변경이 필요한 경우에만 입력하세요</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">API 키</label>
+                            <div class="relative">
+                                <input :type="showApiKey ? 'text' : 'password'" x-model="form.api_key"
+                                       class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 pr-10"
+                                       :placeholder="hasExistingApiKey ? '••••••••' : '변경 시에만 입력'">
+                                <button type="button" @click="showApiKey = !showApiKey"
+                                        class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600">
+                                    <svg x-show="!showApiKey" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                    </svg>
+                                    <svg x-show="showApiKey" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">OAuth 토큰</label>
+                            <div class="relative">
+                                <textarea x-model="form.oauth_token" rows="2"
+                                          class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                          :placeholder="hasExistingOauthToken ? '••••••••' : '변경 시에만 입력'"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- 수정 버튼 -->
+                <div class="pt-4 border-t mt-4">
+                    <div class="flex gap-3">
+                        <button type="button"
+                                onclick="closeBottomSheet('blogEditForm')"
+                                class="flex-1 py-3 px-4 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium">
+                            취소
+                        </button>
+                        <button type="submit"
+                                :disabled="loading"
+                                class="flex-1 py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50">
+                            <span x-show="!loading">수정</span>
+                            <span x-show="loading">수정 중...</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- 하단 안전 영역 (iOS) -->
+    <div class="h-safe-area-inset-bottom"></div>
+</div>
+
+<!-- ========== 블로그 설정 하단 시트 ========== -->
 <div id="blogSettings-backdrop"
      class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden transition-opacity duration-300"
      onclick="closeBottomSheet('blogSettings')">
@@ -454,7 +618,6 @@
                 </div>
                 <h3 class="text-lg font-medium text-gray-900 mb-2">이미지 설정</h3>
                 <p class="text-sm text-gray-500">준비 중입니다</p>
-                <p class="text-xs text-gray-400 mt-2">대표 이미지, 썸네일 설정 등을 구성할 수 있습니다</p>
             </div>
         </div>
 
@@ -468,7 +631,6 @@
                 </div>
                 <h3 class="text-lg font-medium text-gray-900 mb-2">스타일 설정</h3>
                 <p class="text-sm text-gray-500">준비 중입니다</p>
-                <p class="text-xs text-gray-400 mt-2">글 스타일, 에디터 설정 등을 구성할 수 있습니다</p>
             </div>
         </div>
 
@@ -482,7 +644,6 @@
                 </div>
                 <h3 class="text-lg font-medium text-gray-900 mb-2">카테고리 설정</h3>
                 <p class="text-sm text-gray-500">준비 중입니다</p>
-                <p class="text-xs text-gray-400 mt-2">블로그 카테고리 매핑을 설정할 수 있습니다</p>
             </div>
         </div>
 
@@ -496,7 +657,6 @@
                 </div>
                 <h3 class="text-lg font-medium text-gray-900 mb-2">치환자 설정</h3>
                 <p class="text-sm text-gray-500">준비 중입니다</p>
-                <p class="text-xs text-gray-400 mt-2">텍스트 치환 규칙을 설정할 수 있습니다</p>
             </div>
         </div>
     </div>
@@ -506,6 +666,7 @@
 </div>
 
 <script>
+// ========== 메인 블로그 목록 앱 ==========
 function blogListApp() {
     return {
         blogs: [],
@@ -524,7 +685,6 @@ function blogListApp() {
                 });
                 if (response.ok) {
                     const data = await response.json();
-                    // API 응답이 { blogs: [...] } 형태
                     this.blogs = data.blogs || [];
                 }
             } catch (error) {
@@ -548,29 +708,21 @@ function blogListApp() {
             });
         },
 
+        // 블로그 등록 시트 열기 (별도 컴포넌트)
         openCreateSheet() {
-            // 폼 리셋 후 열기
-            const formEl = document.getElementById('blogForm');
-            if (formEl && formEl.__x) {
-                formEl.__x.$data.resetForm();
-            }
-            openBottomSheet('blogForm');
+            openBottomSheet('blogCreateForm');
         },
 
+        // 블로그 수정 시트 열기 (별도 컴포넌트)
         openEditSheet(blog) {
-            console.log('[openEditSheet] 블로그 수정 시작:', blog);
-
-            // 전역 이벤트로 블로그 데이터 전달 (blogFormApp이 수신)
-            window.dispatchEvent(new CustomEvent('blog-edit', {
-                detail: { blog: blog }
-            }));
-
-            // Bottom Sheet 열기
-            openBottomSheet('blogForm');
+            const editEl = document.getElementById('blogEditForm');
+            if (editEl && editEl.__x) {
+                editEl.__x.$data.setBlog(blog);
+            }
+            openBottomSheet('blogEditForm');
         },
 
         openSettingsSheet(blog) {
-            // 설정 시트에 블로그 정보 전달
             const settingsEl = document.getElementById('blogSettings');
             if (settingsEl && settingsEl.__x) {
                 settingsEl.__x.$data.setBlog(blog);
@@ -583,9 +735,7 @@ function blogListApp() {
 
             fetch(`/api/v1/blogs/${blogId}/test`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 credentials: 'include'
             })
             .then(response => response.json())
@@ -606,16 +756,13 @@ function blogListApp() {
 
             fetch(`/api/v1/blogs/${blogId}`, {
                 method: 'DELETE',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 credentials: 'include'
             })
             .then(response => response.json())
             .then(data => {
                 this.showMessage(data.message, 'success');
                 this.loadBlogs();
-                // GlobalSummary 통계 새로고침
                 this.refreshGlobalSummary();
             })
             .catch(error => {
@@ -624,7 +771,6 @@ function blogListApp() {
         },
 
         refreshGlobalSummary() {
-            // GlobalSummary 컴포넌트의 loadStats 호출
             const summaryEl = document.querySelector('[x-data="globalSummary()"]');
             if (summaryEl && summaryEl.__x) {
                 summaryEl.__x.$data.loadStats();
@@ -634,18 +780,15 @@ function blogListApp() {
         showMessage(text, type = 'success') {
             this.message = text;
             this.messageType = type;
-            setTimeout(() => {
-                this.message = '';
-            }, 5000);
+            setTimeout(() => { this.message = ''; }, 5000);
         }
     }
 }
 
-function blogFormApp() {
+// ========== 블로그 등록 앱 (독립 컴포넌트) ==========
+function blogCreateApp() {
     return {
         loading: false,
-        isEditMode: false,
-        editingBlogId: null,
         form: {
             name: '',
             url: '',
@@ -655,125 +798,61 @@ function blogFormApp() {
             oauth_token: ''
         },
 
-        init() {
-            // 전역 이벤트 리스너 등록 (블로그 수정 이벤트)
-            window.addEventListener('blog-edit', (e) => {
-                console.log('[blogFormApp] blog-edit 이벤트 수신:', e.detail.blog);
-                this.setEditMode(e.detail.blog);
-            });
-        },
-
-        platformChanged() {
+        resetForm() {
+            this.form.name = '';
+            this.form.url = '';
+            this.form.platform = '';
             this.form.api_key = '';
             this.form.api_secret = '';
             this.form.oauth_token = '';
         },
 
-        resetForm() {
-            this.isEditMode = false;
-            this.editingBlogId = null;
-            this.form = {
-                name: '',
-                url: '',
-                platform: '',
-                api_key: '',
-                api_secret: '',
-                oauth_token: ''
-            };
-            // 타이틀 업데이트
-            const title = document.getElementById('blogFormTitle');
-            if (title) title.textContent = '블로그 등록';
-        },
-
-        setEditMode(blog) {
-            console.log('[setEditMode] 블로그 수정 모드 설정:', blog);
-            this.isEditMode = true;
-            this.editingBlogId = blog.id;
-
-            // 플랫폼 먼저 설정 (UI 표시에 필요)
-            this.form.platform = blog.platform || '';
-
-            // 나머지 필드 설정 (Alpine.js 반응성 보장을 위해 전체 할당)
-            this.form = {
-                name: blog.name || '',
-                url: blog.url || '',
-                platform: blog.platform || '',
-                api_key: '',      // 수정 시 빈값 (변경시에만 입력)
-                api_secret: '',   // 수정 시 빈값 (변경시에만 입력)
-                oauth_token: ''   // 수정 시 빈값 (변경시에만 입력)
-            };
-
-            // 타이틀 업데이트
-            const title = document.getElementById('blogFormTitle');
-            if (title) title.textContent = '블로그 수정';
-            console.log('[setEditMode] 폼 상태:', this.form);
-        },
-
         async submitForm() {
             if (this.loading) return;
 
-            // 기본 검증
             if (!this.form.name || !this.form.url || !this.form.platform) {
                 alert('필수 항목을 모두 입력해주세요');
                 return;
             }
 
-            // 수정 모드가 아닐 때만 API 키 검증 (새 등록)
-            if (!this.isEditMode) {
-                if (this.form.platform === 'wordpress') {
-                    if (!this.form.api_key || !this.form.api_secret) {
-                        alert('WordPress 사용자명과 Application Password를 입력해주세요');
-                        return;
-                    }
-                } else if (this.form.platform === 'blogger') {
-                    if (!this.form.api_key || !this.form.oauth_token) {
-                        alert('Blogger API 키와 OAuth 토큰을 입력해주세요');
-                        return;
-                    }
+            if (this.form.platform === 'wordpress') {
+                if (!this.form.api_key || !this.form.api_secret) {
+                    alert('WordPress 사용자명과 Application Password를 입력해주세요');
+                    return;
+                }
+            } else if (this.form.platform === 'blogger') {
+                if (!this.form.api_key || !this.form.oauth_token) {
+                    alert('Blogger API 키와 OAuth 토큰을 입력해주세요');
+                    return;
                 }
             }
 
             this.loading = true;
 
             try {
-                const url = this.isEditMode
-                    ? `/api/v1/blogs/${this.editingBlogId}`
-                    : '/api/v1/blogs';
-                const method = this.isEditMode ? 'PUT' : 'POST';
-
-                // 수정 모드에서 빈 비밀번호/토큰은 전송하지 않음
-                const payload = { ...this.form };
-                if (this.isEditMode) {
-                    if (!payload.api_secret) delete payload.api_secret;
-                    if (!payload.oauth_token) delete payload.oauth_token;
-                }
-
-                const response = await fetch(url, {
-                    method: method,
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                const response = await fetch('/api/v1/blogs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify(this.form)
                 });
 
                 const data = await response.json();
 
                 if (response.ok) {
-                    closeBottomSheet('blogForm');
-                    const successMsg = this.isEditMode ? '블로그가 수정되었습니다!' : '블로그가 등록되었습니다!';
+                    closeBottomSheet('blogCreateForm');
                     this.resetForm();
 
-                    // 부모 앱의 loadBlogs 호출
                     const listApp = document.querySelector('[x-data="blogListApp()"]');
                     if (listApp && listApp.__x) {
                         listApp.__x.$data.loadBlogs();
-                        listApp.__x.$data.showMessage(successMsg, 'success');
+                        listApp.__x.$data.showMessage('블로그가 등록되었습니다!', 'success');
+                        listApp.__x.$data.refreshGlobalSummary();
                     } else {
                         location.reload();
                     }
                 } else {
-                    alert(data.detail || data.message || '처리 중 오류가 발생했습니다');
+                    alert(data.detail || data.message || '등록 중 오류가 발생했습니다');
                 }
             } catch (error) {
                 alert('네트워크 오류가 발생했습니다');
@@ -784,6 +863,110 @@ function blogFormApp() {
     }
 }
 
+// ========== 블로그 수정 앱 (독립 컴포넌트) ==========
+function blogEditApp() {
+    return {
+        loading: false,
+        blogId: null,
+        hasExistingApiKey: false,
+        hasExistingApiSecret: false,
+        hasExistingOauthToken: false,
+        showApiKey: false,
+        showApiSecret: false,
+        form: {
+            name: '',
+            url: '',
+            platform: '',
+            api_key: '',
+            api_secret: '',
+            oauth_token: ''
+        },
+
+        setBlog(blog) {
+            this.blogId = blog.id;
+            this.form.name = blog.name || '';
+            this.form.url = blog.url || '';
+            this.form.platform = blog.platform || '';
+            this.form.api_key = '';
+            this.form.api_secret = '';
+            this.form.oauth_token = '';
+            // 기존 인증정보 존재 여부 (API 응답에서 확인)
+            this.hasExistingApiKey = blog.has_api_credentials || false;
+            this.hasExistingApiSecret = blog.has_api_credentials || false;
+            this.hasExistingOauthToken = blog.has_api_credentials || false;
+            this.showApiKey = false;
+            this.showApiSecret = false;
+        },
+
+        resetForm() {
+            this.blogId = null;
+            this.form.name = '';
+            this.form.url = '';
+            this.form.platform = '';
+            this.form.api_key = '';
+            this.form.api_secret = '';
+            this.form.oauth_token = '';
+            this.hasExistingApiKey = false;
+            this.hasExistingApiSecret = false;
+            this.hasExistingOauthToken = false;
+            this.showApiKey = false;
+            this.showApiSecret = false;
+        },
+
+        async submitForm() {
+            if (this.loading) return;
+
+            if (!this.form.name || !this.form.url) {
+                alert('필수 항목을 모두 입력해주세요');
+                return;
+            }
+
+            this.loading = true;
+
+            try {
+                // 빈 인증정보는 전송하지 않음 (기존 값 유지)
+                const payload = {
+                    name: this.form.name,
+                    url: this.form.url,
+                    platform: this.form.platform
+                };
+                if (this.form.api_key) payload.api_key = this.form.api_key;
+                if (this.form.api_secret) payload.api_secret = this.form.api_secret;
+                if (this.form.oauth_token) payload.oauth_token = this.form.oauth_token;
+
+                const response = await fetch(`/api/v1/blogs/${this.blogId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    closeBottomSheet('blogEditForm');
+                    this.resetForm();
+
+                    const listApp = document.querySelector('[x-data="blogListApp()"]');
+                    if (listApp && listApp.__x) {
+                        listApp.__x.$data.loadBlogs();
+                        listApp.__x.$data.showMessage('블로그가 수정되었습니다!', 'success');
+                    } else {
+                        location.reload();
+                    }
+                } else {
+                    alert(data.detail || data.message || '수정 중 오류가 발생했습니다');
+                }
+            } catch (error) {
+                alert('네트워크 오류가 발생했습니다');
+            } finally {
+                this.loading = false;
+            }
+        }
+    }
+}
+
+// ========== 블로그 설정 앱 ==========
 function blogSettingsApp() {
     return {
         selectedBlog: null,
@@ -791,7 +974,7 @@ function blogSettingsApp() {
 
         setBlog(blog) {
             this.selectedBlog = blog;
-            this.activeTab = 'image';  // 탭 초기화
+            this.activeTab = 'image';
         },
 
         reset() {
@@ -801,7 +984,7 @@ function blogSettingsApp() {
     }
 }
 
-// 하단 시트 열기/닫기 함수
+// ========== 하단 시트 열기/닫기 함수 ==========
 function openBottomSheet(id) {
     const backdrop = document.getElementById(id + '-backdrop');
     const sheet = document.getElementById(id);
@@ -820,19 +1003,20 @@ function closeBottomSheet(id) {
     const backdrop = document.getElementById(id + '-backdrop');
     const sheet = document.getElementById(id);
 
+    // 폼 리셋
+    if (sheet && sheet.__x) {
+        if (typeof sheet.__x.$data.resetForm === 'function') {
+            sheet.__x.$data.resetForm();
+        } else if (typeof sheet.__x.$data.reset === 'function') {
+            sheet.__x.$data.reset();
+        }
+    }
+
     backdrop.style.opacity = '0';
     sheet.classList.add('translate-y-full');
 
     setTimeout(() => {
         backdrop.classList.add('hidden');
-        // 닫을 때 폼/설정 리셋
-        if (sheet.__x) {
-            if (id === 'blogForm') {
-                sheet.__x.$data.resetForm();
-            } else if (id === 'blogSettings') {
-                sheet.__x.$data.reset();
-            }
-        }
     }, 300);
 
     document.body.style.overflow = '';
