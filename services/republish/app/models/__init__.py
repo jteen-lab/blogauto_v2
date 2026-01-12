@@ -36,6 +36,18 @@ from .flow_execution_state import FlowExecutionState
 # Phase S-1: Settings models
 from .user_settings import UserSettings
 
+# Phase D-1-1: Keyword models
+from .keyword import KeywordCategory, SeedKeyword, CollectedKeyword
+
+# Phase D-1-2: Title models
+from .title import TitleGroup, MainTitle, TempTitle
+
+# Phase D-1-3: URL History models
+from .url_history import BlogUrlHistory
+
+# Phase D-1-4: Learning models
+from .learning import FilterLearningData, SimilarityLearningData
+
 __all__ = [
     # Core models
     "User",
@@ -68,4 +80,17 @@ __all__ = [
     "FlowExecutionState",
     # Phase S-1: Settings models
     "UserSettings",
+    # Phase D-1-1: Keyword models
+    "KeywordCategory",
+    "SeedKeyword",
+    "CollectedKeyword",
+    # Phase D-1-2: Title models
+    "TitleGroup",
+    "MainTitle",
+    "TempTitle",
+    # Phase D-1-3: URL History models
+    "BlogUrlHistory",
+    # Phase D-1-4: Learning models
+    "FilterLearningData",
+    "SimilarityLearningData",
 ]
