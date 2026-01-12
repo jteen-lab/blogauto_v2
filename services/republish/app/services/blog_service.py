@@ -129,6 +129,28 @@ class BlogService:
 
         return [BlogListResponse(**blog.to_dict()) for blog in blogs]
 
+    async def get_user_blogs_with_credentials(self, user: User) -> List[dict]:
+        """
+        사용자 블로그 목록 조회 (복호화된 인증정보 포함)
+
+        Args:
+            user: 사용자 객체
+
+        Returns:
+            블로그 목록 (인증정보 포함)
+        """
+        query = select(Blog).where(
+            Blog.user_id == user.id,
+            Blog.is_deleted == False
+        ).order_by(Blog.created_at.desc())
+
+        result = await self.db.execute(query)
+        blogs = result.scalars().all()
+
+        logger.info(f"블로그 목록 조회 (인증정보 포함) | 사용자={user.id} | 개수={len(blogs)}")
+
+        return [blog.to_dict_with_credentials(decrypt_data) for blog in blogs]
+
     async def get_blog_by_id(self, user: User, blog_id: int) -> BlogResponse:
         """
         블로그 상세 조회
