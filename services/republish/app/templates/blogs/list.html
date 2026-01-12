@@ -227,7 +227,7 @@
 <div id="blogCreateForm"
      class="fixed inset-x-0 bottom-0 h-[calc(100vh-70px)] bg-white rounded-t-2xl shadow-2xl z-50
             transform translate-y-full transition-transform duration-300 ease-out overflow-y-auto"
-     x-data="blogCreateApp()">
+     x-data="blogCreateApp()" x-init="init()">
 
     <!-- 핸들 바 -->
     <div class="flex justify-center pt-3 pb-2 sticky top-0 bg-white z-10">
@@ -373,7 +373,7 @@
 <div id="blogEditForm"
      class="fixed inset-x-0 bottom-0 h-[calc(100vh-70px)] bg-white rounded-t-2xl shadow-2xl z-50
             transform translate-y-full transition-transform duration-300 ease-out overflow-y-auto"
-     x-data="blogEditApp()">
+     x-data="blogEditApp()" x-init="init()">
 
     <!-- 핸들 바 -->
     <div class="flex justify-center pt-3 pb-2 sticky top-0 bg-white z-10">
@@ -710,19 +710,18 @@ function blogListApp() {
 
         // 블로그 등록 시트 열기 (별도 컴포넌트)
         openCreateSheet() {
-            // 폼 초기화 후 시트 열기
-            const createEl = document.getElementById('blogCreateForm');
-            if (createEl && createEl._x_dataStack) {
-                createEl._x_dataStack[0].resetForm();
+            // 전역 인스턴스를 통해 폼 초기화
+            if (window.blogCreateAppInstance) {
+                window.blogCreateAppInstance.resetForm();
             }
             openBottomSheet('blogCreateForm');
         },
 
         // 블로그 수정 시트 열기 (별도 컴포넌트)
         openEditSheet(blog) {
-            const editEl = document.getElementById('blogEditForm');
-            if (editEl && editEl._x_dataStack) {
-                editEl._x_dataStack[0].setBlog(blog);
+            // 전역 인스턴스를 통해 블로그 데이터 설정
+            if (window.blogEditAppInstance) {
+                window.blogEditAppInstance.setBlog(blog);
             }
             openBottomSheet('blogEditForm');
         },
@@ -790,6 +789,10 @@ function blogListApp() {
     }
 }
 
+// ========== 전역 참조 저장용 ==========
+window.blogCreateAppInstance = null;
+window.blogEditAppInstance = null;
+
 // ========== 블로그 등록 앱 (독립 컴포넌트) ==========
 function blogCreateApp() {
     return {
@@ -801,6 +804,11 @@ function blogCreateApp() {
             api_key: '',
             api_secret: '',
             oauth_token: ''
+        },
+
+        init() {
+            // 전역 참조 저장
+            window.blogCreateAppInstance = this;
         },
 
         resetForm() {
@@ -887,20 +895,29 @@ function blogEditApp() {
             oauth_token: ''
         },
 
+        init() {
+            // 전역 참조 저장
+            window.blogEditAppInstance = this;
+        },
+
         setBlog(blog) {
+            console.log('[blogEditApp] setBlog called:', blog);
             this.blogId = blog.id;
             this.form.name = blog.name || '';
             this.form.url = blog.url || '';
             this.form.platform = blog.platform || '';
+            // 수정 시에는 기존 인증정보 표시하지 않음 (보안)
+            // 빈 값으로 두면 기존 값 유지, 입력하면 새 값으로 변경
             this.form.api_key = '';
             this.form.api_secret = '';
             this.form.oauth_token = '';
-            // 기존 인증정보 존재 여부 (API 응답에서 확인)
+            // 기존 인증정보 존재 여부 (placeholder에 표시용)
             this.hasExistingApiKey = blog.has_api_credentials || false;
             this.hasExistingApiSecret = blog.has_api_credentials || false;
             this.hasExistingOauthToken = blog.has_api_credentials || false;
             this.showApiKey = false;
             this.showApiSecret = false;
+            console.log('[blogEditApp] form after setBlog:', JSON.stringify(this.form));
         },
 
         resetForm() {
@@ -1008,14 +1025,11 @@ function closeBottomSheet(id) {
     const backdrop = document.getElementById(id + '-backdrop');
     const sheet = document.getElementById(id);
 
-    // 폼 리셋 (Alpine.js 3.x 호환)
-    if (sheet && sheet._x_dataStack && sheet._x_dataStack[0]) {
-        const data = sheet._x_dataStack[0];
-        if (typeof data.resetForm === 'function') {
-            data.resetForm();
-        } else if (typeof data.reset === 'function') {
-            data.reset();
-        }
+    // 폼 리셋 (전역 인스턴스 사용)
+    if (id === 'blogCreateForm' && window.blogCreateAppInstance) {
+        window.blogCreateAppInstance.resetForm();
+    } else if (id === 'blogEditForm' && window.blogEditAppInstance) {
+        window.blogEditAppInstance.resetForm();
     }
 
     backdrop.style.opacity = '0';
