@@ -85,6 +85,22 @@ async def get_blogs(
 
 
 @router.get(
+    "/with-credentials",
+    summary="블로그 목록 조회 (인증정보 포함)",
+    description="사용자의 블로그 목록을 조회합니다 (복호화된 인증정보 포함)",
+    responses=responses,
+)
+async def get_blogs_with_credentials(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """블로그 목록 조회 (인증정보 포함)"""
+    blog_service = BlogService(db)
+    blogs = await blog_service.get_user_blogs_with_credentials(current_user)
+    return {"blogs": blogs}
+
+
+@router.get(
     "/{blog_id}",
     response_model=BlogResponse,
     summary="블로그 상세 조회",
