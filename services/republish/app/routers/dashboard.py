@@ -20,6 +20,7 @@ from ..models.module import Module
 from ..models.module_type import ModuleType
 from ..models.flow import Flow
 from ..models.category import Topic, SubTopic, Keyword
+from ..models.flow_execution_state import FlowExecutionState
 
 logger = get_logger("dashboard", "dashboard.log")
 
@@ -105,7 +106,13 @@ async def get_dashboard_stats(db: AsyncSession = Depends(get_db_session)):
     try:
         today = datetime.now().date()
         today_start = datetime.combine(today, datetime.min.time())
-        week_ago = today_start - timedelta(days=7)
+        today_end = datetime.combine(today + timedelta(days=1), datetime.min.time())
+
+        # 이번주 계산 (월요일 0시 ~ 일요일 24시)
+        # weekday(): 월=0, 화=1, 수=2, 목=3, 금=4, 토=5, 일=6
+        days_since_monday = today.weekday()
+        week_start = datetime.combine(today - timedelta(days=days_since_monday), datetime.min.time())
+        week_end = datetime.combine(week_start.date() + timedelta(days=7), datetime.min.time())
 
         # === 블로그 관련 (삭제되지 않은 블로그만) ===
         result = await db.execute(
@@ -182,63 +189,78 @@ async def get_dashboard_stats(db: AsyncSession = Depends(get_db_session)):
         active_flows = result.scalar() or 0
         inactive_flows = total_flows - active_flows
 
-        # === 이번 주 통계 ===
+        # === 이번 주 통계 (실제 작업 수행 기준: 월요일 0시 ~ 일요일 24시) ===
+        # 이번주 실행된 작업 (모듈 타입별)
         result = await db.execute(
-            select(func.count(Module.id)).where(Module.created_at >= week_ago)
-        )
-        week_modules = result.scalar() or 0
-
-        result = await db.execute(
-            select(func.count(Flow.id)).where(Flow.created_at >= week_ago)
-        )
-        week_flows = result.scalar() or 0
-
-        # 이번 주 생성/발행/재발행 (임시: 모듈 생성 기준)
-        result = await db.execute(
-            select(func.count(Module.id))
+            select(func.sum(FlowExecutionState.successful_executions))
+            .join(Module, FlowExecutionState.module_id == Module.id)
             .join(ModuleType, Module.module_type_id == ModuleType.id)
-            .where(ModuleType.code == "generate", Module.created_at >= week_ago)
+            .where(
+                ModuleType.code == "generate",
+                FlowExecutionState.last_executed_at >= week_start,
+                FlowExecutionState.last_executed_at < week_end
+            )
         )
         week_generate = result.scalar() or 0
 
         result = await db.execute(
-            select(func.count(Module.id))
+            select(func.sum(FlowExecutionState.successful_executions))
+            .join(Module, FlowExecutionState.module_id == Module.id)
             .join(ModuleType, Module.module_type_id == ModuleType.id)
-            .where(ModuleType.code == "publish", Module.created_at >= week_ago)
+            .where(
+                ModuleType.code == "publish",
+                FlowExecutionState.last_executed_at >= week_start,
+                FlowExecutionState.last_executed_at < week_end
+            )
         )
         week_publish = result.scalar() or 0
 
         result = await db.execute(
-            select(func.count(Module.id))
+            select(func.sum(FlowExecutionState.successful_executions))
+            .join(Module, FlowExecutionState.module_id == Module.id)
             .join(ModuleType, Module.module_type_id == ModuleType.id)
-            .where(ModuleType.code == "republish", Module.created_at >= week_ago)
+            .where(
+                ModuleType.code == "republish",
+                FlowExecutionState.last_executed_at >= week_start,
+                FlowExecutionState.last_executed_at < week_end
+            )
         )
         week_republish = result.scalar() or 0
 
-        # === 오늘 통계 ===
+        # === 오늘 통계 (실제 작업 수행 기준: 오늘 0시 ~ 24시) ===
         result = await db.execute(
-            select(func.count(Module.id)).where(Module.created_at >= today_start)
-        )
-        today_modules = result.scalar() or 0
-
-        result = await db.execute(
-            select(func.count(Module.id))
+            select(func.sum(FlowExecutionState.successful_executions))
+            .join(Module, FlowExecutionState.module_id == Module.id)
             .join(ModuleType, Module.module_type_id == ModuleType.id)
-            .where(ModuleType.code == "generate", Module.created_at >= today_start)
+            .where(
+                ModuleType.code == "generate",
+                FlowExecutionState.last_executed_at >= today_start,
+                FlowExecutionState.last_executed_at < today_end
+            )
         )
         today_generate = result.scalar() or 0
 
         result = await db.execute(
-            select(func.count(Module.id))
+            select(func.sum(FlowExecutionState.successful_executions))
+            .join(Module, FlowExecutionState.module_id == Module.id)
             .join(ModuleType, Module.module_type_id == ModuleType.id)
-            .where(ModuleType.code == "publish", Module.created_at >= today_start)
+            .where(
+                ModuleType.code == "publish",
+                FlowExecutionState.last_executed_at >= today_start,
+                FlowExecutionState.last_executed_at < today_end
+            )
         )
         today_publish = result.scalar() or 0
 
         result = await db.execute(
-            select(func.count(Module.id))
+            select(func.sum(FlowExecutionState.successful_executions))
+            .join(Module, FlowExecutionState.module_id == Module.id)
             .join(ModuleType, Module.module_type_id == ModuleType.id)
-            .where(ModuleType.code == "republish", Module.created_at >= today_start)
+            .where(
+                ModuleType.code == "republish",
+                FlowExecutionState.last_executed_at >= today_start,
+                FlowExecutionState.last_executed_at < today_end
+            )
         )
         today_republish = result.scalar() or 0
 
@@ -286,8 +308,8 @@ async def get_dashboard_stats(db: AsyncSession = Depends(get_db_session)):
                 "blogger": blogger_count
             },
             "week_created": {
-                "modules": week_modules,
-                "flows": week_flows
+                "modules": week_generate + week_publish + week_republish,
+                "flows": 0  # 레거시 호환
             }
         }
     except Exception as e:
