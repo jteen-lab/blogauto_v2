@@ -54,6 +54,7 @@ class DBSaveModule(ModuleInterface):
                 description="저장할 테이블",
                 options=[
                     {"value": "url_history", "label": "URL 히스토리"},
+                    {"value": "autorun_logs", "label": "오토런 로그"},
                 ]
             ),
             ModuleParam(
@@ -150,7 +151,12 @@ class DBSaveModule(ModuleInterface):
     def _get_model(self, table: str):
         """테이블명으로 모델 반환"""
         from app.models.url_history import URLHistory
-        models = {"url_history": URLHistory}
+        from app.models.autorun_log import AutorunLog
+
+        models = {
+            "url_history": URLHistory,
+            "autorun_logs": AutorunLog,
+        }
         return models.get(table)
 
     def _filter_model_fields(self, model, data: dict) -> dict:

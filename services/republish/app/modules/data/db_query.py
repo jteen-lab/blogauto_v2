@@ -55,6 +55,8 @@ class DBQueryModule(ModuleInterface):
                 options=[
                     {"value": "blogs", "label": "블로그"},
                     {"value": "url_history", "label": "URL 히스토리"},
+                    {"value": "autorun_logs", "label": "오토런 로그"},
+                    {"value": "flow_blogs", "label": "플로우-블로그 연결"},
                 ]
             ),
             ModuleParam(
@@ -144,10 +146,14 @@ class DBQueryModule(ModuleInterface):
         """테이블명으로 모델 반환"""
         from app.models.blog import Blog
         from app.models.url_history import URLHistory
+        from app.models.autorun_log import AutorunLog
+        from app.models.flow_blog import FlowBlog
 
         models = {
             "blogs": Blog,
             "url_history": URLHistory,
+            "autorun_logs": AutorunLog,
+            "flow_blogs": FlowBlog,
         }
         return models.get(table)
 
