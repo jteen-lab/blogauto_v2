@@ -34,11 +34,7 @@ from .routers.settings import router as settings_router
 from .routers.modules_pages import router as modules_page_router
 from .routers.flows_pages import router as flows_page_router
 from .routers.autorun_pages import router as autorun_page_router
-from .routers.collect_pages import router as collect_page_router
 from .routers.engine import router as engine_router
-from .routers.keywords import router as keywords_router
-from .routers.titles import router as titles_router
-from .routers.schedules import router as schedules_router
 from .routers.flows_execute import router as flows_execute_router
 
 logger = get_logger("main", "app.log")
@@ -143,9 +139,6 @@ app.include_router(autorun_router, prefix=settings.api_v1_prefix)
 app.include_router(dashboard_router, prefix=settings.api_v1_prefix)
 app.include_router(settings_router, prefix=settings.api_v1_prefix)
 app.include_router(engine_router, prefix=settings.api_v1_prefix)
-app.include_router(keywords_router, prefix=settings.api_v1_prefix)
-app.include_router(titles_router, prefix=settings.api_v1_prefix)
-app.include_router(schedules_router, prefix=settings.api_v1_prefix)
 app.include_router(flows_execute_router)  # prefix 이미 포함됨
 
 # 페이지 라우터 등록
@@ -156,7 +149,6 @@ app.include_router(republish_page_router)
 app.include_router(modules_page_router)
 app.include_router(flows_page_router)
 app.include_router(autorun_page_router)
-app.include_router(collect_page_router)
 
 # 정적 파일 서빙 (개발환경)
 if settings.is_development:
