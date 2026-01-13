@@ -134,12 +134,12 @@ app.include_router(republish_router, prefix=settings.api_v1_prefix)
 # app.include_router(blogger_slots_router, prefix=settings.api_v1_prefix)  # 임시 비활성화
 app.include_router(module_types_router, prefix=settings.api_v1_prefix)
 app.include_router(modules_router, prefix=settings.api_v1_prefix)
+app.include_router(flows_execute_router)  # 먼저 등록 (더 구체적인 경로)
 app.include_router(flows_router, prefix=settings.api_v1_prefix)
 app.include_router(autorun_router, prefix=settings.api_v1_prefix)
 app.include_router(dashboard_router, prefix=settings.api_v1_prefix)
 app.include_router(settings_router, prefix=settings.api_v1_prefix)
 app.include_router(engine_router, prefix=settings.api_v1_prefix)
-app.include_router(flows_execute_router)  # prefix 이미 포함됨
 
 # 페이지 라우터 등록
 app.include_router(blogs_page_router)
