@@ -25,6 +25,11 @@ function flowListApp() {
         sortBy: 'name',
         sortOrder: 'asc',
 
+        // 플로우 실행 상태
+        executingFlowId: null,
+        executeResult: null,
+        showExecuteResult: false,
+
         // 정렬된 플로우 목록 (computed property)
         get sortedFlows() {
             if (!this.flows || this.flows.length === 0) {
@@ -908,6 +913,54 @@ function flowListApp() {
                     element.classList.remove('touch-paused');
                 }, 5000);
             }
+        },
+
+        // ========================================
+        // 플로우 1회 실행
+        // ========================================
+
+        // 플로우 실행
+        async executeFlow(flowId) {
+            if (this.executingFlowId) return;
+
+            this.executingFlowId = flowId;
+            this.executeResult = null;
+
+            try {
+                const response = await fetch(`/api/v1/flows/${flowId}/execute`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include'
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.detail || `HTTP ${response.status}`);
+                }
+
+                const result = await response.json();
+                this.executeResult = result;
+                this.showExecuteResult = true;
+
+                // 성공/실패 토스트
+                if (result.success) {
+                    this.showSuccess(`플로우 실행 완료 (${result.duration_ms}ms)`);
+                } else {
+                    this.showError(`플로우 실행 실패: ${result.error}`);
+                }
+
+            } catch (error) {
+                console.error('플로우 실행 오류:', error);
+                this.showError(`실행 오류: ${error.message}`);
+            } finally {
+                this.executingFlowId = null;
+            }
+        },
+
+        // 실행 결과 모달 닫기
+        closeExecuteResult() {
+            this.showExecuteResult = false;
+            this.executeResult = null;
         },
 
         // 성공 메시지 표시

@@ -361,6 +361,113 @@
     <div class="h-safe-area-inset-bottom"></div>
 </div>
 
+<!-- 플로우 실행 결과 모달 -->
+<div x-data="{ get show() { return window.flowListApp?.showExecuteResult }, get result() { return window.flowListApp?.executeResult } }"
+     x-show="show"
+     x-cloak
+     class="fixed inset-0 z-50 overflow-y-auto"
+     @keydown.escape.window="window.flowListApp?.closeExecuteResult()">
+    <!-- 백드롭 -->
+    <div class="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+         @click="window.flowListApp?.closeExecuteResult()"></div>
+
+    <!-- 모달 컨텐츠 -->
+    <div class="flex min-h-full items-center justify-center p-4">
+        <div class="relative bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden"
+             @click.stop>
+            <!-- 헤더 -->
+            <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between"
+                 :class="result?.success ? 'bg-green-50' : 'bg-red-50'">
+                <div class="flex items-center gap-3">
+                    <template x-if="result?.success">
+                        <svg class="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </template>
+                    <template x-if="!result?.success">
+                        <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </template>
+                    <h3 class="text-lg font-semibold"
+                        :class="result?.success ? 'text-green-800' : 'text-red-800'"
+                        x-text="result?.success ? '실행 완료' : '실행 실패'"></h3>
+                </div>
+                <button @click="window.flowListApp?.closeExecuteResult()" class="text-gray-400 hover:text-gray-600">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- 본문 -->
+            <div class="px-6 py-4 overflow-y-auto max-h-[60vh]">
+                <!-- 요약 정보 -->
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div class="bg-gray-50 rounded-lg p-3">
+                        <div class="text-xs text-gray-500">플로우</div>
+                        <div class="font-medium" x-text="result?.flow_name"></div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-3">
+                        <div class="text-xs text-gray-500">실행 시간</div>
+                        <div class="font-medium" x-text="(result?.duration_ms || 0) + 'ms'"></div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-3">
+                        <div class="text-xs text-gray-500">처리된 아이템</div>
+                        <div class="font-medium" x-text="result?.total_items_processed || 0"></div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-3">
+                        <div class="text-xs text-gray-500">실행 ID</div>
+                        <div class="font-medium text-xs truncate" x-text="result?.execution_id"></div>
+                    </div>
+                </div>
+
+                <!-- 에러 메시지 -->
+                <template x-if="result?.error">
+                    <div class="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                        <div class="text-sm text-red-800" x-text="result.error"></div>
+                    </div>
+                </template>
+
+                <!-- 노드별 실행 결과 -->
+                <div class="mt-4">
+                    <h4 class="text-sm font-semibold text-gray-700 mb-2">노드별 실행 결과</h4>
+                    <div class="space-y-2">
+                        <template x-for="(node, index) in (result?.node_results || [])" :key="index">
+                            <div class="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs text-gray-400" x-text="index + 1"></span>
+                                    <span class="font-medium text-sm" x-text="node.module_name"></span>
+                                </div>
+                                <div class="flex items-center gap-4 text-xs">
+                                    <span class="text-gray-500">
+                                        <span x-text="node.items_in"></span> → <span x-text="node.items_out"></span>
+                                    </span>
+                                    <span class="text-gray-500" x-text="node.execution_time_ms + 'ms'"></span>
+                                    <span :class="node.success ? 'text-green-600' : 'text-red-600'"
+                                          x-text="node.success ? '✓' : '✗'"></span>
+                                </div>
+                            </div>
+                        </template>
+                        <div x-show="!result?.node_results || result?.node_results.length === 0"
+                             class="text-center py-4 text-gray-500 text-sm">
+                            실행된 노드가 없습니다
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 푸터 -->
+            <div class="px-6 py-4 border-t border-gray-200 bg-gray-50">
+                <button @click="window.flowListApp?.closeExecuteResult()"
+                        class="w-full px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors">
+                    닫기
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- 스크립트 로드 순서: form.js 먼저, list.js 나중 -->
 <script src="/static/js/flows/form.js"></script>
 <script src="/static/js/flows/list.js"></script>
