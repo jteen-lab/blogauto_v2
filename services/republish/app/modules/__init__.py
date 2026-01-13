@@ -13,6 +13,7 @@ from app.modules.triggers.manual import ManualTriggerModule
 # 데이터 모듈
 from app.modules.data.db_query import DBQueryModule
 from app.modules.data.db_save import DBSaveModule
+from app.modules.data.post_selector import PostSelectorModule
 
 # 액션 모듈
 from app.modules.actions.publish import PublishModule
@@ -27,6 +28,7 @@ def register_all_modules():
     # 데이터
     ModuleRegistry.register(DBQueryModule())
     ModuleRegistry.register(DBSaveModule())
+    ModuleRegistry.register(PostSelectorModule())
 
     # 액션
     ModuleRegistry.register(PublishModule())
@@ -38,5 +40,6 @@ __all__ = [
     "ManualTriggerModule",
     "DBQueryModule",
     "DBSaveModule",
+    "PostSelectorModule",
     "PublishModule",
 ]
