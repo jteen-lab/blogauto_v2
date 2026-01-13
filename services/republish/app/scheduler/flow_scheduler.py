@@ -27,6 +27,12 @@ from ..core.database import db_manager
 from ..core.logger import get_logger
 from .scheduler import scheduler_instance
 
+# 노드 기반 실행을 위한 import
+from ..core.executor import (
+    FlowExecutor, FlowDefinition, NodeConfig, Connection
+)
+from ..core.interface import PortType
+
 logger = get_logger("flow_scheduler", "republish.log")
 
 # Timezone 설정
@@ -345,31 +351,60 @@ class FlowScheduler:
                         "message": f"플로우를 찾을 수 없습니다: {flow_id}"
                     }
 
-                # 플로우 실행
-                result = await self.flow_engine.execute(
-                    db=db,
-                    flow=flow,
-                    action_type=action_type
+                # 해당 액션 타입의 모듈 찾기
+                target_module = None
+                for link in flow.module_links:
+                    module = link.module
+                    if module and module.module_type:
+                        if module.module_type.code == action_type:
+                            target_module = module
+                            break
+
+                if not target_module:
+                    return {
+                        "success": False,
+                        "message": f"액션 타입에 해당하는 모듈이 없습니다: {action_type}"
+                    }
+
+                # FlowDefinition 빌드 및 FlowExecutor로 실행
+                flow_definition = self._build_republish_flow_definition(
+                    flow, target_module
+                )
+                executor = FlowExecutor(db, logger)
+                exec_result = await executor.execute(
+                    flow_definition, is_test=False
+                )
+
+                # 실행 결과를 기존 형식으로 변환
+                result = {
+                    "success": exec_result.success,
+                    "message": exec_result.error or "성공",
+                    "execution_id": exec_result.execution_id,
+                    "duration_ms": exec_result.duration_ms,
+                    "total_items": exec_result.total_items_processed,
+                    "node_results": [r.to_dict() for r in exec_result.node_results]
+                }
+
+                logger.info(
+                    f"[FLOW_SCHEDULER] Manual FlowExecutor 실행 완료 | "
+                    f"FlowID={flow_id} | Success={exec_result.success}"
                 )
 
                 # 실행 상태 업데이트
-                for link in flow.module_links:
-                    module = link.module
-                    if module and module.module_type and module.module_type.code == action_type:
-                        state = await self._get_or_create_execution_state(
-                            db, flow.id, module.id
-                        )
-                        state.record_execution(result.get("success", False))
+                state = await self._get_or_create_execution_state(
+                    db, flow.id, target_module.id
+                )
+                state.record_execution(result.get("success", False))
 
-                        # 다음 실행 시간 계산
-                        interval_minutes = module.calculated_interval_minutes
-                        state.calculate_next_execution(
-                            interval_minutes=interval_minutes,
-                            schedule_matrix=module.schedule_matrix,
-                            jitter_enabled=module.jitter_enabled,
-                            jitter_min_percent=module.jitter_min_percent,
-                            jitter_max_percent=module.jitter_max_percent
-                        )
+                # 다음 실행 시간 계산
+                interval_minutes = target_module.calculated_interval_minutes
+                state.calculate_next_execution(
+                    interval_minutes=interval_minutes,
+                    schedule_matrix=target_module.schedule_matrix,
+                    jitter_enabled=target_module.jitter_enabled,
+                    jitter_min_percent=target_module.jitter_min_percent,
+                    jitter_max_percent=target_module.jitter_max_percent
+                )
 
                 await db.commit()
 
@@ -596,12 +631,29 @@ class FlowScheduler:
                 if module.module_type:
                     action_type = module.module_type.code
 
-                # 플로우 실행 (module_id 전달하여 정확한 모듈로 실행)
-                result = await self.flow_engine.execute(
-                    db=db,
-                    flow=flow,
-                    action_type=action_type,
-                    module_id=module_id
+                # FlowDefinition 빌드 및 FlowExecutor로 실행
+                flow_definition = self._build_republish_flow_definition(
+                    flow, module
+                )
+                executor = FlowExecutor(db, logger)
+                exec_result = await executor.execute(
+                    flow_definition, is_test=False
+                )
+
+                # 실행 결과를 기존 형식으로 변환
+                result = {
+                    "success": exec_result.success,
+                    "message": exec_result.error or "성공",
+                    "execution_id": exec_result.execution_id,
+                    "duration_ms": exec_result.duration_ms,
+                    "total_items": exec_result.total_items_processed,
+                    "node_results": [r.to_dict() for r in exec_result.node_results]
+                }
+
+                logger.info(
+                    f"[FLOW_SCHEDULER] FlowExecutor 실행 완료 | "
+                    f"FlowID={flow_id} | Success={exec_result.success} | "
+                    f"Duration={exec_result.duration_ms}ms"
                 )
 
                 # 실행 상태 업데이트
@@ -688,6 +740,58 @@ class FlowScheduler:
     def _get_job_id(self, flow_id: int, module_id: int) -> str:
         """Job ID 생성"""
         return f"{self._job_prefix}{flow_id}_module_{module_id}"
+
+    def _build_republish_flow_definition(
+        self,
+        flow: Flow,
+        module: Module
+    ) -> FlowDefinition:
+        """
+        재발행용 FlowDefinition 빌드
+
+        노드 구성:
+        1. ManualTrigger → 빈 입력으로 시작
+        2. Publish → Flow 블로그 조회 후 재발행
+
+        향후 확장:
+        - DBQuery → PostSelector → Publish 구조로 변경 가능
+        """
+        nodes = []
+        connections = []
+
+        # 1. ManualTrigger 노드 (시작점)
+        trigger_node = NodeConfig(
+            id="node_trigger",
+            module_name="manual_trigger",
+            params={}
+        )
+        nodes.append(trigger_node)
+
+        # 2. Publish 노드 (use_input_post=False로 Flow 블로그 직접 조회)
+        publish_node = NodeConfig(
+            id="node_publish",
+            module_name="publish",
+            params={
+                "publish_mode": "republish",
+                "use_input_post": False  # Flow 블로그 직접 조회
+            }
+        )
+        nodes.append(publish_node)
+
+        # 연결: Trigger → Publish
+        connections.append(Connection(
+            from_node="node_trigger",
+            from_port=PortType.MAIN,
+            to_node="node_publish",
+            to_port=PortType.MAIN
+        ))
+
+        return FlowDefinition(
+            id=flow.id,
+            name=flow.name,
+            nodes=nodes,
+            connections=connections
+        )
 
     # ===========================================
     # 상태 조회
