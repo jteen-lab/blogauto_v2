@@ -747,17 +747,27 @@ class FlowScheduler:
         module: Module
     ) -> FlowDefinition:
         """
-        재발행용 FlowDefinition 빌드
+        재발행용 FlowDefinition 빌드 (5개 노드 체인)
 
         노드 구성:
-        1. ManualTrigger → 빈 입력으로 시작
-        2. Publish → Flow 블로그 조회 후 재발행
+        1. ManualTrigger → 시작점
+        2. DBQuery → Flow에 연결된 블로그 목록 조회
+        3. PostSelector → 각 블로그에서 재발행할 포스트 선택
+        4. Publish → WordPress/Blogger API 호출 (순수 발행)
+        5. DBSave → 실행 결과 저장 (autorun_logs)
 
-        향후 확장:
-        - DBQuery → PostSelector → Publish 구조로 변경 가능
+        데이터 흐름:
+        Trigger → [{triggered_at}]
+        DBQuery → [{blog_id, blog_name, platform, ...}]
+        PostSelector → [{blog_id, post_id, post_title, ...}]
+        Publish → [{blog_id, post_id, publish_result, ...}]
+        DBSave → [{saved: true, log_id}]
         """
         nodes = []
         connections = []
+
+        # 모듈 설정에서 파라미터 가져오기
+        module_settings = module.settings or {}
 
         # 1. ManualTrigger 노드 (시작점)
         trigger_node = NodeConfig(
@@ -767,24 +777,85 @@ class FlowScheduler:
         )
         nodes.append(trigger_node)
 
-        # 2. Publish 노드 (use_input_post=False로 Flow 블로그 직접 조회)
+        # 2. DBQuery 노드 (블로그 목록 조회)
+        db_query_node = NodeConfig(
+            id="node_db_query",
+            module_name="db_query",
+            params={
+                "table": "flow_blogs",
+                "use_flow_id": True,
+                "filter": {"is_active": True},
+                "limit": 100
+            }
+        )
+        nodes.append(db_query_node)
+
+        # 3. PostSelector 노드 (포스트 선택)
+        post_selector_node = NodeConfig(
+            id="node_post_selector",
+            module_name="post_selector",
+            params={
+                "selection_mode": module_settings.get("selection_mode", "oldest"),
+                "min_age_days": module_settings.get("min_age_days", 0),
+                "max_posts_to_scan": module_settings.get("max_posts", 100)
+            }
+        )
+        nodes.append(post_selector_node)
+
+        # 4. Publish 노드 (순수 발행)
         publish_node = NodeConfig(
             id="node_publish",
             module_name="publish",
             params={
-                "publish_mode": "republish",
-                "use_input_post": False  # Flow 블로그 직접 조회
+                "publish_mode": "republish"
             }
         )
         nodes.append(publish_node)
 
-        # 연결: Trigger → Publish
-        connections.append(Connection(
-            from_node="node_trigger",
-            from_port=PortType.MAIN,
-            to_node="node_publish",
-            to_port=PortType.MAIN
-        ))
+        # 5. DBSave 노드 (결과 저장)
+        db_save_node = NodeConfig(
+            id="node_db_save",
+            module_name="db_save",
+            params={
+                "table": "autorun_logs",
+                "mode": "insert",
+                "map_publish_result": True
+            }
+        )
+        nodes.append(db_save_node)
+
+        # 연결 (순차: Trigger → DBQuery → PostSelector → Publish → DBSave)
+        connections = [
+            Connection(
+                from_node="node_trigger",
+                from_port=PortType.MAIN,
+                to_node="node_db_query",
+                to_port=PortType.MAIN
+            ),
+            Connection(
+                from_node="node_db_query",
+                from_port=PortType.MAIN,
+                to_node="node_post_selector",
+                to_port=PortType.MAIN
+            ),
+            Connection(
+                from_node="node_post_selector",
+                from_port=PortType.MAIN,
+                to_node="node_publish",
+                to_port=PortType.MAIN
+            ),
+            Connection(
+                from_node="node_publish",
+                from_port=PortType.MAIN,
+                to_node="node_db_save",
+                to_port=PortType.MAIN
+            ),
+        ]
+
+        logger.info(
+            f"[FLOW_SCHEDULER] FlowDefinition 빌드 | FlowID={flow.id} | "
+            f"노드 5개 체인 생성"
+        )
 
         return FlowDefinition(
             id=flow.id,
