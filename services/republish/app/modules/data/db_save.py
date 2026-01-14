@@ -2,9 +2,11 @@
 DB 저장 모듈
 
 데이터를 데이터베이스에 저장합니다.
+노드 체인에서 발행 결과를 autorun_logs에 저장하는 마지막 단계로 사용됩니다.
 """
 
-from typing import Any
+from datetime import datetime
+from typing import Any, Optional
 from sqlalchemy import select
 from app.core.interface import (
     ModuleInterface, ModuleType, ModuleParam,
@@ -75,6 +77,13 @@ class DBSaveModule(ModuleInterface):
                 required=False,
                 default="id",
                 description="업데이트 시 키 필드"
+            ),
+            ModuleParam(
+                name="map_publish_result",
+                type="boolean",
+                required=False,
+                default=True,
+                description="Publish 결과를 autorun_logs 필드로 매핑"
             )
         ]
 
@@ -88,10 +97,15 @@ class DBSaveModule(ModuleInterface):
         table = params.get("table")
         mode = params.get("mode", "insert")
         key_field = params.get("key_field", "id")
+        map_publish = params.get("map_publish_result", True)
 
-        context.log(f"DB 저장: {table}, mode={mode}, items={len(items)}")
+        context.log(f"[DB_SAVE] 시작 | table={table} | mode={mode} | items={len(items)}")
 
         try:
+            # autorun_logs 특별 처리 (Publish 결과 매핑)
+            if table == "autorun_logs" and map_publish:
+                return await self._save_autorun_logs(context, items)
+
             model = self._get_model(table)
             if not model:
                 return ModuleResult.fail(f"알 수 없는 테이블: {table}")
@@ -140,13 +154,69 @@ class DBSaveModule(ModuleInterface):
                 saved_items.append(saved_item)
 
             await context.db_session.commit()
-            context.log(f"DB 저장 완료: {len(saved_items)}건")
+            context.log(f"[DB_SAVE] 완료 | {len(saved_items)}건")
             return ModuleResult.ok(saved_items)
 
         except Exception as e:
             await context.db_session.rollback()
-            context.log(f"DB 저장 실패: {e}", level="error")
+            context.log(f"[DB_SAVE] 실패 | error={e}", level="error")
             return ModuleResult.fail(str(e))
+
+    async def _save_autorun_logs(
+        self,
+        context: ExecutionContext,
+        items: ItemList
+    ) -> ModuleResult:
+        """
+        Publish 결과를 autorun_logs 테이블에 저장
+
+        입력 (Publish 출력):
+        - blog_id, blog_name, platform
+        - post_id, post_title, post_url
+        - publish_result: {success, message, ...}
+        - published_at
+
+        저장 필드:
+        - flow_id, blog_id, blog_name
+        - action_type, status, message
+        - executed_at, post_id, post_url
+        """
+        from app.models.autorun_log import AutorunLog
+
+        saved_items = []
+
+        for item in items:
+            data = item.json
+            publish_result = data.get("publish_result", {})
+
+            log_entry = AutorunLog(
+                flow_id=context.flow_id,
+                blog_id=data.get("blog_id"),
+                blog_name=data.get("blog_name"),
+                action_type="republish",
+                status="success" if publish_result.get("success") else "failed",
+                message=publish_result.get("message", ""),
+                executed_at=datetime.now(),
+                post_id=str(data.get("post_id", "")),
+                post_url=data.get("post_url") or publish_result.get("url", "")
+            )
+
+            context.db_session.add(log_entry)
+
+            saved_item = BlogAutoItem(
+                json={**item.json, "saved": True, "log_id": None},
+                meta=ItemMeta(source_module=self.name)
+            )
+            saved_items.append(saved_item)
+
+        await context.db_session.commit()
+
+        # 저장된 log_id 업데이트 (flush 후 id 접근)
+        context.log(
+            f"[DB_SAVE] autorun_logs 저장 완료 | flow_id={context.flow_id} | "
+            f"{len(saved_items)}건"
+        )
+        return ModuleResult.ok(saved_items)
 
     def _get_model(self, table: str):
         """테이블명으로 모델 반환"""

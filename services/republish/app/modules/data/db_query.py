@@ -2,10 +2,12 @@
 DB 조회 모듈
 
 데이터베이스에서 데이터를 조회합니다.
+노드 체인에서 블로그 목록 조회의 첫 번째 단계로 사용됩니다.
 """
 
-from typing import Any
+from typing import Any, Optional
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from app.core.interface import (
     ModuleInterface, ModuleType, ModuleParam,
     ModuleResult, PortType, ExecutionContext
@@ -86,6 +88,13 @@ class DBQueryModule(ModuleInterface):
                 required=False,
                 default=False,
                 description="내림차순"
+            ),
+            ModuleParam(
+                name="use_flow_id",
+                type="boolean",
+                required=False,
+                default=True,
+                description="context.flow_id로 필터링 (flow_blogs 전용)"
             )
         ]
 
@@ -99,10 +108,18 @@ class DBQueryModule(ModuleInterface):
         table = params.get("table")
         filter_cond = params.get("filter", {})
         limit = params.get("limit", 100)
+        use_flow_id = params.get("use_flow_id", True)
 
-        context.log(f"DB 조회: {table}, limit={limit}")
+        context.log(f"[DB_QUERY] 시작 | table={table} | limit={limit}")
 
         try:
+            # flow_blogs 테이블은 특별 처리 (Blog 정보 포함)
+            if table == "flow_blogs":
+                return await self._query_flow_blogs(
+                    context, filter_cond, limit, use_flow_id
+                )
+
+            # 일반 테이블 조회
             model = self._get_model(table)
             if not model:
                 return ModuleResult.fail(f"알 수 없는 테이블: {table}")
@@ -135,12 +152,79 @@ class DBQueryModule(ModuleInterface):
                 )
                 output_items.append(item)
 
-            context.log(f"DB 조회 완료: {len(output_items)}건")
+            context.log(f"[DB_QUERY] 완료 | {len(output_items)}건")
             return ModuleResult.ok(output_items)
 
         except Exception as e:
-            context.log(f"DB 조회 실패: {e}", level="error")
+            context.log(f"[DB_QUERY] 실패 | error={e}", level="error")
             return ModuleResult.fail(str(e))
+
+    async def _query_flow_blogs(
+        self,
+        context: ExecutionContext,
+        filter_cond: dict,
+        limit: int,
+        use_flow_id: bool
+    ) -> ModuleResult:
+        """
+        Flow에 연결된 블로그 목록 조회 (Blog 정보 포함)
+
+        출력 형식:
+        - blog_id: 블로그 ID
+        - blog_name: 블로그 이름
+        - blog_url: 블로그 URL
+        - platform: 플랫폼 (wordpress/blogger)
+        - is_active: 활성화 상태
+        """
+        from app.models.flow_blog import FlowBlog
+        from app.models.blog import Blog
+
+        query = (
+            select(FlowBlog)
+            .options(
+                selectinload(FlowBlog.blog)
+                .selectinload(Blog.google_credential)
+            )
+        )
+
+        # flow_id 필터링
+        if use_flow_id and context.flow_id:
+            query = query.where(FlowBlog.flow_id == context.flow_id)
+        elif "flow_id" in filter_cond:
+            query = query.where(FlowBlog.flow_id == filter_cond["flow_id"])
+
+        # is_active 필터링
+        if "is_active" in filter_cond:
+            query = query.where(FlowBlog.is_active == filter_cond["is_active"])
+
+        query = query.limit(limit)
+
+        result = await context.db_session.execute(query)
+        flow_blogs = result.scalars().all()
+
+        # Blog 정보를 포함한 아이템 생성
+        output_items = []
+        for fb in flow_blogs:
+            if fb.blog:
+                item = BlogAutoItem(
+                    json={
+                        "flow_blog_id": fb.id,
+                        "blog_id": fb.blog.id,
+                        "blog_name": fb.blog.name,
+                        "blog_url": fb.blog.url,
+                        "platform": fb.blog.platform.value,
+                        "is_active": fb.is_active,
+                        "flow_id": fb.flow_id
+                    },
+                    meta=ItemMeta(source_module=self.name)
+                )
+                output_items.append(item)
+
+        context.log(
+            f"[DB_QUERY] flow_blogs 조회 완료 | flow_id={context.flow_id} | "
+            f"블로그 {len(output_items)}개"
+        )
+        return ModuleResult.ok(output_items)
 
     def _get_model(self, table: str):
         """테이블명으로 모델 반환"""

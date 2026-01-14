@@ -1,12 +1,13 @@
 """
-발행 모듈
+발행 모듈 (순수화)
 
 블로그에 포스트를 발행합니다.
-재발행과 신규 발행 모두 이 모듈을 사용합니다.
+노드 체인에서 PostSelector에서 전달받은 포스트 정보를 사용하여 발행합니다.
 
-동작 모드:
-1. 입력 아이템에 post_id가 있으면 → 해당 포스트 재발행
-2. 입력 아이템에 post_id가 없으면 → Flow 블로그 조회 후 가장 오래된 포스트 재발행
+입력: PostSelector에서 전달받은 포스트 정보
+      {blog_id, blog_name, platform, post_id, post_title, ...}
+출력: 발행 결과
+      {blog_id, blog_name, platform, post_id, publish_result, published_at}
 """
 
 from datetime import datetime
@@ -19,14 +20,13 @@ from app.core.interface import (
     ModuleResult, PortType, ExecutionContext
 )
 from app.core.item import BlogAutoItem, ItemList, ItemMeta
-from app.models.flow_blog import FlowBlog
 from app.models.blog import Blog, BlogPlatform
 from app.services.wordpress_service import WordPressRepublishService
 from app.services.blogger_service import BloggerRepublishService
 
 
 class PublishModule(ModuleInterface):
-    """발행 모듈 (핵심)"""
+    """발행 모듈 (순수 발행만)"""
 
     @property
     def module_type(self) -> ModuleType:
@@ -69,13 +69,6 @@ class PublishModule(ModuleInterface):
                     {"value": "republish", "label": "재발행 (날짜 업데이트)"},
                     {"value": "new", "label": "신규 발행"}
                 ]
-            ),
-            ModuleParam(
-                name="use_input_post",
-                type="boolean",
-                required=False,
-                default=True,
-                description="입력 아이템의 포스트 사용 (PostSelector 연결 시)"
             )
         ]
 
@@ -86,63 +79,42 @@ class PublishModule(ModuleInterface):
         context: ExecutionContext
     ) -> ModuleResult:
         """
-        발행/재발행 실행
+        발행/재발행 실행 (순수 발행만)
 
-        1. 입력 아이템에 post_id가 있으면 해당 포스트 재발행
-        2. 없으면 Flow 블로그를 조회하여 가장 오래된 포스트 재발행
+        입력: PostSelector에서 전달받은 포스트 정보
+        처리: WordPress/Blogger API 호출
+        출력: 발행 결과
         """
         publish_mode = params.get("publish_mode", "republish")
-        use_input_post = params.get("use_input_post", True)
 
         context.log(
-            f"[PUBLISH_MODULE] 시작 | flow_id={context.flow_id} | "
-            f"mode={publish_mode} | use_input={use_input_post} | "
-            f"input_items={len(items)}"
+            f"[PUBLISH] 시작 | flow_id={context.flow_id} | "
+            f"mode={publish_mode} | input_items={len(items)}"
         )
+
+        if not items:
+            context.log("[PUBLISH] 입력 아이템이 없습니다", level="warning")
+            return ModuleResult.ok([])
 
         results = []
 
-        try:
-            # 모드 1: 입력 아이템에서 포스트 정보 사용 (PostSelector 연결)
-            if use_input_post and items:
-                for item in items:
-                    result = await self._process_input_item(item, context)
-                    if result:
-                        results.append(result)
+        for item in items:
+            result = await self._process_item(item, context)
+            if result:
+                results.append(result)
 
-            # 모드 2: Flow 블로그 직접 조회 (입력 없거나 use_input_post=False)
-            else:
-                blogs = await self._get_flow_blogs(context)
-                if not blogs:
-                    context.log(
-                        "[PUBLISH_MODULE] 연결된 블로그가 없습니다",
-                        level="warning"
-                    )
-                    return ModuleResult.fail("플로우에 연결된 블로그가 없습니다")
+        # 결과 집계
+        success_count = sum(
+            1 for r in results
+            if r.json.get("publish_result", {}).get("success")
+        )
+        context.log(
+            f"[PUBLISH] 완료 | 성공: {success_count}/{len(results)}"
+        )
 
-                context.log(f"[PUBLISH_MODULE] 블로그 {len(blogs)}개 대상 실행")
+        return ModuleResult.ok(results)
 
-                for blog in blogs:
-                    result = await self._execute_republish_blog(blog, context)
-                    if result:
-                        results.append(result)
-
-            # 결과 집계
-            success_count = sum(
-                1 for r in results
-                if r.json.get("publish_result", {}).get("success")
-            )
-            context.log(
-                f"[PUBLISH_MODULE] 완료 | 성공: {success_count}/{len(results)}"
-            )
-
-            return ModuleResult.ok(results)
-
-        except Exception as e:
-            context.log(f"[PUBLISH_MODULE] 전체 오류: {e}", level="error")
-            return ModuleResult.fail(str(e))
-
-    async def _process_input_item(
+    async def _process_item(
         self,
         item: BlogAutoItem,
         context: ExecutionContext
@@ -152,36 +124,42 @@ class PublishModule(ModuleInterface):
         blog_id = data.get("blog_id")
         post_id = data.get("post_id")
         platform = data.get("platform")
+        blog_name = data.get("blog_name")
 
         if not blog_id:
             context.log(
-                f"[PUBLISH_MODULE] blog_id 누락 | data={data}",
+                f"[PUBLISH] blog_id 누락 | data={data}",
+                level="warning"
+            )
+            return None
+
+        if not post_id:
+            context.log(
+                f"[PUBLISH] post_id 누락 | blog_id={blog_id}",
                 level="warning"
             )
             return None
 
         try:
-            # 블로그 조회
+            # 블로그 조회 (API 호출을 위한 credential 필요)
             blog = await self._get_blog(context, blog_id)
             if not blog:
                 return self._create_error_result(
-                    blog_id, data.get("blog_name"), platform,
+                    blog_id, blog_name, platform,
                     "블로그를 찾을 수 없습니다"
                 )
 
-            # 포스트 ID가 있으면 특정 포스트 재발행
-            if post_id:
-                result = await self._republish_specific_post(blog, post_id, context)
-            else:
-                # 없으면 가장 오래된 포스트 재발행
-                result = await self._execute_republish(blog, context)
+            # 포스트 재발행
+            result = await self._republish_post(blog, post_id, context)
 
             return BlogAutoItem(
                 json={
                     "blog_id": blog.id,
                     "blog_name": blog.name,
                     "platform": blog.platform.value,
-                    "post_id": post_id or result.get("post_id"),
+                    "post_id": post_id,
+                    "post_title": data.get("post_title"),
+                    "post_url": data.get("post_url"),
                     "publish_result": result,
                     "published_at": datetime.now().isoformat()
                 },
@@ -190,52 +168,11 @@ class PublishModule(ModuleInterface):
 
         except Exception as e:
             context.log(
-                f"[PUBLISH_MODULE] 처리 오류 | blog_id={blog_id} | error={e}",
+                f"[PUBLISH] 처리 오류 | blog_id={blog_id} | error={e}",
                 level="error"
             )
             return self._create_error_result(
-                blog_id, data.get("blog_name"), platform, str(e)
-            )
-
-    async def _execute_republish_blog(
-        self,
-        blog: Blog,
-        context: ExecutionContext
-    ) -> Optional[BlogAutoItem]:
-        """블로그의 가장 오래된 포스트 재발행"""
-        try:
-            result = await self._execute_republish(blog, context)
-
-            if result.get("success"):
-                context.log(
-                    f"[PUBLISH_MODULE] 성공 | blog={blog.name} | "
-                    f"post={result.get('post_title', '')[:30]}"
-                )
-            else:
-                context.log(
-                    f"[PUBLISH_MODULE] 실패 | blog={blog.name} | "
-                    f"error={result.get('message', '')}",
-                    level="warning"
-                )
-
-            return BlogAutoItem(
-                json={
-                    "blog_id": blog.id,
-                    "blog_name": blog.name,
-                    "platform": blog.platform.value,
-                    "publish_result": result,
-                    "published_at": datetime.now().isoformat()
-                },
-                meta=ItemMeta(source_module=self.name)
-            )
-
-        except Exception as e:
-            context.log(
-                f"[PUBLISH_MODULE] 블로그 처리 오류 | blog={blog.name} | error={e}",
-                level="error"
-            )
-            return self._create_error_result(
-                blog.id, blog.name, blog.platform.value, str(e)
+                blog_id, blog_name, platform, str(e)
             )
 
     async def _get_blog(
@@ -251,58 +188,27 @@ class PublishModule(ModuleInterface):
         )
         return result.scalar_one_or_none()
 
-    async def _get_flow_blogs(self, context: ExecutionContext) -> list[Blog]:
-        """Flow에 연결된 블로그 목록 조회 (credential 포함)"""
-        result = await context.db_session.execute(
-            select(FlowBlog)
-            .where(FlowBlog.flow_id == context.flow_id)
-            .options(
-                selectinload(FlowBlog.blog)
-                .selectinload(Blog.google_credential)
-            )
-        )
-        flow_blogs = result.scalars().all()
-        return [fb.blog for fb in flow_blogs if fb.blog]
-
-    async def _execute_republish(
-        self,
-        blog: Blog,
-        context: ExecutionContext
-    ) -> Dict[str, Any]:
-        """블로그의 가장 오래된 포스트 재발행"""
-        if blog.platform == BlogPlatform.WORDPRESS:
-            service = WordPressRepublishService()
-            return await service.republish(blog)
-
-        elif blog.platform == BlogPlatform.BLOGGER:
-            if not blog.google_credential:
-                return {
-                    "success": False,
-                    "message": "Google 인증 정보가 없습니다"
-                }
-            service = BloggerRepublishService()
-            return await service.republish(blog, blog.google_credential)
-
-        else:
-            return {
-                "success": False,
-                "message": f"지원하지 않는 플랫폼: {blog.platform.value}"
-            }
-
-    async def _republish_specific_post(
+    async def _republish_post(
         self,
         blog: Blog,
         post_id: str,
         context: ExecutionContext
     ) -> Dict[str, Any]:
-        """특정 포스트 재발행 (PostSelector에서 선택된 포스트)"""
+        """포스트 재발행 (API 호출만)"""
         context.log(
-            f"[PUBLISH_MODULE] 특정 포스트 재발행 | blog={blog.name} | post_id={post_id}"
+            f"[PUBLISH] 재발행 시작 | blog={blog.name} | post_id={post_id}"
         )
 
         if blog.platform == BlogPlatform.WORDPRESS:
             service = WordPressRepublishService()
-            return await service.update_post_date(blog, post_id)
+            result = await service.update_post_date(blog, post_id)
+
+            if result.get("success"):
+                context.log(
+                    f"[PUBLISH] WordPress 성공 | blog={blog.name} | "
+                    f"post_id={post_id}"
+                )
+            return result
 
         elif blog.platform == BlogPlatform.BLOGGER:
             if not blog.google_credential:
@@ -310,6 +216,7 @@ class PublishModule(ModuleInterface):
                     "success": False,
                     "message": "Google 인증 정보가 없습니다"
                 }
+
             service = BloggerRepublishService()
             blogger_id = await service.get_blog_id(blog, blog.google_credential)
 
@@ -321,6 +228,11 @@ class PublishModule(ModuleInterface):
             await asyncio.sleep(0.5)
             result = await service.publish_post(
                 blog.google_credential, blogger_id, post_id
+            )
+
+            context.log(
+                f"[PUBLISH] Blogger 성공 | blog={blog.name} | "
+                f"post_id={post_id}"
             )
 
             return {
