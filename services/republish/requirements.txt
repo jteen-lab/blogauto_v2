@@ -7,6 +7,7 @@ uvicorn[standard]==0.24.0
 # 데이터베이스
 sqlalchemy[asyncio]==2.0.23
 asyncpg==0.29.0
+psycopg2-binary==2.9.9
 alembic==1.12.1
 
 # 인증 및 보안
@@ -37,3 +38,9 @@ flake8==6.1.0
 apscheduler>=3.10.0
 redis>=4.5.0
 pytz>=2024.1
+
+# 키워드 수집 API
+pytrends>=4.9.0
+
+# 키워드 추출 (형태소 분석)
+konlpy>=0.6.0

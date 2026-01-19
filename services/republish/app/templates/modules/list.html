@@ -114,6 +114,14 @@
             align-items: start;
         }
 
+        .desktop-sections.sections-5 {
+            max-width: 1600px;
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 0.875rem;
+            align-items: start;
+        }
+
         /* 각 섹션 내 모듈 그리드 */
         .desktop-sections.sections-1 .module-grid {
             grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -133,6 +141,11 @@
         .desktop-sections.sections-4 .module-grid {
             grid-template-columns: 1fr;
             gap: 1rem;
+        }
+
+        .desktop-sections.sections-5 .module-grid {
+            grid-template-columns: 1fr;
+            gap: 0.875rem;
         }
     }
 
@@ -347,6 +360,20 @@
                 </template>
             </div>
         </div>
+
+        <!-- 수집 섹션 -->
+        <div x-show="getModulesByType('collect').length > 0" class="module-section">
+            <div class="section-header">
+                <span class="text-2xl">🔍</span>
+                <h3 class="section-title">수집 모듈</h3>
+                <span class="section-count" x-text="getModulesByType('collect').length"></span>
+            </div>
+            <div class="module-grid">
+                <template x-for="module in getModulesByType('collect')" :key="module.id + '-' + sortBy + '-' + sortOrder">
+                    {% include "modules/_card.html" %}
+                </template>
+            </div>
+        </div>
     </div>
 
     <!-- 모바일: 탭 레이아웃 -->
@@ -381,6 +408,13 @@
                         class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap"
                         x-show="getModulesByType('republish').length > 0">
                     재발행
+                </button>
+                <button type="button"
+                        @click="activeTab = 'collect'"
+                        :class="activeTab === 'collect' ? 'bg-blue-50 text-blue-700 border-blue-500' : 'bg-white text-gray-500 hover:text-gray-700'"
+                        class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap"
+                        x-show="getModulesByType('collect').length > 0">
+                    수집
                 </button>
             </div>
 
@@ -417,6 +451,15 @@
                      x-effect="if (activeTab === 'republish') $nextTick(() => reinitMobileTabSlides($el))">
                     <div class="module-grid">
                         <template x-for="module in getModulesByType('republish')" :key="module.id + '-' + sortBy + '-' + sortOrder">
+                            {% include "modules/_card.html" %}
+                        </template>
+                    </div>
+                </div>
+
+                <div x-show="activeTab === 'collect'"
+                     x-effect="if (activeTab === 'collect') $nextTick(() => reinitMobileTabSlides($el))">
+                    <div class="module-grid">
+                        <template x-for="module in getModulesByType('collect')" :key="module.id + '-' + sortBy + '-' + sortOrder">
                             {% include "modules/_card.html" %}
                         </template>
                     </div>
@@ -479,6 +522,13 @@
           <span class="text-3xl mb-2 group-hover:scale-110 transition-transform duration-200">🔄</span>
           <span class="font-medium text-gray-900 group-hover:text-blue-700">재발행</span>
           <span class="text-xs text-gray-500 mt-1">기존 글 재발행</span>
+        </button>
+
+        <button onclick="selectOption('moduleTypeSelector', 'collect', '수집')"
+                class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-purple-300 hover:bg-purple-50 transition-all duration-200 group col-span-2">
+          <span class="text-3xl mb-2 group-hover:scale-110 transition-transform duration-200">🔍</span>
+          <span class="font-medium text-gray-900 group-hover:text-purple-700">수집</span>
+          <span class="text-xs text-gray-500 mt-1">키워드/제목 자동 수집</span>
         </button>
       </div>
     </div>

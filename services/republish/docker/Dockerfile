@@ -20,6 +20,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 애플리케이션 코드 복사
 COPY app/ app/
 COPY logs/ logs/
+COPY alembic/ alembic/
+COPY alembic.ini .
 
 # 로그 디렉토리 권한 설정
 RUN mkdir -p logs && chmod 755 logs

@@ -586,15 +586,16 @@ function flowListApp() {
             return labels[platform] || platform;
         },
 
-        // 모듈 타입별 색상 반환
+        // 모듈 타입별 색상 반환 (모듈 관리 페이지와 동일)
         getModuleColor(typeCode) {
             const colors = {
-                republish: 'bg-blue-100',
-                publish: 'bg-green-100',
-                generate: 'bg-purple-100',
-                prompt: 'bg-yellow-100'
+                republish: 'bg-sky-200',
+                publish: 'bg-rose-200',
+                generate: 'bg-amber-200',
+                prompt: 'bg-green-200',
+                collect: 'bg-purple-200'
             };
-            return colors[typeCode] || 'bg-gray-100';
+            return colors[typeCode] || 'bg-gray-200';
         },
 
         // 모듈 타입 이름 반환
@@ -603,7 +604,8 @@ function flowListApp() {
                 republish: '재발행',
                 publish: '발행',
                 generate: '생성',
-                prompt: '프롬프트'
+                prompt: '프롬프트',
+                collect: '수집'
             };
             return names[typeCode] || typeCode;
         },
@@ -761,6 +763,32 @@ function flowListApp() {
                 }
                 if (module.category) {
                     items.push({ label: '카테고리', value: module.category });
+                }
+            } else if (typeCode === 'collect') {
+                // 수집 모듈 정보 표시
+                const settings = module.settings || {};
+
+                // 수집 대상
+                const sources = [];
+                if (settings.source_naver_datalab) sources.push('데이터랩');
+                if (settings.source_naver_ads) sources.push('네이버광고');
+                if (settings.source_google_trends) sources.push('트렌드');
+                if (settings.source_google_planner) sources.push('플래너');
+                if (sources.length > 0) {
+                    items.push({ label: '수집', value: sources.join(', ') });
+                }
+
+                // 수집 타입
+                const typeMap = { 'keyword': '키워드', 'title': '제목', 'both': '키워드+제목' };
+                if (settings.collect_type) {
+                    items.push({ label: '타입', value: typeMap[settings.collect_type] || '전체' });
+                }
+
+                // 스케줄
+                if (settings.schedule_mode === 'fixed_time' && settings.fixed_times?.length > 0) {
+                    items.push({ label: '시간', value: settings.fixed_times.join(', ') });
+                } else if (settings.schedule_mode === 'interval' && settings.interval_hours) {
+                    items.push({ label: '간격', value: `${settings.interval_hours}시간` });
                 }
             }
 

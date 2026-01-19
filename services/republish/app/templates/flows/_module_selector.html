@@ -1,0 +1,523 @@
+{#
+모듈/템플릿 선택 위젯
+- 모듈 관리에서 생성된 모듈과 템플릿을 선택하여 플로우에 추가
+- 템플릿 선택 시 workflow_guide에 연결된 모듈들이 자동으로 추가됨
+#}
+
+<div x-data="flowModuleSelectorComponent()" x-init="init()" class="module-selector-widget">
+    <!-- 헤더 -->
+    <div class="widget-header">
+        <h4 class="text-base font-semibold text-gray-800 flex items-center gap-2">
+            <span>🔗</span>
+            <span>모듈 구성</span>
+        </h4>
+        <p class="text-sm text-gray-500 mt-1">모듈이나 템플릿을 선택하여 플로우에 추가하세요</p>
+    </div>
+
+    <!-- 탭 버튼 -->
+    <div class="selector-tabs">
+        <button type="button"
+                @click="activeTab = 'module'"
+                :class="activeTab === 'module' ? 'tab-active' : 'tab-inactive'"
+                class="tab-btn">
+            <span>📦</span>
+            <span>모듈</span>
+            <span class="tab-count" x-text="modules.length"></span>
+        </button>
+        <button type="button"
+                @click="activeTab = 'template'"
+                :class="activeTab === 'template' ? 'tab-active' : 'tab-inactive'"
+                class="tab-btn">
+            <span>📋</span>
+            <span>템플릿</span>
+            <span class="tab-count" x-text="templates.length"></span>
+        </button>
+    </div>
+
+    <!-- 선택된 모듈/템플릿 표시 -->
+    <div class="selected-items" x-show="selectedModules.length > 0">
+        <div class="selected-header">
+            <span class="text-sm font-medium text-gray-700">선택된 모듈</span>
+            <span class="text-xs text-gray-500" x-text="`${selectedModules.length}개`"></span>
+        </div>
+        <div class="selected-list">
+            <template x-for="(item, index) in selectedModules" :key="item.id">
+                <div class="selected-item">
+                    <div class="item-order" x-text="index + 1"></div>
+                    <div class="item-icon" x-text="item.icon || '📦'"></div>
+                    <div class="item-info">
+                        <span class="item-name" x-text="item.name"></span>
+                        <span class="item-type" x-text="item.typeName"></span>
+                    </div>
+                    <div class="item-actions">
+                        <button type="button" @click="moveUp(index)" :disabled="index === 0" class="btn-move">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                            </svg>
+                        </button>
+                        <button type="button" @click="moveDown(index)" :disabled="index === selectedModules.length - 1" class="btn-move">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+                        <button type="button" @click="removeModule(index)" class="btn-remove">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- 빈 상태 -->
+    <div class="empty-selected" x-show="selectedModules.length === 0">
+        <div class="text-3xl mb-2">📭</div>
+        <p class="text-gray-500 text-sm">선택된 모듈이 없습니다</p>
+        <p class="text-gray-400 text-xs">아래에서 모듈이나 템플릿을 선택해주세요</p>
+    </div>
+
+    <!-- 로딩 상태 -->
+    <div x-show="loading" class="loading-state">
+        <svg class="animate-spin h-5 w-5 text-blue-500 mr-2" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <span class="text-sm text-gray-500">모듈 목록을 불러오는 중...</span>
+    </div>
+
+    <!-- 모듈 탭 내용 -->
+    <div x-show="!loading && activeTab === 'module'" class="tab-content">
+        <!-- 카테고리별 모듈 목록 -->
+        <template x-for="category in groupedModules" :key="category.code">
+            <div class="module-category" x-show="category.items.length > 0">
+                <div class="category-header" @click="toggleCategory(category.code)">
+                    <span class="category-icon" x-text="category.icon"></span>
+                    <span class="category-name" x-text="category.name"></span>
+                    <span class="category-count" x-text="`${category.items.length}개`"></span>
+                    <svg class="category-arrow" :class="expandedCategories.includes(category.code) ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </div>
+                <div class="category-items" x-show="expandedCategories.includes(category.code)" x-transition>
+                    <template x-for="mod in category.items" :key="mod.id">
+                        <button type="button"
+                                @click="selectModule(mod)"
+                                class="module-item"
+                                :class="isSelected(mod.id) ? 'module-item-selected' : ''">
+                            <span class="module-icon" x-text="mod.module_type?.icon || '📦'"></span>
+                            <div class="module-info">
+                                <span class="module-name" x-text="mod.name"></span>
+                                <span class="module-desc" x-text="mod.description || mod.module_type?.name || '설명 없음'"></span>
+                            </div>
+                            <div class="module-check" x-show="isSelected(mod.id)">
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                                </svg>
+                            </div>
+                        </button>
+                    </template>
+                </div>
+            </div>
+        </template>
+
+        <!-- 빈 상태 (모듈 없음) -->
+        <div x-show="modules.length === 0 && !loading" class="empty-modules">
+            <div class="text-3xl mb-2">📭</div>
+            <p class="text-gray-500 text-sm">생성된 모듈이 없습니다</p>
+            <p class="text-gray-400 text-xs">모듈 관리에서 먼저 모듈을 생성해주세요</p>
+        </div>
+    </div>
+
+    <!-- 템플릿 탭 내용 -->
+    <div x-show="!loading && activeTab === 'template'" class="tab-content">
+        <template x-for="tmpl in templates" :key="tmpl.id">
+            <button type="button"
+                    @click="selectTemplate(tmpl)"
+                    class="template-item">
+                <span class="template-icon" x-text="tmpl.module_type?.icon || '📋'"></span>
+                <div class="template-info">
+                    <span class="template-name" x-text="tmpl.name"></span>
+                    <span class="template-desc" x-text="tmpl.description || tmpl.module_type?.description || '설명 없음'"></span>
+                    <div class="template-workflow" x-show="tmpl.params?.workflow_guide">
+                        <span class="text-xs text-blue-600">워크플로우 구성:</span>
+                        <span class="text-xs text-gray-600" x-text="getWorkflowSummary(tmpl)"></span>
+                    </div>
+                </div>
+                <span class="template-add-icon">+</span>
+            </button>
+        </template>
+
+        <!-- 빈 상태 (템플릿 없음) -->
+        <div x-show="templates.length === 0 && !loading" class="empty-templates">
+            <div class="text-3xl mb-2">📭</div>
+            <p class="text-gray-500 text-sm">생성된 템플릿이 없습니다</p>
+            <p class="text-gray-400 text-xs">모듈 관리에서 템플릿을 생성해주세요</p>
+        </div>
+    </div>
+</div>
+
+<style>
+/* 모듈 선택 위젯 스타일 */
+.module-selector-widget {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.widget-header {
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+/* 탭 스타일 */
+.selector-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.tab-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.tab-active {
+    background: #3b82f6;
+    color: white;
+}
+
+.tab-inactive {
+    background: white;
+    color: #64748b;
+    border: 1px solid #e2e8f0;
+}
+
+.tab-inactive:hover {
+    background: #f1f5f9;
+}
+
+.tab-count {
+    background: rgba(255,255,255,0.2);
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+}
+
+.tab-inactive .tab-count {
+    background: #e2e8f0;
+}
+
+/* 선택된 모듈 목록 */
+.selected-items {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+    overflow: hidden;
+}
+
+.selected-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background: #f1f5f9;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.selected-list {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.selected-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.selected-item:last-child {
+    border-bottom: none;
+}
+
+.item-order {
+    width: 24px;
+    height: 24px;
+    background: #3b82f6;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.item-icon {
+    font-size: 1.25rem;
+    flex-shrink: 0;
+}
+
+.item-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.item-name {
+    font-weight: 500;
+    color: #1e293b;
+    font-size: 0.875rem;
+}
+
+.item-type {
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+.item-actions {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.btn-move {
+    padding: 0.25rem;
+    color: #64748b;
+    border-radius: 0.25rem;
+    transition: all 0.2s;
+}
+
+.btn-move:hover:not(:disabled) {
+    background: #f1f5f9;
+    color: #3b82f6;
+}
+
+.btn-move:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.btn-remove {
+    padding: 0.25rem;
+    color: #ef4444;
+    border-radius: 0.25rem;
+    transition: all 0.2s;
+}
+
+.btn-remove:hover {
+    background: #fef2f2;
+}
+
+/* 빈 상태 */
+.empty-selected, .empty-modules, .empty-templates {
+    text-align: center;
+    padding: 2rem 1rem;
+    background: white;
+    border: 1px dashed #e2e8f0;
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+/* 로딩 상태 */
+.loading-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+}
+
+/* 탭 내용 */
+.tab-content {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+/* 카테고리 */
+.module-category {
+    margin-bottom: 0.5rem;
+}
+
+.category-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.category-header:hover {
+    background: #f8fafc;
+}
+
+.category-icon {
+    font-size: 1.25rem;
+}
+
+.category-name {
+    flex: 1;
+    font-weight: 500;
+    color: #1e293b;
+}
+
+.category-count {
+    font-size: 0.75rem;
+    color: #64748b;
+    background: #f1f5f9;
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+}
+
+.category-arrow {
+    width: 1.25rem;
+    height: 1.25rem;
+    color: #64748b;
+    transition: transform 0.2s;
+}
+
+.category-items {
+    padding: 0.5rem 0 0 1.5rem;
+}
+
+/* 모듈 아이템 */
+.module-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    margin-bottom: 0.5rem;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.module-item:hover {
+    border-color: #3b82f6;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+}
+
+.module-item-selected {
+    border-color: #3b82f6;
+    background: #eff6ff;
+}
+
+.module-icon {
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+.module-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.module-name {
+    font-weight: 500;
+    color: #1e293b;
+}
+
+.module-desc {
+    font-size: 0.75rem;
+    color: #64748b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.module-check {
+    width: 24px;
+    height: 24px;
+    background: #3b82f6;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+/* 템플릿 아이템 */
+.template-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 1rem;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    margin-bottom: 0.5rem;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.template-item:hover {
+    border-color: #3b82f6;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+}
+
+.template-icon {
+    font-size: 2rem;
+    flex-shrink: 0;
+}
+
+.template-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.template-name {
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.template-desc {
+    font-size: 0.875rem;
+    color: #64748b;
+}
+
+.template-workflow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid #f1f5f9;
+}
+
+.template-add-icon {
+    font-size: 1.5rem;
+    color: #3b82f6;
+    flex-shrink: 0;
+}
+</style>

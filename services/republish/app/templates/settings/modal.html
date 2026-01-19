@@ -137,33 +137,436 @@
 
             <!-- API 설정 탭 -->
             <div x-show="!loading && activeTab === 'api'" x-cloak>
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Google Blogger 시간당 발행 제한</label>
-                        <select x-model="form.blogger_hourly_limit"
-                                @change="checkBloggerWarning()"
-                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <option value="1">1회</option>
-                            <option value="2">2회 (권장)</option>
-                            <option value="3">3회</option>
-                            <option value="4">4회</option>
-                        </select>
-                        <p class="mt-1 text-xs text-gray-500">동일 Google 계정에서 같은 시간대에 발행할 수 있는 최대 횟수</p>
+                <div class="space-y-6">
+                    <!-- Google Blogger 설정 -->
+                    <div class="space-y-4">
+                        <h4 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                            <svg class="w-4 h-4 text-red-500" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .37z"/>
+                            </svg>
+                            Google Blogger
+                        </h4>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">시간당 발행 제한</label>
+                            <select x-model="form.blogger_hourly_limit"
+                                    @change="checkBloggerWarning()"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <option value="1">1회</option>
+                                <option value="2">2회 (권장)</option>
+                                <option value="3">3회</option>
+                                <option value="4">4회</option>
+                            </select>
+                            <p class="mt-1 text-xs text-gray-500">동일 Google 계정에서 같은 시간대에 발행할 수 있는 최대 횟수</p>
+                        </div>
+
+                        <!-- 경고 메시지 (3회 이상 선택 시) -->
+                        <div x-show="showBloggerWarning" x-cloak
+                             class="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                            <div class="flex items-start gap-3">
+                                <svg class="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                                </svg>
+                                <div>
+                                    <h4 class="font-medium text-yellow-800">주의</h4>
+                                    <p class="text-sm text-yellow-700 mt-1">
+                                        잦은 빈도로 API를 사용할 경우 Google 계정이 제한될 수 있습니다. 신중하게 설정하세요.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
-                    <!-- 경고 메시지 (3회 이상 선택 시) -->
-                    <div x-show="showBloggerWarning" x-cloak
-                         class="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                        <div class="flex items-start gap-3">
-                            <svg class="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    <hr class="border-gray-200">
+
+                    <!-- 네이버 검색광고 API 설정 -->
+                    <div class="space-y-4">
+                        <h4 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                            <svg class="w-4 h-4 text-green-500" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z"/>
                             </svg>
-                            <div>
-                                <h4 class="font-medium text-yellow-800">주의</h4>
-                                <p class="text-sm text-yellow-700 mt-1">
-                                    잦은 빈도로 API를 사용할 경우 Google 계정이 제한될 수 있습니다. 신중하게 설정하세요.
-                                </p>
+                            네이버 검색광고 API
+                            <span x-show="form.has_naver_ads_api" class="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full">연동됨</span>
+                        </h4>
+                        <p class="text-xs text-gray-500 -mt-2">키워드 검색량 및 연관 키워드 수집에 사용됩니다</p>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">API 키</label>
+                            <div class="relative">
+                                <input :type="showNaverApiKey ? 'text' : 'password'"
+                                       x-model="form.naver_ads_api_key"
+                                       placeholder="API 키를 입력하세요"
+                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <button @click="showNaverApiKey = !showNaverApiKey" type="button"
+                                        class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                    <svg x-show="!showNaverApiKey" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                    </svg>
+                                    <svg x-show="showNaverApiKey" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+                                    </svg>
+                                </button>
                             </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Secret 키</label>
+                            <div class="relative">
+                                <input :type="showNaverSecretKey ? 'text' : 'password'"
+                                       x-model="form.naver_ads_secret_key"
+                                       placeholder="Secret 키를 입력하세요"
+                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <button @click="showNaverSecretKey = !showNaverSecretKey" type="button"
+                                        class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                    <svg x-show="!showNaverSecretKey" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                    </svg>
+                                    <svg x-show="showNaverSecretKey" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">고객 ID (Customer ID)</label>
+                            <input type="text"
+                                   x-model="form.naver_ads_customer_id"
+                                   placeholder="고객 ID를 입력하세요"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+
+                        <!-- 연결 테스트 버튼 -->
+                        <div class="flex items-center gap-3">
+                            <button @click="testNaverAdsConnection()"
+                                    :disabled="testingNaverAds || !form.naver_ads_api_key || !form.naver_ads_secret_key || !form.naver_ads_customer_id"
+                                    class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                                <span x-show="!testingNaverAds">연결 테스트</span>
+                                <span x-show="testingNaverAds" class="flex items-center gap-2">
+                                    <div class="loading w-4 h-4"></div>
+                                    테스트 중...
+                                </span>
+                            </button>
+                            <span x-show="naverAdsTestResult" :class="naverAdsTestSuccess ? 'text-green-600' : 'text-red-600'" class="text-sm" x-text="naverAdsTestResult"></span>
+                        </div>
+
+                        <p class="text-xs text-gray-500">
+                            네이버 검색광고 API는 <a href="https://searchad.naver.com" target="_blank" class="text-blue-600 hover:underline">네이버 검색광고 센터</a>에서 발급받을 수 있습니다.
+                        </p>
+                    </div>
+
+                    <hr class="border-gray-200">
+
+                    <!-- 네이버 검색 API 설정 -->
+                    <div class="space-y-4">
+                        <h4 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                            <svg class="w-4 h-4 text-green-600" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+                            </svg>
+                            네이버 검색 API
+                            <span x-show="form.has_naver_search_api" class="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full">연동됨</span>
+                        </h4>
+                        <p class="text-xs text-gray-500 -mt-2">블로그 검색 및 <strong class="text-blue-600">뉴스 제목 수집</strong>에 사용됩니다</p>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Client ID</label>
+                            <div class="relative">
+                                <input :type="showNaverSearchClientId ? 'text' : 'password'"
+                                       x-model="form.naver_search_client_id"
+                                       placeholder="Client ID를 입력하세요"
+                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <button @click="showNaverSearchClientId = !showNaverSearchClientId" type="button"
+                                        class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                    <svg x-show="!showNaverSearchClientId" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                    </svg>
+                                    <svg x-show="showNaverSearchClientId" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Client Secret</label>
+                            <div class="relative">
+                                <input :type="showNaverSearchClientSecret ? 'text' : 'password'"
+                                       x-model="form.naver_search_client_secret"
+                                       placeholder="Client Secret을 입력하세요"
+                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <button @click="showNaverSearchClientSecret = !showNaverSearchClientSecret" type="button"
+                                        class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                    <svg x-show="!showNaverSearchClientSecret" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                    </svg>
+                                    <svg x-show="showNaverSearchClientSecret" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 연결 테스트 버튼 -->
+                        <div class="flex items-center gap-3">
+                            <button @click="testNaverSearchConnection()"
+                                    :disabled="testingNaverSearch || !form.naver_search_client_id || !form.naver_search_client_secret"
+                                    class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                                <span x-show="!testingNaverSearch">연결 테스트</span>
+                                <span x-show="testingNaverSearch" class="flex items-center gap-2">
+                                    <div class="loading w-4 h-4"></div>
+                                    테스트 중...
+                                </span>
+                            </button>
+                            <span x-show="naverSearchTestResult" :class="naverSearchTestSuccess ? 'text-green-600' : 'text-red-600'" class="text-sm" x-text="naverSearchTestResult"></span>
+                        </div>
+
+                        <p class="text-xs text-gray-500">
+                            네이버 검색 API는 <a href="https://developers.naver.com/apps/#/register" target="_blank" class="text-blue-600 hover:underline">네이버 개발자센터</a>에서 발급받을 수 있습니다.
+                            (검색 > 블로그 검색 API 사용 신청)
+                        </p>
+                    </div>
+
+                    <hr class="border-gray-200">
+
+                    <!-- 구글 트렌드 설정 -->
+                    <div class="space-y-4">
+                        <h4 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                            <svg class="w-4 h-4 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M23.954 4.569c-.885.389-1.83.654-2.825.775 1.014-.611 1.794-1.574 2.163-2.723-.951.555-2.005.959-3.127 1.184-.896-.959-2.173-1.559-3.591-1.559-2.717 0-4.92 2.203-4.92 4.917 0 .39.045.765.127 1.124C7.691 8.094 4.066 6.13 1.64 3.161c-.427.722-.666 1.561-.666 2.475 0 1.71.87 3.213 2.188 4.096-.807-.026-1.566-.248-2.228-.616v.061c0 2.385 1.693 4.374 3.946 4.827-.413.111-.849.171-1.296.171-.314 0-.615-.03-.916-.086.631 1.953 2.445 3.377 4.604 3.417-1.68 1.319-3.809 2.105-6.102 2.105-.39 0-.779-.023-1.17-.067 2.189 1.394 4.768 2.209 7.557 2.209 9.054 0 13.999-7.496 13.999-13.986 0-.209 0-.42-.015-.63.961-.689 1.8-1.56 2.46-2.548l-.047-.02z"/>
+                            </svg>
+                            구글 트렌드
+                            <span x-show="googleTrendsConnected" class="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full">연동됨</span>
+                        </h4>
+                        <p class="text-xs text-gray-500 -mt-2">실시간 인기 검색어 및 연관 검색어 수집에 사용됩니다 (인증 불필요)</p>
+
+                        <!-- 연결 테스트 버튼 -->
+                        <div class="flex items-center gap-3">
+                            <button @click="testGoogleTrendsConnection()"
+                                    :disabled="testingGoogleTrends"
+                                    class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                                <span x-show="!testingGoogleTrends">연결 테스트</span>
+                                <span x-show="testingGoogleTrends" class="flex items-center gap-2">
+                                    <div class="loading w-4 h-4"></div>
+                                    테스트 중...
+                                </span>
+                            </button>
+                            <span x-show="googleTrendsTestResult" :class="googleTrendsTestSuccess ? 'text-green-600' : 'text-red-600'" class="text-sm" x-text="googleTrendsTestResult"></span>
+                        </div>
+
+                        <!-- 샘플 인기 검색어 표시 -->
+                        <div x-show="googleTrendsSample.length > 0" class="p-3 bg-gray-50 rounded-lg">
+                            <p class="text-xs font-medium text-gray-600 mb-2">실시간 인기 검색어 (샘플)</p>
+                            <div class="flex flex-wrap gap-2">
+                                <template x-for="item in googleTrendsSample" :key="item.keyword">
+                                    <span class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full" x-text="item.keyword"></span>
+                                </template>
+                            </div>
+                        </div>
+
+                        <p class="text-xs text-gray-500">
+                            구글 트렌드는 공개 API로 별도 인증 없이 사용 가능합니다. 단, 과도한 요청 시 일시적으로 제한될 수 있습니다.
+                        </p>
+                    </div>
+
+                    <hr class="border-gray-200">
+
+                    <!-- 네이버 데이터랩 API 설정 -->
+                    <div class="space-y-4">
+                        <h4 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                            <svg class="w-4 h-4 text-green-600" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M3 3v18h18V3H3zm15 12h-3v3h-2v-3H8v-2h5V8h2v5h3v2z"/>
+                            </svg>
+                            네이버 데이터랩
+                            <span x-show="form.has_naver_datalab_api" class="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full">연동됨</span>
+                        </h4>
+                        <p class="text-xs text-gray-500 -mt-2">검색어 트렌드 및 상대적 검색량 비교에 사용됩니다</p>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Client ID</label>
+                            <div class="relative">
+                                <input :type="showNaverDatalabClientId ? 'text' : 'password'"
+                                       x-model="form.naver_datalab_client_id"
+                                       placeholder="Client ID를 입력하세요"
+                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <button @click="showNaverDatalabClientId = !showNaverDatalabClientId" type="button"
+                                        class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                    <svg x-show="!showNaverDatalabClientId" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                    </svg>
+                                    <svg x-show="showNaverDatalabClientId" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Client Secret</label>
+                            <div class="relative">
+                                <input :type="showNaverDatalabClientSecret ? 'text' : 'password'"
+                                       x-model="form.naver_datalab_client_secret"
+                                       placeholder="Client Secret을 입력하세요"
+                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <button @click="showNaverDatalabClientSecret = !showNaverDatalabClientSecret" type="button"
+                                        class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                    <svg x-show="!showNaverDatalabClientSecret" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                    </svg>
+                                    <svg x-show="showNaverDatalabClientSecret" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 연결 테스트 버튼 -->
+                        <div class="flex items-center gap-3">
+                            <button @click="testNaverDatalabConnection()"
+                                    :disabled="testingNaverDatalab || !form.naver_datalab_client_id || !form.naver_datalab_client_secret"
+                                    class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                                <span x-show="!testingNaverDatalab">연결 테스트</span>
+                                <span x-show="testingNaverDatalab" class="flex items-center gap-2">
+                                    <div class="loading w-4 h-4"></div>
+                                    테스트 중...
+                                </span>
+                            </button>
+                            <span x-show="naverDatalabTestResult" :class="naverDatalabTestSuccess ? 'text-green-600' : 'text-red-600'" class="text-sm" x-text="naverDatalabTestResult"></span>
+                        </div>
+
+                        <p class="text-xs text-gray-500">
+                            네이버 데이터랩 API는 <a href="https://developers.naver.com/apps" target="_blank" class="text-blue-600 hover:underline">네이버 개발자센터</a>에서 발급받을 수 있습니다.
+                            (데이터랩 > 검색어트렌드 API 사용 신청)
+                        </p>
+                    </div>
+
+                    <hr class="border-gray-200">
+
+                    <!-- Google Keyword Planner API 설정 -->
+                    <div class="space-y-4">
+                        <h4 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                            <svg class="w-4 h-4 text-blue-600" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                            </svg>
+                            구글 키워드 플래너
+                            <span x-show="form.has_google_keyword_planner_api" class="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full">연동됨</span>
+                        </h4>
+                        <p class="text-xs text-gray-500 -mt-2">키워드 아이디어 및 검색량 조회에 사용됩니다 (Google Ads 계정 필요)</p>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Developer Token</label>
+                            <div class="relative">
+                                <input :type="showGoogleAdsDeveloperToken ? 'text' : 'password'"
+                                       x-model="form.google_ads_developer_token"
+                                       placeholder="Developer Token을 입력하세요"
+                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <button @click="showGoogleAdsDeveloperToken = !showGoogleAdsDeveloperToken" type="button"
+                                        class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                    <svg x-show="!showGoogleAdsDeveloperToken" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                    </svg>
+                                    <svg x-show="showGoogleAdsDeveloperToken" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">OAuth Client ID</label>
+                            <div class="relative">
+                                <input :type="showGoogleAdsClientId ? 'text' : 'password'"
+                                       x-model="form.google_ads_client_id"
+                                       placeholder="OAuth Client ID를 입력하세요"
+                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <button @click="showGoogleAdsClientId = !showGoogleAdsClientId" type="button"
+                                        class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                    <svg x-show="!showGoogleAdsClientId" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                    </svg>
+                                    <svg x-show="showGoogleAdsClientId" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">OAuth Client Secret</label>
+                            <div class="relative">
+                                <input :type="showGoogleAdsClientSecret ? 'text' : 'password'"
+                                       x-model="form.google_ads_client_secret"
+                                       placeholder="OAuth Client Secret을 입력하세요"
+                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <button @click="showGoogleAdsClientSecret = !showGoogleAdsClientSecret" type="button"
+                                        class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                    <svg x-show="!showGoogleAdsClientSecret" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                    </svg>
+                                    <svg x-show="showGoogleAdsClientSecret" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Refresh Token</label>
+                            <div class="relative">
+                                <input :type="showGoogleAdsRefreshToken ? 'text' : 'password'"
+                                       x-model="form.google_ads_refresh_token"
+                                       placeholder="Refresh Token을 입력하세요"
+                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <button @click="showGoogleAdsRefreshToken = !showGoogleAdsRefreshToken" type="button"
+                                        class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                    <svg x-show="!showGoogleAdsRefreshToken" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                    </svg>
+                                    <svg x-show="showGoogleAdsRefreshToken" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Customer ID (10자리 숫자)</label>
+                            <input type="text"
+                                   x-model="form.google_ads_customer_id"
+                                   placeholder="123-456-7890 형식으로 입력"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+
+                        <!-- 연결 테스트 버튼 -->
+                        <div class="flex items-center gap-3">
+                            <button @click="testGoogleKeywordPlannerConnection()"
+                                    :disabled="testingGooglePlanner || !form.google_ads_developer_token || !form.google_ads_client_id || !form.google_ads_client_secret || !form.google_ads_refresh_token || !form.google_ads_customer_id"
+                                    class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                                <span x-show="!testingGooglePlanner">연결 테스트</span>
+                                <span x-show="testingGooglePlanner" class="flex items-center gap-2">
+                                    <div class="loading w-4 h-4"></div>
+                                    테스트 중...
+                                </span>
+                            </button>
+                            <span x-show="googlePlannerTestResult" :class="googlePlannerTestSuccess ? 'text-green-600' : 'text-red-600'" class="text-sm" x-text="googlePlannerTestResult"></span>
+                        </div>
+
+                        <div class="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                            <p class="text-xs text-yellow-700">
+                                <strong>참고:</strong> Google Keyword Planner API는 활성 Google Ads 계정이 필요합니다.
+                                <a href="https://developers.google.com/google-ads/api/docs/get-started/introduction" target="_blank" class="text-blue-600 hover:underline">Google Ads API 시작하기</a>에서 자세한 설정 방법을 확인하세요.
+                            </p>
                         </div>
                     </div>
                 </div>

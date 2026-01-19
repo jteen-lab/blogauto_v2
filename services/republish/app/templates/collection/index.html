@@ -1,0 +1,1507 @@
+{% extends "base.html" %}
+
+{% block title %}데이터 관리 - BlogAuto V2{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="/static/css/components.css">
+<style>
+    /* 탭 스타일 - PC/모바일 동일 */
+    .tab-nav {
+        display: flex;
+        border-bottom: 1px solid #e5e7eb;
+        background: #f9fafb;
+    }
+    .tab-btn {
+        flex: 1;
+        padding: 0.875rem 1rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        text-align: center;
+        border-bottom: 2px solid transparent;
+        transition: all 0.2s;
+        cursor: pointer;
+    }
+    .tab-btn:hover {
+        background: #f3f4f6;
+    }
+    .tab-btn.active {
+        background: white;
+        color: #2563eb;
+        border-bottom-color: #2563eb;
+    }
+    .tab-btn:not(.active) {
+        color: #6b7280;
+    }
+    .tab-content {
+        display: none;
+    }
+    .tab-content.active {
+        display: block;
+    }
+
+    /* 테이블 스타일 */
+    .data-table {
+        width: 100%;
+        font-size: 0.875rem;
+    }
+    .data-table th {
+        padding: 0.75rem 1rem;
+        text-align: left;
+        background: #f9fafb;
+        font-weight: 500;
+        color: #374151;
+        border-bottom: 1px solid #e5e7eb;
+        white-space: nowrap;
+    }
+    .data-table td {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid #f3f4f6;
+        vertical-align: middle;
+    }
+    .data-table tbody tr:hover {
+        background: #f9fafb;
+    }
+
+    /* 배지 스타일 */
+    .badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.125rem 0.5rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+    .badge-blue { background: #dbeafe; color: #1e40af; }
+    .badge-green { background: #dcfce7; color: #166534; }
+    .badge-yellow { background: #fef3c7; color: #92400e; }
+    .badge-red { background: #fee2e2; color: #991b1b; }
+    .badge-gray { background: #f3f4f6; color: #4b5563; }
+
+    /* 페이지네이션 */
+    .pagination {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1rem;
+        border-top: 1px solid #e5e7eb;
+    }
+
+    /* 검색 바 */
+    .search-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        padding: 1rem;
+        background: #f9fafb;
+        border-bottom: 1px solid #e5e7eb;
+    }
+    @media (min-width: 768px) {
+        .search-bar {
+            flex-wrap: nowrap;
+            justify-content: space-between;
+        }
+    }
+
+    /* 반응형 테이블 - PC */
+    .table-container {
+        overflow-x: auto;
+    }
+
+    /* ===== 모바일 아코디언 카드 스타일 ===== */
+
+    /* PC에서 모바일 카드 숨김 */
+    .mobile-card-list {
+        display: none;
+    }
+
+    /* 모바일에서 테이블 숨김, 카드 표시 */
+    @media (max-width: 767px) {
+        .table-container {
+            display: none;
+        }
+        .mobile-card-list {
+            display: block;
+        }
+    }
+
+    /* 카드 기본 스타일 */
+    .mobile-card {
+        background: white;
+        border-bottom: 1px solid #e5e7eb;
+        transition: background-color 0.15s;
+    }
+    .mobile-card:last-child {
+        border-bottom: none;
+    }
+    .mobile-card.selected {
+        background: #eff6ff;
+    }
+
+    /* 카드 헤더 (접힌 상태) */
+    .mobile-card-header {
+        display: flex;
+        align-items: center;
+        padding: 0.875rem 1rem;
+        gap: 0.75rem;
+        cursor: pointer;
+    }
+    .mobile-card-header:active {
+        background: #f3f4f6;
+    }
+
+    /* 체크박스 영역 */
+    .mobile-card-checkbox {
+        flex-shrink: 0;
+    }
+
+    /* 메인 컨텐츠 영역 */
+    .mobile-card-main {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    /* 카드 제목 (주요 정보) */
+    .mobile-card-title {
+        font-weight: 500;
+        color: #111827;
+        font-size: 0.9375rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* 카드 부제목 (보조 정보) */
+    .mobile-card-subtitle {
+        font-size: 0.8125rem;
+        color: #6b7280;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    /* 확장 아이콘 */
+    .mobile-card-expand {
+        flex-shrink: 0;
+        color: #9ca3af;
+        transition: transform 0.2s;
+    }
+    .mobile-card.expanded .mobile-card-expand {
+        transform: rotate(180deg);
+    }
+
+    /* 카드 상세 영역 (펼친 상태) */
+    .mobile-card-details {
+        display: none;
+        padding: 0 1rem 1rem 3rem;
+        font-size: 0.8125rem;
+    }
+    .mobile-card.expanded .mobile-card-details {
+        display: block;
+    }
+
+    /* 상세 정보 행 */
+    .mobile-card-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.375rem 0;
+        border-bottom: 1px solid #f3f4f6;
+    }
+    .mobile-card-row:last-child {
+        border-bottom: none;
+    }
+    .mobile-card-label {
+        color: #6b7280;
+    }
+    .mobile-card-value {
+        color: #111827;
+        font-weight: 500;
+        text-align: right;
+    }
+
+    /* 카드 액션 버튼 */
+    .mobile-card-actions {
+        display: flex;
+        gap: 0.75rem;
+        margin-top: 0.75rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid #e5e7eb;
+    }
+    .mobile-card-action-btn {
+        flex: 1;
+        padding: 0.5rem 0.75rem;
+        border-radius: 0.5rem;
+        font-size: 0.8125rem;
+        font-weight: 500;
+        text-align: center;
+        transition: all 0.15s;
+    }
+    .mobile-card-action-btn.primary {
+        background: #2563eb;
+        color: white;
+    }
+    .mobile-card-action-btn.primary:active {
+        background: #1d4ed8;
+    }
+    .mobile-card-action-btn.danger {
+        background: #fee2e2;
+        color: #dc2626;
+    }
+    .mobile-card-action-btn.danger:active {
+        background: #fecaca;
+    }
+    .mobile-card-action-btn.secondary {
+        background: #f3f4f6;
+        color: #374151;
+    }
+    .mobile-card-action-btn.secondary:active {
+        background: #e5e7eb;
+    }
+
+    /* 모바일 전체 선택 바 */
+    .mobile-select-all {
+        display: flex;
+        align-items: center;
+        padding: 0.75rem 1rem;
+        background: #f9fafb;
+        border-bottom: 1px solid #e5e7eb;
+        gap: 0.75rem;
+    }
+
+    /* 모바일 빈 상태 */
+    .mobile-empty-state {
+        padding: 3rem 1rem;
+        text-align: center;
+    }
+    .mobile-empty-state .icon {
+        font-size: 3rem;
+        margin-bottom: 0.75rem;
+    }
+    .mobile-empty-state .text {
+        color: #6b7280;
+        font-size: 0.9375rem;
+    }
+    .mobile-empty-state .subtext {
+        color: #9ca3af;
+        font-size: 0.8125rem;
+        margin-top: 0.25rem;
+    }
+
+    /* 모바일 로딩 상태 */
+    .mobile-loading {
+        padding: 3rem 1rem;
+        text-align: center;
+    }
+
+    /* 로딩 스피너 */
+    .spinner {
+        display: inline-block;
+        width: 1rem;
+        height: 1rem;
+        border: 2px solid #e5e7eb;
+        border-top-color: #3b82f6;
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* 정렬 가능한 컬럼 헤더 */
+    .sortable-header {
+        cursor: pointer;
+        user-select: none;
+    }
+    .sortable-header:hover {
+        color: #2563eb;
+    }
+    .sort-icon {
+        font-size: 0.75rem;
+        color: #9ca3af;
+        margin-left: 4px;
+    }
+    .sort-icon.active {
+        color: #2563eb;
+    }
+
+    /* 검색 입력창 래퍼 */
+    .search-input-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+    .search-input-wrapper input {
+        padding-right: 2rem;
+    }
+    .search-clear-btn {
+        position: absolute;
+        right: 0.5rem;
+        padding: 0.25rem;
+        color: #9ca3af;
+        cursor: pointer;
+        border-radius: 50%;
+    }
+    .search-clear-btn:hover {
+        color: #374151;
+        background: #f3f4f6;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 py-6" x-data="dataManagementApp()">
+    <!-- 헤더 -->
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">데이터 관리</h1>
+            <p class="text-sm text-gray-500 mt-1">키워드, 제목, 필터 데이터를 관리합니다</p>
+        </div>
+    </div>
+
+    <!-- 탭 컨테이너 -->
+    <div class="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+        <!-- 탭 네비게이션 (PC/모바일 동일) -->
+        <div class="tab-nav">
+            <button
+                @click="switchTab('keywords')"
+                :class="{'active': activeTab === 'keywords'}"
+                class="tab-btn">
+                🔑 키워드
+                <span class="ml-1 text-xs" x-text="`(${stats.seed?.total || 0})`"></span>
+            </button>
+            <button
+                @click="switchTab('titles')"
+                :class="{'active': activeTab === 'titles'}"
+                class="tab-btn">
+                📝 임시제목
+                <span class="ml-1 text-xs" x-text="`(${stats.temp?.total || 0})`"></span>
+            </button>
+            <button
+                @click="switchTab('filters')"
+                :class="{'active': activeTab === 'filters'}"
+                class="tab-btn">
+                🛡️ 필터설정
+                <span class="ml-1 text-xs" x-text="`(${stats.filter?.total || 0})`"></span>
+            </button>
+            <button
+                @click="switchTab('urls')"
+                :class="{'active': activeTab === 'urls'}"
+                class="tab-btn">
+                🔗 URL수집
+                <span class="ml-1 text-xs" x-text="`(${stats.urls?.total || 0})`"></span>
+            </button>
+        </div>
+
+        <!-- 키워드 탭 -->
+        <div x-show="activeTab === 'keywords'" class="tab-content" :class="{'active': activeTab === 'keywords'}">
+            {% include "collection/_keywords.html" %}
+        </div>
+
+        <!-- 임시제목 탭 -->
+        <div x-show="activeTab === 'titles'" class="tab-content" :class="{'active': activeTab === 'titles'}">
+            {% include "collection/_titles.html" %}
+        </div>
+
+        <!-- 필터설정 탭 -->
+        <div x-show="activeTab === 'filters'" class="tab-content" :class="{'active': activeTab === 'filters'}">
+            {% include "collection/_filters.html" %}
+        </div>
+
+        <!-- URL수집 탭 -->
+        <div x-show="activeTab === 'urls'" class="tab-content" :class="{'active': activeTab === 'urls'}">
+            {% include "collection/_urls.html" %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function dataManagementApp() {
+    return {
+        activeTab: 'keywords',
+        stats: {
+            seed: { total: 0, active: 0 },
+            collected: { total: 0, processed: 0 },
+            temp: { total: 0, new: 0, categorized: 0, filtered: 0 },
+            main: { total: 0, available: 0 },
+            filter: { total: 0, active: 0, system: 0, user: 0 },
+            urls: { total: 0, processed: 0, pending: 0, inactive: 0 }
+        },
+
+        // 키워드 관련
+        keywords: [],
+        keywordPage: 1,
+        keywordSearch: '',
+        keywordSourceType: '',
+        keywordLoading: false,
+        keywordHasNext: false,
+        keywordTotal: 0,
+        selectedKeywords: [],
+        keywordSelectAll: false,
+        keywordSortField: 'created_at',
+        keywordSortDir: 'desc',
+
+        // 제목 관련
+        titles: [],
+        titlePage: 1,
+        titleSearch: '',
+        titleStatus: '',
+        titleLoading: false,
+        titleHasNext: false,
+        titleTotal: 0,
+        selectedTitles: [],
+        titleSelectAll: false,
+        titleSortField: 'created_at',
+        titleSortDir: 'desc',
+
+        // 필터 관련
+        filters: [],
+        filterPage: 1,
+        filterSearch: '',
+        filterType: '',
+        filterLoading: false,
+        filterHasNext: false,
+        filterTotal: 0,
+        selectedFilters: [],
+        filterSelectAll: false,
+        filterSortField: 'created_at',
+        filterSortDir: 'desc',
+
+        // URL 관련
+        urls: [],
+        urlPage: 1,
+        urlSearch: '',
+        urlStatus: '',
+        urlPlatform: '',
+        urlLoading: false,
+        urlHasNext: false,
+        urlTotal: 0,
+        selectedUrls: [],
+        urlSortField: 'created_at',
+        urlSortDir: 'desc',
+
+        // ★ 인라인 편집 상태 변수
+        editingKeywordId: null,
+        editingKeywordValue: '',
+        editingTitleId: null,
+        editingTitleValue: '',
+        editingFilterId: null,
+        editingFilterValue: '',
+
+        // ★ 모바일 아코디언 확장 상태
+        expandedKeywordId: null,
+        expandedTitleId: null,
+        expandedUrlId: null,
+        expandedFilterId: null,
+
+        init() {
+            this.loadStats();
+            this.loadKeywords();
+        },
+
+        switchTab(tab) {
+            this.activeTab = tab;
+            if (tab === 'keywords' && this.keywords.length === 0) {
+                this.loadKeywords();
+            } else if (tab === 'titles' && this.titles.length === 0) {
+                this.loadTitles();
+            } else if (tab === 'filters' && this.filters.length === 0) {
+                this.loadFilters();
+            } else if (tab === 'urls' && this.urls.length === 0) {
+                this.loadUrls();
+            }
+        },
+
+        // 통계 로드
+        async loadStats() {
+            try {
+                const [kwRes, titleRes, filterRes, urlRes] = await Promise.all([
+                    fetch(`${API_BASE}/data/keywords/stats`, { credentials: 'include' }),
+                    fetch(`${API_BASE}/data/titles/stats`, { credentials: 'include' }),
+                    fetch(`${API_BASE}/data/filters/stats`, { credentials: 'include' }),
+                    fetch(`${API_BASE}/data/urls/stats`, { credentials: 'include' })
+                ]);
+                const kwData = await kwRes.json();
+                const titleData = await titleRes.json();
+                const filterData = await filterRes.json();
+                const urlData = await urlRes.json();
+
+                this.stats.seed = kwData.seed || { total: 0, active: 0 };
+                this.stats.collected = kwData.collected || { total: 0, processed: 0 };
+                this.stats.temp = titleData.temp || { total: 0, new: 0 };
+                this.stats.main = titleData.main || { total: 0, available: 0 };
+                this.stats.filter = filterData || { total: 0, active: 0 };
+                this.stats.urls = urlData || { total: 0, processed: 0, pending: 0 };
+            } catch (e) {
+                console.error('통계 로드 실패:', e);
+            }
+        },
+
+        // 키워드 로드
+        async loadKeywords() {
+            this.keywordLoading = true;
+            try {
+                const params = new URLSearchParams({
+                    page: this.keywordPage,
+                    size: 20,
+                    sort_field: this.keywordSortField,
+                    sort_dir: this.keywordSortDir,
+                });
+                if (this.keywordSearch) params.append('search', this.keywordSearch);
+                if (this.keywordSourceType) params.append('source_type', this.keywordSourceType);
+
+                const res = await fetch(`${API_BASE}/data/keywords/seed?${params}`, {
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                this.keywords = data.items || [];
+                this.keywordTotal = data.total || 0;
+                this.keywordHasNext = data.has_next || false;
+            } catch (e) {
+                console.error('키워드 로드 실패:', e);
+                showErrorMessage('키워드 로드 실패');
+            } finally {
+                this.keywordLoading = false;
+            }
+        },
+
+        // 키워드 정렬
+        sortKeywords(field) {
+            if (this.keywordSortField === field) {
+                this.keywordSortDir = this.keywordSortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.keywordSortField = field;
+                this.keywordSortDir = 'asc';
+            }
+            this.keywordPage = 1;
+            this.loadKeywords();
+        },
+
+        // 키워드 검색 리셋
+        resetKeywordSearch() {
+            this.keywordSearch = '';
+            this.keywordPage = 1;
+            this.loadKeywords();
+        },
+
+        // 제목 로드
+        async loadTitles() {
+            this.titleLoading = true;
+            try {
+                const params = new URLSearchParams({
+                    page: this.titlePage,
+                    size: 20,
+                    sort_field: this.titleSortField,
+                    sort_dir: this.titleSortDir,
+                });
+                if (this.titleSearch) params.append('search', this.titleSearch);
+                if (this.titleStatus) params.append('status', this.titleStatus);
+
+                const res = await fetch(`${API_BASE}/data/titles/temp?${params}`, {
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                this.titles = data.items || [];
+                this.titleTotal = data.total || 0;
+                this.titleHasNext = data.has_next || false;
+            } catch (e) {
+                console.error('제목 로드 실패:', e);
+                showErrorMessage('제목 로드 실패');
+            } finally {
+                this.titleLoading = false;
+            }
+        },
+
+        // 제목 정렬
+        sortTitles(field) {
+            if (this.titleSortField === field) {
+                this.titleSortDir = this.titleSortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.titleSortField = field;
+                this.titleSortDir = 'asc';
+            }
+            this.titlePage = 1;
+            this.loadTitles();
+        },
+
+        // 제목 검색 리셋
+        resetTitleSearch() {
+            this.titleSearch = '';
+            this.titlePage = 1;
+            this.loadTitles();
+        },
+
+        // 필터 로드
+        async loadFilters() {
+            this.filterLoading = true;
+            try {
+                const params = new URLSearchParams({
+                    page: this.filterPage,
+                    size: 20,
+                    sort_field: this.filterSortField,
+                    sort_dir: this.filterSortDir,
+                });
+                if (this.filterSearch) params.append('search', this.filterSearch);
+                if (this.filterType) params.append('filter_type', this.filterType);
+
+                const res = await fetch(`${API_BASE}/data/filters?${params}`, {
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                this.filters = data.items || [];
+                this.filterTotal = data.total || 0;
+                this.filterHasNext = data.has_next || false;
+            } catch (e) {
+                console.error('필터 로드 실패:', e);
+                showErrorMessage('필터 로드 실패');
+            } finally {
+                this.filterLoading = false;
+            }
+        },
+
+        // 필터 정렬
+        sortFilters(field) {
+            if (this.filterSortField === field) {
+                this.filterSortDir = this.filterSortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.filterSortField = field;
+                this.filterSortDir = 'asc';
+            }
+            this.filterPage = 1;
+            this.loadFilters();
+        },
+
+        // 필터 검색 리셋
+        resetFilterSearch() {
+            this.filterSearch = '';
+            this.filterPage = 1;
+            this.loadFilters();
+        },
+
+        // URL 로드
+        async loadUrls() {
+            this.urlLoading = true;
+            try {
+                const params = new URLSearchParams({
+                    page: this.urlPage,
+                    size: 20,
+                    sort_field: this.urlSortField,
+                    sort_dir: this.urlSortDir,
+                });
+                if (this.urlSearch) params.append('search', this.urlSearch);
+                if (this.urlStatus) params.append('status', this.urlStatus);
+                if (this.urlPlatform) params.append('platform', this.urlPlatform);
+
+                const res = await fetch(`${API_BASE}/data/urls?${params}`, {
+                    credentials: 'include'
+                });
+                const data = await res.json();
+                this.urls = data.items || [];
+                this.urlTotal = data.total || 0;
+                this.urlHasNext = data.has_next || false;
+            } catch (e) {
+                console.error('URL 로드 실패:', e);
+                showErrorMessage('URL 로드 실패');
+            } finally {
+                this.urlLoading = false;
+            }
+        },
+
+        // URL 정렬
+        sortUrls(field) {
+            if (this.urlSortField === field) {
+                this.urlSortDir = this.urlSortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.urlSortField = field;
+                this.urlSortDir = 'asc';
+            }
+            this.urlPage = 1;
+            this.loadUrls();
+        },
+
+        // URL 검색 리셋
+        resetUrlSearch() {
+            this.urlSearch = '';
+            this.urlPage = 1;
+            this.loadUrls();
+        },
+
+        // URL 삭제
+        async deleteUrl(id) {
+            if (!confirm('이 URL을 삭제하시겠습니까?')) return;
+            try {
+                const res = await fetch(`${API_BASE}/data/urls/${id}`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                if (!res.ok) throw new Error('삭제 실패');
+                showSuccessMessage('URL이 삭제되었습니다');
+                this.loadUrls();
+                this.loadStats();
+            } catch (e) {
+                showErrorMessage('삭제 실패');
+            }
+        },
+
+        // URL 재수집 대상 전환
+        async resetUrl(id) {
+            try {
+                const res = await fetch(`${API_BASE}/data/urls/${id}/reset`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                if (!res.ok) throw new Error('전환 실패');
+                showSuccessMessage('재수집 대상으로 전환되었습니다');
+                this.loadUrls();
+                this.loadStats();
+            } catch (e) {
+                showErrorMessage('전환 실패');
+            }
+        },
+
+        // URL 활성화
+        async activateUrl(id) {
+            try {
+                const res = await fetch(`${API_BASE}/data/urls/${id}/activate`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                if (!res.ok) throw new Error('활성화 실패');
+                showSuccessMessage('URL이 활성화되었습니다');
+                this.loadUrls();
+                this.loadStats();
+            } catch (e) {
+                showErrorMessage('활성화 실패');
+            }
+        },
+
+        // URL 전체 선택/해제
+        toggleUrlSelectAll() {
+            const isAllSelected = this.urls.length > 0 &&
+                this.selectedUrls.length === this.urls.length;
+            if (isAllSelected) {
+                this.selectedUrls = [];
+            } else {
+                this.selectedUrls = this.urls.map(u => u.id);
+            }
+        },
+
+        // 선택된 URL 일괄 삭제
+        async deleteSelectedUrls() {
+            if (this.selectedUrls.length === 0) {
+                showErrorMessage('삭제할 URL을 선택하세요');
+                return;
+            }
+            if (!confirm(`선택된 ${this.selectedUrls.length}개 URL을 삭제하시겠습니까?`)) return;
+            try {
+                const res = await fetch(`${API_BASE}/data/urls/bulk-delete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ ids: this.selectedUrls })
+                });
+                if (!res.ok) throw new Error('삭제 실패');
+                const data = await res.json();
+                showSuccessMessage(`${data.deleted}개 URL이 삭제되었습니다`);
+                this.selectedUrls = [];
+                this.loadUrls();
+                this.loadStats();
+            } catch (e) {
+                showErrorMessage('일괄 삭제 실패');
+            }
+        },
+
+        // 선택된 URL 일괄 재수집 대상 전환
+        async resetSelectedUrls() {
+            if (this.selectedUrls.length === 0) {
+                showErrorMessage('전환할 URL을 선택하세요');
+                return;
+            }
+            if (!confirm(`선택된 ${this.selectedUrls.length}개 URL을 재수집 대상으로 전환하시겠습니까?`)) return;
+            try {
+                const res = await fetch(`${API_BASE}/data/urls/bulk-reset`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ ids: this.selectedUrls })
+                });
+                if (!res.ok) throw new Error('전환 실패');
+                const data = await res.json();
+                showSuccessMessage(`${data.reset}개 URL이 재수집 대상으로 전환되었습니다`);
+                this.selectedUrls = [];
+                this.loadUrls();
+                this.loadStats();
+            } catch (e) {
+                showErrorMessage('일괄 전환 실패');
+            }
+        },
+
+        // 오래된 처리완료 URL 재수집 대상 전환
+        async resetOldUrls(days = 7) {
+            if (!confirm(`${days}일 이전에 처리된 URL을 재수집 대상으로 전환하시겠습니까?`)) return;
+            try {
+                const res = await fetch(`${API_BASE}/data/urls/reset-old?days=${days}`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                if (!res.ok) throw new Error('전환 실패');
+                const data = await res.json();
+                showSuccessMessage(`${data.reset}개 URL이 재수집 대상으로 전환되었습니다`);
+                this.loadUrls();
+                this.loadStats();
+            } catch (e) {
+                showErrorMessage('전환 실패');
+            }
+        },
+
+        // 키워드 삭제
+        async deleteKeyword(id) {
+            if (!confirm('이 키워드를 삭제하시겠습니까?')) return;
+            try {
+                const res = await fetch(`${API_BASE}/data/keywords/seed/${id}`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                if (!res.ok) throw new Error('삭제 실패');
+                showSuccessMessage('키워드가 삭제되었습니다');
+                this.loadKeywords();
+                this.loadStats();
+            } catch (e) {
+                showErrorMessage('삭제 실패');
+            }
+        },
+
+        // 제목 삭제
+        async deleteTitle(id) {
+            if (!confirm('이 제목을 삭제하시겠습니까?')) return;
+            try {
+                const res = await fetch(`${API_BASE}/data/titles/temp/${id}`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                if (!res.ok) throw new Error('삭제 실패');
+                showSuccessMessage('제목이 삭제되었습니다');
+                this.loadTitles();
+                this.loadStats();
+            } catch (e) {
+                showErrorMessage('삭제 실패');
+            }
+        },
+
+        // 제목 승격
+        async promoteTitle(id) {
+            if (!confirm('이 제목을 정식 제목으로 승격하시겠습니까?')) return;
+            try {
+                const res = await fetch(`${API_BASE}/data/titles/temp/promote`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ title_ids: [id] })
+                });
+                if (!res.ok) throw new Error('승격 실패');
+                showSuccessMessage('정식 제목으로 승격되었습니다');
+                this.loadTitles();
+                this.loadStats();
+            } catch (e) {
+                showErrorMessage('승격 실패');
+            }
+        },
+
+        // 필터 삭제
+        async deleteFilter(id) {
+            if (!confirm('이 필터를 삭제하시겠습니까?')) return;
+            try {
+                const res = await fetch(`${API_BASE}/data/filters/${id}`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail || '삭제 실패');
+                }
+                showSuccessMessage('필터가 삭제되었습니다');
+                this.loadFilters();
+                this.loadStats();
+            } catch (e) {
+                showErrorMessage(e.message || '삭제 실패');
+            }
+        },
+
+        // 필터 토글
+        async toggleFilter(id, currentActive) {
+            try {
+                const res = await fetch(`${API_BASE}/data/filters/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ is_active: !currentActive })
+                });
+                if (!res.ok) throw new Error('변경 실패');
+                showSuccessMessage('필터 상태가 변경되었습니다');
+                this.loadFilters();
+            } catch (e) {
+                showErrorMessage('상태 변경 실패');
+            }
+        },
+
+        // 날짜 포맷
+        formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const d = new Date(dateStr);
+            return d.toLocaleDateString('ko-KR', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            });
+        },
+
+        // ========== 전체 선택/해제 기능 ==========
+
+        // 키워드 전체 선택/해제
+        toggleKeywordSelectAll() {
+            // 현재 전체 선택 상태 확인
+            const isAllSelected = this.keywords.length > 0 &&
+                this.selectedKeywords.length === this.keywords.length;
+
+            if (isAllSelected) {
+                // 전체 해제
+                this.selectedKeywords = [];
+            } else {
+                // 전체 선택
+                this.selectedKeywords = this.keywords.map(k => k.id);
+            }
+        },
+
+        // 키워드 개별 선택 변경 시 (헤더 체크박스 상태는 :checked로 자동 반영)
+        onKeywordSelect() {
+            // 별도 처리 불필요 - :checked 바인딩이 자동으로 처리
+        },
+
+        // 제목 전체 선택/해제
+        toggleTitleSelectAll() {
+            // 현재 전체 선택 상태 확인
+            const isAllSelected = this.titles.length > 0 &&
+                this.selectedTitles.length === this.titles.length;
+
+            if (isAllSelected) {
+                // 전체 해제
+                this.selectedTitles = [];
+            } else {
+                // 전체 선택
+                this.selectedTitles = this.titles.map(t => t.id);
+            }
+        },
+
+        // 제목 개별 선택 변경 시 (헤더 체크박스 상태는 :checked로 자동 반영)
+        onTitleSelect() {
+            // 별도 처리 불필요 - :checked 바인딩이 자동으로 처리
+        },
+
+        // 필터 전체 선택/해제 (시스템 필터 제외)
+        toggleFilterSelectAll() {
+            const userFilters = this.filters.filter(f => !f.is_system);
+            // 현재 전체 선택 상태 확인
+            const isAllSelected = userFilters.length > 0 &&
+                this.selectedFilters.length === userFilters.length;
+
+            if (isAllSelected) {
+                // 전체 해제
+                this.selectedFilters = [];
+            } else {
+                // 전체 선택 (시스템 필터 제외)
+                this.selectedFilters = userFilters.map(f => f.id);
+            }
+        },
+
+        // 필터 개별 선택 변경 시 (헤더 체크박스 상태는 :checked로 자동 반영)
+        onFilterSelect() {
+            // 별도 처리 불필요 - :checked 바인딩이 자동으로 처리
+        },
+
+        // ========== 일괄 삭제 기능 ==========
+
+        // 선택된 키워드 일괄 삭제
+        async deleteSelectedKeywords() {
+            if (this.selectedKeywords.length === 0) {
+                showErrorMessage('삭제할 키워드를 선택하세요');
+                return;
+            }
+            if (!confirm(`선택된 ${this.selectedKeywords.length}개 키워드를 삭제하시겠습니까?`)) return;
+
+            try {
+                const res = await fetch(`${API_BASE}/data/keywords/seed/bulk-delete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ ids: this.selectedKeywords })
+                });
+                if (!res.ok) throw new Error('삭제 실패');
+                const data = await res.json();
+                showSuccessMessage(`${data.deleted || this.selectedKeywords.length}개 키워드가 삭제되었습니다`);
+                this.selectedKeywords = [];
+                this.keywordSelectAll = false;
+                this.loadKeywords();
+                this.loadStats();
+            } catch (e) {
+                showErrorMessage('일괄 삭제 실패');
+            }
+        },
+
+        // 선택된 제목 일괄 삭제
+        async deleteSelectedTitles() {
+            if (this.selectedTitles.length === 0) {
+                showErrorMessage('삭제할 제목을 선택하세요');
+                return;
+            }
+            if (!confirm(`선택된 ${this.selectedTitles.length}개 제목을 삭제하시겠습니까?`)) return;
+
+            try {
+                const res = await fetch(`${API_BASE}/data/titles/temp/bulk-delete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ ids: this.selectedTitles })
+                });
+                if (!res.ok) throw new Error('삭제 실패');
+                const data = await res.json();
+                showSuccessMessage(`${data.deleted || this.selectedTitles.length}개 제목이 삭제되었습니다`);
+                this.selectedTitles = [];
+                this.titleSelectAll = false;
+                this.loadTitles();
+                this.loadStats();
+            } catch (e) {
+                showErrorMessage('일괄 삭제 실패');
+            }
+        },
+
+        // 선택된 필터 일괄 삭제
+        async deleteSelectedFilters() {
+            if (this.selectedFilters.length === 0) {
+                showErrorMessage('삭제할 필터를 선택하세요');
+                return;
+            }
+            if (!confirm(`선택된 ${this.selectedFilters.length}개 필터를 삭제하시겠습니까?`)) return;
+
+            try {
+                const res = await fetch(`${API_BASE}/data/filters/bulk-delete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ ids: this.selectedFilters })
+                });
+                if (!res.ok) throw new Error('삭제 실패');
+                const data = await res.json();
+                showSuccessMessage(`${data.deleted || this.selectedFilters.length}개 필터가 삭제되었습니다`);
+                this.selectedFilters = [];
+                this.filterSelectAll = false;
+                this.loadFilters();
+                this.loadStats();
+            } catch (e) {
+                showErrorMessage('일괄 삭제 실패');
+            }
+        },
+
+        // ========== 전체 삭제 기능 ==========
+
+        // 키워드 전체 삭제
+        async deleteAllKeywords() {
+            const total = this.stats.seed?.total || 0;
+            if (total === 0) {
+                showErrorMessage('삭제할 키워드가 없습니다');
+                return;
+            }
+            if (!confirm(`정말 ${total}개 키워드를 모두 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다!`)) return;
+            if (!confirm('한번 더 확인합니다. 정말 전체 삭제하시겠습니까?')) return;
+
+            try {
+                const res = await fetch(`${API_BASE}/data/keywords/seed/delete-all`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                if (!res.ok) throw new Error('삭제 실패');
+                const data = await res.json();
+                showSuccessMessage(`${data.deleted}개 키워드가 삭제되었습니다`);
+                this.selectedKeywords = [];
+                this.keywordSelectAll = false;
+                this.loadKeywords();
+                this.loadStats();
+            } catch (e) {
+                showErrorMessage('전체 삭제 실패');
+            }
+        },
+
+        // 제목 전체 삭제
+        async deleteAllTitles() {
+            const total = this.stats.temp?.total || 0;
+            if (total === 0) {
+                showErrorMessage('삭제할 제목이 없습니다');
+                return;
+            }
+            if (!confirm(`정말 ${total}개 제목을 모두 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다!`)) return;
+            if (!confirm('한번 더 확인합니다. 정말 전체 삭제하시겠습니까?')) return;
+
+            try {
+                const res = await fetch(`${API_BASE}/data/titles/temp/delete-all`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                if (!res.ok) throw new Error('삭제 실패');
+                const data = await res.json();
+                showSuccessMessage(`${data.deleted}개 제목이 삭제되었습니다`);
+                this.selectedTitles = [];
+                this.titleSelectAll = false;
+                this.loadTitles();
+                this.loadStats();
+            } catch (e) {
+                showErrorMessage('전체 삭제 실패');
+            }
+        },
+
+        // 필터 전체 삭제 (시스템 필터 제외)
+        async deleteAllFilters() {
+            const userCount = (this.stats.filter?.total || 0) - (this.stats.filter?.system || 0);
+            if (userCount <= 0) {
+                showErrorMessage('삭제할 사용자 필터가 없습니다');
+                return;
+            }
+            if (!confirm(`정말 사용자 필터 ${userCount}개를 모두 삭제하시겠습니까?\n(시스템 필터는 유지됩니다)\n\n이 작업은 되돌릴 수 없습니다!`)) return;
+            if (!confirm('한번 더 확인합니다. 정말 전체 삭제하시겠습니까?')) return;
+
+            try {
+                const res = await fetch(`${API_BASE}/data/filters/delete-all`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                if (!res.ok) throw new Error('삭제 실패');
+                const data = await res.json();
+                showSuccessMessage(`${data.deleted}개 필터가 삭제되었습니다`);
+                this.selectedFilters = [];
+                this.filterSelectAll = false;
+                this.loadFilters();
+                this.loadStats();
+            } catch (e) {
+                showErrorMessage('전체 삭제 실패');
+            }
+        },
+
+        // ========== 인라인 편집 기능 ==========
+
+        // 키워드 인라인 편집 시작
+        startEditKeyword(kw) {
+            this.editingKeywordId = kw.id;
+            this.editingKeywordValue = kw.keyword;
+            // 다음 틱에서 input에 포커스
+            this.$nextTick(() => {
+                const input = this.$refs.keywordEditInput;
+                if (input) {
+                    input.focus();
+                    input.select();
+                }
+            });
+        },
+
+        // 키워드 인라인 편집 저장
+        async saveEditKeyword(id) {
+            if (!this.editingKeywordId) return;
+            const newValue = this.editingKeywordValue.trim();
+            if (!newValue) {
+                showErrorMessage('키워드를 입력하세요');
+                return;
+            }
+            try {
+                const res = await fetch(`${API_BASE}/data/keywords/seed/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ keyword: newValue })
+                });
+                if (!res.ok) throw new Error('수정 실패');
+                // 로컬 데이터 업데이트
+                const kw = this.keywords.find(k => k.id === id);
+                if (kw) kw.keyword = newValue;
+                showSuccessMessage('키워드가 수정되었습니다');
+            } catch (e) {
+                showErrorMessage('키워드 수정 실패');
+            } finally {
+                this.editingKeywordId = null;
+                this.editingKeywordValue = '';
+            }
+        },
+
+        // 키워드 인라인 편집 취소
+        cancelEditKeyword() {
+            this.editingKeywordId = null;
+            this.editingKeywordValue = '';
+        },
+
+        // 제목 인라인 편집 시작
+        startEditTitle(title) {
+            this.editingTitleId = title.id;
+            this.editingTitleValue = title.title;
+            this.$nextTick(() => {
+                const input = this.$refs.titleEditInput;
+                if (input) {
+                    input.focus();
+                    input.select();
+                }
+            });
+        },
+
+        // 제목 인라인 편집 저장
+        async saveEditTitle(id) {
+            if (!this.editingTitleId) return;
+            const newValue = this.editingTitleValue.trim();
+            if (!newValue) {
+                showErrorMessage('제목을 입력하세요');
+                return;
+            }
+            try {
+                const res = await fetch(`${API_BASE}/data/titles/temp/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ title: newValue })
+                });
+                if (!res.ok) throw new Error('수정 실패');
+                // 로컬 데이터 업데이트
+                const t = this.titles.find(t => t.id === id);
+                if (t) t.title = newValue;
+                showSuccessMessage('제목이 수정되었습니다');
+            } catch (e) {
+                showErrorMessage('제목 수정 실패');
+            } finally {
+                this.editingTitleId = null;
+                this.editingTitleValue = '';
+            }
+        },
+
+        // 제목 인라인 편집 취소
+        cancelEditTitle() {
+            this.editingTitleId = null;
+            this.editingTitleValue = '';
+        },
+
+        // 필터 인라인 편집 시작
+        startEditFilter(filter) {
+            if (filter.is_system) return; // 시스템 필터는 편집 불가
+            this.editingFilterId = filter.id;
+            this.editingFilterValue = filter.filter_value;
+            this.$nextTick(() => {
+                const input = this.$refs.filterEditInput;
+                if (input) {
+                    input.focus();
+                    input.select();
+                }
+            });
+        },
+
+        // 필터 인라인 편집 저장
+        async saveEditFilter(id) {
+            if (!this.editingFilterId) return;
+            const newValue = this.editingFilterValue.trim();
+            if (!newValue) {
+                showErrorMessage('필터값을 입력하세요');
+                return;
+            }
+            try {
+                const res = await fetch(`${API_BASE}/data/filters/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ filter_value: newValue })
+                });
+                if (!res.ok) throw new Error('수정 실패');
+                // 로컬 데이터 업데이트
+                const f = this.filters.find(f => f.id === id);
+                if (f) f.filter_value = newValue;
+                showSuccessMessage('필터값이 수정되었습니다');
+            } catch (e) {
+                showErrorMessage('필터 수정 실패');
+            } finally {
+                this.editingFilterId = null;
+                this.editingFilterValue = '';
+            }
+        },
+
+        // 필터 인라인 편집 취소
+        cancelEditFilter() {
+            this.editingFilterId = null;
+            this.editingFilterValue = '';
+        },
+
+        // ========== 키워드 → 필터 이동 기능 ==========
+
+        // 단일 키워드를 필터로 이동
+        async moveKeywordToFilter(id) {
+            if (!confirm('이 키워드를 필터로 이동하시겠습니까?\n(키워드는 삭제되고 필터값으로 등록됩니다)')) return;
+            try {
+                const res = await fetch(`${API_BASE}/data/keywords/seed/move-to-filter`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ keyword_ids: [id], target_type: 'both' })
+                });
+                if (!res.ok) throw new Error('이동 실패');
+                const data = await res.json();
+                if (data.moved > 0) {
+                    showSuccessMessage('필터로 이동되었습니다');
+                } else if (data.skipped > 0) {
+                    showSuccessMessage('이미 등록된 필터입니다 (키워드 삭제됨)');
+                }
+                this.loadKeywords();
+                this.loadFilters();
+                this.loadStats();
+            } catch (e) {
+                showErrorMessage('필터 이동 실패');
+            }
+        },
+
+        // 선택된 키워드들을 필터로 이동
+        async moveSelectedKeywordsToFilter() {
+            if (this.selectedKeywords.length === 0) {
+                showErrorMessage('이동할 키워드를 선택하세요');
+                return;
+            }
+            if (!confirm(`선택된 ${this.selectedKeywords.length}개 키워드를 필터로 이동하시겠습니까?\n(키워드는 삭제되고 필터값으로 등록됩니다)`)) return;
+            try {
+                const res = await fetch(`${API_BASE}/data/keywords/seed/move-to-filter`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ keyword_ids: this.selectedKeywords, target_type: 'both' })
+                });
+                if (!res.ok) throw new Error('이동 실패');
+                const data = await res.json();
+                showSuccessMessage(`${data.moved}개 필터로 이동, ${data.skipped}개 중복`);
+                this.selectedKeywords = [];
+                this.loadKeywords();
+                this.loadFilters();
+                this.loadStats();
+            } catch (e) {
+                showErrorMessage('필터 이동 실패');
+            }
+        },
+
+        // ========== 수동 중복 제거 기능 ==========
+
+        // 키워드 중복 제거
+        async removeDuplicateKeywords() {
+            if (!confirm('중복된 키워드를 제거하시겠습니까?\n(대소문자 무시, 가장 오래된 것만 유지)')) return;
+            try {
+                const res = await fetch(`${API_BASE}/data/keywords/seed/remove-duplicates`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                if (!res.ok) throw new Error('중복 제거 실패');
+                const data = await res.json();
+                if (data.deleted > 0) {
+                    showSuccessMessage(`${data.deleted}개 중복 키워드가 삭제되었습니다`);
+                } else {
+                    showSuccessMessage('중복된 키워드가 없습니다');
+                }
+                this.loadKeywords();
+                this.loadStats();
+            } catch (e) {
+                showErrorMessage('중복 제거 실패');
+            }
+        },
+
+        // 제목 중복 제거
+        async removeDuplicateTitles() {
+            if (!confirm('중복된 제목을 제거하시겠습니까?\n(대소문자 무시, 가장 오래된 것만 유지)')) return;
+            try {
+                const res = await fetch(`${API_BASE}/data/titles/temp/remove-duplicates`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                if (!res.ok) throw new Error('중복 제거 실패');
+                const data = await res.json();
+                if (data.deleted > 0) {
+                    showSuccessMessage(`${data.deleted}개 중복 제목이 삭제되었습니다`);
+                } else {
+                    showSuccessMessage('중복된 제목이 없습니다');
+                }
+                this.loadTitles();
+                this.loadStats();
+            } catch (e) {
+                showErrorMessage('중복 제거 실패');
+            }
+        },
+
+        // 필터 중복 제거
+        async removeDuplicateFilters() {
+            if (!confirm('중복된 필터를 제거하시겠습니까?\n(대소문자 무시, 가장 오래된 것만 유지, 시스템 필터 제외)')) return;
+            try {
+                const res = await fetch(`${API_BASE}/data/filters/remove-duplicates`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                if (!res.ok) throw new Error('중복 제거 실패');
+                const data = await res.json();
+                if (data.deleted > 0) {
+                    showSuccessMessage(`${data.deleted}개 중복 필터가 삭제되었습니다`);
+                } else {
+                    showSuccessMessage('중복된 필터가 없습니다');
+                }
+                this.loadFilters();
+                this.loadStats();
+            } catch (e) {
+                showErrorMessage('중복 제거 실패');
+            }
+        },
+
+        // 키워드 카테고리 재분류
+        async reclassifyKeywords() {
+            if (!confirm('미분류 키워드의 카테고리를 재분류하시겠습니까?')) return;
+
+            try {
+                const res = await fetch(`${API_BASE}/data/keywords/seed/reclassify`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                if (!res.ok) throw new Error('재분류 실패');
+                const data = await res.json();
+
+                if (data.success) {
+                    showSuccessMessage(data.message);
+                    this.loadKeywords();
+                    this.loadStats();
+                } else {
+                    showErrorMessage(data.message || '재분류 실패');
+                }
+            } catch (e) {
+                showErrorMessage('키워드 재분류 중 오류가 발생했습니다');
+            }
+        },
+
+        // 임시제목 카테고리 재분류
+        async reclassifyTitles() {
+            if (!confirm('미분류 임시제목의 카테고리를 재분류하시겠습니까?')) return;
+
+            try {
+                const res = await fetch(`${API_BASE}/data/titles/temp/reclassify`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                if (!res.ok) throw new Error('재분류 실패');
+                const data = await res.json();
+
+                if (data.success) {
+                    showSuccessMessage(data.message);
+                    this.loadTitles();
+                    this.loadStats();
+                } else {
+                    showErrorMessage(data.message || '재분류 실패');
+                }
+            } catch (e) {
+                showErrorMessage('임시제목 재분류 중 오류가 발생했습니다');
+            }
+        }
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,411 @@
+<!-- URL 수집 탭 -->
+<div>
+    <!-- 통계 카드 -->
+    <div class="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div class="bg-white p-3 rounded-lg shadow-sm border">
+                <div class="text-xs text-gray-500">전체 URL</div>
+                <div class="text-xl font-bold text-gray-900" x-text="stats.urls?.total || 0"></div>
+            </div>
+            <div class="bg-white p-3 rounded-lg shadow-sm border">
+                <div class="text-xs text-gray-500">미처리 (대기)</div>
+                <div class="text-xl font-bold text-blue-600" x-text="stats.urls?.pending || 0"></div>
+            </div>
+            <div class="bg-white p-3 rounded-lg shadow-sm border">
+                <div class="text-xs text-gray-500">처리 완료</div>
+                <div class="text-xl font-bold text-green-600" x-text="stats.urls?.processed || 0"></div>
+            </div>
+            <div class="bg-white p-3 rounded-lg shadow-sm border">
+                <div class="text-xs text-gray-500">비활성화</div>
+                <div class="text-xl font-bold text-gray-400" x-text="stats.urls?.inactive || 0"></div>
+            </div>
+        </div>
+        <!-- Phase 1/2 현황 -->
+        <div class="mt-3 grid grid-cols-2 gap-3">
+            <div class="bg-white p-3 rounded-lg shadow-sm border border-orange-200">
+                <div class="flex items-center gap-2">
+                    <span class="text-orange-500">📥</span>
+                    <div>
+                        <div class="text-xs text-gray-500">Phase 1 - 오늘 수집</div>
+                        <div class="text-lg font-bold text-orange-600" x-text="stats.urls?.phase1_today || 0"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white p-3 rounded-lg shadow-sm border border-purple-200">
+                <div class="flex items-center gap-2">
+                    <span class="text-purple-500">📤</span>
+                    <div>
+                        <div class="text-xs text-gray-500">Phase 2 - 오늘 처리</div>
+                        <div class="text-lg font-bold text-purple-600" x-text="stats.urls?.phase2_today || 0"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 검색/필터 바 -->
+    <div class="search-bar">
+        <div class="flex items-center gap-2 flex-1">
+            <div class="search-input-wrapper flex-1">
+                <input type="text"
+                       x-model="urlSearch"
+                       @keyup.enter="urlPage = 1; loadUrls()"
+                       placeholder="도메인/키워드 검색..."
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <button x-show="urlSearch"
+                        @click="resetUrlSearch()"
+                        class="search-clear-btn"
+                        title="검색 초기화">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <select x-model="urlStatus"
+                    @change="urlPage = 1; loadUrls()"
+                    class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                <option value="">전체 상태</option>
+                <option value="pending">미처리</option>
+                <option value="processed">처리완료</option>
+                <option value="inactive">비활성화</option>
+            </select>
+            <select x-model="urlPlatform"
+                    @change="urlPage = 1; loadUrls()"
+                    class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                <option value="">전체 플랫폼</option>
+                <option value="naver_blog">네이버 블로그</option>
+                <option value="tistory">티스토리</option>
+                <option value="wordpress">워드프레스</option>
+                <option value="other">기타</option>
+            </select>
+        </div>
+        <div class="flex items-center gap-2">
+            <button @click="urlPage = 1; loadUrls()"
+                    class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition-colors">
+                검색
+            </button>
+        </div>
+    </div>
+
+    <!-- 일괄 작업 버튼 -->
+    <div class="p-3 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center gap-2">
+        <button @click="deleteSelectedUrls()"
+                :disabled="selectedUrls.length === 0"
+                class="px-3 py-1.5 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+            선택 삭제 (<span x-text="selectedUrls.length"></span>)
+        </button>
+        <button @click="resetSelectedUrls()"
+                :disabled="selectedUrls.length === 0"
+                class="px-3 py-1.5 text-sm bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+            선택 재수집
+        </button>
+        <div class="border-l border-gray-300 h-6 mx-2"></div>
+        <button @click="resetOldUrls(7)"
+                class="px-3 py-1.5 text-sm bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors">
+            7일 지난 URL 재수집
+        </button>
+    </div>
+
+    <!-- PC 테이블 (768px 이상) -->
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th class="w-10">
+                        <input type="checkbox"
+                               @click="toggleUrlSelectAll()"
+                               :checked="urls.length > 0 && selectedUrls.length === urls.length"
+                               class="w-4 h-4 rounded border-gray-300">
+                    </th>
+                    <th @click="sortUrls('domain')" class="sortable-header">
+                        도메인
+                        <span class="sort-icon" :class="{'active': urlSortField === 'domain'}">
+                            <template x-if="urlSortField === 'domain'">
+                                <span x-text="urlSortDir === 'asc' ? '▲' : '▼'"></span>
+                            </template>
+                        </span>
+                    </th>
+                    <th @click="sortUrls('platform')" class="sortable-header">
+                        플랫폼
+                        <span class="sort-icon" :class="{'active': urlSortField === 'platform'}">
+                            <template x-if="urlSortField === 'platform'">
+                                <span x-text="urlSortDir === 'asc' ? '▲' : '▼'"></span>
+                            </template>
+                        </span>
+                    </th>
+                    <th>검색 키워드</th>
+                    <th @click="sortUrls('titles_collected')" class="sortable-header">
+                        수집 제목
+                        <span class="sort-icon" :class="{'active': urlSortField === 'titles_collected'}">
+                            <template x-if="urlSortField === 'titles_collected'">
+                                <span x-text="urlSortDir === 'asc' ? '▲' : '▼'"></span>
+                            </template>
+                        </span>
+                    </th>
+                    <th @click="sortUrls('is_processed')" class="sortable-header">
+                        상태
+                        <span class="sort-icon" :class="{'active': urlSortField === 'is_processed'}">
+                            <template x-if="urlSortField === 'is_processed'">
+                                <span x-text="urlSortDir === 'asc' ? '▲' : '▼'"></span>
+                            </template>
+                        </span>
+                    </th>
+                    <th @click="sortUrls('created_at')" class="sortable-header">
+                        수집일
+                        <span class="sort-icon" :class="{'active': urlSortField === 'created_at'}">
+                            <template x-if="urlSortField === 'created_at'">
+                                <span x-text="urlSortDir === 'asc' ? '▲' : '▼'"></span>
+                            </template>
+                        </span>
+                    </th>
+                    <th class="text-center">액션</th>
+                </tr>
+            </thead>
+            <tbody>
+                <template x-if="urlLoading">
+                    <tr>
+                        <td colspan="8" class="text-center py-8">
+                            <div class="spinner"></div>
+                            <span class="ml-2 text-gray-500">로딩 중...</span>
+                        </td>
+                    </tr>
+                </template>
+                <template x-if="!urlLoading && urls.length === 0">
+                    <tr>
+                        <td colspan="8" class="text-center py-8 text-gray-500">
+                            수집된 URL이 없습니다
+                        </td>
+                    </tr>
+                </template>
+                <template x-for="url in urls" :key="url.id">
+                    <tr>
+                        <td>
+                            <input type="checkbox"
+                                   :value="url.id"
+                                   x-model="selectedUrls"
+                                   class="w-4 h-4 rounded border-gray-300">
+                        </td>
+                        <td>
+                            <div class="max-w-xs truncate">
+                                <a :href="url.url" target="_blank"
+                                   class="text-blue-600 hover:underline"
+                                   x-text="url.domain"></a>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="badge"
+                                  :class="{
+                                      'badge-green': url.platform === 'naver_blog',
+                                      'badge-blue': url.platform === 'tistory',
+                                      'badge-yellow': url.platform === 'wordpress',
+                                      'badge-gray': url.platform === 'other'
+                                  }"
+                                  x-text="url.platform"></span>
+                        </td>
+                        <td>
+                            <span class="text-sm text-gray-600" x-text="url.search_keyword || '-'"></span>
+                        </td>
+                        <td class="text-center">
+                            <span class="font-medium" x-text="url.titles_collected || 0"></span>
+                        </td>
+                        <td>
+                            <template x-if="!url.is_active">
+                                <span class="badge badge-gray">비활성</span>
+                            </template>
+                            <template x-if="url.is_active && url.is_processed">
+                                <span class="badge badge-green">처리완료</span>
+                            </template>
+                            <template x-if="url.is_active && !url.is_processed">
+                                <span class="badge badge-blue">대기중</span>
+                            </template>
+                        </td>
+                        <td class="text-sm text-gray-500" x-text="formatDate(url.created_at)"></td>
+                        <td class="text-center">
+                            <div class="flex items-center justify-center gap-1">
+                                <template x-if="url.is_processed">
+                                    <button @click="resetUrl(url.id)"
+                                            class="p-1 text-yellow-600 hover:bg-yellow-50 rounded"
+                                            title="재수집 대상으로">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                        </svg>
+                                    </button>
+                                </template>
+                                <template x-if="!url.is_active">
+                                    <button @click="activateUrl(url.id)"
+                                            class="p-1 text-green-600 hover:bg-green-50 rounded"
+                                            title="활성화">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                  d="M5 13l4 4L19 7"/>
+                                        </svg>
+                                    </button>
+                                </template>
+                                <button @click="deleteUrl(url.id)"
+                                        class="p-1 text-red-600 hover:bg-red-50 rounded"
+                                        title="삭제">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                </template>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 모바일 카드 리스트 (768px 미만) -->
+    <div class="mobile-card-list">
+        <!-- 전체 선택 바 -->
+        <div class="mobile-select-all">
+            <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" class="rounded border-gray-300"
+                    @click="toggleUrlSelectAll()"
+                    :checked="urls.length > 0 && selectedUrls.length === urls.length">
+                <span class="text-sm text-gray-600">전체 선택</span>
+            </label>
+            <span class="text-xs text-gray-400" x-text="`${selectedUrls.length}/${urls.length}개 선택`"></span>
+        </div>
+
+        <!-- 로딩 상태 -->
+        <template x-if="urlLoading">
+            <div class="text-center py-12">
+                <div class="spinner mx-auto mb-2"></div>
+                <div class="text-gray-500 text-sm">로딩 중...</div>
+            </div>
+        </template>
+
+        <!-- 빈 상태 -->
+        <template x-if="!urlLoading && urls.length === 0">
+            <div class="text-center py-12 text-gray-500">
+                <div class="text-4xl mb-2">🔗</div>
+                <div>수집된 URL이 없습니다</div>
+            </div>
+        </template>
+
+        <!-- 카드 목록 -->
+        <template x-for="url in urls" :key="url.id">
+            <div class="mobile-card"
+                 :class="{'selected': selectedUrls.includes(url.id), 'expanded': expandedUrlId === url.id}">
+                <!-- 카드 헤더 (접힌 상태) -->
+                <div class="mobile-card-header" @click="expandedUrlId = expandedUrlId === url.id ? null : url.id">
+                    <div class="mobile-card-checkbox" @click.stop>
+                        <input type="checkbox" class="rounded border-gray-300"
+                            :value="url.id"
+                            x-model="selectedUrls">
+                    </div>
+                    <div class="mobile-card-main">
+                        <div class="mobile-card-title truncate" x-text="url.domain"></div>
+                        <div class="mobile-card-subtitle flex items-center gap-2">
+                            <span class="badge text-xs"
+                                  :class="{
+                                      'badge-green': url.platform === 'naver_blog',
+                                      'badge-blue': url.platform === 'tistory',
+                                      'badge-yellow': url.platform === 'wordpress',
+                                      'badge-gray': url.platform === 'other'
+                                  }"
+                                  x-text="url.platform"></span>
+                            <template x-if="!url.is_active">
+                                <span class="badge badge-gray text-xs">비활성</span>
+                            </template>
+                            <template x-if="url.is_active && url.is_processed">
+                                <span class="badge badge-green text-xs">처리완료</span>
+                            </template>
+                            <template x-if="url.is_active && !url.is_processed">
+                                <span class="badge badge-blue text-xs">대기중</span>
+                            </template>
+                        </div>
+                    </div>
+                    <div class="mobile-card-badge">
+                        <span class="text-xs text-gray-500" x-text="`${url.titles_collected || 0}개 수집`"></span>
+                    </div>
+                    <div class="mobile-card-expand">
+                        <svg class="w-5 h-5 text-gray-400 transition-transform"
+                             :class="{'rotate-180': expandedUrlId === url.id}"
+                             fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </div>
+                </div>
+                <!-- 카드 상세 (펼친 상태) -->
+                <div class="mobile-card-details" x-show="expandedUrlId === url.id" x-transition>
+                    <div class="mobile-card-detail-row">
+                        <span class="mobile-card-detail-label">도메인</span>
+                        <a :href="url.url" target="_blank" class="mobile-card-detail-value text-blue-600 hover:underline truncate" x-text="url.domain"></a>
+                    </div>
+                    <div class="mobile-card-detail-row">
+                        <span class="mobile-card-detail-label">플랫폼</span>
+                        <span class="mobile-card-detail-value" x-text="url.platform"></span>
+                    </div>
+                    <div class="mobile-card-detail-row">
+                        <span class="mobile-card-detail-label">검색 키워드</span>
+                        <span class="mobile-card-detail-value" x-text="url.search_keyword || '-'"></span>
+                    </div>
+                    <div class="mobile-card-detail-row">
+                        <span class="mobile-card-detail-label">수집 제목</span>
+                        <span class="mobile-card-detail-value font-medium" x-text="`${url.titles_collected || 0}개`"></span>
+                    </div>
+                    <div class="mobile-card-detail-row">
+                        <span class="mobile-card-detail-label">수집일</span>
+                        <span class="mobile-card-detail-value" x-text="formatDate(url.created_at)"></span>
+                    </div>
+                    <div class="mobile-card-actions">
+                        <template x-if="url.is_processed">
+                            <button @click="resetUrl(url.id)"
+                                    class="mobile-card-action-btn text-yellow-600 border-yellow-200 hover:bg-yellow-50">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                </svg>
+                                재수집
+                            </button>
+                        </template>
+                        <template x-if="!url.is_active">
+                            <button @click="activateUrl(url.id)"
+                                    class="mobile-card-action-btn text-green-600 border-green-200 hover:bg-green-50">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                활성화
+                            </button>
+                        </template>
+                        <button @click="deleteUrl(url.id)"
+                                class="mobile-card-action-btn text-red-600 border-red-200 hover:bg-red-50">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                            삭제
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </div>
+
+    <!-- 페이지네이션 -->
+    <div class="pagination">
+        <div class="text-sm text-gray-500">
+            총 <span class="font-medium" x-text="urlTotal"></span>개
+        </div>
+        <div class="flex items-center gap-2">
+            <button @click="urlPage > 1 && (urlPage--, loadUrls())"
+                    :disabled="urlPage === 1"
+                    class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                이전
+            </button>
+            <span class="text-sm text-gray-600">
+                <span x-text="urlPage"></span> 페이지
+            </span>
+            <button @click="urlHasNext && (urlPage++, loadUrls())"
+                    :disabled="!urlHasNext"
+                    class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                다음
+            </button>
+        </div>
+    </div>
+</div>

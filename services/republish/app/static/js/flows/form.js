@@ -210,13 +210,15 @@ function flowFormData() {
         },
 
         getModuleColor(typeCode) {
+            // 모듈 관리 페이지와 동일한 색상 적용
             const colors = {
-                republish: 'bg-blue-100',
-                publish: 'bg-green-100',
-                generate: 'bg-purple-100',
-                prompt: 'bg-yellow-100'
+                republish: 'bg-sky-200',
+                publish: 'bg-rose-200',
+                generate: 'bg-amber-200',
+                prompt: 'bg-green-200',
+                collect: 'bg-purple-200'
             };
-            return colors[typeCode] || 'bg-gray-100';
+            return colors[typeCode] || 'bg-gray-200';
         },
 
         getPostRangeText(module) {
@@ -336,7 +338,8 @@ function flowFormData() {
                 republish: '🔄',
                 publish: '📤',
                 generate: '✨',
-                prompt: '📝'
+                prompt: '📝',
+                collect: '🔍'
             };
             return icons[typeCode] || '📦';
         },
@@ -347,9 +350,44 @@ function flowFormData() {
                 republish: '재발행',
                 publish: '발행',
                 generate: '생성',
-                prompt: '프롬프트'
+                prompt: '프롬프트',
+                collect: '수집'
             };
             return names[typeCode] || typeCode;
+        },
+
+        // 수집 모듈 - 수집 대상 텍스트 반환
+        getCollectSourcesText(module) {
+            const settings = module.settings || {};
+            const sources = [];
+            if (settings.source_naver_datalab) sources.push('네이버 데이터랩');
+            if (settings.source_naver_ads) sources.push('네이버 광고');
+            if (settings.source_google_trends) sources.push('구글 트렌드');
+            if (settings.source_google_planner) sources.push('구글 플래너');
+            return sources.length > 0 ? sources.join(', ') : '설정 없음';
+        },
+
+        // 수집 모듈 - 수집 타입 텍스트 반환
+        getCollectTypeText(module) {
+            const settings = module.settings || {};
+            const typeMap = {
+                'keyword': '키워드만',
+                'title': '제목만',
+                'both': '키워드+제목'
+            };
+            return typeMap[settings.collect_type] || '전체';
+        },
+
+        // 수집 모듈 - 스케줄 텍스트 반환
+        getCollectScheduleText(module) {
+            const settings = module.settings || {};
+            if (settings.schedule_mode === 'fixed_time') {
+                const times = settings.fixed_times || [];
+                return times.length > 0 ? `고정시간: ${times.join(', ')}` : '설정 없음';
+            } else if (settings.schedule_mode === 'interval') {
+                return `${settings.interval_hours || 6}시간 간격`;
+            }
+            return '설정 없음';
         },
 
         // 기존 플로우 데이터 로드 (편집 모드)

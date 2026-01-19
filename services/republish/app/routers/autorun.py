@@ -83,7 +83,19 @@ async def add_flows_to_autorun(
 ):
     """플로우 다중 추가"""
     service = AutorunService(db)
-    return await service.add_flows_to_autorun(current_user, flow_ids)
+    result = await service.add_flows_to_autorun(current_user, flow_ids)
+
+    # 성공한 플로우들을 스케줄러에 등록
+    if result.get("success"):
+        added_ids = result.get("added_flow_ids", [])
+        for flow_id in added_ids:
+            try:
+                await scheduler_manager.register_flow_schedule(flow_id)
+            except Exception as e:
+                # 스케줄러 등록 실패해도 오토런 추가는 유지
+                pass
+
+    return result
 
 
 @router.delete(

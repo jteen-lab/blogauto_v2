@@ -314,14 +314,31 @@ class SchedulerManager:
                     logger.warning(f"[EXECUTE_FLOW] 플로우 {flow_id}에서 모듈 {module_id}를 찾을 수 없음")
                     return
 
-                # 플로우의 모든 블로그에 대해 실행
-                if flow.flow_blogs:
-                    for flow_blog in flow.flow_blogs:
-                        blog = flow_blog.blog
-                        try:
-                            await self._execute_module_for_blog(target_module, blog)
-                        except Exception as e:
-                            logger.error(f"[EXECUTE_FLOW] 모듈 {module_id} 블로그 {blog.id} 실행 실패: {e}")
+                # 모듈 타입 확인
+                module_type = target_module.type_code
+
+                # collect 타입: 블로그 없이 독립 실행
+                if module_type == "collect":
+                    logger.info(f"[EXECUTE_FLOW] 수집 모듈 실행: {target_module.name}")
+                    try:
+                        result = await self._execute_collect_module(target_module, db, flow)
+                        logger.info(
+                            f"[EXECUTE_FLOW] 수집 모듈 완료 | module={target_module.name} | "
+                            f"success={result.get('success', False)}"
+                        )
+                    except Exception as e:
+                        logger.error(f"[EXECUTE_FLOW] 수집 모듈 실행 실패: {e}")
+                else:
+                    # 기타 타입: 블로그 기반 실행
+                    if flow.flow_blogs:
+                        for flow_blog in flow.flow_blogs:
+                            blog = flow_blog.blog
+                            try:
+                                await self._execute_module_for_blog(target_module, blog)
+                            except Exception as e:
+                                logger.error(f"[EXECUTE_FLOW] 모듈 {module_id} 블로그 {blog.id} 실행 실패: {e}")
+                    else:
+                        logger.warning(f"[EXECUTE_FLOW] 플로우 {flow_id}에 연결된 블로그가 없음")
 
                 execution_time = (datetime.now() - start_time).total_seconds()
                 logger.info(f"[EXECUTE_FLOW] 플로우 {flow_id} 모듈 {module_id} 실행 완료 ({execution_time:.2f}s)")
@@ -368,6 +385,167 @@ class SchedulerManager:
         # 콘텐츠 재발행 로직
         logger.info(f"[REPUBLISH_MODULE] 콘텐츠 재발행: {module.name} → {blog.name}")
         # 실제 구현 필요
+
+    async def _execute_collect_module(
+        self,
+        module: Module,
+        db: AsyncSession,
+        flow: Flow
+    ) -> Dict[str, Any]:
+        """
+        수집 모듈 실행 (블로그 없이 독립 실행)
+
+        키워드/제목 수집 작업을 수행합니다.
+        """
+        from app.services.keyword_collector_service import KeywordCollectorService
+        from app.models.user_settings import UserSettings
+        from app.models.autorun_log import AutorunLog
+
+        try:
+            settings_data = module.settings or {}
+
+            # 수집 유형 확인 (keyword, title, both)
+            collect_type = settings_data.get("collect_type", "both")
+
+            # 키워드 소스 목록 (기본값 False - 명시적으로 선택된 소스만 사용)
+            keyword_sources = []
+            if settings_data.get("source_google_trends", False):
+                keyword_sources.append("google_trends")
+            if settings_data.get("source_naver_datalab", False):
+                keyword_sources.append("naver_datalab")
+            if settings_data.get("source_naver_ads", False):
+                keyword_sources.append("naver_ads")
+
+            # 제목 소스 목록 (기본값 False - 명시적으로 선택된 소스만 사용)
+            title_sources = []
+            if settings_data.get("source_naver_news", False):
+                title_sources.append("naver_news")
+            if settings_data.get("source_google_news", False):
+                title_sources.append("google_news")
+            if settings_data.get("source_naver_webdoc", False):
+                title_sources.append("naver_webdoc")
+
+            # collect_type에 따라 소스 필터링
+            sources = []
+            if collect_type == "keyword":
+                sources = keyword_sources
+            elif collect_type == "title":
+                sources = title_sources
+            else:  # both
+                sources = keyword_sources + title_sources
+
+            if not sources:
+                logger.warning(f"[COLLECT_MODULE] 수집 소스가 설정되지 않음: {module.name}")
+                return {
+                    "success": False,
+                    "message": f"수집 소스가 설정되지 않았습니다 (타입: {collect_type})",
+                    "collected_count": 0
+                }
+
+            logger.info(
+                f"[COLLECT_MODULE] 모듈={module.name} | 타입={collect_type} | 소스={sources}"
+            )
+
+            # 사용자 설정 조회
+            query = select(UserSettings).where(UserSettings.user_id == 1)
+            result = await db.execute(query)
+            user_settings = result.scalar_one_or_none()
+
+            if not user_settings:
+                return {
+                    "success": False,
+                    "message": "사용자 설정을 찾을 수 없습니다",
+                    "collected_count": 0
+                }
+
+            # KeywordCollectorService를 사용하여 자동 수집
+            collector = KeywordCollectorService(db=db, settings=user_settings)
+
+            # 수집 수량 제한 적용
+            keyword_limit = settings_data.get("keyword_collect_limit", 100)
+            keyword_limit = max(10, min(1000, keyword_limit))
+            # title_limit: 0 또는 None이면 무제한
+            title_limit_setting = settings_data.get("title_collect_limit", 0)
+            title_limit = None if title_limit_setting == 0 else title_limit_setting
+
+            # 연관검색 확장 옵션 (기본값 True)
+            enable_related_search = settings_data.get("enable_related_search", True)
+
+            # 수집 유형 옵션 (일반/대량) - 기본값 False (명시적으로 활성화해야 동작)
+            enable_normal_collect = settings_data.get("enable_normal_collect", False)
+            enable_bulk_collect = settings_data.get("enable_bulk_collect", False)
+            bulk_collect_delay = settings_data.get("bulk_collect_delay", 0.5)
+            bulk_urls_per_cycle = settings_data.get("bulk_urls_per_cycle", 3)
+
+            logger.info(
+                f"[COLLECT_MODULE] 옵션 | keyword_limit={keyword_limit}, "
+                f"title_limit={'무제한' if not title_limit else title_limit}, "
+                f"enable_related_search={enable_related_search}, "
+                f"enable_normal_collect={enable_normal_collect}, enable_bulk_collect={enable_bulk_collect}"
+            )
+
+            # 선택된 소스에서 수집
+            collect_result = await collector.collect_all(
+                sources=sources,
+                keyword_limit=keyword_limit,
+                title_limit=title_limit,
+                enable_related_search=enable_related_search,
+                enable_normal_collect=enable_normal_collect,
+                enable_bulk_collect=enable_bulk_collect,
+                bulk_collect_delay=bulk_collect_delay,
+                bulk_urls_per_cycle=bulk_urls_per_cycle
+            )
+
+            # AutorunLog 저장
+            try:
+                action_time = datetime.now().strftime("%Y/%m/%d %H:%M")
+                log_entry = AutorunLog(
+                    user_id=1,
+                    flow_id=flow.id,
+                    action="collect",
+                    status="success" if collect_result.get("success") else "failed",
+                    flow_name=flow.name,
+                    module_name=module.name,
+                    blog_name="-",
+                    post_title="",
+                    action_time=action_time,
+                    message=collect_result.get("message", "")[:500] if collect_result.get("message") else ""
+                )
+                db.add(log_entry)
+                await db.commit()
+            except Exception as log_error:
+                logger.warning(f"[COLLECT_MODULE] AutorunLog 저장 실패: {log_error}")
+
+            if collect_result.get("success"):
+                total_collected = collect_result.get("total_collected", 0)
+                total_saved = collect_result.get("total_saved", 0)
+
+                logger.info(
+                    f"[COLLECT_MODULE] 수집 완료 | module={module.name} | "
+                    f"collected={total_collected} | saved={total_saved}"
+                )
+
+                return {
+                    "success": True,
+                    "message": f"총 {total_collected}개 수집, {total_saved}개 저장",
+                    "collected_count": total_collected,
+                    "saved_count": total_saved,
+                    "sources": sources
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": collect_result.get("error", "수집 실패"),
+                    "collected_count": 0
+                }
+
+        except Exception as e:
+            logger.error(f"[COLLECT_MODULE] 수집 실패 | module={module.name} | error={e}")
+            return {
+                "success": False,
+                "message": str(e),
+                "collected_count": 0
+            }
 
     # ===========================================
     # 스케줄러 상태 조회

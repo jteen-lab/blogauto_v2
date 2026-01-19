@@ -153,6 +153,9 @@ class ModuleResponse(BaseModel):
     post_range_end: Optional[int] = None
     auto_daily_count: Optional[int] = None
 
+    # 타입별 설정 (collect 등)
+    settings: Dict[str, Any] = Field(default_factory=dict, description="타입별 설정")
+
     # 메타 정보
     created_at: datetime
     updated_at: datetime
@@ -175,8 +178,8 @@ class ModuleDetailResponse(ModuleResponse):
     active_hours_end: str
     blackout_days: List[int]
 
-    # 기타 설정
-    cooldown_days: int
+    # 기타 설정 (collect 등 일부 타입은 cooldown_days가 없음)
+    cooldown_days: Optional[int] = None
     platform_overrides: Dict[str, Any]
     settings: Dict[str, Any]
 

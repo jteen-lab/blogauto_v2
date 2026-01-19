@@ -30,12 +30,17 @@ from .routers.modules import router as modules_router
 from .routers.flows import router as flows_router
 from .routers.autorun import router as autorun_router
 from .routers.dashboard import router as dashboard_router
-from .routers.settings import router as settings_router
+from .routers.settings import router as settings_router, naver_search_router, naver_ads_router, google_trends_router, naver_datalab_router, google_keyword_planner_router
 from .routers.modules_pages import router as modules_page_router
 from .routers.flows_pages import router as flows_page_router
 from .routers.autorun_pages import router as autorun_page_router
 from .routers.engine import router as engine_router
 from .routers.flows_execute import router as flows_execute_router
+from .routers.collection_pages import router as collection_page_router
+from .routers.data_keywords import router as data_keywords_router
+from .routers.data_titles import router as data_titles_router
+from .routers.data_filters import router as data_filters_router
+from .routers.data_urls import router as data_urls_router
 
 logger = get_logger("main", "app.log")
 
@@ -139,7 +144,16 @@ app.include_router(flows_router, prefix=settings.api_v1_prefix)
 app.include_router(autorun_router, prefix=settings.api_v1_prefix)
 app.include_router(dashboard_router, prefix=settings.api_v1_prefix)
 app.include_router(settings_router, prefix=settings.api_v1_prefix)
+app.include_router(naver_search_router, prefix=settings.api_v1_prefix)
+app.include_router(naver_ads_router, prefix=settings.api_v1_prefix)
+app.include_router(google_trends_router, prefix=settings.api_v1_prefix)
+app.include_router(naver_datalab_router, prefix=settings.api_v1_prefix)
+app.include_router(google_keyword_planner_router, prefix=settings.api_v1_prefix)
 app.include_router(engine_router, prefix=settings.api_v1_prefix)
+app.include_router(data_keywords_router, prefix=settings.api_v1_prefix)
+app.include_router(data_titles_router, prefix=settings.api_v1_prefix)
+app.include_router(data_filters_router, prefix=settings.api_v1_prefix)
+app.include_router(data_urls_router, prefix=settings.api_v1_prefix)
 
 # 페이지 라우터 등록
 app.include_router(blogs_page_router)
@@ -149,6 +163,7 @@ app.include_router(republish_page_router)
 app.include_router(modules_page_router)
 app.include_router(flows_page_router)
 app.include_router(autorun_page_router)
+app.include_router(collection_page_router)
 
 # 정적 파일 서빙 (개발환경)
 if settings.is_development:

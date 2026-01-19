@@ -1,0 +1,450 @@
+<!-- 필터설정 탭 컨텐츠 -->
+<div>
+    <!-- 검색 바 -->
+    <div class="search-bar">
+        <div class="flex items-center gap-2 flex-1">
+            <div class="search-input-wrapper flex-1 md:max-w-xs">
+                <input
+                    type="text"
+                    x-model="filterSearch"
+                    @keyup.enter="filterPage = 1; loadFilters()"
+                    placeholder="필터 검색..."
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                <button
+                    x-show="filterSearch.length > 0"
+                    @click="resetFilterSearch()"
+                    class="search-clear-btn"
+                    title="검색 초기화">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <select
+                x-model="filterType"
+                @change="filterPage = 1; loadFilters()"
+                class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                <option value="">전체 타입</option>
+                <option value="keyword">키워드</option>
+                <option value="domain">도메인</option>
+            </select>
+            <button
+                @click="filterPage = 1; loadFilters()"
+                class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors hidden md:inline-flex">
+                검색
+            </button>
+        </div>
+    </div>
+
+    <!-- 액션 버튼 그리드 -->
+    <div class="p-3 bg-gray-50 border-b border-gray-200">
+        <div class="grid grid-cols-2 md:flex md:flex-wrap gap-2">
+            <!-- 중복 제거 버튼 (시스템 필터 제외) -->
+            <button
+                x-show="(stats.filter?.total || 0) - (stats.filter?.system || 0) > 1"
+                @click="removeDuplicateFilters()"
+                class="inline-flex items-center justify-center px-3 py-2 border-2 border-yellow-500 rounded-lg text-sm font-medium text-yellow-700 bg-white hover:bg-yellow-50 transition-colors">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                </svg>
+                <span class="hidden sm:inline">중복 제거</span>
+                <span class="sm:hidden">중복</span>
+            </button>
+            <!-- 전체 삭제 버튼 (시스템 필터 제외) -->
+            <button
+                x-show="(stats.filter?.total || 0) - (stats.filter?.system || 0) > 0"
+                @click="deleteAllFilters()"
+                class="inline-flex items-center justify-center px-3 py-2 border-2 border-red-700 rounded-lg text-sm font-medium text-red-700 bg-white hover:bg-red-100 transition-colors">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+                <span class="hidden sm:inline">전체 삭제</span>
+                <span class="sm:hidden">전체</span>
+                (<span x-text="(stats.filter?.total || 0) - (stats.filter?.system || 0)"></span>)
+            </button>
+            <!-- 선택 삭제 버튼 -->
+            <button
+                x-show="selectedFilters.length > 0"
+                @click="deleteSelectedFilters()"
+                class="inline-flex items-center justify-center px-3 py-2 border-2 border-red-500 rounded-lg text-sm font-medium text-red-600 bg-white hover:bg-red-50 transition-colors">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+                <span class="hidden sm:inline">선택 삭제</span>
+                <span class="sm:hidden">삭제</span>
+                (<span x-text="selectedFilters.length"></span>)
+            </button>
+            <!-- 필터 추가 버튼 -->
+            <button
+                @click="$dispatch('open-filter-modal')"
+                class="inline-flex items-center justify-center px-3 py-2 border-2 border-blue-600 rounded-lg text-sm font-medium text-blue-600 bg-white hover:bg-blue-50 transition-colors">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                <span class="hidden sm:inline">필터 추가</span>
+                <span class="sm:hidden">추가</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- 필터 설명 -->
+    <div class="px-4 py-3 bg-amber-50 border-b border-amber-100">
+        <div class="flex items-start gap-2">
+            <span class="text-amber-600">⚠️</span>
+            <div class="text-sm text-amber-800">
+                <strong>필터는 수집 시 부적절한 키워드/제목을 자동 차단합니다.</strong>
+                <ul class="mt-1 text-xs space-y-0.5 text-amber-700">
+                    <li>• <strong>키워드</strong>: 해당 단어가 포함되면 차단 (예: 광고, 스팸)</li>
+                    <li>• <strong>도메인</strong>: 해당 도메인에서 수집된 데이터 차단 (예: spam.com)</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- PC 테이블 (768px 이상) -->
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th class="w-12">
+                        <input type="checkbox" class="rounded border-gray-300"
+                            :checked="filters.filter(f => !f.is_system).length > 0 && selectedFilters.length === filters.filter(f => !f.is_system).length"
+                            @click="toggleFilterSelectAll()">
+                    </th>
+                    <th @click="sortFilters('filter_value')" class="sortable-header">
+                        필터값
+                        <span class="sort-icon" :class="{'active': filterSortField === 'filter_value'}"
+                              x-text="filterSortField === 'filter_value' ? (filterSortDir === 'asc' ? '▲' : '▼') : '▲'"></span>
+                    </th>
+                    <th @click="sortFilters('match_count')" class="w-40 text-center sortable-header">
+                        매칭횟수
+                        <span class="sort-icon" :class="{'active': filterSortField === 'match_count'}"
+                              x-text="filterSortField === 'match_count' ? (filterSortDir === 'asc' ? '▲' : '▼') : '▲'"></span>
+                    </th>
+                    <th class="w-40 text-center">액션</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- 로딩 상태 -->
+                <template x-if="filterLoading">
+                    <tr>
+                        <td colspan="4" class="text-center py-12">
+                            <div class="spinner mx-auto mb-2"></div>
+                            <div class="text-gray-500 text-sm">로딩 중...</div>
+                        </td>
+                    </tr>
+                </template>
+                <!-- 빈 상태 -->
+                <template x-if="!filterLoading && filters.length === 0">
+                    <tr>
+                        <td colspan="4" class="text-center py-12 text-gray-500">
+                            <div class="text-4xl mb-2">🛡️</div>
+                            <div>등록된 필터가 없습니다</div>
+                            <div class="text-sm mt-1">새 필터를 추가해보세요</div>
+                        </td>
+                    </tr>
+                </template>
+                <!-- 데이터 목록 -->
+                <template x-for="filter in filters" :key="filter.id">
+                    <tr :class="{'bg-blue-50': filter.is_system}">
+                        <td class="w-12">
+                            <input type="checkbox" class="rounded border-gray-300"
+                                :value="filter.id"
+                                x-model="selectedFilters"
+                                @change="onFilterSelect()"
+                                :disabled="filter.is_system">
+                        </td>
+                        <!-- ★ 인라인 편집 가능한 필터값 셀 (시스템 필터 제외) -->
+                        <td>
+                            <template x-if="editingFilterId !== filter.id">
+                                <div class="flex items-center gap-2">
+                                    <code
+                                        @dblclick="!filter.is_system && startEditFilter(filter)"
+                                        class="text-sm bg-gray-100 px-2 py-1 rounded font-medium"
+                                        :class="{'cursor-pointer hover:bg-yellow-100': !filter.is_system}"
+                                        :title="filter.is_system ? '시스템 필터는 수정 불가' : '더블클릭하여 수정'"
+                                        x-text="filter.filter_value"></code>
+                                    <!-- 타입 뱃지 -->
+                                    <span class="badge text-xs"
+                                        :class="{
+                                            'badge-blue': filter.filter_type === 'keyword',
+                                            'badge-yellow': filter.filter_type === 'domain'
+                                        }">
+                                        <span x-text="filter.filter_type === 'keyword' ? '키워드' : '도메인'"></span>
+                                    </span>
+                                    <!-- 시스템 표시 -->
+                                    <span x-show="filter.is_system" class="badge badge-blue text-xs">시스템</span>
+                                </div>
+                            </template>
+                            <template x-if="editingFilterId === filter.id">
+                                <input
+                                    type="text"
+                                    x-model="editingFilterValue"
+                                    @keyup.enter="saveEditFilter(filter.id)"
+                                    @keyup.escape="cancelEditFilter()"
+                                    @blur="saveEditFilter(filter.id)"
+                                    x-ref="filterEditInput"
+                                    class="w-full px-2 py-1 border border-blue-500 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </template>
+                        </td>
+                        <td class="w-40 text-center text-sm" x-text="filter.match_count || 0"></td>
+                        <td class="w-40 text-center">
+                            <button
+                                x-show="!filter.is_system"
+                                @click="deleteFilter(filter.id)"
+                                class="text-red-600 hover:text-red-800 text-sm font-medium">
+                                삭제
+                            </button>
+                            <span x-show="filter.is_system" class="text-gray-400 text-xs">-</span>
+                        </td>
+                    </tr>
+                </template>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 모바일 카드 리스트 (768px 미만) -->
+    <div class="mobile-card-list">
+        <!-- 전체 선택 바 -->
+        <div class="mobile-select-all">
+            <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" class="rounded border-gray-300"
+                    :checked="filters.filter(f => !f.is_system).length > 0 && selectedFilters.length === filters.filter(f => !f.is_system).length"
+                    @click="toggleFilterSelectAll()">
+                <span class="text-sm text-gray-600">전체 선택</span>
+            </label>
+            <span class="text-xs text-gray-400" x-text="`${selectedFilters.length}/${filters.filter(f => !f.is_system).length}개 선택`"></span>
+        </div>
+
+        <!-- 로딩 상태 -->
+        <template x-if="filterLoading">
+            <div class="text-center py-12">
+                <div class="spinner mx-auto mb-2"></div>
+                <div class="text-gray-500 text-sm">로딩 중...</div>
+            </div>
+        </template>
+
+        <!-- 빈 상태 -->
+        <template x-if="!filterLoading && filters.length === 0">
+            <div class="text-center py-12 text-gray-500">
+                <div class="text-4xl mb-2">🛡️</div>
+                <div>등록된 필터가 없습니다</div>
+                <div class="text-sm mt-1">새 필터를 추가해보세요</div>
+            </div>
+        </template>
+
+        <!-- 카드 목록 -->
+        <template x-for="filter in filters" :key="filter.id">
+            <div class="mobile-card"
+                 :class="{'selected': selectedFilters.includes(filter.id), 'expanded': expandedFilterId === filter.id, 'bg-blue-50': filter.is_system}">
+                <!-- 카드 헤더 (접힌 상태) -->
+                <div class="mobile-card-header" @click="expandedFilterId = expandedFilterId === filter.id ? null : filter.id">
+                    <div class="mobile-card-checkbox" @click.stop>
+                        <input type="checkbox" class="rounded border-gray-300"
+                            :value="filter.id"
+                            x-model="selectedFilters"
+                            @change="onFilterSelect()"
+                            :disabled="filter.is_system">
+                    </div>
+                    <div class="mobile-card-main">
+                        <div class="mobile-card-title flex items-center gap-2">
+                            <code class="text-sm bg-gray-100 px-2 py-0.5 rounded font-medium" x-text="filter.filter_value"></code>
+                            <span x-show="filter.is_system" class="badge badge-blue text-xs">시스템</span>
+                        </div>
+                        <div class="mobile-card-subtitle flex items-center gap-2 mt-1">
+                            <span class="badge text-xs"
+                                  :class="{
+                                      'badge-blue': filter.filter_type === 'keyword',
+                                      'badge-yellow': filter.filter_type === 'domain'
+                                  }"
+                                  x-text="filter.filter_type === 'keyword' ? '키워드' : '도메인'"></span>
+                        </div>
+                    </div>
+                    <div class="mobile-card-badge">
+                        <span class="text-xs text-gray-500" x-text="`매칭 ${filter.match_count || 0}회`"></span>
+                    </div>
+                    <div class="mobile-card-expand">
+                        <svg class="w-5 h-5 text-gray-400 transition-transform"
+                             :class="{'rotate-180': expandedFilterId === filter.id}"
+                             fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </div>
+                </div>
+                <!-- 카드 상세 (펼친 상태) -->
+                <div class="mobile-card-details" x-show="expandedFilterId === filter.id" x-transition>
+                    <div class="mobile-card-detail-row">
+                        <span class="mobile-card-detail-label">필터값</span>
+                        <code class="mobile-card-detail-value bg-gray-100 px-2 py-0.5 rounded text-sm font-medium" x-text="filter.filter_value"></code>
+                    </div>
+                    <div class="mobile-card-detail-row">
+                        <span class="mobile-card-detail-label">타입</span>
+                        <span class="mobile-card-detail-value" x-text="filter.filter_type === 'keyword' ? '키워드 차단' : '도메인 차단'"></span>
+                    </div>
+                    <div class="mobile-card-detail-row">
+                        <span class="mobile-card-detail-label">매칭횟수</span>
+                        <span class="mobile-card-detail-value font-medium" x-text="`${filter.match_count || 0}회`"></span>
+                    </div>
+                    <div class="mobile-card-detail-row" x-show="filter.is_system">
+                        <span class="mobile-card-detail-label">종류</span>
+                        <span class="mobile-card-detail-value text-blue-600">시스템 필터</span>
+                    </div>
+                    <div class="mobile-card-actions" x-show="!filter.is_system">
+                        <button @click="deleteFilter(filter.id)"
+                                class="mobile-card-action-btn text-red-600 border-red-200 hover:bg-red-50">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                            삭제
+                        </button>
+                    </div>
+                    <div x-show="filter.is_system" class="pt-3 text-center text-xs text-gray-400">
+                        시스템 필터는 삭제할 수 없습니다
+                    </div>
+                </div>
+            </div>
+        </template>
+    </div>
+
+    <!-- 페이지네이션 -->
+    <div class="pagination">
+        <div class="text-sm text-gray-600">
+            총 <span class="font-semibold" x-text="filterTotal"></span>개
+        </div>
+        <div class="flex items-center gap-2">
+            <button
+                @click="if(filterPage > 1) { filterPage--; loadFilters(); }"
+                :disabled="filterPage <= 1"
+                class="px-3 py-1.5 border rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50">
+                이전
+            </button>
+            <span class="text-sm text-gray-600 px-2" x-text="`${filterPage} 페이지`"></span>
+            <button
+                @click="if(filterHasNext) { filterPage++; loadFilters(); }"
+                :disabled="!filterHasNext"
+                class="px-3 py-1.5 border rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50">
+                다음
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- 필터 추가 모달 (대량 입력) -->
+<div
+    x-data="{
+        open: false,
+        filter_type: 'keyword',
+        filter_values: '',
+        target_type: 'both',
+        submitting: false,
+        result: null
+    }"
+    @open-filter-modal.window="open = true; filter_values = ''; result = null"
+    x-show="open"
+    x-cloak
+    class="fixed inset-0 z-50 overflow-y-auto"
+    style="background: rgba(0,0,0,0.5)">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div
+            @click.away="open = false"
+            class="bg-white rounded-lg shadow-xl w-full max-w-lg">
+            <div class="px-6 py-4 border-b flex items-center justify-between">
+                <h3 class="text-lg font-semibold">필터 추가</h3>
+                <button @click="open = false" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="px-6 py-4 space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">필터 타입</label>
+                        <select
+                            x-model="filter_type"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                            <option value="keyword">키워드 차단</option>
+                            <option value="domain">도메인 차단</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">적용 대상</label>
+                        <select
+                            x-model="target_type"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                            <option value="both">모두</option>
+                            <option value="keyword">키워드만</option>
+                            <option value="title">제목만</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">차단할 값</label>
+                    <textarea
+                        x-model="filter_values"
+                        rows="6"
+                        :placeholder="filter_type === 'keyword' ? '차단할 키워드를 입력하세요. 한 줄에 하나씩 입력하면 여러 개를 한 번에 등록할 수 있습니다.' : '차단할 도메인을 입력하세요. 한 줄에 하나씩 입력하면 여러 개를 한 번에 등록할 수 있습니다.'"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 resize-none font-mono"
+                    ></textarea>
+                    <div class="flex justify-between mt-1">
+                        <p class="text-xs text-gray-500">줄바꿈으로 구분하여 여러 개 입력 가능</p>
+                        <p class="text-xs text-gray-400" x-text="`${filter_values.split('\\n').filter(v => v.trim()).length}개`"></p>
+                    </div>
+                </div>
+                <!-- 결과 표시 -->
+                <div x-show="result" class="p-3 rounded-lg" :class="result?.success ? 'bg-green-50' : 'bg-red-50'">
+                    <p class="text-sm" :class="result?.success ? 'text-green-700' : 'text-red-700'" x-text="result?.message"></p>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t flex justify-end gap-2 bg-gray-50">
+                <button
+                    type="button"
+                    @click="open = false"
+                    class="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg text-sm transition-colors">
+                    닫기
+                </button>
+                <button
+                    @click="
+                        const lines = filter_values.split('\n').map(v => v.trim()).filter(v => v);
+                        if (lines.length === 0) {
+                            result = { success: false, message: '차단할 값을 입력하세요' };
+                            return;
+                        }
+                        submitting = true;
+                        result = null;
+                        fetch(`${API_BASE}/data/filters/bulk`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({
+                                filter_type,
+                                filter_values: lines,
+                                target_type
+                            })
+                        })
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.detail) throw new Error(data.detail);
+                            result = { success: true, message: `${data.created || lines.length}개 필터가 추가되었습니다` };
+                            filter_values = '';
+                            loadFilters();
+                            loadStats();
+                        })
+                        .catch(e => {
+                            result = { success: false, message: e.message || '추가 실패' };
+                        })
+                        .finally(() => submitting = false);
+                    "
+                    :disabled="submitting || !filter_values.trim()"
+                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm transition-colors disabled:opacity-50">
+                    <span x-show="!submitting">추가</span>
+                    <span x-show="submitting" class="flex items-center gap-1">
+                        <span class="spinner"></span> 처리 중...
+                    </span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

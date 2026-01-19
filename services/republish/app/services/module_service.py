@@ -248,7 +248,8 @@ class ModuleService:
                 return None
 
             # None도 유효한 값으로 처리해야 하는 필드 목록
-            nullable_fields = {'post_range_end', 'cooldown_days', 'description'}
+            # cooldown_days는 collect 타입에서는 사용하지 않으므로 제외
+            nullable_fields = {'post_range_end', 'description'}
 
             # 업데이트 필드 적용
             # exclude_none=True: None은 제외, 빈 문자열("")은 포함

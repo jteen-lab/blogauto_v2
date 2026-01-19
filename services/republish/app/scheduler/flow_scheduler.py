@@ -1,5 +1,5 @@
 """
-플로우 스케줄러 (재설계)
+플로우 스케줄러 (모듈 방식)
 
 Features:
 - IntervalTrigger 기반 분 단위 스케줄링
@@ -7,6 +7,7 @@ Features:
 - 일시정지/재개 시 남은 시간 보존
 - schedule_matrix를 활성화 시간대로 해석
 - 개별 Job 등록/관리
+- 모듈 방식 실행 (flows_execute.py와 동일)
 """
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
@@ -21,17 +22,14 @@ from ..models.flow import Flow
 from ..models.flow_module import FlowModule
 from ..models.flow_blog import FlowBlog
 from ..models.module import Module
+from ..models.blog import Blog, BlogPlatform
 from ..models.flow_execution_state import FlowExecutionState
+from ..models.autorun_log import AutorunLog
+from ..models.user_settings import UserSettings
 from ..engine.flow_engine import FlowEngine
 from ..core.database import db_manager
 from ..core.logger import get_logger
 from .scheduler import scheduler_instance
-
-# 노드 기반 실행을 위한 import
-from ..core.executor import (
-    FlowExecutor, FlowDefinition, NodeConfig, Connection
-)
-from ..core.interface import PortType
 
 logger = get_logger("flow_scheduler", "republish.log")
 
@@ -122,12 +120,30 @@ class FlowScheduler:
                 # 기존 Job 제거
                 await self.unregister_flow(flow_id)
 
-                # 모듈별 실행 상태 초기화 또는 조회
+                # 모듈 타입별로 하나씩만 실행 (중복 방지)
+                # 같은 타입의 모듈이 여러 개 연결되어 있어도 첫 번째만 실행
                 registered_count = 0
+                registered_types = set()  # 이미 등록된 모듈 타입 추적
+
                 for link in flow.module_links:
                     module = link.module
                     if not module:
                         continue
+
+                    # 모듈 타입 확인 (module_type이 있으면 code 사용, 없으면 "unknown")
+                    module_type_code = "unknown"
+                    if module.module_type:
+                        module_type_code = module.module_type.code
+
+                    # 이미 같은 타입의 모듈이 등록되었으면 스킵
+                    if module_type_code in registered_types:
+                        logger.info(
+                            f"[FLOW_SCHEDULER] 중복 모듈 타입 스킵 | FlowID={flow_id} | "
+                            f"ModuleID={module.id} | Type={module_type_code}"
+                        )
+                        continue
+
+                    registered_types.add(module_type_code)
 
                     # 실행 상태 조회 또는 생성
                     state = await self._get_or_create_execution_state(
@@ -150,6 +166,10 @@ class FlowScheduler:
                         )
 
                     registered_count += 1
+                    logger.info(
+                        f"[FLOW_SCHEDULER] 모듈 등록 | FlowID={flow_id} | "
+                        f"ModuleID={module.id} | Type={module_type_code}"
+                    )
 
                 await db.commit()
 
@@ -335,7 +355,9 @@ class FlowScheduler:
         flow_id: int,
         action_type: str = "republish"
     ) -> Dict[str, Any]:
-        """플로우 즉시 실행 (수동)"""
+        """플로우 즉시 실행 (수동) - 모듈 방식"""
+        started_at = datetime.now()
+
         try:
             logger.info(
                 f"[FLOW_SCHEDULER] Manual execution | FlowID={flow_id} | "
@@ -366,28 +388,85 @@ class FlowScheduler:
                         "message": f"액션 타입에 해당하는 모듈이 없습니다: {action_type}"
                     }
 
-                # FlowDefinition 빌드 및 FlowExecutor로 실행
-                flow_definition = self._build_republish_flow_definition(
-                    flow, target_module
-                )
-                executor = FlowExecutor(db, logger)
-                exec_result = await executor.execute(
-                    flow_definition, is_test=False
-                )
+                # 블로그 목록 가져오기
+                blogs = [link.blog for link in flow.blog_links if link.blog]
 
-                # 실행 결과를 기존 형식으로 변환
-                result = {
-                    "success": exec_result.success,
-                    "message": exec_result.error or "성공",
-                    "execution_id": exec_result.execution_id,
-                    "duration_ms": exec_result.duration_ms,
-                    "total_items": exec_result.total_items_processed,
-                    "node_results": [r.to_dict() for r in exec_result.node_results]
-                }
+                # 모듈 방식 실행 (flows_execute.py와 동일)
+                if action_type == "collect":
+                    result = await self._execute_collect_module(target_module, db, flow)
+                    duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
+
+                    # AutorunLog 저장
+                    await self._save_autorun_log(
+                        db=db,
+                        user_id=flow.user_id,
+                        flow_id=flow.id,
+                        flow_name=flow.name,
+                        module_name=target_module.name,
+                        blog_name="-",
+                        result=result,
+                        duration_ms=duration_ms,
+                        action="collect"
+                    )
+
+                elif action_type == "republish":
+                    if not blogs:
+                        result = {"success": False, "message": "블로그가 연결되지 않았습니다"}
+                    else:
+                        success_count = 0
+                        fail_count = 0
+                        for blog in blogs:
+                            blog_start = datetime.now()
+                            try:
+                                blog_result = await self._execute_republish_for_blog(blog)
+                                blog_duration = int((datetime.now() - blog_start).total_seconds() * 1000)
+
+                                await self._save_autorun_log(
+                                    db=db,
+                                    user_id=flow.user_id,
+                                    flow_id=flow.id,
+                                    flow_name=flow.name,
+                                    module_name=target_module.name,
+                                    blog_name=blog.name,
+                                    result=blog_result,
+                                    duration_ms=blog_duration,
+                                    action="republish"
+                                )
+
+                                if blog_result.get("success"):
+                                    success_count += 1
+                                else:
+                                    fail_count += 1
+
+                            except Exception as e:
+                                fail_count += 1
+                                blog_duration = int((datetime.now() - blog_start).total_seconds() * 1000)
+                                await self._save_autorun_log(
+                                    db=db,
+                                    user_id=flow.user_id,
+                                    flow_id=flow.id,
+                                    flow_name=flow.name,
+                                    module_name=target_module.name,
+                                    blog_name=blog.name,
+                                    result={"success": False, "message": str(e)},
+                                    duration_ms=blog_duration,
+                                    action="republish"
+                                )
+
+                        result = {
+                            "success": fail_count == 0,
+                            "message": f"성공 {success_count}/{len(blogs)}, 실패 {fail_count}/{len(blogs)}"
+                        }
+                else:
+                    result = {"success": False, "message": f"지원하지 않는 액션 타입: {action_type}"}
+
+                duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
+                result["duration_ms"] = duration_ms
 
                 logger.info(
-                    f"[FLOW_SCHEDULER] Manual FlowExecutor 실행 완료 | "
-                    f"FlowID={flow_id} | Success={exec_result.success}"
+                    f"[FLOW_SCHEDULER] Manual execution completed | "
+                    f"FlowID={flow_id} | Success={result.get('success', False)} | "
+                    f"Duration={duration_ms}ms"
                 )
 
                 # 실행 상태 업데이트
@@ -568,14 +647,20 @@ class FlowScheduler:
         flow_id: int,
         module_id: int
     ) -> None:
-        """모듈 실행 콜백 (비동기 실제 로직)"""
+        """
+        모듈 실행 콜백 (모듈 방식 - flows_execute.py와 동일)
+
+        노드 체인 방식 대신 직접 서비스를 호출하여 실행합니다.
+        """
+        started_at = datetime.now()
+
         try:
             logger.info(
                 f"[FLOW_SCHEDULER] Executing | FlowID={flow_id} | ModuleID={module_id}"
             )
 
             async with db_manager.get_session() as db:
-                # 플로우 조회
+                # 플로우 조회 (블로그 정보 포함)
                 flow = await self._get_flow_with_modules(db, flow_id)
                 if not flow:
                     logger.warning(f"[FLOW_SCHEDULER] Flow not found | FlowID={flow_id}")
@@ -631,30 +716,102 @@ class FlowScheduler:
                 if module.module_type:
                     action_type = module.module_type.code
 
-                # FlowDefinition 빌드 및 FlowExecutor로 실행
-                flow_definition = self._build_republish_flow_definition(
-                    flow, module
-                )
-                executor = FlowExecutor(db, logger)
-                exec_result = await executor.execute(
-                    flow_definition, is_test=False
-                )
+                # 블로그 목록 가져오기
+                blogs = [link.blog for link in flow.blog_links if link.blog]
 
-                # 실행 결과를 기존 형식으로 변환
-                result = {
-                    "success": exec_result.success,
-                    "message": exec_result.error or "성공",
-                    "execution_id": exec_result.execution_id,
-                    "duration_ms": exec_result.duration_ms,
-                    "total_items": exec_result.total_items_processed,
-                    "node_results": [r.to_dict() for r in exec_result.node_results]
-                }
+                # 모듈 방식 실행 (flows_execute.py와 동일)
+                if action_type == "collect":
+                    result = await self._execute_collect_module(module, db, flow)
+                    duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
 
-                logger.info(
-                    f"[FLOW_SCHEDULER] FlowExecutor 실행 완료 | "
-                    f"FlowID={flow_id} | Success={exec_result.success} | "
-                    f"Duration={exec_result.duration_ms}ms"
-                )
+                    # AutorunLog 저장
+                    await self._save_autorun_log(
+                        db=db,
+                        user_id=flow.user_id,
+                        flow_id=flow.id,
+                        flow_name=flow.name,
+                        module_name=module.name,
+                        blog_name="-",
+                        result=result,
+                        duration_ms=duration_ms,
+                        action="collect"
+                    )
+
+                    logger.info(
+                        f"[FLOW_SCHEDULER] 수집 모듈 실행 완료 | FlowID={flow_id} | "
+                        f"Success={result.get('success', False)} | Duration={duration_ms}ms"
+                    )
+
+                elif action_type == "republish":
+                    if not blogs:
+                        logger.warning(
+                            f"[FLOW_SCHEDULER] 재발행 모듈에 블로그 없음 | FlowID={flow_id}"
+                        )
+                        result = {"success": False, "message": "블로그가 연결되지 않았습니다"}
+                    else:
+                        # 각 블로그에 대해 재발행 실행
+                        success_count = 0
+                        fail_count = 0
+                        for blog in blogs:
+                            blog_start = datetime.now()
+                            try:
+                                blog_result = await self._execute_republish_for_blog(blog)
+                                blog_duration = int((datetime.now() - blog_start).total_seconds() * 1000)
+
+                                # AutorunLog 저장
+                                await self._save_autorun_log(
+                                    db=db,
+                                    user_id=flow.user_id,
+                                    flow_id=flow.id,
+                                    flow_name=flow.name,
+                                    module_name=module.name,
+                                    blog_name=blog.name,
+                                    result=blog_result,
+                                    duration_ms=blog_duration,
+                                    action="republish"
+                                )
+
+                                if blog_result.get("success"):
+                                    success_count += 1
+                                    logger.info(
+                                        f"[FLOW_SCHEDULER] 재발행 성공 | blog={blog.name} | "
+                                        f"post={blog_result.get('post_title', '')[:30]}"
+                                    )
+                                else:
+                                    fail_count += 1
+                                    logger.warning(
+                                        f"[FLOW_SCHEDULER] 재발행 실패 | blog={blog.name} | "
+                                        f"error={blog_result.get('message', '')}"
+                                    )
+
+                            except Exception as e:
+                                fail_count += 1
+                                blog_duration = int((datetime.now() - blog_start).total_seconds() * 1000)
+                                logger.error(f"[FLOW_SCHEDULER] 블로그 처리 오류 | blog={blog.name} | error={e}")
+                                await self._save_autorun_log(
+                                    db=db,
+                                    user_id=flow.user_id,
+                                    flow_id=flow.id,
+                                    flow_name=flow.name,
+                                    module_name=module.name,
+                                    blog_name=blog.name,
+                                    result={"success": False, "message": str(e)},
+                                    duration_ms=blog_duration,
+                                    action="republish"
+                                )
+
+                        result = {
+                            "success": fail_count == 0,
+                            "message": f"성공 {success_count}/{len(blogs)}, 실패 {fail_count}/{len(blogs)}"
+                        }
+
+                        logger.info(
+                            f"[FLOW_SCHEDULER] 재발행 완료 | FlowID={flow_id} | "
+                            f"성공={success_count} | 실패={fail_count}"
+                        )
+                else:
+                    result = {"success": False, "message": f"지원하지 않는 액션 타입: {action_type}"}
+                    logger.warning(f"[FLOW_SCHEDULER] Unknown action type | {action_type}")
 
                 # 실행 상태 업데이트
                 if state:
@@ -675,9 +832,11 @@ class FlowScheduler:
 
                 await db.commit()
 
+                duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
                 logger.info(
                     f"[FLOW_SCHEDULER] Execution completed | FlowID={flow_id} | "
-                    f"ModuleID={module_id} | Success={result.get('success', False)}"
+                    f"ModuleID={module_id} | Success={result.get('success', False)} | "
+                    f"Duration={duration_ms}ms"
                 )
 
         except Exception as e:
@@ -741,128 +900,275 @@ class FlowScheduler:
         """Job ID 생성"""
         return f"{self._job_prefix}{flow_id}_module_{module_id}"
 
-    def _build_republish_flow_definition(
+    # ===========================================
+    # 모듈 방식 실행 메서드 (flows_execute.py와 동일)
+    # ===========================================
+
+    async def _execute_collect_module(
         self,
-        flow: Flow,
-        module: Module
-    ) -> FlowDefinition:
+        module: Module,
+        db: AsyncSession,
+        flow: Flow
+    ) -> Dict[str, Any]:
         """
-        재발행용 FlowDefinition 빌드 (5개 노드 체인)
+        수집 모듈 실행 (flows_execute.py와 동일한 모듈 방식)
 
-        노드 구성:
-        1. ManualTrigger → 시작점
-        2. DBQuery → Flow에 연결된 블로그 목록 조회
-        3. PostSelector → 각 블로그에서 재발행할 포스트 선택
-        4. Publish → WordPress/Blogger API 호출 (순수 발행)
-        5. DBSave → 실행 결과 저장 (autorun_logs)
-
-        데이터 흐름:
-        Trigger → [{triggered_at}]
-        DBQuery → [{blog_id, blog_name, platform, ...}]
-        PostSelector → [{blog_id, post_id, post_title, ...}]
-        Publish → [{blog_id, post_id, publish_result, ...}]
-        DBSave → [{saved: true, log_id}]
+        KeywordCollectorService를 사용하여 키워드/제목 수집을 수행합니다.
         """
-        nodes = []
-        connections = []
+        from app.services.keyword_collector_service import KeywordCollectorService
 
-        # 모듈 설정에서 파라미터 가져오기
-        module_settings = module.settings or {}
+        try:
+            settings = module.settings or {}
 
-        # 1. ManualTrigger 노드 (시작점)
-        trigger_node = NodeConfig(
-            id="node_trigger",
-            module_name="manual_trigger",
-            params={}
-        )
-        nodes.append(trigger_node)
+            # 수집 유형 확인 (keyword, title, both)
+            collect_type = settings.get("collect_type", "both")
 
-        # 2. DBQuery 노드 (블로그 목록 조회)
-        db_query_node = NodeConfig(
-            id="node_db_query",
-            module_name="db_query",
-            params={
-                "table": "flow_blogs",
-                "use_flow_id": True,
-                "filter": {"is_active": True},
-                "limit": 100
+            # 키워드 소스 목록 (기본값 False - 명시적으로 선택된 소스만 사용)
+            keyword_sources = []
+            if settings.get("source_google_trends", False):
+                keyword_sources.append("google_trends")
+            if settings.get("source_naver_datalab", False):
+                keyword_sources.append("naver_datalab")
+            if settings.get("source_naver_ads", False):
+                keyword_sources.append("naver_ads")
+
+            # 제목 소스 목록 (기본값 False - 명시적으로 선택된 소스만 사용)
+            title_sources = []
+            if settings.get("source_naver_news", False):
+                title_sources.append("naver_news")
+            if settings.get("source_google_news", False):
+                title_sources.append("google_news")
+            if settings.get("source_naver_webdoc", False):
+                title_sources.append("naver_webdoc")
+
+            # collect_type에 따라 소스 필터링
+            sources = []
+            if collect_type == "keyword":
+                sources = keyword_sources
+            elif collect_type == "title":
+                sources = title_sources
+            else:  # both
+                sources = keyword_sources + title_sources
+
+            if not sources:
+                return {
+                    "success": False,
+                    "message": f"수집 소스가 설정되지 않았습니다 (타입: {collect_type})",
+                    "collected_count": 0
+                }
+
+            logger.info(
+                f"[FLOW_SCHEDULER] 수집 모듈={module.name} | 타입={collect_type} | 소스={sources}"
+            )
+
+            # 사용자 설정 조회
+            query = select(UserSettings).where(UserSettings.user_id == flow.user_id)
+            result = await db.execute(query)
+            user_settings = result.scalar_one_or_none()
+
+            if not user_settings:
+                return {
+                    "success": False,
+                    "message": "사용자 설정을 찾을 수 없습니다",
+                    "collected_count": 0
+                }
+
+            # KeywordCollectorService를 사용하여 자동 수집
+            collector = KeywordCollectorService(db=db, settings=user_settings)
+
+            # 수집 수량 제한 적용 (키워드/제목 분리)
+            keyword_limit = settings.get("keyword_collect_limit", 100)
+            keyword_limit = max(10, min(1000, keyword_limit))
+            # title_limit: 0 또는 None이면 무제한
+            title_limit_setting = settings.get("title_collect_limit", 0)
+            title_limit = None if title_limit_setting == 0 else title_limit_setting
+
+            # 연관검색 확장 옵션 (기본값 True)
+            enable_related_search = settings.get("enable_related_search", True)
+
+            # 수집 유형 옵션 (일반/대량) - 기본값 False (명시적으로 활성화해야 동작)
+            enable_normal_collect = settings.get("enable_normal_collect", False)
+            enable_bulk_collect = settings.get("enable_bulk_collect", False)
+            bulk_collect_delay = settings.get("bulk_collect_delay", 0.5)
+            bulk_urls_per_cycle = settings.get("bulk_urls_per_cycle", 3)
+
+            logger.info(
+                f"[FLOW_SCHEDULER] 옵션 | keyword_limit={keyword_limit}, "
+                f"title_limit={'무제한' if not title_limit else title_limit}, "
+                f"enable_related_search={enable_related_search}, "
+                f"enable_normal_collect={enable_normal_collect}, enable_bulk_collect={enable_bulk_collect}"
+            )
+
+            # 선택된 소스에서만 수집 (수량 제한 분리 적용)
+            collect_result = await collector.collect_all(
+                sources=sources,
+                keyword_limit=keyword_limit,
+                title_limit=title_limit,
+                enable_related_search=enable_related_search,
+                enable_normal_collect=enable_normal_collect,
+                enable_bulk_collect=enable_bulk_collect,
+                bulk_collect_delay=bulk_collect_delay,
+                bulk_urls_per_cycle=bulk_urls_per_cycle
+            )
+
+            if collect_result.get("success"):
+                total_collected = collect_result.get("total_collected", 0)
+                total_saved = collect_result.get("total_saved", 0)
+                results_detail = collect_result.get("results", {})
+
+                # 각 소스별 결과 메시지 생성
+                source_messages = []
+                for source, src_result in results_detail.items():
+                    if src_result.get("success"):
+                        source_messages.append(
+                            f"{source}: {src_result.get('collected', 0)}개 수집, {src_result.get('saved', 0)}개 저장"
+                        )
+                    else:
+                        source_messages.append(
+                            f"{source}: 오류 - {src_result.get('error', '알 수 없음')}"
+                        )
+
+                # 키워드 추출 실행 (설정에서 enable_keyword_extraction이 활성화된 경우)
+                extraction_result = None
+                if settings.get("enable_keyword_extraction", False):
+                    try:
+                        from app.services.keyword_extractor_service import KeywordExtractorService
+
+                        extraction_method = settings.get("keyword_extraction_method", "all")
+                        extraction_title_limit = settings.get("keyword_extraction_title_limit", 100)
+                        extraction_keyword_limit = settings.get("keyword_extraction_limit", 50)
+
+                        logger.info(
+                            f"[FLOW_SCHEDULER] 키워드 추출 시작 | method={extraction_method}, "
+                            f"title_limit={extraction_title_limit}, keyword_limit={extraction_keyword_limit}"
+                        )
+
+                        extractor = KeywordExtractorService(db)
+                        extraction_result = await extractor.extract_and_save_keywords(
+                            title_limit=extraction_title_limit,
+                            keyword_limit=extraction_keyword_limit,
+                            method=extraction_method,
+                            title_status="new"
+                        )
+
+                        if extraction_result.get("success"):
+                            extracted_count = extraction_result.get("keywords_saved", 0)
+                            source_messages.append(f"키워드 추출: {extracted_count}개 저장")
+                            logger.info(f"[FLOW_SCHEDULER] 키워드 추출 완료 | 저장={extracted_count}개")
+                        else:
+                            logger.warning(f"[FLOW_SCHEDULER] 키워드 추출 실패: {extraction_result.get('error', '알 수 없음')}")
+
+                    except Exception as extract_error:
+                        logger.error(f"[FLOW_SCHEDULER] 키워드 추출 오류: {extract_error}")
+
+                return {
+                    "success": True,
+                    "message": f"총 {total_collected}개 수집, {total_saved}개 저장 ({', '.join(source_messages)})",
+                    "collected_count": total_collected,
+                    "saved_count": total_saved,
+                    "sources": sources,
+                    "collect_type": collect_type,
+                    "results": results_detail,
+                    "extraction_result": extraction_result
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": collect_result.get("error", "수집 실패"),
+                    "collected_count": 0,
+                    "sources": sources,
+                    "collect_type": collect_type
+                }
+
+        except Exception as e:
+            logger.error(f"[FLOW_SCHEDULER] 수집 실패 | module={module.name} | error={e}")
+            return {
+                "success": False,
+                "message": str(e),
+                "collected_count": 0
             }
-        )
-        nodes.append(db_query_node)
 
-        # 3. PostSelector 노드 (포스트 선택)
-        post_selector_node = NodeConfig(
-            id="node_post_selector",
-            module_name="post_selector",
-            params={
-                "selection_mode": module_settings.get("selection_mode", "oldest"),
-                "min_age_days": module_settings.get("min_age_days", 0),
-                "max_posts_to_scan": module_settings.get("max_posts", 100)
+    async def _execute_republish_for_blog(self, blog: Blog) -> Dict[str, Any]:
+        """
+        블로그에 재발행 수행 (flows_execute.py와 동일)
+        """
+        from app.services.wordpress_service import WordPressRepublishService
+        from app.services.blogger_service import BloggerRepublishService
+
+        if blog.platform == BlogPlatform.WORDPRESS:
+            service = WordPressRepublishService()
+            return await service.republish(blog)
+        elif blog.platform == BlogPlatform.BLOGGER:
+            if not blog.google_credential:
+                return {
+                    "success": False,
+                    "message": "Google 인증 정보가 없습니다"
+                }
+            service = BloggerRepublishService()
+            return await service.republish(blog, blog.google_credential)
+        else:
+            return {
+                "success": False,
+                "message": f"지원하지 않는 플랫폼: {blog.platform.value}"
             }
-        )
-        nodes.append(post_selector_node)
 
-        # 4. Publish 노드 (순수 발행)
-        publish_node = NodeConfig(
-            id="node_publish",
-            module_name="publish",
-            params={
-                "publish_mode": "republish"
-            }
-        )
-        nodes.append(publish_node)
+    async def _save_autorun_log(
+        self,
+        db: AsyncSession,
+        user_id: int,
+        flow_id: int,
+        flow_name: str,
+        module_name: str,
+        blog_name: str,
+        result: Dict[str, Any],
+        duration_ms: int,
+        action: str = "republish"
+    ) -> None:
+        """AutorunLog DB 저장 (flows_execute.py와 동일)"""
+        try:
+            is_success = result.get("success", False)
+            status = "success" if is_success else "failed"
+            post_title = result.get("post_title", "")
 
-        # 5. DBSave 노드 (결과 저장)
-        db_save_node = NodeConfig(
-            id="node_db_save",
-            module_name="db_save",
-            params={
-                "table": "autorun_logs",
-                "mode": "insert",
-                "map_publish_result": True
-            }
-        )
-        nodes.append(db_save_node)
+            # action_time 포맷팅
+            action_time = None
+            new_date = result.get("new_date")
+            if new_date:
+                try:
+                    if "T" in new_date:
+                        parsed = datetime.fromisoformat(new_date.replace("Z", "+00:00"))
+                        action_time = parsed.strftime("%Y/%m/%d/%H:%M:%S")
+                    else:
+                        action_time = new_date
+                except Exception:
+                    action_time = datetime.now().strftime("%Y/%m/%d/%H:%M:%S")
+            else:
+                action_time = datetime.now().strftime("%Y/%m/%d/%H:%M:%S")
 
-        # 연결 (순차: Trigger → DBQuery → PostSelector → Publish → DBSave)
-        connections = [
-            Connection(
-                from_node="node_trigger",
-                from_port=PortType.MAIN,
-                to_node="node_db_query",
-                to_port=PortType.MAIN
-            ),
-            Connection(
-                from_node="node_db_query",
-                from_port=PortType.MAIN,
-                to_node="node_post_selector",
-                to_port=PortType.MAIN
-            ),
-            Connection(
-                from_node="node_post_selector",
-                from_port=PortType.MAIN,
-                to_node="node_publish",
-                to_port=PortType.MAIN
-            ),
-            Connection(
-                from_node="node_publish",
-                from_port=PortType.MAIN,
-                to_node="node_db_save",
-                to_port=PortType.MAIN
-            ),
-        ]
+            # 에러 메시지
+            error_msg = None if is_success else result.get("message", "")
 
-        logger.info(
-            f"[FLOW_SCHEDULER] FlowDefinition 빌드 | FlowID={flow.id} | "
-            f"노드 5개 체인 생성"
-        )
+            # AutorunLog 생성
+            log = AutorunLog.create_execution_log(
+                user_id=user_id,
+                flow_id=flow_id,
+                action=action,
+                status=status,
+                flow_name=flow_name,
+                module_name=module_name,
+                blog_name=blog_name,
+                post_title=post_title,
+                action_time=action_time,
+                duration_ms=duration_ms,
+                message=error_msg
+            )
 
-        return FlowDefinition(
-            id=flow.id,
-            name=flow.name,
-            nodes=nodes,
-            connections=connections
-        )
+            db.add(log)
+            # commit은 호출자에서 처리
+            logger.info(f"[FLOW_SCHEDULER] AutorunLog 저장 | blog={blog_name} | status={status}")
+
+        except Exception as e:
+            logger.error(f"[FLOW_SCHEDULER] AutorunLog 저장 실패 | blog={blog_name} | error={e}")
 
     # ===========================================
     # 상태 조회

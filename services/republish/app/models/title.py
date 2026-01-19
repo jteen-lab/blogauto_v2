@@ -103,9 +103,13 @@ class TempTitle(Base):
     # 필터링 정보
     filter_reason: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     filter_keywords: Mapped[Optional[str]] = mapped_column(Text, nullable=True, comment="필터 키워드 (JSON)")
-    # 카테고리 정보
+    # 카테고리 정보 (KeywordCategory)
     category_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("keyword_categories.id"), nullable=True)
     category_confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    # 카테고리 관리 연동 (Topic > SubTopic > Keyword)
+    topic_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("topics.id"), nullable=True, comment="주제 ID")
+    subtopic_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("subtopics.id"), nullable=True, comment="하위 주제 ID")
+    matched_keyword_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("keywords.id"), nullable=True, comment="매칭된 카테고리 키워드 ID")
     # 유사도 매칭 정보
     similar_title_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     similarity_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)

@@ -96,7 +96,26 @@ class SeedKeyword(Base):
         Integer,
         ForeignKey("keyword_categories.id"),
         nullable=True,
-        comment="카테고리 ID"
+        comment="카테고리 ID (KeywordCategory)"
+    )
+    # 카테고리 관리 연동 (Topic > SubTopic > Keyword)
+    topic_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("topics.id"),
+        nullable=True,
+        comment="주제 ID"
+    )
+    subtopic_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("subtopics.id"),
+        nullable=True,
+        comment="하위 주제 ID"
+    )
+    matched_keyword_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("keywords.id"),
+        nullable=True,
+        comment="매칭된 카테고리 키워드 ID"
     )
     source_type: Mapped[str] = mapped_column(
         String(50),
@@ -162,11 +181,16 @@ class CollectedKeyword(Base):
         index=True,
         comment="수집된 키워드"
     )
-    seed_keyword_id: Mapped[int] = mapped_column(
+    seed_keyword_id: Mapped[Optional[int]] = mapped_column(
         Integer,
         ForeignKey("seed_keywords.id"),
-        nullable=False,
-        comment="시드 키워드 ID"
+        nullable=True,
+        comment="시드 키워드 ID (자동 수집 시 NULL)"
+    )
+    source: Mapped[Optional[str]] = mapped_column(
+        String(50),
+        nullable=True,
+        comment="수집 소스 (google_trends|naver_datalab|naver_ads)"
     )
     category_id: Mapped[Optional[int]] = mapped_column(
         Integer,
@@ -205,7 +229,7 @@ class CollectedKeyword(Base):
     )
 
     # 관계
-    seed_keyword: Mapped["SeedKeyword"] = relationship(
+    seed_keyword: Mapped[Optional["SeedKeyword"]] = relationship(
         "SeedKeyword",
         back_populates="collected_keywords"
     )
@@ -214,9 +238,10 @@ class CollectedKeyword(Base):
         back_populates="collected_keywords"
     )
 
-    # 유니크 제약조건
+    # 유니크 제약조건: keyword + source + created_at 날짜 기준 (같은 날 같은 소스에서 중복 방지)
+    # seed_keyword_id가 NULL일 수 있으므로 다른 조합 사용
     __table_args__ = (
-        UniqueConstraint('keyword', 'seed_keyword_id', name='uq_collected_keyword_seed'),
+        UniqueConstraint('keyword', 'source', name='uq_collected_keyword_source'),
     )
 
     def __repr__(self) -> str:

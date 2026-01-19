@@ -416,10 +416,32 @@ class AutorunService:
         # 모듈 존재 확인
         if not flow.module_links or len(flow.module_links) == 0:
             errors.append("연결된 모듈이 없습니다")
+            return {
+                "is_valid": False,
+                "errors": errors,
+                "warnings": warnings
+            }
 
-        # 블로그 존재 확인
-        if not flow.blog_links or len(flow.blog_links) == 0:
-            errors.append("연결된 블로그가 없습니다")
+        # 모듈 타입 분석
+        module_types = set()
+        has_blog_required_module = False  # republish 등 블로그 필수 모듈
+        for flow_module in flow.module_links:
+            if flow_module.module and flow_module.module.module_type:
+                type_code = flow_module.module.module_type.code
+                module_types.add(type_code)
+                # republish, publish 등은 블로그 필수
+                if type_code in ("republish", "publish"):
+                    has_blog_required_module = True
+
+        # 블로그 존재 확인 (블로그 필수 모듈이 있는 경우에만)
+        has_blogs = flow.blog_links and len(flow.blog_links) > 0
+        if has_blog_required_module and not has_blogs:
+            errors.append("재발행/발행 모듈이 있지만 연결된 블로그가 없습니다")
+
+        # 블로그 없이 수집 모듈만 있는 경우는 허용
+        if not has_blogs and "collect" in module_types and not has_blog_required_module:
+            # collect 모듈만 있는 경우 블로그 없이 실행 가능
+            warnings.append("수집 모듈만 있어 블로그 없이 실행됩니다")
 
         # 모듈 스케줄 확인
         has_schedules = False
@@ -435,7 +457,8 @@ class AutorunService:
         return {
             "is_valid": len(errors) == 0,
             "errors": errors,
-            "warnings": warnings
+            "warnings": warnings,
+            "module_types": list(module_types)
         }
 
     # ===========================================

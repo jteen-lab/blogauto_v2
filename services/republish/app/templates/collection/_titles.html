@@ -1,0 +1,539 @@
+<!-- 임시제목 탭 컨텐츠 -->
+<div>
+    <!-- 검색 바 -->
+    <div class="search-bar">
+        <div class="flex items-center gap-2 flex-1">
+            <div class="search-input-wrapper flex-1 md:max-w-xs">
+                <input
+                    type="text"
+                    x-model="titleSearch"
+                    @keyup.enter="titlePage = 1; loadTitles()"
+                    placeholder="제목 검색..."
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                <button
+                    x-show="titleSearch.length > 0"
+                    @click="resetTitleSearch()"
+                    class="search-clear-btn"
+                    title="검색 초기화">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <select
+                x-model="titleStatus"
+                @change="titlePage = 1; loadTitles()"
+                class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                <option value="">전체 상태</option>
+                <option value="new">신규</option>
+                <option value="categorized">분류됨</option>
+                <option value="filtered">필터됨</option>
+                <option value="moved">승격됨</option>
+            </select>
+            <button
+                @click="titlePage = 1; loadTitles()"
+                class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors hidden md:inline-flex">
+                검색
+            </button>
+        </div>
+    </div>
+
+    <!-- 액션 버튼 그리드 -->
+    <div class="p-3 bg-gray-50 border-b border-gray-200">
+        <div class="grid grid-cols-2 md:flex md:flex-wrap gap-2">
+            <!-- 중복 제거 버튼 -->
+            <button
+                x-show="stats.temp?.total > 1"
+                @click="removeDuplicateTitles()"
+                class="inline-flex items-center justify-center px-3 py-2 border-2 border-yellow-500 rounded-lg text-sm font-medium text-yellow-700 bg-white hover:bg-yellow-50 transition-colors">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                </svg>
+                <span class="hidden sm:inline">중복 제거</span>
+                <span class="sm:hidden">중복</span>
+            </button>
+            <!-- 카테고리 재분류 버튼 -->
+            <button
+                x-show="stats.temp?.total > 0"
+                @click="reclassifyTitles()"
+                class="inline-flex items-center justify-center px-3 py-2 border-2 border-emerald-500 rounded-lg text-sm font-medium text-emerald-700 bg-white hover:bg-emerald-50 transition-colors">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+                </svg>
+                <span class="hidden sm:inline">카테고리 재분류</span>
+                <span class="sm:hidden">재분류</span>
+            </button>
+            <!-- 전체 삭제 버튼 -->
+            <button
+                x-show="stats.temp?.total > 0"
+                @click="deleteAllTitles()"
+                class="inline-flex items-center justify-center px-3 py-2 border-2 border-red-700 rounded-lg text-sm font-medium text-red-700 bg-white hover:bg-red-100 transition-colors">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+                <span class="hidden sm:inline">전체 삭제</span>
+                <span class="sm:hidden">전체</span>
+                (<span x-text="stats.temp?.total || 0"></span>)
+            </button>
+            <!-- 선택 삭제 버튼 -->
+            <button
+                x-show="selectedTitles.length > 0"
+                @click="deleteSelectedTitles()"
+                class="inline-flex items-center justify-center px-3 py-2 border-2 border-red-500 rounded-lg text-sm font-medium text-red-600 bg-white hover:bg-red-50 transition-colors">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+                <span class="hidden sm:inline">선택 삭제</span>
+                <span class="sm:hidden">삭제</span>
+                (<span x-text="selectedTitles.length"></span>)
+            </button>
+            <!-- 엑셀 업로드 -->
+            <button
+                @click="$dispatch('open-title-excel-modal')"
+                class="inline-flex items-center justify-center px-3 py-2 border-2 border-gray-400 rounded-lg text-sm font-medium text-gray-600 bg-white hover:bg-gray-50 transition-colors">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                </svg>
+                <span class="hidden sm:inline">엑셀 업로드</span>
+                <span class="sm:hidden">엑셀</span>
+            </button>
+            <!-- 제목 추가 -->
+            <button
+                @click="$dispatch('open-title-modal')"
+                class="inline-flex items-center justify-center px-3 py-2 border-2 border-blue-600 rounded-lg text-sm font-medium text-blue-600 bg-white hover:bg-blue-50 transition-colors">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                <span class="hidden sm:inline">제목 추가</span>
+                <span class="sm:hidden">추가</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- PC 테이블 (768px 이상) -->
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th class="w-12">
+                        <input type="checkbox" class="rounded border-gray-300"
+                            :checked="titles.length > 0 && selectedTitles.length === titles.length"
+                            @click="toggleTitleSelectAll()">
+                    </th>
+                    <th @click="sortTitles('title')" class="sortable-header">
+                        제목
+                        <span class="sort-icon" :class="{'active': titleSortField === 'title'}"
+                              x-text="titleSortField === 'title' ? (titleSortDir === 'asc' ? '▲' : '▼') : '▲'"></span>
+                    </th>
+                    <th @click="sortTitles('category_path')" class="w-72 sortable-header">
+                        카테고리
+                        <span class="sort-icon" :class="{'active': titleSortField === 'category_path'}"
+                              x-text="titleSortField === 'category_path' ? (titleSortDir === 'asc' ? '▲' : '▼') : '▲'"></span>
+                    </th>
+                    <th class="w-40 text-center">액션</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- 로딩 상태 -->
+                <template x-if="titleLoading">
+                    <tr>
+                        <td colspan="4" class="text-center py-12">
+                            <div class="spinner mx-auto mb-2"></div>
+                            <div class="text-gray-500 text-sm">로딩 중...</div>
+                        </td>
+                    </tr>
+                </template>
+                <!-- 빈 상태 -->
+                <template x-if="!titleLoading && titles.length === 0">
+                    <tr>
+                        <td colspan="4" class="text-center py-12 text-gray-500">
+                            <div class="text-4xl mb-2">📝</div>
+                            <div>등록된 임시 제목이 없습니다</div>
+                            <div class="text-sm mt-1">키워드 검색을 통해 제목을 수집하세요</div>
+                        </td>
+                    </tr>
+                </template>
+                <!-- 데이터 목록 -->
+                <template x-for="title in titles" :key="title.id">
+                    <tr>
+                        <td class="w-12">
+                            <input type="checkbox" class="rounded border-gray-300"
+                                :value="title.id"
+                                x-model="selectedTitles"
+                                @change="onTitleSelect()">
+                        </td>
+                        <!-- ★ 인라인 편집 가능한 제목 셀 -->
+                        <td>
+                            <template x-if="editingTitleId !== title.id">
+                                <div>
+                                    <div
+                                        @dblclick="startEditTitle(title)"
+                                        class="font-medium truncate max-w-md cursor-pointer hover:bg-yellow-50 px-1 py-0.5 rounded"
+                                        title="더블클릭하여 수정"
+                                        x-text="title.title"></div>
+                                    <div x-show="title.source_keyword" class="text-xs text-gray-400 mt-0.5">
+                                        키워드: <span x-text="title.source_keyword"></span>
+                                    </div>
+                                </div>
+                            </template>
+                            <template x-if="editingTitleId === title.id">
+                                <input
+                                    type="text"
+                                    x-model="editingTitleValue"
+                                    @keyup.enter="saveEditTitle(title.id)"
+                                    @keyup.escape="cancelEditTitle()"
+                                    @blur="saveEditTitle(title.id)"
+                                    x-ref="titleEditInput"
+                                    class="w-full px-2 py-1 border border-blue-500 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </template>
+                        </td>
+                        <td class="w-72">
+                            <!-- 카테고리 관리 연동 (주제 - 하위 주제) 우선 표시 -->
+                            <template x-if="title.category_path">
+                                <span class="inline-flex items-center gap-1 text-sm text-emerald-600" :title="title.category_path">
+                                    <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+                                    </svg>
+                                    <span class="truncate" x-text="title.category_path"></span>
+                                </span>
+                            </template>
+                            <!-- KeywordCategory 폴백 -->
+                            <template x-if="!title.category_path && title.category_name">
+                                <span class="text-sm text-blue-600" x-text="title.category_name"></span>
+                            </template>
+                            <!-- 미분류 -->
+                            <template x-if="!title.category_path && !title.category_name">
+                                <span class="text-sm text-gray-400">미분류</span>
+                            </template>
+                        </td>
+                        <td class="w-40 text-center">
+                            <div class="flex items-center justify-center gap-2">
+                                <button
+                                    x-show="title.status !== 'moved'"
+                                    @click="promoteTitle(title.id)"
+                                    class="text-green-600 hover:text-green-800 text-sm font-medium">
+                                    승격
+                                </button>
+                                <button
+                                    @click="deleteTitle(title.id)"
+                                    class="text-red-600 hover:text-red-800 text-sm font-medium">
+                                    삭제
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                </template>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 모바일 카드 리스트 (768px 미만) -->
+    <div class="mobile-card-list">
+        <!-- 전체 선택 바 -->
+        <div class="mobile-select-all">
+            <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" class="rounded border-gray-300"
+                    :checked="titles.length > 0 && selectedTitles.length === titles.length"
+                    @click="toggleTitleSelectAll()">
+                <span class="text-sm text-gray-600">전체 선택</span>
+            </label>
+            <span class="text-xs text-gray-400" x-text="`${selectedTitles.length}/${titles.length}개 선택`"></span>
+        </div>
+
+        <!-- 로딩 상태 -->
+        <template x-if="titleLoading">
+            <div class="text-center py-12">
+                <div class="spinner mx-auto mb-2"></div>
+                <div class="text-gray-500 text-sm">로딩 중...</div>
+            </div>
+        </template>
+
+        <!-- 빈 상태 -->
+        <template x-if="!titleLoading && titles.length === 0">
+            <div class="text-center py-12 text-gray-500">
+                <div class="text-4xl mb-2">📝</div>
+                <div>등록된 임시 제목이 없습니다</div>
+                <div class="text-sm mt-1">키워드 검색을 통해 제목을 수집하세요</div>
+            </div>
+        </template>
+
+        <!-- 카드 목록 -->
+        <template x-for="title in titles" :key="title.id">
+            <div class="mobile-card"
+                 :class="{'selected': selectedTitles.includes(title.id), 'expanded': expandedTitleId === title.id}">
+                <!-- 카드 헤더 (접힌 상태) -->
+                <div class="mobile-card-header" @click="expandedTitleId = expandedTitleId === title.id ? null : title.id">
+                    <div class="mobile-card-checkbox" @click.stop>
+                        <input type="checkbox" class="rounded border-gray-300"
+                            :value="title.id"
+                            x-model="selectedTitles"
+                            @change="onTitleSelect()">
+                    </div>
+                    <div class="mobile-card-main">
+                        <div class="mobile-card-title line-clamp-2" x-text="title.title"></div>
+                        <div class="mobile-card-subtitle">
+                            <template x-if="title.source_keyword">
+                                <span class="text-gray-500" x-text="`키워드: ${title.source_keyword}`"></span>
+                            </template>
+                            <template x-if="!title.source_keyword">
+                                <span class="text-gray-400">직접 입력</span>
+                            </template>
+                        </div>
+                    </div>
+                    <div class="mobile-card-expand">
+                        <svg class="w-5 h-5 text-gray-400 transition-transform"
+                             :class="{'rotate-180': expandedTitleId === title.id}"
+                             fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </div>
+                </div>
+                <!-- 카드 상세 (펼친 상태) -->
+                <div class="mobile-card-details" x-show="expandedTitleId === title.id" x-transition>
+                    <div class="mobile-card-detail-row">
+                        <span class="mobile-card-detail-label">제목</span>
+                        <span class="mobile-card-detail-value font-medium" x-text="title.title"></span>
+                    </div>
+                    <div class="mobile-card-detail-row">
+                        <span class="mobile-card-detail-label">카테고리</span>
+                        <span class="mobile-card-detail-value">
+                            <template x-if="title.category_path">
+                                <span class="text-emerald-600" x-text="title.category_path"></span>
+                            </template>
+                            <template x-if="!title.category_path && title.category_name">
+                                <span class="text-blue-600" x-text="title.category_name"></span>
+                            </template>
+                            <template x-if="!title.category_path && !title.category_name">
+                                <span class="text-gray-400">미분류</span>
+                            </template>
+                        </span>
+                    </div>
+                    <div class="mobile-card-detail-row" x-show="title.source_keyword">
+                        <span class="mobile-card-detail-label">키워드</span>
+                        <span class="mobile-card-detail-value" x-text="title.source_keyword"></span>
+                    </div>
+                    <div class="mobile-card-actions">
+                        <button x-show="title.status !== 'moved'"
+                                @click="promoteTitle(title.id)"
+                                class="mobile-card-action-btn text-green-600 border-green-200 hover:bg-green-50">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+                            </svg>
+                            승격
+                        </button>
+                        <button @click="deleteTitle(title.id)"
+                                class="mobile-card-action-btn text-red-600 border-red-200 hover:bg-red-50">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                            삭제
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </div>
+
+    <!-- 페이지네이션 -->
+    <div class="pagination">
+        <div class="text-sm text-gray-600">
+            총 <span class="font-semibold" x-text="titleTotal"></span>개
+        </div>
+        <div class="flex items-center gap-2">
+            <button
+                @click="if(titlePage > 1) { titlePage--; loadTitles(); }"
+                :disabled="titlePage <= 1"
+                class="px-3 py-1.5 border rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50">
+                이전
+            </button>
+            <span class="text-sm text-gray-600 px-2" x-text="`${titlePage} 페이지`"></span>
+            <button
+                @click="if(titleHasNext) { titlePage++; loadTitles(); }"
+                :disabled="!titleHasNext"
+                class="px-3 py-1.5 border rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50">
+                다음
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- 제목 추가 모달 (대량 입력) -->
+<div
+    x-data="{ open: false, titleInput: '', submitting: false, result: null }"
+    @open-title-modal.window="open = true; titleInput = ''; result = null"
+    x-show="open"
+    x-cloak
+    class="fixed inset-0 z-50 overflow-y-auto"
+    style="background: rgba(0,0,0,0.5)">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div
+            @click.away="open = false"
+            class="bg-white rounded-lg shadow-xl w-full max-w-lg">
+            <div class="px-6 py-4 border-b flex items-center justify-between">
+                <h3 class="text-lg font-semibold">제목 추가</h3>
+                <button @click="open = false" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="px-6 py-4 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">제목 입력</label>
+                    <textarea
+                        x-model="titleInput"
+                        rows="8"
+                        placeholder="제목을 입력하세요. 한 줄에 하나씩 입력하면 여러 개를 한 번에 등록할 수 있습니다."
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 resize-none font-mono"
+                    ></textarea>
+                    <div class="flex justify-between mt-1">
+                        <p class="text-xs text-gray-500">줄바꿈으로 구분하여 여러 개 입력 가능</p>
+                        <p class="text-xs text-gray-400" x-text="`${titleInput.split('\\n').filter(t => t.trim()).length}개`"></p>
+                    </div>
+                </div>
+                <!-- 결과 표시 -->
+                <div x-show="result" class="p-3 rounded-lg" :class="result?.success ? 'bg-green-50' : 'bg-red-50'">
+                    <p class="text-sm" :class="result?.success ? 'text-green-700' : 'text-red-700'" x-text="result?.message"></p>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t flex justify-end gap-2 bg-gray-50">
+                <button
+                    type="button"
+                    @click="open = false"
+                    class="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg text-sm transition-colors">
+                    닫기
+                </button>
+                <button
+                    @click="
+                        const lines = titleInput.split('\n').map(t => t.trim()).filter(t => t);
+                        if (lines.length === 0) {
+                            result = { success: false, message: '제목을 입력하세요' };
+                            return;
+                        }
+                        submitting = true;
+                        result = null;
+                        fetch(`${API_BASE}/data/titles/temp/bulk`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({ titles: lines })
+                        })
+                        .then(res => res.json())
+                        .then(data => {
+                            result = { success: true, message: `${data.created || lines.length}개 제목이 추가되었습니다` };
+                            titleInput = '';
+                            loadTitles();
+                            loadStats();
+                        })
+                        .catch(() => {
+                            result = { success: false, message: '추가 실패' };
+                        })
+                        .finally(() => submitting = false);
+                    "
+                    :disabled="submitting || !titleInput.trim()"
+                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm transition-colors disabled:opacity-50">
+                    <span x-show="!submitting">추가</span>
+                    <span x-show="submitting" class="flex items-center gap-1">
+                        <span class="spinner"></span> 처리 중...
+                    </span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 엑셀 업로드 모달 -->
+<div
+    x-data="{ open: false, file: null, uploading: false, result: null }"
+    @open-title-excel-modal.window="open = true; file = null; result = null"
+    x-show="open"
+    x-cloak
+    class="fixed inset-0 z-50 overflow-y-auto"
+    style="background: rgba(0,0,0,0.5)">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div
+            @click.away="open = false"
+            class="bg-white rounded-lg shadow-xl w-full max-w-md">
+            <div class="px-6 py-4 border-b flex items-center justify-between">
+                <h3 class="text-lg font-semibold">엑셀 파일로 제목 일괄 등록</h3>
+                <button @click="open = false" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="px-6 py-4 space-y-4">
+                <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors">
+                    <input
+                        type="file"
+                        accept=".xlsx,.xls,.csv"
+                        @change="file = $event.target.files[0]"
+                        class="hidden"
+                        id="title-excel-input"
+                    >
+                    <label for="title-excel-input" class="cursor-pointer">
+                        <svg class="w-12 h-12 mx-auto text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                        </svg>
+                        <p class="text-sm text-gray-600" x-show="!file">클릭하여 파일 선택</p>
+                        <p class="text-sm text-blue-600 font-medium" x-show="file" x-text="file?.name"></p>
+                    </label>
+                </div>
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <p class="text-xs text-blue-700 font-medium mb-1">📋 파일 형식 안내</p>
+                    <ul class="text-xs text-blue-600 space-y-0.5">
+                        <li>• 지원 형식: .xlsx, .xls, .csv</li>
+                        <li>• 첫 번째 열(A열)에 제목 입력</li>
+                        <li>• 첫 번째 행은 헤더로 인식 (건너뜀)</li>
+                    </ul>
+                </div>
+                <!-- 결과 표시 -->
+                <div x-show="result" class="p-3 rounded-lg" :class="result?.success ? 'bg-green-50' : 'bg-red-50'">
+                    <p class="text-sm" :class="result?.success ? 'text-green-700' : 'text-red-700'" x-text="result?.message"></p>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t flex justify-end gap-2 bg-gray-50">
+                <button
+                    type="button"
+                    @click="open = false"
+                    class="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg text-sm transition-colors">
+                    닫기
+                </button>
+                <button
+                    @click="
+                        if (!file) { result = { success: false, message: '파일을 선택하세요' }; return; }
+                        uploading = true;
+                        result = null;
+                        const formData = new FormData();
+                        formData.append('file', file);
+                        fetch(`${API_BASE}/data/titles/upload`, {
+                            method: 'POST',
+                            credentials: 'include',
+                            body: formData
+                        })
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.detail) throw new Error(data.detail);
+                            result = { success: true, message: `${data.created}개 제목이 등록되었습니다` };
+                            file = null;
+                            document.getElementById('title-excel-input').value = '';
+                            loadTitles();
+                            loadStats();
+                        })
+                        .catch(e => {
+                            result = { success: false, message: e.message || '업로드 실패' };
+                        })
+                        .finally(() => uploading = false);
+                    "
+                    :disabled="uploading || !file"
+                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm transition-colors disabled:opacity-50">
+                    <span x-show="!uploading">업로드</span>
+                    <span x-show="uploading" class="flex items-center gap-1">
+                        <span class="spinner"></span> 업로드 중...
+                    </span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

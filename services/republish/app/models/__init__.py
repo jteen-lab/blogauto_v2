@@ -48,6 +48,12 @@ from .url_history import BlogUrlHistory
 # Phase D-1-4: Learning models
 from .learning import FilterLearningData, SimilarityLearningData
 
+# Phase D-1-5: Content Filter models
+from .content_filter import ContentFilter
+
+# Phase D-2: Bulk Collection models
+from .collected_url import CollectedUrl
+
 __all__ = [
     # Core models
     "User",
@@ -93,4 +99,8 @@ __all__ = [
     # Phase D-1-4: Learning models
     "FilterLearningData",
     "SimilarityLearningData",
+    # Phase D-1-5: Content Filter models
+    "ContentFilter",
+    # Phase D-2: Bulk Collection models
+    "CollectedUrl",
 ]

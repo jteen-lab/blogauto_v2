@@ -57,6 +57,7 @@ class DBSaveModule(ModuleInterface):
                 options=[
                     {"value": "url_history", "label": "URL 히스토리"},
                     {"value": "autorun_logs", "label": "오토런 로그"},
+                    {"value": "temp_titles", "label": "임시 제목"},
                 ]
             ),
             ModuleParam(
@@ -105,6 +106,10 @@ class DBSaveModule(ModuleInterface):
             # autorun_logs 특별 처리 (Publish 결과 매핑)
             if table == "autorun_logs" and map_publish:
                 return await self._save_autorun_logs(context, items)
+
+            # temp_titles 특별 처리 (TitleCollector 결과 매핑)
+            if table == "temp_titles":
+                return await self._save_temp_titles(context, items)
 
             model = self._get_model(table)
             if not model:
@@ -176,29 +181,49 @@ class DBSaveModule(ModuleInterface):
         - publish_result: {success, message, ...}
         - published_at
 
-        저장 필드:
-        - flow_id, blog_id, blog_name
-        - action_type, status, message
-        - executed_at, post_id, post_url
+        AutorunLog 실제 필드:
+        - user_id, flow_id (필수)
+        - action, status
+        - flow_name, module_name, blog_name, post_title, action_time
+        - message, execution_duration_ms
         """
         from app.models.autorun_log import AutorunLog
+        from app.models.flow import Flow
 
         saved_items = []
+
+        # flow에서 user_id와 flow_name 가져오기
+        user_id = 1  # 기본값
+        flow_name = context.flow_name or ""
+        try:
+            result = await context.db_session.execute(
+                select(Flow).where(Flow.id == context.flow_id)
+            )
+            flow = result.scalar_one_or_none()
+            if flow:
+                user_id = flow.user_id
+                flow_name = flow.name
+        except Exception:
+            pass
 
         for item in items:
             data = item.json
             publish_result = data.get("publish_result", {})
 
+            # action_time 생성 (현재 시간)
+            action_time = datetime.now().strftime("%Y/%m/%d %H:%M")
+
             log_entry = AutorunLog(
+                user_id=user_id,
                 flow_id=context.flow_id,
-                blog_id=data.get("blog_id"),
-                blog_name=data.get("blog_name"),
-                action_type="republish",
+                action="republish",
                 status="success" if publish_result.get("success") else "failed",
-                message=publish_result.get("message", ""),
-                executed_at=datetime.now(),
-                post_id=str(data.get("post_id", "")),
-                post_url=data.get("post_url") or publish_result.get("url", "")
+                flow_name=flow_name,
+                module_name="재발행",
+                blog_name=data.get("blog_name", ""),
+                post_title=data.get("post_title", ""),
+                action_time=action_time,
+                message=publish_result.get("message", "")
             )
 
             context.db_session.add(log_entry)
@@ -211,21 +236,102 @@ class DBSaveModule(ModuleInterface):
 
         await context.db_session.commit()
 
-        # 저장된 log_id 업데이트 (flush 후 id 접근)
         context.log(
             f"[DB_SAVE] autorun_logs 저장 완료 | flow_id={context.flow_id} | "
             f"{len(saved_items)}건"
         )
         return ModuleResult.ok(saved_items)
 
+    async def _save_temp_titles(
+        self,
+        context: ExecutionContext,
+        items: ItemList
+    ) -> ModuleResult:
+        """
+        TitleCollector 결과를 temp_titles 테이블에 저장
+
+        입력 (TitleCollector 출력):
+        - title: 수집된 제목
+        - source: 수집 소스 (naver_news, google_news, naver_webdoc)
+        - keyword: 검색 키워드
+        - link: 원본 URL
+
+        TempTitle 필수 필드:
+        - title (String): 제목
+        - source_blog_url (String): 블로그/소스 URL
+        - source_post_url (String): 포스트 URL
+        - collection_stage (String): 수집 단계
+        """
+        from app.models.title import TempTitle
+
+        saved_items = []
+        skipped_count = 0
+
+        for item in items:
+            data = item.json
+            title = data.get("title", "")
+
+            # 제목이 없으면 스킵
+            if not title or len(title) < 5:
+                skipped_count += 1
+                continue
+
+            # 필드 매핑
+            source = data.get("source", "unknown")
+            link = data.get("link", "")
+
+            # source_blog_url: 소스 도메인 추출 또는 기본값
+            source_blog_url = self._extract_domain(link) if link else f"https://{source}"
+
+            # source_post_url: 원본 링크 사용
+            source_post_url = link if link else f"https://{source}/unknown"
+
+            # collection_stage: 소스 기반 결정
+            collection_stage = "keyword_search" if data.get("keyword") else "random_crawl"
+
+            temp_title = TempTitle(
+                title=title,
+                source_blog_url=source_blog_url,
+                source_post_url=source_post_url,
+                collection_stage=collection_stage,
+                status="new"
+            )
+
+            context.db_session.add(temp_title)
+
+            saved_item = BlogAutoItem(
+                json={**item.json, "saved": True},
+                meta=ItemMeta(source_module=self.name)
+            )
+            saved_items.append(saved_item)
+
+        await context.db_session.commit()
+
+        context.log(
+            f"[DB_SAVE] temp_titles 저장 완료 | flow_id={context.flow_id} | "
+            f"저장={len(saved_items)}건 | 스킵={skipped_count}건"
+        )
+        return ModuleResult.ok(saved_items)
+
+    def _extract_domain(self, url: str) -> str:
+        """URL에서 도메인 추출"""
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(url)
+            return f"{parsed.scheme}://{parsed.netloc}" if parsed.netloc else url
+        except Exception:
+            return url
+
     def _get_model(self, table: str):
         """테이블명으로 모델 반환"""
-        from app.models.url_history import URLHistory
+        from app.models.url_history import BlogUrlHistory
         from app.models.autorun_log import AutorunLog
+        from app.models.title import TempTitle
 
         models = {
-            "url_history": URLHistory,
+            "url_history": BlogUrlHistory,
             "autorun_logs": AutorunLog,
+            "temp_titles": TempTitle,
         }
         return models.get(table)
 

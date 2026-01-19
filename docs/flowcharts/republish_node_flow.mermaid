@@ -1,0 +1,102 @@
+%% 재발행 노드 기반 플로우
+%% 5개 독립 노드로 구성된 데이터 흐름
+
+flowchart TD
+    subgraph TRIGGER["🕐 트리거"]
+        START[스케줄러/수동 실행]
+    end
+
+    subgraph NODE1["📦 노드 1: 블로그 조회 (공용)"]
+        N1_INPUT[/FlowID, UserID/]
+        N1_PROCESS[DB에서 블로그 목록 조회]
+        N1_OUTPUT[/BlogList + PostCount/]
+        N1_INPUT --> N1_PROCESS --> N1_OUTPUT
+    end
+
+    subgraph NODE2["📊 노드 2: 상태 분류 (재발행 특화)"]
+        N2_INPUT[/BlogList + PostCount/]
+        N2_CLASSIFY{누적 포스트 수 분류}
+        N2_SEEDLING[🌱 새싹: 1-100]
+        N2_GROWTH[🌿 성장: 101-200]
+        N2_STABLE[🌳 안정: 201-300]
+        N2_MATURE[🏛️ 성숙: 301-400]
+        N2_UNLIMITED[♾️ 무제한: 401+]
+        N2_OUTPUT[/ClassifiedBlogs + Profile/]
+
+        N2_INPUT --> N2_CLASSIFY
+        N2_CLASSIFY -->|1-100| N2_SEEDLING
+        N2_CLASSIFY -->|101-200| N2_GROWTH
+        N2_CLASSIFY -->|201-300| N2_STABLE
+        N2_CLASSIFY -->|301-400| N2_MATURE
+        N2_CLASSIFY -->|401+| N2_UNLIMITED
+        N2_SEEDLING --> N2_OUTPUT
+        N2_GROWTH --> N2_OUTPUT
+        N2_STABLE --> N2_OUTPUT
+        N2_MATURE --> N2_OUTPUT
+        N2_UNLIMITED --> N2_OUTPUT
+    end
+
+    subgraph NODE3["⏱️ 노드 3: 액션 스케줄러 (공용)"]
+        N3_INPUT[/ClassifiedBlogs + Profile/]
+        N3_CHECK_TIME{현재 시간이 활성 시간대?}
+        N3_CHECK_INTERVAL{마지막 발행 후 간격 충족?}
+        N3_SKIP[실행 건너뛰기]
+        N3_OUTPUT[/ExecutableBlog/]
+
+        N3_INPUT --> N3_CHECK_TIME
+        N3_CHECK_TIME -->|No| N3_SKIP
+        N3_CHECK_TIME -->|Yes| N3_CHECK_INTERVAL
+        N3_CHECK_INTERVAL -->|No| N3_SKIP
+        N3_CHECK_INTERVAL -->|Yes| N3_OUTPUT
+    end
+
+    subgraph NODE4["📤 노드 4: 발행 집행 (재발행 특화)"]
+        N4_INPUT[/ExecutableBlog/]
+        N4_DETECT{플랫폼 감지}
+        N4_WP[WordPress API 호출]
+        N4_BG[Blogger API 호출]
+        N4_WP_ACTION[날짜 업데이트 재발행]
+        N4_BG_ACTION[Revert → Publish 재발행]
+        N4_OUTPUT[/PublishResult/]
+
+        N4_INPUT --> N4_DETECT
+        N4_DETECT -->|WordPress| N4_WP --> N4_WP_ACTION --> N4_OUTPUT
+        N4_DETECT -->|Blogger| N4_BG --> N4_BG_ACTION --> N4_OUTPUT
+    end
+
+    subgraph NODE5["💾 노드 5: 상태 기록 (공용)"]
+        N5_INPUT[/PublishResult/]
+        N5_UPDATE_BLOG[블로그 상태 업데이트]
+        N5_CREATE_LOG[AutorunLog 생성]
+        N5_SAVE_URL[URL 히스토리 저장]
+        N5_OUTPUT[/ExecutionSummary/]
+
+        N5_INPUT --> N5_UPDATE_BLOG
+        N5_UPDATE_BLOG --> N5_CREATE_LOG
+        N5_CREATE_LOG --> N5_SAVE_URL
+        N5_SAVE_URL --> N5_OUTPUT
+    end
+
+    subgraph FINISH["✅ 완료"]
+        END[실행 완료]
+    end
+
+    %% 노드 간 연결
+    START --> N1_INPUT
+    N1_OUTPUT --> N2_INPUT
+    N2_OUTPUT --> N3_INPUT
+    N3_OUTPUT --> N4_INPUT
+    N3_SKIP --> END
+    N4_OUTPUT --> N5_INPUT
+    N5_OUTPUT --> END
+
+    %% 스타일
+    classDef trigger fill:#e1f5fe,stroke:#01579b
+    classDef common fill:#e8f5e9,stroke:#2e7d32
+    classDef special fill:#fff3e0,stroke:#ef6c00
+    classDef finish fill:#f3e5f5,stroke:#7b1fa2
+
+    class TRIGGER trigger
+    class NODE1,NODE3,NODE5 common
+    class NODE2,NODE4 special
+    class FINISH finish

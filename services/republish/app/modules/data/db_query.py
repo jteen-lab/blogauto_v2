@@ -193,9 +193,9 @@ class DBQueryModule(ModuleInterface):
         elif "flow_id" in filter_cond:
             query = query.where(FlowBlog.flow_id == filter_cond["flow_id"])
 
-        # is_active 필터링
+        # is_active 필터링 (Blog 모델의 is_active 사용)
         if "is_active" in filter_cond:
-            query = query.where(FlowBlog.is_active == filter_cond["is_active"])
+            query = query.where(Blog.is_active == filter_cond["is_active"])
 
         query = query.limit(limit)
 
@@ -213,7 +213,7 @@ class DBQueryModule(ModuleInterface):
                         "blog_name": fb.blog.name,
                         "blog_url": fb.blog.url,
                         "platform": fb.blog.platform.value,
-                        "is_active": fb.is_active,
+                        "is_active": fb.blog.is_active,  # Blog 모델의 is_active 사용
                         "flow_id": fb.flow_id
                     },
                     meta=ItemMeta(source_module=self.name)

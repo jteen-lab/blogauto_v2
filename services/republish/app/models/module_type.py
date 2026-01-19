@@ -58,5 +58,11 @@ class ModuleType(Base):
                 "name": "재발행",
                 "icon": "🔄",
                 "display_order": 4
+            },
+            {
+                "code": "collect",
+                "name": "수집",
+                "icon": "🔍",
+                "display_order": 5
             }
         ]

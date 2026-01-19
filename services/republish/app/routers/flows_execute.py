@@ -2,7 +2,10 @@
 플로우 실행 API
 
 플로우를 1회 즉시 실행합니다.
-오토런과 동일한 방식으로 각 모듈별로 연결된 블로그에 재발행을 수행합니다.
+모듈 타입별로 실행 방식이 다릅니다:
+- collect: 블로그 없이 독립 실행 (키워드/제목 수집)
+- republish: 블로그 필수, 재발행 수행
+- 기타: 해당 모듈 타입에 맞는 실행 (추후 확장)
 """
 
 import uuid
@@ -25,6 +28,8 @@ from app.routers.auth import get_current_user
 from app.models.user import User
 from app.services.wordpress_service import WordPressRepublishService
 from app.services.blogger_service import BloggerRepublishService
+from app.services.naver_ads_service import NaverAdsService
+from app.models.user_settings import UserSettings
 from app.core.logger import get_logger
 
 router = APIRouter(prefix="/api/v1/flows", tags=["flows-execute"])
@@ -77,100 +82,182 @@ async def execute_flow_once(
         logger.warning(f"[FLOW_EXECUTE] 플로우에 모듈이 없음: {flow_id}")
         raise HTTPException(status_code=400, detail="플로우에 모듈이 없습니다")
 
-    if not blogs:
-        logger.warning(f"[FLOW_EXECUTE] 플로우에 블로그가 없음: {flow_id}")
-        raise HTTPException(status_code=400, detail="플로우에 연결된 블로그가 없습니다")
+    # 3. 모듈을 타입별로 그룹화
+    modules_by_type: Dict[str, List[Module]] = {}
+    for module in modules:
+        type_code = module.module_type.code if module.module_type else "unknown"
+        if type_code not in modules_by_type:
+            modules_by_type[type_code] = []
+        modules_by_type[type_code].append(module)
 
     logger.info(f"[FLOW_EXECUTE] 플로우: {flow.name} | 모듈: {len(modules)}개 | 블로그: {len(blogs)}개")
+    logger.info(f"[FLOW_EXECUTE] 모듈 타입별: {', '.join(f'{k}={len(v)}' for k, v in modules_by_type.items())}")
 
-    # 3. 각 블로그에 대해 1회씩 재발행 실행 (오토런과 동일)
-    blog_results = []
+    # 4. 결과 집계 변수
+    all_results = []
     success_count = 0
     fail_count = 0
+    total_processed = 0
 
-    # 첫 번째 모듈 이름 (로그용)
-    first_module_name = modules[0].name if modules else "재발행 모듈"
+    # 5. collect 모듈 실행 (블로그 없이 독립 실행)
+    if "collect" in modules_by_type:
+        for collect_module in modules_by_type["collect"]:
+            module_start_time = datetime.now()
+            logger.info(f"[FLOW_EXECUTE] 수집 모듈 실행: {collect_module.name}")
 
-    for blog in blogs:
-        blog_start_time = datetime.now()
-        logger.info(f"[FLOW_EXECUTE] 블로그 처리 시작: {blog.name} ({blog.platform.value})")
+            try:
+                result = await _execute_collect_module(collect_module, db)
+                duration_ms = int((datetime.now() - module_start_time).total_seconds() * 1000)
 
-        try:
-            result = await _execute_republish_for_blog(blog)
-            blog_duration_ms = int((datetime.now() - blog_start_time).total_seconds() * 1000)
+                all_results.append({
+                    "type": "collect",
+                    "module_id": collect_module.id,
+                    "module_name": collect_module.name,
+                    "success": result.get("success", False),
+                    "message": result.get("message", ""),
+                    "collected_count": result.get("collected_count", 0),
+                    "duration_ms": duration_ms
+                })
 
-            blog_results.append({
-                "blog_id": blog.id,
-                "blog_name": blog.name,
-                "platform": blog.platform.value,
-                "success": result.get("success", False),
-                "message": result.get("message", ""),
-                "post_id": result.get("post_id"),
-                "post_title": result.get("post_title"),
-                "old_date": result.get("old_date"),
-                "new_date": result.get("new_date"),
-                "link": result.get("link")
-            })
-
-            # AutorunLog DB 저장
-            await _save_autorun_log(
-                db=db,
-                user_id=current_user.id,
-                flow_id=flow.id,
-                flow_name=flow.name,
-                module_name=first_module_name,
-                blog_name=blog.name,
-                result=result,
-                duration_ms=blog_duration_ms
-            )
-
-            if result.get("success"):
-                success_count += 1
-                logger.info(
-                    f"[FLOW_EXECUTE] 재발행 성공 | blog={blog.name} | "
-                    f"post={result.get('post_title', '')[:30]}"
+                # AutorunLog 저장
+                await _save_autorun_log(
+                    db=db,
+                    user_id=current_user.id,
+                    flow_id=flow.id,
+                    flow_name=flow.name,
+                    module_name=collect_module.name,
+                    blog_name="-",
+                    result=result,
+                    duration_ms=duration_ms,
+                    action="collect"
                 )
-            else:
+
+                if result.get("success"):
+                    success_count += 1
+                    logger.info(f"[FLOW_EXECUTE] 수집 성공 | module={collect_module.name}")
+                else:
+                    fail_count += 1
+                    logger.warning(f"[FLOW_EXECUTE] 수집 실패 | module={collect_module.name}")
+
+                total_processed += 1
+
+            except Exception as e:
                 fail_count += 1
-                logger.warning(
-                    f"[FLOW_EXECUTE] 재발행 실패 | blog={blog.name} | "
-                    f"error={result.get('message', '')}"
-                )
+                total_processed += 1
+                duration_ms = int((datetime.now() - module_start_time).total_seconds() * 1000)
+                logger.error(f"[FLOW_EXECUTE] 수집 모듈 오류 | module={collect_module.name} | error={e}")
+                all_results.append({
+                    "type": "collect",
+                    "module_id": collect_module.id,
+                    "module_name": collect_module.name,
+                    "success": False,
+                    "message": str(e)
+                })
 
-        except Exception as e:
-            fail_count += 1
-            blog_duration_ms = int((datetime.now() - blog_start_time).total_seconds() * 1000)
-            logger.error(f"[FLOW_EXECUTE] 블로그 처리 오류 | blog={blog.name} | error={e}")
-            blog_results.append({
-                "blog_id": blog.id,
-                "blog_name": blog.name,
-                "platform": blog.platform.value,
-                "success": False,
-                "message": str(e)
-            })
+    # 6. republish 모듈 실행 (블로그 필수)
+    if "republish" in modules_by_type:
+        if not blogs:
+            logger.warning(f"[FLOW_EXECUTE] 재발행 모듈이 있지만 블로그가 없음: {flow_id}")
+            # 재발행 모듈이 있는데 블로그가 없으면 해당 모듈만 스킵
+            for republish_module in modules_by_type["republish"]:
+                fail_count += 1
+                total_processed += 1
+                all_results.append({
+                    "type": "republish",
+                    "module_id": republish_module.id,
+                    "module_name": republish_module.name,
+                    "success": False,
+                    "message": "플로우에 연결된 블로그가 없습니다"
+                })
+        else:
+            # 첫 번째 재발행 모듈 이름 (로그용)
+            first_module_name = modules_by_type["republish"][0].name
 
-            # 에러 시에도 AutorunLog 저장
-            await _save_autorun_log(
-                db=db,
-                user_id=current_user.id,
-                flow_id=flow.id,
-                flow_name=flow.name,
-                module_name=first_module_name,
-                blog_name=blog.name,
-                result={"success": False, "message": str(e)},
-                duration_ms=blog_duration_ms
-            )
+            for blog in blogs:
+                blog_start_time = datetime.now()
+                logger.info(f"[FLOW_EXECUTE] 블로그 처리 시작: {blog.name} ({blog.platform.value})")
 
-    # 4. 실행 완료
+                try:
+                    result = await _execute_republish_for_blog(blog)
+                    blog_duration_ms = int((datetime.now() - blog_start_time).total_seconds() * 1000)
+
+                    all_results.append({
+                        "type": "republish",
+                        "blog_id": blog.id,
+                        "blog_name": blog.name,
+                        "platform": blog.platform.value,
+                        "success": result.get("success", False),
+                        "message": result.get("message", ""),
+                        "post_id": result.get("post_id"),
+                        "post_title": result.get("post_title"),
+                        "old_date": result.get("old_date"),
+                        "new_date": result.get("new_date"),
+                        "link": result.get("link")
+                    })
+
+                    # AutorunLog DB 저장
+                    await _save_autorun_log(
+                        db=db,
+                        user_id=current_user.id,
+                        flow_id=flow.id,
+                        flow_name=flow.name,
+                        module_name=first_module_name,
+                        blog_name=blog.name,
+                        result=result,
+                        duration_ms=blog_duration_ms,
+                        action="republish"
+                    )
+
+                    if result.get("success"):
+                        success_count += 1
+                        logger.info(
+                            f"[FLOW_EXECUTE] 재발행 성공 | blog={blog.name} | "
+                            f"post={result.get('post_title', '')[:30]}"
+                        )
+                    else:
+                        fail_count += 1
+                        logger.warning(
+                            f"[FLOW_EXECUTE] 재발행 실패 | blog={blog.name} | "
+                            f"error={result.get('message', '')}"
+                        )
+
+                    total_processed += 1
+
+                except Exception as e:
+                    fail_count += 1
+                    total_processed += 1
+                    blog_duration_ms = int((datetime.now() - blog_start_time).total_seconds() * 1000)
+                    logger.error(f"[FLOW_EXECUTE] 블로그 처리 오류 | blog={blog.name} | error={e}")
+                    all_results.append({
+                        "type": "republish",
+                        "blog_id": blog.id,
+                        "blog_name": blog.name,
+                        "platform": blog.platform.value,
+                        "success": False,
+                        "message": str(e)
+                    })
+
+                    # 에러 시에도 AutorunLog 저장
+                    await _save_autorun_log(
+                        db=db,
+                        user_id=current_user.id,
+                        flow_id=flow.id,
+                        flow_name=flow.name,
+                        module_name=first_module_name,
+                        blog_name=blog.name,
+                        result={"success": False, "message": str(e)},
+                        duration_ms=blog_duration_ms,
+                        action="republish"
+                    )
+
+    # 7. 실행 완료
     completed_at = datetime.now()
     duration_ms = int((completed_at - started_at).total_seconds() * 1000)
 
+    logger.info(f"[FLOW_EXECUTE] ========== 테스트 실행 완료 ==========")
     logger.info(
-        f"[FLOW_EXECUTE] ========== 테스트 실행 완료 =========="
-    )
-    logger.info(
-        f"[FLOW_EXECUTE] 결과: 성공 {success_count}/{len(blogs)} | "
-        f"실패 {fail_count}/{len(blogs)} | 소요시간 {duration_ms}ms"
+        f"[FLOW_EXECUTE] 결과: 성공 {success_count}/{total_processed} | "
+        f"실패 {fail_count}/{total_processed} | 소요시간 {duration_ms}ms"
     )
 
     return {
@@ -181,14 +268,409 @@ async def execute_flow_once(
         "started_at": started_at.isoformat(),
         "completed_at": completed_at.isoformat(),
         "duration_ms": duration_ms,
-        "total_items_processed": success_count,
+        "total_items_processed": total_processed,
         "module_count": len(modules),
+        "module_types": list(modules_by_type.keys()),
         "blog_count": len(blogs),
         "success_count": success_count,
         "fail_count": fail_count,
-        "blog_results": blog_results,
-        "error": None if fail_count == 0 else f"{fail_count}개 블로그 재발행 실패"
+        "results": all_results,
+        "error": None if fail_count == 0 else f"{fail_count}개 작업 실패"
     }
+
+
+async def _execute_collect_module(
+    module: Module,
+    db: AsyncSession = None
+) -> Dict[str, Any]:
+    """
+    수집 모듈 실행
+
+    수집 모듈은 블로그 없이 독립적으로 실행됩니다.
+    키워드/제목 수집 작업을 수행합니다.
+
+    시드 키워드 없이 자동으로 트렌딩 키워드를 수집합니다.
+    """
+    from app.services.keyword_collector_service import KeywordCollectorService
+
+    try:
+        settings = module.settings or {}
+
+        # 수집 유형 확인 (keyword, title, both)
+        collect_type = settings.get("collect_type", "both")
+
+        # 키워드 소스 목록 (기본값 False - 명시적으로 선택된 소스만 사용)
+        keyword_sources = []
+        if settings.get("source_google_trends", False):
+            keyword_sources.append("google_trends")
+        if settings.get("source_naver_datalab", False):
+            keyword_sources.append("naver_datalab")
+        if settings.get("source_naver_ads", False):
+            keyword_sources.append("naver_ads")
+
+        # 제목 소스 목록 (기본값 False - 명시적으로 선택된 소스만 사용)
+        title_sources = []
+        if settings.get("source_naver_news", False):
+            title_sources.append("naver_news")
+        if settings.get("source_google_news", False):
+            title_sources.append("google_news")
+        if settings.get("source_naver_webdoc", False):
+            title_sources.append("naver_webdoc")
+
+        # collect_type에 따라 소스 필터링
+        sources = []
+        if collect_type == "keyword":
+            sources = keyword_sources
+        elif collect_type == "title":
+            sources = title_sources
+        else:  # both
+            sources = keyword_sources + title_sources
+
+        if not sources:
+            return {
+                "success": False,
+                "message": f"수집 소스가 설정되지 않았습니다 (타입: {collect_type})",
+                "collected_count": 0
+            }
+
+        logger.info(
+            f"[COLLECT] 모듈={module.name} | 타입={collect_type} | 소스={sources}"
+        )
+
+        # 사용자 설정 조회
+        query = select(UserSettings).where(UserSettings.user_id == 1)
+        result = await db.execute(query)
+        user_settings = result.scalar_one_or_none()
+
+        if not user_settings:
+            return {
+                "success": False,
+                "message": "사용자 설정을 찾을 수 없습니다",
+                "collected_count": 0
+            }
+
+        # KeywordCollectorService를 사용하여 자동 수집
+        collector = KeywordCollectorService(db=db, settings=user_settings)
+
+        # 수집 수량 제한 적용 (키워드/제목 분리)
+        keyword_limit = settings.get("keyword_collect_limit", 100)
+        keyword_limit = max(10, min(1000, keyword_limit))
+        # title_limit: 0 또는 None이면 무제한
+        title_limit_setting = settings.get("title_collect_limit", 0)
+        title_limit = None if title_limit_setting == 0 else title_limit_setting
+
+        # 연관검색 확장 옵션 (기본값 True)
+        enable_related_search = settings.get("enable_related_search", True)
+
+        # 수집 유형 옵션 (일반/대량) - 기본값 False (명시적으로 활성화해야 동작)
+        enable_normal_collect = settings.get("enable_normal_collect", False)
+        enable_bulk_collect = settings.get("enable_bulk_collect", False)
+        bulk_collect_delay = settings.get("bulk_collect_delay", 0.5)
+        bulk_urls_per_cycle = settings.get("bulk_urls_per_cycle", 3)
+
+        logger.info(
+            f"[COLLECT] 옵션 | keyword_limit={keyword_limit}, "
+            f"title_limit={'무제한' if not title_limit else title_limit}, "
+            f"enable_related_search={enable_related_search}, "
+            f"enable_normal_collect={enable_normal_collect}, enable_bulk_collect={enable_bulk_collect}"
+        )
+
+        # 선택된 소스에서만 수집 (수량 제한 분리 적용)
+        collect_result = await collector.collect_all(
+            sources=sources,
+            keyword_limit=keyword_limit,
+            title_limit=title_limit,
+            enable_related_search=enable_related_search,
+            enable_normal_collect=enable_normal_collect,
+            enable_bulk_collect=enable_bulk_collect,
+            bulk_collect_delay=bulk_collect_delay,
+            bulk_urls_per_cycle=bulk_urls_per_cycle
+        )
+
+        if collect_result.get("success"):
+            total_collected = collect_result.get("total_collected", 0)
+            total_saved = collect_result.get("total_saved", 0)
+            results_detail = collect_result.get("results", {})
+
+            # 각 소스별 결과 메시지 생성
+            source_messages = []
+            for source, src_result in results_detail.items():
+                if src_result.get("success"):
+                    source_messages.append(
+                        f"{source}: {src_result.get('collected', 0)}개 수집, {src_result.get('saved', 0)}개 저장"
+                    )
+                else:
+                    source_messages.append(
+                        f"{source}: 오류 - {src_result.get('error', '알 수 없음')}"
+                    )
+
+            # 키워드 추출 실행 (설정에서 enable_keyword_extraction이 활성화된 경우)
+            extraction_result = None
+            if settings.get("enable_keyword_extraction", False):
+                try:
+                    from app.services.keyword_extractor_service import KeywordExtractorService
+
+                    extraction_method = settings.get("keyword_extraction_method", "all")
+                    extraction_title_limit = settings.get("keyword_extraction_title_limit", 100)
+                    extraction_keyword_limit = settings.get("keyword_extraction_limit", 50)
+
+                    logger.info(
+                        f"[COLLECT] 키워드 추출 시작 | method={extraction_method}, "
+                        f"title_limit={extraction_title_limit}, keyword_limit={extraction_keyword_limit}"
+                    )
+
+                    extractor = KeywordExtractorService(db)
+                    extraction_result = await extractor.extract_and_save_keywords(
+                        title_limit=extraction_title_limit,
+                        keyword_limit=extraction_keyword_limit,
+                        method=extraction_method,
+                        title_status="new"
+                    )
+
+                    if extraction_result.get("success"):
+                        extracted_count = extraction_result.get("keywords_saved", 0)
+                        source_messages.append(f"키워드 추출: {extracted_count}개 저장")
+                        logger.info(f"[COLLECT] 키워드 추출 완료 | 저장={extracted_count}개")
+                    else:
+                        logger.warning(f"[COLLECT] 키워드 추출 실패: {extraction_result.get('error', '알 수 없음')}")
+
+                except Exception as extract_error:
+                    logger.error(f"[COLLECT] 키워드 추출 오류: {extract_error}")
+
+            return {
+                "success": True,
+                "message": f"총 {total_collected}개 수집, {total_saved}개 저장 ({', '.join(source_messages)})",
+                "collected_count": total_collected,
+                "saved_count": total_saved,
+                "sources": sources,
+                "collect_type": collect_type,
+                "results": results_detail,
+                "extraction_result": extraction_result,
+                "api_connected": True
+            }
+        else:
+            return {
+                "success": False,
+                "message": collect_result.get("error", "수집 실패"),
+                "collected_count": 0,
+                "sources": sources,
+                "collect_type": collect_type,
+                "api_connected": False
+            }
+
+    except Exception as e:
+        logger.error(f"[COLLECT] 수집 실패 | module={module.name} | error={e}")
+        return {
+            "success": False,
+            "message": str(e),
+            "collected_count": 0
+        }
+
+
+async def _collect_from_naver_ads(
+    db: AsyncSession,
+    seed_keywords: List[str],
+    max_keywords: int = 50
+) -> Dict[str, Any]:
+    """
+    네이버 검색광고 API에서 키워드 수집
+
+    Args:
+        db: DB 세션
+        seed_keywords: 시드 키워드 목록
+        max_keywords: 최대 수집 키워드 수
+
+    Returns:
+        수집 결과
+    """
+    from sqlalchemy import select
+
+    try:
+        if not seed_keywords:
+            return {
+                "success": False,
+                "error": "시드 키워드가 없습니다"
+            }
+
+        # AsyncSession으로 설정 조회
+        query = select(UserSettings).where(UserSettings.user_id == 1)
+        result = await db.execute(query)
+        settings = result.scalar_one_or_none()
+
+        if not settings:
+            return {
+                "success": False,
+                "error": "설정을 찾을 수 없습니다"
+            }
+
+        service = NaverAdsService(settings)
+
+        if not service.is_configured():
+            return {
+                "success": False,
+                "error": "네이버 검색광고 API가 설정되지 않았습니다"
+            }
+
+        # 키워드 수집
+        collect_result = await service.collect_keywords(
+            seed_keywords=seed_keywords,
+            max_related=max_keywords
+        )
+
+        if collect_result.get("success"):
+            keywords = collect_result.get("keywords", [])
+            logger.info(
+                f"[NAVER_ADS] 키워드 수집 성공: "
+                f"seed={len(seed_keywords)}, collected={len(keywords)}"
+            )
+            return {
+                "success": True,
+                "collected_count": len(keywords),
+                "keywords": keywords
+            }
+        else:
+            return {
+                "success": False,
+                "error": collect_result.get("error", "수집 실패")
+            }
+
+    except Exception as e:
+        logger.error(f"[NAVER_ADS] 수집 오류: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+async def _collect_from_google_trends(
+    seed_keywords: List[str],
+    max_keywords: int = 50
+) -> Dict[str, Any]:
+    """
+    구글 트렌드에서 키워드 수집
+
+    Args:
+        seed_keywords: 시드 키워드 목록
+        max_keywords: 최대 수집 키워드 수
+
+    Returns:
+        수집 결과
+    """
+    from app.services.google_trends_service import GoogleTrendsService
+
+    try:
+        if not seed_keywords:
+            return {
+                "success": False,
+                "error": "시드 키워드가 없습니다"
+            }
+
+        service = GoogleTrendsService()
+
+        # 키워드 수집
+        collect_result = await service.collect_keywords(
+            seed_keywords=seed_keywords,
+            max_keywords=max_keywords
+        )
+
+        if collect_result.get("success"):
+            keywords = collect_result.get("keywords", [])
+            logger.info(
+                f"[GOOGLE_TRENDS] 키워드 수집 성공: "
+                f"seed={len(seed_keywords)}, collected={len(keywords)}"
+            )
+            return {
+                "success": True,
+                "collected_count": len(keywords),
+                "keywords": keywords
+            }
+        else:
+            return {
+                "success": False,
+                "error": collect_result.get("error", "수집 실패")
+            }
+
+    except Exception as e:
+        logger.error(f"[GOOGLE_TRENDS] 수집 오류: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+async def _collect_from_naver_datalab(
+    seed_keywords: List[str],
+    db: AsyncSession,
+    max_keywords: int = 50
+) -> Dict[str, Any]:
+    """
+    네이버 데이터랩에서 키워드 트렌드 수집
+
+    Args:
+        seed_keywords: 시드 키워드 목록
+        db: 데이터베이스 세션
+        max_keywords: 최대 수집 키워드 수
+
+    Returns:
+        수집 결과
+    """
+    from app.services.naver_datalab_service import NaverDatalabService
+
+    try:
+        if not seed_keywords:
+            return {
+                "success": False,
+                "error": "시드 키워드가 없습니다"
+            }
+
+        # 설정 조회
+        query = select(UserSettings).where(UserSettings.user_id == 1)
+        result = await db.execute(query)
+        settings = result.scalar_one_or_none()
+
+        if not settings:
+            return {
+                "success": False,
+                "error": "사용자 설정을 찾을 수 없습니다"
+            }
+
+        service = NaverDatalabService(settings)
+
+        if not service.is_configured():
+            return {
+                "success": False,
+                "error": "네이버 데이터랩 API가 설정되지 않았습니다"
+            }
+
+        # 키워드 트렌드 수집
+        collect_result = await service.collect_trending_keywords(
+            seed_keywords=seed_keywords,
+            max_keywords=max_keywords
+        )
+
+        if collect_result.get("success"):
+            keywords = collect_result.get("keywords", [])
+            logger.info(
+                f"[NAVER_DATALAB] 키워드 수집 성공: "
+                f"seed={len(seed_keywords)}, collected={len(keywords)}"
+            )
+            return {
+                "success": True,
+                "collected_count": len(keywords),
+                "keywords": keywords
+            }
+        else:
+            return {
+                "success": False,
+                "error": collect_result.get("error", "수집 실패")
+            }
+
+    except Exception as e:
+        logger.error(f"[NAVER_DATALAB] 수집 오류: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
 
 
 async def _execute_republish_for_blog(blog: Blog) -> Dict[str, Any]:
@@ -219,7 +701,8 @@ async def _save_autorun_log(
     module_name: str,
     blog_name: str,
     result: Dict[str, Any],
-    duration_ms: int
+    duration_ms: int,
+    action: str = "republish"
 ) -> None:
     """AutorunLog DB 저장"""
     try:
@@ -251,7 +734,7 @@ async def _save_autorun_log(
         log = AutorunLog.create_execution_log(
             user_id=user_id,
             flow_id=flow_id,
-            action="republish",
+            action=action,
             status=status,
             flow_name=flow_name,
             module_name=module_name,

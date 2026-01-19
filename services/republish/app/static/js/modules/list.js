@@ -95,7 +95,7 @@ function moduleListApp() {
                         return valueA - valueB;
 
                     case 'module_type':
-                        const typeOrder = { 'prompt': 1, 'generate': 2, 'publish': 3, 'republish': 4 };
+                        const typeOrder = { 'prompt': 1, 'generate': 2, 'publish': 3, 'republish': 4, 'collect': 5 };
                         valueA = typeOrder[a.module_type?.code] || 99;
                         valueB = typeOrder[b.module_type?.code] || 99;
                         return valueA - valueB;
@@ -162,7 +162,7 @@ function moduleListApp() {
 
         // 동적 섹션 레이아웃 적용
         applyDynamicLayout() {
-            const moduleTypes = ['prompt', 'generate', 'publish', 'republish'];
+            const moduleTypes = ['prompt', 'generate', 'publish', 'republish', 'collect'];
             const visibleSections = moduleTypes.filter(type => this.getModulesByType(type).length > 0);
             const sectionCount = visibleSections.length;
 
@@ -173,7 +173,7 @@ function moduleListApp() {
             if (!desktopSections) return;
 
             // 기존 클래스 제거
-            desktopSections.classList.remove('sections-1', 'sections-2', 'sections-3', 'sections-4');
+            desktopSections.classList.remove('sections-1', 'sections-2', 'sections-3', 'sections-4', 'sections-5');
 
             // 섹션 수에 따른 클래스 추가
             desktopSections.classList.add(`sections-${sectionCount}`);
@@ -182,7 +182,7 @@ function moduleListApp() {
             visibleSections.forEach(type => {
                 const moduleGrid = document.querySelector(`[x-show*="getModulesByType('${type}')"] .module-grid`);
                 if (moduleGrid) {
-                    moduleGrid.classList.remove('grid-1', 'grid-2', 'grid-3', 'grid-4');
+                    moduleGrid.classList.remove('grid-1', 'grid-2', 'grid-3', 'grid-4', 'grid-5');
                     moduleGrid.classList.add(`grid-${sectionCount}`);
                 }
             });
@@ -199,7 +199,8 @@ function moduleListApp() {
                 republish: '🔄',
                 publish: '📤',
                 generate: '✨',
-                prompt: '📝'
+                prompt: '📝',
+                collect: '🔍'
             };
             return icons[typeCode] || '📦';
         },
@@ -214,7 +215,8 @@ function moduleListApp() {
                 'prompt': '프롬프트',
                 'generate': '생성',
                 'publish': '발행',
-                'republish': '재발행'
+                'republish': '재발행',
+                'collect': '수집'
             };
             return fallbackNames[typeCode] || typeCode;
         },
@@ -445,8 +447,411 @@ function moduleListApp() {
                             </div>
                         </div>
 
+                        <!-- 수집 모듈 설정 -->
+                        <div x-show="formData.type_code === 'collect'">
+                            <!-- API 상태 안내 -->
+                            <div class="mb-6 p-4 rounded-lg" :class="hasRequiredAPI() ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'">
+                                <div class="flex items-start gap-3">
+                                    <span x-show="hasRequiredAPI()" class="text-green-600 text-xl">✅</span>
+                                    <span x-show="!hasRequiredAPI()" class="text-red-600 text-xl">⚠️</span>
+                                    <div>
+                                        <p class="font-medium" :class="hasRequiredAPI() ? 'text-green-800' : 'text-red-800'">
+                                            <span x-show="hasRequiredAPI()">API 설정 완료</span>
+                                            <span x-show="!hasRequiredAPI()">필수 API 미설정</span>
+                                        </p>
+                                        <p class="text-sm mt-1" :class="hasRequiredAPI() ? 'text-green-700' : 'text-red-700'">
+                                            <span x-show="hasRequiredAPI()">네이버 광고 API가 설정되어 연관검색어 확장이 가능합니다.</span>
+                                            <span x-show="!hasRequiredAPI()">수집 모듈 저장을 위해 <strong>네이버 광고 API</strong>가 필요합니다. 설정 메뉴에서 API 키를 등록해주세요.</span>
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 수집 대상 설정 -->
+                            <div class="space-y-4 mb-6">
+                                <h3 class="text-base font-semibold text-gray-900 flex items-center">
+                                    📊 수집 대상 설정
+                                </h3>
+                                <p class="text-xs text-gray-500 -mt-2">수집할 데이터 소스를 선택하세요</p>
+
+                                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                    <!-- 네이버 뉴스 -->
+                                    <div class="flex items-center p-3 border rounded-lg transition-colors cursor-pointer"
+                                         :class="apiStatus.naver_news
+                                                 ? (formData.source_naver_news ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:bg-gray-50')
+                                                 : 'border-gray-200 bg-gray-100 opacity-60 cursor-not-allowed'"
+                                         @click="if(apiStatus.naver_news) formData.source_naver_news = !formData.source_naver_news">
+                                        <input type="checkbox"
+                                               :checked="formData.source_naver_news"
+                                               :disabled="!apiStatus.naver_news"
+                                               class="rounded text-purple-600 focus:ring-purple-500 pointer-events-none">
+                                        <div class="ml-3">
+                                            <span class="text-sm font-medium text-gray-700">네이버 뉴스</span>
+                                            <span x-show="!apiStatus.naver_news" class="block text-xs text-red-500">API 미등록</span>
+                                            <span x-show="apiStatus.naver_news" class="block text-xs text-blue-600">제목 수집</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- 구글 뉴스 RSS -->
+                                    <div class="flex items-center p-3 border rounded-lg transition-colors cursor-pointer"
+                                         :class="formData.source_google_news ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:bg-gray-50'"
+                                         @click="formData.source_google_news = !formData.source_google_news">
+                                        <input type="checkbox"
+                                               :checked="formData.source_google_news"
+                                               class="rounded text-purple-600 focus:ring-purple-500 pointer-events-none">
+                                        <div class="ml-3">
+                                            <span class="text-sm font-medium text-gray-700">구글 뉴스</span>
+                                            <span class="block text-xs text-blue-600">제목 수집</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- 네이버 웹문서 -->
+                                    <div class="flex items-center p-3 border rounded-lg transition-colors cursor-pointer"
+                                         :class="apiStatus.naver_webdoc
+                                                 ? (formData.source_naver_webdoc ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:bg-gray-50')
+                                                 : 'border-gray-200 bg-gray-100 opacity-60 cursor-not-allowed'"
+                                         @click="if(apiStatus.naver_webdoc) formData.source_naver_webdoc = !formData.source_naver_webdoc">
+                                        <input type="checkbox"
+                                               :checked="formData.source_naver_webdoc"
+                                               :disabled="!apiStatus.naver_webdoc"
+                                               class="rounded text-purple-600 focus:ring-purple-500 pointer-events-none">
+                                        <div class="ml-3">
+                                            <span class="text-sm font-medium text-gray-700">네이버 웹문서</span>
+                                            <span x-show="!apiStatus.naver_webdoc" class="block text-xs text-red-500">API 미등록</span>
+                                            <span x-show="apiStatus.naver_webdoc" class="block text-xs text-blue-600">제목 수집</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <p class="text-xs text-gray-500">
+                                    <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                    네이버 뉴스 API는 설정 → API 설정 → <strong>네이버 검색 API</strong>에서 등록하세요
+                                </p>
+                            </div>
+
+                            <!-- 수집 유형 -->
+                            <div class="space-y-4 mb-6">
+                                <h3 class="text-base font-semibold text-gray-900 flex items-center">
+                                    📋 수집 유형
+                                </h3>
+                                <div class="flex gap-4">
+                                    <label class="flex items-center cursor-pointer">
+                                        <input type="radio" x-model="formData.collect_type" value="keyword" class="text-purple-600 focus:ring-purple-500">
+                                        <span class="ml-2 text-sm">키워드만</span>
+                                    </label>
+                                    <label class="flex items-center cursor-pointer">
+                                        <input type="radio" x-model="formData.collect_type" value="title" class="text-purple-600 focus:ring-purple-500">
+                                        <span class="ml-2 text-sm">제목만</span>
+                                    </label>
+                                    <label class="flex items-center cursor-pointer">
+                                        <input type="radio" x-model="formData.collect_type" value="both" class="text-purple-600 focus:ring-purple-500">
+                                        <span class="ml-2 text-sm">키워드+제목 모두</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- 추가 옵션 -->
+                            <div class="space-y-4 mb-6">
+                                <h3 class="text-base font-semibold text-gray-900 flex items-center">
+                                    ⚙️ 추가 옵션
+                                </h3>
+                                <div class="space-y-3">
+                                    <label class="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50"
+                                           :class="formData.enable_related_search ? 'border-purple-500 bg-purple-50' : 'border-gray-200'">
+                                        <input type="checkbox" x-model="formData.enable_related_search" class="rounded text-purple-600 focus:ring-purple-500">
+                                        <div class="ml-3">
+                                            <span class="text-sm font-medium">연관검색 확장</span>
+                                            <p class="text-xs text-gray-500">수집된 키워드의 연관검색어도 함께 수집합니다</p>
+                                        </div>
+                                    </label>
+                                    <label class="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50"
+                                           :class="formData.enable_title_extraction ? 'border-purple-500 bg-purple-50' : 'border-gray-200'">
+                                        <input type="checkbox" x-model="formData.enable_title_extraction" class="rounded text-purple-600 focus:ring-purple-500">
+                                        <div class="ml-3">
+                                            <span class="text-sm font-medium">제목 자동 추출</span>
+                                            <p class="text-xs text-gray-500">네이버 뉴스/웹문서에서 제목을 자동 수집합니다</p>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- 키워드 추출 옵션 (제목 → 키워드) - 키워드만 선택 시 비활성화 -->
+                            <!-- x-effect로 키워드만 선택 시 자동 비활성화 -->
+                            <div x-effect="if (formData.collect_type === 'keyword') formData.enable_keyword_extraction = false"></div>
+                            <div class="space-y-4 mb-6" x-show="formData.collect_type !== 'keyword'" x-transition>
+                                <h3 class="text-base font-semibold text-gray-900 flex items-center">
+                                    🔑 키워드 추출 (제목 → 키워드)
+                                </h3>
+
+                                <div class="space-y-4">
+                                    <!-- 키워드 추출 활성화 -->
+                                    <label class="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50"
+                                           :class="formData.enable_keyword_extraction ? 'border-green-500 bg-green-50' : 'border-gray-200'">
+                                        <input type="checkbox" x-model="formData.enable_keyword_extraction" class="rounded text-green-600 focus:ring-green-500">
+                                        <div class="ml-3">
+                                            <span class="text-sm font-medium">제목에서 키워드 자동 추출</span>
+                                            <p class="text-xs text-gray-500">수집된 제목을 분석하여 핵심 키워드를 추출하고 저장합니다</p>
+                                        </div>
+                                    </label>
+
+                                    <!-- 키워드 추출 상세 옵션 (활성화시에만 표시) -->
+                                    <div x-show="formData.enable_keyword_extraction" x-transition class="p-4 bg-green-50 rounded-lg space-y-4">
+                                        <!-- 추출 방법 선택 -->
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-2">추출 방법</label>
+                                            <select x-model="formData.keyword_extraction_method"
+                                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent">
+                                                <option value="all">통합 (모든 방법)</option>
+                                                <option value="konlpy">형태소 분석 (명사 추출)</option>
+                                                <option value="tfidf">TF-IDF 핵심 키워드</option>
+                                                <option value="ngram">N-gram 빈도 분석</option>
+                                            </select>
+                                            <p class="mt-1 text-xs text-gray-500">
+                                                <span x-show="formData.keyword_extraction_method === 'all'">KoNLPy + TF-IDF + N-gram 통합 분석</span>
+                                                <span x-show="formData.keyword_extraction_method === 'konlpy'">한국어 형태소 분석으로 명사 추출</span>
+                                                <span x-show="formData.keyword_extraction_method === 'tfidf'">문서 빈도 역수 가중치 기반 핵심어 추출</span>
+                                                <span x-show="formData.keyword_extraction_method === 'ngram'">연속 단어 조합 빈도 분석</span>
+                                            </p>
+                                        </div>
+
+                                        <!-- 분석할 제목 수 -->
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-2">분석할 제목 수</label>
+                                            <div class="flex items-center gap-2">
+                                                <input type="number"
+                                                       x-model.number="formData.keyword_extraction_title_limit"
+                                                       min="10"
+                                                       max="500"
+                                                       class="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent">
+                                                <span class="text-gray-500 text-sm">개의 제목에서</span>
+                                            </div>
+                                        </div>
+
+                                        <!-- 추출할 키워드 수 -->
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-2">추출할 키워드 수</label>
+                                            <div class="flex items-center gap-2">
+                                                <input type="number"
+                                                       x-model.number="formData.keyword_extraction_limit"
+                                                       min="10"
+                                                       max="200"
+                                                       class="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent">
+                                                <span class="text-gray-500 text-sm">개 키워드 추출</span>
+                                            </div>
+                                        </div>
+
+                                        <div class="p-3 bg-green-100 rounded-lg">
+                                            <p class="text-xs text-green-800">
+                                                📝 수집 완료 후 임시 제목에서 키워드를 자동으로 추출하여 키워드 탭에 저장합니다.<br>
+                                                불용어 필터링이 자동 적용되며, 추출된 키워드는 source_type="extracted"로 구분됩니다.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 수집 수량 설정 -->
+                            <div class="space-y-4 mb-6">
+                                <h3 class="text-base font-semibold text-gray-900 flex items-center">
+                                    📊 수집 수량 설정
+                                </h3>
+                                <p class="text-xs text-gray-500 -mt-2">수집 유형을 선택하고 수량을 설정합니다 (중복 선택 가능)</p>
+
+                                <!-- 일반 수집 -->
+                                <div class="border border-gray-200 rounded-lg overflow-hidden">
+                                    <div class="flex items-center p-3 bg-gray-50 border-b border-gray-200 cursor-pointer"
+                                         @click="formData.enable_normal_collect = !formData.enable_normal_collect">
+                                        <input type="checkbox"
+                                               x-model="formData.enable_normal_collect"
+                                               class="rounded text-purple-600 focus:ring-purple-500 pointer-events-none">
+                                        <div class="ml-3">
+                                            <span class="text-sm font-medium">📋 일반 수집</span>
+                                            <p class="text-xs text-gray-500">키워드/제목별 수집 수량 제한</p>
+                                        </div>
+                                    </div>
+                                    <div x-show="formData.enable_normal_collect" x-transition class="p-4 bg-white">
+                                        <div class="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-2">🔑 키워드 수집</label>
+                                                <div class="flex items-center gap-2">
+                                                    <input type="number" x-model.number="formData.keyword_collect_limit" min="10" max="1000"
+                                                           class="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                                                    <span class="text-sm text-gray-500">개</span>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-2">📝 제목 수집</label>
+                                                <div class="flex items-center gap-2">
+                                                    <input type="number" x-model.number="formData.title_collect_limit" min="10" max="1000"
+                                                           class="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                                                    <span class="text-sm text-gray-500">개</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 대량 수집 -->
+                                <div class="border border-gray-200 rounded-lg overflow-hidden">
+                                    <div class="flex items-center p-3 bg-gray-50 border-b border-gray-200 cursor-pointer"
+                                         @click="formData.enable_bulk_collect = !formData.enable_bulk_collect">
+                                        <input type="checkbox"
+                                               x-model="formData.enable_bulk_collect"
+                                               class="rounded text-orange-600 focus:ring-orange-500 pointer-events-none">
+                                        <div class="ml-3">
+                                            <span class="text-sm font-medium">🚀 대량 수집</span>
+                                            <p class="text-xs text-gray-500">블로그/사이트의 전체 포스트 제목 수집 (수량 제한 없음)</p>
+                                        </div>
+                                    </div>
+                                    <div x-show="formData.enable_bulk_collect" x-transition class="p-4 bg-white">
+                                        <div class="p-3 bg-orange-50 rounded-lg mb-3">
+                                            <p class="text-xs text-orange-800">
+                                                ⚠️ 키워드 검색 결과의 블로그/사이트에서 <strong>전체 포스트 제목</strong>을 수집합니다.<br>
+                                                • 네이버 블로그: 검색 API로 수집<br>
+                                                • 티스토리/워드프레스 등: RSS 피드로 수집<br>
+                                                • 도메인 필터가 적용되어 차단된 사이트는 제외됩니다
+                                            </p>
+                                        </div>
+                                        <div class="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-2">🔢 주기당 처리 URL 수</label>
+                                                <div class="flex items-center gap-2">
+                                                    <input type="number" x-model.number="formData.bulk_urls_per_cycle" min="1" max="10" step="1"
+                                                           class="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500">
+                                                    <span class="text-sm text-gray-500">개</span>
+                                                </div>
+                                                <p class="text-xs text-gray-400 mt-1">수집 주기마다 제목을 수집할 URL 수</p>
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 mb-2">🕐 사이트 간 딜레이</label>
+                                                <div class="flex items-center gap-2">
+                                                    <input type="number" x-model.number="formData.bulk_collect_delay" min="0.1" max="5" step="0.1"
+                                                           class="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500">
+                                                    <span class="text-sm text-gray-500">초</span>
+                                                </div>
+                                                <p class="text-xs text-gray-400 mt-1">각 블로그/사이트 수집 사이의 대기 시간</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 수집 스케줄 모드 -->
+                            <div class="space-y-4 mb-6">
+                                <h3 class="text-base font-semibold text-gray-900 flex items-center">
+                                    🕐 수집 스케줄
+                                </h3>
+
+                                <div class="flex gap-4 mb-4">
+                                    <label class="flex items-center cursor-pointer">
+                                        <input type="radio" x-model="formData.collect_schedule_mode" value="fixed_time" class="text-purple-600 focus:ring-purple-500">
+                                        <span class="ml-2 text-sm">고정 시간 (권장)</span>
+                                    </label>
+                                    <label class="flex items-center cursor-pointer">
+                                        <input type="radio" x-model="formData.collect_schedule_mode" value="interval" class="text-purple-600 focus:ring-purple-500">
+                                        <span class="ml-2 text-sm">간격 기반</span>
+                                    </label>
+                                </div>
+
+                                <!-- 고정 시간 모드 -->
+                                <div x-show="formData.collect_schedule_mode === 'fixed_time'" class="p-4 bg-purple-50 rounded-lg">
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">수집 시간 설정</label>
+                                    <div class="flex flex-wrap gap-2 mb-3">
+                                        <template x-for="(time, idx) in formData.collect_fixed_times" :key="idx">
+                                            <span class="inline-flex items-center px-3 py-1 bg-purple-200 text-purple-800 rounded-full text-sm">
+                                                <span x-text="time"></span>
+                                                <button type="button" @click="removeFixedTime(time)" class="ml-2 text-purple-600 hover:text-purple-800">×</button>
+                                            </span>
+                                        </template>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <input type="time" x-model="newFixedTime"
+                                               class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                                        <button type="button" @click="addFixedTime()"
+                                                class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm">
+                                            추가
+                                        </button>
+                                    </div>
+                                    <p class="mt-2 text-xs text-gray-500">매일 지정된 시간에 수집을 실행합니다</p>
+                                </div>
+
+                                <!-- 간격 모드 -->
+                                <div x-show="formData.collect_schedule_mode === 'interval'" class="p-4 bg-purple-50 rounded-lg">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-gray-700 text-sm">수집 간격:</span>
+                                        <input type="number" x-model.number="formData.collect_interval_hours" min="1" max="24"
+                                               class="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                                        <span class="text-gray-500 text-sm">시간마다</span>
+                                    </div>
+                                    <p class="mt-2 text-xs text-gray-500">활성 시간대 내에서 지정된 간격으로 수집을 실행합니다</p>
+                                </div>
+                            </div>
+
+                            <!-- 활성 시간대 (스케줄 매트릭스) -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">활성 시간대</label>
+                                <div class="bg-gray-50 rounded-lg p-4">
+                                    <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+                                        <div class="flex flex-wrap gap-2">
+                                            <button type="button" @click="selectAllHours()"
+                                                    class="px-3 py-1 text-xs bg-purple-100 text-purple-800 rounded-full hover:bg-purple-200">
+                                                전체 선택 (24시간)
+                                            </button>
+                                            <button type="button" @click="clearAllHours()"
+                                                    class="px-3 py-1 text-xs bg-gray-100 text-gray-800 rounded-full hover:bg-gray-200">
+                                                전체 해제
+                                            </button>
+                                            <button type="button" @click="selectWorkingHours()"
+                                                    class="px-3 py-1 text-xs bg-green-100 text-green-800 rounded-full hover:bg-green-200">
+                                                평일 9-21시
+                                            </button>
+                                        </div>
+                                        <div class="flex items-center gap-4 text-sm">
+                                            <span class="text-purple-800 font-medium">
+                                                활성: <span x-text="activeHoursCount"></span>시간/주
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <p class="text-xs text-gray-500 mb-3">
+                                        보라색 = 활성 (수집 가능), 회색 = 비활성
+                                    </p>
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full text-xs border-collapse">
+                                            <thead>
+                                                <tr>
+                                                    <th class="border border-gray-300 bg-gray-100 p-2 text-center w-12">시간</th>
+                                                    <template x-for="(day, dayIdx) in days" :key="dayIdx">
+                                                        <th class="border border-gray-300 bg-gray-100 p-2 text-center cursor-pointer hover:bg-gray-200 w-8"
+                                                            @click="toggleDay(dayIdx)" x-text="day"></th>
+                                                    </template>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <template x-for="hour in 24" :key="hour">
+                                                    <tr>
+                                                        <td class="border border-gray-300 bg-gray-50 p-1 text-center font-medium"
+                                                            x-text="String(hour-1).padStart(2, '0') + '시'"></td>
+                                                        <template x-for="(day, dayIdx) in days" :key="dayIdx + '-' + hour">
+                                                            <td class="border border-gray-300 p-0">
+                                                                <button type="button"
+                                                                        class="w-full h-7 border-none cursor-pointer transition-colors duration-150"
+                                                                        :class="schedule[dayIdx][hour-1] ? 'bg-purple-500 hover:bg-purple-600' : 'bg-gray-100 hover:bg-gray-200'"
+                                                                        @click="toggleHour(dayIdx, hour-1)"></button>
+                                                            </td>
+                                                        </template>
+                                                    </tr>
+                                                </template>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- 기타 타입 설정 -->
-                        <div x-show="formData.type_code !== 'republish'">
+                        <div x-show="formData.type_code !== 'republish' && formData.type_code !== 'collect'">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-2">설정 정보 (JSON)</label>
                                 <textarea x-model="settingsJson"
@@ -497,7 +902,8 @@ function moduleListApp() {
                 'republish': 'bg-sky-200',
                 'prompt': 'bg-green-200',
                 'generate': 'bg-amber-200',
-                'publish': 'bg-rose-200'
+                'publish': 'bg-rose-200',
+                'collect': 'bg-purple-200'
             };
             return colors[typeCode] || 'bg-gray-200';
         },
@@ -761,7 +1167,6 @@ function moduleListApp() {
                 if (contentArea) {
                     contentArea.innerHTML = formContent;
                     console.log('폼 내용 로드 완료');
-
                 } else {
                     console.warn('모듈 폼 컨텐츠 엘리먼트를 찾을 수 없습니다');
                 }
@@ -913,8 +1318,10 @@ function moduleListApp() {
             window[moduleId] = module;
             window[typeId] = moduleType;
 
+            // Alpine.js 3.x는 x-data의 init() 메서드를 자동 호출함
+            // x-init="init()" 제거하여 중복 호출 방지
             return `
-                <div x-data="moduleFormApp(window.${moduleId}, window.${typeId})" x-init="init()">
+                <div x-data="moduleFormApp(window.${moduleId}, window.${typeId})">
                     ${this.getFullFormTemplate()}
                 </div>
             `;
@@ -1225,6 +1632,63 @@ function getModuleInfoRows(module) {
         }
         if (module.settings && module.settings.max_length) {
             rows.push({ label: '길이 설정', value: `${module.settings.max_length}자` });
+        }
+    } else if (typeCode === 'collect') {
+        // 수집 모듈
+        const settings = module.settings || {};
+
+        // 수집 대상 소스
+        const sources = [];
+        if (settings.source_naver_datalab) sources.push('네이버 데이터랩');
+        if (settings.source_naver_ads) sources.push('네이버 광고');
+        if (settings.source_google_trends) sources.push('구글 트렌드');
+        if (settings.source_google_planner) sources.push('구글 플래너');
+        if (settings.source_naver_news) sources.push('네이버 뉴스');
+        if (settings.source_google_news) sources.push('구글 뉴스');
+        if (settings.source_naver_webdoc) sources.push('웹문서');
+        if (sources.length > 0) {
+            rows.push({ label: '수집 대상', value: sources.join(', ') });
+        }
+
+        // 수집 유형
+        const collectType = settings.collect_type;
+        if (collectType) {
+            const typeLabels = { 'keyword': '키워드만', 'title': '제목만', 'both': '키워드+제목' };
+            rows.push({ label: '수집 유형', value: typeLabels[collectType] || collectType });
+        }
+
+        // 스케줄 모드
+        const scheduleMode = settings.schedule_mode;
+        if (scheduleMode === 'fixed_time' && settings.fixed_times) {
+            rows.push({ label: '수집 시간', value: settings.fixed_times.join(', ') });
+        } else if (scheduleMode === 'interval' && settings.interval_hours) {
+            rows.push({ label: '수집 간격', value: `${settings.interval_hours}시간마다` });
+        }
+
+        // 연관검색 옵션
+        if (settings.enable_related_search) {
+            rows.push({ label: '연관검색', value: '활성' });
+        }
+
+        // 수집 수량 설정
+        if (settings.keyword_collect_limit) {
+            rows.push({ label: '키워드 수집', value: `최대 ${settings.keyword_collect_limit}개` });
+        }
+        if (settings.title_collect_limit) {
+            rows.push({ label: '제목 수집', value: `최대 ${settings.title_collect_limit}개` });
+        }
+
+        // 스케줄 (schedule_matrix가 있으면)
+        if (app && typeof app.getScheduleSummary === 'function') {
+            const schedule = app.getScheduleSummary(module);
+            if (schedule && schedule !== '설정 없음') {
+                rows.push({ label: '스케줄', value: schedule.replace(/\n/g, ' | ') });
+            }
+        } else if (module.schedule_matrix && Array.isArray(module.schedule_matrix)) {
+            const scheduleText = parseScheduleMatrix(module.schedule_matrix);
+            if (scheduleText && scheduleText !== '설정 없음') {
+                rows.push({ label: '스케줄', value: scheduleText });
+            }
         }
     }
 

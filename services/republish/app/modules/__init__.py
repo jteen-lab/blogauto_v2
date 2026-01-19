@@ -14,6 +14,8 @@ from app.modules.triggers.manual import ManualTriggerModule
 from app.modules.data.db_query import DBQueryModule
 from app.modules.data.db_save import DBSaveModule
 from app.modules.data.post_selector import PostSelectorModule
+from app.modules.data.keyword_loader import KeywordLoaderModule
+from app.modules.data.title_collector import TitleCollectorModule
 
 # 액션 모듈
 from app.modules.actions.publish import PublishModule
@@ -25,10 +27,14 @@ def register_all_modules():
     ModuleRegistry.register(ScheduleTriggerModule())
     ModuleRegistry.register(ManualTriggerModule())
 
-    # 데이터
+    # 데이터 - 재발행용
     ModuleRegistry.register(DBQueryModule())
     ModuleRegistry.register(DBSaveModule())
     ModuleRegistry.register(PostSelectorModule())
+
+    # 데이터 - 수집용
+    ModuleRegistry.register(KeywordLoaderModule())
+    ModuleRegistry.register(TitleCollectorModule())
 
     # 액션
     ModuleRegistry.register(PublishModule())
@@ -41,5 +47,7 @@ __all__ = [
     "DBQueryModule",
     "DBSaveModule",
     "PostSelectorModule",
+    "KeywordLoaderModule",
+    "TitleCollectorModule",
     "PublishModule",
 ]

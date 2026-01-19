@@ -15,6 +15,18 @@ function moduleFormApp(module = null, moduleType = null) {
         module: initialModule,
         moduleType: initialType,
 
+        // API 상태 (수집 모듈용)
+        apiStatus: {
+            naver_ads: false,
+            naver_datalab: false,
+            google_trends: true,  // 구글 트렌드는 API 키 불필요
+            google_planner: false,
+            naver_news: false,    // 네이버 API 사용 (client_id, client_secret)
+            google_news: true,    // 구글 뉴스 RSS는 API 키 불필요
+            naver_webdoc: false   // 네이버 웹문서 (client_id, client_secret)
+        },
+        apiStatusLoading: false,
+
         // 폼 데이터
         formData: {
             name: initialModule?.name || '',
@@ -30,8 +42,42 @@ function moduleFormApp(module = null, moduleType = null) {
             post_range_end: initialModule?.post_range_end || null,
             // 새로운 간격 설정 필드들
             interval_mode: initialModule?.interval_mode || 'manual',
-            auto_daily_count: initialModule?.auto_daily_count || 5
+            auto_daily_count: initialModule?.auto_daily_count || 5,
+            // 수집 모듈 필드들
+            collect_schedule_mode: initialModule?.settings?.schedule_mode || 'fixed_time',
+            collect_fixed_times: initialModule?.settings?.fixed_times || ['06:00', '18:00'],
+            collect_interval_hours: initialModule?.settings?.interval_hours || 6,
+            collect_type: initialModule?.settings?.collect_type || 'both',
+            // 키워드 수집 소스 (기본값 False - 사용자가 명시적으로 선택)
+            source_google_trends: initialModule?.settings?.source_google_trends ?? false,
+            source_naver_datalab: initialModule?.settings?.source_naver_datalab ?? false,
+            source_naver_ads: initialModule?.settings?.source_naver_ads ?? false,
+            source_google_planner: initialModule?.settings?.source_google_planner ?? false,
+            // 제목 수집 소스 (기본값 False - 사용자가 명시적으로 선택)
+            source_naver_news: initialModule?.settings?.source_naver_news ?? false,
+            source_google_news: initialModule?.settings?.source_google_news ?? false,
+            source_naver_webdoc: initialModule?.settings?.source_naver_webdoc ?? false,
+            // 추가 옵션
+            enable_related_search: initialModule?.settings?.enable_related_search ?? true,
+            enable_title_extraction: initialModule?.settings?.enable_title_extraction ?? false,
+            // 키워드 추출 옵션
+            enable_keyword_extraction: initialModule?.settings?.enable_keyword_extraction ?? false,
+            keyword_extraction_method: initialModule?.settings?.keyword_extraction_method || 'all',
+            keyword_extraction_title_limit: initialModule?.settings?.keyword_extraction_title_limit || 100,
+            keyword_extraction_limit: initialModule?.settings?.keyword_extraction_limit || 50,
+            // 수집 유형 선택 (일반/대량)
+            enable_normal_collect: initialModule?.settings?.enable_normal_collect ?? true,
+            enable_bulk_collect: initialModule?.settings?.enable_bulk_collect ?? false,
+            // 일반 수집 수량 설정 (키워드/제목 각각)
+            keyword_collect_limit: initialModule?.settings?.keyword_collect_limit || 100,
+            title_collect_limit: initialModule?.settings?.title_collect_limit || 100,
+            // 대량 수집 설정
+            bulk_collect_delay: initialModule?.settings?.bulk_collect_delay || 0.5,
+            bulk_urls_per_cycle: initialModule?.settings?.bulk_urls_per_cycle || 3
         },
+
+        // 수집 시간 입력용
+        newFixedTime: '',
 
         // 스케줄 매트릭스 (재발행 모듈용)
         days: ['월', '화', '수', '목', '금', '토', '일'],
@@ -60,6 +106,24 @@ function moduleFormApp(module = null, moduleType = null) {
             this.initializeSettings();
             this.calculateStats();
 
+            // 수집 모듈인 경우 API 상태 로드
+            // moduleType.code 또는 formData.type_code 둘 다 체크
+            const typeCode = this.formData.type_code || this.moduleType?.code;
+            console.log('typeCode 확인:', typeCode, 'formData.type_code:', this.formData.type_code, 'moduleType:', this.moduleType);
+            if (typeCode === 'collect') {
+                console.log('수집 모듈 감지 - API 상태 로드 시작');
+                this.loadApiStatus();
+
+                // 수집 유형 변경 시 키워드 추출 옵션 자동 리셋
+                this.$watch('formData.collect_type', (newVal) => {
+                    if (newVal === 'keyword') {
+                        // 키워드만 선택 시 키워드 추출 비활성화 (제목이 없으므로)
+                        this.formData.enable_keyword_extraction = false;
+                        console.log('[collect_type] 키워드만 선택 - 키워드 추출 옵션 비활성화');
+                    }
+                });
+            }
+
             // Alpine.js $nextTick이 사용 가능한지 확인
             if (this.$nextTick) {
                 this.$nextTick(() => {
@@ -79,16 +143,20 @@ function moduleFormApp(module = null, moduleType = null) {
 
         // 스케줄 매트릭스 초기화
         initializeSchedule() {
-            if (this.formData.type_code === 'republish') {
+            if (this.formData.type_code === 'republish' || this.formData.type_code === 'collect') {
                 if (this.isEdit && this.formData.schedule_matrix) {
                     this.schedule = JSON.parse(JSON.stringify(this.formData.schedule_matrix));
                 } else {
-                    // 기본 평일 9-21시 스케줄
-                    this.schedule = Array(7).fill().map((_, dayIdx) =>
-                        Array(24).fill().map((_, hour) =>
-                            dayIdx < 5 && hour >= 9 && hour <= 21
-                        )
-                    );
+                    // 기본 평일 9-21시 스케줄 (재발행) / 24시간 (수집)
+                    if (this.formData.type_code === 'collect') {
+                        this.schedule = Array(7).fill().map(() => Array(24).fill(true));
+                    } else {
+                        this.schedule = Array(7).fill().map((_, dayIdx) =>
+                            Array(24).fill().map((_, hour) =>
+                                dayIdx < 5 && hour >= 9 && hour <= 21
+                            )
+                        );
+                    }
                 }
                 this.updateActiveHoursCount();
             } else {
@@ -345,8 +413,69 @@ function moduleFormApp(module = null, moduleType = null) {
                 }
             }
 
+            // 수집 모듈 검증
+            if (this.formData.type_code === 'collect') {
+                // 필수 API 검증 (네이버 광고 API 필수)
+                if (!this.apiStatus.naver_ads) {
+                    this.showError('수집 모듈 저장을 위해 네이버 광고 API가 필요합니다.\n설정 메뉴에서 API 키를 등록해주세요.');
+                    return false;
+                }
+
+                // 스케줄 모드별 검증
+                if (this.formData.collect_schedule_mode === 'fixed_time') {
+                    if (!this.formData.collect_fixed_times || this.formData.collect_fixed_times.length === 0) {
+                        this.showError('최소 1개 이상의 수집 시간을 설정해주세요');
+                        return false;
+                    }
+                } else if (this.formData.collect_schedule_mode === 'interval') {
+                    if (!this.formData.collect_interval_hours || this.formData.collect_interval_hours < 1) {
+                        this.showError('수집 간격은 1시간 이상이어야 합니다');
+                        return false;
+                    }
+                }
+
+                // 수집 유형 검증 (최소 하나 선택 필수)
+                if (!this.formData.enable_normal_collect && !this.formData.enable_bulk_collect) {
+                    this.showError('최소 하나의 수집 유형을 선택해주세요 (일반 수집 또는 대량 수집)');
+                    return false;
+                }
+
+                // 일반 수집 수량 설정 검증 (일반 수집 선택 시에만)
+                if (this.formData.enable_normal_collect) {
+                    if (!this.formData.keyword_collect_limit || this.formData.keyword_collect_limit < 10) {
+                        this.showError('키워드 수집 수량은 10개 이상이어야 합니다');
+                        return false;
+                    }
+                    if (this.formData.keyword_collect_limit > 1000) {
+                        this.showError('키워드 수집 수량은 1000개를 초과할 수 없습니다');
+                        return false;
+                    }
+                    if (!this.formData.title_collect_limit || this.formData.title_collect_limit < 10) {
+                        this.showError('제목 수집 수량은 10개 이상이어야 합니다');
+                        return false;
+                    }
+                    if (this.formData.title_collect_limit > 1000) {
+                        this.showError('제목 수집 수량은 1000개를 초과할 수 없습니다');
+                        return false;
+                    }
+                }
+
+                // 대량 수집 딜레이 검증 (대량 수집 선택 시에만)
+                if (this.formData.enable_bulk_collect) {
+                    if (!this.formData.bulk_collect_delay || this.formData.bulk_collect_delay < 0.1) {
+                        this.showError('대량 수집 사이트 간 딜레이는 최소 0.1초 이상이어야 합니다');
+                        return false;
+                    }
+                }
+
+                if (this.activeHoursCount === 0) {
+                    this.showError('최소 1시간 이상의 활성 스케줄을 설정해주세요');
+                    return false;
+                }
+            }
+
             // 기타 타입 설정 JSON 검증
-            if (this.formData.type_code !== 'republish' && this.settingsJson) {
+            if (this.formData.type_code !== 'republish' && this.formData.type_code !== 'collect' && this.settingsJson) {
                 try {
                     JSON.parse(this.settingsJson);
                 } catch (e) {
@@ -385,6 +514,41 @@ function moduleFormApp(module = null, moduleType = null) {
                 data.interval_mode = this.formData.interval_mode;
                 data.manual_interval_minutes = this.formData.manual_interval_minutes;
                 data.auto_daily_count = this.formData.auto_daily_count;
+            } else if (this.formData.type_code === 'collect') {
+                // 수집 모듈 데이터
+                data.schedule_matrix = this.schedule;
+                data.settings = {
+                    schedule_mode: this.formData.collect_schedule_mode,
+                    fixed_times: this.formData.collect_fixed_times,
+                    interval_hours: this.formData.collect_interval_hours,
+                    collect_type: this.formData.collect_type,
+                    // 키워드 수집 소스
+                    source_google_trends: this.formData.source_google_trends,
+                    source_naver_datalab: this.formData.source_naver_datalab,
+                    source_naver_ads: this.formData.source_naver_ads,
+                    source_google_planner: this.formData.source_google_planner,
+                    // 제목 수집 소스 (뉴스/웹문서)
+                    source_naver_news: this.formData.source_naver_news,
+                    source_google_news: this.formData.source_google_news,
+                    source_naver_webdoc: this.formData.source_naver_webdoc,
+                    // 추가 옵션
+                    enable_related_search: this.formData.enable_related_search,
+                    enable_title_extraction: this.formData.enable_title_extraction,
+                    // 키워드 추출 옵션
+                    enable_keyword_extraction: this.formData.enable_keyword_extraction,
+                    keyword_extraction_method: this.formData.keyword_extraction_method,
+                    keyword_extraction_title_limit: this.formData.keyword_extraction_title_limit,
+                    keyword_extraction_limit: this.formData.keyword_extraction_limit,
+                    // 수집 유형 선택 (일반/대량)
+                    enable_normal_collect: this.formData.enable_normal_collect,
+                    enable_bulk_collect: this.formData.enable_bulk_collect,
+                    // 일반 수집 수량 설정
+                    keyword_collect_limit: this.formData.keyword_collect_limit,
+                    title_collect_limit: this.formData.title_collect_limit,
+                    // 대량 수집 설정
+                    bulk_collect_delay: this.formData.bulk_collect_delay,
+                    bulk_urls_per_cycle: this.formData.bulk_urls_per_cycle
+                };
             } else {
                 // 설정 JSON 파싱
                 try {
@@ -395,6 +559,30 @@ function moduleFormApp(module = null, moduleType = null) {
             }
 
             return data;
+        },
+
+        // 수집 시간 추가 (수집 모듈용)
+        addFixedTime() {
+            if (!this.newFixedTime) return;
+
+            // 중복 체크
+            if (this.formData.collect_fixed_times.includes(this.newFixedTime)) {
+                this.showError('이미 등록된 시간입니다');
+                return;
+            }
+
+            // 시간 추가 및 정렬
+            this.formData.collect_fixed_times.push(this.newFixedTime);
+            this.formData.collect_fixed_times.sort();
+            this.newFixedTime = '';
+        },
+
+        // 수집 시간 삭제 (수집 모듈용)
+        removeFixedTime(time) {
+            const index = this.formData.collect_fixed_times.indexOf(time);
+            if (index > -1) {
+                this.formData.collect_fixed_times.splice(index, 1);
+            }
         },
 
         // 폼 닫기
@@ -419,6 +607,99 @@ function moduleFormApp(module = null, moduleType = null) {
             } else {
                 alert(message);
             }
+        },
+
+        // API 상태 로드 (수집 모듈용)
+        async loadApiStatus() {
+            console.log('loadApiStatus 호출됨');
+            this.apiStatusLoading = true;
+            try {
+                const response = await fetch('/api/v1/settings/api-status', {
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('API 상태 응답:', data);
+                    this.apiStatus = {
+                        naver_ads: data.naver_ads || false,
+                        naver_datalab: data.naver_datalab || false,
+                        google_trends: true,  // 구글 트렌드는 항상 사용 가능
+                        google_planner: data.google_planner || false,
+                        naver_news: data.naver_news || false,  // 네이버 API (client_id)
+                        google_news: true,  // 구글 뉴스 RSS는 항상 사용 가능
+                        naver_webdoc: data.naver_news || false  // 네이버 웹문서 (client_id 공유)
+                    };
+                    console.log('apiStatus 업데이트됨:', this.apiStatus);
+
+                    // API가 비활성화된 소스는 체크 해제
+                    this.syncSourcesWithApiStatus();
+                }
+            } catch (error) {
+                console.error('API 상태 로드 실패:', error);
+            } finally {
+                this.apiStatusLoading = false;
+                console.log('apiStatusLoading 완료, apiStatus:', this.apiStatus);
+            }
+        },
+
+        // API 상태에 따라 소스 선택 동기화
+        syncSourcesWithApiStatus() {
+            // API가 비활성화된 소스는 선택 해제
+            if (!this.apiStatus.naver_ads) {
+                this.formData.source_naver_ads = false;
+            }
+            if (!this.apiStatus.naver_datalab) {
+                this.formData.source_naver_datalab = false;
+            }
+            if (!this.apiStatus.google_planner) {
+                this.formData.source_google_planner = false;
+            }
+            if (!this.apiStatus.naver_news) {
+                this.formData.source_naver_news = false;
+            }
+            if (!this.apiStatus.naver_webdoc) {
+                this.formData.source_naver_webdoc = false;
+            }
+            // 구글 트렌드와 구글 뉴스 RSS는 API 키 불필요 - 동기화하지 않음
+        },
+
+        // 소스 체크박스 클릭 핸들러
+        toggleSource(source) {
+            // API가 활성화되어 있을 때만 토글 가능
+            if (source === 'naver_ads' && this.apiStatus.naver_ads) {
+                this.formData.source_naver_ads = !this.formData.source_naver_ads;
+            } else if (source === 'naver_datalab' && this.apiStatus.naver_datalab) {
+                this.formData.source_naver_datalab = !this.formData.source_naver_datalab;
+            } else if (source === 'google_trends') {
+                this.formData.source_google_trends = !this.formData.source_google_trends;
+            } else if (source === 'google_planner' && this.apiStatus.google_planner) {
+                this.formData.source_google_planner = !this.formData.source_google_planner;
+            } else if (source === 'naver_news' && this.apiStatus.naver_news) {
+                this.formData.source_naver_news = !this.formData.source_naver_news;
+            } else if (source === 'google_news') {
+                // 구글 뉴스 RSS는 API 키 불필요 - 항상 토글 가능
+                this.formData.source_google_news = !this.formData.source_google_news;
+            } else if (source === 'naver_webdoc' && this.apiStatus.naver_webdoc) {
+                this.formData.source_naver_webdoc = !this.formData.source_naver_webdoc;
+            }
+        },
+
+        // 소스가 활성화 가능한지 확인
+        isSourceEnabled(source) {
+            if (source === 'naver_ads') return this.apiStatus.naver_ads;
+            if (source === 'naver_datalab') return this.apiStatus.naver_datalab;
+            if (source === 'google_trends') return true;  // 항상 사용 가능
+            if (source === 'google_planner') return this.apiStatus.google_planner;
+            if (source === 'naver_news') return this.apiStatus.naver_news;
+            if (source === 'google_news') return true;  // 항상 사용 가능
+            if (source === 'naver_webdoc') return this.apiStatus.naver_webdoc;
+            return false;
+        },
+
+        // 필수 API 설정 여부 확인 (네이버 광고 API 필수)
+        hasRequiredAPI() {
+            return this.apiStatus.naver_ads === true;
         }
     };
 }
