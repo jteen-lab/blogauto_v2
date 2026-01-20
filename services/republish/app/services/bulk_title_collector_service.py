@@ -35,7 +35,7 @@ from ..models.user_settings import UserSettings
 from ..models.content_filter import ContentFilter
 from ..models.collected_url import CollectedUrl
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("keyword_collector")
 
 
 class BulkTitleCollectorService:
