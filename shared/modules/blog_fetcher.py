@@ -36,7 +36,9 @@ class BlogFetcher:
         self,
         flow_id: int,
         user_id: int,
-        module_id: Optional[int] = None
+        module_id: Optional[int] = None,
+        post_range_start: Optional[int] = None,
+        post_range_end: Optional[int] = None
     ) -> dict[str, Any]:
         """
         블로그 목록 조회 실행
@@ -45,11 +47,16 @@ class BlogFetcher:
             flow_id: 플로우 ID
             user_id: 사용자 ID
             module_id: 모듈 ID (선택)
+            post_range_start: 포스트 범위 시작 (선택)
+            post_range_end: 포스트 범위 끝 (선택, None이면 무제한)
 
         Returns:
             BlogFetcherOutput 형식의 딕셔너리
         """
-        logger.info(f"[BLOG_FETCHER] 시작 | FlowID={flow_id}, UserID={user_id}")
+        logger.info(
+            f"[BLOG_FETCHER] 시작 | FlowID={flow_id}, UserID={user_id}, "
+            f"PostRange={post_range_start}~{post_range_end if post_range_end else '무제한'}"
+        )
 
         try:
             blogs = await self._fetch_blogs_from_flow(flow_id, user_id)
@@ -59,6 +66,43 @@ class BlogFetcher:
             for blog in blogs:
                 blog_info = await self._build_blog_info(blog)
                 blog_infos.append(blog_info)
+
+            # 포스트 범위로 블로그 필터링
+            if post_range_start is not None:
+                filtered_blogs = []
+                for blog_info in blog_infos:
+                    post_count = blog_info.get("post_count", 0)
+
+                    # 범위 체크: start <= post_count <= end (end가 None이면 무제한)
+                    if post_range_end is None:
+                        # 무제한: start 이상이면 통과
+                        if post_count >= post_range_start:
+                            filtered_blogs.append(blog_info)
+                            logger.info(
+                                f"[BLOG_FETCHER] ✅ 범위 내 | {blog_info['name']}: "
+                                f"{post_count}개 >= {post_range_start}"
+                            )
+                        else:
+                            logger.info(
+                                f"[BLOG_FETCHER] ❌ 범위 외 | {blog_info['name']}: "
+                                f"{post_count}개 < {post_range_start}"
+                            )
+                    else:
+                        # 범위 지정: start <= post_count <= end
+                        if post_range_start <= post_count <= post_range_end:
+                            filtered_blogs.append(blog_info)
+                            logger.info(
+                                f"[BLOG_FETCHER] ✅ 범위 내 | {blog_info['name']}: "
+                                f"{post_range_start} <= {post_count} <= {post_range_end}"
+                            )
+                        else:
+                            logger.info(
+                                f"[BLOG_FETCHER] ❌ 범위 외 | {blog_info['name']}: "
+                                f"{post_count}개 not in {post_range_start}~{post_range_end}"
+                            )
+
+                blog_infos = filtered_blogs
+                logger.info(f"[BLOG_FETCHER] 필터링 후 | {len(blog_infos)}개 블로그")
 
             logger.info(f"[BLOG_FETCHER] 완료 | {len(blog_infos)}개 블로그 조회됨")
 
