@@ -8,11 +8,12 @@
 - 기타: 해당 모듈 타입에 맞는 실행 (추후 확장)
 """
 
+import asyncio
 import uuid
 from datetime import datetime
 from typing import Dict, Any, List
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -39,7 +40,6 @@ logger = get_logger("flow_execute", "app.log")
 @router.post("/{flow_id}/execute")
 async def execute_flow_once(
     flow_id: int,
-    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_user)
 ):
@@ -81,12 +81,13 @@ async def execute_flow_once(
         logger.warning(f"[FLOW_EXECUTE] 플로우에 모듈이 없음: {flow_id}")
         raise HTTPException(status_code=400, detail="플로우에 모듈이 없습니다")
 
-    # 3. 백그라운드 작업 등록
-    background_tasks.add_task(
-        _execute_flow_background,
-        flow_id=flow_id,
-        user_id=current_user.id,
-        execution_id=execution_id
+    # 3. 백그라운드 작업 등록 (asyncio.create_task 사용)
+    asyncio.create_task(
+        _execute_flow_background(
+            flow_id=flow_id,
+            user_id=current_user.id,
+            execution_id=execution_id
+        )
     )
 
     logger.info(f"[FLOW_EXECUTE] 백그라운드 작업 등록 완료 | flow={flow.name}")
