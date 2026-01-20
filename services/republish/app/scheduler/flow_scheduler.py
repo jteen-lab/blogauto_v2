@@ -120,10 +120,9 @@ class FlowScheduler:
                 # 기존 Job 제거
                 await self.unregister_flow(flow_id)
 
-                # 모듈 타입별로 하나씩만 실행 (중복 방지)
-                # 같은 타입의 모듈이 여러 개 연결되어 있어도 첫 번째만 실행
+                # 모든 모듈 등록 (포스트 범위가 다른 같은 타입 모듈도 모두 등록)
                 registered_count = 0
-                registered_types = set()  # 이미 등록된 모듈 타입 추적
+                registered_module_ids = set()  # 이미 등록된 모듈 ID 추적 (중복 방지)
 
                 for link in flow.module_links:
                     module = link.module
@@ -135,15 +134,15 @@ class FlowScheduler:
                     if module.module_type:
                         module_type_code = module.module_type.code
 
-                    # 이미 같은 타입의 모듈이 등록되었으면 스킵
-                    if module_type_code in registered_types:
+                    # 이미 같은 모듈 ID가 등록되었으면 스킵 (동일 모듈 중복 방지)
+                    if module.id in registered_module_ids:
                         logger.info(
-                            f"[FLOW_SCHEDULER] 중복 모듈 타입 스킵 | FlowID={flow_id} | "
+                            f"[FLOW_SCHEDULER] 중복 모듈 ID 스킵 | FlowID={flow_id} | "
                             f"ModuleID={module.id} | Type={module_type_code}"
                         )
                         continue
 
-                    registered_types.add(module_type_code)
+                    registered_module_ids.add(module.id)
 
                     # 실행 상태 조회 또는 생성
                     state = await self._get_or_create_execution_state(
