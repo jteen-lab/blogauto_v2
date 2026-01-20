@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime
 from typing import Dict, Any, List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -39,33 +39,32 @@ logger = get_logger("flow_execute", "app.log")
 @router.post("/{flow_id}/execute")
 async def execute_flow_once(
     flow_id: int,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_user)
 ):
     """
-    플로우 1회 즉시 실행 (테스트)
+    플로우 1회 즉시 실행 (테스트) - 백그라운드 작업
 
-    오토런과 동일한 방식으로 각 모듈별로 연결된 블로그에 재발행을 수행합니다.
-    - 각 모듈은 1회씩만 실행
-    - 각 블로그는 1회씩만 재발행
+    장시간 실행되는 수집 작업의 브라우저 타임아웃을 방지하기 위해
+    백그라운드 작업으로 실행합니다.
+
+    - 플로우 존재 여부만 확인하고 즉시 응답 반환
+    - 실제 작업은 백그라운드에서 실행
+    - 결과는 AutorunLog에 기록됨
     """
     execution_id = str(uuid.uuid4())
-    started_at = datetime.now()
 
-    logger.info(f"[FLOW_EXECUTE] ========== 테스트 실행 시작 ==========")
+    logger.info(f"[FLOW_EXECUTE] ========== 백그라운드 실행 요청 ==========")
     logger.info(f"[FLOW_EXECUTE] flow_id={flow_id} | user_id={current_user.id} | execution_id={execution_id}")
 
-    # 1. 플로우 조회 (모듈, 블로그 포함)
+    # 1. 플로우 존재 여부만 빠르게 확인 (모듈 개수 확인용)
     result = await db.execute(
         select(Flow)
         .where(Flow.id == flow_id, Flow.user_id == current_user.id)
         .options(
-            selectinload(Flow.module_links)
-            .selectinload(FlowModule.module)
-            .selectinload(Module.module_type),
+            selectinload(Flow.module_links),
             selectinload(Flow.blog_links)
-            .selectinload(FlowBlog.blog)
-            .selectinload(Blog.google_credential)
         )
     )
     flow = result.scalar_one_or_none()
@@ -74,209 +73,242 @@ async def execute_flow_once(
         logger.warning(f"[FLOW_EXECUTE] 플로우를 찾을 수 없음: {flow_id}")
         raise HTTPException(status_code=404, detail="플로우를 찾을 수 없습니다")
 
-    # 2. 모듈과 블로그 확인
-    modules = [link.module for link in flow.module_links if link.module]
-    blogs = [link.blog for link in flow.blog_links if link.blog]
+    # 2. 모듈 존재 확인
+    module_count = len(flow.module_links)
+    blog_count = len(flow.blog_links)
 
-    if not modules:
+    if module_count == 0:
         logger.warning(f"[FLOW_EXECUTE] 플로우에 모듈이 없음: {flow_id}")
         raise HTTPException(status_code=400, detail="플로우에 모듈이 없습니다")
 
-    # 3. 모듈을 타입별로 그룹화
-    modules_by_type: Dict[str, List[Module]] = {}
-    for module in modules:
-        type_code = module.module_type.code if module.module_type else "unknown"
-        if type_code not in modules_by_type:
-            modules_by_type[type_code] = []
-        modules_by_type[type_code].append(module)
-
-    logger.info(f"[FLOW_EXECUTE] 플로우: {flow.name} | 모듈: {len(modules)}개 | 블로그: {len(blogs)}개")
-    logger.info(f"[FLOW_EXECUTE] 모듈 타입별: {', '.join(f'{k}={len(v)}' for k, v in modules_by_type.items())}")
-
-    # 4. 결과 집계 변수
-    all_results = []
-    success_count = 0
-    fail_count = 0
-    total_processed = 0
-
-    # 5. collect 모듈 실행 (블로그 없이 독립 실행)
-    if "collect" in modules_by_type:
-        for collect_module in modules_by_type["collect"]:
-            module_start_time = datetime.now()
-            logger.info(f"[FLOW_EXECUTE] 수집 모듈 실행: {collect_module.name}")
-
-            try:
-                result = await _execute_collect_module(collect_module, db)
-                duration_ms = int((datetime.now() - module_start_time).total_seconds() * 1000)
-
-                all_results.append({
-                    "type": "collect",
-                    "module_id": collect_module.id,
-                    "module_name": collect_module.name,
-                    "success": result.get("success", False),
-                    "message": result.get("message", ""),
-                    "collected_count": result.get("collected_count", 0),
-                    "duration_ms": duration_ms
-                })
-
-                # AutorunLog 저장
-                await _save_autorun_log(
-                    db=db,
-                    user_id=current_user.id,
-                    flow_id=flow.id,
-                    flow_name=flow.name,
-                    module_name=collect_module.name,
-                    blog_name="-",
-                    result=result,
-                    duration_ms=duration_ms,
-                    action="collect"
-                )
-
-                if result.get("success"):
-                    success_count += 1
-                    logger.info(f"[FLOW_EXECUTE] 수집 성공 | module={collect_module.name}")
-                else:
-                    fail_count += 1
-                    logger.warning(f"[FLOW_EXECUTE] 수집 실패 | module={collect_module.name}")
-
-                total_processed += 1
-
-            except Exception as e:
-                fail_count += 1
-                total_processed += 1
-                duration_ms = int((datetime.now() - module_start_time).total_seconds() * 1000)
-                logger.error(f"[FLOW_EXECUTE] 수집 모듈 오류 | module={collect_module.name} | error={e}")
-                all_results.append({
-                    "type": "collect",
-                    "module_id": collect_module.id,
-                    "module_name": collect_module.name,
-                    "success": False,
-                    "message": str(e)
-                })
-
-    # 6. republish 모듈 실행 (블로그 필수)
-    if "republish" in modules_by_type:
-        if not blogs:
-            logger.warning(f"[FLOW_EXECUTE] 재발행 모듈이 있지만 블로그가 없음: {flow_id}")
-            # 재발행 모듈이 있는데 블로그가 없으면 해당 모듈만 스킵
-            for republish_module in modules_by_type["republish"]:
-                fail_count += 1
-                total_processed += 1
-                all_results.append({
-                    "type": "republish",
-                    "module_id": republish_module.id,
-                    "module_name": republish_module.name,
-                    "success": False,
-                    "message": "플로우에 연결된 블로그가 없습니다"
-                })
-        else:
-            # 첫 번째 재발행 모듈 이름 (로그용)
-            first_module_name = modules_by_type["republish"][0].name
-
-            for blog in blogs:
-                blog_start_time = datetime.now()
-                logger.info(f"[FLOW_EXECUTE] 블로그 처리 시작: {blog.name} ({blog.platform.value})")
-
-                try:
-                    result = await _execute_republish_for_blog(blog)
-                    blog_duration_ms = int((datetime.now() - blog_start_time).total_seconds() * 1000)
-
-                    all_results.append({
-                        "type": "republish",
-                        "blog_id": blog.id,
-                        "blog_name": blog.name,
-                        "platform": blog.platform.value,
-                        "success": result.get("success", False),
-                        "message": result.get("message", ""),
-                        "post_id": result.get("post_id"),
-                        "post_title": result.get("post_title"),
-                        "old_date": result.get("old_date"),
-                        "new_date": result.get("new_date"),
-                        "link": result.get("link")
-                    })
-
-                    # AutorunLog DB 저장
-                    await _save_autorun_log(
-                        db=db,
-                        user_id=current_user.id,
-                        flow_id=flow.id,
-                        flow_name=flow.name,
-                        module_name=first_module_name,
-                        blog_name=blog.name,
-                        result=result,
-                        duration_ms=blog_duration_ms,
-                        action="republish"
-                    )
-
-                    if result.get("success"):
-                        success_count += 1
-                        logger.info(
-                            f"[FLOW_EXECUTE] 재발행 성공 | blog={blog.name} | "
-                            f"post={result.get('post_title', '')[:30]}"
-                        )
-                    else:
-                        fail_count += 1
-                        logger.warning(
-                            f"[FLOW_EXECUTE] 재발행 실패 | blog={blog.name} | "
-                            f"error={result.get('message', '')}"
-                        )
-
-                    total_processed += 1
-
-                except Exception as e:
-                    fail_count += 1
-                    total_processed += 1
-                    blog_duration_ms = int((datetime.now() - blog_start_time).total_seconds() * 1000)
-                    logger.error(f"[FLOW_EXECUTE] 블로그 처리 오류 | blog={blog.name} | error={e}")
-                    all_results.append({
-                        "type": "republish",
-                        "blog_id": blog.id,
-                        "blog_name": blog.name,
-                        "platform": blog.platform.value,
-                        "success": False,
-                        "message": str(e)
-                    })
-
-                    # 에러 시에도 AutorunLog 저장
-                    await _save_autorun_log(
-                        db=db,
-                        user_id=current_user.id,
-                        flow_id=flow.id,
-                        flow_name=flow.name,
-                        module_name=first_module_name,
-                        blog_name=blog.name,
-                        result={"success": False, "message": str(e)},
-                        duration_ms=blog_duration_ms,
-                        action="republish"
-                    )
-
-    # 7. 실행 완료
-    completed_at = datetime.now()
-    duration_ms = int((completed_at - started_at).total_seconds() * 1000)
-
-    logger.info(f"[FLOW_EXECUTE] ========== 테스트 실행 완료 ==========")
-    logger.info(
-        f"[FLOW_EXECUTE] 결과: 성공 {success_count}/{total_processed} | "
-        f"실패 {fail_count}/{total_processed} | 소요시간 {duration_ms}ms"
+    # 3. 백그라운드 작업 등록
+    background_tasks.add_task(
+        _execute_flow_background,
+        flow_id=flow_id,
+        user_id=current_user.id,
+        execution_id=execution_id
     )
 
+    logger.info(f"[FLOW_EXECUTE] 백그라운드 작업 등록 완료 | flow={flow.name}")
+
+    # 4. 즉시 응답 반환
     return {
+        "success": True,
+        "message": "플로우 실행이 시작되었습니다. 결과는 실행 로그에서 확인하세요.",
+        "status": "started",
         "execution_id": execution_id,
         "flow_id": flow.id,
         "flow_name": flow.name,
-        "success": fail_count == 0,
-        "started_at": started_at.isoformat(),
-        "completed_at": completed_at.isoformat(),
-        "duration_ms": duration_ms,
-        "total_items_processed": total_processed,
-        "module_count": len(modules),
-        "module_types": list(modules_by_type.keys()),
-        "blog_count": len(blogs),
-        "success_count": success_count,
-        "fail_count": fail_count,
-        "results": all_results,
-        "error": None if fail_count == 0 else f"{fail_count}개 작업 실패"
+        "module_count": module_count,
+        "blog_count": blog_count
     }
+
+
+async def _execute_flow_background(
+    flow_id: int,
+    user_id: int,
+    execution_id: str
+) -> None:
+    """
+    백그라운드에서 플로우 실행
+
+    - 자체 DB 세션 생성 (요청 세션은 이미 종료됨)
+    - 성공/실패 결과를 AutorunLog에 저장
+    """
+    from app.core.database import db_manager
+
+    started_at = datetime.now()
+    logger.info(f"[FLOW_BG] ========== 백그라운드 실행 시작 ==========")
+    logger.info(f"[FLOW_BG] flow_id={flow_id} | user_id={user_id} | execution_id={execution_id}")
+
+    try:
+        async with db_manager.get_session() as db:
+            # 1. 플로우 조회 (모듈, 블로그 포함)
+            result = await db.execute(
+                select(Flow)
+                .where(Flow.id == flow_id, Flow.user_id == user_id)
+                .options(
+                    selectinload(Flow.module_links)
+                    .selectinload(FlowModule.module)
+                    .selectinload(Module.module_type),
+                    selectinload(Flow.blog_links)
+                    .selectinload(FlowBlog.blog)
+                    .selectinload(Blog.google_credential)
+                )
+            )
+            flow = result.scalar_one_or_none()
+
+            if not flow:
+                logger.error(f"[FLOW_BG] 플로우를 찾을 수 없음: {flow_id}")
+                return
+
+            # 2. 모듈과 블로그 확인
+            modules = [link.module for link in flow.module_links if link.module]
+            blogs = [link.blog for link in flow.blog_links if link.blog]
+
+            if not modules:
+                logger.error(f"[FLOW_BG] 플로우에 모듈이 없음: {flow_id}")
+                return
+
+            # 3. 모듈을 타입별로 그룹화
+            modules_by_type: Dict[str, List[Module]] = {}
+            for module in modules:
+                type_code = module.module_type.code if module.module_type else "unknown"
+                if type_code not in modules_by_type:
+                    modules_by_type[type_code] = []
+                modules_by_type[type_code].append(module)
+
+            logger.info(f"[FLOW_BG] 플로우: {flow.name} | 모듈: {len(modules)}개 | 블로그: {len(blogs)}개")
+            logger.info(f"[FLOW_BG] 모듈 타입별: {', '.join(f'{k}={len(v)}' for k, v in modules_by_type.items())}")
+
+            # 4. 결과 집계 변수
+            success_count = 0
+            fail_count = 0
+            total_processed = 0
+
+            # 5. collect 모듈 실행 (블로그 없이 독립 실행)
+            if "collect" in modules_by_type:
+                for collect_module in modules_by_type["collect"]:
+                    module_start_time = datetime.now()
+                    logger.info(f"[FLOW_BG] 수집 모듈 실행: {collect_module.name}")
+
+                    try:
+                        result = await _execute_collect_module(collect_module, db)
+                        duration_ms = int((datetime.now() - module_start_time).total_seconds() * 1000)
+
+                        # AutorunLog 저장
+                        await _save_autorun_log(
+                            db=db,
+                            user_id=user_id,
+                            flow_id=flow.id,
+                            flow_name=flow.name,
+                            module_name=collect_module.name,
+                            blog_name="-",
+                            result=result,
+                            duration_ms=duration_ms,
+                            action="collect"
+                        )
+
+                        if result.get("success"):
+                            success_count += 1
+                            logger.info(f"[FLOW_BG] 수집 성공 | module={collect_module.name}")
+                        else:
+                            fail_count += 1
+                            logger.warning(f"[FLOW_BG] 수집 실패 | module={collect_module.name}")
+
+                        total_processed += 1
+
+                    except Exception as e:
+                        fail_count += 1
+                        total_processed += 1
+                        duration_ms = int((datetime.now() - module_start_time).total_seconds() * 1000)
+                        logger.error(f"[FLOW_BG] 수집 모듈 오류 | module={collect_module.name} | error={e}")
+
+                        # 에러 시에도 AutorunLog 저장
+                        await _save_autorun_log(
+                            db=db,
+                            user_id=user_id,
+                            flow_id=flow.id,
+                            flow_name=flow.name,
+                            module_name=collect_module.name,
+                            blog_name="-",
+                            result={"success": False, "message": str(e)},
+                            duration_ms=duration_ms,
+                            action="collect"
+                        )
+
+            # 6. republish 모듈 실행 (블로그 필수)
+            if "republish" in modules_by_type:
+                if not blogs:
+                    logger.warning(f"[FLOW_BG] 재발행 모듈이 있지만 블로그가 없음: {flow_id}")
+                    # 재발행 모듈이 있는데 블로그가 없으면 해당 모듈만 스킵
+                    for republish_module in modules_by_type["republish"]:
+                        fail_count += 1
+                        total_processed += 1
+                        await _save_autorun_log(
+                            db=db,
+                            user_id=user_id,
+                            flow_id=flow.id,
+                            flow_name=flow.name,
+                            module_name=republish_module.name,
+                            blog_name="-",
+                            result={"success": False, "message": "플로우에 연결된 블로그가 없습니다"},
+                            duration_ms=0,
+                            action="republish"
+                        )
+                else:
+                    # 첫 번째 재발행 모듈 이름 (로그용)
+                    first_module_name = modules_by_type["republish"][0].name
+
+                    for blog in blogs:
+                        blog_start_time = datetime.now()
+                        logger.info(f"[FLOW_BG] 블로그 처리 시작: {blog.name} ({blog.platform.value})")
+
+                        try:
+                            result = await _execute_republish_for_blog(blog)
+                            blog_duration_ms = int((datetime.now() - blog_start_time).total_seconds() * 1000)
+
+                            # AutorunLog DB 저장
+                            await _save_autorun_log(
+                                db=db,
+                                user_id=user_id,
+                                flow_id=flow.id,
+                                flow_name=flow.name,
+                                module_name=first_module_name,
+                                blog_name=blog.name,
+                                result=result,
+                                duration_ms=blog_duration_ms,
+                                action="republish"
+                            )
+
+                            if result.get("success"):
+                                success_count += 1
+                                logger.info(
+                                    f"[FLOW_BG] 재발행 성공 | blog={blog.name} | "
+                                    f"post={result.get('post_title', '')[:30]}"
+                                )
+                            else:
+                                fail_count += 1
+                                logger.warning(
+                                    f"[FLOW_BG] 재발행 실패 | blog={blog.name} | "
+                                    f"error={result.get('message', '')}"
+                                )
+
+                            total_processed += 1
+
+                        except Exception as e:
+                            fail_count += 1
+                            total_processed += 1
+                            blog_duration_ms = int((datetime.now() - blog_start_time).total_seconds() * 1000)
+                            logger.error(f"[FLOW_BG] 블로그 처리 오류 | blog={blog.name} | error={e}")
+
+                            # 에러 시에도 AutorunLog 저장
+                            await _save_autorun_log(
+                                db=db,
+                                user_id=user_id,
+                                flow_id=flow.id,
+                                flow_name=flow.name,
+                                module_name=first_module_name,
+                                blog_name=blog.name,
+                                result={"success": False, "message": str(e)},
+                                duration_ms=blog_duration_ms,
+                                action="republish"
+                            )
+
+            # 7. 실행 완료
+            completed_at = datetime.now()
+            duration_ms = int((completed_at - started_at).total_seconds() * 1000)
+
+            logger.info(f"[FLOW_BG] ========== 백그라운드 실행 완료 ==========")
+            logger.info(
+                f"[FLOW_BG] 결과: 성공 {success_count}/{total_processed} | "
+                f"실패 {fail_count}/{total_processed} | 소요시간 {duration_ms}ms"
+            )
+
+    except Exception as e:
+        logger.error(f"[FLOW_BG] 백그라운드 실행 치명적 오류 | flow_id={flow_id} | error={e}")
+        import traceback
+        logger.error(f"[FLOW_BG] 스택 트레이스: {traceback.format_exc()}")
 
 
 async def _execute_collect_module(

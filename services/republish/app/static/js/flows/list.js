@@ -970,8 +970,11 @@ function flowListApp() {
                 this.executeResult = result;
                 this.showExecuteResult = true;
 
-                // 성공/실패 토스트
-                if (result.success) {
+                // 백그라운드 작업 응답 처리
+                if (result.status === 'started') {
+                    this.showSuccess('플로우 실행이 시작되었습니다. 결과는 실행 로그에서 확인하세요.');
+                } else if (result.success) {
+                    // 기존 동기 실행 응답 (하위 호환)
                     this.showSuccess(`플로우 실행 완료 (${result.duration_ms}ms)`);
                 } else {
                     this.showError(`플로우 실행 실패: ${result.error}`);
