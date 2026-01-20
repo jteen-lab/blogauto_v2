@@ -229,11 +229,10 @@ async def _execute_flow_background(
                             action="collect"
                         )
 
-            # 6. republish 모듈 실행 (블로그 필수)
+            # 6. republish 모듈 실행 (블로그 필수, 모듈별 포스트 범위 필터링)
             if "republish" in modules_by_type:
                 if not blogs:
                     logger.warning(f"[FLOW_BG] 재발행 모듈이 있지만 블로그가 없음: {flow_id}")
-                    # 재발행 모듈이 있는데 블로그가 없으면 해당 모듈만 스킵
                     for republish_module in modules_by_type["republish"]:
                         fail_count += 1
                         total_processed += 1
@@ -249,63 +248,91 @@ async def _execute_flow_background(
                             action="republish"
                         )
                 else:
-                    # 첫 번째 재발행 모듈 이름 (로그용)
-                    first_module_name = modules_by_type["republish"][0].name
+                    # 각 재발행 모듈별로 해당 포스트 범위의 블로그만 실행
+                    for republish_module in modules_by_type["republish"]:
+                        # 모듈의 직접 속성에서 포스트 범위 가져오기 (settings가 아님)
+                        post_range_start = republish_module.post_range_start
+                        post_range_end = republish_module.post_range_end
 
-                    for blog in blogs:
-                        blog_start_time = datetime.now()
-                        logger.info(f"[FLOW_BG] 블로그 처리 시작: {blog.name} ({blog.platform.value})")
+                        logger.info(
+                            f"[FLOW_BG] 재발행 모듈: {republish_module.name} | "
+                            f"범위: {post_range_start}~{post_range_end if post_range_end else '무제한'}"
+                        )
 
-                        try:
-                            result = await _execute_republish_for_blog(blog)
-                            blog_duration_ms = int((datetime.now() - blog_start_time).total_seconds() * 1000)
+                        # 블로그 필터링: 포스트 범위에 해당하는 블로그만 선택
+                        filtered_blogs = []
+                        for blog in blogs:
+                            post_count = blog.total_post_count or 0
 
-                            # AutorunLog DB 저장
-                            await _save_autorun_log(
-                                db=db,
-                                user_id=user_id,
-                                flow_id=flow.id,
-                                flow_name=flow.name,
-                                module_name=first_module_name,
-                                blog_name=blog.name,
-                                result=result,
-                                duration_ms=blog_duration_ms,
-                                action="republish"
-                            )
-
-                            if result.get("success"):
-                                success_count += 1
-                                logger.info(
-                                    f"[FLOW_BG] 재발행 성공 | blog={blog.name} | "
-                                    f"post={result.get('post_title', '')[:30]}"
-                                )
+                            # post_range_start 기본값 1, post_range_end None이면 무제한
+                            if post_range_end is None:
+                                # 무제한: start 이상이면 통과
+                                if post_count >= post_range_start:
+                                    filtered_blogs.append(blog)
+                                    logger.info(f"[FLOW_BG] ✅ {blog.name}: {post_count}개 >= {post_range_start}")
+                                else:
+                                    logger.info(f"[FLOW_BG] ❌ {blog.name}: {post_count}개 < {post_range_start}")
                             else:
-                                fail_count += 1
-                                logger.warning(
-                                    f"[FLOW_BG] 재발행 실패 | blog={blog.name} | "
-                                    f"error={result.get('message', '')}"
+                                # 범위 지정: start <= post_count <= end
+                                if post_range_start <= post_count <= post_range_end:
+                                    filtered_blogs.append(blog)
+                                    logger.info(f"[FLOW_BG] ✅ {blog.name}: {post_range_start} <= {post_count} <= {post_range_end}")
+                                else:
+                                    logger.info(f"[FLOW_BG] ❌ {blog.name}: {post_count}개 범위 외")
+
+                        if not filtered_blogs:
+                            logger.info(f"[FLOW_BG] 모듈 '{republish_module.name}'에 해당하는 블로그 없음")
+                            continue
+
+                        logger.info(f"[FLOW_BG] 모듈 '{republish_module.name}' 대상 블로그: {len(filtered_blogs)}개")
+
+                        # 필터링된 블로그만 재발행 실행
+                        for blog in filtered_blogs:
+                            blog_start_time = datetime.now()
+                            logger.info(f"[FLOW_BG] 블로그 처리: {blog.name} ({blog.platform.value})")
+
+                            try:
+                                result = await _execute_republish_for_blog(blog)
+                                blog_duration_ms = int((datetime.now() - blog_start_time).total_seconds() * 1000)
+
+                                await _save_autorun_log(
+                                    db=db,
+                                    user_id=user_id,
+                                    flow_id=flow.id,
+                                    flow_name=flow.name,
+                                    module_name=republish_module.name,
+                                    blog_name=blog.name,
+                                    result=result,
+                                    duration_ms=blog_duration_ms,
+                                    action="republish"
                                 )
 
-                            total_processed += 1
+                                if result.get("success"):
+                                    success_count += 1
+                                    logger.info(f"[FLOW_BG] 재발행 성공 | blog={blog.name}")
+                                else:
+                                    fail_count += 1
+                                    logger.warning(f"[FLOW_BG] 재발행 실패 | blog={blog.name}")
 
-                        except Exception as e:
-                            fail_count += 1
-                            total_processed += 1
-                            blog_duration_ms = int((datetime.now() - blog_start_time).total_seconds() * 1000)
-                            logger.error(f"[FLOW_BG] 블로그 처리 오류 | blog={blog.name} | error={e}")
+                                total_processed += 1
 
-                            # 에러 시에도 AutorunLog 저장
-                            await _save_autorun_log(
-                                db=db,
-                                user_id=user_id,
-                                flow_id=flow.id,
-                                flow_name=flow.name,
-                                module_name=first_module_name,
-                                blog_name=blog.name,
-                                result={"success": False, "message": str(e)},
-                                duration_ms=blog_duration_ms,
-                                action="republish"
-                            )
+                            except Exception as e:
+                                fail_count += 1
+                                total_processed += 1
+                                blog_duration_ms = int((datetime.now() - blog_start_time).total_seconds() * 1000)
+                                logger.error(f"[FLOW_BG] 블로그 오류 | blog={blog.name} | error={e}")
+
+                                await _save_autorun_log(
+                                    db=db,
+                                    user_id=user_id,
+                                    flow_id=flow.id,
+                                    flow_name=flow.name,
+                                    module_name=republish_module.name,
+                                    blog_name=blog.name,
+                                    result={"success": False, "message": str(e)},
+                                    duration_ms=blog_duration_ms,
+                                    action="republish"
+                                )
 
             # 7. 실행 완료
             completed_at = datetime.now()
