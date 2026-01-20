@@ -82,13 +82,24 @@ async def execute_flow_once(
         raise HTTPException(status_code=400, detail="플로우에 모듈이 없습니다")
 
     # 3. 백그라운드 작업 등록 (asyncio.create_task 사용)
-    asyncio.create_task(
+    task = asyncio.create_task(
         _execute_flow_background(
             flow_id=flow_id,
             user_id=current_user.id,
             execution_id=execution_id
         )
     )
+
+    # 태스크 예외 로깅 (fire-and-forget 방식에서 예외가 무시되지 않도록)
+    def _handle_task_exception(t):
+        try:
+            exc = t.exception()
+            if exc:
+                logger.error(f"[FLOW_BG] 백그라운드 작업 예외 발생: {exc}", exc_info=exc)
+        except asyncio.CancelledError:
+            pass
+
+    task.add_done_callback(_handle_task_exception)
 
     logger.info(f"[FLOW_EXECUTE] 백그라운드 작업 등록 완료 | flow={flow.name}")
 
