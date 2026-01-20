@@ -89,10 +89,24 @@ class RepublishOrchestrator:
             # 노드 1: 블로그 조회
             # ========================================
             logger.info("[ORCHESTRATOR] 노드 1: 블로그 조회 시작")
+
+            # 모듈 설정에서 포스트 범위 추출
+            post_range_start = None
+            post_range_end = None
+            if module_settings:
+                post_range_start = module_settings.get("post_range_start")
+                post_range_end = module_settings.get("post_range_end")
+                logger.info(
+                    f"[ORCHESTRATOR] 포스트 범위 필터: "
+                    f"{post_range_start}~{post_range_end if post_range_end else '무제한'}"
+                )
+
             fetcher_output = await self.blog_fetcher.execute(
                 flow_id=flow_id,
                 user_id=user_id,
-                module_id=module_id
+                module_id=module_id,
+                post_range_start=post_range_start,
+                post_range_end=post_range_end
             )
             blogs = fetcher_output.get("blogs", [])
 
