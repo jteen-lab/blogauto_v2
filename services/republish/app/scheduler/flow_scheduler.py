@@ -749,66 +749,117 @@ class FlowScheduler:
                         )
                         result = {"success": False, "message": "블로그가 연결되지 않았습니다"}
                     else:
-                        # 각 블로그에 대해 재발행 실행
-                        success_count = 0
-                        fail_count = 0
+                        # 포스트 범위로 블로그 필터링
+                        post_range_start = module.post_range_start or 1
+                        post_range_end = module.post_range_end  # None이면 무제한
+
+                        filtered_blogs = []
                         for blog in blogs:
-                            blog_start = datetime.now()
-                            try:
-                                blog_result = await self._execute_republish_for_blog(blog)
-                                blog_duration = int((datetime.now() - blog_start).total_seconds() * 1000)
+                            post_count = blog.total_post_count or 0
 
-                                # AutorunLog 저장
-                                await self._save_autorun_log(
-                                    db=db,
-                                    user_id=flow.user_id,
-                                    flow_id=flow.id,
-                                    flow_name=flow.name,
-                                    module_name=module.name,
-                                    blog_name=blog.name,
-                                    result=blog_result,
-                                    duration_ms=blog_duration,
-                                    action="republish"
-                                )
-
-                                if blog_result.get("success"):
-                                    success_count += 1
+                            if post_range_end is None:
+                                # 무제한: start 이상이면 통과
+                                if post_count >= post_range_start:
+                                    filtered_blogs.append(blog)
                                     logger.info(
-                                        f"[FLOW_SCHEDULER] 재발행 성공 | blog={blog.name} | "
-                                        f"post={blog_result.get('post_title', '')[:30]}"
+                                        f"[FLOW_SCHEDULER] ✅ 범위 내 | {blog.name}: "
+                                        f"{post_count}개 >= {post_range_start}"
                                     )
                                 else:
-                                    fail_count += 1
-                                    logger.warning(
-                                        f"[FLOW_SCHEDULER] 재발행 실패 | blog={blog.name} | "
-                                        f"error={blog_result.get('message', '')}"
+                                    logger.info(
+                                        f"[FLOW_SCHEDULER] ❌ 범위 외 | {blog.name}: "
+                                        f"{post_count}개 < {post_range_start}"
+                                    )
+                            else:
+                                # 범위 지정: start <= post_count <= end
+                                if post_range_start <= post_count <= post_range_end:
+                                    filtered_blogs.append(blog)
+                                    logger.info(
+                                        f"[FLOW_SCHEDULER] ✅ 범위 내 | {blog.name}: "
+                                        f"{post_range_start} <= {post_count} <= {post_range_end}"
+                                    )
+                                else:
+                                    logger.info(
+                                        f"[FLOW_SCHEDULER] ❌ 범위 외 | {blog.name}: "
+                                        f"{post_count}개 not in {post_range_start}~{post_range_end}"
                                     )
 
-                            except Exception as e:
-                                fail_count += 1
-                                blog_duration = int((datetime.now() - blog_start).total_seconds() * 1000)
-                                logger.error(f"[FLOW_SCHEDULER] 블로그 처리 오류 | blog={blog.name} | error={e}")
-                                await self._save_autorun_log(
-                                    db=db,
-                                    user_id=flow.user_id,
-                                    flow_id=flow.id,
-                                    flow_name=flow.name,
-                                    module_name=module.name,
-                                    blog_name=blog.name,
-                                    result={"success": False, "message": str(e)},
-                                    duration_ms=blog_duration,
-                                    action="republish"
-                                )
-
-                        result = {
-                            "success": fail_count == 0,
-                            "message": f"성공 {success_count}/{len(blogs)}, 실패 {fail_count}/{len(blogs)}"
-                        }
-
                         logger.info(
-                            f"[FLOW_SCHEDULER] 재발행 완료 | FlowID={flow_id} | "
-                            f"성공={success_count} | 실패={fail_count}"
+                            f"[FLOW_SCHEDULER] 포스트 범위 필터링 | "
+                            f"전체={len(blogs)} → 대상={len(filtered_blogs)} | "
+                            f"범위={post_range_start}~{post_range_end if post_range_end else '무제한'}"
                         )
+
+                        if not filtered_blogs:
+                            logger.info(
+                                f"[FLOW_SCHEDULER] 포스트 범위에 해당하는 블로그 없음 | "
+                                f"FlowID={flow_id} | 범위={post_range_start}~{post_range_end}"
+                            )
+                            result = {
+                                "success": True,
+                                "message": f"포스트 범위({post_range_start}~{post_range_end or '무제한'})에 해당하는 블로그 없음"
+                            }
+                        else:
+                            # 필터링된 블로그에 대해 재발행 실행
+                            success_count = 0
+                            fail_count = 0
+                            for blog in filtered_blogs:
+                                blog_start = datetime.now()
+                                try:
+                                    blog_result = await self._execute_republish_for_blog(blog)
+                                    blog_duration = int((datetime.now() - blog_start).total_seconds() * 1000)
+
+                                    # AutorunLog 저장
+                                    await self._save_autorun_log(
+                                        db=db,
+                                        user_id=flow.user_id,
+                                        flow_id=flow.id,
+                                        flow_name=flow.name,
+                                        module_name=module.name,
+                                        blog_name=blog.name,
+                                        result=blog_result,
+                                        duration_ms=blog_duration,
+                                        action="republish"
+                                    )
+
+                                    if blog_result.get("success"):
+                                        success_count += 1
+                                        logger.info(
+                                            f"[FLOW_SCHEDULER] 재발행 성공 | blog={blog.name} | "
+                                            f"post={blog_result.get('post_title', '')[:30]}"
+                                        )
+                                    else:
+                                        fail_count += 1
+                                        logger.warning(
+                                            f"[FLOW_SCHEDULER] 재발행 실패 | blog={blog.name} | "
+                                            f"error={blog_result.get('message', '')}"
+                                        )
+
+                                except Exception as e:
+                                    fail_count += 1
+                                    blog_duration = int((datetime.now() - blog_start).total_seconds() * 1000)
+                                    logger.error(f"[FLOW_SCHEDULER] 블로그 처리 오류 | blog={blog.name} | error={e}")
+                                    await self._save_autorun_log(
+                                        db=db,
+                                        user_id=flow.user_id,
+                                        flow_id=flow.id,
+                                        flow_name=flow.name,
+                                        module_name=module.name,
+                                        blog_name=blog.name,
+                                        result={"success": False, "message": str(e)},
+                                        duration_ms=blog_duration,
+                                        action="republish"
+                                    )
+
+                            result = {
+                                "success": fail_count == 0,
+                                "message": f"성공 {success_count}/{len(filtered_blogs)}, 실패 {fail_count}/{len(filtered_blogs)}"
+                            }
+
+                            logger.info(
+                                f"[FLOW_SCHEDULER] 재발행 완료 | FlowID={flow_id} | "
+                                f"성공={success_count} | 실패={fail_count}"
+                            )
                 else:
                     result = {"success": False, "message": f"지원하지 않는 액션 타입: {action_type}"}
                     logger.warning(f"[FLOW_SCHEDULER] Unknown action type | {action_type}")
