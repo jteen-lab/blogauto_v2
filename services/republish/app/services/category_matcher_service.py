@@ -23,12 +23,14 @@ logger = get_logger("category_matcher", "category_matcher.log")
 class CategoryMatcherService:
     """카테고리 자동 매칭 서비스"""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, user_id: Optional[int] = None):
         """
         Args:
             db: 데이터베이스 세션
+            user_id: 사용자 ID (사용자별 키워드 필터링용)
         """
         self.db = db
+        self.user_id = user_id
         self._keywords_cache: Optional[List[Dict[str, Any]]] = None
 
     async def _load_keywords(self, force_reload: bool = False) -> List[Dict[str, Any]]:
@@ -41,6 +43,8 @@ class CategoryMatcherService:
                     "keyword_id": int,
                     "keyword": str,
                     "keyword_lower": str,
+                    "keyword_length": int,
+                    "priority": int,
                     "subtopic_id": int,
                     "subtopic_name": str,
                     "topic_id": int,
@@ -52,6 +56,10 @@ class CategoryMatcherService:
             return self._keywords_cache
 
         try:
+            # force_reload 시 세션 캐시 무효화 (최신 데이터 로드 보장)
+            if force_reload:
+                self.db.expire_all()
+
             # Topic > SubTopic > Keyword 전체 조회 (삭제되지 않은 것만)
             query = (
                 select(Topic)
@@ -61,6 +69,11 @@ class CategoryMatcherService:
                     .selectinload(SubTopic.keywords)
                 )
             )
+
+            # 사용자 ID가 지정된 경우 해당 사용자의 키워드만 로드
+            if self.user_id is not None:
+                query = query.where(Topic.user_id == self.user_id)
+
             result = await self.db.execute(query)
             topics = result.scalars().all()
 
@@ -81,6 +94,8 @@ class CategoryMatcherService:
                             "keyword_id": keyword.id,
                             "keyword": keyword.name,
                             "keyword_lower": keyword.name.lower(),
+                            "keyword_length": len(keyword.name),
+                            "priority": keyword.priority or 5,  # 기본값 5
                             "subtopic_id": subtopic.id,
                             "subtopic_name": subtopic.name,
                             "topic_id": topic.id,
@@ -131,8 +146,14 @@ class CategoryMatcherService:
         if not keywords:
             return None
 
-        # 가장 긴 키워드부터 매칭 시도 (더 구체적인 매칭 우선)
-        sorted_keywords = sorted(keywords, key=lambda x: len(x["keyword"]), reverse=True)
+        # 정렬 기준:
+        # 1. priority 낮을수록 높은 우선순위 (오름차순)
+        # 2. keyword_length 길수록 높은 우선순위 (내림차순)
+        # 예: priority=1, length=3 > priority=1, length=2 > priority=5, length=10
+        sorted_keywords = sorted(
+            keywords,
+            key=lambda x: (x["priority"], -x["keyword_length"])
+        )
 
         for kw in sorted_keywords:
             if kw["keyword_lower"] in text_lower:

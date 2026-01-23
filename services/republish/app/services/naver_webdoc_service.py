@@ -256,7 +256,8 @@ class NaverWebdocService:
                     # HTML 태그 제거
                     title = self._clean_title(title)
 
-                    if title and len(title) >= 10:
+                    # 띄어쓰기 포함 10자 이하 제목은 수집하지 않음
+                    if title and len(title) > 10:
                         all_titles.append({
                             "title": title,
                             "source": "naver_webdoc",
@@ -347,7 +348,8 @@ class NaverWebdocService:
                 title = item.get("title", "")
                 title = self._clean_title(title)
 
-                if title and len(title) >= 10:
+                # 띄어쓰기 포함 10자 이하 제목은 수집하지 않음
+                if title and len(title) > 10:
                     all_titles.append({
                         "title": title,
                         "source": "naver_webdoc",
@@ -472,8 +474,8 @@ class NaverWebdocService:
                 title = item.get("title", "")
                 title = self._clean_title(title)
 
-                # 최소 길이 체크 (10자 이상)
-                if title and len(title) >= 10:
+                # 띄어쓰기 포함 10자 이하 제목은 수집하지 않음
+                if title and len(title) > 10:
                     all_titles.append({
                         "title": title,
                         "source": "naver_webdoc",

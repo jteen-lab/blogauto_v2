@@ -303,6 +303,9 @@ class CategoryService:
 
         logger.info(f"키워드 생성 시도 | 사용자={user.id} | 이름={request.name} | 하위주제={request.subtopic_id}")
 
+        # 전역 키워드 중복 검사 (모든 하위주제에서)
+        await self._check_global_duplicate_keyword_name(user.id, request.name)
+
         try:
             keyword = Keyword(
                 subtopic_id=request.subtopic_id,
@@ -310,7 +313,8 @@ class CategoryService:
                 description=request.description,
                 order=request.order,
                 search_volume=request.search_volume,
-                difficulty=request.difficulty
+                difficulty=request.difficulty,
+                priority=request.priority
             )
 
             self.db.add(keyword)
@@ -328,6 +332,7 @@ class CategoryService:
                 order=keyword.order,
                 search_volume=keyword.search_volume,
                 difficulty=keyword.difficulty,
+                priority=keyword.priority,
                 is_deleted=keyword.is_deleted,
                 created_at=keyword.created_at,
                 updated_at=keyword.updated_at
@@ -367,6 +372,7 @@ class CategoryService:
                 order=keyword.order,
                 search_volume=keyword.search_volume,
                 difficulty=keyword.difficulty,
+                priority=keyword.priority,
                 is_deleted=keyword.is_deleted,
                 created_at=keyword.created_at,
                 updated_at=keyword.updated_at
@@ -624,14 +630,16 @@ class CategoryService:
             # 키워드 조회
             keyword = await self._get_user_keyword(user, keyword_id)
 
-            # 중복 확인 (같은 하위 주제 내에서)
-            await self._check_duplicate_keyword_name(keyword.subtopic_id, request.name, exclude_id=keyword_id)
+            # 전역 중복 확인 (모든 하위주제에서)
+            await self._check_global_duplicate_keyword_name(user.id, request.name, exclude_id=keyword_id)
 
             # 업데이트
             keyword.name = request.name
             keyword.description = request.description
             keyword.search_volume = request.search_volume
             keyword.difficulty = request.difficulty
+            if request.priority is not None:
+                keyword.priority = request.priority
             keyword.updated_at = datetime.now(timezone.utc)
 
             await self.db.commit()
@@ -647,6 +655,7 @@ class CategoryService:
                 order=keyword.order,
                 search_volume=keyword.search_volume,
                 difficulty=keyword.difficulty,
+                priority=keyword.priority,
                 is_deleted=keyword.is_deleted,
                 created_at=keyword.created_at,
                 updated_at=keyword.updated_at
@@ -729,7 +738,7 @@ class CategoryService:
             )
 
     async def _check_duplicate_keyword_name(self, subtopic_id: int, name: str, exclude_id: Optional[int] = None) -> None:
-        """키워드명 중복 확인"""
+        """키워드명 중복 확인 (동일 하위주제 내)"""
         query = select(Keyword).where(
             and_(
                 Keyword.subtopic_id == subtopic_id,
@@ -749,4 +758,36 @@ class CategoryService:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="이미 존재하는 키워드명입니다"
+            )
+
+    async def _check_global_duplicate_keyword_name(self, user_id: int, name: str, exclude_id: Optional[int] = None) -> None:
+        """키워드명 전역 중복 확인 (모든 하위주제에서)"""
+        # 사용자의 모든 주제 > 하위주제 > 키워드를 검사
+        query = (
+            select(Keyword, SubTopic, Topic)
+            .join(SubTopic, Keyword.subtopic_id == SubTopic.id)
+            .join(Topic, SubTopic.topic_id == Topic.id)
+            .where(
+                and_(
+                    Topic.user_id == user_id,
+                    Keyword.name == name,
+                    Keyword.is_deleted == False,
+                    SubTopic.is_deleted == False,
+                    Topic.is_deleted == False
+                )
+            )
+        )
+
+        if exclude_id:
+            query = query.where(Keyword.id != exclude_id)
+
+        result = await self.db.execute(query)
+        existing = result.first()
+
+        if existing:
+            keyword, subtopic, topic = existing
+            logger.warning(f"키워드명 전역 중복 | 이름={name} | 기존위치={topic.name} > {subtopic.name}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"이미 '{topic.name} > {subtopic.name}'에 동일한 키워드가 존재합니다"
             )

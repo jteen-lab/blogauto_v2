@@ -173,7 +173,8 @@ class GoogleNewsRssService:
 
                 if title_elem is not None and title_elem.text:
                     title = self._clean_title(title_elem.text)
-                    if title and len(title) >= 10:
+                    # 띄어쓰기 포함 10자 이하 제목은 수집하지 않음
+                    if title and len(title) > 10:
                         items.append({
                             "title": title,
                             "link": link_elem.text if link_elem is not None else "",
