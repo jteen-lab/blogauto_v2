@@ -859,6 +859,28 @@ class FlowScheduler:
                                 f"[FLOW_SCHEDULER] 재발행 완료 | FlowID={flow_id} | "
                                 f"성공={success_count} | 실패={fail_count}"
                             )
+                elif action_type == "data":
+                    # 데이터 모듈 실행 (제목 이동 등)
+                    result = await self._execute_data_module(module, db)
+                    duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
+
+                    # AutorunLog 저장
+                    await self._save_autorun_log(
+                        db=db,
+                        user_id=flow.user_id,
+                        flow_id=flow.id,
+                        flow_name=flow.name,
+                        module_name=module.name,
+                        blog_name="-",
+                        result=result,
+                        duration_ms=duration_ms,
+                        action="data"
+                    )
+
+                    logger.info(
+                        f"[FLOW_SCHEDULER] 데이터 모듈 실행 완료 | FlowID={flow_id} | "
+                        f"Success={result.get('success', False)} | Duration={duration_ms}ms"
+                    )
                 else:
                     result = {"success": False, "message": f"지원하지 않는 액션 타입: {action_type}"}
                     logger.warning(f"[FLOW_SCHEDULER] Unknown action type | {action_type}")
@@ -1136,6 +1158,136 @@ class FlowScheduler:
                 "success": False,
                 "message": str(e),
                 "collected_count": 0
+            }
+
+    async def _execute_data_module(
+        self,
+        module: Module,
+        db: AsyncSession
+    ) -> Dict[str, Any]:
+        """
+        데이터 모듈 실행 (제목 이동 등)
+
+        모듈 settings에 저장된 옵션을 사용하여 TitleTransferService를 호출합니다.
+        """
+        from app.services.title_transfer_service import TitleTransferService
+
+        try:
+            settings = module.settings or {}
+
+            # 설정 값 추출
+            transfer_mode = settings.get("transfer_mode", "auto")
+
+            # 실행 조건
+            execution = settings.get("execution", {})
+            max_titles = execution.get("max_titles_per_run", 100)
+            min_titles = execution.get("min_titles_required", 1)
+
+            # 그룹화 설정
+            auto_group = settings.get("auto_group", True)
+            threshold = settings.get("similarity_threshold", 75)
+
+            # 필터 설정
+            filter_opts = settings.get("filter", {})
+            categories = filter_opts.get("categories", [])
+
+            logger.info(
+                f"[FLOW_SCHEDULER] 데이터 모듈 실행 | module={module.name} | "
+                f"mode={transfer_mode} | max={max_titles} | min={min_titles} | "
+                f"auto_group={auto_group} | threshold={threshold}"
+            )
+
+            # TitleTransferService 생성
+            service = TitleTransferService(db=db, threshold=threshold / 100.0)
+
+            # 이동 가능한 제목 수 확인
+            from sqlalchemy import func
+            from app.models.title import TempTitle
+
+            query = select(func.count(TempTitle.id)).where(
+                TempTitle.status.in_(["new", "categorized"])
+            )
+
+            if transfer_mode == "auto":
+                query = query.where(TempTitle.topic_id.isnot(None))
+
+            if categories:
+                query = query.where(TempTitle.topic_id.in_(categories))
+
+            result = await db.execute(query)
+            available_count = result.scalar() or 0
+
+            logger.info(f"[FLOW_SCHEDULER] 이동 가능 제목 수: {available_count} | 최소 조건: {min_titles}")
+
+            if available_count < min_titles:
+                return {
+                    "success": True,
+                    "message": f"이동 가능한 제목({available_count}개)이 최소 조건({min_titles}개)보다 적어 스킵",
+                    "moved": 0,
+                    "grouped": 0,
+                    "duplicates": 0,
+                    "skipped_reason": "min_titles_not_met"
+                }
+
+            # 이동 대상 제목 ID 조회
+            id_query = select(TempTitle.id).where(
+                TempTitle.status.in_(["new", "categorized"])
+            )
+
+            if transfer_mode == "auto":
+                id_query = id_query.where(TempTitle.topic_id.isnot(None))
+
+            if categories:
+                id_query = id_query.where(TempTitle.topic_id.in_(categories))
+
+            id_query = id_query.limit(max_titles)
+
+            id_result = await db.execute(id_query)
+            temp_ids = [row[0] for row in id_result.all()]
+
+            if not temp_ids:
+                return {
+                    "success": True,
+                    "message": "이동할 제목이 없습니다",
+                    "moved": 0,
+                    "grouped": 0,
+                    "duplicates": 0
+                }
+
+            logger.info(f"[FLOW_SCHEDULER] 이동 대상 제목 수: {len(temp_ids)}")
+
+            # 제목 이동 실행
+            transfer_result = await service.move_to_main(temp_ids, auto_group=auto_group)
+
+            moved = transfer_result.get("moved", 0)
+            grouped = transfer_result.get("grouped", 0)
+            duplicates = transfer_result.get("duplicates", 0)
+            errors = transfer_result.get("errors", [])
+
+            logger.info(
+                f"[FLOW_SCHEDULER] 제목 이동 완료 | moved={moved} | grouped={grouped} | "
+                f"duplicates={duplicates} | errors={len(errors)}"
+            )
+
+            return {
+                "success": True,
+                "message": f"제목 이동 완료: {moved}개 이동, {grouped}개 그룹화, {duplicates}개 중복",
+                "moved": moved,
+                "grouped": grouped,
+                "duplicates": duplicates,
+                "errors": errors
+            }
+
+        except Exception as e:
+            logger.error(f"[FLOW_SCHEDULER] 데이터 모듈 실패 | module={module.name} | error={e}")
+            import traceback
+            logger.error(f"[FLOW_SCHEDULER] 스택 트레이스: {traceback.format_exc()}")
+            return {
+                "success": False,
+                "message": str(e),
+                "moved": 0,
+                "grouped": 0,
+                "duplicates": 0
             }
 
     async def _execute_republish_for_blog(self, blog: Blog) -> Dict[str, Any]:

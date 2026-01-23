@@ -224,7 +224,7 @@ class TitleCollectorModule(ModuleInterface):
                             "link": item.get("link", "")
                         }
                         for item in result.get("items", [])
-                        if len(self._clean_title(item.get("title", ""))) >= 10
+                        if len(self._clean_title(item.get("title", ""))) > 10
                     ][:limit]
                 return []
 

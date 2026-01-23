@@ -41,8 +41,50 @@ from .routers.data_keywords import router as data_keywords_router
 from .routers.data_titles import router as data_titles_router
 from .routers.data_filters import router as data_filters_router
 from .routers.data_urls import router as data_urls_router
+from .routers.titles import router as titles_router  # Phase C: MainTitle API
+from .routers.title_groups import router as title_groups_router  # Phase C: TitleGroup API
+from .routers.title_transfer import router as title_transfer_router  # Phase D: Title Transfer API
 
 logger = get_logger("main", "app.log")
+
+
+async def seed_module_types():
+    """누락된 모듈 타입을 자동으로 추가"""
+    from sqlalchemy import select
+    from .models.module_type import ModuleType
+
+    try:
+        async with db_manager.get_session() as session:
+            # 기본 모듈 타입 목록
+            default_types = ModuleType.get_default_types()
+
+            # 기존 모듈 타입 코드 조회
+            result = await session.execute(select(ModuleType.code))
+            existing_codes = {row[0] for row in result.fetchall()}
+
+            # 누락된 타입 추가
+            added_count = 0
+            for type_data in default_types:
+                if type_data["code"] not in existing_codes:
+                    module_type = ModuleType(
+                        code=type_data["code"],
+                        name=type_data["name"],
+                        icon=type_data.get("icon"),
+                        display_order=type_data.get("display_order", 0)
+                    )
+                    session.add(module_type)
+                    added_count += 1
+                    logger.info(f"모듈 타입 추가: {type_data['code']} ({type_data['name']})")
+
+            if added_count > 0:
+                await session.commit()
+                logger.info(f"총 {added_count}개 모듈 타입 추가 완료")
+            else:
+                logger.info("모든 모듈 타입이 이미 존재합니다")
+
+    except Exception as e:
+        logger.error(f"모듈 타입 초기화 실패: {e}")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -62,6 +104,9 @@ async def lifespan(app: FastAPI):
     if settings.is_development:
         await db_manager.create_tables()
         logger.info("개발환경 - 데이터베이스 테이블 생성")
+
+    # 모듈 타입 초기화 (누락된 타입 자동 추가)
+    await seed_module_types()
 
     # 스케줄러 시작
     try:
@@ -154,6 +199,9 @@ app.include_router(data_keywords_router, prefix=settings.api_v1_prefix)
 app.include_router(data_titles_router, prefix=settings.api_v1_prefix)
 app.include_router(data_filters_router, prefix=settings.api_v1_prefix)
 app.include_router(data_urls_router, prefix=settings.api_v1_prefix)
+app.include_router(titles_router, prefix=settings.api_v1_prefix)  # Phase C: MainTitle
+app.include_router(title_groups_router, prefix=settings.api_v1_prefix)  # Phase C: TitleGroup
+app.include_router(title_transfer_router, prefix=settings.api_v1_prefix)  # Phase D: Title Transfer
 
 # 페이지 라우터 등록
 app.include_router(blogs_page_router)

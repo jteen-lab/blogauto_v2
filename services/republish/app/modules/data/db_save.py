@@ -271,8 +271,8 @@ class DBSaveModule(ModuleInterface):
             data = item.json
             title = data.get("title", "")
 
-            # 제목이 없으면 스킵
-            if not title or len(title) < 5:
+            # 제목이 없거나 띄어쓰기 포함 10자 이하면 스킵
+            if not title or len(title) <= 10:
                 skipped_count += 1
                 continue
 
