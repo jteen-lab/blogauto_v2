@@ -64,5 +64,11 @@ class ModuleType(Base):
                 "name": "수집",
                 "icon": "🔍",
                 "display_order": 5
+            },
+            {
+                "code": "data",
+                "name": "데이터",
+                "icon": "📊",
+                "display_order": 6
             }
         ]

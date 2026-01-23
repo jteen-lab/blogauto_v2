@@ -118,6 +118,7 @@ class Keyword(Base):
     # 추가 속성
     search_volume = Column(Integer, default=0, comment="검색량 (선택사항)")
     difficulty = Column(Integer, default=0, comment="난이도 (1-10)")
+    priority = Column(Integer, default=5, comment="매칭 우선순위 (1-10, 낮을수록 높은 우선순위)")
 
     # 소프트 삭제
     is_deleted = Column(Boolean, default=False, index=True)
@@ -143,6 +144,7 @@ class Keyword(Base):
             "order": self.order,
             "search_volume": self.search_volume,
             "difficulty": self.difficulty,
+            "priority": self.priority,
             "is_deleted": self.is_deleted,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,

@@ -132,6 +132,7 @@ class KeywordCreateRequest(BaseModel):
     order: int = Field(default=0, ge=0, description="정렬 순서")
     search_volume: int = Field(default=0, ge=0, description="검색량")
     difficulty: int = Field(default=0, ge=1, le=10, description="난이도 (1-10)")
+    priority: int = Field(default=5, ge=1, le=10, description="매칭 우선순위 (1-10, 낮을수록 높은 우선순위)")
 
     class Config:
         str_strip_whitespace = True
@@ -142,7 +143,8 @@ class KeywordCreateRequest(BaseModel):
                 "description": "뼈 밀도가 감소하는 질병",
                 "order": 1,
                 "search_volume": 1000,
-                "difficulty": 5
+                "difficulty": 5,
+                "priority": 5
             }
         }
 
@@ -155,6 +157,7 @@ class KeywordUpdateRequest(BaseModel):
     order: Optional[int] = Field(None, ge=0, description="정렬 순서")
     search_volume: Optional[int] = Field(None, ge=0, description="검색량")
     difficulty: Optional[int] = Field(None, ge=1, le=10, description="난이도 (1-10)")
+    priority: Optional[int] = Field(None, ge=1, le=10, description="매칭 우선순위 (1-10, 낮을수록 높은 우선순위)")
 
     class Config:
         str_strip_whitespace = True
@@ -169,6 +172,7 @@ class KeywordResponse(BaseModel):
     order: int
     search_volume: int = 0
     difficulty: int = 0
+    priority: int = Field(default=5, description="매칭 우선순위 (1-10, 낮을수록 높은 우선순위)")
     is_deleted: bool = False
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

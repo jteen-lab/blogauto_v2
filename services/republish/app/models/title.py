@@ -5,6 +5,7 @@
 - TempTitle: 임시 수집 제목
 - TitleGroup ↔ MainTitle 순환 참조 처리 (use_alter, post_update)
 """
+import uuid
 from datetime import datetime
 from typing import Optional, List, TYPE_CHECKING
 from sqlalchemy import Integer, String, Boolean, DateTime, Text, Float, ForeignKey, Index
@@ -21,10 +22,19 @@ class TitleGroup(Base):
     __tablename__ = "title_groups"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    # 외부 참조용 UUID
+    group_uuid: Mapped[str] = mapped_column(
+        String(36), unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
     name: Mapped[str] = mapped_column(String(200), nullable=False, comment="그룹명")
     description: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     representative_title_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("main_titles.id", use_alter=True, name="fk_title_group_rep"), nullable=True)
+    # 카테고리 연결 (KeywordCategory)
+    category_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("keyword_categories.id"), nullable=True, index=True)
+    # 그룹 메타데이터 (Phase C 추가)
+    location: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, comment="공통 지역명")
+    main_keyword: Mapped[Optional[str]] = mapped_column(String(200), nullable=True, comment="공통 주제 키워드")
     member_count: Mapped[int] = mapped_column(Integer, default=0, comment="멤버 수")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -34,6 +44,7 @@ class TitleGroup(Base):
     titles: Mapped[List["MainTitle"]] = relationship("MainTitle", back_populates="group", foreign_keys="MainTitle.group_id")
     representative_title: Mapped[Optional["MainTitle"]] = relationship(
         "MainTitle", foreign_keys=[representative_title_id], post_update=True)
+    category: Mapped[Optional["KeywordCategory"]] = relationship("KeywordCategory")
 
     def __repr__(self) -> str:
         return f"<TitleGroup(id={self.id}, name='{self.name}')>"
@@ -53,15 +64,25 @@ class MainTitle(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     title: Mapped[str] = mapped_column(String(500), nullable=False, index=True, comment="제목")
     category_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("keyword_categories.id"), nullable=True)
-    group_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("title_groups.id"), nullable=True)
-    is_group_representative: Mapped[bool] = mapped_column(Boolean, default=False)
-    status: Mapped[str] = mapped_column(String(50), default="available")
+    # 카테고리 관리 연동 (Topic > SubTopic)
+    topic_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("topics.id"), nullable=True, index=True, comment="주제 ID")
+    subtopic_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("subtopics.id"), nullable=True, index=True, comment="하위 주제 ID")
+    group_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("title_groups.id"), nullable=True, index=True)
+    is_group_representative: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    status: Mapped[str] = mapped_column(String(50), default="available", index=True)
+    # Phase C 추가: 유사도 매칭 정보
+    similarity_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True, comment="대표 제목과의 유사도")
+    grouped_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, comment="그룹핑된 시간")
+    # Phase C 추가: 지역/키워드 정보 (JSON)
+    location_info: Mapped[Optional[str]] = mapped_column(Text, nullable=True, comment="추출된 지역 정보 JSON")
+    keywords: Mapped[Optional[str]] = mapped_column(Text, nullable=True, comment="추출된 키워드 JSON")
     # 매칭/사용 정보
     matched_blog_ids: Mapped[Optional[str]] = mapped_column(Text, nullable=True, comment="매칭 블로그 IDs (JSON)")
     matched_count: Mapped[int] = mapped_column(Integer, default=0)
     use_count: Mapped[int] = mapped_column(Integer, default=0)
     last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     # 원본 정보
+    source: Mapped[str] = mapped_column(String(50), default="transfer", comment="transfer/manual/crawl")
     source_temp_title_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     source_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -71,7 +92,10 @@ class MainTitle(Base):
     category: Mapped[Optional["KeywordCategory"]] = relationship("KeywordCategory")
     group: Mapped[Optional["TitleGroup"]] = relationship("TitleGroup", back_populates="titles", foreign_keys=[group_id])
 
-    __table_args__ = (Index('ix_main_title_status_category', 'status', 'category_id'),)
+    __table_args__ = (
+        Index('ix_main_title_status_category', 'status', 'category_id'),
+        Index('ix_main_title_group_rep', 'group_id', 'is_group_representative'),
+    )
 
     def __repr__(self) -> str:
         return f"<MainTitle(id={self.id}, title='{self.title[:30]}...')>"
@@ -107,8 +131,8 @@ class TempTitle(Base):
     category_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("keyword_categories.id"), nullable=True)
     category_confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     # 카테고리 관리 연동 (Topic > SubTopic > Keyword)
-    topic_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("topics.id"), nullable=True, comment="주제 ID")
-    subtopic_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("subtopics.id"), nullable=True, comment="하위 주제 ID")
+    topic_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("topics.id"), nullable=True, index=True, comment="주제 ID")
+    subtopic_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("subtopics.id"), nullable=True, index=True, comment="하위 주제 ID")
     matched_keyword_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("keywords.id"), nullable=True, comment="매칭된 카테고리 키워드 ID")
     # 유사도 매칭 정보
     similar_title_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
