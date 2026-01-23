@@ -1,0 +1,639 @@
+<!-- 정식 제목 탭 컨텐츠 -->
+<div>
+    <!-- 검색 바 -->
+    <div class="search-bar">
+        <div class="flex items-center gap-2 flex-1">
+            <div class="search-input-wrapper flex-1 md:max-w-xs">
+                <input
+                    type="text"
+                    x-model="mainTitleSearch"
+                    @keyup.enter="mainTitlePage = 1; loadMainTitles()"
+                    placeholder="제목 검색..."
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                <button
+                    x-show="mainTitleSearch.length > 0"
+                    @click="resetMainTitleSearch()"
+                    class="search-clear-btn"
+                    title="검색 초기화">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <select
+                x-model="mainTitleStatus"
+                @change="mainTitlePage = 1; loadMainTitles()"
+                class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                <option value="">전체 상태</option>
+                <option value="available">사용가능</option>
+                <option value="matched">매칭됨</option>
+                <option value="used">사용됨</option>
+                <option value="archived">보관됨</option>
+            </select>
+            <select
+                x-model="mainTitleViewMode"
+                @change="mainTitlePage = 1; loadMainTitles()"
+                class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                <option value="all">전체 보기</option>
+                <option value="group">그룹별 보기</option>
+            </select>
+            <button
+                @click="mainTitlePage = 1; loadMainTitles()"
+                class="inline-flex items-center justify-center px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors">
+                <svg class="w-4 h-4 md:mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <span class="hidden md:inline">검색</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- 액션 버튼 그리드 -->
+    <div class="p-3 bg-gray-50 border-b border-gray-200">
+        <div class="grid grid-cols-2 md:flex md:flex-wrap gap-2">
+            <!-- 선택 복구 (임시로 이동) -->
+            <button
+                x-show="selectedMainTitles.length > 0"
+                @click="restoreSelectedMainTitles()"
+                class="inline-flex items-center justify-center px-3 py-2 border-2 border-yellow-500 rounded-lg text-sm font-medium text-yellow-700 bg-white hover:bg-yellow-50 transition-colors">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
+                </svg>
+                <span class="hidden sm:inline">선택 복구</span>
+                <span class="sm:hidden">복구</span>
+                (<span x-text="selectedMainTitles.length"></span>)
+            </button>
+            <!-- 선택 삭제 -->
+            <button
+                x-show="selectedMainTitles.length > 0"
+                @click="deleteSelectedMainTitles()"
+                class="inline-flex items-center justify-center px-3 py-2 border-2 border-red-500 rounded-lg text-sm font-medium text-red-600 bg-white hover:bg-red-50 transition-colors">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+                <span class="hidden sm:inline">선택 삭제</span>
+                <span class="sm:hidden">삭제</span>
+                (<span x-text="selectedMainTitles.length"></span>)
+            </button>
+        </div>
+    </div>
+
+    <!-- 전체 보기 모드 -->
+    <template x-if="mainTitleViewMode === 'all'">
+        <div>
+            <!-- PC 테이블 -->
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th class="w-12">
+                                <input type="checkbox" class="rounded border-gray-300"
+                                    :checked="mainTitles.length > 0 && selectedMainTitles.length === mainTitles.length"
+                                    @click="toggleMainTitleSelectAll()">
+                            </th>
+                            <th @click="sortMainTitles('title')" class="sortable-header">
+                                제목
+                                <span class="sort-icon" :class="{'active': mainTitleSortField === 'title'}"
+                                      x-text="mainTitleSortField === 'title' ? (mainTitleSortDir === 'asc' ? '▲' : '▼') : '▲'"></span>
+                            </th>
+                            <th class="w-32 text-center">카테고리</th>
+                            <th class="w-24 text-center">상태</th>
+                            <th @click="sortMainTitles('created_at')" class="w-32 sortable-header text-center">
+                                등록일
+                                <span class="sort-icon" :class="{'active': mainTitleSortField === 'created_at'}"
+                                      x-text="mainTitleSortField === 'created_at' ? (mainTitleSortDir === 'asc' ? '▲' : '▼') : '▲'"></span>
+                            </th>
+                            <th class="w-24 text-center">액션</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-if="mainTitleLoading">
+                            <tr>
+                                <td colspan="6" class="text-center py-12">
+                                    <div class="spinner mx-auto mb-2"></div>
+                                    <div class="text-gray-500 text-sm">로딩 중...</div>
+                                </td>
+                            </tr>
+                        </template>
+                        <template x-if="!mainTitleLoading && mainTitles.length === 0">
+                            <tr>
+                                <td colspan="6" class="text-center py-12 text-gray-500">
+                                    <div class="text-4xl mb-2">📋</div>
+                                    <div>정식 제목이 없습니다</div>
+                                    <div class="text-sm mt-1">임시 제목을 승격하여 정식 제목을 추가하세요</div>
+                                </td>
+                            </tr>
+                        </template>
+                        <template x-for="title in mainTitles" :key="title.id">
+                            <tr>
+                                <td class="w-12">
+                                    <input type="checkbox" class="rounded border-gray-300"
+                                        :value="title.id"
+                                        x-model="selectedMainTitles">
+                                </td>
+                                <td>
+                                    <div class="flex items-center gap-2">
+                                        <!-- 활성 그룹 (2개 이상 멤버): 폴더 아이콘 클릭 가능 -->
+                                        <template x-if="title.group_member_count >= 2">
+                                            <button @click="openGroupDetailModal(title.group_id)"
+                                                    class="flex items-center gap-1 text-blue-600 hover:text-blue-800 cursor-pointer"
+                                                    :title="'그룹 보기 (' + title.group_member_count + '개)'">
+                                                <span class="text-lg">📁</span>
+                                                <span class="text-xs text-gray-500" x-text="'(' + title.group_member_count + ')'"></span>
+                                            </button>
+                                        </template>
+                                        <span class="font-medium truncate max-w-md" x-text="title.title"></span>
+                                    </div>
+                                </td>
+                                <td class="text-center">
+                                    <template x-if="title.category_path">
+                                        <span class="inline-flex items-center gap-1 text-sm text-emerald-600" :title="title.category_path">
+                                            <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+                                            </svg>
+                                            <span class="truncate" x-text="title.category_path"></span>
+                                        </span>
+                                    </template>
+                                    <template x-if="!title.category_path && title.category_name">
+                                        <span class="text-sm text-blue-600" x-text="title.category_name"></span>
+                                    </template>
+                                    <template x-if="!title.category_path && !title.category_name">
+                                        <span class="text-gray-400 text-xs">미분류</span>
+                                    </template>
+                                </td>
+                                <td class="text-center">
+                                    <span :class="{
+                                        'bg-green-100 text-green-800': title.status === 'available',
+                                        'bg-blue-100 text-blue-800': title.status === 'matched',
+                                        'bg-gray-100 text-gray-800': title.status === 'used',
+                                        'bg-yellow-100 text-yellow-800': title.status === 'archived'
+                                    }" class="px-2 py-0.5 rounded text-xs" x-text="getMainTitleStatusText(title.status)"></span>
+                                </td>
+                                <td class="text-center text-sm text-gray-500" x-text="formatDate(title.created_at)"></td>
+                                <td class="text-center">
+                                    <button
+                                        @click="openMainTitleEditModal(title)"
+                                        class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                        수정
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 모바일 카드 리스트 -->
+            <div class="mobile-card-list">
+                <div class="mobile-select-all">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" class="rounded border-gray-300"
+                            :checked="mainTitles.length > 0 && selectedMainTitles.length === mainTitles.length"
+                            @click="toggleMainTitleSelectAll()">
+                        <span class="text-sm text-gray-600">전체 선택</span>
+                    </label>
+                    <span class="text-xs text-gray-400" x-text="`${selectedMainTitles.length}/${mainTitles.length}개 선택`"></span>
+                </div>
+                <template x-if="mainTitleLoading">
+                    <div class="text-center py-12">
+                        <div class="spinner mx-auto mb-2"></div>
+                        <div class="text-gray-500 text-sm">로딩 중...</div>
+                    </div>
+                </template>
+                <template x-if="!mainTitleLoading && mainTitles.length === 0">
+                    <div class="text-center py-12 text-gray-500">
+                        <div class="text-4xl mb-2">📋</div>
+                        <div>정식 제목이 없습니다</div>
+                    </div>
+                </template>
+                <template x-for="title in mainTitles" :key="title.id">
+                    <div class="mobile-card"
+                         :class="{'selected': selectedMainTitles.includes(title.id), 'expanded': expandedMainTitleId === title.id}">
+                        <div class="mobile-card-header" @click="expandedMainTitleId = expandedMainTitleId === title.id ? null : title.id">
+                            <div class="mobile-card-checkbox" @click.stop>
+                                <input type="checkbox" class="rounded border-gray-300"
+                                    :value="title.id"
+                                    x-model="selectedMainTitles">
+                            </div>
+                            <div class="mobile-card-main">
+                                <div class="mobile-card-title flex items-center gap-1">
+                                    <!-- 활성 그룹: 폴더 아이콘 -->
+                                    <template x-if="title.group_member_count >= 2">
+                                        <button @click.stop="openGroupDetailModal(title.group_id)"
+                                                class="text-blue-600 hover:text-blue-800"
+                                                :title="'그룹 보기 (' + title.group_member_count + '개)'">
+                                            <span class="text-lg">📁</span>
+                                        </button>
+                                    </template>
+                                    <span x-text="title.title"></span>
+                                </div>
+                                <div class="mobile-card-subtitle">
+                                    <span :class="{
+                                        'text-green-600': title.status === 'available',
+                                        'text-blue-600': title.status === 'matched',
+                                        'text-gray-600': title.status === 'used'
+                                    }" x-text="getMainTitleStatusText(title.status)"></span>
+                                    <span x-show="title.group_member_count >= 2" class="text-blue-500" x-text="'그룹(' + title.group_member_count + ')'"></span>
+                                </div>
+                            </div>
+                            <div class="mobile-card-expand">
+                                <svg class="w-5 h-5 text-gray-400 transition-transform"
+                                     :class="{'rotate-180': expandedMainTitleId === title.id}"
+                                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="mobile-card-details" x-show="expandedMainTitleId === title.id" x-transition>
+                            <div class="mobile-card-row">
+                                <span class="mobile-card-label">카테고리</span>
+                                <span class="mobile-card-value" x-text="title.category_name || '미분류'"></span>
+                            </div>
+                            <div class="mobile-card-row">
+                                <span class="mobile-card-label">그룹</span>
+                                <span class="mobile-card-value" x-text="title.group_name || '미그룹'"></span>
+                            </div>
+                            <div class="mobile-card-row">
+                                <span class="mobile-card-label">등록일</span>
+                                <span class="mobile-card-value" x-text="formatDate(title.created_at)"></span>
+                            </div>
+                            <div class="mobile-card-actions">
+                                <button @click="openMainTitleEditModal(title)"
+                                        class="mobile-card-action-btn primary">
+                                    수정
+                                </button>
+                                <button @click="restoreMainTitle(title.id)"
+                                        class="mobile-card-action-btn secondary">
+                                    복구
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </template>
+
+    <!-- 그룹별 보기 모드 -->
+    <template x-if="mainTitleViewMode === 'group'">
+        <div class="p-4 space-y-3">
+            <template x-if="mainTitleLoading">
+                <div class="text-center py-12">
+                    <div class="spinner mx-auto mb-2"></div>
+                    <div class="text-gray-500 text-sm">로딩 중...</div>
+                </div>
+            </template>
+            <template x-if="!mainTitleLoading && titleGroups.length === 0">
+                <div class="text-center py-12 text-gray-500">
+                    <div class="text-4xl mb-2">📂</div>
+                    <div>그룹이 없습니다</div>
+                </div>
+            </template>
+            <template x-for="group in titleGroups" :key="group.id">
+                <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                    <div @click="toggleGroupExpand(group.id)"
+                         class="p-4 flex justify-between items-center cursor-pointer hover:bg-gray-50">
+                        <div class="flex items-center gap-3">
+                            <span x-text="expandedGroupIds.includes(group.id) ? '▼' : '▶'" class="text-gray-400 text-sm"></span>
+                            <span class="font-medium" x-text="group.representative_title || group.name"></span>
+                            <span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs"
+                                  x-text="(group.member_count || 0) + '개'"></span>
+                        </div>
+                        <div class="flex items-center gap-4 text-sm text-gray-500">
+                            <span x-text="group.location || ''"></span>
+                            <span x-text="group.category_name || '미분류'"></span>
+                        </div>
+                    </div>
+                    <div x-show="expandedGroupIds.includes(group.id)" x-collapse class="border-t">
+                        <template x-if="!group.titles">
+                            <div class="p-4 text-center text-gray-400 text-sm">
+                                로딩 중...
+                            </div>
+                        </template>
+                        <template x-if="group.titles">
+                            <table class="w-full text-sm">
+                                <tbody>
+                                    <template x-for="title in group.titles" :key="title.id">
+                                        <tr class="border-t" :class="{'bg-amber-50': title.is_group_representative, 'hover:bg-gray-50': !title.is_group_representative}">
+                                            <td class="w-10 p-3 text-center">
+                                                <input type="checkbox" class="rounded border-gray-300"
+                                                       :value="title.id"
+                                                       x-model="selectedMainTitles">
+                                            </td>
+                                            <td class="p-3">
+                                                <div class="flex items-center gap-2">
+                                                    <span x-show="title.is_group_representative" class="text-xs text-amber-600 font-medium px-1.5 py-0.5 bg-amber-100 rounded">대표</span>
+                                                    <span x-text="title.title"></span>
+                                                    <span x-show="title.similarity_score"
+                                                          class="text-xs text-gray-400"
+                                                          x-text="'(' + Math.round(title.similarity_score) + '%)'"></span>
+                                                </div>
+                                            </td>
+                                            <td class="w-32 p-3 text-center">
+                                                <button x-show="!title.is_group_representative"
+                                                        @click="setAsRepresentative(group.id, title.id)"
+                                                        class="text-xs text-blue-500 hover:underline">
+                                                    대표로 설정
+                                                </button>
+                                                <span x-show="title.is_group_representative" class="text-xs text-amber-700 font-medium">대표 제목</span>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </template>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </template>
+
+    <!-- 페이지네이션 -->
+    <div class="pagination">
+        <div class="text-sm text-gray-600">
+            총 <span class="font-semibold" x-text="mainTitleTotal"></span>개
+            <span x-show="stats.main?.grouped > 0" class="ml-2">
+                (그룹: <span x-text="titleGroupTotal"></span>개)
+            </span>
+        </div>
+        <div class="flex items-center gap-2">
+            <button
+                @click="if(mainTitlePage > 1) { mainTitlePage--; loadMainTitles(); }"
+                :disabled="mainTitlePage <= 1"
+                class="px-3 py-1.5 border rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50">
+                이전
+            </button>
+            <span class="text-sm text-gray-600 px-2" x-text="`${mainTitlePage} 페이지`"></span>
+            <button
+                @click="if(mainTitleHasNext) { mainTitlePage++; loadMainTitles(); }"
+                :disabled="!mainTitleHasNext"
+                class="px-3 py-1.5 border rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50">
+                다음
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- 제목 수정 모달 -->
+<div
+    x-data="{ open: false, title: {}, submitting: false }"
+    @open-main-title-edit-modal.window="open = true; title = $event.detail"
+    x-show="open"
+    x-cloak
+    class="fixed inset-0 z-50 overflow-y-auto"
+    style="background: rgba(0,0,0,0.5)">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div @click.away="open = false" class="bg-white rounded-lg shadow-xl w-full max-w-lg">
+            <div class="px-6 py-4 border-b flex items-center justify-between">
+                <h3 class="text-lg font-semibold">제목 수정</h3>
+                <button @click="open = false" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="px-6 py-4 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">제목</label>
+                    <input type="text" x-model="title.title"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">상태</label>
+                    <select x-model="title.status"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                        <option value="available">사용가능</option>
+                        <option value="matched">매칭됨</option>
+                        <option value="used">사용됨</option>
+                        <option value="archived">보관됨</option>
+                    </select>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t flex justify-end gap-2 bg-gray-50">
+                <button @click="open = false"
+                        class="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg text-sm">
+                    취소
+                </button>
+                <button
+                    @click="
+                        submitting = true;
+                        fetch(`${API_BASE}/titles/${title.id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({ title: title.title, status: title.status })
+                        })
+                        .then(res => { if(!res.ok) throw new Error(); return res.json(); })
+                        .then(() => {
+                            showSuccessMessage('저장되었습니다');
+                            open = false;
+                            loadMainTitles();
+                        })
+                        .catch(() => showErrorMessage('저장 실패'))
+                        .finally(() => submitting = false);
+                    "
+                    :disabled="submitting"
+                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm disabled:opacity-50">
+                    <span x-show="!submitting">저장</span>
+                    <span x-show="submitting">저장 중...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 그룹 상세 팝업 모달 -->
+<div
+    x-data="{
+        open: false,
+        group: {},
+        titles: [],
+        loading: false,
+        expandedTitleId: null,
+        async refreshGroupData() {
+            if (!this.group.id) return;
+            this.loading = true;
+            try {
+                const res = await fetch(`${API_BASE}/title-groups/${this.group.id}`, { credentials: 'include' });
+                if (!res.ok) throw new Error('그룹 조회 실패');
+                const data = await res.json();
+                this.group = data;
+                this.titles = data.titles || [];
+            } catch (e) {
+                console.error('그룹 새로고침 실패:', e);
+            } finally {
+                this.loading = false;
+            }
+        },
+        async setRepresentativeAndRefresh(groupId, titleId) {
+            try {
+                const res = await fetch(`${API_BASE}/title-groups/${groupId}/representative`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ new_representative_id: titleId })
+                });
+                if (!res.ok) throw new Error('대표 설정 실패');
+                showSuccessMessage('대표 제목이 변경되었습니다');
+                await this.refreshGroupData();
+                loadMainTitles();
+            } catch (e) {
+                showErrorMessage('대표 설정 실패');
+            }
+        }
+    }"
+    @open-group-detail-modal.window="open = true; group = $event.detail; titles = $event.detail.titles || []; expandedTitleId = null"
+    x-show="open"
+    x-cloak
+    class="fixed inset-0 z-50 overflow-y-auto"
+    style="background: rgba(0,0,0,0.5)">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div @click.away="open = false" class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[80vh] flex flex-col">
+            <!-- 헤더 -->
+            <div class="px-4 md:px-6 py-4 border-b flex items-center justify-between flex-shrink-0">
+                <div>
+                    <h3 class="text-lg font-semibold flex items-center gap-2">
+                        <span>📁</span>
+                        <span>그룹 상세</span>
+                        <span class="text-sm text-gray-500 font-normal" x-text="'(' + titles.length + '개 제목)'"></span>
+                    </h3>
+                    <p class="text-sm text-gray-500 mt-1 truncate max-w-[280px] md:max-w-none" x-text="group.name"></p>
+                </div>
+                <button @click="open = false" class="text-gray-400 hover:text-gray-600 p-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- 제목 테이블 (PC) -->
+            <div class="flex-1 overflow-y-auto hidden md:block relative">
+                <!-- 로딩 오버레이 -->
+                <div x-show="loading" class="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10">
+                    <div class="spinner"></div>
+                </div>
+                <table class="w-full">
+                    <thead class="bg-gray-50 sticky top-0">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">제목</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase w-24">유사도</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase w-24">상태</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase w-32">액션</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200">
+                        <template x-for="title in titles" :key="title.id">
+                            <tr :class="{'bg-amber-50': title.is_group_representative}">
+                                <td class="px-4 py-3">
+                                    <div class="flex items-center gap-2">
+                                        <span x-show="title.is_group_representative"
+                                              class="text-xs text-amber-600 font-medium px-1.5 py-0.5 bg-amber-100 rounded flex-shrink-0">대표</span>
+                                        <span class="text-sm" x-text="title.title"></span>
+                                    </div>
+                                </td>
+                                <td class="px-4 py-3 text-center">
+                                    <template x-if="!title.is_group_representative && title.similarity_score">
+                                        <span class="text-sm text-gray-600" x-text="Math.round(title.similarity_score) + '%'"></span>
+                                    </template>
+                                    <template x-if="title.is_group_representative || !title.similarity_score">
+                                        <span class="text-xs text-gray-400">-</span>
+                                    </template>
+                                </td>
+                                <td class="px-4 py-3 text-center">
+                                    <span :class="{
+                                        'bg-green-100 text-green-800': title.status === 'available',
+                                        'bg-blue-100 text-blue-800': title.status === 'matched',
+                                        'bg-gray-100 text-gray-800': title.status === 'used',
+                                        'bg-yellow-100 text-yellow-800': title.status === 'archived'
+                                    }" class="px-2 py-0.5 rounded text-xs" x-text="getMainTitleStatusText(title.status)"></span>
+                                </td>
+                                <td class="px-4 py-3 text-center">
+                                    <button x-show="!title.is_group_representative"
+                                            @click="setRepresentativeAndRefresh(group.id, title.id)"
+                                            class="text-xs text-blue-500 hover:underline">
+                                        대표로 설정
+                                    </button>
+                                    <span x-show="title.is_group_representative" class="text-xs text-amber-700 font-medium">대표 제목</span>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 제목 카드 리스트 (모바일) -->
+            <div class="flex-1 overflow-y-auto md:hidden relative">
+                <!-- 로딩 오버레이 -->
+                <div x-show="loading" class="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10">
+                    <div class="spinner"></div>
+                </div>
+                <div class="p-3 space-y-2">
+                    <template x-for="title in titles" :key="title.id">
+                        <div class="border rounded-lg overflow-hidden"
+                             :class="{'border-amber-300 bg-amber-50': title.is_group_representative, 'border-gray-200 bg-white': !title.is_group_representative}">
+                            <!-- 카드 헤더 (아코디언 토글) -->
+                            <div class="p-3 flex items-start gap-3 cursor-pointer"
+                                 @click="expandedTitleId = expandedTitleId === title.id ? null : title.id">
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span x-show="title.is_group_representative"
+                                              class="text-xs text-amber-600 font-medium px-1.5 py-0.5 bg-amber-100 rounded flex-shrink-0">대표</span>
+                                        <span :class="{
+                                            'bg-green-100 text-green-800': title.status === 'available',
+                                            'bg-blue-100 text-blue-800': title.status === 'matched',
+                                            'bg-gray-100 text-gray-800': title.status === 'used',
+                                            'bg-yellow-100 text-yellow-800': title.status === 'archived'
+                                        }" class="px-2 py-0.5 rounded text-xs" x-text="getMainTitleStatusText(title.status)"></span>
+                                        <template x-if="!title.is_group_representative && title.similarity_score">
+                                            <span class="text-xs text-gray-500" x-text="'유사도: ' + Math.round(title.similarity_score) + '%'"></span>
+                                        </template>
+                                    </div>
+                                    <p class="text-sm text-gray-800 leading-snug"
+                                       :class="{'line-clamp-2': expandedTitleId !== title.id}"
+                                       x-text="title.title"></p>
+                                </div>
+                                <svg class="w-5 h-5 text-gray-400 flex-shrink-0 transition-transform"
+                                     :class="{'rotate-180': expandedTitleId === title.id}"
+                                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                </svg>
+                            </div>
+                            <!-- 카드 확장 (아코디언 컨텐츠) -->
+                            <div x-show="expandedTitleId === title.id" x-transition
+                                 class="px-3 pb-3 pt-0 border-t border-gray-100">
+                                <div class="flex items-center justify-between pt-3">
+                                    <div class="text-xs text-gray-500">
+                                        <template x-if="!title.is_group_representative && title.similarity_score">
+                                            <span x-text="'대표 제목과 ' + Math.round(title.similarity_score) + '% 유사'"></span>
+                                        </template>
+                                        <template x-if="title.is_group_representative">
+                                            <span class="text-amber-600 font-medium">그룹 대표 제목</span>
+                                        </template>
+                                    </div>
+                                    <button x-show="!title.is_group_representative"
+                                            @click.stop="setRepresentativeAndRefresh(group.id, title.id)"
+                                            class="px-3 py-1.5 text-xs text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors">
+                                        대표로 설정
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- 푸터 -->
+            <div class="px-4 md:px-6 py-4 border-t flex flex-col md:flex-row justify-between items-start md:items-center gap-3 bg-gray-50 flex-shrink-0">
+                <div class="text-sm text-gray-500 flex flex-wrap gap-2">
+                    <span x-show="group.location" x-text="'📍 ' + group.location"></span>
+                    <span x-show="group.category_name" x-text="'🏷️ ' + group.category_name"></span>
+                </div>
+                <button @click="open = false"
+                        class="w-full md:w-auto px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm">
+                    닫기
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
