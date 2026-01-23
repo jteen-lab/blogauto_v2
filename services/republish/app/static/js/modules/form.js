@@ -73,11 +73,45 @@ function moduleFormApp(module = null, moduleType = null) {
             title_collect_limit: initialModule?.settings?.title_collect_limit || 100,
             // 대량 수집 설정
             bulk_collect_delay: initialModule?.settings?.bulk_collect_delay || 0.5,
-            bulk_urls_per_cycle: initialModule?.settings?.bulk_urls_per_cycle || 3
+            bulk_urls_per_cycle: initialModule?.settings?.bulk_urls_per_cycle || 3,
+            // 데이터 모듈 필드들
+            // 실행 방식 (상호 배타적: collection_link 또는 schedule)
+            // 하위 호환: 기존 collection_link.enabled가 true면 collection_link, schedule.enabled가 true면 schedule
+            execution_mode: (() => {
+                const s = initialModule?.settings;
+                if (s?.execution_mode) return s.execution_mode;
+                if (s?.schedule?.enabled) return 'schedule';
+                if (s?.collection_link?.enabled !== false) return 'collection_link';
+                return 'collection_link';
+            })(),
+            // 수집 모듈 연동 옵션
+            collection_link_delay: initialModule?.settings?.collection_link?.delay_seconds ?? 30,
+            // 데이터 이동 스케줄 옵션
+            data_schedule_mode: initialModule?.settings?.schedule?.mode || 'fixed_time',
+            data_fixed_times: initialModule?.settings?.schedule?.fixed_times || ['06:00', '18:00'],
+            data_interval_hours: initialModule?.settings?.schedule?.interval_hours || 6,
+            // 실행 조건
+            max_titles_per_run: (() => {
+                const val = initialModule?.settings?.execution?.max_titles_per_run;
+                return (val === -1 || val === null || val === undefined) ? 100 : val;
+            })(),
+            max_titles_unlimited: (() => {
+                const exec = initialModule?.settings?.execution;
+                return exec?.max_titles_unlimited === true || exec?.max_titles_per_run === -1;
+            })(),
+            min_titles_required: initialModule?.settings?.execution?.min_titles_required ?? 1,
+            // 필터 및 중복 처리
+            duplicate_handling: initialModule?.settings?.filter?.duplicate_handling || 'skip',
+            category_filter: initialModule?.settings?.filter?.categories?.join(', ') || '',
+            // 그룹화 설정
+            auto_group: initialModule?.settings?.auto_group ?? true,
+            similarity_threshold: initialModule?.settings?.similarity_threshold ?? 75
         },
 
         // 수집 시간 입력용
         newFixedTime: '',
+        // 데이터 이동 시간 입력용
+        newDataFixedTime: '',
 
         // 스케줄 매트릭스 (재발행 모듈용)
         days: ['월', '화', '수', '목', '금', '토', '일'],
@@ -143,14 +177,21 @@ function moduleFormApp(module = null, moduleType = null) {
 
         // 스케줄 매트릭스 초기화
         initializeSchedule() {
-            if (this.formData.type_code === 'republish' || this.formData.type_code === 'collect') {
-                if (this.isEdit && this.formData.schedule_matrix) {
+            if (this.formData.type_code === 'republish' || this.formData.type_code === 'collect' || this.formData.type_code === 'data') {
+                // 데이터 모듈: settings.schedule.schedule_matrix에서 먼저 로드 (우선순위 높음)
+                if (this.formData.type_code === 'data' && this.isEdit && this.formData.settings?.schedule?.schedule_matrix) {
+                    this.schedule = JSON.parse(JSON.stringify(this.formData.settings.schedule.schedule_matrix));
+                    console.log('[initializeSchedule] 데이터 모듈 schedule_matrix 로드됨:', this.schedule?.length, 'x', this.schedule?.[0]?.length);
+                } else if (this.isEdit && this.formData.schedule_matrix) {
+                    // 재발행/수집 모듈: 루트 레벨 schedule_matrix에서 로드
                     this.schedule = JSON.parse(JSON.stringify(this.formData.schedule_matrix));
                 } else {
-                    // 기본 평일 9-21시 스케줄 (재발행) / 24시간 (수집)
-                    if (this.formData.type_code === 'collect') {
+                    // 기본 스케줄 설정
+                    if (this.formData.type_code === 'collect' || this.formData.type_code === 'data') {
+                        // 수집/데이터 모듈: 기본 24시간 활성
                         this.schedule = Array(7).fill().map(() => Array(24).fill(true));
                     } else {
+                        // 재발행 모듈: 기본 평일 9-21시
                         this.schedule = Array(7).fill().map((_, dayIdx) =>
                             Array(24).fill().map((_, hour) =>
                                 dayIdx < 5 && hour >= 9 && hour <= 21
@@ -474,8 +515,64 @@ function moduleFormApp(module = null, moduleType = null) {
                 }
             }
 
+            // 데이터 모듈 검증
+            if (this.formData.type_code === 'data') {
+                // 실행 방식 선택 검증
+                if (!this.formData.execution_mode) {
+                    this.showError('실행 방식을 선택해주세요');
+                    return false;
+                }
+
+                // 실행 조건 검증 (전체 선택이 아닌 경우에만)
+                if (!this.formData.max_titles_unlimited) {
+                    if (!this.formData.max_titles_per_run || this.formData.max_titles_per_run < 1) {
+                        this.showError('최대 이동 개수는 1개 이상이어야 합니다');
+                        return false;
+                    }
+                    if (this.formData.max_titles_per_run > 10000) {
+                        this.showError('최대 이동 개수는 10000개를 초과할 수 없습니다');
+                        return false;
+                    }
+                }
+                if (!this.formData.min_titles_required || this.formData.min_titles_required < 1) {
+                    this.showError('최소 제목 수 조건은 1개 이상이어야 합니다');
+                    return false;
+                }
+
+                // 수집 모듈 연동 모드 검증
+                if (this.formData.execution_mode === 'collection_link') {
+                    if (this.formData.collection_link_delay < 0 || this.formData.collection_link_delay > 300) {
+                        this.showError('대기 시간은 0~300초 범위여야 합니다');
+                        return false;
+                    }
+                }
+
+                // 스케줄 모드 검증
+                if (this.formData.execution_mode === 'schedule') {
+                    if (this.formData.data_schedule_mode === 'fixed_time') {
+                        if (!this.formData.data_fixed_times || this.formData.data_fixed_times.length === 0) {
+                            this.showError('최소 1개 이상의 데이터 이동 시간을 설정해주세요');
+                            return false;
+                        }
+                    } else if (this.formData.data_schedule_mode === 'interval') {
+                        if (!this.formData.data_interval_hours || this.formData.data_interval_hours < 1) {
+                            this.showError('데이터 이동 간격은 1시간 이상이어야 합니다');
+                            return false;
+                        }
+                    }
+                }
+
+                // 유사도 임계값 검증 (자동 그룹화 활성화 시)
+                if (this.formData.auto_group) {
+                    if (this.formData.similarity_threshold < 50 || this.formData.similarity_threshold > 100) {
+                        this.showError('유사도 임계값은 50~100% 범위여야 합니다');
+                        return false;
+                    }
+                }
+            }
+
             // 기타 타입 설정 JSON 검증
-            if (this.formData.type_code !== 'republish' && this.formData.type_code !== 'collect' && this.settingsJson) {
+            if (this.formData.type_code !== 'republish' && this.formData.type_code !== 'collect' && this.formData.type_code !== 'data' && this.settingsJson) {
                 try {
                     JSON.parse(this.settingsJson);
                 } catch (e) {
@@ -549,6 +646,43 @@ function moduleFormApp(module = null, moduleType = null) {
                     bulk_collect_delay: this.formData.bulk_collect_delay,
                     bulk_urls_per_cycle: this.formData.bulk_urls_per_cycle
                 };
+            } else if (this.formData.type_code === 'data') {
+                // 데이터 모듈 설정
+                const categoryFilter = this.formData.category_filter?.trim();
+                const categories = categoryFilter
+                    ? categoryFilter.split(',').map(c => c.trim()).filter(c => c)
+                    : [];
+
+                data.settings = {
+                    // 실행 방식 (상호 배타적)
+                    execution_mode: this.formData.execution_mode,
+                    // 수집 모듈 연동 설정 (연동 모드일 때만 사용)
+                    collection_link: {
+                        enabled: this.formData.execution_mode === 'collection_link',
+                        target_modules: ['same_flow'],  // 항상 동일 플로우
+                        delay_seconds: this.formData.collection_link_delay
+                    },
+                    // 데이터 이동 스케줄 설정 (스케줄 모드일 때만 사용)
+                    schedule: {
+                        enabled: this.formData.execution_mode === 'schedule',
+                        mode: this.formData.data_schedule_mode,
+                        fixed_times: this.formData.data_fixed_times,
+                        interval_hours: this.formData.data_interval_hours,
+                        // 활성 시간대 매트릭스 저장
+                        schedule_matrix: this.schedule
+                    },
+                    execution: {
+                        max_titles_per_run: this.formData.max_titles_unlimited ? -1 : this.formData.max_titles_per_run,
+                        max_titles_unlimited: this.formData.max_titles_unlimited,
+                        min_titles_required: this.formData.min_titles_required
+                    },
+                    filter: {
+                        categories: categories,
+                        duplicate_handling: this.formData.duplicate_handling
+                    },
+                    auto_group: this.formData.auto_group,
+                    similarity_threshold: this.formData.similarity_threshold
+                };
             } else {
                 // 설정 JSON 파싱
                 try {
@@ -582,6 +716,30 @@ function moduleFormApp(module = null, moduleType = null) {
             const index = this.formData.collect_fixed_times.indexOf(time);
             if (index > -1) {
                 this.formData.collect_fixed_times.splice(index, 1);
+            }
+        },
+
+        // 데이터 이동 시간 추가 (데이터 모듈용)
+        addDataFixedTime() {
+            if (!this.newDataFixedTime) return;
+
+            // 중복 체크
+            if (this.formData.data_fixed_times.includes(this.newDataFixedTime)) {
+                this.showError('이미 등록된 시간입니다');
+                return;
+            }
+
+            // 시간 추가 및 정렬
+            this.formData.data_fixed_times.push(this.newDataFixedTime);
+            this.formData.data_fixed_times.sort();
+            this.newDataFixedTime = '';
+        },
+
+        // 데이터 이동 시간 삭제 (데이터 모듈용)
+        removeDataFixedTime(time) {
+            const index = this.formData.data_fixed_times.indexOf(time);
+            if (index > -1) {
+                this.formData.data_fixed_times.splice(index, 1);
             }
         },
 

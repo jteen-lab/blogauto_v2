@@ -216,7 +216,8 @@ function flowFormData() {
                 publish: 'bg-rose-200',
                 generate: 'bg-amber-200',
                 prompt: 'bg-green-200',
-                collect: 'bg-purple-200'
+                collect: 'bg-purple-200',
+                data: 'bg-teal-200'
             };
             return colors[typeCode] || 'bg-gray-200';
         },
@@ -339,7 +340,8 @@ function flowFormData() {
                 publish: '📤',
                 generate: '✨',
                 prompt: '📝',
-                collect: '🔍'
+                collect: '🔍',
+                data: '📊'
             };
             return icons[typeCode] || '📦';
         },
@@ -351,7 +353,8 @@ function flowFormData() {
                 publish: '발행',
                 generate: '생성',
                 prompt: '프롬프트',
-                collect: '수집'
+                collect: '수집',
+                data: '데이터'
             };
             return names[typeCode] || typeCode;
         },

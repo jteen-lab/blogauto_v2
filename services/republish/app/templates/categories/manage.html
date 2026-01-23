@@ -172,6 +172,7 @@
                                 <p class="text-sm text-gray-600 mt-1" x-show="keyword.description" x-text="keyword.description"></p>
                                 <div class="flex justify-between items-center mt-2">
                                     <div class="text-xs text-gray-500">
+                                        우선순위: <span x-text="keyword.priority || 5"></span> |
                                         검색량: <span x-text="keyword.search_volume"></span> |
                                         난이도: <span x-text="keyword.difficulty"></span>/10
                                     </div>
@@ -328,6 +329,7 @@
                             <p class="text-sm text-gray-600 mt-1" x-show="keyword.description" x-text="keyword.description"></p>
                             <div class="flex justify-between items-center mt-2">
                                 <div class="text-xs text-gray-500">
+                                    우선순위: <span x-text="keyword.priority || 5"></span> |
                                     검색량: <span x-text="keyword.search_volume"></span> |
                                     난이도: <span x-text="keyword.difficulty"></span>/10
                                 </div>
@@ -467,6 +469,20 @@
                             rows="3"
                         ></textarea>
                     </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            매칭 우선순위 (1-10)
+                            <span class="text-gray-500 font-normal">- 숫자가 낮을수록 우선 매칭됨</span>
+                        </label>
+                        <input
+                            type="number"
+                            x-model="keywordForm.priority"
+                            class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                            min="1"
+                            max="10"
+                        >
+                        <p class="mt-1 text-xs text-gray-500">예: "화환"을 "병원"보다 먼저 매칭하려면 "화환"의 우선순위를 낮게 설정</p>
+                    </div>
                     <div class="grid grid-cols-2 gap-4 mb-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">검색량</label>
@@ -557,7 +573,8 @@
                 name: '',
                 description: '',
                 search_volume: 0,
-                difficulty: 5
+                difficulty: 5,
+                priority: 5
             },
 
             // API 토큰
@@ -866,7 +883,8 @@
                         await this.refreshTopicsData();
                         await this.loadSubTopics(this.selectedTopic.id);
                     } else {
-                        alert('키워드 생성에 실패했습니다.');
+                        const errorData = await response.json();
+                        alert(errorData.detail || '키워드 생성에 실패했습니다.');
                     }
                 } catch (error) {
                     console.error('키워드 생성 실패:', error);
@@ -892,7 +910,8 @@
                             name: this.keywordForm.name,
                             description: this.keywordForm.description,
                             search_volume: this.keywordForm.search_volume,
-                            difficulty: this.keywordForm.difficulty
+                            difficulty: this.keywordForm.difficulty,
+                            priority: this.keywordForm.priority
                         })
                     });
 
@@ -903,7 +922,8 @@
                         await this.refreshTopicsData();
                         await this.loadSubTopics(this.selectedTopic.id);
                     } else {
-                        alert('키워드 수정에 실패했습니다.');
+                        const errorData = await response.json();
+                        alert(errorData.detail || '키워드 수정에 실패했습니다.');
                     }
                 } catch (error) {
                     console.error('키워드 수정 실패:', error);
@@ -953,7 +973,7 @@
             closeKeywordModal() {
                 this.showCreateKeyword = false;
                 this.editingKeyword = false;
-                this.keywordForm = { id: null, subtopic_id: null, name: '', description: '', search_volume: 0, difficulty: 5 };
+                this.keywordForm = { id: null, subtopic_id: null, name: '', description: '', search_volume: 0, difficulty: 5, priority: 5 };
             }
         };
     }

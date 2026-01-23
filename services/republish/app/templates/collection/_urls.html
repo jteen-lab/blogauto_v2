@@ -46,13 +46,13 @@
     <!-- 검색/필터 바 -->
     <div class="search-bar">
         <div class="flex items-center gap-2 flex-1">
-            <div class="search-input-wrapper flex-1">
+            <div class="search-input-wrapper flex-1 md:max-w-xs">
                 <input type="text"
                        x-model="urlSearch"
                        @keyup.enter="urlPage = 1; loadUrls()"
                        placeholder="도메인/키워드 검색..."
                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                <button x-show="urlSearch"
+                <button x-show="urlSearch.length > 0"
                         @click="resetUrlSearch()"
                         class="search-clear-btn"
                         title="검색 초기화">
@@ -78,32 +78,59 @@
                 <option value="wordpress">워드프레스</option>
                 <option value="other">기타</option>
             </select>
-        </div>
-        <div class="flex items-center gap-2">
             <button @click="urlPage = 1; loadUrls()"
-                    class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 transition-colors">
-                검색
+                    class="inline-flex items-center justify-center px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors">
+                <svg class="w-4 h-4 md:mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <span class="hidden md:inline">검색</span>
             </button>
         </div>
     </div>
 
-    <!-- 일괄 작업 버튼 -->
-    <div class="p-3 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center gap-2">
-        <button @click="deleteSelectedUrls()"
-                :disabled="selectedUrls.length === 0"
-                class="px-3 py-1.5 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-            선택 삭제 (<span x-text="selectedUrls.length"></span>)
-        </button>
-        <button @click="resetSelectedUrls()"
-                :disabled="selectedUrls.length === 0"
-                class="px-3 py-1.5 text-sm bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-            선택 재수집
-        </button>
-        <div class="border-l border-gray-300 h-6 mx-2"></div>
-        <button @click="resetOldUrls(7)"
-                class="px-3 py-1.5 text-sm bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors">
-            7일 지난 URL 재수집
-        </button>
+    <!-- 액션 버튼 그리드 -->
+    <div class="p-3 bg-gray-50 border-b border-gray-200">
+        <div class="grid grid-cols-2 md:flex md:flex-wrap gap-2">
+            <!-- URL 추가 -->
+            <button @click="$dispatch('open-url-add-modal')"
+                    class="inline-flex items-center justify-center px-3 py-2 border-2 border-blue-600 rounded-lg text-sm font-medium text-blue-600 bg-white hover:bg-blue-50 transition-colors">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                <span class="hidden sm:inline">URL 추가</span>
+                <span class="sm:hidden">추가</span>
+            </button>
+            <!-- 선택 삭제 -->
+            <button x-show="selectedUrls.length > 0"
+                    @click="deleteSelectedUrls()"
+                    class="inline-flex items-center justify-center px-3 py-2 border-2 border-red-500 rounded-lg text-sm font-medium text-red-600 bg-white hover:bg-red-50 transition-colors">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+                <span class="hidden sm:inline">선택 삭제</span>
+                <span class="sm:hidden">삭제</span>
+                (<span x-text="selectedUrls.length"></span>)
+            </button>
+            <!-- 선택 재수집 -->
+            <button x-show="selectedUrls.length > 0"
+                    @click="resetSelectedUrls()"
+                    class="inline-flex items-center justify-center px-3 py-2 border-2 border-yellow-500 rounded-lg text-sm font-medium text-yellow-700 bg-white hover:bg-yellow-50 transition-colors">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                <span class="hidden sm:inline">선택 재수집</span>
+                <span class="sm:hidden">재수집</span>
+            </button>
+            <!-- 7일 지난 URL 재수집 -->
+            <button @click="resetOldUrls(7)"
+                    class="inline-flex items-center justify-center px-3 py-2 border-2 border-purple-500 rounded-lg text-sm font-medium text-purple-700 bg-white hover:bg-purple-50 transition-colors">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <span class="hidden sm:inline">7일 지난 URL 재수집</span>
+                <span class="sm:hidden">7일 재수집</span>
+            </button>
+        </div>
     </div>
 
     <!-- PC 테이블 (768px 이상) -->
@@ -406,6 +433,110 @@
                     class="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
                 다음
             </button>
+        </div>
+    </div>
+</div>
+
+<!-- URL 추가 모달 (대량 입력) -->
+<div
+    x-data="{ open: false, urlInput: '', submitting: false, result: null }"
+    @open-url-add-modal.window="open = true; urlInput = ''; result = null"
+    x-show="open"
+    x-cloak
+    class="fixed inset-0 z-50 overflow-y-auto"
+    style="background: rgba(0,0,0,0.5)">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div
+            @click.away="open = false"
+            class="bg-white rounded-lg shadow-xl w-full max-w-lg">
+            <div class="px-6 py-4 border-b flex items-center justify-between">
+                <h3 class="text-lg font-semibold">URL 추가</h3>
+                <button @click="open = false" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="px-6 py-4 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">URL 입력</label>
+                    <textarea
+                        x-model="urlInput"
+                        rows="10"
+                        placeholder="URL을 입력하세요. 한 줄에 하나씩 입력하면 여러 개를 한 번에 등록할 수 있습니다.
+
+예시:
+https://example.tistory.com
+https://blog.naver.com/example
+https://example.wordpress.com
+example.com (자동으로 https:// 추가됨)"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 resize-none font-mono"
+                    ></textarea>
+                    <div class="flex justify-between mt-1">
+                        <p class="text-xs text-gray-500">줄바꿈으로 구분하여 여러 개 입력 가능</p>
+                        <p class="text-xs text-gray-400" x-text="`${urlInput.split('\\n').filter(u => u.trim()).length}개`"></p>
+                    </div>
+                </div>
+                <!-- 안내 -->
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <p class="text-xs text-blue-700 font-medium mb-1">📋 플랫폼 자동 감지</p>
+                    <ul class="text-xs text-blue-600 space-y-0.5">
+                        <li>• <strong>tistory.com</strong> → 티스토리</li>
+                        <li>• <strong>blog.naver.com</strong> → 네이버 블로그</li>
+                        <li>• <strong>wordpress.com</strong> 또는 도메인에 wp 포함 → 워드프레스</li>
+                        <li>• 그 외 → 기타</li>
+                    </ul>
+                </div>
+                <!-- 결과 표시 -->
+                <div x-show="result" class="p-3 rounded-lg" :class="result?.success ? 'bg-green-50' : 'bg-red-50'">
+                    <p class="text-sm" :class="result?.success ? 'text-green-700' : 'text-red-700'" x-text="result?.message"></p>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t flex justify-end gap-2 bg-gray-50">
+                <button
+                    type="button"
+                    @click="open = false"
+                    class="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg text-sm transition-colors">
+                    닫기
+                </button>
+                <button
+                    @click="
+                        const lines = urlInput.split('\n').map(u => u.trim()).filter(u => u);
+                        if (lines.length === 0) {
+                            result = { success: false, message: 'URL을 입력하세요' };
+                            return;
+                        }
+                        submitting = true;
+                        result = null;
+                        fetch(`${API_BASE}/data/urls/bulk-add`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({ urls: lines })
+                        })
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.detail) throw new Error(data.detail);
+                            result = { success: true, message: data.message };
+                            if (data.created > 0) {
+                                urlInput = '';
+                                loadUrls();
+                                loadStats();
+                            }
+                        })
+                        .catch(e => {
+                            result = { success: false, message: e.message || '추가 실패' };
+                        })
+                        .finally(() => submitting = false);
+                    "
+                    :disabled="submitting || !urlInput.trim()"
+                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm transition-colors disabled:opacity-50">
+                    <span x-show="!submitting">추가</span>
+                    <span x-show="submitting" class="flex items-center gap-1">
+                        <span class="spinner"></span> 처리 중...
+                    </span>
+                </button>
+            </div>
         </div>
     </div>
 </div>

@@ -31,10 +31,22 @@
                 <option value="filtered">필터됨</option>
                 <option value="moved">승격됨</option>
             </select>
+            <select
+                x-model="titleTopicId"
+                @change="titlePage = 1; loadTitles()"
+                class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 max-w-[140px] md:max-w-none">
+                <option value="">전체 카테고리</option>
+                <template x-for="topic in topics" :key="topic.id">
+                    <option :value="topic.id" x-text="topic.name"></option>
+                </template>
+            </select>
             <button
                 @click="titlePage = 1; loadTitles()"
-                class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors hidden md:inline-flex">
-                검색
+                class="inline-flex items-center justify-center px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors">
+                <svg class="w-4 h-4 md:mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <span class="hidden md:inline">검색</span>
             </button>
         </div>
     </div>

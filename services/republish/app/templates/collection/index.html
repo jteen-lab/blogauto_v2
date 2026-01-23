@@ -380,6 +380,13 @@
                 <span class="ml-1 text-xs" x-text="`(${stats.temp?.total || 0})`"></span>
             </button>
             <button
+                @click="switchTab('titlesMain')"
+                :class="{'active': activeTab === 'titlesMain'}"
+                class="tab-btn">
+                📋 정식제목
+                <span class="ml-1 text-xs" x-text="`(${stats.main?.total || 0})`"></span>
+            </button>
+            <button
                 @click="switchTab('filters')"
                 :class="{'active': activeTab === 'filters'}"
                 class="tab-btn">
@@ -403,6 +410,11 @@
         <!-- 임시제목 탭 -->
         <div x-show="activeTab === 'titles'" class="tab-content" :class="{'active': activeTab === 'titles'}">
             {% include "collection/_titles.html" %}
+        </div>
+
+        <!-- 정식제목 탭 -->
+        <div x-show="activeTab === 'titlesMain'" class="tab-content" :class="{'active': activeTab === 'titlesMain'}">
+            {% include "collection/_titles_main.html" %}
         </div>
 
         <!-- 필터설정 탭 -->
@@ -445,11 +457,15 @@ function dataManagementApp() {
         keywordSortField: 'created_at',
         keywordSortDir: 'desc',
 
+        // 카테고리(Topic) 목록
+        topics: [],
+
         // 제목 관련
         titles: [],
         titlePage: 1,
         titleSearch: '',
         titleStatus: '',
+        titleTopicId: '',
         titleLoading: false,
         titleHasNext: false,
         titleTotal: 0,
@@ -484,6 +500,23 @@ function dataManagementApp() {
         urlSortField: 'created_at',
         urlSortDir: 'desc',
 
+        // ★ 정식 제목 관련 (Phase E)
+        mainTitles: [],
+        mainTitlePage: 1,
+        mainTitleSearch: '',
+        mainTitleStatus: '',
+        mainTitleViewMode: 'all',
+        mainTitleLoading: false,
+        mainTitleHasNext: false,
+        mainTitleTotal: 0,
+        selectedMainTitles: [],
+        mainTitleSortField: 'created_at',
+        mainTitleSortDir: 'desc',
+        expandedMainTitleId: null,
+        titleGroups: [],
+        titleGroupTotal: 0,
+        expandedGroupIds: [],
+
         // ★ 인라인 편집 상태 변수
         editingKeywordId: null,
         editingKeywordValue: '',
@@ -501,6 +534,22 @@ function dataManagementApp() {
         init() {
             this.loadStats();
             this.loadKeywords();
+            this.loadTopics();  // 카테고리(주제) 목록 로드
+        },
+
+        // 카테고리(주제) 목록 로드
+        async loadTopics() {
+            try {
+                const res = await fetch(`${API_BASE}/categories/topics`, {
+                    credentials: 'include'
+                });
+                if (res.ok) {
+                    this.topics = await res.json();
+                    console.log('[loadTopics] 로드된 topics:', this.topics.length, '개', this.topics);
+                }
+            } catch (e) {
+                console.error('카테고리 목록 로드 실패:', e);
+            }
         },
 
         switchTab(tab) {
@@ -509,6 +558,8 @@ function dataManagementApp() {
                 this.loadKeywords();
             } else if (tab === 'titles' && this.titles.length === 0) {
                 this.loadTitles();
+            } else if (tab === 'titlesMain' && this.mainTitles.length === 0) {
+                this.loadMainTitles();
             } else if (tab === 'filters' && this.filters.length === 0) {
                 this.loadFilters();
             } else if (tab === 'urls' && this.urls.length === 0) {
@@ -600,6 +651,10 @@ function dataManagementApp() {
                 });
                 if (this.titleSearch) params.append('search', this.titleSearch);
                 if (this.titleStatus) params.append('status', this.titleStatus);
+                if (this.titleTopicId) params.append('topic_id', this.titleTopicId);
+
+                // 디버깅 로그
+                console.log('[loadTitles] titleTopicId:', this.titleTopicId, 'params:', params.toString());
 
                 const res = await fetch(`${API_BASE}/data/titles/temp?${params}`, {
                     credentials: 'include'
@@ -608,6 +663,8 @@ function dataManagementApp() {
                 this.titles = data.items || [];
                 this.titleTotal = data.total || 0;
                 this.titleHasNext = data.has_next || false;
+
+                console.log('[loadTitles] 응답:', data.total, '건');
             } catch (e) {
                 console.error('제목 로드 실패:', e);
                 showErrorMessage('제목 로드 실패');
@@ -777,6 +834,223 @@ function dataManagementApp() {
             } catch (e) {
                 showErrorMessage('활성화 실패');
             }
+        },
+
+        // ========== 정식 제목 기능 (Phase E) ==========
+
+        // 정식 제목 로드
+        async loadMainTitles() {
+            this.mainTitleLoading = true;
+            try {
+                const params = new URLSearchParams({
+                    page: this.mainTitlePage,
+                    size: 20,
+                    sort_field: this.mainTitleSortField,
+                    sort_dir: this.mainTitleSortDir,
+                });
+                if (this.mainTitleSearch) params.append('search', this.mainTitleSearch);
+                if (this.mainTitleStatus) params.append('status', this.mainTitleStatus);
+
+                if (this.mainTitleViewMode === 'group') {
+                    // 그룹별 보기
+                    const res = await fetch(`${API_BASE}/title-groups?${params}`, { credentials: 'include' });
+                    const data = await res.json();
+                    this.titleGroups = data.items || [];
+                    this.titleGroupTotal = data.total || 0;
+                    this.mainTitles = [];
+                } else {
+                    // 전체 보기 - 그룹 멤버 숨김 (대표 + 미그룹만 표시)
+                    params.append('hide_group_members', 'true');
+                    const res = await fetch(`${API_BASE}/titles?${params}`, { credentials: 'include' });
+                    const data = await res.json();
+                    this.mainTitles = data.items || [];
+                    this.mainTitleTotal = data.total || 0;
+                    this.mainTitleHasNext = data.has_next || false;
+                    this.titleGroups = [];
+                }
+            } catch (e) {
+                console.error('정식 제목 로드 실패:', e);
+                showErrorMessage('정식 제목 로드 실패');
+            } finally {
+                this.mainTitleLoading = false;
+            }
+        },
+
+        // 그룹 상세 팝업 열기
+        async openGroupDetailModal(groupId) {
+            try {
+                const res = await fetch(`${API_BASE}/title-groups/${groupId}`, { credentials: 'include' });
+                if (!res.ok) throw new Error('그룹 조회 실패');
+                const groupData = await res.json();
+                window.dispatchEvent(new CustomEvent('open-group-detail-modal', { detail: groupData }));
+            } catch (e) {
+                console.error('그룹 상세 조회 실패:', e);
+                showErrorMessage('그룹 상세 조회 실패');
+            }
+        },
+
+        // 정식 제목 정렬
+        sortMainTitles(field) {
+            if (this.mainTitleSortField === field) {
+                this.mainTitleSortDir = this.mainTitleSortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.mainTitleSortField = field;
+                this.mainTitleSortDir = 'asc';
+            }
+            this.mainTitlePage = 1;
+            this.loadMainTitles();
+        },
+
+        // 정식 제목 검색 리셋
+        resetMainTitleSearch() {
+            this.mainTitleSearch = '';
+            this.mainTitlePage = 1;
+            this.loadMainTitles();
+        },
+
+        // 정식 제목 전체 선택/해제
+        toggleMainTitleSelectAll() {
+            const isAllSelected = this.mainTitles.length > 0 &&
+                this.selectedMainTitles.length === this.mainTitles.length;
+            if (isAllSelected) {
+                this.selectedMainTitles = [];
+            } else {
+                this.selectedMainTitles = this.mainTitles.map(t => t.id);
+            }
+        },
+
+        // 선택한 정식 제목 삭제
+        async deleteSelectedMainTitles() {
+            if (this.selectedMainTitles.length === 0) return;
+            if (!confirm(`선택된 ${this.selectedMainTitles.length}개 제목을 삭제하시겠습니까?`)) return;
+            try {
+                for (const id of this.selectedMainTitles) {
+                    await fetch(`${API_BASE}/titles/${id}`, { method: 'DELETE', credentials: 'include' });
+                }
+                showSuccessMessage(`${this.selectedMainTitles.length}개 제목이 삭제되었습니다`);
+                this.selectedMainTitles = [];
+                this.loadMainTitles();
+                this.loadStats();
+            } catch (e) {
+                showErrorMessage('삭제 실패');
+            }
+        },
+
+        // 선택한 정식 제목 복구 (임시로 이동)
+        async restoreSelectedMainTitles() {
+            if (this.selectedMainTitles.length === 0) return;
+            if (!confirm(`선택된 ${this.selectedMainTitles.length}개 제목을 임시 제목으로 복구하시겠습니까?`)) return;
+            try {
+                const res = await fetch(`${API_BASE}/titles/transfer/to-temp`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ title_ids: this.selectedMainTitles })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showSuccessMessage(`${data.moved}개 제목이 복구되었습니다`);
+                    this.selectedMainTitles = [];
+                    this.loadMainTitles();
+                    this.loadTitles();
+                    this.loadStats();
+                } else {
+                    showErrorMessage('복구 실패');
+                }
+            } catch (e) {
+                showErrorMessage('복구 중 오류 발생');
+            }
+        },
+
+        // 단일 정식 제목 복구 (임시로 이동)
+        async restoreMainTitle(id) {
+            if (!confirm('이 제목을 임시 제목으로 복구하시겠습니까?')) return;
+            try {
+                const res = await fetch(`${API_BASE}/titles/transfer/to-temp`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ title_ids: [id] })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showSuccessMessage('제목이 복구되었습니다');
+                    this.loadMainTitles();
+                    this.loadTitles();
+                    this.loadStats();
+                }
+            } catch (e) {
+                showErrorMessage('복구 실패');
+            }
+        },
+
+        // 선택한 정식 제목을 임시로 이동 (구버전 호환)
+        async moveMainTitlesToTemp() {
+            return this.restoreSelectedMainTitles();
+        },
+
+        // 단일 정식 제목을 임시로 이동 (구버전 호환)
+        async moveMainTitleToTemp(id) {
+            return this.restoreMainTitle(id);
+        },
+
+        // 정식 제목 수정 모달 열기
+        openMainTitleEditModal(title) {
+            this.$dispatch('open-main-title-edit-modal', { ...title });
+        },
+
+        // 그룹 펼치기/접기
+        toggleGroupExpand(groupId) {
+            const idx = this.expandedGroupIds.indexOf(groupId);
+            if (idx > -1) {
+                this.expandedGroupIds.splice(idx, 1);
+            } else {
+                this.expandedGroupIds.push(groupId);
+                this.loadGroupTitles(groupId);
+            }
+        },
+
+        // 그룹 내 제목 로드
+        async loadGroupTitles(groupId) {
+            try {
+                const res = await fetch(`${API_BASE}/title-groups/${groupId}`, { credentials: 'include' });
+                const data = await res.json();
+                const group = this.titleGroups.find(g => g.id === groupId);
+                if (group) {
+                    group.titles = data.titles || [];
+                }
+            } catch (e) {
+                console.error('그룹 제목 로드 실패:', e);
+            }
+        },
+
+        // 대표 제목 설정
+        async setAsRepresentative(groupId, titleId) {
+            try {
+                const res = await fetch(`${API_BASE}/title-groups/${groupId}/representative`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ new_representative_id: titleId })
+                });
+                if (res.ok) {
+                    showSuccessMessage('대표 제목이 변경되었습니다');
+                    this.loadGroupTitles(groupId);
+                }
+            } catch (e) {
+                showErrorMessage('대표 변경 실패');
+            }
+        },
+
+        // 정식 제목 상태 텍스트
+        getMainTitleStatusText(status) {
+            const statusMap = {
+                'available': '사용가능',
+                'matched': '매칭됨',
+                'used': '사용됨',
+                'archived': '보관됨'
+            };
+            return statusMap[status] || status;
         },
 
         // URL 전체 선택/해제
@@ -1480,10 +1754,10 @@ function dataManagementApp() {
 
         // 임시제목 카테고리 재분류
         async reclassifyTitles() {
-            if (!confirm('미분류 임시제목의 카테고리를 재분류하시겠습니까?')) return;
+            if (!confirm('모든 임시제목의 카테고리를 재분류하시겠습니까?\n(이미 분류된 제목도 최신 카테고리로 갱신됩니다)')) return;
 
             try {
-                const res = await fetch(`${API_BASE}/data/titles/temp/reclassify`, {
+                const res = await fetch(`${API_BASE}/data/titles/temp/reclassify?force_all=true`, {
                     method: 'POST',
                     credentials: 'include'
                 });

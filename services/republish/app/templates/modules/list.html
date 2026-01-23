@@ -122,6 +122,14 @@
             align-items: start;
         }
 
+        .desktop-sections.sections-6 {
+            max-width: 1800px;
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 0.75rem;
+            align-items: start;
+        }
+
         /* 각 섹션 내 모듈 그리드 */
         .desktop-sections.sections-1 .module-grid {
             grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -146,6 +154,11 @@
         .desktop-sections.sections-5 .module-grid {
             grid-template-columns: 1fr;
             gap: 0.875rem;
+        }
+
+        .desktop-sections.sections-6 .module-grid {
+            grid-template-columns: 1fr;
+            gap: 0.75rem;
         }
     }
 
@@ -374,6 +387,20 @@
                 </template>
             </div>
         </div>
+
+        <!-- 데이터 섹션 -->
+        <div x-show="getModulesByType('data').length > 0" class="module-section">
+            <div class="section-header">
+                <span class="text-2xl">📊</span>
+                <h3 class="section-title">데이터 모듈</h3>
+                <span class="section-count" x-text="getModulesByType('data').length"></span>
+            </div>
+            <div class="module-grid">
+                <template x-for="module in getModulesByType('data')" :key="module.id + '-' + sortBy + '-' + sortOrder">
+                    {% include "modules/_card.html" %}
+                </template>
+            </div>
+        </div>
     </div>
 
     <!-- 모바일: 탭 레이아웃 -->
@@ -415,6 +442,13 @@
                         class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap"
                         x-show="getModulesByType('collect').length > 0">
                     수집
+                </button>
+                <button type="button"
+                        @click="activeTab = 'data'"
+                        :class="activeTab === 'data' ? 'bg-teal-50 text-teal-700 border-teal-500' : 'bg-white text-gray-500 hover:text-gray-700'"
+                        class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap"
+                        x-show="getModulesByType('data').length > 0">
+                    데이터
                 </button>
             </div>
 
@@ -460,6 +494,15 @@
                      x-effect="if (activeTab === 'collect') $nextTick(() => reinitMobileTabSlides($el))">
                     <div class="module-grid">
                         <template x-for="module in getModulesByType('collect')" :key="module.id + '-' + sortBy + '-' + sortOrder">
+                            {% include "modules/_card.html" %}
+                        </template>
+                    </div>
+                </div>
+
+                <div x-show="activeTab === 'data'"
+                     x-effect="if (activeTab === 'data') $nextTick(() => reinitMobileTabSlides($el))">
+                    <div class="module-grid">
+                        <template x-for="module in getModulesByType('data')" :key="module.id + '-' + sortBy + '-' + sortOrder">
                             {% include "modules/_card.html" %}
                         </template>
                     </div>
@@ -525,10 +568,17 @@
         </button>
 
         <button onclick="selectOption('moduleTypeSelector', 'collect', '수집')"
-                class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-purple-300 hover:bg-purple-50 transition-all duration-200 group col-span-2">
+                class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-purple-300 hover:bg-purple-50 transition-all duration-200 group">
           <span class="text-3xl mb-2 group-hover:scale-110 transition-transform duration-200">🔍</span>
           <span class="font-medium text-gray-900 group-hover:text-purple-700">수집</span>
           <span class="text-xs text-gray-500 mt-1">키워드/제목 자동 수집</span>
+        </button>
+
+        <button onclick="selectOption('moduleTypeSelector', 'data', '데이터')"
+                class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-teal-300 hover:bg-teal-50 transition-all duration-200 group">
+          <span class="text-3xl mb-2 group-hover:scale-110 transition-transform duration-200">📊</span>
+          <span class="font-medium text-gray-900 group-hover:text-teal-700">데이터</span>
+          <span class="text-xs text-gray-500 mt-1">데이터 처리 및 이동</span>
         </button>
       </div>
     </div>
@@ -586,6 +636,6 @@
 </div>
 
 <!-- 스크립트 로드 순서: form.js 먼저, list.js 나중 -->
-<script src="/static/js/modules/form.js"></script>
-<script src="/static/js/modules/list.js"></script>
+<script src="/static/js/modules/form.js?v=20260122-4"></script>
+<script src="/static/js/modules/list.js?v=20260122-4"></script>
 {% endblock %}

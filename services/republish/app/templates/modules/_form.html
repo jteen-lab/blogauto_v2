@@ -717,8 +717,357 @@ Alpine.js 데이터 바인딩 사용
             </div>
         </div>
 
+        <!-- 데이터 모듈 설정 -->
+        <div x-show="formData.type_code === 'data'">
+            <!-- 실행 방식 선택 (라디오 버튼으로 상호 배타적 선택) -->
+            <div class="space-y-4 mb-6">
+                <h3 class="text-base font-semibold text-gray-900 flex items-center gap-2">
+                    🔄 실행 방식 선택
+                </h3>
+                <p class="text-xs text-gray-500 mb-3">수집 모듈 연동 또는 데이터 이동 스케줄 중 하나를 선택하세요.</p>
+
+                <!-- 실행 방식 라디오 버튼 -->
+                <div class="space-y-3">
+                    <!-- 옵션 1: 수집 모듈 연동 -->
+                    <div class="p-4 rounded-lg border-2 cursor-pointer transition-all"
+                         :class="formData.execution_mode === 'collection_link' ? 'bg-teal-50 border-teal-400' : 'bg-white border-gray-200 hover:border-gray-300'"
+                         @click="formData.execution_mode = 'collection_link'">
+                        <label class="flex items-center cursor-pointer">
+                            <input type="radio"
+                                   x-model="formData.execution_mode"
+                                   value="collection_link"
+                                   class="w-4 h-4 text-teal-600 focus:ring-teal-500">
+                            <span class="ml-2 text-sm font-medium text-gray-700">🔗 수집 모듈 연동</span>
+                        </label>
+                        <p class="mt-1 ml-6 text-xs text-gray-500">동일 플로우 내 수집 모듈이 완료되면 자동으로 제목 이동을 수행합니다</p>
+                    </div>
+
+                    <!-- 옵션 2: 데이터 이동 스케줄 -->
+                    <div class="p-4 rounded-lg border-2 cursor-pointer transition-all"
+                         :class="formData.execution_mode === 'schedule' ? 'bg-blue-50 border-blue-400' : 'bg-white border-gray-200 hover:border-gray-300'"
+                         @click="formData.execution_mode = 'schedule'">
+                        <label class="flex items-center cursor-pointer">
+                            <input type="radio"
+                                   x-model="formData.execution_mode"
+                                   value="schedule"
+                                   class="w-4 h-4 text-blue-600 focus:ring-blue-500">
+                            <span class="ml-2 text-sm font-medium text-gray-700">⏰ 데이터 이동 스케줄</span>
+                        </label>
+                        <p class="mt-1 ml-6 text-xs text-gray-500">설정된 스케줄에 따라 독립적으로 제목 이동을 수행합니다</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 수집 모듈 연동 설정 (연동 모드 선택 시만 표시) -->
+            <div x-show="formData.execution_mode === 'collection_link'" x-transition class="space-y-4 mb-6 pl-4 border-l-2 border-teal-200">
+                <h4 class="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                    🔗 수집 모듈 연동 설정
+                </h4>
+
+                <!-- 연동할 수집 모듈 선택 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">연동할 수집 모듈</label>
+                    <div class="p-3 bg-teal-50 rounded-lg border border-teal-200">
+                        <span class="text-sm text-teal-800">📌 동일 플로우에 추가된 수집 모듈</span>
+                        <p class="mt-1 text-xs text-gray-500">이 데이터 모듈과 같은 플로우에 수집 모듈을 추가해야 합니다</p>
+                    </div>
+                </div>
+
+                <!-- 완료 후 대기 시간 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">수집 완료 후 대기 시간</label>
+                    <div class="flex items-center gap-2">
+                        <input type="number"
+                               x-model.number="formData.collection_link_delay"
+                               min="0"
+                               max="300"
+                               class="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent">
+                        <span class="text-sm text-gray-500">초</span>
+                    </div>
+                    <p class="mt-1 text-xs text-gray-500">수집 모듈 완료 후 제목 이동까지 대기할 시간 (기본: 30초)</p>
+                </div>
+
+                <!-- 경고 메시지 -->
+                <div class="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                    <p class="text-xs text-yellow-800">
+                        ⚠️ <strong>주의:</strong> 플로우에 수집 모듈이 없으면 테스트/오토런 실행 시 경고가 표시됩니다.
+                    </p>
+                </div>
+            </div>
+
+            <!-- 데이터 이동 스케줄 설정 (스케줄 모드 선택 시만 표시) -->
+            <div x-show="formData.execution_mode === 'schedule'" x-transition class="space-y-4 mb-6 pl-4 border-l-2 border-blue-200">
+                <h4 class="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                    ⏰ 데이터 이동 스케줄 설정
+                </h4>
+
+                <!-- 스케줄 모드 선택 -->
+                <div class="flex gap-4 mb-4">
+                    <label class="flex items-center cursor-pointer">
+                        <input type="radio"
+                               x-model="formData.data_schedule_mode"
+                               value="fixed_time"
+                               class="text-blue-600 focus:ring-blue-500 h-4 w-4">
+                        <span class="ml-2 text-sm text-gray-700">고정 시간</span>
+                    </label>
+                    <label class="flex items-center cursor-pointer">
+                        <input type="radio"
+                               x-model="formData.data_schedule_mode"
+                               value="interval"
+                               class="text-blue-600 focus:ring-blue-500 h-4 w-4">
+                        <span class="ml-2 text-sm text-gray-700">일정 간격</span>
+                    </label>
+                </div>
+
+                <!-- 고정 시간 모드 -->
+                <div x-show="formData.data_schedule_mode === 'fixed_time'" class="p-4 bg-gray-50 rounded-lg">
+                    <div class="flex items-center gap-2 mb-3">
+                        <input type="time"
+                               x-model="newDataFixedTime"
+                               class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <button type="button"
+                                @click="addDataFixedTime()"
+                                class="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                            추가
+                        </button>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <template x-for="time in formData.data_fixed_times" :key="time">
+                            <span class="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+                                <span x-text="time"></span>
+                                <button type="button"
+                                        @click="removeDataFixedTime(time)"
+                                        class="ml-2 text-blue-600 hover:text-blue-800">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                    </svg>
+                                </button>
+                            </span>
+                        </template>
+                    </div>
+                    <p class="mt-2 text-xs text-gray-500">설정된 시간에 데이터 이동이 실행됩니다</p>
+                </div>
+
+                <!-- 일정 간격 모드 -->
+                <div x-show="formData.data_schedule_mode === 'interval'" class="p-4 bg-gray-50 rounded-lg">
+                    <div class="flex items-center gap-2">
+                        <span class="text-gray-700 text-sm">이동 간격:</span>
+                        <input type="number"
+                               x-model.number="formData.data_interval_hours"
+                               min="1"
+                               max="24"
+                               class="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <span class="text-gray-500 text-sm">시간마다</span>
+                    </div>
+                    <p class="mt-2 text-xs text-gray-500">설정된 간격마다 데이터 이동이 실행됩니다</p>
+                </div>
+
+                <!-- 안내 메시지 -->
+                <div class="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <p class="text-xs text-blue-800">
+                        ℹ️ 스케줄 모드는 플로우에 수집 모듈이 없어도 독립적으로 동작합니다.
+                    </p>
+                </div>
+
+                <!-- 데이터 이동용 활성 시간대 설정 -->
+                <div class="mt-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">활성 시간대 설정</label>
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <!-- 빠른 설정 버튼 -->
+                        <div class="flex flex-wrap gap-2 mb-4">
+                            <button type="button"
+                                    @click="selectAllHours()"
+                                    class="px-3 py-1 text-xs bg-blue-100 text-blue-800 rounded-full hover:bg-blue-200">
+                                전체 선택
+                            </button>
+                            <button type="button"
+                                    @click="clearAllHours()"
+                                    class="px-3 py-1 text-xs bg-gray-100 text-gray-800 rounded-full hover:bg-gray-200">
+                                전체 해제
+                            </button>
+                        </div>
+
+                        <p class="text-xs text-gray-500 mb-3">
+                            파란색 = 활성, 회색 = 비활성 | 요일 헤더 클릭으로 전체 선택/해제
+                        </p>
+
+                        <!-- 스케줄 테이블 -->
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-xs border-collapse">
+                                <thead>
+                                    <tr>
+                                        <th class="border border-gray-300 bg-gray-100 p-2 text-center w-12">시간</th>
+                                        <template x-for="(day, dayIdx) in days" :key="dayIdx">
+                                            <th class="border border-gray-300 bg-gray-100 p-2 text-center cursor-pointer hover:bg-gray-200 w-8"
+                                                @click="toggleDay(dayIdx)"
+                                                x-text="day">
+                                            </th>
+                                        </template>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="hour in 24" :key="hour">
+                                        <tr>
+                                            <td class="border border-gray-300 bg-gray-50 p-1 text-center font-medium"
+                                                x-text="String(hour-1).padStart(2, '0') + '시'">
+                                            </td>
+                                            <template x-for="(day, dayIdx) in days" :key="dayIdx + '-' + hour">
+                                                <td class="border border-gray-300 p-0">
+                                                    <button type="button"
+                                                            class="w-full h-7 border-none cursor-pointer transition-colors duration-150"
+                                                            :class="schedule[dayIdx][hour-1] ? 'bg-blue-500 hover:bg-blue-600' : 'bg-gray-100 hover:bg-gray-200'"
+                                                            @click="toggleHour(dayIdx, hour-1)">
+                                                    </button>
+                                                </td>
+                                            </template>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- 활성 시간 요약 -->
+                        <div class="mt-4 p-3 bg-blue-50 rounded-lg">
+                            <div class="flex items-center justify-between text-sm">
+                                <span class="text-blue-800 font-medium">
+                                    활성 시간: <span x-text="activeHoursCount"></span>시간/주
+                                </span>
+                                <span class="text-blue-600" x-show="todayActiveHours > 0">
+                                    오늘: <span x-text="todayActiveHours"></span>시간
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. 실행 조건 설정 -->
+            <div class="space-y-4 mb-6">
+                <h3 class="text-base font-semibold text-gray-900 flex items-center gap-2">
+                    ⚙️ 실행 조건
+                </h3>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- 최대 이동 개수 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">최대 이동 개수</label>
+                        <div class="flex items-center gap-2">
+                            <label class="flex items-center cursor-pointer mr-3">
+                                <input type="checkbox"
+                                       x-model="formData.max_titles_unlimited"
+                                       class="w-4 h-4 text-teal-600 focus:ring-teal-500 rounded">
+                                <span class="ml-2 text-sm text-gray-600">전체 (카테고리 분류된 제목)</span>
+                            </label>
+                            <input type="number"
+                                   x-model.number="formData.max_titles_per_run"
+                                   min="1"
+                                   max="10000"
+                                   x-show="!formData.max_titles_unlimited"
+                                   class="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent">
+                            <span class="text-sm text-gray-500" x-show="!formData.max_titles_unlimited">개</span>
+                        </div>
+                        <p class="mt-1 text-xs text-gray-500" x-show="!formData.max_titles_unlimited">한 번 실행 시 최대 이동할 제목 수</p>
+                        <p class="mt-1 text-xs text-teal-600" x-show="formData.max_titles_unlimited">✅ 카테고리가 분류된 모든 제목을 이동합니다</p>
+                    </div>
+
+                    <!-- 최소 제목 수 조건 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">최소 제목 수 조건</label>
+                        <div class="flex items-center gap-2">
+                            <input type="number"
+                                   x-model.number="formData.min_titles_required"
+                                   min="1"
+                                   max="100"
+                                   class="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent">
+                            <span class="text-sm text-gray-500">개 이상</span>
+                        </div>
+                        <p class="mt-1 text-xs text-gray-500">임시 제목이 N개 이상일 때만 동작</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. 필터 및 중복 처리 -->
+            <div class="space-y-4 mb-6">
+                <h3 class="text-base font-semibold text-gray-900 flex items-center gap-2">
+                    🔍 필터 및 중복 처리
+                </h3>
+
+                <!-- 중복 제목 처리 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">중복 제목 처리</label>
+                    <div class="flex gap-4 flex-wrap">
+                        <label class="flex items-center cursor-pointer">
+                            <input type="radio"
+                                   x-model="formData.duplicate_handling"
+                                   value="skip"
+                                   class="text-teal-600 focus:ring-teal-500 h-4 w-4">
+                            <span class="ml-2 text-sm text-gray-700">건너뛰기</span>
+                        </label>
+                        <label class="flex items-center cursor-pointer">
+                            <input type="radio"
+                                   x-model="formData.duplicate_handling"
+                                   value="overwrite"
+                                   class="text-teal-600 focus:ring-teal-500 h-4 w-4">
+                            <span class="ml-2 text-sm text-gray-700">덮어쓰기</span>
+                        </label>
+                        <label class="flex items-center cursor-pointer">
+                            <input type="radio"
+                                   x-model="formData.duplicate_handling"
+                                   value="suffix"
+                                   class="text-teal-600 focus:ring-teal-500 h-4 w-4">
+                            <span class="ml-2 text-sm text-gray-700">접미사 추가</span>
+                        </label>
+                    </div>
+                    <p class="mt-1 text-xs text-gray-500">이미 존재하는 제목과 중복될 경우 처리 방식</p>
+                </div>
+
+                <!-- 카테고리 필터 (향후 확장) -->
+                <div class="p-4 bg-gray-50 rounded-lg">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">카테고리 필터</label>
+                    <p class="text-xs text-gray-500">특정 카테고리의 제목만 이동합니다. 비어있으면 전체 카테고리를 대상으로 합니다.</p>
+                    <div class="mt-2">
+                        <input type="text"
+                               x-model="formData.category_filter"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                               placeholder="카테고리명을 쉼표로 구분 (예: IT, 건강, 여행)">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. 그룹화 설정 -->
+            <div class="space-y-4 mb-6">
+                <h3 class="text-base font-semibold text-gray-900 flex items-center gap-2">
+                    📊 그룹화 설정
+                </h3>
+
+                <div class="p-4 bg-gray-50 rounded-lg">
+                    <label class="flex items-center cursor-pointer mb-3">
+                        <input type="checkbox"
+                               x-model="formData.auto_group"
+                               class="w-4 h-4 text-teal-600 focus:ring-teal-500 rounded">
+                        <span class="ml-2 text-sm font-medium text-gray-700">자동 그룹화 활성화</span>
+                    </label>
+                    <p class="ml-6 text-xs text-gray-500 mb-3">유사한 제목끼리 자동으로 그룹화합니다</p>
+
+                    <!-- 유사도 임계값 (자동 그룹화 활성화 시) -->
+                    <div x-show="formData.auto_group" x-transition class="ml-6 mt-3">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">유사도 임계값</label>
+                        <div class="flex items-center gap-2">
+                            <input type="range"
+                                   x-model.number="formData.similarity_threshold"
+                                   min="50"
+                                   max="100"
+                                   class="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                            <span class="w-12 text-center text-sm font-medium text-teal-700" x-text="formData.similarity_threshold + '%'"></span>
+                        </div>
+                        <p class="mt-1 text-xs text-gray-500">값이 높을수록 더 엄격하게 그룹화됩니다 (권장: 75%)</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- 기타 타입 설정 -->
-        <div x-show="formData.type_code !== 'republish' && formData.type_code !== 'collect'">
+        <div x-show="formData.type_code !== 'republish' && formData.type_code !== 'collect' && formData.type_code !== 'data'">
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-2">설정 정보 (JSON)</label>
                 <textarea x-model="settingsJson"
