@@ -855,9 +855,9 @@ async def reclassify_uncategorized_keywords(
                 "message": "미분류 키워드가 없습니다"
             }
 
-        # 2. 카테고리 매처 초기화
-        matcher = CategoryMatcherService(db)
-        await matcher._load_keywords()
+        # 2. 카테고리 매처 초기화 (현재 사용자의 키워드만 로드)
+        matcher = CategoryMatcherService(db, user_id=current_user.id)
+        await matcher._load_keywords(force_reload=True)  # 항상 최신 키워드 로드
 
         # 3. 각 키워드에 대해 매칭 시도
         matched_count = 0

@@ -78,6 +78,11 @@ class BulkUrlReset(BaseModel):
     ids: List[int]
 
 
+class BulkUrlAdd(BaseModel):
+    """대량 URL 추가"""
+    urls: List[str]
+
+
 # API Endpoints
 @router.get("", response_model=CollectedUrlListResponse)
 async def list_collected_urls(
@@ -218,74 +223,82 @@ async def get_url_stats(
     )
 
 
-@router.get("/{url_id}", response_model=CollectedUrlResponse)
-async def get_collected_url(
-    url_id: int,
+# ============ 일괄 처리 API (동적 라우트 전에 배치) ============
+
+@router.post("/bulk-add")
+async def add_urls_bulk(
+    data: BulkUrlAdd,
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_user),
 ):
-    """수집된 URL 상세 조회"""
-    url = await db.get(CollectedUrl, url_id)
-    if not url:
-        raise HTTPException(status_code=404, detail="URL을 찾을 수 없습니다")
+    """URL 대량 추가"""
+    from urllib.parse import urlparse
+    import re
 
-    return CollectedUrlResponse.model_validate(url)
+    created_count = 0
+    duplicate_count = 0
+    invalid_count = 0
 
+    for url_str in data.urls:
+        url_str = url_str.strip()
+        if not url_str:
+            continue
 
-@router.delete("/{url_id}")
-async def delete_collected_url(
-    url_id: int,
-    db: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(get_current_user),
-):
-    """수집된 URL 삭제"""
-    url = await db.get(CollectedUrl, url_id)
-    if not url:
-        raise HTTPException(status_code=404, detail="URL을 찾을 수 없습니다")
+        # URL 형식 검증 (http/https로 시작하지 않으면 https 추가)
+        if not url_str.startswith(('http://', 'https://')):
+            url_str = 'https://' + url_str
 
-    await db.delete(url)
+        try:
+            parsed = urlparse(url_str)
+            if not parsed.netloc:
+                invalid_count += 1
+                continue
+
+            domain = parsed.netloc.lower()
+
+            # 플랫폼 자동 감지
+            platform = "other"
+            if "tistory.com" in domain:
+                platform = "tistory"
+            elif "blog.naver.com" in domain or "m.blog.naver.com" in domain:
+                platform = "naver_blog"
+            elif any(wp in domain for wp in ["wordpress.com", "wp.com"]):
+                platform = "wordpress"
+            elif re.search(r'\bwp\b|wordpress', domain, re.I):
+                platform = "wordpress"
+
+            # 중복 체크
+            existing = await db.execute(
+                select(CollectedUrl).where(CollectedUrl.domain == domain)
+            )
+            if existing.scalar_one_or_none():
+                duplicate_count += 1
+                continue
+
+            # URL 추가
+            new_url = CollectedUrl(
+                url=url_str,
+                domain=domain,
+                platform=platform,
+                is_processed=False,
+                is_active=True
+            )
+            db.add(new_url)
+            created_count += 1
+
+        except Exception as e:
+            logger.warning(f"[BULK_ADD_URL] 파싱 오류: {url_str} - {e}")
+            invalid_count += 1
+
     await db.commit()
+    logger.info(f"[BULK_ADD_URL] 추가: {created_count}개, 중복: {duplicate_count}개, 오류: {invalid_count}개")
 
-    logger.info(f"[DELETE_URL] URL 삭제: {url.domain}")
-    return {"message": "삭제되었습니다"}
-
-
-@router.post("/{url_id}/reset")
-async def reset_url_for_recollect(
-    url_id: int,
-    db: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(get_current_user),
-):
-    """URL을 재수집 대상으로 전환"""
-    url = await db.get(CollectedUrl, url_id)
-    if not url:
-        raise HTTPException(status_code=404, detail="URL을 찾을 수 없습니다")
-
-    url.reset_for_recollect()
-    await db.commit()
-
-    logger.info(f"[RESET_URL] URL 재수집 대상 전환: {url.domain}")
-    return {"message": "재수집 대상으로 전환되었습니다"}
-
-
-@router.post("/{url_id}/activate")
-async def activate_url(
-    url_id: int,
-    db: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(get_current_user),
-):
-    """비활성화된 URL 활성화"""
-    url = await db.get(CollectedUrl, url_id)
-    if not url:
-        raise HTTPException(status_code=404, detail="URL을 찾을 수 없습니다")
-
-    url.is_active = True
-    url.error_count = 0
-    url.last_error = None
-    await db.commit()
-
-    logger.info(f"[ACTIVATE_URL] URL 활성화: {url.domain}")
-    return {"message": "활성화되었습니다"}
+    return {
+        "created": created_count,
+        "duplicates": duplicate_count,
+        "invalid": invalid_count,
+        "message": f"{created_count}개 URL이 추가되었습니다 (중복: {duplicate_count}개, 오류: {invalid_count}개)"
+    }
 
 
 @router.post("/bulk-delete")
@@ -403,3 +416,75 @@ async def reset_old_processed_urls(
         "days": days,
         "message": f"{count}개 URL이 재수집 대상으로 전환되었습니다"
     }
+
+
+# ============ 개별 URL 처리 API (동적 라우트) ============
+
+@router.get("/{url_id}", response_model=CollectedUrlResponse)
+async def get_collected_url(
+    url_id: int,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_user),
+):
+    """수집된 URL 상세 조회"""
+    url = await db.get(CollectedUrl, url_id)
+    if not url:
+        raise HTTPException(status_code=404, detail="URL을 찾을 수 없습니다")
+
+    return CollectedUrlResponse.model_validate(url)
+
+
+@router.delete("/{url_id}")
+async def delete_collected_url(
+    url_id: int,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_user),
+):
+    """수집된 URL 삭제"""
+    url = await db.get(CollectedUrl, url_id)
+    if not url:
+        raise HTTPException(status_code=404, detail="URL을 찾을 수 없습니다")
+
+    await db.delete(url)
+    await db.commit()
+
+    logger.info(f"[DELETE_URL] URL 삭제: {url.domain}")
+    return {"message": "삭제되었습니다"}
+
+
+@router.post("/{url_id}/reset")
+async def reset_url_for_recollect(
+    url_id: int,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_user),
+):
+    """URL을 재수집 대상으로 전환"""
+    url = await db.get(CollectedUrl, url_id)
+    if not url:
+        raise HTTPException(status_code=404, detail="URL을 찾을 수 없습니다")
+
+    url.reset_for_recollect()
+    await db.commit()
+
+    logger.info(f"[RESET_URL] URL 재수집 대상 전환: {url.domain}")
+    return {"message": "재수집 대상으로 전환되었습니다"}
+
+
+@router.post("/{url_id}/activate")
+async def activate_url(
+    url_id: int,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_user),
+):
+    """비활성화된 URL 활성화"""
+    url = await db.get(CollectedUrl, url_id)
+    if not url:
+        raise HTTPException(status_code=404, detail="URL을 찾을 수 없습니다")
+
+    url.is_active = True
+    url.error_count = 0
+    url.last_error = None
+    await db.commit()
+
+    logger.info(f"[ACTIVATE_URL] URL 활성화: {url.domain}")
+    return {"message": "활성화되었습니다"}

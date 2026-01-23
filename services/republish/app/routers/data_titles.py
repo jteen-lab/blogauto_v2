@@ -91,6 +91,39 @@ class BulkTitleDelete(BaseModel):
 
 
 # API Endpoints
+
+@router.get("/temp/topic-distribution")
+async def get_topic_distribution(
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_user),
+):
+    """임시 제목의 topic_id 분포 확인 (디버깅용)"""
+    from sqlalchemy import text
+
+    # topic_id별 개수 조회
+    result = await db.execute(
+        text("""
+            SELECT topic_id, COUNT(*) as cnt
+            FROM temp_titles
+            GROUP BY topic_id
+            ORDER BY cnt DESC
+        """)
+    )
+    rows = result.fetchall()
+
+    distribution = []
+    for row in rows:
+        distribution.append({
+            "topic_id": row[0],
+            "count": row[1]
+        })
+
+    return {
+        "distribution": distribution,
+        "message": "topic_id가 NULL인 경우 카테고리 재분류가 필요합니다"
+    }
+
+
 @router.get("/temp", response_model=TempTitleListResponse)
 async def list_temp_titles(
     page: int = Query(1, ge=1),
@@ -98,6 +131,8 @@ async def list_temp_titles(
     search: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     category_id: Optional[int] = Query(None),
+    topic_id: Optional[int] = Query(None, description="카테고리 관리 주제 ID"),
+    subtopic_id: Optional[int] = Query(None, description="카테고리 관리 하위 주제 ID"),
     collection_stage: Optional[str] = Query(None),
     sort_field: Optional[str] = Query("created_at", description="정렬 필드"),
     sort_dir: Optional[str] = Query("desc", description="정렬 방향 (asc/desc)"),
@@ -105,6 +140,12 @@ async def list_temp_titles(
     current_user: User = Depends(get_current_user),
 ):
     """임시 제목 목록 조회"""
+    # 디버깅 로그
+    logger.info(
+        f"[TEMP_TITLES] 조회 요청 - search={search}, status={status}, "
+        f"topic_id={topic_id} (type={type(topic_id).__name__}), subtopic_id={subtopic_id}, page={page}"
+    )
+
     query = select(TempTitle)
 
     # 필터 적용
@@ -114,12 +155,22 @@ async def list_temp_titles(
         query = query.where(TempTitle.status == status)
     if category_id:
         query = query.where(TempTitle.category_id == category_id)
+    # 카테고리 관리 기반 필터 (Topic/SubTopic)
+    if topic_id is not None:
+        logger.info(f"[TEMP_TITLES] topic_id 필터 적용: {topic_id} (type={type(topic_id).__name__})")
+        query = query.where(TempTitle.topic_id == topic_id)
+    if subtopic_id:
+        query = query.where(TempTitle.subtopic_id == subtopic_id)
     if collection_stage:
         query = query.where(TempTitle.collection_stage == collection_stage)
 
     # 전체 개수
     count_query = select(func.count()).select_from(query.subquery())
     total = (await db.execute(count_query)).scalar() or 0
+
+    # 디버깅: topic_id 필터 결과 로깅
+    if topic_id:
+        logger.info(f"[TEMP_TITLES] topic_id={topic_id} 필터 결과: {total}건")
 
     # 정렬 적용
     sort_columns = {
@@ -428,10 +479,16 @@ async def create_temp_titles_bulk(
     """임시 제목 대량 등록"""
     created_count = 0
     skipped_count = 0
+    short_count = 0  # 10자 이하로 필터링된 개수
 
     for title_text in data.titles:
         title_text = title_text.strip()
         if not title_text:
+            continue
+
+        # 띄어쓰기 포함 10자 이하 제목은 수집하지 않음
+        if len(title_text) <= 10:
+            short_count += 1
             continue
 
         # 중복 체크
@@ -453,9 +510,12 @@ async def create_temp_titles_bulk(
         created_count += 1
 
     await db.commit()
-    logger.info(f"[BULK_TITLE] 등록: {created_count}개, 중복 스킵: {skipped_count}개")
+    logger.info(
+        f"[BULK_TITLE] 등록: {created_count}개, 중복 스킵: {skipped_count}개, "
+        f"10자 이하 스킵: {short_count}개"
+    )
 
-    return {"created": created_count, "skipped": skipped_count}
+    return {"created": created_count, "skipped": skipped_count, "short_filtered": short_count}
 
 
 @router.post("/upload")
@@ -511,9 +571,15 @@ async def upload_titles_excel(
     # 대량 등록
     created_count = 0
     skipped_count = 0
+    short_count = 0  # 10자 이하로 필터링된 개수
 
     for title_text in titles:
         if not title_text:
+            continue
+
+        # 띄어쓰기 포함 10자 이하 제목은 수집하지 않음
+        if len(title_text) <= 10:
+            short_count += 1
             continue
 
         existing = await db.execute(
@@ -534,9 +600,12 @@ async def upload_titles_excel(
         created_count += 1
 
     await db.commit()
-    logger.info(f"[EXCEL_UPLOAD] 등록: {created_count}개, 중복 스킵: {skipped_count}개")
+    logger.info(
+        f"[EXCEL_UPLOAD] 등록: {created_count}개, 중복 스킵: {skipped_count}개, "
+        f"10자 이하 스킵: {short_count}개"
+    )
 
-    return {"created": created_count, "skipped": skipped_count}
+    return {"created": created_count, "skipped": skipped_count, "short_filtered": short_count}
 
 
 @router.post("/temp/remove-duplicates")
@@ -589,39 +658,51 @@ async def remove_duplicate_titles(
 
 @router.post("/temp/reclassify")
 async def reclassify_uncategorized_titles(
+    force_all: bool = Query(False, description="True면 전체 재분류, False면 미분류만"),
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_user),
 ):
     """
-    미분류 제목 카테고리 재분류
+    제목 카테고리 재분류
 
-    topic_id가 NULL인 제목들을 대상으로
-    카테고리 관리의 키워드와 매칭하여 카테고리를 할당합니다.
+    Args:
+        force_all: True면 이미 분류된 제목도 포함하여 전체 재분류 (subtopic_id 갱신)
+                  False면 topic_id가 NULL인 미분류 제목만 재분류 (기본값)
     """
     from ..services.category_matcher_service import CategoryMatcherService
 
     try:
-        # 1. 미분류 제목 조회
-        result = await db.execute(
-            select(TempTitle).where(TempTitle.topic_id == None)
-        )
-        uncategorized = result.scalars().all()
+        # 1. 제목 조회 (force_all 여부에 따라)
+        if force_all:
+            # 전체 제목 조회 (이미 분류된 것 포함, 모든 status)
+            result = await db.execute(
+                select(TempTitle)
+            )
+            mode_str = "전체 재분류"
+        else:
+            # 미분류 제목만 조회
+            result = await db.execute(
+                select(TempTitle).where(TempTitle.topic_id == None)
+            )
+            mode_str = "미분류 재분류"
 
-        if not uncategorized:
+        titles_to_process = result.scalars().all()
+
+        if not titles_to_process:
             return {
                 "success": True,
                 "total": 0,
                 "matched": 0,
-                "message": "미분류 제목이 없습니다"
+                "message": "재분류할 제목이 없습니다"
             }
 
-        # 2. 카테고리 매처 초기화
-        matcher = CategoryMatcherService(db)
-        await matcher._load_keywords()
+        # 2. 카테고리 매처 초기화 (현재 사용자의 키워드만 로드)
+        matcher = CategoryMatcherService(db, user_id=current_user.id)
+        await matcher._load_keywords(force_reload=True)  # 항상 최신 키워드 로드
 
         # 3. 각 제목에 대해 매칭 시도
         matched_count = 0
-        for title in uncategorized:
+        for title in titles_to_process:
             topic_id, subtopic_id, matched_keyword_id = \
                 await matcher.match_and_apply_to_title(title.title)
 
@@ -634,15 +715,16 @@ async def reclassify_uncategorized_titles(
         await db.commit()
 
         logger.info(
-            f"[RECLASSIFY_TITLE] 재분류 완료: "
-            f"전체 {len(uncategorized)}개 중 {matched_count}개 매칭"
+            f"[RECLASSIFY_TITLE] {mode_str} 완료: "
+            f"전체 {len(titles_to_process)}개 중 {matched_count}개 매칭"
         )
 
         return {
             "success": True,
-            "total": len(uncategorized),
+            "total": len(titles_to_process),
             "matched": matched_count,
-            "message": f"{len(uncategorized)}개 중 {matched_count}개 제목이 분류되었습니다"
+            "mode": "all" if force_all else "uncategorized",
+            "message": f"{len(titles_to_process)}개 중 {matched_count}개 제목이 분류되었습니다"
         }
 
     except Exception as e:
