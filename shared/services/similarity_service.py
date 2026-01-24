@@ -301,37 +301,58 @@ class SimilarityService:
         # Stage 1: 캐노니컬 키 완전 일치
         canonical_check = check_canonical_match(title1, title2)
 
-        if canonical_check["match"]:
-            return {
-                "score": 100.0,
-                "groupable": True,
-                "reason": f"캐노니컬 키 완전 일치: {canonical_check['key1']}",
-                "details": {
-                    "stage": "Stage 1: 캐노니컬 키 일치",
-                    "location_check": location_check,
-                    "canonical_check": canonical_check,
-                    "keyword_score": 100,
-                    "location_penalty": 0,
-                    "base_score": 100
-                }
-            }
+        # 캐노니컬 키 매칭 시에도 최소 텍스트 유사도 검증 (오매칭 방지)
+        if canonical_check["match"] or canonical_check.get("partial_match"):
+            # 지역명 제거 후 텍스트 유사도 계산
+            loc1 = extract_location(title1)
+            loc2 = extract_location(title2)
+            clean1 = remove_location(title1, loc1)
+            clean2 = remove_location(title2, loc2)
+            text_similarity = self.calculate_text_similarity(clean1, clean2)
 
-        # Stage 1.5: 캐노니컬 키 부분 일치 (지역+장소)
-        if canonical_check.get("partial_match"):
-            # 부분 일치 시 90점 부여
-            return {
-                "score": 90.0,
-                "groupable": True,
-                "reason": f"캐노니컬 키 부분 일치 (지역+장소): {canonical_check['key1']}",
-                "details": {
-                    "stage": "Stage 1.5: 캐노니컬 키 부분 일치",
-                    "location_check": location_check,
-                    "canonical_check": canonical_check,
-                    "keyword_score": 90,
-                    "location_penalty": 0,
-                    "base_score": 90
+            # 텍스트 유사도가 최소 임계값(75%) 이상이어야 캐노니컬 키 매칭 인정
+            min_text_threshold = 75.0
+
+            if canonical_check["match"] and text_similarity >= min_text_threshold:
+                # 완전 일치: 텍스트 유사도와 100점 중 높은 값 사용
+                final_score = max(text_similarity, 95.0)
+                return {
+                    "score": round(final_score, 2),
+                    "groupable": True,
+                    "reason": f"캐노니컬 키 완전 일치: {canonical_check['key1']}",
+                    "details": {
+                        "stage": "Stage 1: 캐노니컬 키 일치",
+                        "location_check": location_check,
+                        "canonical_check": canonical_check,
+                        "keyword_score": round(text_similarity, 2),
+                        "location_penalty": 0,
+                        "base_score": round(final_score, 2)
+                    }
                 }
-            }
+
+            # Stage 1.5: 캐노니컬 키 부분 일치 (지역+장소)
+            if canonical_check.get("partial_match") and text_similarity >= min_text_threshold:
+                # 부분 일치: 텍스트 유사도와 90점 중 높은 값 사용
+                final_score = max(text_similarity, 85.0)
+                return {
+                    "score": round(final_score, 2),
+                    "groupable": True,
+                    "reason": f"캐노니컬 키 부분 일치 (지역+장소): {canonical_check['key1']}",
+                    "details": {
+                        "stage": "Stage 1.5: 캐노니컬 키 부분 일치",
+                        "location_check": location_check,
+                        "canonical_check": canonical_check,
+                        "keyword_score": round(text_similarity, 2),
+                        "location_penalty": 0,
+                        "base_score": round(final_score, 2)
+                    }
+                }
+
+            # 텍스트 유사도가 너무 낮으면 캐노니컬 키 매칭 무시하고 일반 유사도로 진행
+            logger.debug(
+                f"[SIMILARITY] 캐노니컬 키 매칭되었으나 텍스트 유사도 부족: "
+                f"{text_similarity:.1f}% < {min_text_threshold}%"
+            )
 
         # Stage 2: 키워드 기반 유사도 (기존 로직 활용)
         loc1 = extract_location(title1)
@@ -414,10 +435,10 @@ class SimilarityService:
                     "locations2": loc2
                 }
 
-        # Case 3: 한쪽만 지역명 있음 → 진행하되 패널티
+        # Case 3: 한쪽만 지역명 있음 → 진행하되 강화된 패널티
         return {
             "compatible": True,
-            "penalty": 0.15,  # 15% 감점
+            "penalty": 0.30,  # 30% 감점 (15% → 30%로 강화)
             "reason": "한쪽만 지역명 존재 - 불확실성 패널티 적용",
             "locations1": loc1,
             "locations2": loc2

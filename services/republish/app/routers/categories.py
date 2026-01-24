@@ -336,6 +336,44 @@ async def delete_keyword(
 # =================================
 
 
+@router.get(
+    "",
+    summary="전체 카테고리 목록 조회 (블로그 설정용)",
+    description="사용자의 전체 카테고리 목록을 계층적으로 조회합니다 (블로그 설정 카테고리 탭용)"
+)
+async def get_all_categories(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """
+    전체 카테고리 목록 조회 (블로그 설정 카테고리 탭용).
+
+    레거시 blogauto_new의 categories/subcategories 형식과 호환되는 응답 반환.
+    """
+    category_service = CategoryService(db)
+    topics = await category_service.get_user_topics(current_user)
+
+    # 레거시 형식으로 변환: categories[{id, name, subcategories: [{id, name}]}]
+    categories = []
+    for topic in topics:
+        cat = {
+            "id": topic.id,
+            "name": topic.name,
+            "subcategories": []
+        }
+        # 각 Topic의 SubTopic 목록 조회
+        subtopics = await category_service.get_subtopics_by_topic(current_user, topic.id)
+        for subtopic in subtopics:
+            cat["subcategories"].append({
+                "id": subtopic.id,
+                "name": subtopic.name
+            })
+        categories.append(cat)
+
+    logger.info(f"전체 카테고리 조회 | user_id={current_user.id} | topics={len(categories)}")
+
+    return {"categories": categories}
+
 
 @router.get(
     "/stats",

@@ -72,7 +72,11 @@ function settingsApp() {
         saving: false,
         showOpenaiKey: false,
         showClaudeKey: false,
+        showGeminiKey: false,
         showBloggerWarning: false,
+
+        // AI API 키 다계정 관리 상태 (ai_keys.js에서 믹스인으로 추가됨)
+        ...window.aiKeysMixin,
 
         // 네이버 검색광고 API 상태
         showNaverApiKey: false,
@@ -115,6 +119,7 @@ function settingsApp() {
         settings: {
             has_openai_key: false,
             has_claude_key: false,
+            has_gemini_key: false,
             has_naver_ads_api: false,
             has_naver_datalab_api: false,
             blogger_hourly_limit: 2
@@ -124,6 +129,7 @@ function settingsApp() {
         form: {
             openai_api_key: '',
             claude_api_key: '',
+            gemini_api_key: '',
             blogger_hourly_limit: 2,
             // 네이버 검색광고 API
             naver_ads_api_key: '',
@@ -154,6 +160,7 @@ function settingsApp() {
             // 모달 열림 이벤트 리스닝
             this.$el.addEventListener('settings-modal-open', () => {
                 this.loadSettings();
+                this.loadAiKeys();
             });
         },
 
@@ -176,6 +183,7 @@ function settingsApp() {
                     this.form = {
                         openai_api_key: data.openai_api_key || '',
                         claude_api_key: data.claude_api_key || '',
+                        gemini_api_key: data.gemini_api_key || '',
                         blogger_hourly_limit: data.blogger_hourly_limit || 2,
                         // 네이버 검색광고 API
                         naver_ads_api_key: data.naver_ads_api_key || '',
@@ -231,12 +239,25 @@ function settingsApp() {
                     blogger_hourly_limit: parseInt(this.form.blogger_hourly_limit)
                 };
 
-                // API 키는 새로 입력된 경우에만 포함 (마스킹된 값은 제외)
-                if (this.form.openai_api_key && !this.isMaskedKey(this.form.openai_api_key)) {
+                // API 키 처리 규칙:
+                // - 마스킹된 값(****포함): payload에 포함하지 않음 → 서버에서 기존 값 유지
+                // - 빈 문자열(""): payload에 빈 문자열 포함 → 서버에서 키 삭제 (null로 설정)
+                // - 새 값: payload에 새 값 포함 → 서버에서 키 업데이트
+
+                // OpenAI API 키 - 마스킹된 값이 아니면 payload에 포함 (빈 문자열도 포함)
+                if (!this.isMaskedKey(this.form.openai_api_key)) {
                     payload.openai_api_key = this.form.openai_api_key;
+                    console.log('[SETTINGS] OpenAI 키 payload:', payload.openai_api_key === '' ? '(빈 문자열 - 삭제 요청)' : '(새 값)');
                 }
-                if (this.form.claude_api_key && !this.isMaskedKey(this.form.claude_api_key)) {
+                // Claude API 키
+                if (!this.isMaskedKey(this.form.claude_api_key)) {
                     payload.claude_api_key = this.form.claude_api_key;
+                    console.log('[SETTINGS] Claude 키 payload:', payload.claude_api_key === '' ? '(빈 문자열 - 삭제 요청)' : '(새 값)');
+                }
+                // Gemini API 키
+                if (!this.isMaskedKey(this.form.gemini_api_key)) {
+                    payload.gemini_api_key = this.form.gemini_api_key;
+                    console.log('[SETTINGS] Gemini 키 payload:', payload.gemini_api_key === '' ? '(빈 문자열 - 삭제 요청)' : '(새 값)');
                 }
 
                 // 네이버 검색광고 API 키
@@ -294,17 +315,30 @@ function settingsApp() {
 
                 if (response.ok) {
                     const result = await response.json();
-                    showSuccessMessage('설정이 저장되었습니다');
+
+                    // 삭제된 키 정보 수집
+                    const deletedKeys = [];
+                    if (payload.openai_api_key === '') deletedKeys.push('OpenAI');
+                    if (payload.claude_api_key === '') deletedKeys.push('Claude');
+                    if (payload.gemini_api_key === '') deletedKeys.push('Gemini');
+
+                    if (deletedKeys.length > 0) {
+                        showSuccessMessage(`설정이 저장되었습니다. (${deletedKeys.join(', ')} API 키 삭제됨)`);
+                    } else {
+                        showSuccessMessage('설정이 저장되었습니다');
+                    }
 
                     // 설정 데이터 업데이트
                     if (result.data) {
                         this.settings.has_openai_key = result.data.has_openai_key;
                         this.settings.has_claude_key = result.data.has_claude_key;
+                        this.settings.has_gemini_key = result.data.has_gemini_key;
                         this.settings.has_naver_ads_api = result.data.has_naver_ads_api;
                         this.settings.has_naver_datalab_api = result.data.has_naver_datalab_api;
                         // 마스킹된 키 값 업데이트
                         this.form.openai_api_key = result.data.openai_api_key || '';
                         this.form.claude_api_key = result.data.claude_api_key || '';
+                        this.form.gemini_api_key = result.data.gemini_api_key || '';
                         this.form.naver_ads_api_key = result.data.naver_ads_api_key || '';
                         this.form.naver_ads_secret_key = result.data.naver_ads_secret_key || '';
                         this.form.naver_ads_customer_id = result.data.naver_ads_customer_id || '';
@@ -351,6 +385,7 @@ function settingsApp() {
             this.activeTab = 'account';
             this.showOpenaiKey = false;
             this.showClaudeKey = false;
+            this.showGeminiKey = false;
             this.showNaverApiKey = false;
             this.showNaverSecretKey = false;
             this.showNaverSearchClientId = false;

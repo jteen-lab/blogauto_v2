@@ -661,8 +661,8 @@ async def _execute_data_module(
             f"auto_group={auto_group} | threshold={threshold}"
         )
 
-        # TitleTransferService 생성
-        service = TitleTransferService(db=db, threshold=threshold / 100.0)
+        # TitleTransferService 생성 (threshold는 0-100 범위)
+        service = TitleTransferService(db=db, threshold=threshold)
 
         # 이동 가능한 제목 수 확인
         from sqlalchemy import select, func

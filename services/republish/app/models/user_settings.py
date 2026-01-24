@@ -38,6 +38,7 @@ class UserSettings(Base):
     # AI 서비스 설정
     openai_api_key = Column(String(255), nullable=True)
     claude_api_key = Column(String(255), nullable=True)
+    gemini_api_key = Column(String(255), nullable=True)
     default_ai_model = Column(String(50), default="gpt-4", nullable=False)
 
     # API 설정
@@ -88,6 +89,11 @@ class UserSettings(Base):
         return bool(self.claude_api_key)
 
     @property
+    def has_gemini_key(self) -> bool:
+        """Gemini API 키 설정 여부"""
+        return bool(self.gemini_api_key)
+
+    @property
     def masked_openai_key(self) -> Optional[str]:
         """마스킹된 OpenAI API 키 (앞 4자 + **** + 뒤 4자)"""
         if not self.openai_api_key:
@@ -104,6 +110,15 @@ class UserSettings(Base):
         if len(self.claude_api_key) <= 8:
             return "****"
         return f"{self.claude_api_key[:4]}****{self.claude_api_key[-4:]}"
+
+    @property
+    def masked_gemini_key(self) -> Optional[str]:
+        """마스킹된 Gemini API 키"""
+        if not self.gemini_api_key:
+            return None
+        if len(self.gemini_api_key) <= 8:
+            return "****"
+        return f"{self.gemini_api_key[:4]}****{self.gemini_api_key[-4:]}"
 
     @property
     def has_naver_ads_api(self) -> bool:
@@ -238,10 +253,12 @@ class UserSettings(Base):
             "user_id": self.user_id,
             "openai_api_key": self.masked_openai_key,
             "claude_api_key": self.masked_claude_key,
+            "gemini_api_key": self.masked_gemini_key,
             "default_ai_model": self.default_ai_model,
             "blogger_hourly_limit": self.blogger_hourly_limit,
             "has_openai_key": self.has_openai_key,
             "has_claude_key": self.has_claude_key,
+            "has_gemini_key": self.has_gemini_key,
             # 네이버 검색광고 API
             "naver_ads_api_key": self.masked_naver_ads_api_key,
             "naver_ads_secret_key": self.masked_naver_ads_secret_key,

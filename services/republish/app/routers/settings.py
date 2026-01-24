@@ -37,10 +37,12 @@ class SettingsResponse(BaseModel):
     user_id: int
     openai_api_key: Optional[str] = None
     claude_api_key: Optional[str] = None
+    gemini_api_key: Optional[str] = None
     default_ai_model: str = "gpt-4"
     blogger_hourly_limit: int = 2
     has_openai_key: bool = False
     has_claude_key: bool = False
+    has_gemini_key: bool = False
     # 네이버 검색광고 API
     naver_ads_api_key: Optional[str] = None
     naver_ads_secret_key: Optional[str] = None
@@ -52,9 +54,17 @@ class SettingsResponse(BaseModel):
 
 
 class SettingsUpdateRequest(BaseModel):
-    """설정 업데이트 요청 스키마"""
+    """설정 업데이트 요청 스키마
+
+    API 키 처리 규칙:
+    - None: 기존 값 유지
+    - 빈 문자열(""): 키 삭제 (null로 설정)
+    - 새 값: 키 업데이트
+    - 마스킹된 값(****포함): 기존 값 유지
+    """
     openai_api_key: Optional[str] = Field(None, max_length=255)
     claude_api_key: Optional[str] = Field(None, max_length=255)
+    gemini_api_key: Optional[str] = Field(None, max_length=255)
     default_ai_model: Optional[str] = Field(None, max_length=50)
     blogger_hourly_limit: Optional[int] = Field(None, ge=1, le=4)
     # 네이버 검색광고 API
@@ -133,10 +143,12 @@ async def get_settings(db: AsyncSession = Depends(get_db_session)):
             "user_id": settings.user_id,
             "openai_api_key": settings.masked_openai_key,
             "claude_api_key": settings.masked_claude_key,
+            "gemini_api_key": settings.masked_gemini_key,
             "default_ai_model": settings.default_ai_model,
             "blogger_hourly_limit": settings.blogger_hourly_limit,
             "has_openai_key": settings.has_openai_key,
             "has_claude_key": settings.has_claude_key,
+            "has_gemini_key": settings.has_gemini_key,
             # 네이버 검색광고 API
             "naver_ads_api_key": settings.masked_naver_ads_api_key,
             "naver_ads_secret_key": settings.masked_naver_ads_secret_key,
@@ -182,8 +194,11 @@ async def update_settings(
     """
     설정 업데이트
 
-    - API 키는 빈 문자열이면 기존 값 유지
-    - None이면 기존 값 삭제
+    API 키 처리 규칙:
+    - None (payload에 없음): 기존 값 유지
+    - 빈 문자열(""): 키 삭제 (null로 설정)
+    - 마스킹된 값(****포함): 기존 값 유지
+    - 새 값: 키 업데이트
     """
     try:
         user_id = 1  # 단일 사용자 환경
@@ -197,21 +212,45 @@ async def update_settings(
             settings = UserSettings(user_id=user_id)
             db.add(settings)
 
+        # 마스킹된 키인지 확인하는 헬퍼 함수
+        def is_masked_key(key: Optional[str]) -> bool:
+            return key is not None and "****" in key
+
         # OpenAI API 키 업데이트
         if request.openai_api_key is not None:
-            if request.openai_api_key == "":
-                pass  # 빈 문자열이면 기존 값 유지
+            logger.debug(f"[SETTINGS] OpenAI 키 요청값: '{request.openai_api_key}' (길이: {len(request.openai_api_key)})")
+            if is_masked_key(request.openai_api_key):
+                logger.debug(f"[SETTINGS] OpenAI 키: 마스킹된 값 - 기존 값 유지")
+            elif request.openai_api_key == "":
+                settings.openai_api_key = None  # 빈 문자열이면 키 삭제
+                logger.info(f"[SETTINGS] OpenAI API 키 삭제: user_id={user_id}")
             else:
                 settings.openai_api_key = request.openai_api_key
                 logger.info(f"[SETTINGS] OpenAI API 키 업데이트: user_id={user_id}")
 
         # Claude API 키 업데이트
         if request.claude_api_key is not None:
-            if request.claude_api_key == "":
-                pass  # 빈 문자열이면 기존 값 유지
+            logger.debug(f"[SETTINGS] Claude 키 요청값: '{request.claude_api_key}' (길이: {len(request.claude_api_key)})")
+            if is_masked_key(request.claude_api_key):
+                logger.debug(f"[SETTINGS] Claude 키: 마스킹된 값 - 기존 값 유지")
+            elif request.claude_api_key == "":
+                settings.claude_api_key = None  # 빈 문자열이면 키 삭제
+                logger.info(f"[SETTINGS] Claude API 키 삭제: user_id={user_id}")
             else:
                 settings.claude_api_key = request.claude_api_key
                 logger.info(f"[SETTINGS] Claude API 키 업데이트: user_id={user_id}")
+
+        # Gemini API 키 업데이트
+        if request.gemini_api_key is not None:
+            logger.debug(f"[SETTINGS] Gemini 키 요청값: '{request.gemini_api_key}' (길이: {len(request.gemini_api_key)})")
+            if is_masked_key(request.gemini_api_key):
+                logger.debug(f"[SETTINGS] Gemini 키: 마스킹된 값 - 기존 값 유지")
+            elif request.gemini_api_key == "":
+                settings.gemini_api_key = None  # 빈 문자열이면 키 삭제
+                logger.info(f"[SETTINGS] Gemini API 키 삭제: user_id={user_id}")
+            else:
+                settings.gemini_api_key = request.gemini_api_key
+                logger.info(f"[SETTINGS] Gemini API 키 업데이트: user_id={user_id}")
 
         # AI 모델 업데이트
         if request.default_ai_model:

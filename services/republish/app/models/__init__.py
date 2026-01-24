@@ -36,6 +36,9 @@ from .flow_execution_state import FlowExecutionState
 # Phase S-1: Settings models
 from .user_settings import UserSettings
 
+# Phase S-2: AI API Key Multi-Account models
+from .ai_api_key import AIApiKey
+
 # Phase D-1-1: Keyword models
 from .keyword import KeywordCategory, SeedKeyword, CollectedKeyword
 
@@ -86,6 +89,8 @@ __all__ = [
     "FlowExecutionState",
     # Phase S-1: Settings models
     "UserSettings",
+    # Phase S-2: AI API Key Multi-Account models
+    "AIApiKey",
     # Phase D-1-1: Keyword models
     "KeywordCategory",
     "SeedKeyword",

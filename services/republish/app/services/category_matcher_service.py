@@ -6,8 +6,16 @@
 
 Features:
 - 키워드 포함 여부 기반 매칭
+- 키워드 페어 매칭 지원 (+ 조합 키워드)
+  예: "이사+업체" → 텍스트에 "이사"와 "업체"가 모두 포함되면 매칭
 - Topic/SubTopic 정보 저장 (주제/하위 주제까지만 표시)
 - 캐시를 통한 성능 최적화
+
+키워드 입력 형식:
+- 단일 키워드: "이사업체" (기존 방식)
+- 띄어쓰기 포함: "이사 업체" (기존 방식)
+- 조합 키워드: "이사+업체" (AND 연산, 순서 무관)
+- 다중 조합: "근조+화환+배달" (3개 이상도 가능)
 """
 from typing import Dict, List, Optional, Tuple, Any
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -115,6 +123,40 @@ class CategoryMatcherService:
         """캐시 초기화"""
         self._keywords_cache = None
 
+    def _is_keyword_match(self, text_lower: str, keyword: str) -> bool:
+        """
+        키워드 매칭 여부 확인 (단일 + 조합 키워드 지원)
+
+        Args:
+            text_lower: 소문자로 변환된 검색 대상 텍스트
+            keyword: 키워드 (단일 또는 + 조합)
+
+        Returns:
+            매칭 여부
+
+        Examples:
+            - 단일: "이사업체" in "경북 이사업체 추천" → True
+            - 조합: "이사+업체" → "이사" AND "업체" 모두 포함 시 True
+            - 조합: "이사+업체" in "경북 이사 전문 업체" → True
+            - 조합: "이사+업체" in "경북 이사 전문가" → False (업체 없음)
+        """
+        # 빈 키워드나 빈 텍스트 처리
+        if not keyword or not keyword.strip():
+            return False
+
+        # 조합 키워드인 경우 (+ 포함)
+        if "+" in keyword:
+            parts = [part.strip().lower() for part in keyword.split("+")]
+            # 빈 문자열 필터링
+            parts = [p for p in parts if p]
+            if not parts:
+                return False
+            # 모든 부분이 텍스트에 포함되어야 함 (AND 연산)
+            return all(part in text_lower for part in parts)
+
+        # 단일 키워드 (기존 방식)
+        return keyword.lower() in text_lower
+
     async def match_category(
         self,
         text: str
@@ -156,11 +198,14 @@ class CategoryMatcherService:
         )
 
         for kw in sorted_keywords:
-            if kw["keyword_lower"] in text_lower:
+            # 단일 키워드 및 조합 키워드(+) 모두 지원
+            if self._is_keyword_match(text_lower, kw["keyword"]):
                 category_path = f"{kw['topic_name']} - {kw['subtopic_name']}"
 
+                # 조합 키워드 여부 표시
+                keyword_type = "조합" if "+" in kw["keyword"] else "단일"
                 logger.debug(
-                    f"[CATEGORY_MATCHER] 매칭 성공: '{text[:30]}...' → "
+                    f"[CATEGORY_MATCHER] 매칭 성공 ({keyword_type}): '{text[:30]}...' → "
                     f"'{kw['keyword']}' ({category_path})"
                 )
 

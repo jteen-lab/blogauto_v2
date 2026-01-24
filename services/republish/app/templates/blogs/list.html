@@ -77,7 +77,19 @@
             display: block;
         }
     }
+
+    /* x-cloak 숨김 처리 */
+    [x-cloak] { display: none !important; }
 </style>
+{% endblock %}
+
+{% block extra_js %}
+<script src="/static/js/blog_image_settings.js"></script>
+<script src="/static/js/blogs/replace-tab.js"></script>
+<!-- 스타일 탭 관련 스크립트 (순서 중요: 의존성 먼저) -->
+<script src="/static/js/blogs/style-tab-presets.js"></script>
+<script src="/static/js/blogs/style-tab-css-utils.js"></script>
+<script src="/static/js/blogs/style-tab.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -594,30 +606,36 @@
     <!-- 탭 네비게이션 -->
     <div class="sticky top-[72px] bg-white z-10 border-b border-gray-200">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex">
+            <div class="flex overflow-x-auto">
                 <button type="button"
                         @click="activeTab = 'image'"
                         :class="activeTab === 'image' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
-                        class="flex-1 py-3 px-1 text-center border-b-2 font-medium text-sm transition-colors">
+                        class="flex-1 py-3 px-1 text-center border-b-2 font-medium text-sm transition-colors whitespace-nowrap">
                     이미지
-                </button>
-                <button type="button"
-                        @click="activeTab = 'style'"
-                        :class="activeTab === 'style' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
-                        class="flex-1 py-3 px-1 text-center border-b-2 font-medium text-sm transition-colors">
-                    스타일
                 </button>
                 <button type="button"
                         @click="activeTab = 'category'"
                         :class="activeTab === 'category' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
-                        class="flex-1 py-3 px-1 text-center border-b-2 font-medium text-sm transition-colors">
+                        class="flex-1 py-3 px-1 text-center border-b-2 font-medium text-sm transition-colors whitespace-nowrap">
                     카테고리
                 </button>
                 <button type="button"
                         @click="activeTab = 'replace'"
                         :class="activeTab === 'replace' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
-                        class="flex-1 py-3 px-1 text-center border-b-2 font-medium text-sm transition-colors">
+                        class="flex-1 py-3 px-1 text-center border-b-2 font-medium text-sm transition-colors whitespace-nowrap">
                     치환자
+                </button>
+                <button type="button"
+                        @click="activeTab = 'style'"
+                        :class="activeTab === 'style' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                        class="flex-1 py-3 px-1 text-center border-b-2 font-medium text-sm transition-colors whitespace-nowrap">
+                    스타일
+                </button>
+                <button type="button"
+                        @click="activeTab = 'ai'"
+                        :class="activeTab === 'ai' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                        class="flex-1 py-3 px-1 text-center border-b-2 font-medium text-sm transition-colors whitespace-nowrap">
+                    AI
                 </button>
             </div>
         </div>
@@ -626,55 +644,28 @@
     <!-- 탭 콘텐츠 -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <!-- 이미지 탭 -->
-        <div x-show="activeTab === 'image'" x-transition>
-            <div class="text-center py-16">
-                <div class="mx-auto w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                    <svg class="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                    </svg>
-                </div>
-                <h3 class="text-lg font-medium text-gray-900 mb-2">이미지 설정</h3>
-                <p class="text-sm text-gray-500">준비 중입니다</p>
-            </div>
-        </div>
-
-        <!-- 스타일 탭 -->
-        <div x-show="activeTab === 'style'" x-transition>
-            <div class="text-center py-16">
-                <div class="mx-auto w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                    <svg class="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/>
-                    </svg>
-                </div>
-                <h3 class="text-lg font-medium text-gray-900 mb-2">스타일 설정</h3>
-                <p class="text-sm text-gray-500">준비 중입니다</p>
-            </div>
+        <div x-show="activeTab === 'image'" x-transition x-cloak>
+            {% include "blogs/settings/_tab_image.html" %}
         </div>
 
         <!-- 카테고리 탭 -->
-        <div x-show="activeTab === 'category'" x-transition>
-            <div class="text-center py-16">
-                <div class="mx-auto w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                    <svg class="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
-                    </svg>
-                </div>
-                <h3 class="text-lg font-medium text-gray-900 mb-2">카테고리 설정</h3>
-                <p class="text-sm text-gray-500">준비 중입니다</p>
-            </div>
+        <div x-show="activeTab === 'category'" x-transition x-cloak>
+            {% include "blogs/settings/_tab_category.html" %}
         </div>
 
         <!-- 치환자 탭 -->
-        <div x-show="activeTab === 'replace'" x-transition>
-            <div class="text-center py-16">
-                <div class="mx-auto w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                    <svg class="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
-                    </svg>
-                </div>
-                <h3 class="text-lg font-medium text-gray-900 mb-2">치환자 설정</h3>
-                <p class="text-sm text-gray-500">준비 중입니다</p>
-            </div>
+        <div x-show="activeTab === 'replace'" x-transition x-cloak>
+            {% include "blogs/settings/_tab_replace.html" %}
+        </div>
+
+        <!-- 스타일 탭 -->
+        <div x-show="activeTab === 'style'" x-transition x-cloak>
+            {% include "blogs/settings/_tab_style.html" %}
+        </div>
+
+        <!-- AI 설정 탭 -->
+        <div x-show="activeTab === 'ai'" x-transition x-cloak>
+            {% include "blogs/settings/_tab_ai.html" %}
         </div>
     </div>
 
@@ -1018,6 +1009,11 @@ function blogSettingsApp() {
         setBlog(blog) {
             this.selectedBlog = blog;
             this.activeTab = 'image';
+            // 전역 이벤트 발생 - 자식 탭 컴포넌트들이 blogId를 받을 수 있도록
+            window.dispatchEvent(new CustomEvent('blog-settings-loaded', {
+                detail: { blogId: blog.id, blog: blog }
+            }));
+            console.log('[blogSettingsApp] setBlog 호출됨, blogId:', blog.id);
         },
 
         reset() {

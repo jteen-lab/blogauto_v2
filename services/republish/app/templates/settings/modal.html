@@ -88,49 +88,257 @@
                 </div>
             </div>
 
-            <!-- AI 서비스 탭 -->
+            <!-- AI 서비스 탭 (다계정 지원) -->
             <div x-show="!loading && activeTab === 'ai'" x-cloak>
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">OpenAI API 키</label>
-                        <div class="relative">
-                            <input :type="showOpenaiKey ? 'text' : 'password'"
-                                   x-model="form.openai_api_key"
-                                   placeholder="sk-..."
-                                   class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <button @click="showOpenaiKey = !showOpenaiKey" type="button"
-                                    class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                                <svg x-show="!showOpenaiKey" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                                </svg>
-                                <svg x-show="showOpenaiKey" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
-                                </svg>
-                            </button>
-                        </div>
-                        <p class="mt-1 text-xs text-gray-500">새 키를 입력하면 기존 키가 교체됩니다</p>
+                <div class="space-y-6">
+                    <!-- 안내 문구 -->
+                    <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <p class="text-sm text-blue-700">
+                            <strong>다계정 지원:</strong> 각 AI 서비스에 여러 API 키를 등록할 수 있습니다.
+                            사용량 제한에 도달하면 자동으로 다음 우선순위 키로 전환됩니다.
+                        </p>
                     </div>
 
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Claude API 키</label>
-                        <div class="relative">
-                            <input :type="showClaudeKey ? 'text' : 'password'"
-                                   x-model="form.claude_api_key"
-                                   placeholder="sk-ant-..."
-                                   class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <button @click="showClaudeKey = !showClaudeKey" type="button"
-                                    class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                                <svg x-show="!showClaudeKey" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                                </svg>
-                                <svg x-show="showClaudeKey" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
-                                </svg>
-                            </button>
+                    <!-- AI 키 로딩 상태 -->
+                    <div x-show="aiKeysLoading" class="flex items-center justify-center py-8">
+                        <div class="loading"></div>
+                        <span class="ml-2 text-gray-500">API 키 목록 로딩 중...</span>
+                    </div>
+
+                    <!-- AI 키 목록 (제공자별) -->
+                    <div x-show="!aiKeysLoading" class="space-y-6">
+                        <!-- OpenAI 섹션 -->
+                        <div class="p-4 border border-gray-200 rounded-lg">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="flex items-center gap-2">
+                                    <svg class="w-5 h-5 text-green-600" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364l2.0201-1.1638a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/>
+                                    </svg>
+                                    <span class="font-medium text-gray-900">OpenAI</span>
+                                    <span x-show="getKeysByProvider('openai').length > 0" class="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full" x-text="getKeysByProvider('openai').length + '개 등록됨'"></span>
+                                </div>
+                                <button @click="openAddKeyModal('openai')"
+                                        class="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                                    </svg>
+                                    키 추가
+                                </button>
+                            </div>
+                            <!-- 키 목록 -->
+                            <div x-show="getKeysByProvider('openai').length === 0" class="text-sm text-gray-500 text-center py-4">
+                                등록된 API 키가 없습니다
+                            </div>
+                            <div x-show="getKeysByProvider('openai').length > 0" class="space-y-2">
+                                <template x-for="key in getKeysByProvider('openai')" :key="key.id">
+                                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                        <div class="flex items-center gap-3">
+                                            <span class="text-xs font-medium text-gray-400 w-6" x-text="'#' + (key.priority + 1)"></span>
+                                            <div>
+                                                <div class="flex items-center gap-2">
+                                                    <span class="font-medium text-gray-900 text-sm" x-text="key.label"></span>
+                                                    <span :class="key.status === 'active' ? 'bg-green-100 text-green-700' : key.status === 'rate_limited' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'"
+                                                          class="text-xs px-2 py-0.5 rounded-full" x-text="getStatusText(key.status)"></span>
+                                                </div>
+                                                <span class="text-xs text-gray-500" x-text="key.api_key"></span>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <button @click="editKey(key)" class="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                                </svg>
+                                            </button>
+                                            <button @click="deleteKey(key)" class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                            <p class="mt-2 text-xs text-gray-500">
+                                <a href="https://platform.openai.com/api-keys" target="_blank" class="text-blue-600 hover:underline">OpenAI 플랫폼</a>에서 API 키를 발급받을 수 있습니다
+                            </p>
                         </div>
-                        <p class="mt-1 text-xs text-gray-500">새 키를 입력하면 기존 키가 교체됩니다</p>
+
+                        <!-- Claude (Anthropic) 섹션 -->
+                        <div class="p-4 border border-gray-200 rounded-lg">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="flex items-center gap-2">
+                                    <svg class="w-5 h-5 text-orange-500" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+                                    </svg>
+                                    <span class="font-medium text-gray-900">Anthropic (Claude)</span>
+                                    <span x-show="getKeysByProvider('anthropic').length > 0" class="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full" x-text="getKeysByProvider('anthropic').length + '개 등록됨'"></span>
+                                </div>
+                                <button @click="openAddKeyModal('anthropic')"
+                                        class="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                                    </svg>
+                                    키 추가
+                                </button>
+                            </div>
+                            <!-- 키 목록 -->
+                            <div x-show="getKeysByProvider('anthropic').length === 0" class="text-sm text-gray-500 text-center py-4">
+                                등록된 API 키가 없습니다
+                            </div>
+                            <div x-show="getKeysByProvider('anthropic').length > 0" class="space-y-2">
+                                <template x-for="key in getKeysByProvider('anthropic')" :key="key.id">
+                                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                        <div class="flex items-center gap-3">
+                                            <span class="text-xs font-medium text-gray-400 w-6" x-text="'#' + (key.priority + 1)"></span>
+                                            <div>
+                                                <div class="flex items-center gap-2">
+                                                    <span class="font-medium text-gray-900 text-sm" x-text="key.label"></span>
+                                                    <span :class="key.status === 'active' ? 'bg-green-100 text-green-700' : key.status === 'rate_limited' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'"
+                                                          class="text-xs px-2 py-0.5 rounded-full" x-text="getStatusText(key.status)"></span>
+                                                </div>
+                                                <span class="text-xs text-gray-500" x-text="key.api_key"></span>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <button @click="editKey(key)" class="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                                </svg>
+                                            </button>
+                                            <button @click="deleteKey(key)" class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                            <p class="mt-2 text-xs text-gray-500">
+                                <a href="https://console.anthropic.com/settings/keys" target="_blank" class="text-blue-600 hover:underline">Anthropic 콘솔</a>에서 API 키를 발급받을 수 있습니다
+                            </p>
+                        </div>
+
+                        <!-- Gemini (Google) 섹션 -->
+                        <div class="p-4 border border-gray-200 rounded-lg">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="flex items-center gap-2">
+                                    <svg class="w-5 h-5 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 0 0-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .37z"/>
+                                    </svg>
+                                    <span class="font-medium text-gray-900">Google (Gemini)</span>
+                                    <span x-show="getKeysByProvider('google').length > 0" class="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full" x-text="getKeysByProvider('google').length + '개 등록됨'"></span>
+                                </div>
+                                <button @click="openAddKeyModal('google')"
+                                        class="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                                    </svg>
+                                    키 추가
+                                </button>
+                            </div>
+                            <!-- 키 목록 -->
+                            <div x-show="getKeysByProvider('google').length === 0" class="text-sm text-gray-500 text-center py-4">
+                                등록된 API 키가 없습니다
+                            </div>
+                            <div x-show="getKeysByProvider('google').length > 0" class="space-y-2">
+                                <template x-for="key in getKeysByProvider('google')" :key="key.id">
+                                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                        <div class="flex items-center gap-3">
+                                            <span class="text-xs font-medium text-gray-400 w-6" x-text="'#' + (key.priority + 1)"></span>
+                                            <div>
+                                                <div class="flex items-center gap-2">
+                                                    <span class="font-medium text-gray-900 text-sm" x-text="key.label"></span>
+                                                    <span :class="key.status === 'active' ? 'bg-green-100 text-green-700' : key.status === 'rate_limited' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'"
+                                                          class="text-xs px-2 py-0.5 rounded-full" x-text="getStatusText(key.status)"></span>
+                                                </div>
+                                                <span class="text-xs text-gray-500" x-text="key.api_key"></span>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <button @click="editKey(key)" class="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                                </svg>
+                                            </button>
+                                            <button @click="deleteKey(key)" class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                            <p class="mt-2 text-xs text-gray-500">
+                                <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-600 hover:underline">Google AI Studio</a>에서 API 키를 발급받을 수 있습니다
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- API 키 추가/수정 모달 -->
+                <div x-show="showKeyModal" x-cloak
+                     class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center"
+                     @click.self="closeKeyModal()">
+                    <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4" x-text="editingKey ? 'API 키 수정' : 'API 키 추가'"></h3>
+                        <form @submit.prevent="saveKey()">
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">라벨 (구분용)</label>
+                                    <input type="text" x-model="keyForm.label" required
+                                           placeholder="예: 개인 계정, 회사 계정"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">API 키</label>
+                                    <div class="relative">
+                                        <input :type="showKeyFormKey ? 'text' : 'password'"
+                                               x-model="keyForm.api_key"
+                                               :required="!editingKey"
+                                               :placeholder="editingKey ? '변경하지 않으려면 비워두세요' : 'API 키 입력'"
+                                               class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                        <button @click="showKeyFormKey = !showKeyFormKey" type="button"
+                                                class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                            <svg x-show="!showKeyFormKey" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                            </svg>
+                                            <svg x-show="showKeyFormKey" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">우선순위</label>
+                                    <select x-model="keyForm.priority"
+                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                        <option value="0">1순위 (가장 먼저 사용)</option>
+                                        <option value="1">2순위</option>
+                                        <option value="2">3순위</option>
+                                        <option value="3">4순위</option>
+                                        <option value="4">5순위</option>
+                                    </select>
+                                    <p class="mt-1 text-xs text-gray-500">낮은 순위의 키부터 사용됩니다</p>
+                                </div>
+                            </div>
+                            <div class="flex gap-3 mt-6">
+                                <button type="button" @click="closeKeyModal()"
+                                        class="flex-1 py-2 px-4 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                                    취소
+                                </button>
+                                <button type="submit" :disabled="savingKey"
+                                        class="flex-1 py-2 px-4 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                                    <span x-show="!savingKey" x-text="editingKey ? '수정' : '추가'"></span>
+                                    <span x-show="savingKey" class="flex items-center justify-center gap-2">
+                                        <div class="loading w-4 h-4"></div>
+                                        저장 중...
+                                    </span>
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -596,4 +804,5 @@
     <div class="h-safe-area-inset-bottom flex-shrink-0"></div>
 </div>
 
+<script src="/static/js/ai_keys.js"></script>
 <script src="/static/js/settings.js"></script>

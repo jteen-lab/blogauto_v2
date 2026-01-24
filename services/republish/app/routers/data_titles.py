@@ -12,7 +12,8 @@ Features:
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, update
+from sqlalchemy.orm import load_only
 from pydantic import BaseModel
 from datetime import datetime
 import io
@@ -352,31 +353,70 @@ async def promote_titles(
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_user),
 ):
-    """임시 제목을 정식 제목으로 승격"""
-    promoted = 0
-    for title_id in data.title_ids:
-        temp = await db.get(TempTitle, title_id)
-        if not temp or temp.status == "moved":
-            continue
+    """
+    임시 제목을 정식 제목으로 승격
 
-        # MainTitle 생성
-        main = MainTitle(
-            title=temp.title,
-            category_id=temp.category_id,
-            status="available",
-            source_temp_title_id=temp.id,
-            source_url=temp.source_post_url
+    데이터 이동 모듈과 동일한 방식 사용:
+    - topic_id와 subtopic_id가 모두 있는 제목만 승격
+    - 카테고리 정보(topic_id, subtopic_id) 유지
+    - 유사도 기반 자동 그룹화 (임계값 75%)
+    """
+    from ..services.title_transfer_service import move_temp_to_main
+    from sqlalchemy import select
+
+    # shared 서비스에서 기본 임계값 가져오기
+    import sys
+    import os
+    _shared_paths = ['/app/shared', '/home/jteen/blogauto_v2/shared']
+    for _path in _shared_paths:
+        if os.path.exists(_path) and _path not in sys.path:
+            sys.path.insert(0, _path)
+            break
+    from services.similarity_service import DEFAULT_SIMILARITY_THRESHOLD
+
+    try:
+        # Data Module 방식: topic_id와 subtopic_id가 모두 있는 제목만 필터링
+        query = select(TempTitle.id).where(
+            TempTitle.id.in_(data.title_ids),
+            TempTitle.topic_id.isnot(None),
+            TempTitle.subtopic_id.isnot(None)
         )
-        db.add(main)
-        await db.flush()
+        filter_result = await db.execute(query)
+        valid_title_ids = [row[0] for row in filter_result.all()]
 
-        # TempTitle 상태 변경
-        temp.mark_moved(main.id)
-        promoted += 1
+        # 필터링된 제목 수 계산
+        skipped_count = len(data.title_ids) - len(valid_title_ids)
 
-    await db.commit()
+        if not valid_title_ids:
+            return {
+                "promoted": 0,
+                "grouped": 0,
+                "duplicates": 0,
+                "skipped": skipped_count,
+                "message": f"카테고리가 지정되지 않은 제목은 승격할 수 없습니다 ({skipped_count}개 스킵)"
+            }
 
-    return {"promoted": promoted, "message": f"{promoted}개 제목이 승격되었습니다"}
+        result = await move_temp_to_main(
+            db=db,
+            temp_title_ids=valid_title_ids,
+            auto_group=True,
+            threshold=DEFAULT_SIMILARITY_THRESHOLD  # 유사도 임계값 75% 적용
+        )
+
+        message = f"{result['moved']}개 제목이 승격되었습니다"
+        if skipped_count > 0:
+            message += f" (카테고리 미지정 {skipped_count}개 스킵)"
+
+        return {
+            "promoted": result["moved"],
+            "grouped": result.get("grouped", 0),
+            "duplicates": result.get("duplicates", 0),
+            "skipped": skipped_count,
+            "message": message
+        }
+    except Exception as e:
+        logger.error(f"[PROMOTE] 승격 실패: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/temp/categorize")
@@ -673,22 +713,27 @@ async def reclassify_uncategorized_titles(
 
     try:
         # 1. 제목 조회 (force_all 여부에 따라)
+        # 순수 컬럼 값만 조회하여 ORM 지연 로딩 문제 방지
+        base_query = select(
+            TempTitle.id,
+            TempTitle.title
+        )
+
         if force_all:
             # 전체 제목 조회 (이미 분류된 것 포함, 모든 status)
-            result = await db.execute(
-                select(TempTitle)
-            )
+            result = await db.execute(base_query)
             mode_str = "전체 재분류"
         else:
             # 미분류 제목만 조회
             result = await db.execute(
-                select(TempTitle).where(TempTitle.topic_id == None)
+                base_query.where(TempTitle.topic_id == None)
             )
             mode_str = "미분류 재분류"
 
-        titles_to_process = result.scalars().all()
+        # 튜플 리스트로 가져옴: [(id, title), ...]
+        titles_data = result.all()
 
-        if not titles_to_process:
+        if not titles_data:
             return {
                 "success": True,
                 "total": 0,
@@ -700,31 +745,38 @@ async def reclassify_uncategorized_titles(
         matcher = CategoryMatcherService(db, user_id=current_user.id)
         await matcher._load_keywords(force_reload=True)  # 항상 최신 키워드 로드
 
-        # 3. 각 제목에 대해 매칭 시도
+        # 3. 각 제목에 대해 매칭 시도 (순수 데이터로 처리)
         matched_count = 0
-        for title in titles_to_process:
+        for title_id, title_text in titles_data:
             topic_id, subtopic_id, matched_keyword_id = \
-                await matcher.match_and_apply_to_title(title.title)
+                await matcher.match_and_apply_to_title(title_text)
 
             if topic_id:
-                title.topic_id = topic_id
-                title.subtopic_id = subtopic_id
-                title.matched_keyword_id = matched_keyword_id
+                # UPDATE 쿼리로 직접 업데이트 (ORM 객체 접근 회피)
+                await db.execute(
+                    update(TempTitle)
+                    .where(TempTitle.id == title_id)
+                    .values(
+                        topic_id=topic_id,
+                        subtopic_id=subtopic_id,
+                        matched_keyword_id=matched_keyword_id
+                    )
+                )
                 matched_count += 1
 
         await db.commit()
 
         logger.info(
             f"[RECLASSIFY_TITLE] {mode_str} 완료: "
-            f"전체 {len(titles_to_process)}개 중 {matched_count}개 매칭"
+            f"전체 {len(titles_data)}개 중 {matched_count}개 매칭"
         )
 
         return {
             "success": True,
-            "total": len(titles_to_process),
+            "total": len(titles_data),
             "matched": matched_count,
             "mode": "all" if force_all else "uncategorized",
-            "message": f"{len(titles_to_process)}개 중 {matched_count}개 제목이 분류되었습니다"
+            "message": f"{len(titles_data)}개 중 {matched_count}개 제목이 분류되었습니다"
         }
 
     except Exception as e:

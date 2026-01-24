@@ -52,6 +52,18 @@
     <!-- 액션 버튼 그리드 -->
     <div class="p-3 bg-gray-50 border-b border-gray-200">
         <div class="grid grid-cols-2 md:flex md:flex-wrap gap-2">
+            <!-- 수동 그룹 매칭 (2개 이상 선택 시) -->
+            <button
+                x-show="selectedMainTitles.length >= 2"
+                @click="manualGroupTitles()"
+                class="inline-flex items-center justify-center px-3 py-2 border-2 border-blue-500 rounded-lg text-sm font-medium text-blue-700 bg-white hover:bg-blue-50 transition-colors">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14v6m-3-3h6M6 10h2a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v2a2 2 0 002 2zm10 0h2a2 2 0 002-2V6a2 2 0 00-2-2h-2a2 2 0 00-2 2v2a2 2 0 002 2zM6 20h2a2 2 0 002-2v-2a2 2 0 00-2-2H6a2 2 0 00-2 2v2a2 2 0 002 2z"/>
+                </svg>
+                <span class="hidden sm:inline">수동 그룹</span>
+                <span class="sm:hidden">그룹</span>
+                (<span x-text="selectedMainTitles.length"></span>)
+            </button>
             <!-- 선택 복구 (임시로 이동) -->
             <button
                 x-show="selectedMainTitles.length > 0"
@@ -481,6 +493,37 @@
             } catch (e) {
                 showErrorMessage('대표 설정 실패');
             }
+        },
+        async removeFromGroupAndRefresh(groupId, titleId) {
+            if (!confirm('이 제목을 그룹에서 제외하시겠습니까?')) return;
+            this.loading = true;
+            try {
+                const res = await fetch(`${API_BASE}/titles/groups/${groupId}/remove`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ title_ids: [titleId] })
+                });
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail || '그룹에서 제외 실패');
+                }
+                const data = await res.json();
+                showSuccessMessage(data.message || '그룹에서 제외되었습니다');
+
+                // 그룹이 해제되었으면 모달 닫기
+                if (data.group_deleted) {
+                    this.open = false;
+                    loadMainTitles();
+                } else {
+                    await this.refreshGroupData();
+                    loadMainTitles();
+                }
+            } catch (e) {
+                showErrorMessage(e.message || '그룹에서 제외 실패');
+            } finally {
+                this.loading = false;
+            }
         }
     }"
     @open-group-detail-modal.window="open = true; group = $event.detail; titles = $event.detail.titles || []; expandedTitleId = null"
@@ -549,12 +592,19 @@
                                     }" class="px-2 py-0.5 rounded text-xs" x-text="getMainTitleStatusText(title.status)"></span>
                                 </td>
                                 <td class="px-4 py-3 text-center">
-                                    <button x-show="!title.is_group_representative"
-                                            @click="setRepresentativeAndRefresh(group.id, title.id)"
-                                            class="text-xs text-blue-500 hover:underline">
-                                        대표로 설정
-                                    </button>
-                                    <span x-show="title.is_group_representative" class="text-xs text-amber-700 font-medium">대표 제목</span>
+                                    <div class="flex items-center justify-center gap-2">
+                                        <button x-show="!title.is_group_representative"
+                                                @click="setRepresentativeAndRefresh(group.id, title.id)"
+                                                class="text-xs text-blue-500 hover:underline">
+                                            대표로
+                                        </button>
+                                        <button x-show="!title.is_group_representative"
+                                                @click="removeFromGroupAndRefresh(group.id, title.id)"
+                                                class="text-xs text-red-500 hover:underline">
+                                            제외
+                                        </button>
+                                        <span x-show="title.is_group_representative" class="text-xs text-amber-700 font-medium">대표 제목</span>
+                                    </div>
                                 </td>
                             </tr>
                         </template>
@@ -611,11 +661,16 @@
                                             <span class="text-amber-600 font-medium">그룹 대표 제목</span>
                                         </template>
                                     </div>
-                                    <button x-show="!title.is_group_representative"
-                                            @click.stop="setRepresentativeAndRefresh(group.id, title.id)"
-                                            class="px-3 py-1.5 text-xs text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors">
-                                        대표로 설정
-                                    </button>
+                                    <div class="flex gap-2" x-show="!title.is_group_representative">
+                                        <button @click.stop="setRepresentativeAndRefresh(group.id, title.id)"
+                                                class="px-3 py-1.5 text-xs text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors">
+                                            대표로
+                                        </button>
+                                        <button @click.stop="removeFromGroupAndRefresh(group.id, title.id)"
+                                                class="px-3 py-1.5 text-xs text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors">
+                                            제외
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>

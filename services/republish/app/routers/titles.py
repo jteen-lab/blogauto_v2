@@ -296,3 +296,356 @@ async def delete_main_title(
     await db.commit()
 
     return {"message": "삭제되었습니다"}
+
+
+# ===== 수동 그룹 관리 API =====
+
+from pydantic import BaseModel, Field
+
+
+class ManualGroupRequest(BaseModel):
+    """수동 그룹 매칭 요청"""
+    title_ids: List[int] = Field(..., min_length=2, description="그룹으로 묶을 제목 ID 목록 (최소 2개)")
+    group_name: Optional[str] = Field(None, description="그룹명 (미지정 시 첫 제목 사용)")
+
+
+class RemoveFromGroupRequest(BaseModel):
+    """그룹에서 제목 제외 요청"""
+    title_ids: List[int] = Field(..., min_length=1, description="그룹에서 제외할 제목 ID 목록")
+
+
+@router.post("/groups/manual", summary="수동 그룹 매칭")
+async def manual_group_titles(
+    data: ManualGroupRequest,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    선택한 제목들을 수동으로 활성 그룹으로 묶습니다.
+
+    동작 방식:
+    1. 선택한 제목 중 활성 그룹(멤버 2개 이상)의 대표가 있으면 → 해당 그룹에 나머지를 멤버로 추가
+    2. 여러 활성 그룹이 선택된 경우 → 첫 번째 그룹에 다른 그룹의 모든 멤버를 병합
+    3. 모두 개별 제목인 경우 → 첫 번째 제목이 대표인 새 그룹 생성
+    """
+    from datetime import datetime
+
+    if len(data.title_ids) < 2:
+        raise HTTPException(status_code=400, detail="최소 2개 이상의 제목이 필요합니다")
+
+    # 선택된 제목 조회
+    titles_query = select(MainTitle).where(MainTitle.id.in_(data.title_ids))
+    titles_result = await db.execute(titles_query)
+    selected_titles = list(titles_result.scalars().all())
+    selected_titles_map = {t.id: t for t in selected_titles}
+
+    if len(selected_titles) != len(data.title_ids):
+        raise HTTPException(status_code=404, detail="일부 제목을 찾을 수 없습니다")
+
+    # 선택된 제목들의 그룹 정보 수집
+    selected_group_ids = set(t.group_id for t in selected_titles if t.group_id)
+
+    # 활성 그룹(멤버 2개 이상) 조회
+    active_groups = []
+    if selected_group_ids:
+        groups_query = select(TitleGroup).where(
+            TitleGroup.id.in_(selected_group_ids),
+            TitleGroup.member_count >= 2
+        )
+        groups_result = await db.execute(groups_query)
+        active_groups = list(groups_result.scalars().all())
+
+    # === 시나리오 판단 ===
+
+    # 시나리오 1 & 2: 활성 그룹이 있는 경우 - 첫 번째 활성 그룹에 병합
+    if active_groups:
+        from sqlalchemy import update as sql_update
+
+        # 첫 번째 활성 그룹을 타겟으로 선택
+        target_group = active_groups[0]
+        target_group_id = target_group.id
+
+        # 타겟 그룹의 모든 멤버 조회
+        target_members_query = select(MainTitle).where(MainTitle.group_id == target_group_id)
+        target_members_result = await db.execute(target_members_query)
+        target_members = {t.id: t for t in target_members_result.scalars().all()}
+
+        # 다른 활성 그룹들의 모든 멤버도 타겟 그룹으로 이동
+        other_group_ids = [g.id for g in active_groups[1:]]
+        other_members = {}
+        groups_to_delete_ids = []
+
+        if other_group_ids:
+            other_members_query = select(MainTitle).where(MainTitle.group_id.in_(other_group_ids))
+            other_members_result = await db.execute(other_members_query)
+            other_members = {t.id: t for t in other_members_result.scalars().all()}
+            groups_to_delete_ids = other_group_ids
+
+        # 병합할 제목 ID들 (타겟 그룹에 없는 것들)
+        title_ids_to_merge = []
+
+        # 선택된 제목 중 타겟 그룹에 없는 것들
+        for title in selected_titles:
+            if title.id not in target_members:
+                title_ids_to_merge.append(title.id)
+
+        # 다른 활성 그룹의 멤버들 (타겟 그룹에 없는 것들)
+        for title_id in other_members.keys():
+            if title_id not in target_members and title_id not in title_ids_to_merge:
+                title_ids_to_merge.append(title_id)
+
+        # 병합 실행 - 직접 UPDATE 쿼리 사용
+        merged_count = 0
+        if title_ids_to_merge:
+            update_stmt = sql_update(MainTitle).where(
+                MainTitle.id.in_(title_ids_to_merge)
+            ).values(
+                group_id=target_group_id,
+                is_group_representative=False,
+                grouped_at=datetime.utcnow()
+            )
+            await db.execute(update_stmt)
+            merged_count = len(title_ids_to_merge)
+            logger.info(f"[MANUAL_GROUP] 병합할 제목 ID: {title_ids_to_merge}")
+
+        # 타겟 그룹 멤버 수 업데이트
+        total_members = len(target_members) + merged_count
+        target_group.member_count = total_members
+
+        # 삭제할 그룹 처리 - 직접 DELETE 쿼리 사용
+        if groups_to_delete_ids:
+            from sqlalchemy import delete as sql_delete
+            delete_stmt = sql_delete(TitleGroup).where(TitleGroup.id.in_(groups_to_delete_ids))
+            await db.execute(delete_stmt)
+
+        await db.commit()
+
+        logger.info(f"[MANUAL_GROUP] 그룹 병합: target_group_id={target_group_id}, merged={merged_count}, deleted_groups={len(groups_to_delete_ids)}")
+
+        return {
+            "success": True,
+            "group_id": target_group_id,
+            "group_name": target_group.name,
+            "member_count": total_members,
+            "merged_count": merged_count,
+            "deleted_groups": len(groups_to_delete_ids),
+            "message": f"{merged_count}개 제목이 그룹에 추가되었습니다"
+        }
+
+    # 시나리오 3: 모두 개별 제목 (또는 비활성 그룹의 멤버) - 새 그룹 생성
+    else:
+        from sqlalchemy import update as sql_update, delete as sql_delete
+
+        # 기존 그룹 ID 수집
+        old_group_ids = set(t.group_id for t in selected_titles if t.group_id)
+
+        # 기존 그룹들의 멤버 수 업데이트 및 빈 그룹 삭제
+        groups_to_delete_ids = []
+        if old_group_ids:
+            old_groups_query = select(TitleGroup).where(TitleGroup.id.in_(old_group_ids))
+            old_groups_result = await db.execute(old_groups_query)
+            for old_group in old_groups_result.scalars().all():
+                # 이 그룹에서 빠지는 제목 수
+                leaving_count = sum(1 for t in selected_titles if t.group_id == old_group.id)
+                new_member_count = (old_group.member_count or 0) - leaving_count
+
+                if new_member_count <= 1:
+                    # 멤버가 1개 이하면 그룹 삭제, 남은 멤버는 그룹 해제
+                    remaining_update = sql_update(MainTitle).where(
+                        MainTitle.group_id == old_group.id,
+                        ~MainTitle.id.in_(data.title_ids)
+                    ).values(group_id=None, is_group_representative=False)
+                    await db.execute(remaining_update)
+                    groups_to_delete_ids.append(old_group.id)
+                else:
+                    old_group.member_count = new_member_count
+                    # 대표가 빠진 경우 새 대표 설정
+                    if old_group.representative_title_id in data.title_ids:
+                        new_rep_query = select(MainTitle).where(
+                            MainTitle.group_id == old_group.id,
+                            ~MainTitle.id.in_(data.title_ids)
+                        ).limit(1)
+                        new_rep = (await db.execute(new_rep_query)).scalars().first()
+                        if new_rep:
+                            old_group.representative_title_id = new_rep.id
+                            # 새 대표 설정 - UPDATE 쿼리 사용
+                            await db.execute(sql_update(MainTitle).where(
+                                MainTitle.id == new_rep.id
+                            ).values(is_group_representative=True))
+
+        # 새 그룹 생성
+        rep_title = selected_titles[0]
+        group_name = data.group_name or rep_title.title[:50]
+        new_group = TitleGroup(
+            name=group_name,
+            category_id=rep_title.topic_id,
+            member_count=len(selected_titles),
+            is_active=True,
+        )
+        db.add(new_group)
+        await db.flush()  # ID 생성
+
+        logger.info(f"[MANUAL_GROUP] 새 그룹 생성됨: group_id={new_group.id}, title_ids={data.title_ids}")
+
+        # 제목들을 새 그룹에 연결 - 직접 UPDATE 쿼리 사용
+        # 먼저 모든 제목을 멤버로 설정
+        update_all_stmt = sql_update(MainTitle).where(
+            MainTitle.id.in_(data.title_ids)
+        ).values(
+            group_id=new_group.id,
+            grouped_at=datetime.utcnow(),
+            is_group_representative=False
+        )
+        await db.execute(update_all_stmt)
+
+        # 첫 번째 제목을 대표로 설정
+        rep_title_id = data.title_ids[0]
+        update_rep_stmt = sql_update(MainTitle).where(
+            MainTitle.id == rep_title_id
+        ).values(is_group_representative=True)
+        await db.execute(update_rep_stmt)
+
+        # 그룹의 대표 제목 ID 설정
+        new_group.representative_title_id = rep_title_id
+
+        # 빈 그룹 삭제
+        if groups_to_delete_ids:
+            delete_stmt = sql_delete(TitleGroup).where(TitleGroup.id.in_(groups_to_delete_ids))
+            await db.execute(delete_stmt)
+
+        await db.commit()
+
+        logger.info(f"[MANUAL_GROUP] 새 그룹 생성 완료: group_id={new_group.id}, count={len(selected_titles)}, rep_id={rep_title_id}")
+
+        return {
+            "success": True,
+            "group_id": new_group.id,
+            "group_name": new_group.name,
+            "member_count": len(selected_titles),
+            "representative_title_id": rep_title_id,
+            "message": f"{len(selected_titles)}개 제목이 새 그룹으로 묶였습니다"
+        }
+
+
+@router.post("/groups/{group_id}/remove", summary="그룹에서 제목 제외")
+async def remove_from_group(
+    group_id: int,
+    data: RemoveFromGroupRequest,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    선택한 제목들을 그룹에서 제외합니다.
+
+    - 제외된 제목은 미그룹 상태가 됩니다.
+    - 그룹 멤버가 1개 이하가 되면 그룹이 삭제됩니다.
+    """
+    # 그룹 조회
+    group = await db.get(TitleGroup, group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="그룹을 찾을 수 없습니다")
+
+    # 제목 조회
+    titles_query = select(MainTitle).where(
+        MainTitle.id.in_(data.title_ids),
+        MainTitle.group_id == group_id
+    )
+    titles_result = await db.execute(titles_query)
+    titles = list(titles_result.scalars().all())
+
+    if not titles:
+        raise HTTPException(status_code=404, detail="그룹에 속한 제목을 찾을 수 없습니다")
+
+    removed_count = 0
+    removed_rep = False
+
+    for title in titles:
+        if title.is_group_representative:
+            removed_rep = True
+        title.group_id = None
+        title.is_group_representative = False
+        title.grouped_at = None
+        title.similarity_score = None
+        removed_count += 1
+
+    # 그룹 멤버 수 업데이트
+    remaining_count = (group.member_count or 0) - removed_count
+    group.member_count = max(0, remaining_count)
+
+    # 대표 제목이 제외된 경우 새 대표 설정
+    if removed_rep:
+        new_rep_query = select(MainTitle).where(MainTitle.group_id == group_id).limit(1)
+        new_rep = (await db.execute(new_rep_query)).scalars().first()
+        if new_rep:
+            new_rep.is_group_representative = True
+            group.representative_title_id = new_rep.id
+        else:
+            group.representative_title_id = None
+
+    # 그룹 멤버가 1개 이하면 그룹 삭제
+    group_deleted = False
+    if remaining_count <= 1:
+        # 남은 멤버가 있으면 그룹 해제
+        if remaining_count == 1:
+            last_member_query = select(MainTitle).where(MainTitle.group_id == group_id)
+            last_member = (await db.execute(last_member_query)).scalars().first()
+            if last_member:
+                last_member.group_id = None
+                last_member.is_group_representative = False
+
+        # 그룹 삭제
+        await db.delete(group)
+        group_deleted = True
+        logger.info(f"[REMOVE_GROUP] 그룹 삭제 (멤버 부족): group_id={group_id}")
+
+    await db.commit()
+
+    return {
+        "success": True,
+        "removed_count": removed_count,
+        "remaining_count": max(0, remaining_count - 1) if group_deleted else remaining_count,
+        "group_deleted": group_deleted,
+        "message": f"{removed_count}개 제목이 그룹에서 제외되었습니다" + (" (그룹 삭제됨)" if group_deleted else "")
+    }
+
+
+@router.delete("/groups/{group_id}", summary="그룹 해제")
+async def dissolve_group(
+    group_id: int,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    그룹을 해제하고 모든 멤버를 미그룹 상태로 변경합니다.
+
+    - 그룹이 삭제됩니다.
+    - 멤버 제목들은 삭제되지 않고 미그룹 상태가 됩니다.
+    """
+    # 그룹 조회
+    group = await db.get(TitleGroup, group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="그룹을 찾을 수 없습니다")
+
+    # 그룹 멤버 조회
+    members_query = select(MainTitle).where(MainTitle.group_id == group_id)
+    members_result = await db.execute(members_query)
+    members = list(members_result.scalars().all())
+
+    # 모든 멤버 그룹 해제
+    for member in members:
+        member.group_id = None
+        member.is_group_representative = False
+        member.grouped_at = None
+        member.similarity_score = None
+
+    # 그룹 삭제
+    await db.delete(group)
+    await db.commit()
+
+    logger.info(f"[DISSOLVE_GROUP] 그룹 해제: group_id={group_id}, members={len(members)}")
+
+    return {
+        "success": True,
+        "disbanded_count": len(members),
+        "message": f"그룹이 해제되었습니다. {len(members)}개 제목이 미그룹 상태가 되었습니다"
+    }

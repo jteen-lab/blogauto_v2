@@ -1179,6 +1179,7 @@ function dataManagementApp() {
                 if (!res.ok) throw new Error('승격 실패');
                 showSuccessMessage('정식 제목으로 승격되었습니다');
                 this.loadTitles();
+                this.loadMainTitles();  // 정식제목 탭 새로고침 추가
                 this.loadStats();
             } catch (e) {
                 showErrorMessage('승격 실패');
@@ -1733,6 +1734,10 @@ function dataManagementApp() {
             if (!confirm('미분류 키워드의 카테고리를 재분류하시겠습니까?')) return;
 
             try {
+                // ★ 재분류 전에 최신 카테고리(topics) 목록 로드
+                await this.loadTopics();
+                console.log('[reclassifyKeywords] 최신 카테고리 로드 완료:', this.topics.length, '개');
+
                 const res = await fetch(`${API_BASE}/data/keywords/seed/reclassify`, {
                     method: 'POST',
                     credentials: 'include'
@@ -1744,6 +1749,8 @@ function dataManagementApp() {
                     showSuccessMessage(data.message);
                     this.loadKeywords();
                     this.loadStats();
+                    // ★ 재분류 후에도 카테고리 목록 새로고침 (드롭다운 동기화)
+                    await this.loadTopics();
                 } else {
                     showErrorMessage(data.message || '재분류 실패');
                 }
@@ -1757,6 +1764,10 @@ function dataManagementApp() {
             if (!confirm('모든 임시제목의 카테고리를 재분류하시겠습니까?\n(이미 분류된 제목도 최신 카테고리로 갱신됩니다)')) return;
 
             try {
+                // ★ 재분류 전에 최신 카테고리(topics) 목록 로드
+                await this.loadTopics();
+                console.log('[reclassifyTitles] 최신 카테고리 로드 완료:', this.topics.length, '개');
+
                 const res = await fetch(`${API_BASE}/data/titles/temp/reclassify?force_all=true`, {
                     method: 'POST',
                     credentials: 'include'
@@ -1768,11 +1779,100 @@ function dataManagementApp() {
                     showSuccessMessage(data.message);
                     this.loadTitles();
                     this.loadStats();
+                    // ★ 재분류 후에도 카테고리 목록 새로고침 (드롭다운 동기화)
+                    await this.loadTopics();
                 } else {
                     showErrorMessage(data.message || '재분류 실패');
                 }
             } catch (e) {
                 showErrorMessage('임시제목 재분류 중 오류가 발생했습니다');
+            }
+        },
+
+        // ========== 수동 그룹 매칭 기능 (Phase E) ==========
+
+        // 선택된 정식 제목들을 수동으로 그룹 매칭
+        async manualGroupTitles() {
+            if (this.selectedMainTitles.length < 2) {
+                showErrorMessage('그룹을 만들려면 2개 이상의 제목을 선택하세요');
+                return;
+            }
+            if (!confirm(`선택된 ${this.selectedMainTitles.length}개 제목을 하나의 그룹으로 매칭하시겠습니까?`)) return;
+
+            try {
+                const res = await fetch(`${API_BASE}/titles/groups/manual`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ title_ids: this.selectedMainTitles })
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail || '그룹 생성 실패');
+                }
+
+                const data = await res.json();
+                showSuccessMessage(data.message || '수동 그룹이 생성되었습니다');
+                this.selectedMainTitles = [];
+                this.loadMainTitles();
+                this.loadStats();
+            } catch (e) {
+                showErrorMessage(e.message || '수동 그룹 생성 실패');
+            }
+        },
+
+        // 그룹에서 특정 제목들 제외
+        async removeFromGroup(groupId, titleIds) {
+            if (!titleIds || titleIds.length === 0) {
+                showErrorMessage('제외할 제목을 선택하세요');
+                return;
+            }
+            if (!confirm(`선택된 ${titleIds.length}개 제목을 그룹에서 제외하시겠습니까?`)) return;
+
+            try {
+                const res = await fetch(`${API_BASE}/titles/groups/${groupId}/remove`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ title_ids: titleIds })
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail || '그룹에서 제외 실패');
+                }
+
+                const data = await res.json();
+                showSuccessMessage(data.message || '그룹에서 제외되었습니다');
+                return data;
+            } catch (e) {
+                showErrorMessage(e.message || '그룹에서 제외 실패');
+                throw e;
+            }
+        },
+
+        // 그룹 전체 해제
+        async dissolveGroup(groupId) {
+            if (!confirm('이 그룹을 해제하시겠습니까?\n(모든 멤버가 개별 제목으로 분리됩니다)')) return;
+
+            try {
+                const res = await fetch(`${API_BASE}/titles/groups/${groupId}`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail || '그룹 해제 실패');
+                }
+
+                const data = await res.json();
+                showSuccessMessage(data.message || '그룹이 해제되었습니다');
+                this.loadMainTitles();
+                this.loadStats();
+            } catch (e) {
+                showErrorMessage(e.message || '그룹 해제 실패');
             }
         }
     }

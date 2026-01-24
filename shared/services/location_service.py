@@ -13,6 +13,19 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# 지역명 뒤에 바로 붙어있으면 지역이 아닌 상호명으로 판단하는 키워드
+BUSINESS_SUFFIXES = [
+    # 의료기관
+    "병원", "의원", "한의원", "치과", "안과", "피부과", "성형외과", "내과", "외과",
+    "이비인후과", "정형외과", "산부인과", "비뇨기과", "신경외과", "신경과", "정신과",
+    "재활의학과", "영상의학과", "마취통증의학과", "약국", "한약국", "의료원",
+    # 기타 상호
+    "마트", "상가", "빌딩", "타워", "센터", "플라자", "몰", "백화점",
+    "호텔", "모텔", "리조트", "펜션", "아파트", "빌라", "오피스텔",
+    "초등학교", "중학교", "고등학교", "대학교", "학원", "유치원", "어린이집",
+    "교회", "성당", "사찰", "절", "법당",
+]
+
 
 class LocationService:
     """지역명 추출 및 비교 서비스 (싱글톤)"""
@@ -130,6 +143,30 @@ class LocationService:
         logger.debug(f"[LOCATION] 추출 결과: {title} -> {result}")
         return result
 
+    def _is_business_name(self, title: str, location: str, start_idx: int) -> bool:
+        """
+        지역명이 상호명의 일부인지 확인
+
+        예: "은평이비인후과"에서 "은평"은 상호명의 일부
+
+        Args:
+            title: 전체 제목
+            location: 찾은 지역명
+            start_idx: 지역명이 시작하는 인덱스
+
+        Returns:
+            상호명의 일부이면 True
+        """
+        end_idx = start_idx + len(location)
+        remaining = title[end_idx:]
+
+        # 지역명 바로 뒤에 상호 접미사가 오면 상호명으로 판단
+        for suffix in BUSINESS_SUFFIXES:
+            if remaining.startswith(suffix):
+                return True
+
+        return False
+
     def _find_province(self, title: str) -> Optional[Dict]:
         """시/도 찾기"""
         provinces = self._location_data.get("provinces", {})
@@ -137,11 +174,16 @@ class LocationService:
         for province, info in provinces.items():
             # 정식 명칭 검색
             if province in title:
-                return {"name": province, "matched": province}
+                idx = title.find(province)
+                # 상호명 일부인지 확인
+                if not self._is_business_name(title, province, idx):
+                    return {"name": province, "matched": province}
             # 별칭 검색
             for alias in info.get("aliases", []):
                 if alias in title:
-                    return {"name": province, "matched": alias}
+                    idx = title.find(alias)
+                    if not self._is_business_name(title, alias, idx):
+                        return {"name": province, "matched": alias}
 
         return None
 
@@ -156,19 +198,24 @@ class LocationService:
 
             # 정식 명칭 검색
             if city in title:
-                return {
-                    "name": city,
-                    "matched": city,
-                    "province": info.get("province")
-                }
+                idx = title.find(city)
+                # 상호명 일부인지 확인
+                if not self._is_business_name(title, city, idx):
+                    return {
+                        "name": city,
+                        "matched": city,
+                        "province": info.get("province")
+                    }
             # 별칭 검색
             for alias in info.get("aliases", []):
                 if alias in title:
-                    return {
-                        "name": city,
-                        "matched": alias,
-                        "province": info.get("province")
-                    }
+                    idx = title.find(alias)
+                    if not self._is_business_name(title, alias, idx):
+                        return {
+                            "name": city,
+                            "matched": alias,
+                            "province": info.get("province")
+                        }
 
         # 시/도 제한 없이 재검색
         if province:
@@ -186,7 +233,10 @@ class LocationService:
                 continue
 
             if district in title:
-                return {"name": district, "matched": district}
+                idx = title.find(district)
+                # 상호명 일부인지 확인
+                if not self._is_business_name(title, district, idx):
+                    return {"name": district, "matched": district}
 
         # 시 제한 없이 재검색
         if city:

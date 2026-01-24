@@ -44,6 +44,8 @@ from .routers.data_urls import router as data_urls_router
 from .routers.titles import router as titles_router  # Phase C: MainTitle API
 from .routers.title_groups import router as title_groups_router  # Phase C: TitleGroup API
 from .routers.title_transfer import router as title_transfer_router  # Phase D: Title Transfer API
+from .routers.blog_settings import router as blog_settings_router  # 블로그 설정 API
+from .routers.ai_api_keys import router as ai_api_keys_router  # AI API 키 다계정 관리
 
 logger = get_logger("main", "app.log")
 
@@ -202,6 +204,8 @@ app.include_router(data_urls_router, prefix=settings.api_v1_prefix)
 app.include_router(titles_router, prefix=settings.api_v1_prefix)  # Phase C: MainTitle
 app.include_router(title_groups_router, prefix=settings.api_v1_prefix)  # Phase C: TitleGroup
 app.include_router(title_transfer_router, prefix=settings.api_v1_prefix)  # Phase D: Title Transfer
+app.include_router(blog_settings_router, prefix=settings.api_v1_prefix)  # 블로그 설정
+app.include_router(ai_api_keys_router)  # AI API 키 다계정 관리 (prefix 포함)
 
 # 페이지 라우터 등록
 app.include_router(blogs_page_router)

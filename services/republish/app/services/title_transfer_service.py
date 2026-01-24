@@ -7,7 +7,7 @@ import json
 from datetime import datetime
 from typing import List, Dict, Optional, Any
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, update
 
 from ..models.title import MainTitle, TitleGroup, TempTitle
 from ..core.logger import get_logger
@@ -233,7 +233,8 @@ class TitleTransferService:
             # V3 다단계 하이브리드 유사도 계산 사용
             result = self.similarity_service.calculate_similarity_v3(title.title, rep_title.title)
             score = result["score"]
-            if result["groupable"] and score >= self.threshold and score > best_score:
+            # 항상 threshold 기준으로 판단 (캐노니컬 키 매칭도 threshold 적용)
+            if score >= self.threshold and score > best_score:
                 best_score = score
                 best_match = (group, score)
 
@@ -325,8 +326,10 @@ class TitleTransferService:
                 logger.info(f"[TRANSFER] 그룹 전체 이동: {len(group_ids_to_move)}개 그룹, {len(main_titles)}개 제목")
 
         # 1-2. 삭제 대상을 representative_title_id로 참조하는 모든 그룹 조회 (실제 FK 기반)
+        # 중요: 그룹 전체 이동으로 확장된 title_ids를 사용해야 함
+        all_title_ids_to_delete = list(main_titles.keys())
         referencing_groups_query = select(TitleGroup).where(
-            TitleGroup.representative_title_id.in_(title_ids)
+            TitleGroup.representative_title_id.in_(all_title_ids_to_delete)
         )
         ref_groups_result = await self.db.execute(referencing_groups_query)
         referencing_groups = {g.representative_title_id: g for g in ref_groups_result.scalars().all()}
@@ -375,10 +378,15 @@ class TitleTransferService:
             self.db.add(temp_title)
 
         # 모든 참조하는 그룹의 representative_title_id를 NULL로 설정 (FK 해제)
-        for group in referencing_groups.values():
-            group.representative_title_id = None
+        # ORM 객체 수정 대신 직접 UPDATE 쿼리 실행으로 확실히 반영
+        if all_title_ids_to_delete:
+            update_stmt = update(TitleGroup).where(
+                TitleGroup.representative_title_id.in_(all_title_ids_to_delete)
+            ).values(representative_title_id=None)
+            await self.db.execute(update_stmt)
+            logger.info(f"[TRANSFER] FK 참조 해제: {len(all_title_ids_to_delete)}개 제목에 대한 그룹 참조 해제")
 
-        # flush로 참조 해제 반영
+        # flush로 UPDATE 반영
         await self.db.flush()
 
         # 정식 제목 삭제 (참조 해제 후)

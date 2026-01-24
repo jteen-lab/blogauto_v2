@@ -178,13 +178,15 @@ function moduleFormApp(module = null, moduleType = null) {
         // 스케줄 매트릭스 초기화
         initializeSchedule() {
             if (this.formData.type_code === 'republish' || this.formData.type_code === 'collect' || this.formData.type_code === 'data') {
-                // 데이터 모듈: settings.schedule.schedule_matrix에서 먼저 로드 (우선순위 높음)
-                if (this.formData.type_code === 'data' && this.isEdit && this.formData.settings?.schedule?.schedule_matrix) {
-                    this.schedule = JSON.parse(JSON.stringify(this.formData.settings.schedule.schedule_matrix));
+                // 데이터 모듈: module.settings.schedule.schedule_matrix에서 먼저 로드 (우선순위 높음)
+                // ★ this.module.settings를 사용해야 함 (this.formData.settings가 아님)
+                const moduleSettings = this.module?.settings || {};
+                if (this.formData.type_code === 'data' && this.isEdit && moduleSettings?.schedule?.schedule_matrix) {
+                    this.schedule = JSON.parse(JSON.stringify(moduleSettings.schedule.schedule_matrix));
                     console.log('[initializeSchedule] 데이터 모듈 schedule_matrix 로드됨:', this.schedule?.length, 'x', this.schedule?.[0]?.length);
-                } else if (this.isEdit && this.formData.schedule_matrix) {
+                } else if (this.isEdit && this.module?.schedule_matrix) {
                     // 재발행/수집 모듈: 루트 레벨 schedule_matrix에서 로드
-                    this.schedule = JSON.parse(JSON.stringify(this.formData.schedule_matrix));
+                    this.schedule = JSON.parse(JSON.stringify(this.module.schedule_matrix));
                 } else {
                     // 기본 스케줄 설정
                     if (this.formData.type_code === 'collect' || this.formData.type_code === 'data') {

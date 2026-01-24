@@ -64,6 +64,44 @@ class Blog(Base):
     editor_type = Column(String(50), default="classic", nullable=False, comment="에디터 타입")
     css_classes = Column(JSON, nullable=True, comment="CSS 클래스 치환 규칙")
 
+    # 이미지 설정
+    image_mode = Column(
+        String(20),
+        default="template",
+        nullable=False,
+        comment="이미지 모드: template, openai, both"
+    )
+    overlay_config = Column(
+        JSON,
+        default=dict,
+        nullable=True,
+        comment="이미지 오버레이 설정"
+    )
+
+    # 치환자 설정
+    placeholders = Column(
+        JSON,
+        default=dict,
+        nullable=True,
+        comment="치환자 설정: html_tags, css_classes, text_replace"
+    )
+
+    # 스타일 설정
+    style_config = Column(
+        JSON,
+        default=dict,
+        nullable=True,
+        comment="CSS 스타일 설정"
+    )
+
+    # AI 설정
+    ai_config = Column(
+        JSON,
+        default=dict,
+        nullable=True,
+        comment="AI 서비스 설정: writing_ai, title_ai, image_ai"
+    )
+
     # 포스트 통계 (재발행 모듈 적용 구간 필터링용)
     total_post_count = Column(Integer, nullable=True, comment="누적 포스트 수")
     post_count_updated_at = Column(DateTime(timezone=True), nullable=True, comment="포스트 수 업데이트 시점")
@@ -140,7 +178,12 @@ class Blog(Base):
         self.is_active = False
 
     def to_dict(self) -> Dict[str, Any]:
-        """딕셔너리로 변환 (민감 정보 제외)"""
+        """
+        딕셔너리로 변환 (민감 정보 제외)
+
+        Returns:
+            Dict[str, Any]: 블로그 정보 딕셔너리
+        """
         return {
             "id": self.id,
             "user_id": self.user_id,
@@ -156,6 +199,15 @@ class Blog(Base):
             "daily_limit": self.daily_limit,
             "editor_type": self.editor_type,
             "css_classes": self.css_classes,
+            # 이미지 설정
+            "image_mode": self.image_mode,
+            "overlay_config": self.overlay_config or {},
+            # 치환자 설정
+            "placeholders": self.placeholders or {},
+            # 스타일 설정
+            "style_config": self.style_config or {},
+            # AI 설정
+            "ai_config": self.ai_config or {},
             "created_at": self.created_at,
             "updated_at": self.updated_at
         }
