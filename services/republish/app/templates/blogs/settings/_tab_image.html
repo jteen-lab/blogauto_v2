@@ -4,13 +4,6 @@
   Last-Updated: 2026-01-23
 -->
 <div x-data="imageSettingsApp()"
-     x-init="$nextTick(() => {
-         const parent = $el.closest('#blogSettings');
-         if (parent && parent._x_dataStack && parent._x_dataStack[0] && parent._x_dataStack[0].selectedBlog) {
-             blogId = parent._x_dataStack[0].selectedBlog.id;
-         }
-         init();
-     })"
      class="space-y-6">
     <!-- 로딩 상태 -->
     <div x-show="loading" class="flex items-center justify-center py-8">

@@ -72,50 +72,65 @@ function imageSettingsApp() {
             }
         },
 
-        async init() {
-            // 부모 컴포넌트(blogSettingsApp)에서 blogId를 가져옴
-            const blogId = this.getBlogId();
-            if (blogId) {
-                this.blogId = blogId;
-                await this.loadSettings();
-            } else {
-                this.loading = false;
-            }
-
-            // MutationObserver로 부모 컴포넌트 변경 감지
-            this.setupBlogChangeObserver();
-        },
-
-        setupBlogChangeObserver() {
-            const parentEl = this.$el.closest('#blogSettings');
-            if (!parentEl) return;
-            const checkParent = () => {
-                const parentData = this.getParentData();
-                if (parentData?.selectedBlog?.id && parentData.selectedBlog.id !== this.blogId) {
-                    this.blogId = parentData.selectedBlog.id;
+        /**
+         * 초기화 - Alpine.js가 자동 호출
+         */
+        init() {
+            // 전역 이벤트 리스너 등록 - blogSettingsApp에서 setBlog 호출 시
+            window.addEventListener('blog-settings-loaded', (e) => {
+                if (e.detail && e.detail.blogId) {
+                    this.blogId = e.detail.blogId;
+                    console.log('[imageSettingsApp] 이벤트로 blogId 수신:', this.blogId);
                     this.loadSettings();
                 }
-            };
-            checkParent();
-            this._parentCheckInterval = setInterval(checkParent, 500);
+            });
+
+            // $nextTick으로 DOM 준비 후 부모에서 blogId 가져오기 시도
+            this.$nextTick(() => {
+                this.tryLoadFromParent();
+            });
         },
 
-        getParentData() {
-            const parentEl = this.$el.closest('#blogSettings');
-            return parentEl?._x_dataStack?.[0] || null;
-        },
-
-        getBlogId() {
-            if (this.blogId) return this.blogId;
-            const parentData = this.getParentData();
-            if (parentData?.selectedBlog?.id) {
-                this.blogId = parentData.selectedBlog.id;
-                return this.blogId;
+        /**
+         * 부모 컴포넌트에서 blogId 가져오기 시도
+         */
+        tryLoadFromParent() {
+            const settingsEl = document.getElementById('blogSettings');
+            if (settingsEl && settingsEl._x_dataStack && settingsEl._x_dataStack[0]) {
+                const parentData = settingsEl._x_dataStack[0];
+                if (parentData.selectedBlog && parentData.selectedBlog.id) {
+                    this.blogId = parentData.selectedBlog.id;
+                    console.log('[imageSettingsApp] 부모에서 blogId 가져옴:', this.blogId);
+                    this.loadSettings();
+                    return true;
+                }
             }
+            // URL에서도 시도
+            const urlId = this.getBlogIdFromUrl();
+            if (urlId) {
+                this.blogId = urlId;
+                console.log('[imageSettingsApp] URL에서 blogId 가져옴:', this.blogId);
+                this.loadSettings();
+                return true;
+            }
+            this.loading = false;
+            return false;
+        },
 
-            // URL에서 추출 시도 (폴백)
+        /**
+         * URL에서 블로그 ID 추출
+         */
+        getBlogIdFromUrl() {
             const match = window.location.pathname.match(/\/blogs\/(\d+)/);
             return match ? match[1] : null;
+        },
+
+        /**
+         * 블로그 ID 가져오기 (캐시된 값 또는 URL에서)
+         */
+        getBlogId() {
+            if (this.blogId) return this.blogId;
+            return this.getBlogIdFromUrl();
         },
 
         async loadSettings() {
@@ -339,6 +354,8 @@ function imageSettingsApp() {
         },
 
         updatePreview() {
+            // $refs가 아직 바인딩되지 않았을 수 있으므로 안전하게 접근
+            if (!this.$refs) return;
             const canvas = this.$refs.previewCanvas;
             if (!canvas || !this.templateImage) return;
 
