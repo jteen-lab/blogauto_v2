@@ -16,6 +16,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.attributes import flag_modified
 
 from ..core.database import get_db_session
 from ..core.logger import get_logger
@@ -140,9 +141,17 @@ async def save_image_settings(
     blog.image_mode = request.image_mode
 
     # ai_image_service를 overlay_config에 함께 저장
+    # 기존 파일 경로 보존
+    existing_config = dict(blog.overlay_config or {})
     overlay_data = request.overlay_config.model_dump()
     overlay_data["ai_image_service"] = request.ai_image_service
+    # 기존 파일 경로 유지
+    if "template_image" in existing_config:
+        overlay_data["template_image"] = existing_config["template_image"]
+    if "font_file" in existing_config:
+        overlay_data["font_file"] = existing_config["font_file"]
     blog.overlay_config = overlay_data
+    flag_modified(blog, 'overlay_config')
 
     await db.commit()
     await db.refresh(blog)
@@ -241,11 +250,12 @@ async def upload_image_file(
     relative_path = save_uploaded_file(file, blog_id, file_type, ext)
 
     # overlay_config에 파일 경로 업데이트
-    overlay_config = blog.overlay_config or {}
+    overlay_config = dict(blog.overlay_config or {})
     config_key = "template_image" if file_type == "template" else "font_file"
     overlay_config[config_key] = relative_path
 
     blog.overlay_config = overlay_config
+    flag_modified(blog, 'overlay_config')
     await db.commit()
 
     logger.info(f"파일 업로드 완료 | blog_id={blog_id} | type={file_type} | path={relative_path}")
@@ -286,8 +296,10 @@ async def delete_image_file(
     delete_uploaded_file(file_path_str, blog_id)
 
     # overlay_config에서 경로 제거
+    overlay_config = dict(overlay_config)  # 새 dict로 복사
     overlay_config.pop(config_key, None)
     blog.overlay_config = overlay_config
+    flag_modified(blog, 'overlay_config')
     await db.commit()
 
     return {
