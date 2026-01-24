@@ -1,0 +1,446 @@
+<!--
+  블로그 설정 - 스타일 탭
+  File: app/templates/blogs/settings/_tab_style.html
+  Last-Updated: 2026-01-23
+
+  기능:
+  - 선택자별 CSS 스타일 편집
+  - 실시간 미리보기 (반응형)
+  - CSS 코드 생성 및 복사
+-->
+<div x-data="styleTabApp()" x-init="init()" class="space-y-4">
+
+    <!-- 상단 도구바 -->
+    <div class="flex flex-wrap items-center justify-between gap-2 p-3 bg-gray-50 border rounded-lg">
+        <div class="text-xs text-gray-600">
+            선택자 <span x-text="Object.keys(styleConfig).length" class="font-semibold">0</span>개 설정됨
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <!-- 프리셋 드롭다운 -->
+            <div class="relative" x-data="{ open: false }">
+                <button @click="open = !open"
+                        class="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 flex items-center gap-1">
+                    프리셋
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                <div x-show="open" @click.away="open = false" x-cloak
+                     class="absolute right-0 mt-1 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                    <button @click="applyPreset('default'); open = false"
+                            class="w-full px-3 py-2 text-xs text-left text-gray-700 hover:bg-gray-100">
+                        기본 스타일
+                    </button>
+                    <button @click="applyPreset('minimal'); open = false"
+                            class="w-full px-3 py-2 text-xs text-left text-gray-700 hover:bg-gray-100">
+                        미니멀
+                    </button>
+                    <button @click="applyPreset('modern'); open = false"
+                            class="w-full px-3 py-2 text-xs text-left text-gray-700 hover:bg-gray-100">
+                        모던
+                    </button>
+                </div>
+            </div>
+
+            <button @click="showCssPanel = !showCssPanel"
+                    :class="showCssPanel ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-white text-gray-700 border-gray-300'"
+                    class="px-3 py-1.5 text-xs font-medium border rounded hover:bg-gray-50">
+                CSS 코드
+            </button>
+            <button @click="resetToDefault()"
+                    class="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50">
+                초기화
+            </button>
+            <button @click="save()"
+                    :disabled="saving"
+                    class="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1">
+                <span x-show="!saving">저장</span>
+                <span x-show="saving" class="flex items-center gap-1">
+                    <div class="loading w-3 h-3"></div>
+                    저장 중
+                </span>
+            </button>
+        </div>
+    </div>
+
+    <!-- 로딩 상태 -->
+    <div x-show="loading" class="flex items-center justify-center py-8">
+        <div class="loading"></div>
+        <span class="ml-2 text-gray-500">로딩 중...</span>
+    </div>
+
+    <!-- 메인 컨텐츠: 3컬럼 레이아웃 -->
+    <div x-show="!loading" x-cloak class="grid grid-cols-12 gap-4">
+
+        <!-- 좌측: 선택자 목록 (3컬럼) -->
+        <div class="col-span-12 lg:col-span-3">
+            <div class="border rounded-lg overflow-hidden">
+                <div class="px-3 py-2 bg-gray-50 border-b">
+                    <h4 class="text-sm font-medium text-gray-700">선택자 목록</h4>
+                </div>
+                <div class="divide-y divide-gray-100 max-h-[500px] overflow-y-auto">
+                    <template x-for="selector in selectors" :key="selector">
+                        <button @click="activeSelector = selector; loadCurrentSelectorStyles()"
+                                :class="activeSelector === selector
+                                    ? 'bg-blue-50 border-l-4 border-l-blue-500 text-blue-700'
+                                    : 'hover:bg-gray-50 border-l-4 border-l-transparent'"
+                                class="w-full px-3 py-2.5 text-left text-sm transition-colors flex items-center justify-between">
+                            <code class="font-mono" x-text="selectorLabels[selector] || selector"></code>
+                            <span x-show="hasStyles(selector)" class="w-2 h-2 bg-green-500 rounded-full"></span>
+                        </button>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+        <!-- 중앙: 스타일 편집 패널 (5컬럼) -->
+        <div class="col-span-12 lg:col-span-5">
+            <div class="border rounded-lg overflow-hidden">
+                <div class="px-3 py-2 bg-gray-50 border-b flex items-center justify-between">
+                    <h4 class="text-sm font-medium text-gray-700">
+                        스타일 편집: <code class="text-blue-600" x-text="activeSelector"></code>
+                    </h4>
+                    <button @click="clearSelectorStyles()"
+                            class="text-xs text-red-500 hover:text-red-700">
+                        이 선택자 초기화
+                    </button>
+                </div>
+                <div class="p-4 space-y-4 max-h-[500px] overflow-y-auto">
+
+                    <!-- 폰트 섹션 -->
+                    <div class="space-y-3">
+                        <h5 class="text-xs font-semibold text-gray-500 uppercase tracking-wide">폰트</h5>
+
+                        <!-- 글자 크기 -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs text-gray-600 mb-1">글자 크기 (px)</label>
+                                <input type="number" x-model="currentStyles['font-size']"
+                                       @input="updateStyle('font-size', $event.target.value)"
+                                       placeholder="16"
+                                       class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-600 mb-1">줄 높이</label>
+                                <input type="text" x-model="currentStyles['line-height']"
+                                       @input="updateStyle('line-height', $event.target.value)"
+                                       placeholder="1.5"
+                                       class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
+                            </div>
+                        </div>
+
+                        <!-- 글자 색상 / 굵기 -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs text-gray-600 mb-1">글자 색상</label>
+                                <div class="flex gap-2">
+                                    <input type="color"
+                                           :value="hasColorValue(currentStyles['color']) ? currentStyles['color'] : '#333333'"
+                                           @input="updateStyle('color', $event.target.value)"
+                                           class="w-10 h-8 border border-gray-300 rounded cursor-pointer">
+                                    <input type="text" x-model="currentStyles['color']"
+                                           @input="updateStyle('color', $event.target.value)"
+                                           placeholder="#333333"
+                                           class="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 font-mono">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-600 mb-1">글자 굵기</label>
+                                <select x-model="currentStyles['font-weight']"
+                                        @change="updateStyle('font-weight', $event.target.value)"
+                                        class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
+                                    <option value="">선택안함</option>
+                                    <option value="normal">Normal (400)</option>
+                                    <option value="500">Medium (500)</option>
+                                    <option value="600">Semi Bold (600)</option>
+                                    <option value="bold">Bold (700)</option>
+                                    <option value="800">Extra Bold (800)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- 글자 스타일 -->
+                        <div>
+                            <label class="block text-xs text-gray-600 mb-1">글자 스타일</label>
+                            <select x-model="currentStyles['font-style']"
+                                    @change="updateStyle('font-style', $event.target.value)"
+                                    class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
+                                <option value="">선택안함</option>
+                                <option value="normal">Normal</option>
+                                <option value="italic">Italic</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <hr class="border-gray-200">
+
+                    <!-- 여백 섹션 -->
+                    <div class="space-y-3">
+                        <h5 class="text-xs font-semibold text-gray-500 uppercase tracking-wide">여백</h5>
+
+                        <!-- Margin -->
+                        <div>
+                            <label class="block text-xs text-gray-600 mb-1">Margin (상/우/하/좌)</label>
+                            <div class="grid grid-cols-4 gap-2">
+                                <input type="text" x-model="currentStyles['margin-top']"
+                                       @input="updateStyle('margin-top', $event.target.value)"
+                                       placeholder="0" class="px-2 py-1.5 text-sm border border-gray-300 rounded text-center">
+                                <input type="text" x-model="currentStyles['margin-right']"
+                                       @input="updateStyle('margin-right', $event.target.value)"
+                                       placeholder="0" class="px-2 py-1.5 text-sm border border-gray-300 rounded text-center">
+                                <input type="text" x-model="currentStyles['margin-bottom']"
+                                       @input="updateStyle('margin-bottom', $event.target.value)"
+                                       placeholder="0" class="px-2 py-1.5 text-sm border border-gray-300 rounded text-center">
+                                <input type="text" x-model="currentStyles['margin-left']"
+                                       @input="updateStyle('margin-left', $event.target.value)"
+                                       placeholder="0" class="px-2 py-1.5 text-sm border border-gray-300 rounded text-center">
+                            </div>
+                        </div>
+
+                        <!-- Padding -->
+                        <div>
+                            <label class="block text-xs text-gray-600 mb-1">Padding (상/우/하/좌)</label>
+                            <div class="grid grid-cols-4 gap-2">
+                                <input type="text" x-model="currentStyles['padding-top']"
+                                       @input="updateStyle('padding-top', $event.target.value)"
+                                       placeholder="0" class="px-2 py-1.5 text-sm border border-gray-300 rounded text-center">
+                                <input type="text" x-model="currentStyles['padding-right']"
+                                       @input="updateStyle('padding-right', $event.target.value)"
+                                       placeholder="0" class="px-2 py-1.5 text-sm border border-gray-300 rounded text-center">
+                                <input type="text" x-model="currentStyles['padding-bottom']"
+                                       @input="updateStyle('padding-bottom', $event.target.value)"
+                                       placeholder="0" class="px-2 py-1.5 text-sm border border-gray-300 rounded text-center">
+                                <input type="text" x-model="currentStyles['padding-left']"
+                                       @input="updateStyle('padding-left', $event.target.value)"
+                                       placeholder="0" class="px-2 py-1.5 text-sm border border-gray-300 rounded text-center">
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="border-gray-200">
+
+                    <!-- 테두리 섹션 -->
+                    <div class="space-y-3" x-data="{ borderMode: 'all' }">
+                        <div class="flex items-center justify-between">
+                            <h5 class="text-xs font-semibold text-gray-500 uppercase tracking-wide">테두리</h5>
+                            <div class="flex items-center gap-1 bg-gray-100 rounded p-0.5">
+                                <button @click="borderMode = 'all'"
+                                        :class="borderMode === 'all' ? 'bg-white shadow text-blue-600' : 'text-gray-500'"
+                                        class="px-2 py-1 text-xs rounded transition-all">
+                                    전체
+                                </button>
+                                <button @click="borderMode = 'each'"
+                                        :class="borderMode === 'each' ? 'bg-white shadow text-blue-600' : 'text-gray-500'"
+                                        class="px-2 py-1 text-xs rounded transition-all">
+                                    방향별
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 전체 테두리 설정 -->
+                        <div x-show="borderMode === 'all'" class="space-y-3">
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">스타일</label>
+                                    <select x-model="currentStyles['border-style']"
+                                            @change="updateStyle('border-style', $event.target.value)"
+                                            class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
+                                        <option value="">선택안함</option>
+                                        <option value="none">None</option>
+                                        <option value="solid">Solid</option>
+                                        <option value="dashed">Dashed</option>
+                                        <option value="dotted">Dotted</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">두께 (px)</label>
+                                    <input type="number" x-model="currentStyles['border-width']"
+                                           @input="updateStyle('border-width', $event.target.value)"
+                                           placeholder="1"
+                                           class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">색상</label>
+                                    <div class="flex gap-2">
+                                        <input type="color"
+                                               :value="hasColorValue(currentStyles['border-color']) ? currentStyles['border-color'] : '#cccccc'"
+                                               @input="updateStyle('border-color', $event.target.value)"
+                                               class="w-10 h-8 border border-gray-300 rounded cursor-pointer">
+                                        <input type="text" x-model="currentStyles['border-color']"
+                                               @input="updateStyle('border-color', $event.target.value)"
+                                               placeholder="#cccccc"
+                                               class="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded font-mono">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">둥글기 (px)</label>
+                                    <input type="number" x-model="currentStyles['border-radius']"
+                                           @input="updateStyle('border-radius', $event.target.value)"
+                                           placeholder="0"
+                                           class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 방향별 테두리 설정 -->
+                        <div x-show="borderMode === 'each'" class="space-y-3">
+                            {% from "blogs/settings/_style_border_inputs.html" import border_direction_input %}
+                            {{ border_direction_input('top', '상단 (Top)', '▲') }}
+                            {{ border_direction_input('right', '우측 (Right)', '▶') }}
+                            {{ border_direction_input('bottom', '하단 (Bottom)', '▼') }}
+                            {{ border_direction_input('left', '좌측 (Left)', '◀') }}
+
+                            <!-- 둥글기 (공통) -->
+                            <div>
+                                <label class="block text-xs text-gray-600 mb-1">둥글기 (px)</label>
+                                <input type="number" x-model="currentStyles['border-radius']"
+                                       @input="updateStyle('border-radius', $event.target.value)"
+                                       placeholder="0"
+                                       class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
+                            </div>
+
+                            <!-- 팁 -->
+                            <div class="p-2 bg-blue-50 border border-blue-100 rounded text-xs text-blue-700">
+                                💡 <strong>팁:</strong> 좌측만 두껍게 하려면 좌측 테두리만 설정하고 나머지는 "없음"으로 두세요.
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="border-gray-200">
+
+                    <!-- 배경 섹션 -->
+                    <div class="space-y-3">
+                        <h5 class="text-xs font-semibold text-gray-500 uppercase tracking-wide">배경</h5>
+                        <div>
+                            <label class="block text-xs text-gray-600 mb-1">배경색</label>
+                            <div class="flex gap-2">
+                                <input type="color"
+                                       :value="hasColorValue(currentStyles['background-color']) ? currentStyles['background-color'] : '#ffffff'"
+                                       @input="updateStyle('background-color', $event.target.value)"
+                                       class="w-10 h-8 border border-gray-300 rounded cursor-pointer">
+                                <input type="text" x-model="currentStyles['background-color']"
+                                       @input="updateStyle('background-color', $event.target.value)"
+                                       placeholder="transparent"
+                                       class="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded font-mono">
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- 우측: 미리보기 영역 (4컬럼) -->
+        <div class="col-span-12 lg:col-span-4">
+            <div class="border rounded-lg overflow-hidden">
+                <div class="px-3 py-2 bg-gray-50 border-b flex items-center justify-between">
+                    <h4 class="text-sm font-medium text-gray-700">미리보기</h4>
+                    <div class="flex items-center gap-1">
+                        <button @click="previewMode = 'mobile'"
+                                :class="previewMode === 'mobile' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'"
+                                class="px-2 py-1 text-xs rounded transition-colors"
+                                title="모바일 (375px)">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                            </svg>
+                        </button>
+                        <button @click="previewMode = 'tablet'"
+                                :class="previewMode === 'tablet' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'"
+                                class="px-2 py-1 text-xs rounded transition-colors"
+                                title="태블릿 (768px)">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                            </svg>
+                        </button>
+                        <button @click="previewMode = 'desktop'"
+                                :class="previewMode === 'desktop' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'"
+                                class="px-2 py-1 text-xs rounded transition-colors"
+                                title="PC (1024px)">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="p-4 bg-gray-100">
+                    <div class="mx-auto transition-all duration-300 bg-white shadow rounded overflow-hidden"
+                         :style="{
+                             width: previewMode === 'mobile' ? '375px' : (previewMode === 'tablet' ? '100%' : '100%'),
+                             maxWidth: previewMode === 'mobile' ? '375px' : (previewMode === 'tablet' ? '768px' : '100%')
+                         }">
+                        <iframe id="stylePreviewFrame"
+                                :srcdoc="previewHtml"
+                                class="w-full h-[400px] border-0"
+                                title="스타일 미리보기"></iframe>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- CSS 코드 패널 (접이식) -->
+    <div x-show="showCssPanel" x-cloak
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0 -translate-y-2"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         class="border rounded-lg overflow-hidden">
+        <div class="px-3 py-2 bg-gray-800 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <h4 class="text-sm font-medium text-white">생성된 CSS</h4>
+                <span class="text-xs text-gray-400">(치환자 클래스 적용됨)</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <button @click="reloadPlaceholders()"
+                        title="치환자 설정과 동기화"
+                        class="px-2 py-1 text-xs font-medium text-gray-300 bg-gray-700 rounded hover:bg-gray-600 flex items-center gap-1">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                    동기화
+                </button>
+                <button @click="copyCss()"
+                        class="px-3 py-1 text-xs font-medium text-gray-300 bg-gray-700 rounded hover:bg-gray-600">
+                    복사
+                </button>
+            </div>
+        </div>
+        <!-- 치환자 클래스 정보 -->
+        <div class="px-3 py-2 bg-gray-700 border-t border-gray-600">
+            <p class="text-xs text-gray-300">
+                <span class="text-blue-400">💡 적용된 클래스:</span>
+                <template x-if="Object.keys(placeholderConfig?.css_classes || {}).length > 0 || (placeholderConfig?.link_styles?.default_class || placeholderConfig?.link_styles?.button_class)">
+                    <span class="ml-1">
+                        <template x-for="(cls, tag) in (placeholderConfig?.css_classes || {})" :key="tag">
+                            <span class="inline-block px-1.5 py-0.5 mr-1 mb-1 bg-gray-600 rounded text-gray-200">
+                                <span x-text="tag"></span>.<span class="text-green-400" x-text="cls"></span>
+                            </span>
+                        </template>
+                        <template x-if="placeholderConfig?.link_styles?.default_class">
+                            <span class="inline-block px-1.5 py-0.5 mr-1 mb-1 bg-gray-600 rounded text-gray-200">
+                                a.<span class="text-green-400" x-text="placeholderConfig.link_styles.default_class"></span>
+                            </span>
+                        </template>
+                        <template x-if="placeholderConfig?.link_styles?.button_class">
+                            <span class="inline-block px-1.5 py-0.5 mr-1 mb-1 bg-blue-700 rounded text-gray-200">
+                                a.button.<span class="text-yellow-400" x-text="placeholderConfig.link_styles.button_class"></span>
+                            </span>
+                        </template>
+                    </span>
+                </template>
+                <template x-if="Object.keys(placeholderConfig?.css_classes || {}).length === 0 && !placeholderConfig?.link_styles?.default_class && !placeholderConfig?.link_styles?.button_class">
+                    <span class="text-gray-400 ml-1">없음 (치환자 탭에서 설정하세요)</span>
+                </template>
+            </p>
+        </div>
+        <div class="bg-gray-900 p-4 max-h-60 overflow-auto">
+            <pre class="text-sm text-green-400 font-mono whitespace-pre-wrap" x-text="generatedCss"></pre>
+        </div>
+    </div>
+
+</div>
+
+<!-- 스타일 탭 JavaScript는 list.html에서 로드됨 -->

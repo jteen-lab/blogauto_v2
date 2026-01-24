@@ -1,0 +1,478 @@
+<!--
+  BlogAuto V2 - 블로그 설정: 카테고리 탭
+  파일: app/templates/blogs/settings/_tab_category.html
+  작성: frontend-agent
+
+  기능:
+  - 대분류/세부 카테고리 아코디언 UI
+  - 다중 선택 체크박스
+  - 선택된 카테고리 칩 표시
+  - 전체 선택/해제
+-->
+
+<!-- 스크립트를 먼저 정의하여 Alpine.js가 함수를 찾을 수 있도록 함 -->
+<script>
+/**
+ * 카테고리 설정 Alpine.js 컴포넌트
+ * - 대분류/세부 카테고리 아코디언 UI
+ * - 다중 선택 및 저장
+ */
+function categorySettingsApp() {
+    return {
+        // 상태
+        blogId: null,             // 현재 블로그 ID
+        categories: [],           // 전체 카테고리 목록
+        selectedIds: [],          // 선택된 서브카테고리 ID 배열
+        originalSelectedIds: [],  // 초기 선택 상태 (초기화용)
+        expandedCategory: null,   // 펼쳐진 대분류 ID
+        loading: false,
+        saving: false,
+        message: '',
+        messageType: 'success',
+
+        /**
+         * 컴포넌트 초기화
+         */
+        async init() {
+            if (this.blogId) {
+                await this.loadCategories(this.blogId);
+            }
+        },
+
+        /**
+         * 카테고리 목록 및 현재 선택 상태 로드
+         */
+        async loadCategories(blogId) {
+            if (!blogId) return;
+
+            this.loading = true;
+            this.categories = [];
+            this.selectedIds = [];
+
+            try {
+                // 전체 카테고리 목록 조회
+                const categoriesRes = await fetch('/api/v1/categories', {
+                    credentials: 'include'
+                });
+
+                if (categoriesRes.ok) {
+                    const categoriesData = await categoriesRes.json();
+                    this.categories = categoriesData.categories || [];
+                }
+
+                // 현재 블로그에 설정된 카테고리 조회
+                const settingsRes = await fetch(`/api/v1/blogs/${blogId}/settings/categories`, {
+                    credentials: 'include'
+                });
+
+                if (settingsRes.ok) {
+                    const settingsData = await settingsRes.json();
+                    this.selectedIds = settingsData.selected_ids || [];
+                    this.originalSelectedIds = [...this.selectedIds];
+                }
+            } catch (error) {
+                console.error('카테고리 로드 실패:', error);
+                this.showMessage('카테고리를 불러오는데 실패했습니다', 'error');
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        /**
+         * 대분류 펼침/접힘 토글
+         */
+        toggleExpand(categoryId) {
+            if (this.expandedCategory === categoryId) {
+                this.expandedCategory = null;
+            } else {
+                this.expandedCategory = categoryId;
+            }
+        },
+
+        /**
+         * 세부 카테고리 선택 토글
+         */
+        toggleSubcategory(subcatId) {
+            const idx = this.selectedIds.indexOf(subcatId);
+            if (idx > -1) {
+                this.selectedIds.splice(idx, 1);
+            } else {
+                this.selectedIds.push(subcatId);
+            }
+        },
+
+        /**
+         * 특정 대분류의 전체 선택/해제
+         */
+        toggleCategoryAll(categoryId) {
+            const category = this.categories.find(c => c.id === categoryId);
+            if (!category) return;
+
+            const subcatIds = category.subcategories.map(s => s.id);
+            const allSelected = this.isAllSelectedInCategory(categoryId);
+
+            if (allSelected) {
+                // 전체 해제
+                this.selectedIds = this.selectedIds.filter(id => !subcatIds.includes(id));
+            } else {
+                // 전체 선택
+                subcatIds.forEach(id => {
+                    if (!this.selectedIds.includes(id)) {
+                        this.selectedIds.push(id);
+                    }
+                });
+            }
+        },
+
+        /**
+         * 전체 카테고리 선택
+         */
+        selectAll() {
+            this.selectedIds = [];
+            this.categories.forEach(cat => {
+                cat.subcategories.forEach(sub => {
+                    this.selectedIds.push(sub.id);
+                });
+            });
+        },
+
+        /**
+         * 전체 카테고리 해제
+         */
+        deselectAll() {
+            this.selectedIds = [];
+        },
+
+        /**
+         * 초기 상태로 되돌리기
+         */
+        resetSelection() {
+            this.selectedIds = [...this.originalSelectedIds];
+            this.showMessage('선택이 초기화되었습니다', 'success');
+        },
+
+        /**
+         * 특정 대분류에서 모두 선택되었는지 확인
+         */
+        isAllSelectedInCategory(categoryId) {
+            const category = this.categories.find(c => c.id === categoryId);
+            if (!category || category.subcategories.length === 0) return false;
+            return category.subcategories.every(s => this.selectedIds.includes(s.id));
+        },
+
+        /**
+         * 특정 대분류에서 일부만 선택되었는지 확인 (indeterminate 상태)
+         */
+        isSomeSelectedInCategory(categoryId) {
+            const category = this.categories.find(c => c.id === categoryId);
+            if (!category) return false;
+
+            const selectedCount = category.subcategories.filter(s =>
+                this.selectedIds.includes(s.id)
+            ).length;
+
+            return selectedCount > 0 && selectedCount < category.subcategories.length;
+        },
+
+        /**
+         * 특정 대분류에서 선택된 개수
+         */
+        getSelectedCountInCategory(categoryId) {
+            const category = this.categories.find(c => c.id === categoryId);
+            if (!category) return 0;
+            return category.subcategories.filter(s => this.selectedIds.includes(s.id)).length;
+        },
+
+        /**
+         * 선택된 세부 카테고리 목록 (칩 표시용)
+         */
+        getSelectedSubcategories() {
+            const result = [];
+            this.categories.forEach(cat => {
+                cat.subcategories.forEach(sub => {
+                    if (this.selectedIds.includes(sub.id)) {
+                        result.push({
+                            id: sub.id,
+                            name: sub.name,
+                            parentName: cat.name
+                        });
+                    }
+                });
+            });
+            return result;
+        },
+
+        /**
+         * 카테고리 설정 저장
+         */
+        async saveCategories() {
+            if (!this.blogId) {
+                this.showMessage('블로그 정보를 찾을 수 없습니다', 'error');
+                return;
+            }
+
+            this.saving = true;
+
+            try {
+                const response = await fetch(`/api/v1/blogs/${this.blogId}/settings/categories`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        selected_ids: this.selectedIds
+                    })
+                });
+
+                if (response.ok) {
+                    this.originalSelectedIds = [...this.selectedIds];
+                    this.showMessage('카테고리 설정이 저장되었습니다', 'success');
+                } else {
+                    const data = await response.json();
+                    throw new Error(data.detail || data.message || '저장 실패');
+                }
+            } catch (error) {
+                console.error('카테고리 저장 실패:', error);
+                this.showMessage(error.message || '저장 중 오류가 발생했습니다', 'error');
+            } finally {
+                this.saving = false;
+            }
+        },
+
+        /**
+         * 메시지 표시
+         */
+        showMessage(text, type = 'success') {
+            this.message = text;
+            this.messageType = type;
+            setTimeout(() => {
+                this.message = '';
+            }, 3000);
+        }
+    };
+}
+</script>
+
+<div x-data="categorySettingsApp()"
+     x-init="$nextTick(() => {
+         const parent = $el.closest('#blogSettings');
+         if (parent && parent._x_dataStack && parent._x_dataStack[0] && parent._x_dataStack[0].selectedBlog) {
+             blogId = parent._x_dataStack[0].selectedBlog.id;
+         }
+         init();
+     })"
+     x-effect="(() => {
+         if (!blogId) {
+             const parent = $el.closest('#blogSettings');
+             if (parent && parent._x_dataStack && parent._x_dataStack[0] && parent._x_dataStack[0].selectedBlog) {
+                 blogId = parent._x_dataStack[0].selectedBlog.id;
+                 if (blogId && categories.length === 0 && !loading) {
+                     loadCategories(blogId);
+                 }
+             }
+         }
+     })()"
+     class="space-y-4">
+    <!-- 설명 영역 -->
+    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+        <div class="flex items-start gap-3">
+            <div class="flex-shrink-0">
+                <svg class="w-5 h-5 text-blue-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            </div>
+            <div class="text-sm text-blue-800">
+                <p class="font-medium mb-1">이 블로그에서 작성할 카테고리를 선택하세요</p>
+                <p class="text-blue-600">선택한 카테고리의 제목만 글 생성에 사용됩니다</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 로딩 상태 -->
+    <div x-show="loading" class="text-center py-12">
+        <div class="inline-flex items-center gap-2 text-gray-500">
+            <svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+            <span>카테고리 불러오는 중...</span>
+        </div>
+    </div>
+
+    <!-- 카테고리가 없는 경우 -->
+    <div x-show="!loading && categories.length === 0" class="text-center py-12">
+        <div class="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+            <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+            </svg>
+        </div>
+        <p class="text-gray-500 mb-4">등록된 카테고리가 없습니다</p>
+        <p class="text-sm text-gray-400">카테고리 관리에서 먼저 카테고리를 추가해주세요</p>
+    </div>
+
+    <!-- 메인 컨텐츠 -->
+    <div x-show="!loading && categories.length > 0">
+
+        <!-- 상단 액션 바 -->
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <!-- 선택 카운트 -->
+            <div class="text-sm text-gray-600">
+                <span class="font-medium text-blue-600" x-text="selectedIds.length"></span>
+                <span>개 선택됨</span>
+            </div>
+
+            <!-- 전체 선택/해제 버튼 -->
+            <div class="flex gap-2">
+                <button type="button"
+                        @click="selectAll()"
+                        class="px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
+                    전체 선택
+                </button>
+                <button type="button"
+                        @click="deselectAll()"
+                        class="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors">
+                    전체 해제
+                </button>
+            </div>
+        </div>
+
+        <!-- 선택된 카테고리 칩 영역 -->
+        <div x-show="selectedIds.length > 0"
+             class="bg-gray-50 rounded-lg p-3 mb-4 border border-gray-200">
+            <div class="flex flex-wrap gap-2">
+                <template x-for="subcat in getSelectedSubcategories()" :key="subcat.id">
+                    <span class="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-gray-300 rounded-full text-sm text-gray-700 shadow-sm">
+                        <span x-text="subcat.parentName + ' > ' + subcat.name"></span>
+                        <button type="button"
+                                @click="toggleSubcategory(subcat.id)"
+                                class="ml-0.5 text-gray-400 hover:text-red-500 transition-colors">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </span>
+                </template>
+            </div>
+        </div>
+
+        <!-- 아코디언 카테고리 목록 -->
+        <div class="space-y-2 mb-6">
+            <template x-for="category in categories" :key="category.id">
+                <div class="border border-gray-200 rounded-lg overflow-hidden">
+                    <!-- 대분류 헤더 (클릭시 펼침/접힘) -->
+                    <button type="button"
+                            @click="toggleExpand(category.id)"
+                            class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left">
+                        <div class="flex items-center gap-3">
+                            <!-- 펼침/접힘 아이콘 -->
+                            <svg class="w-5 h-5 text-gray-500 transition-transform duration-200"
+                                 :class="{ 'rotate-90': expandedCategory === category.id }"
+                                 fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                            </svg>
+
+                            <!-- 대분류명 -->
+                            <span class="font-medium text-gray-800" x-text="category.name"></span>
+                        </div>
+
+                        <!-- 선택 카운트 뱃지 -->
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs text-gray-500">
+                                <span x-text="getSelectedCountInCategory(category.id)"></span>
+                                <span>/</span>
+                                <span x-text="category.subcategories.length"></span>
+                            </span>
+                            <span x-show="getSelectedCountInCategory(category.id) > 0"
+                                  class="w-2 h-2 bg-blue-500 rounded-full"></span>
+                        </div>
+                    </button>
+
+                    <!-- 세부 카테고리 목록 -->
+                    <div x-show="expandedCategory === category.id"
+                         x-transition:enter="transition ease-out duration-200"
+                         x-transition:enter-start="opacity-0 -translate-y-2"
+                         x-transition:enter-end="opacity-100 translate-y-0"
+                         class="bg-white border-t border-gray-200">
+
+                        <!-- 이 대분류 전체 선택 -->
+                        <div class="px-4 py-2 border-b border-gray-100 bg-gray-50">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox"
+                                       :checked="isAllSelectedInCategory(category.id)"
+                                       :indeterminate="isSomeSelectedInCategory(category.id)"
+                                       @change="toggleCategoryAll(category.id)"
+                                       class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                                <span class="text-sm font-medium text-gray-600">전체 선택하기</span>
+                            </label>
+                        </div>
+
+                        <!-- 세부 카테고리 체크박스 목록 -->
+                        <div class="divide-y divide-gray-100">
+                            <template x-for="subcat in category.subcategories" :key="subcat.id">
+                                <label class="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors">
+                                    <input type="checkbox"
+                                           :checked="selectedIds.includes(subcat.id)"
+                                           @change="toggleSubcategory(subcat.id)"
+                                           class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                                    <span class="text-sm text-gray-700" x-text="subcat.name"></span>
+                                </label>
+                            </template>
+                        </div>
+
+                        <!-- 세부 카테고리가 없는 경우 -->
+                        <div x-show="category.subcategories.length === 0"
+                             class="px-4 py-6 text-center text-sm text-gray-400">
+                            세부 카테고리가 없습니다
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- 저장 버튼 -->
+        <div class="sticky bottom-0 bg-white py-4 border-t border-gray-200 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+            <div class="flex gap-3">
+                <button type="button"
+                        @click="resetSelection()"
+                        class="flex-1 py-3 px-4 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium">
+                    초기화
+                </button>
+                <button type="button"
+                        @click="saveCategories()"
+                        :disabled="saving"
+                        class="flex-1 py-3 px-4 text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed">
+                    <span x-show="!saving">저장</span>
+                    <span x-show="saving" class="inline-flex items-center gap-2">
+                        <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                        </svg>
+                        저장 중...
+                    </span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 성공/오류 메시지 -->
+    <div x-show="message"
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0 translate-y-2"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100 translate-y-0"
+         x-transition:leave-end="opacity-0 translate-y-2"
+         :class="messageType === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'"
+         class="fixed bottom-20 left-4 right-4 sm:left-auto sm:right-4 sm:w-80 border rounded-lg p-4 shadow-lg z-50">
+        <div class="flex items-center gap-2">
+            <!-- 성공 아이콘 -->
+            <svg x-show="messageType === 'success'" class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+            </svg>
+            <!-- 오류 아이콘 -->
+            <svg x-show="messageType === 'error'" class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span x-text="message"></span>
+        </div>
+    </div>
+</div>
