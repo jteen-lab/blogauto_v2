@@ -85,6 +85,66 @@
         [x-cloak] {
             display: none !important;
         }
+
+        /* Phase 2-1: 동작로그 슬라이드 애니메이션 - 메시지만 슬라이드 */
+        @keyframes log-message-slide {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+
+        /* 로그 행 컨테이너 (시간 고정 + 메시지 슬라이드) */
+        .log-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0;
+        }
+
+        /* 고정 영역 (시간 + 레벨) */
+        .log-fixed-area {
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+            flex-shrink: 0;
+        }
+
+        /* 메시지 슬라이드 영역 */
+        .log-message-container {
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* 메시지 슬라이드 트랙 (연속 슬라이드용 - 콘텐츠 2배 복제) */
+        .log-message-track {
+            display: inline-flex;
+            white-space: nowrap;
+        }
+
+        /* 모바일에서만 슬라이드 적용 */
+        @media (max-width: 767px) {
+            .log-message-track.sliding {
+                animation: log-message-slide var(--log-slide-duration, 20s) linear infinite;
+            }
+        }
+
+        /* 메시지 아이템 */
+        .log-message-item {
+            padding-right: 4rem;
+        }
+
+        /* 로그 레벨 배지 (고정 요약탭용) */
+        .log-level-badge {
+            font-size: 0.625rem;
+            font-weight: 700;
+            padding: 0.125rem 0.375rem;
+            border-radius: 0.25rem;
+            flex-shrink: 0;
+        }
+        .log-level-info { background: #1e3a5f; color: #93c5fd; }
+        .log-level-success { background: #14532d; color: #86efac; }
+        .log-level-warn { background: #713f12; color: #fcd34d; }
+        .log-level-error { background: #7f1d1d; color: #fca5a5; }
     </style>
 
     {% block extra_css %}{% endblock %}

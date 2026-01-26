@@ -517,6 +517,15 @@ function dataManagementApp() {
         titleGroupTotal: 0,
         expandedGroupIds: [],
 
+        // ★ Phase 2-2: 블로그 선택 및 매칭 관련
+        availableBlogs: [],
+        selectedBlogId: '',
+        matchingSummary: null,
+        matchingFilter: 'all',  // 'all' | 'matched' | 'unmatched' | 'unmatched_crawled'
+        blogMatchingConfig: null,  // 블로그 매칭 설정 (enable_manual_matching 등)
+        unmatchedCrawledPosts: [],  // 미매칭 크롤링 포스트 목록
+        selectedUnmatchedCrawled: [],  // 선택된 미매칭 크롤링 포스트 ID
+
         // ★ 인라인 편집 상태 변수
         editingKeywordId: null,
         editingKeywordValue: '',
@@ -535,6 +544,7 @@ function dataManagementApp() {
             this.loadStats();
             this.loadKeywords();
             this.loadTopics();  // 카테고리(주제) 목록 로드
+            this.loadAvailableBlogs();  // Phase 2-2: 블로그 목록 로드
         },
 
         // 카테고리(주제) 목록 로드
@@ -838,6 +848,198 @@ function dataManagementApp() {
 
         // ========== 정식 제목 기능 (Phase E) ==========
 
+        // Phase 2-2: 블로그 목록 로드
+        async loadAvailableBlogs() {
+            try {
+                const res = await fetch(`${API_BASE}/blogs`, { credentials: 'include' });
+                if (res.ok) {
+                    const data = await res.json();
+                    this.availableBlogs = data.blogs || [];
+                }
+            } catch (e) {
+                console.error('블로그 목록 로드 실패:', e);
+            }
+        },
+
+        // Phase 2-2: 매칭 페어 및 요약 로드
+        async loadMatchingPairs() {
+            if (!this.selectedBlogId) {
+                this.matchingSummary = null;
+                this.matchingFilter = 'all';
+                this.blogMatchingConfig = null;
+                this.unmatchedCrawledPosts = [];
+                this.selectedUnmatchedCrawled = [];
+                this.loadMainTitles();
+                return;
+            }
+
+            try {
+                // 매칭 요약 로드
+                const summaryRes = await fetch(
+                    `${API_BASE}/blogs/${this.selectedBlogId}/matching-summary`,
+                    { credentials: 'include' }
+                );
+                if (summaryRes.ok) {
+                    this.matchingSummary = await summaryRes.json();
+                }
+
+                // 블로그 매칭 설정 로드
+                const configRes = await fetch(
+                    `${API_BASE}/blogs/${this.selectedBlogId}/settings/matching`,
+                    { credentials: 'include' }
+                );
+                if (configRes.ok) {
+                    this.blogMatchingConfig = await configRes.json();
+                    console.log('블로그 매칭 설정 로드됨:', this.blogMatchingConfig);
+                }
+            } catch (e) {
+                console.error('매칭 요약 로드 실패:', e);
+            }
+
+            // 제목 목록 다시 로드
+            this.mainTitlePage = 1;
+            this.matchingFilter = 'all';
+            // 전체 필터에서는 미매칭 크롤링 포스트도 함께 로드
+            this.loadMainTitlesWithCrawled();
+        },
+
+        // 미매칭 크롤링 포스트 로드
+        async loadUnmatchedCrawledPosts() {
+            if (!this.selectedBlogId) return;
+
+            try {
+                const res = await fetch(
+                    `${API_BASE}/blogs/${this.selectedBlogId}/crawled-posts?match_status=unmatched`,
+                    { credentials: 'include' }
+                );
+                if (res.ok) {
+                    const data = await res.json();
+                    this.unmatchedCrawledPosts = data.items || data || [];
+                }
+            } catch (e) {
+                console.error('미매칭 크롤링 포스트 로드 실패:', e);
+            }
+        },
+
+        // 수동 매칭 뷰 로드 (독립포스트 + 미매칭 크롤링 함께)
+        async loadManualMatchingView() {
+            if (!this.selectedBlogId) return;
+
+            // 선택 초기화
+            this.selectedMainTitles = [];
+            this.selectedUnmatchedCrawled = [];
+
+            // 독립포스트 (unmatched 필터로 메인 타이틀 로드)와 미매칭 크롤링 포스트 동시 로드
+            this.mainTitleLoading = true;
+            try {
+                const params = new URLSearchParams({
+                    page: 1,
+                    size: 100,
+                    blog_id: this.selectedBlogId,
+                    matching_filter: 'unmatched',
+                    hide_group_members: 'true'
+                });
+
+                const [titlesRes, crawledRes] = await Promise.all([
+                    fetch(`${API_BASE}/titles?${params}`, { credentials: 'include' }),
+                    fetch(`${API_BASE}/blogs/${this.selectedBlogId}/crawled-posts?match_status=unmatched`, { credentials: 'include' })
+                ]);
+
+                if (titlesRes.ok) {
+                    const data = await titlesRes.json();
+                    this.mainTitles = data.items || [];
+                }
+
+                if (crawledRes.ok) {
+                    const data = await crawledRes.json();
+                    this.unmatchedCrawledPosts = data.items || data || [];
+                }
+            } catch (e) {
+                console.error('수동 매칭 뷰 로드 실패:', e);
+            } finally {
+                this.mainTitleLoading = false;
+            }
+        },
+
+        // 페어 매칭 가능 여부 (computed)
+        get canPairMatch() {
+            // 독립포스트(메인타이틀) 1개 + 미매칭 크롤링 포스트 1개 선택 시
+            if (this.selectedMainTitles.length !== 1 || this.selectedUnmatchedCrawled.length !== 1) {
+                return false;
+            }
+            // 선택된 메인 타이틀이 이미 매칭되지 않은 독립포스트인지 확인
+            // x-model 체크박스는 값을 문자열로 저장하므로 숫자로 변환하여 비교
+            const selectedMainId = parseInt(this.selectedMainTitles[0]);
+            const selectedTitle = this.mainTitles.find(t => t.id === selectedMainId);
+            if (!selectedTitle) return false;
+            // 이미 매칭된 포스트는 페어 매칭 불가
+            if (selectedTitle.matched_crawled_post) return false;
+            return true;
+        },
+
+        // 1:1 페어 매칭 실행
+        async pairMatchTitles() {
+            if (!this.canPairMatch) {
+                showErrorMessage('독립 포스트 1개와 미매칭 크롤링 포스트 1개를 선택해주세요.');
+                return;
+            }
+
+            // x-model 체크박스는 값을 문자열로 저장하므로 숫자로 변환
+            const mainTitleId = parseInt(this.selectedMainTitles[0]);
+            const crawledPostId = parseInt(this.selectedUnmatchedCrawled[0]);
+
+            // 선택된 항목 정보 저장 (실시간 UI 업데이트용)
+            const selectedMainTitle = this.mainTitles.find(t => t.id === mainTitleId);
+            const selectedCrawledPost = this.unmatchedCrawledPosts.find(p => p.id === crawledPostId);
+
+            try {
+                const res = await fetch(`${API_BASE}/titles/main/${mainTitleId}/pair-match`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        crawled_post_id: crawledPostId,
+                        blog_id: parseInt(this.selectedBlogId)
+                    })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    showSuccessMessage('페어 매칭이 완료되었습니다.');
+
+                    // 실시간 UI 업데이트: 메인 타이틀에 매칭 정보 추가
+                    if (selectedMainTitle && selectedCrawledPost) {
+                        selectedMainTitle.matched_crawled_post = {
+                            id: crawledPostId,
+                            title: selectedCrawledPost.title,
+                            url: selectedCrawledPost.url,
+                            match_score: 100.0
+                        };
+                    }
+
+                    // 실시간 UI 업데이트: 미매칭 크롤링 목록에서 제거
+                    this.unmatchedCrawledPosts = this.unmatchedCrawledPosts.filter(p => p.id !== crawledPostId);
+
+                    // 선택 초기화
+                    this.selectedMainTitles = [];
+                    this.selectedUnmatchedCrawled = [];
+
+                    // 매칭 요약 업데이트
+                    if (this.matchingSummary) {
+                        this.matchingSummary.matched = (this.matchingSummary.matched || 0) + 1;
+                        this.matchingSummary.unmatched = Math.max(0, (this.matchingSummary.unmatched || 0) - 1);
+                        this.matchingSummary.unmatched_posts = Math.max(0, (this.matchingSummary.unmatched_posts || 0) - 1);
+                    }
+                } else {
+                    const err = await res.json();
+                    showErrorMessage(err.detail || '페어 매칭에 실패했습니다.');
+                }
+            } catch (e) {
+                console.error('페어 매칭 실패:', e);
+                showErrorMessage('페어 매칭 중 오류가 발생했습니다.');
+            }
+        },
+
         // 정식 제목 로드
         async loadMainTitles() {
             this.mainTitleLoading = true;
@@ -850,6 +1052,14 @@ function dataManagementApp() {
                 });
                 if (this.mainTitleSearch) params.append('search', this.mainTitleSearch);
                 if (this.mainTitleStatus) params.append('status', this.mainTitleStatus);
+
+                // Phase 2-2: 블로그 및 매칭 필터 추가
+                if (this.selectedBlogId) {
+                    params.append('blog_id', this.selectedBlogId);
+                    if (this.matchingFilter && this.matchingFilter !== 'all') {
+                        params.append('matching_filter', this.matchingFilter);
+                    }
+                }
 
                 if (this.mainTitleViewMode === 'group') {
                     // 그룹별 보기
@@ -898,14 +1108,24 @@ function dataManagementApp() {
                 this.mainTitleSortDir = 'asc';
             }
             this.mainTitlePage = 1;
-            this.loadMainTitles();
+            // 전체 보기 + 수동 매칭 활성화 시 미매칭 크롤링 포스트도 함께 정렬
+            if (this.matchingFilter === 'all' && this.blogMatchingConfig?.enable_manual_matching) {
+                this.loadMainTitlesWithCrawled();
+            } else {
+                this.loadMainTitles();
+            }
         },
 
         // 정식 제목 검색 리셋
         resetMainTitleSearch() {
             this.mainTitleSearch = '';
             this.mainTitlePage = 1;
-            this.loadMainTitles();
+            // 전체 보기 + 수동 매칭 활성화 시 미매칭 크롤링 포스트도 함께 로드
+            if (this.matchingFilter === 'all' && this.blogMatchingConfig?.enable_manual_matching) {
+                this.loadMainTitlesWithCrawled();
+            } else {
+                this.loadMainTitles();
+            }
         },
 
         // 정식 제목 전체 선택/해제
@@ -1051,6 +1271,95 @@ function dataManagementApp() {
                 'archived': '보관됨'
             };
             return statusMap[status] || status;
+        },
+
+        // 매칭 상태 텍스트 (독립포스트/매칭/발행대기)
+        getMatchingStatusText(title) {
+            if (title.status === 'used') {
+                return '발행대기';
+            }
+            if (title.matched_crawled_post) {
+                return '매칭';
+            }
+            return '독립포스트';
+        },
+
+        // 전체 보기 + 미매칭 크롤링 포스트 함께 로드
+        async loadMainTitlesWithCrawled() {
+            // 메인 타이틀과 미매칭 크롤링 포스트 동시 로드
+            this.mainTitleLoading = true;
+            this.selectedMainTitles = [];
+            this.selectedUnmatchedCrawled = [];
+
+            try {
+                const params = new URLSearchParams({
+                    page: this.mainTitlePage,
+                    size: 20,
+                    sort_field: this.mainTitleSortField,
+                    sort_dir: this.mainTitleSortDir,
+                    hide_group_members: 'true'
+                });
+
+                if (this.mainTitleSearch) params.append('search', this.mainTitleSearch);
+                if (this.selectedBlogId) {
+                    params.append('blog_id', this.selectedBlogId);
+                }
+
+                const requests = [
+                    fetch(`${API_BASE}/titles?${params}`, { credentials: 'include' })
+                ];
+
+                // 수동 매칭 활성화 시 미매칭 크롤링 포스트도 로드
+                if (this.selectedBlogId && this.blogMatchingConfig?.enable_manual_matching) {
+                    let crawledUrl = `${API_BASE}/blogs/${this.selectedBlogId}/crawled-posts?match_status=unmatched`;
+                    // 검색어가 있으면 미매칭 크롤링 포스트에도 적용
+                    if (this.mainTitleSearch) {
+                        crawledUrl += `&search=${encodeURIComponent(this.mainTitleSearch)}`;
+                    }
+                    requests.push(
+                        fetch(crawledUrl, { credentials: 'include' })
+                    );
+                }
+
+                const responses = await Promise.all(requests);
+
+                if (responses[0].ok) {
+                    const data = await responses[0].json();
+                    this.mainTitles = data.items || [];
+                    this.mainTitleTotal = data.total || 0;
+                    this.mainTitleHasNext = data.has_next || false;
+                }
+
+                if (responses[1] && responses[1].ok) {
+                    const data = await responses[1].json();
+                    let posts = data.items || data || [];
+                    // 미매칭 크롤링 포스트도 현재 정렬 기준에 따라 클라이언트에서 정렬
+                    if (this.mainTitleSortField === 'title') {
+                        posts.sort((a, b) => {
+                            const aVal = (a.title || '').toLowerCase();
+                            const bVal = (b.title || '').toLowerCase();
+                            return this.mainTitleSortDir === 'asc'
+                                ? aVal.localeCompare(bVal, 'ko')
+                                : bVal.localeCompare(aVal, 'ko');
+                        });
+                    } else if (this.mainTitleSortField === 'created_at') {
+                        posts.sort((a, b) => {
+                            const aVal = new Date(a.crawled_at || 0);
+                            const bVal = new Date(b.crawled_at || 0);
+                            return this.mainTitleSortDir === 'asc' ? aVal - bVal : bVal - aVal;
+                        });
+                    }
+                    // 카테고리/상태 정렬은 미매칭 포스트에 해당 없음 (모두 '미매칭')
+                    this.unmatchedCrawledPosts = posts;
+                } else {
+                    this.unmatchedCrawledPosts = [];
+                }
+            } catch (e) {
+                console.error('데이터 로드 실패:', e);
+                showErrorMessage('데이터 로드 실패');
+            } finally {
+                this.mainTitleLoading = false;
+            }
         },
 
         // URL 전체 선택/해제

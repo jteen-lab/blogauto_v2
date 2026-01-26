@@ -10,7 +10,9 @@
 function globalSummary() {
     return {
         panelOpen: false,
+        panelTab: 'summary',  // 'summary' | 'activities' | 'logs'
         refreshInterval: null,
+        logRefreshInterval: null,
         stats: {
             // 초기값 설정 (API 로드 전 0 표시)
             total_blogs: 0, wordpress: 0, blogger: 0, active_blogs: 0, inactive_blogs: 0,
@@ -21,7 +23,14 @@ function globalSummary() {
             today_generate: 0, today_publish: 0, today_republish: 0
         },
         activities: [],
+        logs: [],
+        logOffset: 0,
+        hasMoreLogs: false,
+        latestLog: '',
+        latestLogTime: '',
         pinnedTabKeys: [],
+        displayLogCount: 1,  // 고정 요약탭에 표시할 로그 수 (1~3)
+        displayLogs: [],     // 고정 요약탭에 표시할 로그 배열
 
         // 22개 전체 탭 정의
         allTabs: [
@@ -65,10 +74,16 @@ function globalSummary() {
         async init() {
             // localStorage에서 고정 탭 설정 로드
             this.loadPinnedTabs();
+            // 노출 로그 수 설정 로드
+            this.loadDisplayLogCount();
             // 통계 데이터 로드
             await this.loadStats();
+            // 최신 로그 로드 (노출 수만큼)
+            await this.loadDisplayLogs();
             // 실시간 갱신 시작 (30초마다)
             this.startAutoRefresh();
+            // 로그 실시간 갱신 (10초마다)
+            this.startLogAutoRefresh();
         },
 
         startAutoRefresh() {
@@ -82,6 +97,20 @@ function globalSummary() {
             if (this.refreshInterval) {
                 clearInterval(this.refreshInterval);
                 this.refreshInterval = null;
+            }
+        },
+
+        startLogAutoRefresh() {
+            // 10초마다 최신 로그 갱신
+            this.logRefreshInterval = setInterval(() => {
+                this.loadDisplayLogs();
+            }, 10000);
+        },
+
+        stopLogAutoRefresh() {
+            if (this.logRefreshInterval) {
+                clearInterval(this.logRefreshInterval);
+                this.logRefreshInterval = null;
             }
         },
 
@@ -180,6 +209,152 @@ function globalSummary() {
             }
             const days = Math.floor(diff / 86400000);
             return `${days}일 전`;
+        },
+
+        formatLogTime(timestamp) {
+            if (!timestamp) return '';
+            const date = new Date(timestamp);
+            return date.toLocaleTimeString('ko-KR', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        },
+
+        async loadLatestLog() {
+            try {
+                const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
+                const res = await fetch(`${apiBase}/dashboard/logs?limit=1`, { credentials: 'include' });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.logs && data.logs.length > 0) {
+                        const log = data.logs[0];
+                        this.latestLog = `[${log.level}] ${log.message}`;
+                        this.latestLogTime = this.formatLogTime(log.timestamp);
+                    }
+                }
+            } catch (error) {
+                console.error('[GlobalSummary] 최신 로그 로드 실패:', error);
+            }
+        },
+
+        // 노출 로그 수 설정 로드
+        loadDisplayLogCount() {
+            try {
+                const saved = localStorage.getItem('dashboard_display_log_count');
+                if (saved) {
+                    const count = parseInt(saved);
+                    if (count >= 1 && count <= 3) {
+                        this.displayLogCount = count;
+                    }
+                }
+            } catch (e) {
+                this.displayLogCount = 1;
+            }
+        },
+
+        // 노출 로그 수 설정 저장
+        setDisplayLogCount(count) {
+            this.displayLogCount = count;
+            localStorage.setItem('dashboard_display_log_count', count.toString());
+            this.loadDisplayLogs();
+        },
+
+        // 표시할 로그 로드 (노출 수만큼)
+        async loadDisplayLogs() {
+            try {
+                const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
+                const res = await fetch(`${apiBase}/dashboard/logs?limit=${this.displayLogCount}`, { credentials: 'include' });
+                if (res.ok) {
+                    const data = await res.json();
+                    this.displayLogs = data.logs || [];
+                    // 호환성을 위해 latestLog도 업데이트
+                    if (this.displayLogs.length > 0) {
+                        const log = this.displayLogs[0];
+                        this.latestLog = `[${log.level}] ${log.message}`;
+                        this.latestLogTime = this.formatLogTime(log.timestamp);
+                    }
+                }
+            } catch (error) {
+                console.error('[GlobalSummary] 로그 로드 실패:', error);
+            }
+        },
+
+        // 메시지 슬라이드 지속 시간 계산 (메시지 길이에 따라 조정)
+        getMessageSlideDuration(message) {
+            if (!message) return 20;
+            // 메시지 길이에 비례 (최소 15초, 최대 40초)
+            const baseTime = 15;
+            const charTime = 0.3;  // 글자당 0.3초
+            const duration = baseTime + (message.length * charTime);
+            return Math.min(Math.max(duration, 15), 40);
+        },
+
+        async loadLogs() {
+            try {
+                this.logOffset = 0;
+                const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
+                const res = await fetch(`${apiBase}/dashboard/logs?limit=50&offset=0`, { credentials: 'include' });
+                if (res.ok) {
+                    const data = await res.json();
+                    this.logs = data.logs || [];
+                    this.hasMoreLogs = data.has_more || false;
+                }
+            } catch (error) {
+                console.error('[GlobalSummary] 로그 로드 실패:', error);
+            }
+        },
+
+        async loadMoreLogs() {
+            try {
+                this.logOffset += 50;
+                const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
+                const res = await fetch(`${apiBase}/dashboard/logs?limit=50&offset=${this.logOffset}`, { credentials: 'include' });
+                if (res.ok) {
+                    const data = await res.json();
+                    this.logs = [...this.logs, ...(data.logs || [])];
+                    this.hasMoreLogs = data.has_more || false;
+                }
+            } catch (error) {
+                console.error('[GlobalSummary] 추가 로그 로드 실패:', error);
+            }
+        },
+
+        // 외부에서 로그 추가 (전역 함수로 사용 가능)
+        addLog(level, message) {
+            const logEntry = {
+                level: level,
+                message: message,
+                timestamp: new Date().toISOString()
+            };
+            this.logs.unshift(logEntry);
+            this.latestLog = `[${level}] ${message}`;
+            this.latestLogTime = this.formatLogTime(logEntry.timestamp);
+
+            // 서버에도 저장 시도
+            this.saveLogToServer(logEntry);
+        },
+
+        async saveLogToServer(logEntry) {
+            try {
+                const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
+                await fetch(`${apiBase}/dashboard/logs`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(logEntry)
+                });
+            } catch (error) {
+                // 실패해도 무시 (클라이언트에는 이미 표시됨)
+            }
         }
     };
 }
+
+// 전역 로그 함수 (다른 컴포넌트에서 사용)
+window.addGlobalLog = function(level, message) {
+    const component = document.querySelector('[x-data*="globalSummary"]');
+    if (component && component.__x) {
+        component.__x.$data.addLog(level, message);
+    }
+};

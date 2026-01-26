@@ -1,5 +1,95 @@
 <!-- 정식 제목 탭 컨텐츠 -->
 <div>
+    <!-- 페어 매칭 안내 (블로그 선택 시 상단에 표시) -->
+    <div x-show="selectedBlogId && blogMatchingConfig?.enable_manual_matching" x-cloak
+         class="p-4 bg-purple-50 border-b border-purple-100">
+        <div class="flex items-start gap-3">
+            <svg class="w-5 h-5 text-purple-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <div class="text-sm text-purple-700">
+                <p class="font-medium">1:1 페어 매칭 방법</p>
+                <p class="mt-1 text-xs">
+                    독립포스트 1개와 미매칭 크롤링 1개를 선택한 후 "1:1 페어 매칭" 버튼을 클릭하세요.
+                </p>
+            </div>
+        </div>
+        <!-- 선택 현황 -->
+        <div class="mt-3 flex flex-wrap gap-3 text-xs">
+            <div class="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg">
+                <span class="text-gray-600">독립포스트 선택:</span>
+                <span class="font-bold" :class="selectedMainTitles.length === 1 ? 'text-blue-600' : 'text-gray-400'"
+                      x-text="selectedMainTitles.length + '개'"></span>
+            </div>
+            <div class="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg">
+                <span class="text-gray-600">미매칭 크롤링 선택:</span>
+                <span class="font-bold" :class="selectedUnmatchedCrawled.length === 1 ? 'text-red-600' : 'text-gray-400'"
+                      x-text="selectedUnmatchedCrawled.length + '개'"></span>
+            </div>
+            <template x-if="canPairMatch">
+                <span class="text-green-600 font-medium">✓ 페어 매칭 가능!</span>
+            </template>
+        </div>
+    </div>
+
+    <!-- Phase 2-2: 블로그 선택 및 매칭 현황 -->
+    <div class="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100">
+        <div class="flex flex-col md:flex-row md:items-center gap-4">
+            <!-- 블로그 선택 -->
+            <div class="flex items-center gap-2 flex-1">
+                <label class="text-sm font-medium text-gray-700 flex-shrink-0">블로그:</label>
+                <select x-model="selectedBlogId"
+                        @change="loadMatchingPairs()"
+                        class="flex-1 md:max-w-xs px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                    <option value="">블로그 선택 (전체 보기)</option>
+                    <template x-for="blog in availableBlogs" :key="blog.id">
+                        <option :value="blog.id" x-text="blog.name + ' (' + blog.platform + ')'"></option>
+                    </template>
+                </select>
+            </div>
+
+            <!-- 매칭 현황 (블로그 선택 시 표시) -->
+            <div x-show="selectedBlogId && matchingSummary" x-cloak
+                 class="flex items-center gap-3 bg-white rounded-lg px-4 py-2 shadow-sm">
+                <div class="flex items-center gap-2">
+                    <span class="text-xs text-gray-500">전체:</span>
+                    <span class="font-bold text-gray-800" x-text="matchingSummary?.total || 0"></span>
+                </div>
+                <div class="w-px h-4 bg-gray-300"></div>
+                <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                    <span class="text-xs text-gray-500">매칭:</span>
+                    <span class="font-bold text-green-600" x-text="matchingSummary?.matched || 0"></span>
+                </div>
+                <div class="w-px h-4 bg-gray-300"></div>
+                <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                    <span class="text-xs text-gray-500">독립:</span>
+                    <span class="font-bold text-blue-600" x-text="matchingSummary?.unmatched || 0"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 매칭 필터 (블로그 선택 시) -->
+        <div x-show="selectedBlogId" x-cloak class="mt-3 flex flex-wrap gap-2">
+            <button @click="matchingFilter = 'all'; mainTitlePage = 1; loadMainTitlesWithCrawled()"
+                    class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
+                    :class="matchingFilter === 'all' ? 'bg-gray-800 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'">
+                전체
+            </button>
+            <button @click="matchingFilter = 'matched'; mainTitlePage = 1; loadMainTitles()"
+                    class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
+                    :class="matchingFilter === 'matched' ? 'bg-green-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'">
+                매칭됨
+            </button>
+            <button @click="matchingFilter = 'unmatched'; mainTitlePage = 1; loadMainTitles()"
+                    class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
+                    :class="matchingFilter === 'unmatched' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'">
+                독립포스트
+            </button>
+        </div>
+    </div>
+
     <!-- 검색 바 -->
     <div class="search-bar">
         <div class="flex items-center gap-2 flex-1">
@@ -7,7 +97,7 @@
                 <input
                     type="text"
                     x-model="mainTitleSearch"
-                    @keyup.enter="mainTitlePage = 1; loadMainTitles()"
+                    @keyup.enter="mainTitlePage = 1; matchingFilter === 'all' && blogMatchingConfig?.enable_manual_matching ? loadMainTitlesWithCrawled() : loadMainTitles()"
                     placeholder="제목 검색..."
                     class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
@@ -22,24 +112,14 @@
                 </button>
             </div>
             <select
-                x-model="mainTitleStatus"
-                @change="mainTitlePage = 1; loadMainTitles()"
-                class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
-                <option value="">전체 상태</option>
-                <option value="available">사용가능</option>
-                <option value="matched">매칭됨</option>
-                <option value="used">사용됨</option>
-                <option value="archived">보관됨</option>
-            </select>
-            <select
                 x-model="mainTitleViewMode"
-                @change="mainTitlePage = 1; loadMainTitles()"
+                @change="mainTitlePage = 1; matchingFilter === 'all' && blogMatchingConfig?.enable_manual_matching ? loadMainTitlesWithCrawled() : loadMainTitles()"
                 class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
                 <option value="all">전체 보기</option>
                 <option value="group">그룹별 보기</option>
             </select>
             <button
-                @click="mainTitlePage = 1; loadMainTitles()"
+                @click="mainTitlePage = 1; matchingFilter === 'all' && blogMatchingConfig?.enable_manual_matching ? loadMainTitlesWithCrawled() : loadMainTitles()"
                 class="inline-flex items-center justify-center px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors">
                 <svg class="w-4 h-4 md:mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
@@ -52,6 +132,17 @@
     <!-- 액션 버튼 그리드 -->
     <div class="p-3 bg-gray-50 border-b border-gray-200">
         <div class="grid grid-cols-2 md:flex md:flex-wrap gap-2">
+            <!-- 1:1 페어 매칭 버튼 (독립포스트 1개 + 미매칭 크롤링 1개 선택 시) -->
+            <button
+                x-show="canPairMatch"
+                @click="pairMatchTitles()"
+                class="inline-flex items-center justify-center px-3 py-2 border-2 border-purple-500 rounded-lg text-sm font-medium text-purple-700 bg-white hover:bg-purple-50 transition-colors">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                </svg>
+                <span class="hidden sm:inline">1:1 페어 매칭</span>
+                <span class="sm:hidden">페어</span>
+            </button>
             <!-- 수동 그룹 매칭 (2개 이상 선택 시) -->
             <button
                 x-show="selectedMainTitles.length >= 2"
@@ -104,17 +195,25 @@
                                     :checked="mainTitles.length > 0 && selectedMainTitles.length === mainTitles.length"
                                     @click="toggleMainTitleSelectAll()">
                             </th>
-                            <th @click="sortMainTitles('title')" class="sortable-header">
+                            <th @click="sortMainTitles('title')" class="sortable-header" style="max-width: 400px;">
                                 제목
                                 <span class="sort-icon" :class="{'active': mainTitleSortField === 'title'}"
                                       x-text="mainTitleSortField === 'title' ? (mainTitleSortDir === 'asc' ? '▲' : '▼') : '▲'"></span>
                             </th>
-                            <th class="w-32 text-center">카테고리</th>
-                            <th class="w-24 text-center">상태</th>
-                            <th @click="sortMainTitles('created_at')" class="w-32 sortable-header text-center">
+                            <th @click="sortMainTitles('category')" class="w-36 sortable-header text-center">
+                                카테고리
+                                <span class="sort-icon" :class="{'active': mainTitleSortField === 'category'}"
+                                      x-text="mainTitleSortField === 'category' ? (mainTitleSortDir === 'asc' ? '▲' : '▼') : '▲'"></span>
+                            </th>
+                            <th @click="sortMainTitles('created_at')" class="w-28 sortable-header text-center">
                                 등록일
                                 <span class="sort-icon" :class="{'active': mainTitleSortField === 'created_at'}"
                                       x-text="mainTitleSortField === 'created_at' ? (mainTitleSortDir === 'asc' ? '▲' : '▼') : '▲'"></span>
+                            </th>
+                            <th @click="sortMainTitles('status')" class="w-28 sortable-header text-center whitespace-nowrap">
+                                상태
+                                <span class="sort-icon" :class="{'active': mainTitleSortField === 'status'}"
+                                      x-text="mainTitleSortField === 'status' ? (mainTitleSortDir === 'asc' ? '▲' : '▼') : '▲'"></span>
                             </th>
                             <th class="w-24 text-center">액션</th>
                         </tr>
@@ -128,7 +227,7 @@
                                 </td>
                             </tr>
                         </template>
-                        <template x-if="!mainTitleLoading && mainTitles.length === 0">
+                        <template x-if="!mainTitleLoading && mainTitles.length === 0 && unmatchedCrawledPosts.length === 0">
                             <tr>
                                 <td colspan="6" class="text-center py-12 text-gray-500">
                                     <div class="text-4xl mb-2">📋</div>
@@ -137,25 +236,45 @@
                                 </td>
                             </tr>
                         </template>
+                        <!-- 메인 타이틀 (한 행에 표시) -->
                         <template x-for="title in mainTitles" :key="title.id">
-                            <tr>
+                            <tr :class="{'bg-blue-50': selectedMainTitles.includes(title.id)}">
                                 <td class="w-12">
                                     <input type="checkbox" class="rounded border-gray-300"
                                         :value="title.id"
                                         x-model="selectedMainTitles">
                                 </td>
                                 <td>
-                                    <div class="flex items-center gap-2">
-                                        <!-- 활성 그룹 (2개 이상 멤버): 폴더 아이콘 클릭 가능 -->
-                                        <template x-if="title.group_member_count >= 2">
-                                            <button @click="openGroupDetailModal(title.group_id)"
-                                                    class="flex items-center gap-1 text-blue-600 hover:text-blue-800 cursor-pointer"
-                                                    :title="'그룹 보기 (' + title.group_member_count + '개)'">
-                                                <span class="text-lg">📁</span>
-                                                <span class="text-xs text-gray-500" x-text="'(' + title.group_member_count + ')'"></span>
-                                            </button>
+                                    <div class="flex flex-col gap-1">
+                                        <div class="flex items-center gap-2">
+                                            <!-- 활성 그룹 (2개 이상 멤버): 폴더 아이콘 클릭 가능 -->
+                                            <template x-if="title.group_member_count >= 2">
+                                                <button @click="openGroupDetailModal(title.group_id)"
+                                                        class="flex items-center gap-1 text-blue-600 hover:text-blue-800 cursor-pointer"
+                                                        :title="'그룹 보기 (' + title.group_member_count + '개)'">
+                                                    <span class="text-lg">📁</span>
+                                                    <span class="text-xs text-gray-500" x-text="'(' + title.group_member_count + ')'"></span>
+                                                </button>
+                                            </template>
+                                            <span class="font-medium truncate max-w-md" x-text="title.title"></span>
+                                        </div>
+                                        <!-- 매칭된 크롤링 포스트 (같은 셀 내에 표시) -->
+                                        <template x-if="title.matched_crawled_post">
+                                            <div class="flex items-center gap-2 pl-2 text-sm text-gray-600">
+                                                <span class="text-gray-400">↳</span>
+                                                <span class="truncate max-w-sm" x-text="title.matched_crawled_post.title"></span>
+                                                <span class="text-xs font-medium px-1.5 py-0.5 bg-green-100 text-green-700 rounded"
+                                                      x-text="(title.matched_crawled_post.match_score || 100).toFixed(2) + '%'"></span>
+                                                <template x-if="title.matched_crawled_post.url">
+                                                    <a :href="title.matched_crawled_post.url" target="_blank"
+                                                       class="text-blue-500 hover:text-blue-700">
+                                                        <svg class="w-3.5 h-3.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                                                        </svg>
+                                                    </a>
+                                                </template>
+                                            </div>
                                         </template>
-                                        <span class="font-medium truncate max-w-md" x-text="title.title"></span>
                                     </div>
                                 </td>
                                 <td class="text-center">
@@ -174,21 +293,48 @@
                                         <span class="text-gray-400 text-xs">미분류</span>
                                     </template>
                                 </td>
-                                <td class="text-center">
-                                    <span :class="{
-                                        'bg-green-100 text-green-800': title.status === 'available',
-                                        'bg-blue-100 text-blue-800': title.status === 'matched',
-                                        'bg-gray-100 text-gray-800': title.status === 'used',
-                                        'bg-yellow-100 text-yellow-800': title.status === 'archived'
-                                    }" class="px-2 py-0.5 rounded text-xs" x-text="getMainTitleStatusText(title.status)"></span>
-                                </td>
                                 <td class="text-center text-sm text-gray-500" x-text="formatDate(title.created_at)"></td>
+                                <td class="text-center whitespace-nowrap">
+                                    <span :class="{
+                                        'bg-blue-100 text-blue-800': !title.matched_crawled_post && title.status !== 'used',
+                                        'bg-green-100 text-green-800': title.matched_crawled_post && title.status !== 'used',
+                                        'bg-yellow-100 text-yellow-800': title.status === 'used'
+                                    }" class="px-2 py-0.5 rounded text-xs whitespace-nowrap"
+                                       x-text="getMatchingStatusText(title)"></span>
+                                </td>
                                 <td class="text-center">
                                     <button
                                         @click="openMainTitleEditModal(title)"
                                         class="text-blue-600 hover:text-blue-800 text-sm font-medium">
                                         수정
                                     </button>
+                                </td>
+                            </tr>
+                        </template>
+                        <!-- 미매칭 크롤링 포스트 (경계 없이 동일 테이블에 표시) -->
+                        <template x-for="post in (matchingFilter === 'all' && blogMatchingConfig?.enable_manual_matching ? unmatchedCrawledPosts : [])" :key="'crawled_' + post.id">
+                            <tr class="hover:bg-gray-50" :class="selectedUnmatchedCrawled.includes(post.id) ? 'bg-orange-50' : ''">
+                                <td class="w-12">
+                                    <input type="checkbox" class="rounded border-orange-300 text-orange-600 focus:ring-orange-500"
+                                        :value="post.id"
+                                        x-model="selectedUnmatchedCrawled">
+                                </td>
+                                <td>
+                                    <span class="font-medium text-gray-900" x-text="post.title"></span>
+                                </td>
+                                <td class="text-center text-gray-400 text-xs">-</td>
+                                <td class="text-center text-sm text-gray-500" x-text="post.crawled_at ? new Date(post.crawled_at).toLocaleDateString('ko-KR') : '-'"></td>
+                                <td class="text-center whitespace-nowrap">
+                                    <span class="text-orange-600 text-xs px-2 py-0.5 bg-orange-100 rounded whitespace-nowrap">미매칭</span>
+                                </td>
+                                <td class="text-center">
+                                    <a x-show="post.url" :href="post.url" target="_blank"
+                                       class="text-blue-600 hover:text-blue-800 text-sm">
+                                        <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                                        </svg>
+                                    </a>
+                                    <span x-show="!post.url" class="text-gray-400">-</span>
                                 </td>
                             </tr>
                         </template>
@@ -242,12 +388,20 @@
                                 </div>
                                 <div class="mobile-card-subtitle">
                                     <span :class="{
-                                        'text-green-600': title.status === 'available',
-                                        'text-blue-600': title.status === 'matched',
-                                        'text-gray-600': title.status === 'used'
-                                    }" x-text="getMainTitleStatusText(title.status)"></span>
+                                        'text-blue-600': !title.matched_crawled_post,
+                                        'text-green-600': title.matched_crawled_post,
+                                        'text-yellow-600': title.status === 'used'
+                                    }" x-text="getMatchingStatusText(title)"></span>
                                     <span x-show="title.group_member_count >= 2" class="text-blue-500" x-text="'그룹(' + title.group_member_count + ')'"></span>
                                 </div>
+                                <!-- 매칭된 크롤링 포스트 표시 (모바일) -->
+                                <template x-if="title.matched_crawled_post">
+                                    <div class="mt-1 text-xs text-gray-500 flex items-center gap-1">
+                                        <span class="text-gray-400">↳</span>
+                                        <span class="truncate" x-text="title.matched_crawled_post.title"></span>
+                                        <span class="text-green-600" x-text="(title.matched_crawled_post.match_score || 100).toFixed(0) + '%'"></span>
+                                    </div>
+                                </template>
                             </div>
                             <div class="mobile-card-expand">
                                 <svg class="w-5 h-5 text-gray-400 transition-transform"
@@ -279,6 +433,26 @@
                                         class="mobile-card-action-btn secondary">
                                     복구
                                 </button>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+                <!-- 미매칭 크롤링 포스트 (모바일) -->
+                <template x-for="post in (matchingFilter === 'all' && blogMatchingConfig?.enable_manual_matching ? unmatchedCrawledPosts : [])" :key="'m_crawled_' + post.id">
+                    <div class="mobile-card" :class="{'selected': selectedUnmatchedCrawled.includes(post.id)}">
+                        <div class="mobile-card-header">
+                            <div class="mobile-card-checkbox">
+                                <input type="checkbox" class="rounded border-orange-300 text-orange-600"
+                                    :value="post.id"
+                                    x-model="selectedUnmatchedCrawled">
+                            </div>
+                            <div class="mobile-card-main">
+                                <div class="mobile-card-title">
+                                    <span x-text="post.title"></span>
+                                </div>
+                                <div class="mobile-card-subtitle">
+                                    <span class="text-orange-600">미매칭</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -389,8 +563,8 @@
 
 <!-- 제목 수정 모달 -->
 <div
-    x-data="{ open: false, title: {}, submitting: false }"
-    @open-main-title-edit-modal.window="open = true; title = $event.detail"
+    x-data="{ open: false, title: {}, submitting: false, unmatchSubmitting: false }"
+    @open-main-title-edit-modal.window="open = true; title = {...$event.detail}"
     x-show="open"
     x-cloak
     class="fixed inset-0 z-50 overflow-y-auto"
@@ -411,45 +585,74 @@
                     <input type="text" x-model="title.title"
                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">상태</label>
-                    <select x-model="title.status"
-                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                        <option value="available">사용가능</option>
-                        <option value="matched">매칭됨</option>
-                        <option value="used">사용됨</option>
-                        <option value="archived">보관됨</option>
-                    </select>
-                </div>
+                <!-- 매칭 정보 표시 (매칭된 경우) -->
+                <template x-if="title.matched_crawled_post">
+                    <div class="p-3 bg-green-50 rounded-lg">
+                        <div class="text-sm font-medium text-green-700 mb-2">매칭된 크롤링 포스트</div>
+                        <div class="text-sm text-gray-700" x-text="title.matched_crawled_post?.title"></div>
+                        <div class="mt-1 text-xs text-green-600">
+                            유사도: <span x-text="(title.matched_crawled_post?.match_score || 100).toFixed(2) + '%'"></span>
+                        </div>
+                    </div>
+                </template>
             </div>
-            <div class="px-6 py-4 border-t flex justify-end gap-2 bg-gray-50">
-                <button @click="open = false"
-                        class="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg text-sm">
-                    취소
-                </button>
-                <button
-                    @click="
-                        submitting = true;
-                        fetch(`${API_BASE}/titles/${title.id}`, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            credentials: 'include',
-                            body: JSON.stringify({ title: title.title, status: title.status })
-                        })
-                        .then(res => { if(!res.ok) throw new Error(); return res.json(); })
-                        .then(() => {
-                            showSuccessMessage('저장되었습니다');
-                            open = false;
-                            loadMainTitles();
-                        })
-                        .catch(() => showErrorMessage('저장 실패'))
-                        .finally(() => submitting = false);
-                    "
-                    :disabled="submitting"
-                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm disabled:opacity-50">
-                    <span x-show="!submitting">저장</span>
-                    <span x-show="submitting">저장 중...</span>
-                </button>
+            <div class="px-6 py-4 border-t flex justify-between items-center bg-gray-50">
+                <!-- 매칭 해제 버튼 (매칭된 경우에만 표시) -->
+                <div>
+                    <template x-if="title.matched_crawled_post">
+                        <button
+                            @click="
+                                if (!confirm('이 매칭을 해제하시겠습니까?\\n독립포스트와 미매칭 크롤링 포스트로 분리됩니다.')) return;
+                                unmatchSubmitting = true;
+                                fetch(`${API_BASE}/titles/main/${title.id}/unmatch`, {
+                                    method: 'POST',
+                                    credentials: 'include'
+                                })
+                                .then(res => { if(!res.ok) throw new Error(); return res.json(); })
+                                .then(() => {
+                                    showSuccessMessage('매칭이 해제되었습니다');
+                                    open = false;
+                                    loadMainTitlesWithCrawled();
+                                })
+                                .catch(() => showErrorMessage('매칭 해제 실패'))
+                                .finally(() => unmatchSubmitting = false);
+                            "
+                            :disabled="unmatchSubmitting"
+                            class="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm disabled:opacity-50">
+                            <span x-show="!unmatchSubmitting">매칭 해제</span>
+                            <span x-show="unmatchSubmitting">처리 중...</span>
+                        </button>
+                    </template>
+                </div>
+                <div class="flex gap-2">
+                    <button @click="open = false"
+                            class="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg text-sm">
+                        취소
+                    </button>
+                    <button
+                        @click="
+                            submitting = true;
+                            fetch(`${API_BASE}/titles/${title.id}`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                credentials: 'include',
+                                body: JSON.stringify({ title: title.title })
+                            })
+                            .then(res => { if(!res.ok) throw new Error(); return res.json(); })
+                            .then(() => {
+                                showSuccessMessage('저장되었습니다');
+                                open = false;
+                                loadMainTitles();
+                            })
+                            .catch(() => showErrorMessage('저장 실패'))
+                            .finally(() => submitting = false);
+                        "
+                        :disabled="submitting"
+                        class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm disabled:opacity-50">
+                        <span x-show="!submitting">저장</span>
+                        <span x-show="submitting">저장 중...</span>
+                    </button>
+                </div>
             </div>
         </div>
     </div>

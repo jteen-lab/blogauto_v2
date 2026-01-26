@@ -37,6 +37,47 @@
         </div>
     </div>
 
+    <!-- 동작로그 바 - 노출 수만큼 줄 표시, 각 줄당 1개 로그 (시간 고정 + 메시지 슬라이드) -->
+    <div class="border-t border-gray-200 bg-gray-900">
+        <div class="max-w-7xl mx-auto px-4 py-1">
+            <!-- 각 로그를 개별 줄로 표시 -->
+            <template x-for="(log, index) in displayLogs" :key="index">
+                <div class="log-row text-xs">
+                    <!-- 고정 영역: 시간 + 레벨 -->
+                    <div class="log-fixed-area">
+                        <span class="text-gray-500 font-mono text-[11px]" x-text="formatLogTime(log.timestamp)"></span>
+                        <span class="log-level-badge"
+                              :class="{
+                                  'log-level-info': log.level === 'INFO',
+                                  'log-level-success': log.level === 'SUCCESS',
+                                  'log-level-warn': log.level === 'WARN',
+                                  'log-level-error': log.level === 'ERROR'
+                              }"
+                              x-text="log.level"></span>
+                    </div>
+                    <!-- 메시지 영역: PC는 정적, 모바일은 슬라이드 -->
+                    <div class="log-message-container">
+                        <!-- PC: 정적 표시 (truncate) -->
+                        <div class="hidden md:block text-gray-300 truncate" x-text="log.message"></div>
+                        <!-- 모바일: 연속 슬라이드 -->
+                        <div class="md:hidden">
+                            <div class="log-message-track"
+                                 :class="{ 'sliding': log.message && log.message.length > 25 }"
+                                 :style="{ '--log-slide-duration': getMessageSlideDuration(log.message) + 's' }">
+                                <span class="log-message-item text-gray-300" x-text="log.message"></span>
+                                <span class="log-message-item text-gray-300" aria-hidden="true" x-text="log.message"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </template>
+            <!-- 로그 없을 때 -->
+            <div x-show="displayLogs.length === 0" class="text-gray-500 text-xs py-1 text-center">
+                동작 로그가 없습니다
+            </div>
+        </div>
+    </div>
+
     <!-- 상단 슬라이드 다운 패널 -->
     <div x-show="panelOpen"
          x-transition:enter="transition ease-out duration-300"
@@ -50,8 +91,8 @@
          style="height: 100vh; max-height: 100vh;">
 
         <!-- 패널 헤더 -->
-        <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white sticky top-0">
-            <h3 class="text-lg font-bold text-gray-900">대시보드 요약</h3>
+        <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white sticky top-0 z-10">
+            <h3 class="text-lg font-bold text-gray-900">대시보드</h3>
             <div class="flex items-center gap-2">
                 <!-- 설정 버튼 (사용자/AI/API 설정) -->
                 <button @click.stop="openSettingsModal()"
@@ -72,9 +113,41 @@
             </div>
         </div>
 
+        <!-- 탭 네비게이션 (Phase 2-1) -->
+        <div class="border-b border-gray-200 bg-white sticky top-[60px] z-10">
+            <div class="max-w-5xl mx-auto px-4">
+                <nav class="flex gap-1">
+                    <button @click="panelTab = 'summary'"
+                            class="px-4 py-3 text-sm font-medium border-b-2 transition-colors"
+                            :class="panelTab === 'summary'
+                                ? 'border-blue-500 text-blue-600'
+                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
+                        요약탭 선택
+                    </button>
+                    <button @click="panelTab = 'activities'; loadActivities()"
+                            class="px-4 py-3 text-sm font-medium border-b-2 transition-colors"
+                            :class="panelTab === 'activities'
+                                ? 'border-green-500 text-green-600'
+                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
+                        최근 활동
+                    </button>
+                    <button @click="panelTab = 'logs'; loadLogs()"
+                            class="px-4 py-3 text-sm font-medium border-b-2 transition-colors"
+                            :class="panelTab === 'logs'
+                                ? 'border-purple-500 text-purple-600'
+                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
+                        동작 로그
+                    </button>
+                </nav>
+            </div>
+        </div>
+
         <!-- 패널 콘텐츠 -->
-        <div class="overflow-y-auto" style="height: calc(100vh - 60px);">
+        <div class="overflow-y-auto" style="height: calc(100vh - 120px);">
             <div class="max-w-5xl mx-auto px-4 py-6">
+
+            <!-- 요약탭 선택 콘텐츠 -->
+            <div x-show="panelTab === 'summary'" x-cloak>
                 <!-- 블로그 섹션 -->
                 <div class="mb-6">
                     <h4 class="text-sm font-bold text-blue-600 mb-3 uppercase tracking-wide">블로그</h4>
@@ -213,29 +286,86 @@
                     </div>
                 </div>
 
-                <!-- 최근 활동 -->
-                <div class="bg-gray-50 rounded-xl p-4">
-                    <div class="text-sm font-bold text-gray-700 mb-3">최근 활동</div>
-                    <div class="space-y-2">
-                        <template x-for="(activity, index) in activities" :key="index">
-                            <div class="flex items-center gap-3 text-sm bg-white rounded-lg px-4 py-3 shadow-sm">
-                                <span class="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center"
-                                      :class="{
-                                          'bg-blue-100 text-blue-600': activity.type === 'flow',
-                                          'bg-green-100 text-green-600': activity.type === 'blog',
-                                          'bg-purple-100 text-purple-600': activity.type === 'module'
-                                      }">
-                                    <span x-text="activity.type === 'flow' ? '⚡' : (activity.type === 'blog' ? '📝' : '📦')"></span>
-                                </span>
-                                <span class="text-gray-700 truncate flex-1 font-medium" x-text="activity.name"></span>
-                                <span class="text-gray-400 text-xs flex-shrink-0" x-text="formatTime(activity.timestamp)"></span>
+            </div>
+
+            <!-- 최근 활동 탭 콘텐츠 (Phase 2-1) -->
+            <div x-show="panelTab === 'activities'" x-cloak>
+                <div class="space-y-3">
+                    <template x-for="(activity, index) in activities" :key="index">
+                        <div class="flex items-center gap-3 text-sm bg-white rounded-xl px-4 py-4 shadow-sm border border-gray-100">
+                            <span class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center"
+                                  :class="{
+                                      'bg-blue-100 text-blue-600': activity.type === 'flow',
+                                      'bg-green-100 text-green-600': activity.type === 'blog',
+                                      'bg-purple-100 text-purple-600': activity.type === 'module',
+                                      'bg-orange-100 text-orange-600': activity.type === 'crawl',
+                                      'bg-cyan-100 text-cyan-600': activity.type === 'match'
+                                  }">
+                                <span x-text="activity.type === 'flow' ? '⚡' : (activity.type === 'blog' ? '📝' : (activity.type === 'crawl' ? '🔍' : (activity.type === 'match' ? '🔗' : '📦')))"></span>
+                            </span>
+                            <div class="flex-1 min-w-0">
+                                <div class="text-gray-800 font-medium" x-text="activity.name"></div>
+                                <div class="text-gray-400 text-xs" x-text="activity.detail || ''"></div>
                             </div>
-                        </template>
-                        <div x-show="activities.length === 0" class="text-gray-400 text-center py-8">
-                            최근 활동이 없습니다
+                            <span class="text-gray-400 text-xs flex-shrink-0" x-text="formatTime(activity.timestamp)"></span>
+                        </div>
+                    </template>
+                    <div x-show="activities.length === 0" class="text-gray-400 text-center py-16">
+                        <div class="text-4xl mb-2">📭</div>
+                        최근 활동이 없습니다
+                    </div>
+                </div>
+            </div>
+
+            <!-- 동작 로그 탭 콘텐츠 (Phase 2-1) -->
+            <div x-show="panelTab === 'logs'" x-cloak>
+                <!-- 노출 로그 수 설정 -->
+                <div class="mb-4 p-3 bg-gray-100 rounded-lg">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <span class="text-sm font-medium text-gray-700">고정 요약탭 노출 로그 수</span>
+                            <p class="text-xs text-gray-500 mt-0.5">상단 고정 요약탭에 표시할 로그 개수를 선택하세요</p>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <template x-for="n in [1, 2, 3]" :key="n">
+                                <button @click="setDisplayLogCount(n)"
+                                        class="w-10 h-10 rounded-lg text-sm font-bold transition-colors"
+                                        :class="displayLogCount === n
+                                            ? 'bg-purple-600 text-white'
+                                            : 'bg-white text-gray-600 hover:bg-gray-200 border border-gray-300'"
+                                        x-text="n"></button>
+                            </template>
                         </div>
                     </div>
                 </div>
+
+                <div class="bg-gray-900 rounded-xl p-4 font-mono text-xs overflow-x-auto">
+                    <template x-for="(log, index) in logs" :key="index">
+                        <div class="flex items-start gap-2 py-1 border-b border-gray-800 last:border-0">
+                            <span class="text-gray-500 flex-shrink-0" x-text="formatLogTime(log.timestamp)"></span>
+                            <span class="flex-shrink-0 px-1.5 py-0.5 rounded text-xs font-bold"
+                                  :class="{
+                                      'bg-blue-900 text-blue-300': log.level === 'INFO',
+                                      'bg-yellow-900 text-yellow-300': log.level === 'WARN',
+                                      'bg-red-900 text-red-300': log.level === 'ERROR',
+                                      'bg-green-900 text-green-300': log.level === 'SUCCESS'
+                                  }"
+                                  x-text="log.level"></span>
+                            <span class="text-gray-300 break-all" x-text="log.message"></span>
+                        </div>
+                    </template>
+                    <div x-show="logs.length === 0" class="text-gray-500 text-center py-8">
+                        동작 로그가 없습니다
+                    </div>
+                </div>
+                <!-- 로그 더 보기 버튼 -->
+                <div class="mt-4 text-center" x-show="hasMoreLogs">
+                    <button @click="loadMoreLogs()"
+                            class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors">
+                        더 보기
+                    </button>
+                </div>
+            </div>
 
             </div>
         </div>

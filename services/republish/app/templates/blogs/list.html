@@ -637,6 +637,12 @@
                         class="flex-1 py-3 px-1 text-center border-b-2 font-medium text-sm transition-colors whitespace-nowrap">
                     AI
                 </button>
+                <button type="button"
+                        @click="activeTab = 'matching'"
+                        :class="activeTab === 'matching' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                        class="flex-1 py-3 px-1 text-center border-b-2 font-medium text-sm transition-colors whitespace-nowrap">
+                    매칭
+                </button>
             </div>
         </div>
     </div>
@@ -666,6 +672,11 @@
         <!-- AI 설정 탭 -->
         <div x-show="activeTab === 'ai'" x-transition x-cloak>
             {% include "blogs/settings/_tab_ai.html" %}
+        </div>
+
+        <!-- 유사도 매칭 탭 (Phase 3) -->
+        <div x-show="activeTab === 'matching'" x-transition x-cloak>
+            {% include "blogs/settings/_tab_matching.html" %}
         </div>
     </div>
 
@@ -743,23 +754,58 @@ function blogListApp() {
             openBottomSheet('blogSettings');
         },
 
-        testConnection(blogId) {
+        async testConnection(blogId) {
             this.testing = blogId;
 
-            fetch(`/api/v1/blogs/${blogId}/test`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include'
-            })
-            .then(response => response.json())
-            .then(data => {
+            try {
+                const response = await fetch(`/api/v1/blogs/${blogId}/test`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include'
+                });
+                const data = await response.json();
+
                 this.testing = null;
                 this.showMessage(data.message, data.success ? 'success' : 'error');
-            })
-            .catch(error => {
+
+                // 블로그 목록 새로고침 (상태 업데이트 반영)
+                await this.loadBlogs();
+
+                // 백그라운드 매칭이 시작된 경우 폴링 시작
+                if (data.success && data.matching_started) {
+                    this.startMatchingPolling(blogId);
+                }
+            } catch (error) {
                 this.testing = null;
                 this.showMessage('연결 테스트 중 오류가 발생했습니다', 'error');
-            });
+            }
+        },
+
+        // 매칭 진행 상태 폴링
+        startMatchingPolling(blogId) {
+            const pollInterval = setInterval(async () => {
+                try {
+                    await this.loadBlogs();
+                    const blog = this.blogs.find(b => b.id === blogId);
+
+                    // 매칭 완료 또는 에러 시 폴링 중단
+                    if (blog && (blog.crawl_status === 'synced' || blog.crawl_status === 'error')) {
+                        clearInterval(pollInterval);
+
+                        if (blog.crawl_status === 'synced') {
+                            this.showMessage(
+                                `매칭 완료: ${blog.matched_count}/${blog.crawled_count}개 매칭됨`,
+                                'success'
+                            );
+                        }
+                    }
+                } catch (error) {
+                    clearInterval(pollInterval);
+                }
+            }, 3000); // 3초마다 폴링
+
+            // 5분 후 자동 중단 (안전장치)
+            setTimeout(() => clearInterval(pollInterval), 300000);
         },
 
         deleteBlog(blogId, blogName) {
@@ -1006,6 +1052,21 @@ function blogSettingsApp() {
         selectedBlog: null,
         activeTab: 'image',
 
+        // Phase 3: 매칭 설정
+        matchingSettings: {
+            allow_duplicate_similar_posts: false,
+            matching_threshold: 65,
+            enable_manual_matching: false
+        },
+        matchingStats: {
+            crawled_count: 0,
+            matched_posts: 0,
+            unmatched_posts: 0,
+            last_matched_at: null
+        },
+        matchingInProgress: false,
+        crawlInProgress: false,
+
         setBlog(blog) {
             this.selectedBlog = blog;
             this.activeTab = 'image';
@@ -1014,11 +1075,167 @@ function blogSettingsApp() {
                 detail: { blogId: blog.id, blog: blog }
             }));
             console.log('[blogSettingsApp] setBlog 호출됨, blogId:', blog.id);
+
+            // 매칭 설정 및 통계 로드
+            this.loadMatchingSettings(blog.id);
+            this.loadMatchingStats(blog.id);
         },
 
         reset() {
             this.selectedBlog = null;
             this.activeTab = 'image';
+            this.matchingSettings = {
+                allow_duplicate_similar_posts: false,
+                matching_threshold: 65,
+                enable_manual_matching: false
+            };
+            this.matchingStats = {
+                crawled_count: 0,
+                matched_posts: 0,
+                unmatched_posts: 0,
+                last_matched_at: null
+            };
+        },
+
+        // Phase 3: 매칭 설정 로드
+        async loadMatchingSettings(blogId) {
+            try {
+                const response = await fetch(`/api/v1/blogs/${blogId}/settings/matching`, {
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    this.matchingSettings = {
+                        allow_duplicate_similar_posts: data.allow_duplicate_similar_posts ?? false,
+                        matching_threshold: data.matching_threshold ?? 65,
+                        enable_manual_matching: data.enable_manual_matching ?? false
+                    };
+                }
+            } catch (error) {
+                console.error('매칭 설정 로드 실패:', error);
+            }
+        },
+
+        // Phase 3: 매칭 통계 로드
+        async loadMatchingStats(blogId) {
+            try {
+                const response = await fetch(`/api/v1/blogs/${blogId}/matching-summary`, {
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    this.matchingStats = {
+                        crawled_count: data.crawled_count ?? 0,
+                        matched_posts: data.matched_posts ?? 0,
+                        unmatched_posts: data.unmatched_posts ?? 0,
+                        last_matched_at: data.last_matched_at
+                    };
+                }
+            } catch (error) {
+                console.error('매칭 통계 로드 실패:', error);
+            }
+        },
+
+        // Phase 3: 매칭 설정 저장
+        async saveMatchingSettings() {
+            if (!this.selectedBlog) return;
+
+            try {
+                const response = await fetch(`/api/v1/blogs/${this.selectedBlog.id}/settings/matching`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify(this.matchingSettings)
+                });
+
+                if (response.ok) {
+                    if (window.showSuccessMessage) {
+                        window.showSuccessMessage('매칭 설정이 저장되었습니다');
+                    }
+                } else {
+                    throw new Error('저장 실패');
+                }
+            } catch (error) {
+                console.error('매칭 설정 저장 실패:', error);
+                if (window.showErrorMessage) {
+                    window.showErrorMessage('매칭 설정 저장에 실패했습니다');
+                }
+            }
+        },
+
+        // Phase 3: 재매칭 실행
+        async runMatching() {
+            if (!this.selectedBlog || this.matchingInProgress) return;
+
+            this.matchingInProgress = true;
+            try {
+                const response = await fetch(`/api/v1/blogs/${this.selectedBlog.id}/rematch`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (window.showSuccessMessage) {
+                        window.showSuccessMessage(`매칭 완료: ${data.matched}개 매칭, ${data.unmatched}개 미매칭`);
+                    }
+                    // 통계 새로고침
+                    await this.loadMatchingStats(this.selectedBlog.id);
+                } else {
+                    throw new Error('재매칭 실패');
+                }
+            } catch (error) {
+                console.error('재매칭 실패:', error);
+                if (window.showErrorMessage) {
+                    window.showErrorMessage('재매칭에 실패했습니다');
+                }
+            } finally {
+                this.matchingInProgress = false;
+            }
+        },
+
+        // Phase 3: 포스트 새로고침 (크롤링)
+        async refreshCrawl() {
+            if (!this.selectedBlog || this.crawlInProgress) return;
+
+            this.crawlInProgress = true;
+            try {
+                const response = await fetch(`/api/v1/blogs/${this.selectedBlog.id}/crawl`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (window.showSuccessMessage) {
+                        window.showSuccessMessage(data.message || '크롤링이 시작되었습니다');
+                    }
+                    // 통계 새로고침
+                    setTimeout(() => this.loadMatchingStats(this.selectedBlog.id), 3000);
+                } else {
+                    throw new Error('크롤링 실패');
+                }
+            } catch (error) {
+                console.error('크롤링 실패:', error);
+                if (window.showErrorMessage) {
+                    window.showErrorMessage('크롤링에 실패했습니다');
+                }
+            } finally {
+                this.crawlInProgress = false;
+            }
+        },
+
+        // Phase 3: 날짜 포맷
+        formatMatchingDate(dateStr) {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('ko-KR', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
         }
     }
 }
