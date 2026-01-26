@@ -172,6 +172,13 @@ class BlogListResponse(BaseModel):
     platform: str = Field(..., description="플랫폼 타입")
     is_active: bool = Field(..., description="활성 상태")
     auto_publish: bool = Field(..., description="자동 발행 여부")
+    # 크롤링/매칭 상태 (Phase M-1)
+    is_new_blog: bool = Field(True, description="신규 블로그 여부")
+    crawl_status: str = Field("never", description="크롤링 상태")
+    crawled_count: int = Field(0, description="크롤링된 포스트 수")
+    matched_count: int = Field(0, description="매칭된 포스트 수")
+    last_crawled_at: Optional[datetime] = Field(None, description="마지막 크롤링 시간")
+    last_matched_at: Optional[datetime] = Field(None, description="마지막 매칭 시간")
     created_at: datetime = Field(..., description="생성일시")
 
     class Config:
@@ -190,6 +197,10 @@ class BlogConnectionTestResponse(BaseModel):
     success: bool = Field(..., description="연결 성공 여부")
     message: str = Field(..., description="결과 메시지")
     details: Optional[Dict[str, Any]] = Field(None, description="상세 정보")
+    # 크롤링/매칭 결과 (Phase M-1)
+    crawled_count: int = Field(0, description="크롤링된 포스트 수")
+    is_new_blog: bool = Field(True, description="신규 블로그 여부")
+    matching_started: bool = Field(False, description="백그라운드 매칭 시작 여부")
 
 
 class BlogStatsResponse(BaseModel):
@@ -199,6 +210,46 @@ class BlogStatsResponse(BaseModel):
     active_blogs: int = Field(..., description="활성 블로그 수")
     auto_publish_enabled: int = Field(..., description="자동 발행 활성화 수")
     by_platform: Dict[str, int] = Field(..., description="플랫폼별 수")
+
+
+class BlogMatchingConfigRequest(BaseModel):
+    """블로그 매칭 설정 요청 스키마 (Phase 3)"""
+
+    allow_duplicate_similar_posts: bool = Field(
+        False, description="매칭된 포스트도 글 생성 후 발행 (OFF: 독립 포스트만 발행)"
+    )
+    matching_threshold: int = Field(
+        65, ge=50, le=100, description="유사도 매칭 임계값(%)"
+    )
+    enable_manual_matching: bool = Field(
+        False, description="미매칭 수동 매칭 활성화"
+    )
+
+
+class BlogMatchingConfigResponse(BaseModel):
+    """블로그 매칭 설정 응답 스키마 (Phase 3)"""
+
+    allow_duplicate_similar_posts: bool = Field(
+        False, description="매칭된 포스트도 글 생성 후 발행"
+    )
+    matching_threshold: int = Field(
+        65, description="유사도 매칭 임계값(%)"
+    )
+    enable_manual_matching: bool = Field(
+        False, description="미매칭 수동 매칭 활성화"
+    )
+
+    class Config:
+        from_attributes = True
+
+
+class BlogMatchingStatsResponse(BaseModel):
+    """블로그 매칭 통계 응답 스키마 (Phase 3)"""
+
+    crawled_count: int = Field(0, description="크롤링된 포스트 수")
+    matched_posts: int = Field(0, description="매칭된 포스트 수")
+    unmatched_posts: int = Field(0, description="미매칭 포스트 수")
+    last_matched_at: Optional[datetime] = Field(None, description="마지막 매칭 시간")
 
 
 class ErrorResponse(BaseModel):

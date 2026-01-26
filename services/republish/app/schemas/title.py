@@ -76,6 +76,15 @@ class MainTitleUpdate(BaseModel):
     status: Optional[str] = Field(None, pattern="^(available|matched|used|archived)$")
 
 
+class CrawledPostInfo(BaseModel):
+    """매칭된 크롤 포스트 간략 정보 (Phase 2-2)"""
+    id: int
+    title: str
+    url: Optional[str] = None
+    match_score: Optional[float] = None
+    published_at: Optional[datetime] = None
+
+
 class MainTitleResponse(MainTitleBase):
     """MainTitle 응답 스키마"""
     id: int
@@ -99,6 +108,8 @@ class MainTitleResponse(MainTitleBase):
     subtopic_name: Optional[str] = None
     group_name: Optional[str] = None
     group_member_count: Optional[int] = None  # 그룹 멤버 수 (활성 그룹 표시용)
+    # Phase 2-2: 블로그별 매칭 포스트 정보
+    matched_crawled_post: Optional[CrawledPostInfo] = None
 
     class Config:
         from_attributes = True
