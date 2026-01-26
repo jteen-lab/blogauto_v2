@@ -25,8 +25,34 @@ from ..schemas.blog import (
 )
 from ..core.security import encrypt_data, decrypt_data
 from ..core.logger import get_logger, log_security_event
+from .crawl_service import CrawlService
+from .similarity_matcher_service import SimilarityMatcherService
+from ..models.action_log import ActionLog
 
 logger = get_logger("blog_service", "blog.log")
+
+
+async def add_action_log(
+    db: AsyncSession,
+    level: str,
+    message: str,
+    category: str = None,
+    resource_type: str = None,
+    resource_id: int = None
+):
+    """동작 로그 추가 헬퍼"""
+    try:
+        log = ActionLog(
+            level=level,
+            message=message,
+            category=category,
+            resource_type=resource_type,
+            resource_id=resource_id
+        )
+        db.add(log)
+        await db.commit()
+    except Exception as e:
+        logger.warning(f"동작 로그 저장 실패: {e}")
 
 
 class BlogService:
@@ -419,10 +445,12 @@ class BlogService:
 
     async def _perform_connection_test(self, blog: Blog) -> Dict[str, Any]:
         """
-        실제 연결 테스트 수행
+        연결 테스트 및 크롤링/매칭 수행
 
-        Note: Phase 4에서 WordPress/Blogger API 연동 시 구현 예정
-        현재는 기본 검증만 수행
+        Phase M-1: 연결테스트 시 크롤링 + 백그라운드 매칭
+        1. API 연결 확인
+        2. 포스트 타이틀 크롤링
+        3. 기존 블로그인 경우 백그라운드 매칭 시작
         """
         # 기본적인 설정 확인
         if blog.platform == BlogPlatform.WORDPRESS:
@@ -430,24 +458,154 @@ class BlogService:
                 return {
                     "success": False,
                     "message": "WordPress API 키와 시크릿이 모두 필요합니다",
-                    "details": {"platform": "wordpress", "missing_auth": True}
+                    "details": {"platform": "wordpress", "missing_auth": True},
+                    "crawled_count": 0,
+                    "is_new_blog": True,
+                    "matching_started": False
                 }
 
         elif blog.platform == BlogPlatform.BLOGGER:
-            if not blog.oauth_token_encrypted:
+            if not blog.api_key_encrypted:
                 return {
                     "success": False,
-                    "message": "Blogger OAuth 토큰이 필요합니다",
-                    "details": {"platform": "blogger", "missing_oauth": True}
+                    "message": "Blogger API 키가 필요합니다",
+                    "details": {"platform": "blogger", "missing_api_key": True},
+                    "crawled_count": 0,
+                    "is_new_blog": True,
+                    "matching_started": False
                 }
 
-        # Phase 4에서 실제 API 호출 로직 구현 예정
-        return {
-            "success": True,
-            "message": "연결 설정이 올바르게 구성되었습니다 (실제 API 테스트는 Phase 4에서 구현 예정)",
-            "details": {
-                "platform": blog.platform.value,
-                "url": blog.url,
-                "has_credentials": blog.has_api_credentials
+        # 블로그 상태를 크롤링 중으로 변경
+        blog.crawl_status = "crawling"
+        await self.db.commit()
+
+        try:
+            # 1. 포스트 크롤링 실행
+            crawl_service = CrawlService(self.db)
+            crawl_result = await crawl_service.crawl_blog_posts(blog, incremental=False)
+
+            if not crawl_result.success:
+                blog.crawl_status = "error"
+                await self.db.commit()
+                return {
+                    "success": False,
+                    "message": f"크롤링 실패: {crawl_result.error}",
+                    "details": {"platform": blog.platform.value, "error": crawl_result.error},
+                    "crawled_count": 0,
+                    "is_new_blog": True,
+                    "matching_started": False
+                }
+
+            # 2. 신규 블로그 여부 확인
+            is_new_blog = crawl_result.is_new_blog
+
+            if is_new_blog:
+                # 신규 블로그: 매칭 불필요
+                blog.crawl_status = "synced"
+                blog.is_new_blog = True
+                await self.db.commit()
+
+                logger.info(f"신규 블로그 연결 완료 | 블로그ID={blog.id}")
+
+                # 동작 로그 기록
+                await add_action_log(
+                    self.db, "SUCCESS",
+                    f"신규 블로그 연결 완료: {blog.name}",
+                    category="crawl", resource_type="blog", resource_id=blog.id
+                )
+
+                return {
+                    "success": True,
+                    "message": "신규 블로그로 등록되었습니다. 글 생성 후 바로 발행 가능합니다.",
+                    "details": {
+                        "platform": blog.platform.value,
+                        "url": blog.url,
+                        "is_new_blog": True
+                    },
+                    "crawled_count": 0,
+                    "is_new_blog": True,
+                    "matching_started": False
+                }
+
+            # 3. 기존 운영 블로그: 백그라운드 매칭 시작
+            blog.crawl_status = "matching"
+            blog.is_new_blog = False
+            await self.db.commit()
+
+            # 동작 로그 기록 (크롤링 완료)
+            await add_action_log(
+                self.db, "INFO",
+                f"블로그 크롤링 완료: {blog.name} ({crawl_result.crawled_count}개)",
+                category="crawl", resource_type="blog", resource_id=blog.id
+            )
+
+            # 백그라운드에서 매칭 실행 (비동기)
+            await self._run_background_matching(blog.id)
+
+            logger.info(f"기존 블로그 연결 완료 - 매칭 시작 | 블로그ID={blog.id} | 크롤링={crawl_result.crawled_count}")
+
+            return {
+                "success": True,
+                "message": f"{crawl_result.crawled_count}개 포스트 발견. 백그라운드에서 유사도 매칭 진행 중...",
+                "details": {
+                    "platform": blog.platform.value,
+                    "url": blog.url,
+                    "crawled_count": crawl_result.crawled_count,
+                    "new_posts": crawl_result.new_count
+                },
+                "crawled_count": crawl_result.crawled_count,
+                "is_new_blog": False,
+                "matching_started": True
             }
-        }
+
+        except Exception as e:
+            blog.crawl_status = "error"
+            await self.db.commit()
+            logger.error(f"연결 테스트 실패 | 블로그ID={blog.id} | 오류={e}")
+
+            return {
+                "success": False,
+                "message": f"연결 테스트 중 오류가 발생했습니다: {str(e)}",
+                "details": {"platform": blog.platform.value, "error": str(e)},
+                "crawled_count": 0,
+                "is_new_blog": True,
+                "matching_started": False
+            }
+
+    async def _run_background_matching(self, blog_id: int) -> None:
+        """
+        백그라운드 유사도 매칭 실행
+
+        Note: 현재는 동기적으로 실행하지만,
+        추후 Celery/FastAPI BackgroundTasks로 비동기 처리 가능
+        """
+        try:
+            matcher_service = SimilarityMatcherService(self.db)
+            matched_count, unmatched_count = await matcher_service.match_blog_posts(blog_id)
+
+            logger.info(f"백그라운드 매칭 완료 | 블로그ID={blog_id} | 매칭={matched_count} | 미매칭={unmatched_count}")
+
+            # 동작 로그 기록 (매칭 완료)
+            blog = await self.db.get(Blog, blog_id)
+            if blog:
+                await add_action_log(
+                    self.db, "SUCCESS",
+                    f"유사도 매칭 완료: {blog.name} ({matched_count}/{matched_count + unmatched_count})",
+                    category="match", resource_type="blog", resource_id=blog_id
+                )
+
+        except Exception as e:
+            logger.error(f"백그라운드 매칭 실패 | 블로그ID={blog_id} | 오류={e}")
+
+            # 동작 로그 기록 (매칭 실패)
+            await add_action_log(
+                self.db, "ERROR",
+                f"유사도 매칭 실패: 블로그 ID {blog_id} - {str(e)[:100]}",
+                category="match", resource_type="blog", resource_id=blog_id
+            )
+
+            # 블로그 상태를 에러로 변경
+            blog = await self.db.get(Blog, blog_id)
+            if blog:
+                blog.crawl_status = "error"
+                await self.db.commit()
