@@ -41,6 +41,8 @@ async def list_main_titles(
     representatives_only: bool = Query(False, description="대표 제목만"),
     ungrouped_only: bool = Query(False, description="미그룹 제목만"),
     hide_group_members: bool = Query(False, description="그룹 멤버 숨김 (대표+미그룹만 표시)"),
+    blog_id: Optional[int] = Query(None, description="블로그 ID (매칭 필터용)"),
+    matching_filter: Optional[str] = Query(None, description="매칭 필터: all/matched/unmatched"),
     sort_field: Optional[str] = Query("created_at", description="정렬 필드"),
     sort_dir: Optional[str] = Query("desc", description="정렬 방향"),
     db: AsyncSession = Depends(get_db_session),
@@ -56,8 +58,11 @@ async def list_main_titles(
     - representatives_only: 대표 제목만 조회
     - ungrouped_only: 그룹에 속하지 않은 제목만
     - hide_group_members: 그룹 멤버 숨김 (대표 제목 또는 미그룹 제목만 표시)
+    - blog_id: 블로그 ID (매칭 필터링에 사용)
+    - matching_filter: 매칭 필터 (all: 전체, matched: 매칭됨, unmatched: 독립포스트)
     """
     from sqlalchemy import or_
+    from ..models.crawled_post import CrawledPost
 
     query = select(MainTitle)
 
@@ -91,6 +96,26 @@ async def list_main_titles(
                 ~MainTitle.group_id.in_(select(TitleGroup.id).where(TitleGroup.member_count >= 2))
             )
         )
+
+    # Phase 2-2: 블로그-제목 매칭 필터
+    if blog_id and matching_filter and matching_filter != "all":
+        # 해당 블로그에서 매칭된 main_title_id들 조회
+        matched_title_ids_subq = (
+            select(CrawledPost.matched_main_title_id)
+            .where(
+                CrawledPost.blog_id == blog_id,
+                CrawledPost.match_status == "matched",
+                CrawledPost.matched_main_title_id.isnot(None)
+            )
+            .distinct()
+            .scalar_subquery()
+        )
+        if matching_filter == "matched":
+            # 매칭된 제목만
+            query = query.where(MainTitle.id.in_(matched_title_ids_subq))
+        elif matching_filter == "unmatched":
+            # 매칭되지 않은 제목만 (독립 포스트)
+            query = query.where(~MainTitle.id.in_(matched_title_ids_subq))
 
     # 전체 개수
     count_query = select(func.count()).select_from(query.subquery())
@@ -141,6 +166,23 @@ async def list_main_titles(
         groups_result = await db.execute(groups_query)
         groups_map = {g.id: g for g in groups_result.scalars().all()}
 
+    # Phase 2-2: blog_id가 있을 때 매칭된 크롤 포스트 배치 조회
+    crawled_posts_map = {}
+    if blog_id:
+        title_ids = [t.id for t in titles]
+        if title_ids:
+            crawled_query = select(CrawledPost).where(
+                CrawledPost.blog_id == blog_id,
+                CrawledPost.matched_main_title_id.in_(title_ids),
+                CrawledPost.match_status == "matched"
+            )
+            crawled_result = await db.execute(crawled_query)
+            for cp in crawled_result.scalars().all():
+                if cp.matched_main_title_id:
+                    crawled_posts_map[cp.matched_main_title_id] = cp
+
+    from ..schemas.title import CrawledPostInfo
+
     items = []
     for t in titles:
         item = MainTitleResponse.model_validate(t)
@@ -163,6 +205,16 @@ async def list_main_titles(
             group = groups_map[t.group_id]
             item.group_name = group.name
             item.group_member_count = group.member_count
+        # Phase 2-2: 매칭된 크롤 포스트 정보
+        if t.id in crawled_posts_map:
+            cp = crawled_posts_map[t.id]
+            item.matched_crawled_post = CrawledPostInfo(
+                id=cp.id,
+                title=cp.title,
+                url=cp.url,
+                match_score=cp.match_score,
+                published_at=cp.published_at
+            )
         items.append(item)
 
     return MainTitleListResponse(
@@ -606,6 +658,133 @@ async def remove_from_group(
         "remaining_count": max(0, remaining_count - 1) if group_deleted else remaining_count,
         "group_deleted": group_deleted,
         "message": f"{removed_count}개 제목이 그룹에서 제외되었습니다" + (" (그룹 삭제됨)" if group_deleted else "")
+    }
+
+
+class PairMatchRequest(BaseModel):
+    """1:1 페어 매칭 요청"""
+    crawled_post_id: int = Field(..., description="매칭할 크롤링 포스트 ID")
+    blog_id: int = Field(..., description="블로그 ID")
+
+
+@router.post("/main/{main_title_id}/pair-match", summary="1:1 페어 매칭")
+async def pair_match_title(
+    main_title_id: int,
+    data: PairMatchRequest,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    독립 포스트(MainTitle)와 미매칭 크롤링 포스트를 수동으로 1:1 매칭합니다.
+
+    - 크롤링 포스트의 match_status가 'unmatched'인 경우에만 매칭 가능
+    - 매칭 후 크롤링 포스트의 matched_main_title_id에 해당 MainTitle ID가 설정됨
+    - match_score는 100.0 (수동 매칭)으로 설정됨
+    """
+    from ..models.crawled_post import CrawledPost
+    from datetime import datetime
+
+    # MainTitle 조회
+    main_title = await db.get(MainTitle, main_title_id)
+    if not main_title:
+        raise HTTPException(status_code=404, detail="정식 제목을 찾을 수 없습니다")
+
+    # CrawledPost 조회
+    crawled_post = await db.get(CrawledPost, data.crawled_post_id)
+    if not crawled_post:
+        raise HTTPException(status_code=404, detail="크롤링 포스트를 찾을 수 없습니다")
+
+    # 블로그 ID 검증
+    if crawled_post.blog_id != data.blog_id:
+        raise HTTPException(status_code=400, detail="블로그 ID가 일치하지 않습니다")
+
+    # 미매칭 상태 확인
+    if crawled_post.match_status != "unmatched":
+        raise HTTPException(
+            status_code=400,
+            detail=f"미매칭 상태의 포스트만 매칭할 수 있습니다 (현재 상태: {crawled_post.match_status})"
+        )
+
+    # 수동 매칭 처리
+    crawled_post.match_status = "matched"
+    crawled_post.matched_main_title_id = main_title_id
+    crawled_post.match_score = 100.0  # 수동 매칭은 100% 점수
+    crawled_post.updated_at = datetime.now()
+
+    await db.commit()
+    await db.refresh(crawled_post)
+
+    logger.info(
+        f"[PAIR_MATCH] 수동 매칭 완료 | "
+        f"main_title_id={main_title_id} | "
+        f"crawled_post_id={data.crawled_post_id} | "
+        f"blog_id={data.blog_id}"
+    )
+
+    return {
+        "success": True,
+        "message": "1:1 페어 매칭이 완료되었습니다",
+        "main_title_id": main_title_id,
+        "main_title": main_title.title,
+        "crawled_post_id": data.crawled_post_id,
+        "crawled_post_title": crawled_post.title,
+    }
+
+
+@router.post("/main/{main_title_id}/unmatch", summary="매칭 해제")
+async def unmatch_title(
+    main_title_id: int,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    메인 타이틀과 매칭된 크롤링 포스트의 매칭을 해제합니다.
+
+    - 메인 타이틀은 독립포스트로 돌아갑니다.
+    - 크롤링 포스트는 미매칭 상태로 돌아갑니다.
+    """
+    from ..models.crawled_post import CrawledPost
+    from sqlalchemy import update as sql_update
+    from datetime import datetime
+
+    # MainTitle 조회
+    main_title = await db.get(MainTitle, main_title_id)
+    if not main_title:
+        raise HTTPException(status_code=404, detail="정식 제목을 찾을 수 없습니다")
+
+    # 매칭된 크롤링 포스트 조회
+    matched_query = select(CrawledPost).where(
+        CrawledPost.matched_main_title_id == main_title_id,
+        CrawledPost.match_status == "matched"
+    )
+    result = await db.execute(matched_query)
+    matched_posts = result.scalars().all()
+
+    if not matched_posts:
+        raise HTTPException(status_code=404, detail="매칭된 크롤링 포스트가 없습니다")
+
+    # 모든 매칭된 포스트의 매칭 해제
+    unmatch_count = 0
+    for post in matched_posts:
+        post.match_status = "unmatched"
+        post.matched_main_title_id = None
+        post.match_score = None
+        post.updated_at = datetime.now()
+        unmatch_count += 1
+
+    await db.commit()
+
+    logger.info(
+        f"[UNMATCH] 매칭 해제 완료 | "
+        f"main_title_id={main_title_id} | "
+        f"unmatched_count={unmatch_count}"
+    )
+
+    return {
+        "success": True,
+        "message": f"매칭이 해제되었습니다. {unmatch_count}개 포스트가 미매칭 상태로 변경되었습니다",
+        "main_title_id": main_title_id,
+        "unmatched_count": unmatch_count
     }
 
 

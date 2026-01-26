@@ -22,6 +22,7 @@ from ..models.flow import Flow
 from ..models.category import Topic, SubTopic, Keyword
 from ..models.flow_execution_state import FlowExecutionState
 from ..models.autorun_log import AutorunLog
+from ..models.action_log import ActionLog
 
 logger = get_logger("dashboard", "dashboard.log")
 
@@ -401,4 +402,91 @@ async def get_recent_activities(
         logger.error(f"[DASHBOARD] activities 에러: {str(e)}")
         return {
             "activities": []
+        }
+
+
+class LogCreateRequest(BaseModel):
+    """로그 생성 요청"""
+    level: str = "INFO"
+    message: str
+    category: Optional[str] = None
+    resource_type: Optional[str] = None
+    resource_id: Optional[int] = None
+
+
+@router.get("/logs")
+async def get_action_logs(
+    limit: int = 50,
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db_session)
+):
+    """
+    동작 로그 조회 (Phase 2-1)
+    """
+    try:
+        # 최신 로그부터 조회
+        result = await db.execute(
+            select(ActionLog)
+            .order_by(ActionLog.timestamp.desc())
+            .offset(offset)
+            .limit(limit + 1)  # has_more 확인용 +1
+        )
+        logs = result.scalars().all()
+
+        has_more = len(logs) > limit
+        if has_more:
+            logs = logs[:limit]
+
+        return {
+            "logs": [
+                {
+                    "id": log.id,
+                    "level": log.level,
+                    "message": log.message,
+                    "category": log.category,
+                    "resource_type": log.resource_type,
+                    "resource_id": log.resource_id,
+                    "timestamp": log.timestamp.isoformat() if log.timestamp else None
+                }
+                for log in logs
+            ],
+            "has_more": has_more
+        }
+    except Exception as e:
+        logger.error(f"[DASHBOARD] logs 에러: {str(e)}")
+        return {
+            "logs": [],
+            "has_more": False
+        }
+
+
+@router.post("/logs")
+async def create_action_log(
+    request: LogCreateRequest,
+    db: AsyncSession = Depends(get_db_session)
+):
+    """
+    동작 로그 생성 (Phase 2-1)
+    """
+    try:
+        log = ActionLog(
+            level=request.level,
+            message=request.message,
+            category=request.category,
+            resource_type=request.resource_type,
+            resource_id=request.resource_id
+        )
+        db.add(log)
+        await db.commit()
+        await db.refresh(log)
+
+        return {
+            "success": True,
+            "log_id": log.id
+        }
+    except Exception as e:
+        logger.error(f"[DASHBOARD] log 생성 에러: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e)
         }
