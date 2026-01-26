@@ -422,12 +422,13 @@ async def get_action_logs(
 ):
     """
     동작 로그 조회 (Phase 2-1)
+    autorun_logs 테이블에서 최신 로그를 조회하여 GlobalSummary에 표시
     """
     try:
-        # 최신 로그부터 조회
+        # autorun_logs 테이블에서 최신 로그 조회
         result = await db.execute(
-            select(ActionLog)
-            .order_by(ActionLog.timestamp.desc())
+            select(AutorunLog)
+            .order_by(AutorunLog.created_at.desc())
             .offset(offset)
             .limit(limit + 1)  # has_more 확인용 +1
         )
@@ -437,16 +438,88 @@ async def get_action_logs(
         if has_more:
             logs = logs[:limit]
 
+        # GlobalSummary용 로그 포맷 변환
+        # level: action 기반 (success→INFO, failed→ERROR, warning→WARN)
+        # message: 간결한 한 줄 형식
+        def format_log_level(log):
+            if log.status == "success":
+                return "INFO"
+            elif log.status == "failed":
+                return "ERROR"
+            elif log.status == "warning":
+                return "WARN"
+            return "INFO"
+
+        def format_log_message(log):
+            """간결한 로그 메시지 생성"""
+            # log.message가 있으면 상세 메시지로 우선 사용
+            if log.message:
+                # 플로우/모듈명 + 상세 메시지 조합
+                prefix_parts = []
+                if log.flow_name:
+                    prefix_parts.append(log.flow_name)
+                if log.blog_name and log.blog_name != "-":
+                    prefix_parts.append(f"({log.blog_name})")
+
+                prefix = " ".join(prefix_parts) + " - " if prefix_parts else ""
+                return f"{prefix}{log.message}"
+
+            # message가 없으면 기존 포맷 사용
+            parts = []
+
+            # 액션 타입
+            action_map = {
+                "republish": "재발행",
+                "publish": "발행",
+                "generate": "생성",
+                "data": "데이터",
+                "collect": "수집",
+                "paused": "일시정지",
+                "resumed": "재개",
+                "stopped": "중지",
+                "added": "추가",
+                "removed": "제외"
+            }
+            action_text = action_map.get(log.action, log.action)
+
+            # 상태
+            status_map = {
+                "success": "완료",
+                "failed": "실패",
+                "warning": "경고"
+            }
+            status_text = status_map.get(log.status, log.status)
+
+            # 메시지 조합: "[액션] [대상] - [결과]"
+            if log.flow_name:
+                parts.append(f"{action_text}: {log.flow_name}")
+            elif log.module_name:
+                parts.append(f"{action_text}: {log.module_name}")
+            else:
+                parts.append(action_text)
+
+            if log.blog_name and log.blog_name != "-":
+                parts.append(f"({log.blog_name})")
+
+            if log.post_title:
+                # 제목이 길면 축약
+                title = log.post_title[:30] + "..." if len(log.post_title) > 30 else log.post_title
+                parts.append(f"- {title}")
+
+            parts.append(status_text)
+
+            return " ".join(parts)
+
         return {
             "logs": [
                 {
                     "id": log.id,
-                    "level": log.level,
-                    "message": log.message,
-                    "category": log.category,
-                    "resource_type": log.resource_type,
-                    "resource_id": log.resource_id,
-                    "timestamp": log.timestamp.isoformat() if log.timestamp else None
+                    "level": format_log_level(log),
+                    "message": format_log_message(log),
+                    "category": log.action,
+                    "resource_type": "autorun",
+                    "resource_id": log.flow_id,
+                    "timestamp": log.created_at.isoformat() if log.created_at else None
                 }
                 for log in logs
             ],

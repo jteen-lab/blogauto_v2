@@ -1347,8 +1347,8 @@ class FlowScheduler:
             else:
                 action_time = datetime.now().strftime("%Y/%m/%d/%H:%M:%S")
 
-            # 에러 메시지
-            error_msg = None if is_success else result.get("message", "")
+            # 메시지: 성공/실패 모두 result["message"] 사용
+            log_message = result.get("message", "")
 
             # AutorunLog 생성
             log = AutorunLog.create_execution_log(
@@ -1362,7 +1362,7 @@ class FlowScheduler:
                 post_title=post_title,
                 action_time=action_time,
                 duration_ms=duration_ms,
-                message=error_msg
+                message=log_message
             )
 
             db.add(log)

@@ -496,9 +496,21 @@ class SchedulerManager:
                 bulk_urls_per_cycle=bulk_urls_per_cycle
             )
 
-            # AutorunLog 저장
+            if collect_result.get("success"):
+                total_collected = collect_result.get("total_collected", 0)
+                total_saved = collect_result.get("total_saved", 0)
+
+            # AutorunLog 저장 (상세 정보 포함)
             try:
                 action_time = datetime.now().strftime("%Y/%m/%d %H:%M")
+                # 상세 메시지 생성
+                if collect_result.get("success"):
+                    total_collected = collect_result.get("total_collected", 0)
+                    total_saved = collect_result.get("total_saved", 0)
+                    log_message = f"키워드/제목 수집 완료: {total_collected}개 수집, {total_saved}개 저장"
+                else:
+                    log_message = collect_result.get("message", "수집 실패")[:500]
+
                 log_entry = AutorunLog(
                     user_id=1,
                     flow_id=flow.id,
@@ -509,7 +521,7 @@ class SchedulerManager:
                     blog_name="-",
                     post_title="",
                     action_time=action_time,
-                    message=collect_result.get("message", "")[:500] if collect_result.get("message") else ""
+                    message=log_message
                 )
                 db.add(log_entry)
                 await db.commit()
@@ -517,8 +529,6 @@ class SchedulerManager:
                 logger.warning(f"[COLLECT_MODULE] AutorunLog 저장 실패: {log_error}")
 
             if collect_result.get("success"):
-                total_collected = collect_result.get("total_collected", 0)
-                total_saved = collect_result.get("total_saved", 0)
 
                 logger.info(
                     f"[COLLECT_MODULE] 수집 완료 | module={module.name} | "

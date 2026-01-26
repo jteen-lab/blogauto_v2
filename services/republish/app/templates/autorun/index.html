@@ -96,25 +96,12 @@
 
         <!-- 헤더 버튼 (PC) -->
         <div class="hidden md:flex items-center gap-2">
-            <button @click="openLogSheet()"
-                    class="inline-flex items-center px-3 py-2 border-2 border-gray-400 rounded-md text-sm font-bold text-gray-600 hover:bg-gray-50 focus:outline-none transition-colors">
-                <span class="mr-1">📋</span>
-                로그
-            </button>
             <button @click="openAddSheet()"
                     class="inline-flex items-center px-4 py-2 border-2 border-blue-600 rounded-md text-sm font-bold text-blue-600 hover:bg-blue-50 focus:outline-none transition-colors">
                 <svg class="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                 </svg>
                 추가
-            </button>
-        </div>
-
-        <!-- 모바일 로그 버튼 (헤더에 표시) -->
-        <div class="md:hidden">
-            <button @click="openLogSheet()"
-                    class="inline-flex items-center px-3 py-2 border-2 border-gray-400 rounded-md text-sm font-bold text-gray-600 bg-white hover:bg-gray-50 focus:outline-none transition-colors">
-                <span>📋</span>
             </button>
         </div>
     </div>
@@ -265,47 +252,6 @@
     </div>
 </div>
 
-<!-- 로그 하단 시트 -->
-<div id="logSheet-backdrop"
-     class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden transition-opacity duration-300"
-     onclick="closeBottomSheet('logSheet')">
-</div>
-
-<div id="logSheet"
-     class="fixed inset-x-0 bottom-0 h-[calc(100vh-70px)] bg-white rounded-t-2xl shadow-2xl z-50
-            transform translate-y-full transition-transform duration-300 ease-out">
-
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex flex-col">
-        <!-- 핸들 바 -->
-        <div class="flex justify-center pt-3 pb-2">
-            <div class="w-12 h-1 bg-gray-300 rounded-full"></div>
-        </div>
-
-        <!-- 헤더 -->
-        <div class="flex justify-between items-center py-3 border-b border-gray-200">
-            <h3 class="text-lg font-semibold text-gray-900">동작 로그</h3>
-            <div class="flex items-center gap-2">
-                <button onclick="refreshLogs()"
-                        class="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                    </svg>
-                </button>
-                <button onclick="closeBottomSheet('logSheet')"
-                        class="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                </button>
-            </div>
-        </div>
-
-        <!-- 로그 목록 -->
-        <div id="logSheetContent" class="flex-1 p-4 overflow-y-auto">
-            <div class="text-center text-gray-500 py-8">로그가 없습니다</div>
-        </div>
-    </div>
-</div>
 
 <!-- 확인 다이얼로그 -->
 <div id="confirmDialog"
