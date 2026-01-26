@@ -15,6 +15,7 @@ from ..core.database import Base
 
 if TYPE_CHECKING:
     from .keyword import KeywordCategory, CollectedKeyword
+    from .crawled_post import CrawledPost
 
 
 class TitleGroup(Base):
@@ -91,6 +92,7 @@ class MainTitle(Base):
     # 관계
     category: Mapped[Optional["KeywordCategory"]] = relationship("KeywordCategory")
     group: Mapped[Optional["TitleGroup"]] = relationship("TitleGroup", back_populates="titles", foreign_keys=[group_id])
+    matched_crawled_posts: Mapped[List["CrawledPost"]] = relationship("CrawledPost", back_populates="matched_main_title")
 
     __table_args__ = (
         Index('ix_main_title_status_category', 'status', 'category_id'),

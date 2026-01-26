@@ -57,6 +57,12 @@ from .content_filter import ContentFilter
 # Phase D-2: Bulk Collection models
 from .collected_url import CollectedUrl
 
+# Phase M-1: Crawled Post models (유사도 매칭)
+from .crawled_post import CrawledPost
+
+# Phase M-2: Action Log models (동작 로그)
+from .action_log import ActionLog
+
 __all__ = [
     # Core models
     "User",
@@ -108,4 +114,8 @@ __all__ = [
     "ContentFilter",
     # Phase D-2: Bulk Collection models
     "CollectedUrl",
+    # Phase M-1: Crawled Post models
+    "CrawledPost",
+    # Phase M-2: Action Log models
+    "ActionLog",
 ]

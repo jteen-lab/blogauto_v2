@@ -102,9 +102,25 @@ class Blog(Base):
         comment="AI 서비스 설정: writing_ai, title_ai, image_ai"
     )
 
+    # 유사도 매칭 설정 (Phase 3)
+    matching_config = Column(
+        JSON,
+        default=dict,
+        nullable=True,
+        comment="유사도 매칭 설정: allow_duplicate_similar_posts, matching_threshold, use_waiting_category, waiting_threshold_min"
+    )
+
     # 포스트 통계 (재발행 모듈 적용 구간 필터링용)
     total_post_count = Column(Integer, nullable=True, comment="누적 포스트 수")
     post_count_updated_at = Column(DateTime(timezone=True), nullable=True, comment="포스트 수 업데이트 시점")
+
+    # 크롤링/매칭 상태 (Phase M-1: 유사도 매칭 워크플로우)
+    is_new_blog = Column(Boolean, default=True, nullable=False, comment="신규 블로그 여부 (포스트 없음)")
+    crawl_status = Column(String(20), default="never", nullable=False, comment="크롤링 상태: never | crawling | matching | synced | error")
+    last_crawled_at = Column(DateTime(timezone=True), nullable=True, comment="마지막 크롤링 시간")
+    last_matched_at = Column(DateTime(timezone=True), nullable=True, comment="마지막 매칭 완료 시간")
+    crawled_count = Column(Integer, default=0, nullable=False, comment="크롤링된 포스트 수")
+    matched_count = Column(Integer, default=0, nullable=False, comment="매칭된 포스트 수")
 
     # 소프트 딜리트
     is_deleted = Column(Boolean, default=False, nullable=False)
@@ -119,6 +135,7 @@ class Blog(Base):
     # profile_links는 제거됨 (새로운 Flow 시스템으로 교체)
     # group_links = relationship("BlogGroupLink", back_populates="blog", cascade="all, delete-orphan")  # 제거됨 (Flow 시스템으로 교체)
     flow_links = relationship("FlowBlog", back_populates="blog", cascade="all, delete-orphan")
+    crawled_posts = relationship("CrawledPost", back_populates="blog", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
         return f"<Blog(id={self.id}, name={self.name}, platform={self.platform.value})>"
@@ -208,6 +225,16 @@ class Blog(Base):
             "style_config": self.style_config or {},
             # AI 설정
             "ai_config": self.ai_config or {},
+            # 유사도 매칭 설정 (Phase 3)
+            "matching_config": self.matching_config or {},
+            # 크롤링/매칭 상태 (Phase M-1)
+            "is_new_blog": self.is_new_blog,
+            "crawl_status": self.crawl_status,
+            "last_crawled_at": self.last_crawled_at,
+            "last_matched_at": self.last_matched_at,
+            "crawled_count": self.crawled_count,
+            "matched_count": self.matched_count,
+            # 타임스탬프
             "created_at": self.created_at,
             "updated_at": self.updated_at
         }
