@@ -46,3 +46,5 @@ Thumbs.db
 
 # Backup files
 *.bak
+*.pyc
+media/
