@@ -63,6 +63,9 @@ from .crawled_post import CrawledPost
 # Phase M-2: Action Log models (동작 로그)
 from .action_log import ActionLog
 
+# Phase R-1: Reference Collection models (참조자료 수집)
+from .collected_reference import CollectedReference, CrawlLog
+
 __all__ = [
     # Core models
     "User",
@@ -118,4 +121,7 @@ __all__ = [
     "CrawledPost",
     # Phase M-2: Action Log models
     "ActionLog",
+    # Phase R-1: Reference Collection models
+    "CollectedReference",
+    "CrawlLog",
 ]

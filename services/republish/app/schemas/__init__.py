@@ -6,3 +6,4 @@ from .category import *
 from .strategy import *
 from .republish import *
 from .ai_api_key import *
+from .reference_collection import *
