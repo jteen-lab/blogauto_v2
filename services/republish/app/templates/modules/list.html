@@ -635,7 +635,9 @@
   <div class="h-safe-area-inset-bottom"></div>
 </div>
 
-<!-- 스크립트 로드 순서: form.js 먼저, list.js 나중 -->
-<script src="/static/js/modules/form.js?v=20260122-4"></script>
-<script src="/static/js/modules/list.js?v=20260122-4"></script>
+<!-- 스크립트 로드 순서: prompt-form.js → prompt-form-template.js → form.js → list.js -->
+<script src="/static/js/modules/prompt-form.js?v=20260203"></script>
+<script src="/static/js/modules/prompt-form-template.js?v=20260203"></script>
+<script src="/static/js/modules/form.js?v=20260203"></script>
+<script src="/static/js/modules/list.js?v=20260203"></script>
 {% endblock %}

@@ -1066,8 +1066,18 @@ Alpine.js 데이터 바인딩 사용
             </div>
         </div>
 
+        <!-- 생성 모듈 설정 -->
+        <div x-show="formData.type_code === 'generate'">
+            {% include "modules/_generate_form.html" %}
+        </div>
+
+        <!-- 프롬프트 모듈 설정 -->
+        <div x-show="formData.type_code === 'prompt'">
+            {% include "modules/_prompt_form.html" %}
+        </div>
+
         <!-- 기타 타입 설정 -->
-        <div x-show="formData.type_code !== 'republish' && formData.type_code !== 'collect' && formData.type_code !== 'data'">
+        <div x-show="formData.type_code !== 'republish' && formData.type_code !== 'collect' && formData.type_code !== 'data' && formData.type_code !== 'generate' && formData.type_code !== 'prompt'">
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-2">설정 정보 (JSON)</label>
                 <textarea x-model="settingsJson"

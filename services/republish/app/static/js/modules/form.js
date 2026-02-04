@@ -8,12 +8,20 @@ function moduleFormApp(module = null, moduleType = null) {
     const initialModule = module || {};
     const initialType = moduleType || { code: null, name: '' };
 
+    // 프롬프트 모듈 초기 상태 (전역 함수에서 가져옴)
+    const promptModuleState = window.createPromptModuleState
+        ? window.createPromptModuleState()
+        : {};
+
     return {
         // 폼 상태
         loading: false,
         isEdit: !!initialModule?.id,
         module: initialModule,
         moduleType: initialType,
+
+        // 프롬프트 모듈 상태
+        promptModule: promptModuleState,
 
         // API 상태 (수집 모듈용)
         apiStatus: {
@@ -105,7 +113,13 @@ function moduleFormApp(module = null, moduleType = null) {
             category_filter: initialModule?.settings?.filter?.categories?.join(', ') || '',
             // 그룹화 설정
             auto_group: initialModule?.settings?.auto_group ?? true,
-            similarity_threshold: initialModule?.settings?.similarity_threshold ?? 75
+            similarity_threshold: initialModule?.settings?.similarity_threshold ?? 75,
+            // 생성 모듈 필드들
+            enable_title_prompt: initialModule?.settings?.enable_title_prompt ?? false,
+            title_prompt: initialModule?.settings?.title_prompt_config?.prompt || '',
+            enable_reference_collection: initialModule?.settings?.enable_reference_collection ?? false,
+            reference_count: initialModule?.settings?.reference_count ?? 3,
+            generation_prompt: initialModule?.settings?.generation_prompt_config?.prompt || '블로그 글을 작성해주세요.'
         },
 
         // 수집 시간 입력용
@@ -156,6 +170,16 @@ function moduleFormApp(module = null, moduleType = null) {
                         console.log('[collect_type] 키워드만 선택 - 키워드 추출 옵션 비활성화');
                     }
                 });
+            }
+
+            // 프롬프트 모듈인 경우 초기화
+            if (typeCode === 'prompt') {
+                console.log('프롬프트 모듈 감지 - 카테고리 로드 시작');
+                this.loadCategories();
+                // 편집 모드일 경우 기존 데이터 로드
+                if (this.isEdit) {
+                    this.initPromptModuleFromData();
+                }
             }
 
             // Alpine.js $nextTick이 사용 가능한지 확인
@@ -573,8 +597,26 @@ function moduleFormApp(module = null, moduleType = null) {
                 }
             }
 
+            // 생성 모듈 검증
+            if (this.formData.type_code === 'generate') {
+                // 참조자료 수집 설정 검증
+                if (this.formData.enable_reference_collection) {
+                    if (!this.formData.reference_count || this.formData.reference_count < 1 || this.formData.reference_count > 10) {
+                        this.showError('참조자료 개수는 1~10개 범위여야 합니다');
+                        return false;
+                    }
+                }
+            }
+
+            // 프롬프트 모듈 검증
+            if (this.formData.type_code === 'prompt') {
+                if (!this.validatePromptModule()) {
+                    return false;
+                }
+            }
+
             // 기타 타입 설정 JSON 검증
-            if (this.formData.type_code !== 'republish' && this.formData.type_code !== 'collect' && this.formData.type_code !== 'data' && this.settingsJson) {
+            if (this.formData.type_code !== 'republish' && this.formData.type_code !== 'collect' && this.formData.type_code !== 'data' && this.formData.type_code !== 'generate' && this.settingsJson) {
                 try {
                     JSON.parse(this.settingsJson);
                 } catch (e) {
@@ -685,6 +727,22 @@ function moduleFormApp(module = null, moduleType = null) {
                     auto_group: this.formData.auto_group,
                     similarity_threshold: this.formData.similarity_threshold
                 };
+            } else if (this.formData.type_code === 'generate') {
+                // 생성 모듈 설정
+                data.settings = {
+                    enable_title_prompt: this.formData.enable_title_prompt,
+                    title_prompt_config: this.formData.enable_title_prompt ? {
+                        prompt: this.formData.title_prompt
+                    } : null,
+                    enable_reference_collection: this.formData.enable_reference_collection,
+                    reference_count: this.formData.reference_count,
+                    generation_prompt_config: {
+                        prompt: this.formData.generation_prompt
+                    }
+                };
+            } else if (this.formData.type_code === 'prompt') {
+                // 프롬프트 모듈 설정
+                data.settings = this.preparePromptModuleData();
             } else {
                 // 설정 JSON 파싱
                 try {
@@ -860,7 +918,19 @@ function moduleFormApp(module = null, moduleType = null) {
         // 필수 API 설정 여부 확인 (네이버 광고 API 필수)
         hasRequiredAPI() {
             return this.apiStatus.naver_ads === true;
-        }
+        },
+
+        // =========================================
+        // 프롬프트 모듈 메서드 (prompt-form.js에서 믹스인)
+        // =========================================
+        // 아래 메서드들은 prompt-form.js가 로드되면 자동으로 추가됨
+        // loadCategories, initPromptModuleFromData, toggleTopicExpand,
+        // isTopicSelected, toggleTopicSelection, isSubtopicSelected,
+        // toggleSubtopicSelection, onCategoryChange, getCategoryDisplayName,
+        // removeCategory, loadBlogsByCategories, toggleTitleStyle,
+        // toggleBlogSelection, selectAllMatchedBlogs, removeBlog,
+        // getBlogName, validatePromptModule, preparePromptModuleData
+        ...(window.promptModuleMethods || {})
     };
 }
 

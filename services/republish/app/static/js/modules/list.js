@@ -25,6 +25,10 @@ function moduleListApp() {
 
             this.loading = true;
             try {
+                // 1단계: 캐시 먼저 로드 (카테고리, 블로그 정보)
+                await initPromptModuleCache();
+
+                // 2단계: 모듈 타입과 모듈 목록 로드
                 await Promise.all([
                     this.loadModuleTypes(),
                     this.loadModules()
@@ -1190,8 +1194,10 @@ function moduleListApp() {
                             </div>
                         </div>
 
+                        ${window.getPromptModuleFormTemplate ? window.getPromptModuleFormTemplate() : '<!-- prompt-form.js 로드 필요 -->'}
+
                         <!-- 기타 타입 설정 -->
-                        <div x-show="formData.type_code !== 'republish' && formData.type_code !== 'collect' && formData.type_code !== 'data'">
+                        <div x-show="formData.type_code !== 'republish' && formData.type_code !== 'collect' && formData.type_code !== 'data' && formData.type_code !== 'prompt'">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-2">설정 정보 (JSON)</label>
                                 <textarea x-model="settingsJson"
@@ -1943,36 +1949,106 @@ function getModuleInfoRows(module) {
         }
     } else if (typeCode === 'generate') {
         // AI 생성 모듈
+        const settings = module.settings || {};
+
+        // 제목 프롬프트 상태
+        if (settings.enable_title_prompt) {
+            rows.push({ label: '제목 재조합', value: '✅ 활성화' });
+        }
+
+        // 참조자료 수집 상태
+        if (settings.enable_reference_collection) {
+            const count = settings.reference_count || 3;
+            rows.push({ label: '참조자료', value: `✅ ${count}개 수집` });
+        } else {
+            rows.push({ label: '참조자료', value: '❌ 비활성' });
+        }
+
+        // 생성 프롬프트 미리보기
+        if (settings.generation_prompt_config?.prompt) {
+            const preview = settings.generation_prompt_config.prompt.length > 40
+                ? settings.generation_prompt_config.prompt.substring(0, 40) + '...'
+                : settings.generation_prompt_config.prompt;
+            rows.push({ label: '프롬프트', value: preview });
+        }
+
+        // 기존 필드 호환
         if (module.ai_model) {
             rows.push({ label: 'AI 모델', value: module.ai_model });
         }
-        if (module.prompt_template) {
-            const preview = module.prompt_template.length > 40
-                ? module.prompt_template.substring(0, 40) + '...'
-                : module.prompt_template;
-            rows.push({ label: '프롬프트', value: preview });
-        }
-        if (module.settings) {
-            if (module.settings.max_tokens) {
-                rows.push({ label: '토큰 제한', value: `${module.settings.max_tokens}토큰` });
-            }
-            if (module.settings.temperature) {
-                rows.push({ label: '창의성', value: String(module.settings.temperature) });
-            }
-        }
     } else if (typeCode === 'prompt') {
-        // 프롬프트 모듈
-        if (module.template_name || module.prompt_name) {
-            rows.push({ label: '템플릿', value: module.template_name || module.prompt_name });
+        // 프롬프트 모듈 - settings 구조 기반 정보 표시
+        const settings = module.settings || {};
+
+        // 1. 연결 카테고리 (토픽 - 서브토픽 형식)
+        if (settings.categories && settings.categories.length > 0) {
+            const categoryNames = settings.categories.map(cat => {
+                const topicName = getTopicNameById(cat.topic_id);
+                if (cat.subtopic_id) {
+                    // 특정 서브토픽 선택: "토픽 - 서브토픽"
+                    const subtopicName = getSubtopicNameById(cat.topic_id, cat.subtopic_id);
+                    return subtopicName ? `${topicName} - ${subtopicName}` : `${topicName}(전체)`;
+                }
+                // 토픽만 선택 (서브토픽 전체): "토픽(전체)"
+                return `${topicName}(전체)`;
+            });
+            rows.push({ label: '카테고리', value: categoryNames.join(' | ') });
         }
-        if (module.category) {
-            rows.push({ label: '카테고리', value: module.category });
+
+        // 2. 제목 프롬프트 (title_recombine)
+        const titleRecombine = settings.title_recombine || {};
+        if (titleRecombine.enabled) {
+            const styles = titleRecombine.styles || [];
+            const styleLabels = {
+                'emotional': '감성적',
+                'practical': '실용적',
+                'question': '질문형',
+                'number': '숫자형',
+                'curiosity': '호기심'
+            };
+            const styleText = styles.map(s => styleLabels[s] || s).join(', ');
+            rows.push({ label: '제목', value: `✅ ${styleText || '활성화'}` });
+        } else {
+            rows.push({ label: '제목', value: '❌ 비활성' });
         }
-        if (module.variables && Array.isArray(module.variables)) {
-            rows.push({ label: '변수', value: module.variables.join(', ') });
+
+        // 3. 글 생성 프롬프트 (content_generation)
+        const contentGen = settings.content_generation || {};
+        if (contentGen.enabled) {
+            const providerLabels = {
+                'openai': 'OpenAI',
+                'claude': 'Claude',
+                'gemini': 'Gemini'
+            };
+            const providerText = providerLabels[contentGen.provider] || contentGen.provider || 'AI';
+            rows.push({ label: '글 생성', value: `✅ ${providerText}` });
+        } else {
+            rows.push({ label: '글 생성', value: '❌ 비활성' });
         }
-        if (module.settings && module.settings.max_length) {
-            rows.push({ label: '길이 설정', value: `${module.settings.max_length}자` });
+
+        // 4. 이미지 프롬프트 (image_generation)
+        const imageGen = settings.image_generation || {};
+        if (imageGen.enabled) {
+            const providerLabels = {
+                'dalle': 'DALL-E',
+                'nanobanana': 'Nanobanana',
+                'midjourney': 'Midjourney'
+            };
+            const providerText = providerLabels[imageGen.provider] || imageGen.provider || 'AI';
+            rows.push({ label: '이미지', value: `✅ ${providerText}` });
+        } else {
+            rows.push({ label: '이미지', value: '❌ 비활성' });
+        }
+
+        // 5. 선택 블로그 (플로우 카드 방식: 타입 + 이름)
+        if (settings.blogs && settings.blogs.length > 0) {
+            const blogInfoList = settings.blogs.map(blogId => getBlogInfoById(blogId)).filter(Boolean);
+            // 플로우 카드와 동일한 형식: "WP 블로그A · BL 블로그B"
+            const blogDisplayParts = blogInfoList.map(blog => {
+                const platformBadge = blog.platform === 'wordpress' ? 'WP' : 'BL';
+                return `${platformBadge} ${blog.name}`;
+            });
+            rows.push({ label: '블로그', value: blogDisplayParts.join(' · '), type: 'blog', blogs: blogInfoList });
         }
     } else if (typeCode === 'collect') {
         // 수집 모듈
@@ -2292,4 +2368,110 @@ function parseScheduleMatrix(scheduleMatrix) {
     }
 
     return groupTexts.join(' | ');
+}
+
+
+// ========================================
+// 프롬프트 모듈 헬퍼 함수 (캐시 기반)
+// ========================================
+
+// 카테고리/블로그 캐시 (API 응답 저장)
+let _categoriesCache = null;
+let _blogsCache = null;
+
+/**
+ * 카테고리 캐시 로드 (비동기)
+ */
+async function loadCategoriesCache() {
+    if (_categoriesCache) return _categoriesCache;
+    try {
+        const response = await fetch('/api/v1/categories', { credentials: 'include' });
+        if (response.ok) {
+            const data = await response.json();
+            _categoriesCache = data.categories || [];
+            console.log('[캐시] 카테고리 로드 완료:', _categoriesCache.length, '개');
+        }
+    } catch (error) {
+        console.error('카테고리 캐시 로드 실패:', error);
+    }
+    return _categoriesCache || [];
+}
+
+/**
+ * 블로그 캐시 로드 (비동기)
+ */
+async function loadBlogsCache() {
+    if (_blogsCache) return _blogsCache;
+    try {
+        const response = await fetch('/api/v1/blogs', { credentials: 'include' });
+        if (response.ok) {
+            const data = await response.json();
+            _blogsCache = data.blogs || data || [];
+            console.log('[캐시] 블로그 로드 완료:', _blogsCache.length, '개');
+        }
+    } catch (error) {
+        console.error('블로그 캐시 로드 실패:', error);
+    }
+    return _blogsCache || [];
+}
+
+/**
+ * 토픽 ID로 이름 가져오기 (동기, 캐시 기반)
+ * @param {number} topicId - 토픽 ID
+ * @returns {string} - 토픽 이름 또는 ID 문자열
+ */
+function getTopicNameById(topicId) {
+    if (!_categoriesCache || _categoriesCache.length === 0) {
+        console.warn('[getTopicNameById] 캐시 미로드 상태:', _categoriesCache);
+        return `카테고리 ${topicId}`;
+    }
+    if (!topicId) return '카테고리 없음';
+    const topic = _categoriesCache.find(t => t.id === topicId);
+    return topic ? topic.name : `카테고리 ${topicId}`;
+}
+
+/**
+ * 서브토픽 ID로 이름 가져오기 (동기, 캐시 기반)
+ * @param {number} topicId - 부모 토픽 ID
+ * @param {number} subtopicId - 서브토픽 ID
+ * @returns {string|null} - 서브토픽 이름 또는 null
+ */
+function getSubtopicNameById(topicId, subtopicId) {
+    if (!_categoriesCache || !topicId || !subtopicId) return null;
+    const topic = _categoriesCache.find(t => t.id === topicId);
+    if (!topic || !topic.subcategories) return null;
+    const subtopic = topic.subcategories.find(s => s.id === subtopicId);
+    return subtopic ? subtopic.name : null;
+}
+
+/**
+ * 블로그 ID로 이름 가져오기 (동기, 캐시 기반)
+ * @param {number} blogId - 블로그 ID
+ * @returns {string|null} - 블로그 이름 또는 null
+ */
+function getBlogNameById(blogId) {
+    if (!_blogsCache || !blogId) return null;
+    const blog = _blogsCache.find(b => b.id === blogId);
+    return blog ? blog.name : null;
+}
+
+/**
+ * 블로그 ID로 블로그 정보 가져오기 (동기, 캐시 기반)
+ * @param {number} blogId - 블로그 ID
+ * @returns {Object|null} - 블로그 객체 {id, name, platform, ...} 또는 null
+ */
+function getBlogInfoById(blogId) {
+    if (!_blogsCache || !blogId) return null;
+    return _blogsCache.find(b => b.id === blogId) || null;
+}
+
+/**
+ * 모듈 목록 로드 시 캐시 초기화 호출
+ * moduleListApp.loadModules() 호출 시 함께 실행
+ */
+async function initPromptModuleCache() {
+    await Promise.all([
+        loadCategoriesCache(),
+        loadBlogsCache()
+    ]);
 }
