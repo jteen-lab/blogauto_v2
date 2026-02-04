@@ -63,39 +63,96 @@
                 <template x-for="(row, rowIndex) in infoRows" :key="rowIndex">
                     <!-- 행 표시 조건: 확장됨 OR 인덱스 < maxVisible -->
                     <div x-show="expanded || rowIndex < maxVisible" x-transition>
-                        <div class="module-info-row"
-                             :class="'type-' + module.module_type.code"
-                             @touchstart="toggleModuleInfoTouch($event, $el)"
-                             x-init="$nextTick(() => initModuleInfoSlideCheck($el))">
 
-                            <!-- 라벨 (고정 - 33%, 90px) -->
-                            <div class="module-info-label">
-                                <span class="module-info-label-text" x-text="row.label"></span>
-                            </div>
-
-                            <!-- 값 슬라이드 영역 (67%) -->
-                            <div class="module-info-container"
-                                 :class="{ 'slide-fade-mask': needsModuleInfoSlide(row.value) }">
-                                <div class="module-info-track"
-                                     :style="{ '--slide-duration': getModuleInfoSlideDuration(row.value) + 's' }"
-                                     :class="{ 'no-slide': !needsModuleInfoSlide(row.value) }">
-
-                                    <!-- 원본 값 -->
-                                    <span class="module-info-value" x-text="row.value"></span>
-
-                                    <!-- 구분자 (슬라이드 필요시만) -->
-                                    <template x-if="needsModuleInfoSlide(row.value)">
-                                        <span class="slide-cycle-separator">◆</span>
-                                    </template>
-
-                                    <!-- 복제 값 (무한 스크롤용 - 슬라이드 필요시만) -->
-                                    <template x-if="needsModuleInfoSlide(row.value)">
-                                        <span class="module-info-value" x-text="row.value" aria-hidden="true"></span>
-                                    </template>
+                        <!-- 블로그 행: 플로우 카드 스타일로 표시 -->
+                        <template x-if="row.type === 'blog' && row.blogs">
+                            <div class="blog-slide-section"
+                                 @touchstart="toggleSlideTouch && toggleSlideTouch($event, $el)"
+                                 x-init="$nextTick(() => typeof initBlogSlideCheck === 'function' && initBlogSlideCheck($el, row.blogs.length))">
+                                <!-- 블로그 라벨 -->
+                                <div class="blog-slide-label">
+                                    <span class="blog-slide-icon">📝</span>
+                                    <span class="blog-slide-count">블로그</span>
                                 </div>
-                                <span class="slide-pause-hint">⏸</span>
+
+                                <!-- 슬라이드 영역 -->
+                                <div class="blog-slide-container">
+                                    <div class="blog-slide-track"
+                                         :style="{ '--blog-slide-duration': (typeof getBlogSlideDuration === 'function' ? getBlogSlideDuration(row.blogs.length) : 15) + 's' }"
+                                         :class="{ 'no-slide': typeof needsBlogSlide === 'function' ? !needsBlogSlide(row.blogs.length) : row.blogs.length <= 3 }">
+
+                                        <!-- 원본 블로그 목록 -->
+                                        <template x-for="(blog, i) in row.blogs" :key="'blog-orig-' + blog.id">
+                                            <span class="blog-slide-item">
+                                                <span class="blog-platform-badge"
+                                                      :class="blog.platform === 'wordpress' ? 'blog-platform-wp' : 'blog-platform-bl'"
+                                                      x-text="blog.platform === 'wordpress' ? 'WP' : 'BL'"></span>
+                                                <span class="blog-slide-name" x-text="blog.name"></span>
+                                                <span x-show="i < row.blogs.length - 1" class="blog-slide-separator">·</span>
+                                            </span>
+                                        </template>
+
+                                        <!-- 구분자 (슬라이드 필요시만) -->
+                                        <template x-if="typeof needsBlogSlide === 'function' ? needsBlogSlide(row.blogs.length) : row.blogs.length > 3">
+                                            <span class="slide-cycle-separator">◆</span>
+                                        </template>
+
+                                        <!-- 복제 블로그 목록 (무한 스크롤용) -->
+                                        <template x-if="typeof needsBlogSlide === 'function' ? needsBlogSlide(row.blogs.length) : row.blogs.length > 3">
+                                            <template x-for="(blog, i) in row.blogs" :key="'blog-dup-' + blog.id">
+                                                <span class="blog-slide-item" aria-hidden="true">
+                                                    <span class="blog-platform-badge"
+                                                          :class="blog.platform === 'wordpress' ? 'blog-platform-wp' : 'blog-platform-bl'"
+                                                          x-text="blog.platform === 'wordpress' ? 'WP' : 'BL'"></span>
+                                                    <span class="blog-slide-name" x-text="blog.name"></span>
+                                                    <span x-show="i < row.blogs.length - 1" class="blog-slide-separator">·</span>
+                                                </span>
+                                            </template>
+                                        </template>
+                                    </div>
+                                    <span class="blog-pause-hint">⏸</span>
+                                </div>
                             </div>
-                        </div>
+                        </template>
+
+                        <!-- 일반 정보 행 -->
+                        <template x-if="row.type !== 'blog'">
+                            <div class="module-info-row"
+                                 :class="'type-' + module.module_type.code"
+                                 @touchstart="toggleModuleInfoTouch($event, $el)"
+                                 x-init="$nextTick(() => initModuleInfoSlideCheck($el))">
+
+                                <!-- 라벨 (고정 - 33%, 90px) -->
+                                <div class="module-info-label">
+                                    <span class="module-info-label-text" x-text="row.label"></span>
+                                </div>
+
+                                <!-- 값 슬라이드 영역 (67%) -->
+                                <div class="module-info-container"
+                                     :class="{ 'slide-fade-mask': needsModuleInfoSlide(row.value) }">
+                                    <div class="module-info-track"
+                                         :style="{ '--slide-duration': getModuleInfoSlideDuration(row.value) + 's' }"
+                                         :class="{ 'no-slide': !needsModuleInfoSlide(row.value) }">
+
+                                        <!-- 원본 값 (tooltip 지원) -->
+                                        <span class="module-info-value"
+                                              x-text="row.value"
+                                              :title="row.tooltip || row.value"></span>
+
+                                        <!-- 구분자 (슬라이드 필요시만) -->
+                                        <template x-if="needsModuleInfoSlide(row.value)">
+                                            <span class="slide-cycle-separator">◆</span>
+                                        </template>
+
+                                        <!-- 복제 값 (무한 스크롤용 - 슬라이드 필요시만) -->
+                                        <template x-if="needsModuleInfoSlide(row.value)">
+                                            <span class="module-info-value" x-text="row.value" aria-hidden="true"></span>
+                                        </template>
+                                    </div>
+                                    <span class="slide-pause-hint">⏸</span>
+                                </div>
+                            </div>
+                        </template>
                     </div>
                 </template>
             </div>

@@ -1,0 +1,93 @@
+<!--
+생성 모듈 설정 폼 컴포넌트
+참조자료 수집, 제목 프롬프트, 글 생성 프롬프트 설정
+-->
+
+<!-- 제목 프롬프트 설정 -->
+<div class="space-y-4 mb-6">
+    <h3 class="text-base font-semibold text-gray-900 flex items-center gap-2">
+        📝 제목 재조합 (선택)
+    </h3>
+    <div class="border border-gray-200 rounded-lg overflow-hidden">
+        <div class="flex items-center p-3 bg-gray-50 border-b border-gray-200 cursor-pointer"
+             @click="formData.enable_title_prompt = !formData.enable_title_prompt">
+            <input type="checkbox"
+                   :checked="formData.enable_title_prompt"
+                   class="text-blue-600 focus:ring-blue-500 h-4 w-4 rounded pointer-events-none">
+            <span class="ml-3 text-sm font-medium text-gray-700">제목 재조합 프롬프트 사용</span>
+        </div>
+        <div x-show="formData.enable_title_prompt" x-transition class="p-4 space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">제목 프롬프트</label>
+                <textarea x-model="formData.title_prompt"
+                          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          rows="3"
+                          placeholder="원본 제목: {title}&#10;위 제목을 SEO에 최적화된 형태로 변환해주세요."></textarea>
+                <p class="mt-1 text-xs text-gray-500">{title}은 원본 제목으로 치환됩니다</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 참조자료 수집 설정 -->
+<div class="space-y-4 mb-6">
+    <h3 class="text-base font-semibold text-gray-900 flex items-center gap-2">
+        🔍 참조자료 수집 (선택)
+    </h3>
+    <div class="border border-orange-200 rounded-lg overflow-hidden">
+        <div class="flex items-center p-3 bg-orange-50 border-b border-orange-200 cursor-pointer"
+             @click="formData.enable_reference_collection = !formData.enable_reference_collection">
+            <input type="checkbox"
+                   :checked="formData.enable_reference_collection"
+                   class="text-orange-600 focus:ring-orange-500 h-4 w-4 rounded pointer-events-none">
+            <span class="ml-3 text-sm font-medium text-gray-700">참조자료 자동 수집</span>
+            <span class="ml-2 text-xs text-orange-600">(네이버 웹문서 검색)</span>
+        </div>
+        <div x-show="formData.enable_reference_collection" x-transition class="p-4 space-y-4">
+            <div class="p-3 bg-orange-50 rounded-lg">
+                <p class="text-sm text-orange-800 font-medium mb-2">참조자료 수집 프로세스:</p>
+                <ol class="text-xs text-orange-700 space-y-1 list-decimal list-inside">
+                    <li>제목으로 네이버 웹문서 검색 (최대 30개)</li>
+                    <li>검색 결과 페이지 크롤링</li>
+                    <li>AI 요약으로 핵심 내용 추출</li>
+                    <li>요약된 참조자료를 프롬프트에 자동 삽입</li>
+                </ol>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">참조자료 개수</label>
+                <div class="flex items-center gap-2">
+                    <input type="number"
+                           x-model.number="formData.reference_count"
+                           min="1"
+                           max="10"
+                           class="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent">
+                    <span class="text-gray-500 text-sm">개 (1~10)</span>
+                </div>
+                <p class="mt-1 text-xs text-gray-500">크롤링 성공한 문서 중 랜덤 선택</p>
+            </div>
+
+            <div class="p-3 bg-blue-50 rounded-lg">
+                <p class="text-xs text-blue-700">
+                    💡 참조자료는 글 생성 프롬프트 앞에 다음 형식으로 삽입됩니다:<br>
+                    <code class="bg-blue-100 px-1 rounded">---[참조자료] 참조1: 요약내용... ---</code>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 글 생성 프롬프트 설정 -->
+<div class="space-y-4 mb-6">
+    <h3 class="text-base font-semibold text-gray-900 flex items-center gap-2">
+        ✨ 글 생성 프롬프트
+    </h3>
+    <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">생성 프롬프트</label>
+        <textarea x-model="formData.generation_prompt"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  rows="5"
+                  placeholder="블로그 글을 작성해주세요.&#10;- 전문적이고 정보성 있는 내용&#10;- SEO 최적화된 구조&#10;- 자연스러운 문체"></textarea>
+        <p class="mt-1 text-xs text-gray-500">참조자료가 있으면 자동으로 프롬프트 앞에 삽입됩니다</p>
+    </div>
+</div>
