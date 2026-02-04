@@ -104,6 +104,127 @@ async def get_blogs_with_credentials(
 
 
 @router.get(
+    "/by-categories",
+    summary="카테고리 기반 블로그 필터링",
+    description="선택된 카테고리에 매칭된 블로그와 미매칭 블로그를 반환합니다",
+    responses=responses,
+)
+async def get_blogs_by_categories(
+    topic_ids: str = None,
+    subtopic_ids: str = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """
+    카테고리 기반 블로그 필터링 (BlogCategory 테이블 기반)
+
+    Args:
+        topic_ids: 쉼표로 구분된 topic ID 목록 (예: "1,2,3")
+        subtopic_ids: 쉼표로 구분된 subtopic ID 목록 (예: "4,5")
+
+    Returns:
+        matched_blogs: 선택된 카테고리와 연결된 블로그 목록
+        unmatched_blogs: 선택된 카테고리와 연결되지 않은 블로그 목록
+    """
+    from sqlalchemy import select, and_, or_
+    from sqlalchemy.orm import selectinload
+    from ..models.blog import Blog
+    from ..models.category import BlogCategory, Topic, SubTopic
+
+    # topic_ids, subtopic_ids 파싱
+    parsed_topic_ids = []
+    parsed_subtopic_ids = []
+
+    if topic_ids:
+        parsed_topic_ids = [int(x.strip()) for x in topic_ids.split(',') if x.strip().isdigit()]
+    if subtopic_ids:
+        parsed_subtopic_ids = [int(x.strip()) for x in subtopic_ids.split(',') if x.strip().isdigit()]
+
+    # 사용자의 모든 블로그 조회
+    query = select(Blog).where(
+        Blog.user_id == current_user.id,
+        Blog.is_deleted == False
+    )
+    result = await db.execute(query)
+    all_blogs = result.scalars().all()
+
+    matched_blogs = []
+    unmatched_blogs = []
+
+    for blog in all_blogs:
+        # BlogCategory 테이블에서 해당 블로그의 카테고리 조회
+        cat_query = select(BlogCategory).where(
+            BlogCategory.blog_id == blog.id,
+            BlogCategory.is_active == True
+        )
+        cat_result = await db.execute(cat_query)
+        blog_categories = cat_result.scalars().all()
+
+        # 매칭 여부 확인
+        is_matched = False
+        matched_categories = []
+
+        for bc in blog_categories:
+            # topic_id 매칭 확인
+            if bc.topic_id in parsed_topic_ids:
+                is_matched = True
+                # Topic, SubTopic 이름 조회
+                topic_name = ""
+                subtopic_name = ""
+                if bc.topic_id:
+                    topic_result = await db.execute(select(Topic).where(Topic.id == bc.topic_id))
+                    topic = topic_result.scalar_one_or_none()
+                    topic_name = topic.name if topic else ""
+                if bc.subtopic_id:
+                    subtopic_result = await db.execute(select(SubTopic).where(SubTopic.id == bc.subtopic_id))
+                    subtopic = subtopic_result.scalar_one_or_none()
+                    subtopic_name = subtopic.name if subtopic else ""
+                matched_categories.append({
+                    'topic_id': bc.topic_id,
+                    'topic_name': topic_name,
+                    'subtopic_id': bc.subtopic_id,
+                    'subtopic_name': subtopic_name
+                })
+            # subtopic_id 매칭 확인
+            elif bc.subtopic_id and bc.subtopic_id in parsed_subtopic_ids:
+                is_matched = True
+                topic_name = ""
+                subtopic_name = ""
+                if bc.topic_id:
+                    topic_result = await db.execute(select(Topic).where(Topic.id == bc.topic_id))
+                    topic = topic_result.scalar_one_or_none()
+                    topic_name = topic.name if topic else ""
+                if bc.subtopic_id:
+                    subtopic_result = await db.execute(select(SubTopic).where(SubTopic.id == bc.subtopic_id))
+                    subtopic = subtopic_result.scalar_one_or_none()
+                    subtopic_name = subtopic.name if subtopic else ""
+                matched_categories.append({
+                    'topic_id': bc.topic_id,
+                    'topic_name': topic_name,
+                    'subtopic_id': bc.subtopic_id,
+                    'subtopic_name': subtopic_name
+                })
+
+        blog_data = {
+            'id': blog.id,
+            'name': blog.name,
+            'url': blog.url,
+            'platform': blog.platform,
+        }
+
+        if is_matched:
+            blog_data['matched_categories'] = matched_categories
+            matched_blogs.append(blog_data)
+        else:
+            unmatched_blogs.append(blog_data)
+
+    return {
+        'matched_blogs': matched_blogs,
+        'unmatched_blogs': unmatched_blogs,
+    }
+
+
+@router.get(
     "/{blog_id}",
     response_model=BlogResponse,
     summary="블로그 상세 조회",
