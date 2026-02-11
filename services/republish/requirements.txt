@@ -45,3 +45,11 @@ pytrends>=4.9.0
 
 # 키워드 추출 (형태소 분석)
 konlpy>=0.6.0
+
+# AI 요약 (Google Gemini)
+google-generativeai>=0.8.0
+
+# Phase G-1: Celery 비동기 태스크 큐
+celery>=5.3.0
+kombu>=5.3.0
+flower>=2.0.0

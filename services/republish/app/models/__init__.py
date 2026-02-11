@@ -65,6 +65,11 @@ from .action_log import ActionLog
 
 # Phase R-1: Reference Collection models (참조자료 수집)
 from .collected_reference import CollectedReference, CrawlLog
+from .domain_blacklist import DomainBlacklist
+
+# Phase G-1: Generation models (생성 모듈)
+from .generation_history import GenerationHistory
+from .blog_growth_setting import BlogGrowthSetting
 
 __all__ = [
     # Core models
@@ -124,4 +129,8 @@ __all__ = [
     # Phase R-1: Reference Collection models
     "CollectedReference",
     "CrawlLog",
+    "DomainBlacklist",
+    # Phase G-1: Generation models
+    "GenerationHistory",
+    "BlogGrowthSetting",
 ]

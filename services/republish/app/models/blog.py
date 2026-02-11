@@ -137,6 +137,19 @@ class Blog(Base):
     flow_links = relationship("FlowBlog", back_populates="blog", cascade="all, delete-orphan")
     crawled_posts = relationship("CrawledPost", back_populates="blog", cascade="all, delete-orphan")
 
+    # Phase G-1: 생성 모듈 관계
+    generation_histories = relationship(
+        "GenerationHistory",
+        back_populates="blog",
+        cascade="all, delete-orphan",
+    )
+    growth_setting = relationship(
+        "BlogGrowthSetting",
+        back_populates="blog",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
     def __repr__(self) -> str:
         return f"<Blog(id={self.id}, name={self.name}, platform={self.platform.value})>"
 

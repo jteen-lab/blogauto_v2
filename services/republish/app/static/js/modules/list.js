@@ -1194,10 +1194,12 @@ function moduleListApp() {
                             </div>
                         </div>
 
-                        ${window.getPromptModuleFormTemplate ? window.getPromptModuleFormTemplate() : '<!-- prompt-form.js 로드 필요 -->'}
+                        ${window.getPromptModuleFormTemplate ? window.getPromptModuleFormTemplate() : '<!-- prompt-form-template.js 로드 필요 -->'}
+
+                        ${window.getGenerateModuleFormTemplate ? window.getGenerateModuleFormTemplate() : '<!-- generate-form-template.js 로드 필요 -->'}
 
                         <!-- 기타 타입 설정 -->
-                        <div x-show="formData.type_code !== 'republish' && formData.type_code !== 'collect' && formData.type_code !== 'data' && formData.type_code !== 'prompt'">
+                        <div x-show="formData.type_code !== 'republish' && formData.type_code !== 'collect' && formData.type_code !== 'data' && formData.type_code !== 'prompt' && formData.type_code !== 'generate'">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-2">설정 정보 (JSON)</label>
                                 <textarea x-model="settingsJson"
@@ -1950,32 +1952,33 @@ function getModuleInfoRows(module) {
     } else if (typeCode === 'generate') {
         // AI 생성 모듈
         const settings = module.settings || {};
+        const ref = settings.reference || {};
 
-        // 제목 프롬프트 상태
-        if (settings.enable_title_prompt) {
-            rows.push({ label: '제목 재조합', value: '✅ 활성화' });
-        }
+        // 참조자료 수집 파이프라인
+        const maxSearch = ref.max_search || 30;
+        const crawlTarget = ref.crawl_target || 10;
+        const summaryCount = ref.summary_count || 3;
+        rows.push({
+            label: '참조수집',
+            value: `검색 ${maxSearch} → 크롤링 ${crawlTarget} → 요약 ${summaryCount}개`
+        });
 
-        // 참조자료 수집 상태
-        if (settings.enable_reference_collection) {
-            const count = settings.reference_count || 3;
-            rows.push({ label: '참조자료', value: `✅ ${count}개 수집` });
+        // 요약 방법 + 모델
+        const method = ref.summary_method || 'ai';
+        if (method === 'ai') {
+            const model = ref.ai_model || 'gpt-4o-mini';
+            rows.push({ label: '요약', value: `AI (${model})` });
         } else {
-            rows.push({ label: '참조자료', value: '❌ 비활성' });
+            const algoMap = { textrank: 'TextRank', frequency: '빈도 기반', position: '위치 기반' };
+            const algo = algoMap[ref.algorithm_type] || 'TextRank';
+            rows.push({ label: '요약', value: `${algo}` });
         }
 
-        // 생성 프롬프트 미리보기
-        if (settings.generation_prompt_config?.prompt) {
-            const preview = settings.generation_prompt_config.prompt.length > 40
-                ? settings.generation_prompt_config.prompt.substring(0, 40) + '...'
-                : settings.generation_prompt_config.prompt;
-            rows.push({ label: '프롬프트', value: preview });
-        }
-
-        // 기존 필드 호환
-        if (module.ai_model) {
-            rows.push({ label: 'AI 모델', value: module.ai_model });
-        }
+        // 요약 스타일 + 글자수
+        const styleMap = { concise: '간결형', narrative: '서술형', report: '보고서형', bullet: '요점형' };
+        const style = styleMap[ref.summary_style] || '간결형';
+        const maxLen = ref.max_length || 500;
+        rows.push({ label: '스타일', value: `${style} (${maxLen}자)` });
     } else if (typeCode === 'prompt') {
         // 프롬프트 모듈 - settings 구조 기반 정보 표시
         const settings = module.settings || {};

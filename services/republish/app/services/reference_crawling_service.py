@@ -2,11 +2,12 @@
 참조자료 크롤링 서비스
 
 웹 문서를 크롤링하여 참조자료를 수집합니다.
-핵심: 실패 시 다음 문서로 자동 이동하여 목표 개수(10개)를 달성합니다.
+핵심: 실패 시 다음 문서로 자동 이동하여 목표 개수를 달성합니다.
 
 Features:
-- 목표 개수 달성까지 자동 순회
+- 사용자 설정 가능한 목표/최소 크롤링 수
 - 같은 도메인 제한 (최대 2개)
+- 블랙리스트 도메인 자동 스킵 및 등록
 - 차단 사이트 자동 스킵
 - 모든 결과 DB 로깅
 """
@@ -14,14 +15,16 @@ import re
 import time
 import logging
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Set
 from urllib.parse import urlparse
 
 import httpx
 from bs4 import BeautifulSoup
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.collected_reference import CrawlLog
+from ..models.domain_blacklist import DomainBlacklist
 from ..schemas.reference_collection import CrawledDocument, CrawlResult
 
 logger = logging.getLogger(__name__)
@@ -30,10 +33,8 @@ logger = logging.getLogger(__name__)
 class ReferenceCrawlingService:
     """참조자료 크롤링 서비스"""
 
-    # 설정값
+    # 고정 설정값
     CRAWL_TIMEOUT = 10
-    TARGET_COUNT = 10
-    MIN_COUNT = 5
     MIN_CONTENT_LENGTH = 100
     MAX_CONTENT_LENGTH = 5000
     MAX_SAME_DOMAIN = 2
@@ -45,8 +46,21 @@ class ReferenceCrawlingService:
         "Chrome/120.0.0.0 Safari/537.36"
     )
 
-    def __init__(self, db_session: AsyncSession):
+    def __init__(
+        self,
+        db_session: AsyncSession,
+        target_count: int = 10,
+        min_count: int = 5
+    ):
+        """
+        Args:
+            db_session: DB 세션
+            target_count: 크롤링 목표 수 (사용자 설정)
+            min_count: 최소 필요 수
+        """
         self.db = db_session
+        self.TARGET_COUNT = max(1, target_count)
+        self.MIN_COUNT = max(1, min(min_count, self.TARGET_COUNT))
 
     async def crawl_documents(
         self,
@@ -65,6 +79,11 @@ class ReferenceCrawlingService:
         """
         logger.info(f"[CRAWL] 시작 | ref_id={reference_id} | urls={len(urls)}")
 
+        # 블랙리스트 도메인 사전 조회
+        blacklisted = await self._get_blacklisted_domains()
+        if blacklisted:
+            logger.info(f"[CRAWL] 블랙리스트 도메인: {len(blacklisted)}개")
+
         documents: List[CrawledDocument] = []
         domain_counts: dict = {}
         total_attempted = 0
@@ -77,9 +96,20 @@ class ReferenceCrawlingService:
             total_attempted += 1
             domain = self._extract_domain(url)
 
+            # 블랙리스트 도메인 스킵
+            if domain in blacklisted:
+                await self._log_crawl(
+                    reference_id, url, domain,
+                    "skipped", "블랙리스트 도메인"
+                )
+                continue
+
             # 같은 도메인 제한 확인
             if domain_counts.get(domain, 0) >= self.MAX_SAME_DOMAIN:
-                await self._log_crawl(reference_id, url, domain, "skipped", "같은 도메인 제한 초과")
+                await self._log_crawl(
+                    reference_id, url, domain,
+                    "skipped", "같은 도메인 제한 초과"
+                )
                 continue
 
             # 크롤링 시도
@@ -92,7 +122,8 @@ class ReferenceCrawlingService:
                 domain_counts[domain] = domain_counts.get(domain, 0) + 1
                 await self._log_crawl(
                     reference_id, url, domain, "success",
-                    content_length=doc.content_length, duration_ms=duration_ms
+                    content_length=doc.content_length,
+                    duration_ms=duration_ms
                 )
             else:
                 total_failed += 1
@@ -100,11 +131,17 @@ class ReferenceCrawlingService:
                     reference_id, url, domain, error_status,
                     error_message=error_msg, duration_ms=duration_ms
                 )
+                # 본문 추출 실패 시 블랙리스트 등록
+                if error_status in ("failed", "blocked", "timeout"):
+                    await self._register_blacklist(domain, error_status)
 
         has_minimum = len(documents) >= self.MIN_COUNT
 
         if not has_minimum:
-            logger.warning(f"[CRAWL] 최소 개수 미달 | ref_id={reference_id} | count={len(documents)}")
+            logger.warning(
+                f"[CRAWL] 최소 개수 미달 | ref_id={reference_id} | "
+                f"count={len(documents)}"
+            )
 
         logger.info(
             f"[CRAWL] 완료 | ref_id={reference_id} | "
@@ -119,6 +156,43 @@ class ReferenceCrawlingService:
             has_minimum=has_minimum
         )
 
+    async def _get_blacklisted_domains(self) -> Set[str]:
+        """블랙리스트 도메인 목록 조회"""
+        try:
+            result = await self.db.execute(
+                select(DomainBlacklist.domain).where(
+                    DomainBlacklist.is_active == True,
+                    DomainBlacklist.fail_count >= DomainBlacklist.FAIL_THRESHOLD
+                )
+            )
+            return set(result.scalars().all())
+        except Exception as e:
+            logger.warning(f"[CRAWL] 블랙리스트 조회 실패: {e}")
+            return set()
+
+    async def _register_blacklist(self, domain: str, reason: str) -> None:
+        """실패 도메인 블랙리스트 등록/카운트 증가"""
+        if not domain:
+            return
+        try:
+            result = await self.db.execute(
+                select(DomainBlacklist).where(
+                    DomainBlacklist.domain == domain
+                )
+            )
+            entry = result.scalar_one_or_none()
+            if entry:
+                entry.increment_fail(reason)
+            else:
+                self.db.add(DomainBlacklist(
+                    domain=domain,
+                    reason=reason,
+                    last_failed_at=datetime.now()
+                ))
+            await self.db.flush()
+        except Exception as e:
+            logger.warning(f"[CRAWL] 블랙리스트 등록 실패: {e}")
+
     async def _crawl_single(
         self,
         url: str,
@@ -127,36 +201,32 @@ class ReferenceCrawlingService:
         """
         단일 URL 크롤링
 
-        Args:
-            url: 크롤링 URL
-            domain: 도메인
-
         Returns:
             (CrawledDocument 또는 None, 상태코드, 에러메시지)
         """
         headers = {"User-Agent": self.USER_AGENT}
 
         try:
-            async with httpx.AsyncClient(timeout=self.CRAWL_TIMEOUT) as client:
-                response = await client.get(url, headers=headers, follow_redirects=True)
+            async with httpx.AsyncClient(
+                timeout=self.CRAWL_TIMEOUT
+            ) as client:
+                response = await client.get(
+                    url, headers=headers, follow_redirects=True
+                )
 
-                # 차단 응답 확인
                 if response.status_code in (401, 403):
                     return None, "blocked", f"HTTP {response.status_code}"
 
                 if response.status_code != 200:
                     return None, "failed", f"HTTP {response.status_code}"
 
-                # 본문 추출
                 content = self._extract_content(response.text)
                 if not content:
                     return None, "failed", "본문 추출 실패"
 
-                # 콘텐츠 검증
                 if not self._validate_content(content):
                     return None, "failed", f"콘텐츠 길이 부족 ({len(content)}자)"
 
-                # 제목 추출
                 title = self._extract_title(response.text)
 
                 doc = CrawledDocument(
@@ -175,24 +245,14 @@ class ReferenceCrawlingService:
             return None, "failed", str(e)
 
     def _extract_content(self, html: str) -> Optional[str]:
-        """
-        HTML에서 본문 추출
-
-        Args:
-            html: HTML 문자열
-
-        Returns:
-            추출된 본문 또는 None
-        """
+        """HTML에서 본문 추출"""
         try:
             soup = BeautifulSoup(html, 'html.parser')
 
-            # 불필요한 요소 제거
             for tag in soup(['script', 'style', 'nav', 'header', 'footer',
                             'aside', 'form', 'iframe', 'noscript']):
                 tag.decompose()
 
-            # 본문 영역 찾기 (우선순위)
             content_selectors = [
                 'article', 'main', '.content', '.post-content',
                 '.entry-content', '#content', '.article-body'
@@ -205,14 +265,12 @@ class ReferenceCrawlingService:
                     if len(text) >= self.MIN_CONTENT_LENGTH:
                         return self._clean_text(text)
 
-            # 본문 영역 없으면 body 전체에서 추출
             body = soup.find('body')
             if body:
                 text = body.get_text(separator=' ', strip=True)
                 return self._clean_text(text) if text else None
 
             return None
-
         except Exception as e:
             logger.warning(f"[CRAWL] 본문 추출 실패: {e}")
             return None
@@ -222,12 +280,10 @@ class ReferenceCrawlingService:
         try:
             soup = BeautifulSoup(html, 'html.parser')
 
-            # og:title 우선
             og_title = soup.find('meta', property='og:title')
             if og_title and og_title.get('content'):
                 return og_title['content'].strip()[:200]
 
-            # title 태그
             title_tag = soup.find('title')
             if title_tag and title_tag.string:
                 return title_tag.string.strip()[:200]
@@ -240,9 +296,7 @@ class ReferenceCrawlingService:
         """콘텐츠 유효성 검증"""
         if not content:
             return False
-        if len(content) < self.MIN_CONTENT_LENGTH:
-            return False
-        return True
+        return len(content) >= self.MIN_CONTENT_LENGTH
 
     def _extract_domain(self, url: str) -> str:
         """URL에서 도메인 추출"""

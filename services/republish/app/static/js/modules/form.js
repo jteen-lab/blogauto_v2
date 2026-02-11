@@ -114,12 +114,16 @@ function moduleFormApp(module = null, moduleType = null) {
             // 그룹화 설정
             auto_group: initialModule?.settings?.auto_group ?? true,
             similarity_threshold: initialModule?.settings?.similarity_threshold ?? 75,
-            // 생성 모듈 필드들
-            enable_title_prompt: initialModule?.settings?.enable_title_prompt ?? false,
-            title_prompt: initialModule?.settings?.title_prompt_config?.prompt || '',
-            enable_reference_collection: initialModule?.settings?.enable_reference_collection ?? false,
-            reference_count: initialModule?.settings?.reference_count ?? 3,
-            generation_prompt: initialModule?.settings?.generation_prompt_config?.prompt || '블로그 글을 작성해주세요.'
+            // 생성 모듈 필드들 (참조자료 수집 설정)
+            ref_max_search: initialModule?.settings?.reference?.max_search ?? 30,
+            ref_crawl_target: initialModule?.settings?.reference?.crawl_target ?? 10,
+            ref_summary_count: initialModule?.settings?.reference?.summary_count ?? 3,
+            ref_summary_method: initialModule?.settings?.reference?.summary_method || 'ai',
+            ref_ai_provider: initialModule?.settings?.reference?.ai_provider || 'openai',
+            ref_ai_model: initialModule?.settings?.reference?.ai_model || 'gpt-4.1-mini',
+            ref_summary_style: initialModule?.settings?.reference?.summary_style || 'concise',
+            ref_algorithm_type: initialModule?.settings?.reference?.algorithm_type || 'textrank',
+            ref_max_length: initialModule?.settings?.reference?.max_length ?? 500
         },
 
         // 수집 시간 입력용
@@ -599,12 +603,25 @@ function moduleFormApp(module = null, moduleType = null) {
 
             // 생성 모듈 검증
             if (this.formData.type_code === 'generate') {
-                // 참조자료 수집 설정 검증
-                if (this.formData.enable_reference_collection) {
-                    if (!this.formData.reference_count || this.formData.reference_count < 1 || this.formData.reference_count > 10) {
-                        this.showError('참조자료 개수는 1~10개 범위여야 합니다');
-                        return false;
-                    }
+                if (this.formData.ref_max_search < 10 || this.formData.ref_max_search > 100) {
+                    this.showError('최대 검색 수는 10~100 범위여야 합니다');
+                    return false;
+                }
+                if (this.formData.ref_crawl_target < 3 || this.formData.ref_crawl_target > 30) {
+                    this.showError('크롤링 목표는 3~30 범위여야 합니다');
+                    return false;
+                }
+                if (this.formData.ref_summary_count < 1 || this.formData.ref_summary_count > 10) {
+                    this.showError('요약 선택 수는 1~10 범위여야 합니다');
+                    return false;
+                }
+                if (this.formData.ref_summary_count > this.formData.ref_crawl_target) {
+                    this.showError('요약 선택 수는 크롤링 목표 이하여야 합니다');
+                    return false;
+                }
+                if (this.formData.ref_max_length < 200 || this.formData.ref_max_length > 2000) {
+                    this.showError('요약 최대 글자수는 200~2000 범위여야 합니다');
+                    return false;
                 }
             }
 
@@ -730,14 +747,16 @@ function moduleFormApp(module = null, moduleType = null) {
             } else if (this.formData.type_code === 'generate') {
                 // 생성 모듈 설정
                 data.settings = {
-                    enable_title_prompt: this.formData.enable_title_prompt,
-                    title_prompt_config: this.formData.enable_title_prompt ? {
-                        prompt: this.formData.title_prompt
-                    } : null,
-                    enable_reference_collection: this.formData.enable_reference_collection,
-                    reference_count: this.formData.reference_count,
-                    generation_prompt_config: {
-                        prompt: this.formData.generation_prompt
+                    reference: {
+                        max_search: this.formData.ref_max_search,
+                        crawl_target: this.formData.ref_crawl_target,
+                        summary_count: this.formData.ref_summary_count,
+                        summary_method: this.formData.ref_summary_method,
+                        ai_provider: this.formData.ref_ai_provider,
+                        ai_model: this.formData.ref_ai_model,
+                        summary_style: this.formData.ref_summary_style,
+                        algorithm_type: this.formData.ref_algorithm_type,
+                        max_length: this.formData.ref_max_length
                     }
                 };
             } else if (this.formData.type_code === 'prompt') {

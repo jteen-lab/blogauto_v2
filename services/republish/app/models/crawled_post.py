@@ -79,11 +79,20 @@ class CrawledPost(Base):
         comment="유사도 점수 (0.0 ~ 100.0)"
     )
 
+    # 생성 이력 연결 (nullable - 수동 추가 글은 null)
+    generation_history_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("generation_histories.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="생성 이력 FK (자동 생성된 글만)",
+    )
+
     # 소스 정보
     source: Mapped[str] = mapped_column(
         String(20),
         default="crawled",
-        comment="소스: crawled(크롤링) | published(발행)"
+        comment="소스: crawled(크롤링) | published(발행)",
     )
 
     # 타임스탬프
