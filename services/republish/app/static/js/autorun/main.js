@@ -292,9 +292,10 @@ function formatTime(dateString) {
 function getModuleIcon(code) {
     const icons = {
         'republish': '🔄',
-        'generate': '🤖',
+        'generate': '✨',
         'prompt': '📝',
-        'publish': '📤'
+        'publish': '📤',
+        'collect': '🔍'
     };
     return icons[code] || '📦';
 }
@@ -332,6 +333,32 @@ function getModuleInfoItems(module) {
         }
         if (module.category) {
             items.push({ label: '카테고리', value: module.category });
+        }
+    } else if (typeCode === 'collect') {
+        // 수집 모듈 정보 표시 (flows/list.js와 동일)
+        const settings = module.settings || {};
+
+        // 수집 대상
+        const sources = [];
+        if (settings.source_naver_datalab) sources.push('데이터랩');
+        if (settings.source_naver_ads) sources.push('네이버광고');
+        if (settings.source_google_trends) sources.push('트렌드');
+        if (settings.source_google_planner) sources.push('플래너');
+        if (sources.length > 0) {
+            items.push({ label: '수집', value: sources.join(', ') });
+        }
+
+        // 수집 타입
+        const typeMap = { 'keyword': '키워드', 'title': '제목', 'both': '키워드+제목' };
+        if (settings.collect_type) {
+            items.push({ label: '타입', value: typeMap[settings.collect_type] || '전체' });
+        }
+
+        // 스케줄
+        if (settings.schedule_mode === 'fixed_time' && settings.fixed_times?.length > 0) {
+            items.push({ label: '시간', value: settings.fixed_times.join(', ') });
+        } else if (settings.schedule_mode === 'interval' && settings.interval_hours) {
+            items.push({ label: '간격', value: `${settings.interval_hours}시간` });
         }
     }
 
@@ -461,9 +488,9 @@ function formatDayRange(dayIndices, days) {
     return ranges.join(', ');
 }
 
-// 모듈 슬라이드 필요 여부 판단 (정보 아이템 3개 이상)
+// 모듈 슬라이드 필요 여부 판단 (초기 힌트, DOM 체크로 최종 결정)
 function needsModuleSlide(module) {
-    return getModuleInfoItems(module).length >= 3;
+    return getModuleInfoItems(module).length >= 1;
 }
 
 // 모듈 정보 텍스트 길이에 따른 슬라이드 속도 계산 (초)
@@ -479,9 +506,9 @@ function getModuleSlideDuration(module) {
     return Math.max(minDuration, Math.min(maxDuration, baseSpeed + (totalLength * perChar)));
 }
 
-// 블로그 슬라이드 필요 여부 판단 (4개 이상)
+// 블로그 슬라이드 필요 여부 판단 (초기 힌트, DOM 체크로 최종 결정)
 function needsBlogSlide(blogCount) {
-    return blogCount >= 4;
+    return blogCount >= 1;
 }
 
 // 블로그 개수에 따른 슬라이드 속도 계산 (초)
@@ -493,15 +520,103 @@ function getBlogSlideDuration(blogCount) {
 }
 
 function initSlideCheck(el) {
-    // 슬라이드 필요 여부 확인
+    const container = el.querySelector('.module-slide-container');
+    const track = el.querySelector('.module-slide-track');
+    if (!container || !track) return;
+
+    setTimeout(() => {
+        const containerWidth = container.clientWidth;
+        if (containerWidth === 0) return;
+
+        // 측정을 위해 no-slide 일시 제거 (복제 콘텐츠 display:none 해제)
+        track.classList.remove('no-slide');
+        const trackWidth = track.scrollWidth / 2;
+
+        if (trackWidth > containerWidth) {
+            // 슬라이드 필요 - no-slide 이미 제거됨
+        } else {
+            // 슬라이드 불필요 - no-slide 복원
+            track.classList.add('no-slide');
+        }
+    }, 100);
 }
 
 function initBlogSlideCheck(el, count) {
-    // 블로그 슬라이드 필요 여부 확인
+    const container = el.querySelector('.blog-slide-container');
+    const track = el.querySelector('.blog-slide-track');
+    if (!container || !track) return;
+
+    setTimeout(() => {
+        const containerWidth = container.clientWidth;
+        if (containerWidth === 0) return;
+
+        track.classList.remove('no-slide');
+        const trackWidth = track.scrollWidth / 2;
+
+        if (trackWidth > containerWidth) {
+            // 슬라이드 필요
+        } else {
+            track.classList.add('no-slide');
+        }
+    }, 100);
+}
+
+// 슬라이드 재초기화 (더보기 클릭 시 호출)
+function reinitSlides(containerEl) {
+    if (!containerEl) return;
+
+    setTimeout(() => {
+        // 모듈 슬라이드 재초기화
+        containerEl.querySelectorAll('.module-slide-row').forEach(row => {
+            const container = row.querySelector('.module-slide-container');
+            const track = row.querySelector('.module-slide-track');
+            if (!container || !track) return;
+
+            const containerWidth = container.clientWidth;
+            if (containerWidth === 0) return;
+
+            track.classList.remove('no-slide');
+            const trackWidth = track.scrollWidth / 2;
+
+            if (trackWidth <= containerWidth) {
+                track.classList.add('no-slide');
+            }
+        });
+
+        // 블로그 슬라이드 재초기화
+        containerEl.querySelectorAll('.blog-slide-section').forEach(section => {
+            const container = section.querySelector('.blog-slide-container');
+            const track = section.querySelector('.blog-slide-track');
+            if (!container || !track) return;
+
+            const containerWidth = container.clientWidth;
+            if (containerWidth === 0) return;
+
+            track.classList.remove('no-slide');
+            const trackWidth = track.scrollWidth / 2;
+
+            if (trackWidth <= containerWidth) {
+                track.classList.add('no-slide');
+            }
+        });
+    }, 50);
 }
 
 function toggleSlideTouch(event, el) {
-    // 터치로 슬라이드 일시정지 토글
+    if (event.type !== 'touchstart') return;
+
+    const track = el.querySelector('.module-slide-track') || el.querySelector('.blog-slide-track');
+    if (!track) return;
+
+    const isPaused = track.classList.contains('paused');
+    if (isPaused) {
+        track.classList.remove('paused');
+    } else {
+        track.classList.add('paused');
+        setTimeout(() => {
+            track.classList.remove('paused');
+        }, 5000);
+    }
 }
 
 // 스크롤 위치 저장용 변수 (autorun)

@@ -112,6 +112,9 @@ function flowListApp() {
 
         // 초기화
         async init() {
+            // 전역 참조 즉시 설정 (템플릿 헬퍼 함수들이 사용)
+            window.flowListApp = this;
+
             // 저장된 정렬 설정 로드
             this.loadSortPreference();
 
@@ -552,7 +555,8 @@ function flowListApp() {
                 republish: '🔄',
                 publish: '📤',
                 generate: '✨',
-                prompt: '📝'
+                prompt: '📝',
+                collect: '🔍'
             };
             return icons[typeCode] || '📦';
         },
@@ -835,24 +839,31 @@ function flowListApp() {
             return count >= 2;
         },
 
-        // 모듈 슬라이드 초기화 체크 (DOM 기반)
+        // 모듈 슬라이드 초기화 체크 (DOM 너비 기반)
+        // no-slide 제거 → 측정 → 결과에 따라 적용 (동기 실행으로 깜빡임 없음)
         initSlideCheck(element) {
             const container = element.querySelector('.module-slide-container');
             const track = element.querySelector('.module-slide-track');
             if (!container || !track) return;
 
-            // 약간의 지연 후 너비 체크 (렌더링 완료 대기)
             setTimeout(() => {
                 const containerWidth = container.clientWidth;
-                const trackWidth = track.scrollWidth / 2; // 복제된 콘텐츠 제외
+                if (containerWidth === 0) return;
 
-                if (trackWidth <= containerWidth) {
+                // 측정을 위해 no-slide 일시 제거 (복제 콘텐츠 display:none 해제)
+                track.classList.remove('no-slide');
+                const trackWidth = track.scrollWidth / 2;
+
+                if (trackWidth > containerWidth) {
+                    // 슬라이드 필요 - no-slide 이미 제거됨
+                } else {
+                    // 슬라이드 불필요 - no-slide 복원
                     track.classList.add('no-slide');
                 }
             }, 100);
         },
 
-        // 블로그 슬라이드 초기화 체크 (DOM 기반)
+        // 블로그 슬라이드 초기화 체크 (DOM 너비 기반)
         initBlogSlideCheck(element, count) {
             const container = element.querySelector('.blog-slide-container');
             const track = element.querySelector('.blog-slide-track');
@@ -860,15 +871,15 @@ function flowListApp() {
 
             setTimeout(() => {
                 const containerWidth = container.clientWidth;
-                // 슬라이드가 필요한 경우 복제된 콘텐츠 포함하여 너비 계산
-                // 슬라이드가 필요 없으면 원본 너비만 사용
-                const hasSlideClass = !track.classList.contains('no-slide');
-                const trackWidth = hasSlideClass ? track.scrollWidth / 2 : track.scrollWidth;
+                if (containerWidth === 0) return;
 
-                if (trackWidth <= containerWidth) {
-                    track.classList.add('no-slide');
+                track.classList.remove('no-slide');
+                const trackWidth = track.scrollWidth / 2;
+
+                if (trackWidth > containerWidth) {
+                    // 슬라이드 필요
                 } else {
-                    track.classList.remove('no-slide');
+                    track.classList.add('no-slide');
                 }
             }, 100);
         },
@@ -877,45 +888,42 @@ function flowListApp() {
         reinitSlides(containerEl) {
             if (!containerEl) return;
 
-            // 모듈 슬라이드 재초기화
-            const moduleRows = containerEl.querySelectorAll('.module-slide-row');
-            moduleRows.forEach(row => {
-                const container = row.querySelector('.module-slide-container');
-                const track = row.querySelector('.module-slide-track');
-                if (!container || !track) return;
+            // 약간의 딜레이 (x-transition 완료 대기)
+            setTimeout(() => {
+                // 모듈 슬라이드 재초기화
+                containerEl.querySelectorAll('.module-slide-row').forEach(row => {
+                    const container = row.querySelector('.module-slide-container');
+                    const track = row.querySelector('.module-slide-track');
+                    if (!container || !track) return;
 
-                // no-slide 클래스 제거 후 다시 체크
-                track.classList.remove('no-slide');
-
-                setTimeout(() => {
                     const containerWidth = container.clientWidth;
+                    if (containerWidth === 0) return;
+
+                    track.classList.remove('no-slide');
                     const trackWidth = track.scrollWidth / 2;
 
                     if (trackWidth <= containerWidth) {
                         track.classList.add('no-slide');
                     }
-                }, 100);
-            });
+                });
 
-            // 블로그 슬라이드 재초기화
-            const blogSections = containerEl.querySelectorAll('.blog-slide-section');
-            blogSections.forEach(section => {
-                const container = section.querySelector('.blog-slide-container');
-                const track = section.querySelector('.blog-slide-track');
-                if (!container || !track) return;
+                // 블로그 슬라이드 재초기화
+                containerEl.querySelectorAll('.blog-slide-section').forEach(section => {
+                    const container = section.querySelector('.blog-slide-container');
+                    const track = section.querySelector('.blog-slide-track');
+                    if (!container || !track) return;
 
-                // no-slide 클래스 제거 후 다시 체크
-                track.classList.remove('no-slide');
-
-                setTimeout(() => {
                     const containerWidth = container.clientWidth;
+                    if (containerWidth === 0) return;
+
+                    track.classList.remove('no-slide');
                     const trackWidth = track.scrollWidth / 2;
 
                     if (trackWidth <= containerWidth) {
                         track.classList.add('no-slide');
                     }
-                }, 100);
-            });
+                });
+            }, 50);
         },
 
         // 터치 일시정지 토글 (모바일용)
@@ -1185,6 +1193,6 @@ function getModuleIcon(typeCode) {
     if (window.flowListApp) {
         return window.flowListApp.getModuleIcon(typeCode);
     }
-    const icons = { republish: '🔄', publish: '📤', generate: '✨', prompt: '📝' };
+    const icons = { republish: '🔄', publish: '📤', generate: '✨', prompt: '📝', collect: '🔍' };
     return icons[typeCode] || '📦';
 }

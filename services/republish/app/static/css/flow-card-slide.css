@@ -94,6 +94,10 @@
     background: linear-gradient(to right, #fef9c3 0%, #fef9c3 90px, #f3f4f6 90px);
 }
 
+.module-slide-row.type-collect {
+    background: linear-gradient(to right, #f3e8ff 0%, #f3e8ff 90px, #f3f4f6 90px);
+}
+
 /* 슬라이드 컨테이너 (2/3 비율) */
 .module-slide-container {
     flex: 1;
@@ -376,9 +380,11 @@
     animation: none;
 }
 
-/* 정적 표시 시 구분자 숨김 */
+/* 정적 표시 시 구분자 + 복제 콘텐츠 숨김 */
 .module-slide-track.no-slide .slide-cycle-separator,
-.blog-slide-track.no-slide .slide-cycle-separator {
+.blog-slide-track.no-slide .slide-cycle-separator,
+.module-slide-track.no-slide [aria-hidden="true"],
+.blog-slide-track.no-slide [aria-hidden="true"] {
     display: none;
 }
 
@@ -449,6 +455,10 @@
     background: linear-gradient(to right, #fef9c3 0%, #fef9c3 90px, #f3f4f6 90px);
 }
 
+.module-info-row.type-collect {
+    background: linear-gradient(to right, #f3e8ff 0%, #f3e8ff 90px, #f3f4f6 90px);
+}
+
 /* 값 슬라이드 컨테이너 (67%) */
 .module-info-container {
     flex: 1;
@@ -487,7 +497,8 @@
     animation: none;
 }
 
-.module-info-track.no-slide .slide-cycle-separator {
+.module-info-track.no-slide .slide-cycle-separator,
+.module-info-track.no-slide [aria-hidden="true"] {
     display: none;
 }
 

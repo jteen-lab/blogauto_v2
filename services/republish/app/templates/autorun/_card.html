@@ -115,7 +115,9 @@
                             <!-- 모듈 행 -->
                             <template x-if="row.type === 'module'">
                                 <div class="module-slide-row"
-                                     :class="'type-' + (row.data.module?.module_type?.code || 'republish')">
+                                     :class="'type-' + (row.data.module?.module_type?.code || 'republish')"
+                                     x-init="$nextTick(() => initSlideCheck($el))"
+                                     @touchstart="toggleSlideTouch($event, $el)">
 
                                     <div class="module-slide-label">
                                         <span class="module-slide-icon" x-text="getModuleIcon(row.data.module?.module_type?.code)"></span>
@@ -123,9 +125,8 @@
                                     </div>
 
                                     <div class="module-slide-container">
-                                        <div class="module-slide-track"
-                                             :style="{ '--slide-duration': getModuleSlideDuration(row.data.module) + 's' }"
-                                             :class="{ 'no-slide': !needsModuleSlide(row.data.module) }">
+                                        <div class="module-slide-track no-slide"
+                                             :style="{ '--slide-duration': getModuleSlideDuration(row.data.module) + 's' }">
 
                                             <template x-for="(info, i) in getModuleInfoItems(row.data.module)" :key="'orig-' + i">
                                                 <span class="slide-info-item">
@@ -134,35 +135,35 @@
                                                 </span>
                                             </template>
 
-                                            <template x-if="needsModuleSlide(row.data.module)">
-                                                <span class="slide-cycle-separator">◆</span>
-                                            </template>
+                                            <!-- 구분자 (항상 렌더링, CSS로 제어) -->
+                                            <span class="slide-cycle-separator">◆</span>
 
-                                            <template x-if="needsModuleSlide(row.data.module)">
-                                                <template x-for="(info, i) in getModuleInfoItems(row.data.module)" :key="'dup-' + i">
-                                                    <span class="slide-info-item" aria-hidden="true">
-                                                        <span class="slide-info-label" x-text="info.label + ':'"></span>
-                                                        <span class="slide-info-value" x-text="info.value"></span>
-                                                    </span>
-                                                </template>
+                                            <!-- 복제 정보 (항상 렌더링, CSS로 제어) -->
+                                            <template x-for="(info, i) in getModuleInfoItems(row.data.module)" :key="'dup-' + i">
+                                                <span class="slide-info-item" aria-hidden="true">
+                                                    <span class="slide-info-label" x-text="info.label + ':'"></span>
+                                                    <span class="slide-info-value" x-text="info.value"></span>
+                                                </span>
                                             </template>
                                         </div>
+                                        <span class="slide-pause-hint">⏸</span>
                                     </div>
                                 </div>
                             </template>
 
                             <!-- 블로그 행 -->
                             <template x-if="row.type === 'blog'">
-                                <div class="blog-slide-section">
+                                <div class="blog-slide-section"
+                                     x-init="$nextTick(() => initBlogSlideCheck($el, row.data.length))"
+                                     @touchstart="toggleSlideTouch($event, $el)">
                                     <div class="blog-slide-label">
                                         <span class="blog-slide-icon">📝</span>
                                         <span class="blog-slide-count">블로그</span>
                                     </div>
 
                                     <div class="blog-slide-container">
-                                        <div class="blog-slide-track"
-                                             :style="{ '--blog-slide-duration': getBlogSlideDuration(row.data.length) + 's' }"
-                                             :class="{ 'no-slide': !needsBlogSlide(row.data.length) }">
+                                        <div class="blog-slide-track no-slide"
+                                             :style="{ '--blog-slide-duration': getBlogSlideDuration(row.data.length) + 's' }">
 
                                             <template x-for="(flowBlog, i) in row.data" :key="'blog-orig-' + flowBlog.id">
                                                 <span class="blog-slide-item">
@@ -174,22 +175,21 @@
                                                 </span>
                                             </template>
 
-                                            <template x-if="needsBlogSlide(row.data.length)">
-                                                <span class="slide-cycle-separator">◆</span>
-                                            </template>
+                                            <!-- 구분자 (항상 렌더링, CSS로 제어) -->
+                                            <span class="slide-cycle-separator">◆</span>
 
-                                            <template x-if="needsBlogSlide(row.data.length)">
-                                                <template x-for="(flowBlog, i) in row.data" :key="'blog-dup-' + flowBlog.id">
-                                                    <span class="blog-slide-item" aria-hidden="true">
-                                                        <span class="blog-platform-badge"
-                                                              :class="flowBlog.blog.platform === 'wordpress' ? 'blog-platform-wp' : 'blog-platform-bl'"
-                                                              x-text="flowBlog.blog.platform === 'wordpress' ? 'WP' : 'BL'"></span>
-                                                        <span class="blog-slide-name" x-text="flowBlog.blog.name"></span>
-                                                        <span x-show="i < row.data.length - 1" class="blog-slide-separator">·</span>
-                                                    </span>
-                                                </template>
+                                            <!-- 복제 블로그 목록 (항상 렌더링, CSS로 제어) -->
+                                            <template x-for="(flowBlog, i) in row.data" :key="'blog-dup-' + flowBlog.id">
+                                                <span class="blog-slide-item" aria-hidden="true">
+                                                    <span class="blog-platform-badge"
+                                                          :class="flowBlog.blog.platform === 'wordpress' ? 'blog-platform-wp' : 'blog-platform-bl'"
+                                                          x-text="flowBlog.blog.platform === 'wordpress' ? 'WP' : 'BL'"></span>
+                                                    <span class="blog-slide-name" x-text="flowBlog.blog.name"></span>
+                                                    <span x-show="i < row.data.length - 1" class="blog-slide-separator">·</span>
+                                                </span>
                                             </template>
                                         </div>
+                                        <span class="blog-pause-hint">⏸</span>
                                     </div>
                                 </div>
                             </template>
@@ -206,7 +206,7 @@
 
         <!-- 더보기/접기 버튼 -->
         <button x-show="hiddenCount > 0"
-                @click="expanded = !expanded"
+                @click="expanded = !expanded; if(expanded) { $nextTick(() => reinitSlides($el.closest('.px-4'))) }"
                 class="card-expand-btn">
             <span x-text="expanded ? '접기 ▲' : `더보기 (${hiddenCount}개 더) ▼`"></span>
         </button>
