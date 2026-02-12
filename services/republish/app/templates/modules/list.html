@@ -53,9 +53,8 @@
 
         .desktop-sections {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 1.5rem;
-            max-width: 7xl;
             margin: 0 auto;
             padding: 0 2rem;
             /* 초기 상태에서 숨김 */
@@ -72,61 +71,52 @@
 
         /* 동적 섹션 레이아웃 */
         .desktop-sections.sections-1 {
-            max-width: 4xl;
+            max-width: 56rem; /* 896px */
         }
 
         .desktop-sections.sections-2 {
-            max-width: 5xl;
+            max-width: 64rem; /* 1024px */
         }
 
         .desktop-sections.sections-3 {
-            max-width: 6xl;
+            max-width: 72rem; /* 1152px */
         }
 
-        .desktop-sections.sections-4 {
-            max-width: 7xl;
+        .desktop-sections.sections-4,
+        .desktop-sections.sections-5,
+        .desktop-sections.sections-6 {
+            max-width: 80rem; /* 1280px */
         }
 
         /* 섹션 그리드 레이아웃 */
         .desktop-sections.sections-1 > .module-section {
             margin: 0 auto;
-            max-width: 4xl;
+            max-width: 56rem;
         }
 
         .desktop-sections.sections-2 {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 2rem;
             align-items: start;
         }
 
         .desktop-sections.sections-3 {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 1.5rem;
             align-items: start;
         }
 
         .desktop-sections.sections-4 {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 1rem;
             align-items: start;
         }
 
-        .desktop-sections.sections-5 {
-            max-width: 1600px;
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 0.875rem;
-            align-items: start;
-        }
-
+        /* 5~6개 섹션: 최대 4열, 초과 섹션은 다음 줄로 줄바꿈 */
+        .desktop-sections.sections-5,
         .desktop-sections.sections-6 {
-            max-width: 1800px;
-            display: grid;
-            grid-template-columns: repeat(6, 1fr);
-            gap: 0.75rem;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 1rem;
             align-items: start;
         }
 
@@ -147,18 +137,14 @@
         }
 
         .desktop-sections.sections-4 .module-grid {
-            grid-template-columns: 1fr;
+            grid-template-columns: minmax(0, 1fr);
             gap: 1rem;
         }
 
-        .desktop-sections.sections-5 .module-grid {
-            grid-template-columns: 1fr;
-            gap: 0.875rem;
-        }
-
+        .desktop-sections.sections-5 .module-grid,
         .desktop-sections.sections-6 .module-grid {
-            grid-template-columns: 1fr;
-            gap: 0.75rem;
+            grid-template-columns: minmax(0, 1fr);
+            gap: 1rem;
         }
     }
 
@@ -175,6 +161,7 @@
 
     .module-section {
         margin-bottom: 2rem;
+        min-width: 0; /* minmax(0,1fr)과 함께 그리드 열 균등 분할 보장 */
     }
 
     .section-header {
@@ -319,87 +306,129 @@
     <!-- sortBy, sortOrder를 참조하여 반응성 보장 -->
     <div x-show="!loading && modules.length > 0" class="desktop-sections" :data-sort-key="sortBy + '-' + sortOrder">
         <!-- 프롬프트 섹션 -->
-        <div x-show="getModulesByType('prompt').length > 0" class="module-section">
+        <div x-show="getModulesByType('prompt').length > 0" class="module-section" x-data="{ sectionExpanded: false }">
             <div class="section-header">
                 <span class="text-2xl">📝</span>
                 <h3 class="section-title">프롬프트 모듈</h3>
                 <span class="section-count" x-text="getModulesByType('prompt').length"></span>
             </div>
             <div class="module-grid">
-                <template x-for="module in getModulesByType('prompt')" :key="module.id + '-' + sortBy + '-' + sortOrder">
-                    {% include "modules/_card.html" %}
+                <template x-for="(module, idx) in getModulesByType('prompt')" :key="module.id + '-' + sortBy + '-' + sortOrder">
+                    <div x-show="sectionExpanded || idx < 1" x-transition>
+                        {% include "modules/_card.html" %}
+                    </div>
                 </template>
             </div>
+            <button x-show="getModulesByType('prompt').length > 1"
+                    @click="sectionExpanded = !sectionExpanded; if(sectionExpanded) { $nextTick(() => reinitModuleSlides($el.previousElementSibling)) }"
+                    class="card-expand-btn mt-2">
+                <span x-text="sectionExpanded ? '접기 ▲' : `더보기 (${getModulesByType('prompt').length - 1}개 더) ▼`"></span>
+            </button>
         </div>
 
         <!-- 생성 섹션 -->
-        <div x-show="getModulesByType('generate').length > 0" class="module-section">
+        <div x-show="getModulesByType('generate').length > 0" class="module-section" x-data="{ sectionExpanded: false }">
             <div class="section-header">
                 <span class="text-2xl">✨</span>
                 <h3 class="section-title">생성 모듈</h3>
                 <span class="section-count" x-text="getModulesByType('generate').length"></span>
             </div>
             <div class="module-grid">
-                <template x-for="module in getModulesByType('generate')" :key="module.id + '-' + sortBy + '-' + sortOrder">
-                    {% include "modules/_card.html" %}
+                <template x-for="(module, idx) in getModulesByType('generate')" :key="module.id + '-' + sortBy + '-' + sortOrder">
+                    <div x-show="sectionExpanded || idx < 1" x-transition>
+                        {% include "modules/_card.html" %}
+                    </div>
                 </template>
             </div>
+            <button x-show="getModulesByType('generate').length > 1"
+                    @click="sectionExpanded = !sectionExpanded; if(sectionExpanded) { $nextTick(() => reinitModuleSlides($el.previousElementSibling)) }"
+                    class="card-expand-btn mt-2">
+                <span x-text="sectionExpanded ? '접기 ▲' : `더보기 (${getModulesByType('generate').length - 1}개 더) ▼`"></span>
+            </button>
         </div>
 
         <!-- 발행 섹션 -->
-        <div x-show="getModulesByType('publish').length > 0" class="module-section">
+        <div x-show="getModulesByType('publish').length > 0" class="module-section" x-data="{ sectionExpanded: false }">
             <div class="section-header">
                 <span class="text-2xl">📤</span>
                 <h3 class="section-title">발행 모듈</h3>
                 <span class="section-count" x-text="getModulesByType('publish').length"></span>
             </div>
             <div class="module-grid">
-                <template x-for="module in getModulesByType('publish')" :key="module.id + '-' + sortBy + '-' + sortOrder">
-                    {% include "modules/_card.html" %}
+                <template x-for="(module, idx) in getModulesByType('publish')" :key="module.id + '-' + sortBy + '-' + sortOrder">
+                    <div x-show="sectionExpanded || idx < 1" x-transition>
+                        {% include "modules/_card.html" %}
+                    </div>
                 </template>
             </div>
+            <button x-show="getModulesByType('publish').length > 1"
+                    @click="sectionExpanded = !sectionExpanded; if(sectionExpanded) { $nextTick(() => reinitModuleSlides($el.previousElementSibling)) }"
+                    class="card-expand-btn mt-2">
+                <span x-text="sectionExpanded ? '접기 ▲' : `더보기 (${getModulesByType('publish').length - 1}개 더) ▼`"></span>
+            </button>
         </div>
 
         <!-- 재발행 섹션 -->
-        <div x-show="getModulesByType('republish').length > 0" class="module-section">
+        <div x-show="getModulesByType('republish').length > 0" class="module-section" x-data="{ sectionExpanded: false }">
             <div class="section-header">
                 <span class="text-2xl">🔄</span>
                 <h3 class="section-title">재발행 모듈</h3>
                 <span class="section-count" x-text="getModulesByType('republish').length"></span>
             </div>
             <div class="module-grid">
-                <template x-for="module in getModulesByType('republish')" :key="module.id + '-' + sortBy + '-' + sortOrder">
-                    {% include "modules/_card.html" %}
+                <template x-for="(module, idx) in getModulesByType('republish')" :key="module.id + '-' + sortBy + '-' + sortOrder">
+                    <div x-show="sectionExpanded || idx < 1" x-transition>
+                        {% include "modules/_card.html" %}
+                    </div>
                 </template>
             </div>
+            <button x-show="getModulesByType('republish').length > 1"
+                    @click="sectionExpanded = !sectionExpanded; if(sectionExpanded) { $nextTick(() => reinitModuleSlides($el.previousElementSibling)) }"
+                    class="card-expand-btn mt-2">
+                <span x-text="sectionExpanded ? '접기 ▲' : `더보기 (${getModulesByType('republish').length - 1}개 더) ▼`"></span>
+            </button>
         </div>
 
         <!-- 수집 섹션 -->
-        <div x-show="getModulesByType('collect').length > 0" class="module-section">
+        <div x-show="getModulesByType('collect').length > 0" class="module-section" x-data="{ sectionExpanded: false }">
             <div class="section-header">
                 <span class="text-2xl">🔍</span>
                 <h3 class="section-title">수집 모듈</h3>
                 <span class="section-count" x-text="getModulesByType('collect').length"></span>
             </div>
             <div class="module-grid">
-                <template x-for="module in getModulesByType('collect')" :key="module.id + '-' + sortBy + '-' + sortOrder">
-                    {% include "modules/_card.html" %}
+                <template x-for="(module, idx) in getModulesByType('collect')" :key="module.id + '-' + sortBy + '-' + sortOrder">
+                    <div x-show="sectionExpanded || idx < 1" x-transition>
+                        {% include "modules/_card.html" %}
+                    </div>
                 </template>
             </div>
+            <button x-show="getModulesByType('collect').length > 1"
+                    @click="sectionExpanded = !sectionExpanded; if(sectionExpanded) { $nextTick(() => reinitModuleSlides($el.previousElementSibling)) }"
+                    class="card-expand-btn mt-2">
+                <span x-text="sectionExpanded ? '접기 ▲' : `더보기 (${getModulesByType('collect').length - 1}개 더) ▼`"></span>
+            </button>
         </div>
 
         <!-- 데이터 섹션 -->
-        <div x-show="getModulesByType('data').length > 0" class="module-section">
+        <div x-show="getModulesByType('data').length > 0" class="module-section" x-data="{ sectionExpanded: false }">
             <div class="section-header">
                 <span class="text-2xl">📊</span>
                 <h3 class="section-title">데이터 모듈</h3>
                 <span class="section-count" x-text="getModulesByType('data').length"></span>
             </div>
             <div class="module-grid">
-                <template x-for="module in getModulesByType('data')" :key="module.id + '-' + sortBy + '-' + sortOrder">
-                    {% include "modules/_card.html" %}
+                <template x-for="(module, idx) in getModulesByType('data')" :key="module.id + '-' + sortBy + '-' + sortOrder">
+                    <div x-show="sectionExpanded || idx < 1" x-transition>
+                        {% include "modules/_card.html" %}
+                    </div>
                 </template>
             </div>
+            <button x-show="getModulesByType('data').length > 1"
+                    @click="sectionExpanded = !sectionExpanded; if(sectionExpanded) { $nextTick(() => reinitModuleSlides($el.previousElementSibling)) }"
+                    class="card-expand-btn mt-2">
+                <span x-text="sectionExpanded ? '접기 ▲' : `더보기 (${getModulesByType('data').length - 1}개 더) ▼`"></span>
+            </button>
         </div>
     </div>
 

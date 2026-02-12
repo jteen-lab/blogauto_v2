@@ -191,9 +191,10 @@ function moduleListApp() {
                 }
             });
 
-            // 레이아웃 적용 완료 후 표시
+            // 레이아웃 적용 완료 후 표시 + ResizeObserver 설정
             setTimeout(() => {
                 desktopSections.classList.add('layout-ready');
+                setupSlideResizeObserver();
             }, 50);
         },
 
@@ -1632,7 +1633,12 @@ function moduleListApp() {
                         if (card.parentNode) {
                             card.parentNode.removeChild(card);
                         }
+                        // 섹션 레이아웃 재조정 (섹션 수 변경 대응)
+                        this.applyDynamicLayout();
                     }, 300);
+                } else {
+                    // DOM에서 카드를 찾지 못한 경우에도 레이아웃 재조정
+                    this.applyDynamicLayout();
                 }
 
             } catch (error) {
@@ -2165,13 +2171,13 @@ function getModuleInfoRows(module) {
 }
 
 /**
- * 슬라이드 필요 여부 판단 (값 길이 기준)
+ * 슬라이드 필요 여부 판단 (값 길이 기준, 초기 힌트용)
+ * 실제 슬라이드 활성화는 DOM 너비 체크(initModuleInfoSlideCheck)에서 결정
  * @param {string} value - 표시할 값
  * @returns {boolean}
  */
 function needsModuleInfoSlide(value) {
     if (!value) return false;
-    // 30자 이상이면 슬라이드
     return value.length > 30;
 }
 
@@ -2183,35 +2189,113 @@ function needsModuleInfoSlide(value) {
 function getModuleInfoSlideDuration(value) {
     if (!value) return 12;
     const length = value.length;
-    const baseSpeed = 10; // 기본 10초 (플로우보다 약간 빠름)
-    const perChar = 0.2; // 글자당 0.2초 추가
-    const minDuration = 10; // 최소 10초
-    const maxDuration = 35; // 최대 35초
+    const baseSpeed = 10;
+    const perChar = 0.2;
+    const minDuration = 10;
+    const maxDuration = 35;
     return Math.max(minDuration, Math.min(maxDuration, baseSpeed + (length * perChar)));
 }
 
 /**
- * 슬라이드 초기화 체크 (DOM 기반)
- * @param {HTMLElement} element - 행 요소
+ * 슬라이드 초기화 체크 (DOM 너비 기반)
+ * 복제 콘텐츠가 항상 렌더링되므로 정확한 너비 비교 가능
+ * @param {HTMLElement} element - module-info-row 요소
+ * @param {string} value - 값 텍스트 (slide-fade-mask 용)
  */
-function initModuleInfoSlideCheck(element) {
+function initModuleInfoSlideCheck(element, value) {
     const container = element.querySelector('.module-info-container');
     const track = element.querySelector('.module-info-track');
     if (!container || !track) return;
 
-    // 렌더링 완료 후 너비 체크
     setTimeout(() => {
-        const containerWidth = container.clientWidth;
-        const trackWidth = track.scrollWidth / 2; // 복제된 콘텐츠 제외
-
-        if (trackWidth <= containerWidth) {
-            track.classList.add('no-slide');
-        }
+        _applyModuleInfoSlideState(container, track);
     }, 100);
 }
 
 /**
- * 터치 일시정지 토글 (모바일용)
+ * 모듈 정보 행의 슬라이드 상태 적용 (공통 로직)
+ * no-slide 제거 → 측정 → 결과에 따라 적용 (동기 실행으로 깜빡임 없음)
+ * @param {HTMLElement} container - module-info-container 요소
+ * @param {HTMLElement} track - module-info-track 요소
+ */
+function _applyModuleInfoSlideState(container, track) {
+    const containerWidth = container.clientWidth;
+    if (containerWidth === 0) return; // display:none 상태
+
+    // 측정을 위해 no-slide 일시 제거 (복제 콘텐츠가 CSS display:none → 해제되어야 정확한 scrollWidth)
+    track.classList.remove('no-slide');
+    const trackWidth = track.scrollWidth / 2; // 원본 콘텐츠 폭
+
+    if (trackWidth > containerWidth) {
+        // 슬라이드 필요 - no-slide 이미 제거됨
+        container.classList.add('slide-fade-mask');
+    } else {
+        // 슬라이드 불필요 - no-slide 복원
+        track.classList.add('no-slide');
+        container.classList.remove('slide-fade-mask');
+    }
+}
+
+/**
+ * 블로그 슬라이드 필요 여부 판단 (초기 힌트용)
+ * @param {number} count - 블로그 수
+ * @returns {boolean}
+ */
+function needsBlogSlide(count) {
+    return count >= 2;
+}
+
+/**
+ * 블로그 슬라이드 속도 계산 (초)
+ * @param {number} count - 블로그 수
+ * @returns {number}
+ */
+function getBlogSlideDuration(count) {
+    const baseSpeed = 5.4;
+    const minDuration = 14;
+    const maxDuration = 44;
+    return Math.max(minDuration, Math.min(maxDuration, count * baseSpeed));
+}
+
+/**
+ * 블로그 슬라이드 초기화 체크 (DOM 너비 기반)
+ * @param {HTMLElement} element - blog-slide-section 요소
+ * @param {number} count - 블로그 수
+ */
+function initBlogSlideCheck(element, count) {
+    const container = element.querySelector('.blog-slide-container');
+    const track = element.querySelector('.blog-slide-track');
+    if (!container || !track) return;
+
+    setTimeout(() => {
+        _applyBlogSlideState(container, track);
+    }, 100);
+}
+
+/**
+ * 블로그 슬라이드 상태 적용 (공통 로직)
+ * no-slide 제거 → 측정 → 결과에 따라 적용
+ * @param {HTMLElement} container - blog-slide-container 요소
+ * @param {HTMLElement} track - blog-slide-track 요소
+ */
+function _applyBlogSlideState(container, track) {
+    const containerWidth = container.clientWidth;
+    if (containerWidth === 0) return;
+
+    // 측정을 위해 no-slide 일시 제거
+    track.classList.remove('no-slide');
+    const trackWidth = track.scrollWidth / 2;
+
+    if (trackWidth > containerWidth) {
+        // 슬라이드 필요 - no-slide 이미 제거됨
+    } else {
+        // 슬라이드 불필요 - no-slide 복원
+        track.classList.add('no-slide');
+    }
+}
+
+/**
+ * 터치 일시정지 토글 (모바일용 - 모듈 정보 행)
  * @param {Event} event - 터치 이벤트
  * @param {HTMLElement} element - 행 요소
  */
@@ -2229,10 +2313,31 @@ function toggleModuleInfoTouch(event, element) {
         track.classList.add('paused');
         element.classList.add('touch-paused');
 
-        // 5초 후 자동 재개
         setTimeout(() => {
             track.classList.remove('paused');
             element.classList.remove('touch-paused');
+        }, 5000);
+    }
+}
+
+/**
+ * 터치 일시정지 토글 (모바일용 - 블로그 슬라이드)
+ * @param {Event} event - 터치 이벤트
+ * @param {HTMLElement} element - blog-slide-section 요소
+ */
+function toggleSlideTouch(event, element) {
+    if (event.type !== 'touchstart') return;
+
+    const track = element.querySelector('.blog-slide-track');
+    if (!track) return;
+
+    const isPaused = track.classList.contains('paused');
+    if (isPaused) {
+        track.classList.remove('paused');
+    } else {
+        track.classList.add('paused');
+        setTimeout(() => {
+            track.classList.remove('paused');
         }, 5000);
     }
 }
@@ -2244,54 +2349,119 @@ function toggleModuleInfoTouch(event, element) {
 function reinitModuleSlides(container) {
     if (!container) return;
 
-    // 모든 module-info-row에 대해 슬라이드 체크 재실행
-    const rows = container.querySelectorAll('.module-info-row');
-    rows.forEach(row => {
-        const track = row.querySelector('.module-info-track');
-        if (track) {
-            // 기존 no-slide 클래스 제거 후 재체크
-            track.classList.remove('no-slide');
-            initModuleInfoSlideCheck(row);
-        }
-    });
+    // 약간의 딜레이 (x-transition 완료 대기 후 측정)
+    setTimeout(() => {
+        // 모듈 정보 행 재체크
+        container.querySelectorAll('.module-info-row').forEach(row => {
+            const infoContainer = row.querySelector('.module-info-container');
+            const track = row.querySelector('.module-info-track');
+            if (infoContainer && track) {
+                _applyModuleInfoSlideState(infoContainer, track);
+            }
+        });
+
+        // 블로그 슬라이드 재체크
+        container.querySelectorAll('.blog-slide-section').forEach(section => {
+            const blogContainer = section.querySelector('.blog-slide-container');
+            const track = section.querySelector('.blog-slide-track');
+            if (blogContainer && track) {
+                _applyBlogSlideState(blogContainer, track);
+            }
+        });
+    }, 50);
 }
 
 /**
  * 모바일 탭 전환 시 슬라이드 재초기화
- * display: none 상태에서 너비가 0으로 계산되는 문제 해결
  * @param {HTMLElement} tabContent - 탭 콘텐츠 요소
  */
 function reinitMobileTabSlides(tabContent) {
     if (!tabContent) return;
 
-    // 약간의 딜레이 후 실행 (display: block 적용 대기)
     setTimeout(() => {
-        const rows = tabContent.querySelectorAll('.module-info-row');
-        rows.forEach(row => {
+        // 모듈 정보 행
+        tabContent.querySelectorAll('.module-info-row').forEach(row => {
             const container = row.querySelector('.module-info-container');
             const track = row.querySelector('.module-info-track');
             if (!container || !track) return;
 
-            // 기존 상태 초기화
-            track.classList.remove('no-slide');
+            _applyModuleInfoSlideState(container, track);
 
-            // 너비 재계산
-            const containerWidth = container.clientWidth;
-            const trackWidth = track.scrollWidth / 2; // 복제된 콘텐츠 제외
-
-            if (trackWidth > containerWidth) {
-                // 슬라이드 필요 - 애니메이션 재시작
+            // 슬라이드가 필요하면 애니메이션 재시작
+            if (!track.classList.contains('no-slide')) {
                 track.style.webkitAnimation = 'none';
                 track.style.animation = 'none';
-                track.offsetHeight; // reflow 트리거
+                track.offsetHeight; // reflow
                 track.style.webkitAnimation = '';
                 track.style.animation = '';
-            } else {
-                // 슬라이드 불필요
-                track.classList.add('no-slide');
+            }
+        });
+
+        // 블로그 슬라이드
+        tabContent.querySelectorAll('.blog-slide-section').forEach(section => {
+            const container = section.querySelector('.blog-slide-container');
+            const track = section.querySelector('.blog-slide-track');
+            if (!container || !track) return;
+
+            _applyBlogSlideState(container, track);
+
+            if (!track.classList.contains('no-slide')) {
+                track.style.webkitAnimation = 'none';
+                track.style.animation = 'none';
+                track.offsetHeight;
+                track.style.webkitAnimation = '';
+                track.style.animation = '';
             }
         });
     }, 100);
+}
+
+/**
+ * ResizeObserver: 카드 컨테이너 크기 변경 시 슬라이드 자동 재판단
+ * 모듈 타입 수 변경으로 섹션 너비가 줄어들 때 대응
+ */
+let _slideResizeObserver = null;
+
+function setupSlideResizeObserver() {
+    if (_slideResizeObserver) return; // 이미 설정됨
+    if (typeof ResizeObserver === 'undefined') return; // 미지원 브라우저
+
+    let resizeTimer = null;
+    _slideResizeObserver = new ResizeObserver(() => {
+        // 디바운스: 100ms 이내 연속 호출 무시
+        if (resizeTimer) clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+            recheckAllSlides();
+        }, 150);
+    });
+
+    // 데스크탑 섹션 컨테이너 관찰
+    const desktopSections = document.querySelector('.desktop-sections');
+    if (desktopSections) {
+        _slideResizeObserver.observe(desktopSections);
+    }
+}
+
+/**
+ * 전체 슬라이드 상태 재판단
+ * ResizeObserver 콜백 및 레이아웃 변경 시 호출
+ */
+function recheckAllSlides() {
+    // 모듈 정보 행 (_applyModuleInfoSlideState가 내부에서 no-slide 제거/측정/적용 처리)
+    document.querySelectorAll('.module-info-row').forEach(row => {
+        const container = row.querySelector('.module-info-container');
+        const track = row.querySelector('.module-info-track');
+        if (!container || !track) return;
+        _applyModuleInfoSlideState(container, track);
+    });
+
+    // 블로그 슬라이드
+    document.querySelectorAll('.blog-slide-section').forEach(section => {
+        const container = section.querySelector('.blog-slide-container');
+        const track = section.querySelector('.blog-slide-track');
+        if (!container || !track) return;
+        _applyBlogSlideState(container, track);
+    });
 }
 
 /**
