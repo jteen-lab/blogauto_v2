@@ -144,6 +144,14 @@ class FlowScheduler:
 
                     registered_module_ids.add(module.id)
 
+                    # prompt 모듈은 개별 스케줄링 안 함 (generate 모듈이 트리거)
+                    if module_type_code == "prompt":
+                        logger.info(
+                            f"[FLOW_SCHEDULER] prompt 모듈은 generate 모듈이 트리거 | "
+                            f"FlowID={flow_id} | ModuleID={module.id}"
+                        )
+                        continue
+
                     # 실행 상태 조회 또는 생성
                     state = await self._get_or_create_execution_state(
                         db, flow.id, module.id
@@ -881,6 +889,29 @@ class FlowScheduler:
                         f"[FLOW_SCHEDULER] 데이터 모듈 실행 완료 | FlowID={flow_id} | "
                         f"Success={result.get('success', False)} | Duration={duration_ms}ms"
                     )
+                elif action_type == "generate":
+                    # 생성 모듈: 동일 플로우의 prompt 모듈들을 찾아 실행
+                    result = await self._execute_generate_module(
+                        flow, module, blogs, db
+                    )
+                    duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
+
+                    await self._save_autorun_log(
+                        db=db,
+                        user_id=flow.user_id,
+                        flow_id=flow.id,
+                        flow_name=flow.name,
+                        module_name=module.name,
+                        blog_name="-",
+                        result=result,
+                        duration_ms=duration_ms,
+                        action="generate"
+                    )
+
+                    logger.info(
+                        f"[FLOW_SCHEDULER] 생성 모듈 실행 완료 | FlowID={flow_id} | "
+                        f"Success={result.get('success', False)} | Duration={duration_ms}ms"
+                    )
                 else:
                     result = {"success": False, "message": f"지원하지 않는 액션 타입: {action_type}"}
                     logger.warning(f"[FLOW_SCHEDULER] Unknown action type | {action_type}")
@@ -1158,6 +1189,126 @@ class FlowScheduler:
                 "success": False,
                 "message": str(e),
                 "collected_count": 0
+            }
+
+    async def _execute_generate_module(
+        self,
+        flow: Flow,
+        generate_module: Module,
+        blogs: List[Blog],
+        db: AsyncSession
+    ) -> Dict[str, Any]:
+        """
+        생성 모듈 실행
+
+        동일 플로우의 prompt 모듈들을 찾아
+        FlowGenerateExecutor로 블로그별 글 생성을 실행합니다.
+
+        Args:
+            flow: 플로우
+            generate_module: generate 타입 모듈 (스케줄러 소유)
+            blogs: 플로우에 연결된 블로그 목록
+            db: DB 세션
+        """
+        from app.services.generation.flow_generate_executor import FlowGenerateExecutor
+
+        try:
+            if not blogs:
+                return {
+                    "success": False,
+                    "message": "플로우에 연결된 블로그가 없습니다"
+                }
+
+            # 동일 플로우 내 prompt 모듈 찾기
+            prompt_modules = []
+            for link in flow.module_links:
+                if not link.module or not link.module.module_type:
+                    continue
+                if link.module.module_type.code == "prompt":
+                    prompt_modules.append(link.module)
+
+            if not prompt_modules:
+                return {
+                    "success": False,
+                    "message": "플로우에 prompt 모듈이 없습니다"
+                }
+
+            logger.info(
+                f"[FLOW_SCHEDULER] 생성 모듈 실행 | "
+                f"prompt 모듈 {len(prompt_modules)}개 × "
+                f"블로그 {len(blogs)}개"
+            )
+
+            gen_executor = FlowGenerateExecutor(db, flow.user_id)
+
+            total_success = 0
+            total_skipped = 0
+            total_failed = 0
+
+            # generate 모듈의 settings에서 재고 설정 추출
+            gen_settings = generate_module.settings or {}
+
+            for prompt_module in prompt_modules:
+                for blog in blogs:
+                    try:
+                        blog_start = datetime.now()
+                        result = await gen_executor.execute_for_blog(
+                            prompt_module, blog,
+                            inventory_settings=gen_settings,
+                        )
+                        blog_duration = int(
+                            (datetime.now() - blog_start).total_seconds() * 1000
+                        )
+
+                        if result.get("success"):
+                            if result.get("skipped"):
+                                total_skipped += 1
+                            else:
+                                total_success += 1
+                        else:
+                            total_failed += 1
+
+                        # 블로그별 AutorunLog 저장
+                        await self._save_autorun_log(
+                            db=db,
+                            user_id=flow.user_id,
+                            flow_id=flow.id,
+                            flow_name=flow.name,
+                            module_name=prompt_module.name,
+                            blog_name=blog.name,
+                            result=result,
+                            duration_ms=blog_duration,
+                            action="generate"
+                        )
+
+                    except Exception as e:
+                        total_failed += 1
+                        logger.error(
+                            f"[FLOW_SCHEDULER] 생성 오류 | "
+                            f"prompt={prompt_module.name} | "
+                            f"blog={blog.name} | error={e}"
+                        )
+
+            msg = (
+                f"생성 {total_success} / 스킵 {total_skipped} / "
+                f"실패 {total_failed}"
+            )
+            logger.info(f"[FLOW_SCHEDULER] 생성 모듈 결과 | {msg}")
+
+            return {
+                "success": total_failed == 0,
+                "message": msg,
+                "generated": total_success,
+                "skipped": total_skipped,
+                "failed": total_failed,
+            }
+
+        except Exception as e:
+            logger.error(f"[FLOW_SCHEDULER] 생성 모듈 오류: {e}")
+            return {
+                "success": False,
+                "message": str(e),
+                "generated": 0
             }
 
     async def _execute_data_module(

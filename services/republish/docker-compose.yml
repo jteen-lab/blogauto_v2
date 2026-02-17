@@ -1,4 +1,5 @@
 # Phase 1-1: BlogAuto V2 Docker Compose (개발/프로덕션 공통)
+# Phase G-1: Redis + Celery 워커 추가
 version: '3.8'
 
 services:
@@ -21,6 +22,26 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    networks:
+      - blogauto_network
+
+  # Redis (Celery Broker)
+  redis:
+    image: redis:7-alpine
+    container_name: blogauto_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - blogauto_network
 
   # FastAPI 애플리케이션
   app:
@@ -30,6 +51,7 @@ services:
     container_name: blogauto_app
     depends_on:
       - db
+      - redis
     environment:
       - DEBUG=${DEBUG:-true}
       - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
@@ -37,6 +59,7 @@ services:
       - DATABASE_URL=${DATABASE_URL:-postgresql://blogauto:blogauto123@db:5432/blogauto_v2}
       - JWT_SECRET=${JWT_SECRET:-dev-jwt-secret-change-in-production}
       - JWT_EXPIRE_MINUTES=${JWT_EXPIRE_MINUTES:-1440}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
     volumes:
       - ./logs:/app/logs
       - ./app:/app/app
@@ -50,6 +73,102 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    networks:
+      - blogauto_network
+
+  # Celery 워커 - 제목 재조합
+  celery_title_worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: blogauto_celery_title
+    command: celery -A app.core.celery_config worker -Q title_queue --concurrency=2 -l INFO
+    environment:
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://blogauto:blogauto123@db:5432/blogauto_v2}
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-dev-encryption-key-32-bytes-long}
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    volumes:
+      - ./app:/app/app
+      - ./logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - blogauto_network
+
+  # Celery 워커 - 글 생성 (오토스케일)
+  celery_content_worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: blogauto_celery_content
+    command: celery -A app.core.celery_config worker -Q content_queue --autoscale=5,3 -l INFO
+    environment:
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://blogauto:blogauto123@db:5432/blogauto_v2}
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-dev-encryption-key-32-bytes-long}
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    volumes:
+      - ./app:/app/app
+      - ./logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - blogauto_network
+
+  # Celery 워커 - 이미지 생성
+  celery_image_worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: blogauto_celery_image
+    command: celery -A app.core.celery_config worker -Q image_queue --concurrency=2 -l INFO
+    environment:
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://blogauto:blogauto123@db:5432/blogauto_v2}
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-dev-encryption-key-32-bytes-long}
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    volumes:
+      - ./app:/app/app
+      - ./logs:/app/logs
+    restart: unless-stopped
+    networks:
+      - blogauto_network
+
+  # Flower (Celery 모니터링)
+  celery_flower:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: blogauto_celery_flower
+    command: celery -A app.core.celery_config flower --port=5555
+    ports:
+      - "5555:5555"
+    environment:
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+    depends_on:
+      - redis
+    restart: unless-stopped
+    networks:
+      - blogauto_network
+
+networks:
+  blogauto_network:
+    driver: bridge
 
 volumes:
   postgres_data:
+  redis_data:

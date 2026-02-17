@@ -92,7 +92,7 @@ class CrawledPost(Base):
     source: Mapped[str] = mapped_column(
         String(20),
         default="crawled",
-        comment="소스: crawled(크롤링) | published(발행)",
+        comment="소스: crawled(크롤링) | generated(자동생성) | published(발행)",
     )
 
     # 타임스탬프
@@ -121,6 +121,8 @@ class CrawledPost(Base):
     __table_args__ = (
         Index('ix_crawled_post_blog_status', 'blog_id', 'match_status'),
         Index('ix_crawled_post_blog_title', 'blog_id', 'title'),
+        Index('ix_crawled_post_blog_source_published',
+              'blog_id', 'source', 'published_at'),
     )
 
     def __repr__(self) -> str:
@@ -149,3 +151,32 @@ class CrawledPost(Base):
     def is_from_publish(self) -> bool:
         """발행으로 생성된 포스트 여부"""
         return self.source == "published"
+
+    @property
+    def is_generated(self) -> bool:
+        """자동 생성된 포스트 여부"""
+        return self.source == "generated"
+
+    @property
+    def is_published(self) -> bool:
+        """발행 완료 여부 (published_at이 설정됨)"""
+        return self.published_at is not None
+
+    @property
+    def is_publishable(self) -> bool:
+        """발행 가능 여부 (생성됨 + 미발행)"""
+        return self.is_generated and not self.is_published
+
+    def mark_published(
+        self, published_url: Optional[str] = None
+    ) -> None:
+        """
+        발행 완료 처리
+
+        Args:
+            published_url: 발행된 URL (선택)
+        """
+        self.published_at = datetime.now()
+        if published_url:
+            self.url = published_url
+        self.updated_at = datetime.now()

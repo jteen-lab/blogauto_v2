@@ -4,8 +4,9 @@
 플로우를 1회 즉시 실행합니다.
 모듈 타입별로 실행 방식이 다릅니다:
 - collect: 블로그 없이 독립 실행 (키워드/제목 수집)
+- data: 블로그 없이 독립 실행 (제목 이동 등)
 - republish: 블로그 필수, 재발행 수행
-- 기타: 해당 모듈 타입에 맞는 실행 (추후 확장)
+- prompt: 블로그 필수, 재고 기반 글 생성 (Phase 4)
 """
 
 import asyncio
@@ -416,7 +417,102 @@ async def _execute_flow_background(
                                     action="republish"
                                 )
 
-            # 7. 실행 완료
+            # 8. prompt 모듈 실행 (블로그 필수, 재고 기반 글 생성)
+            if "prompt" in modules_by_type:
+                if not blogs:
+                    logger.warning(f"[FLOW_BG] 생성 모듈이 있지만 블로그가 없음: {flow_id}")
+                    for prompt_module in modules_by_type["prompt"]:
+                        fail_count += 1
+                        total_processed += 1
+                        await _save_autorun_log(
+                            db=db,
+                            user_id=user_id,
+                            flow_id=flow.id,
+                            flow_name=flow.name,
+                            module_name=prompt_module.name,
+                            blog_name="-",
+                            result={"success": False, "message": "플로우에 연결된 블로그가 없습니다"},
+                            duration_ms=0,
+                            action="generate"
+                        )
+                else:
+                    from app.services.generation.flow_generate_executor import FlowGenerateExecutor
+                    gen_executor = FlowGenerateExecutor(db, user_id)
+
+                    # generate 모듈에서 재고 설정 추출 (있으면)
+                    gen_inv_settings = None
+                    if "generate" in modules_by_type:
+                        gen_mod = modules_by_type["generate"][0]
+                        gen_inv_settings = gen_mod.settings or {}
+
+                    for prompt_module in modules_by_type["prompt"]:
+                        logger.info(f"[FLOW_BG] 생성 모듈 실행: {prompt_module.name}")
+
+                        for blog in blogs:
+                            blog_start_time = datetime.now()
+                            logger.info(
+                                f"[FLOW_BG] 생성 처리: {blog.name} | module={prompt_module.name}"
+                            )
+
+                            try:
+                                result = await gen_executor.execute_for_blog(
+                                    prompt_module, blog,
+                                    inventory_settings=gen_inv_settings,
+                                )
+                                blog_duration_ms = int(
+                                    (datetime.now() - blog_start_time).total_seconds() * 1000
+                                )
+
+                                await _save_autorun_log(
+                                    db=db,
+                                    user_id=user_id,
+                                    flow_id=flow.id,
+                                    flow_name=flow.name,
+                                    module_name=prompt_module.name,
+                                    blog_name=blog.name,
+                                    result=result,
+                                    duration_ms=blog_duration_ms,
+                                    action="generate"
+                                )
+
+                                if result.get("success"):
+                                    if result.get("skipped"):
+                                        logger.info(
+                                            f"[FLOW_BG] 생성 스킵 | blog={blog.name} | "
+                                            f"{result.get('message')}"
+                                        )
+                                    else:
+                                        success_count += 1
+                                        logger.info(f"[FLOW_BG] 생성 성공 | blog={blog.name}")
+                                else:
+                                    fail_count += 1
+                                    logger.warning(f"[FLOW_BG] 생성 실패 | blog={blog.name}")
+
+                                total_processed += 1
+
+                            except Exception as e:
+                                fail_count += 1
+                                total_processed += 1
+                                blog_duration_ms = int(
+                                    (datetime.now() - blog_start_time).total_seconds() * 1000
+                                )
+                                logger.error(
+                                    f"[FLOW_BG] 생성 오류 | blog={blog.name} | error={e}"
+                                )
+
+                                await _save_autorun_log(
+                                    db=db,
+                                    user_id=user_id,
+                                    flow_id=flow.id,
+                                    flow_name=flow.name,
+                                    module_name=prompt_module.name,
+                                    blog_name=blog.name,
+                                    result={"success": False, "message": str(e)},
+                                    duration_ms=blog_duration_ms,
+                                    action="generate"
+                                )
+
+            # 9. 실행 완료
             completed_at = datetime.now()
             duration_ms = int((completed_at - started_at).total_seconds() * 1000)
 
