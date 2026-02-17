@@ -62,6 +62,20 @@ function createPromptModuleState() {
             showAdvanced: false
         },
 
+        // 참조자료 수집 설정 (필수 - 항상 활성화)
+        reference: {
+            enabled: true,
+            maxSearch: 30,
+            crawlTarget: 10,
+            summaryCount: 3,
+            summaryMethod: 'ai',
+            aiProvider: 'openai',
+            aiModel: 'gpt-4.1-mini',
+            summaryStyle: 'concise',
+            algorithmType: 'textrank',
+            maxLength: 500
+        },
+
         // 이미지 생성 설정
         imageGeneration: {
             enabled: false,
@@ -145,6 +159,23 @@ const promptModuleMethods = {
                 selectedStyles: settings.title_recombine.styles || ['emotional', 'practical'],
                 countPerStyle: settings.title_recombine.count_per_style || 3,
                 customPrompt: settings.title_recombine.custom_prompt || ''
+            };
+        }
+
+        // 참조자료 수집 설정
+        if (settings.reference) {
+            const ref = settings.reference;
+            this.promptModule.reference = {
+                enabled: true,
+                maxSearch: ref.max_search ?? 30,
+                crawlTarget: ref.crawl_target ?? 10,
+                summaryCount: ref.summary_count ?? 3,
+                summaryMethod: ref.summary_method || 'ai',
+                aiProvider: ref.ai_provider || 'openai',
+                aiModel: ref.ai_model || 'gpt-4.1-mini',
+                summaryStyle: ref.summary_style || 'concise',
+                algorithmType: ref.algorithm_type || 'textrank',
+                maxLength: ref.max_length ?? 500
             };
         }
 
@@ -373,6 +404,28 @@ const promptModuleMethods = {
             }
         }
 
+        // 참조자료 수집 검증 (필수)
+        if (this.promptModule.reference.maxSearch < 10 || this.promptModule.reference.maxSearch > 100) {
+            this.showError('최대 검색 수는 10~100 범위여야 합니다');
+            return false;
+        }
+        if (this.promptModule.reference.crawlTarget < 3 || this.promptModule.reference.crawlTarget > 30) {
+            this.showError('크롤링 목표는 3~30 범위여야 합니다');
+            return false;
+        }
+        if (this.promptModule.reference.summaryCount < 1 || this.promptModule.reference.summaryCount > 10) {
+            this.showError('요약 선택 수는 1~10 범위여야 합니다');
+            return false;
+        }
+        if (this.promptModule.reference.summaryCount > this.promptModule.reference.crawlTarget) {
+            this.showError('요약 선택 수는 크롤링 목표 이하여야 합니다');
+            return false;
+        }
+        if (this.promptModule.reference.maxLength < 200 || this.promptModule.reference.maxLength > 2000) {
+            this.showError('요약 최대 글자수는 200~2000 범위여야 합니다');
+            return false;
+        }
+
         // 글 생성 활성화 시 검증
         if (this.promptModule.contentGeneration.enabled) {
             if (!this.promptModule.contentGeneration.provider) {
@@ -410,6 +463,19 @@ const promptModuleMethods = {
             })),
             // 블로그 연결
             blogs: this.promptModule.selectedBlogs,
+            // 참조자료 수집 설정 (필수 - 항상 활성화)
+            reference: {
+                enabled: true,
+                max_search: this.promptModule.reference.maxSearch,
+                crawl_target: this.promptModule.reference.crawlTarget,
+                summary_count: this.promptModule.reference.summaryCount,
+                summary_method: this.promptModule.reference.summaryMethod,
+                ai_provider: this.promptModule.reference.aiProvider,
+                ai_model: this.promptModule.reference.aiModel,
+                summary_style: this.promptModule.reference.summaryStyle,
+                algorithm_type: this.promptModule.reference.algorithmType,
+                max_length: this.promptModule.reference.maxLength
+            },
             // 제목 재조합 설정
             title_recombine: {
                 enabled: this.promptModule.titleRecombine.enabled,

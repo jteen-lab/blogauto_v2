@@ -1,8 +1,11 @@
-/** 프롬프트 모듈 폼 HTML 템플릿 - list.js의 getFullFormTemplate()에서 호출 */
-function getPromptModuleFormTemplate() {
+/**
+ * 프롬프트 모듈 폼 HTML 템플릿 - list.js의 getFullFormTemplate()에서 호출
+ * 섹션별 함수: prompt-form-template-sections.js (참조자료 + 글 생성)
+ */
+
+/** 1. 카테고리 선택 섹션 */
+function getPromptCategorySection() {
     return `
-                        <!-- 프롬프트 모듈 설정 -->
-                        <div x-show="formData.type_code === 'prompt'" class="space-y-6">
                             <!-- 1. 카테고리 선택 섹션 -->
                             <div class="space-y-4">
                                 <h3 class="text-base font-semibold text-gray-900 flex items-center gap-2">
@@ -48,7 +51,12 @@ function getPromptModuleFormTemplate() {
                                         </span>
                                     </template>
                                 </div>
-                            </div>
+                            </div>`;
+}
+
+/** 2. 제목 재조합 설정 섹션 */
+function getPromptTitleSection() {
+    return `
                             <!-- 2. 제목 재조합 프롬프트 섹션 -->
                             <div class="space-y-4">
                                 <div class="flex items-center justify-between">
@@ -75,161 +83,13 @@ function getPromptModuleFormTemplate() {
                                         <textarea x-model="promptModule.titleRecombine.customPrompt" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm" placeholder="예: 한국 시장에 맞는 표현 사용, 이모지 포함하지 않기"></textarea>
                                     </div>
                                 </div>
-                            </div>
+                            </div>`;
+}
 
-                            <!-- 3. 글 생성 프롬프트 섹션 -->
-                            <div class="space-y-4">
-                                <div class="flex items-center justify-between">
-                                    <h3 class="text-base font-semibold text-gray-900 flex items-center gap-2">
-                                        ✨ 글 생성 프롬프트
-                                    </h3>
-                                    <label class="flex items-center cursor-pointer">
-                                        <input type="checkbox"
-                                               x-model="promptModule.contentGeneration.enabled"
-                                               class="w-4 h-4 text-purple-600 rounded focus:ring-purple-500">
-                                        <span class="ml-2 text-sm text-gray-600">활성화</span>
-                                    </label>
-                                </div>
-
-                                <div x-show="promptModule.contentGeneration.enabled" x-transition class="space-y-4 p-4 bg-purple-50 rounded-lg">
-                                    <!-- AI 모델 선택 -->
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-2">AI 모델</label>
-                                        <div class="grid grid-cols-3 gap-2">
-                                            <template x-for="provider in promptModule.aiProviders" :key="provider.value">
-                                                <label class="flex items-center p-3 border rounded-lg cursor-pointer transition-colors"
-                                                       :class="promptModule.contentGeneration.provider === provider.value
-                                                               ? 'bg-purple-100 border-purple-400' : 'bg-white border-gray-200 hover:border-gray-300'">
-                                                    <input type="radio"
-                                                           :value="provider.value"
-                                                           x-model="promptModule.contentGeneration.provider"
-                                                           class="w-4 h-4 text-purple-600 focus:ring-purple-500">
-                                                    <span class="ml-2 text-sm font-medium" x-text="provider.label"></span>
-                                                </label>
-                                            </template>
-                                        </div>
-                                    </div>
-
-                                    <!-- Temperature 슬라이더 -->
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-2">
-                                            창의성 (Temperature): <span class="text-purple-600" x-text="promptModule.contentGeneration.temperature"></span>
-                                        </label>
-                                        <input type="range"
-                                               x-model.number="promptModule.contentGeneration.temperature"
-                                               min="0" max="2" step="0.1"
-                                               class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
-                                        <div class="flex justify-between text-xs text-gray-500 mt-1">
-                                            <span>정확한 (0)</span>
-                                            <span>창의적 (2)</span>
-                                        </div>
-                                    </div>
-
-                                    <!-- Max Tokens -->
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-2">최대 토큰</label>
-                                        <input type="number"
-                                               x-model.number="promptModule.contentGeneration.maxTokens"
-                                               min="100" max="128000"
-                                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
-                                    </div>
-
-                                    <!-- 시스템 프롬프트 -->
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-2">시스템 프롬프트</label>
-                                        <textarea x-model="promptModule.contentGeneration.systemPrompt"
-                                                  rows="3"
-                                                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-sm font-mono"
-                                                  placeholder="당신은 전문 블로그 작성자입니다..."></textarea>
-                                    </div>
-
-                                    <!-- 사용자 프롬프트 템플릿 -->
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-2">
-                                            사용자 프롬프트 템플릿
-                                            <span class="text-xs text-gray-500">(변수: {title}, {keywords}, {category})</span>
-                                        </label>
-                                        <textarea x-model="promptModule.contentGeneration.userPromptTemplate"
-                                                  rows="4"
-                                                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-sm font-mono"
-                                                  placeholder="제목: {title}
-
-위 제목으로 블로그 글을 작성해주세요.
-카테고리: {category}
-키워드: {keywords}"></textarea>
-                                    </div>
-
-                                    <!-- 고급 설정 (접기/펼치기) -->
-                                    <div class="border-t border-purple-200 pt-4">
-                                        <button type="button"
-                                                @click="promptModule.contentGeneration.showAdvanced = !promptModule.contentGeneration.showAdvanced"
-                                                class="flex items-center gap-2 text-sm text-purple-600 hover:text-purple-800">
-                                            <svg class="w-4 h-4 transition-transform"
-                                                 :class="promptModule.contentGeneration.showAdvanced ? 'rotate-90' : ''"
-                                                 fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                                            </svg>
-                                            고급 설정
-                                        </button>
-
-                                        <div x-show="promptModule.contentGeneration.showAdvanced" x-transition class="mt-4 grid grid-cols-2 gap-4">
-                                            <!-- Top P (다양성 조절) -->
-                                            <div>
-                                                <label class="block text-sm font-medium text-gray-700 mb-2">다양성 조절 (Top P)</label>
-                                                <input type="number"
-                                                       x-model.number="promptModule.contentGeneration.topP"
-                                                       min="0" max="1" step="0.05"
-                                                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
-                                                <div class="flex justify-between text-xs text-gray-500 mt-1">
-                                                    <span>일관적 (0)</span>
-                                                    <span>다양함 (1)</span>
-                                                </div>
-                                            </div>
-
-                                            <!-- Frequency Penalty (OpenAI) -->
-                                            <div x-show="promptModule.contentGeneration.provider === 'openai'">
-                                                <label class="block text-sm font-medium text-gray-700 mb-2">단어 반복 방지 (Frequency)</label>
-                                                <input type="number"
-                                                       x-model.number="promptModule.contentGeneration.frequencyPenalty"
-                                                       min="-2" max="2" step="0.1"
-                                                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
-                                                <div class="flex justify-between text-xs text-gray-500 mt-1">
-                                                    <span>반복 허용 (-2)</span>
-                                                    <span>반복 방지 (2)</span>
-                                                </div>
-                                            </div>
-
-                                            <!-- Presence Penalty (OpenAI) -->
-                                            <div x-show="promptModule.contentGeneration.provider === 'openai'">
-                                                <label class="block text-sm font-medium text-gray-700 mb-2">주제 반복 방지 (Presence)</label>
-                                                <input type="number"
-                                                       x-model.number="promptModule.contentGeneration.presencePenalty"
-                                                       min="-2" max="2" step="0.1"
-                                                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
-                                                <div class="flex justify-between text-xs text-gray-500 mt-1">
-                                                    <span>반복 허용 (-2)</span>
-                                                    <span>새 주제 유도 (2)</span>
-                                                </div>
-                                            </div>
-
-                                            <!-- Top K (Claude/Gemini) -->
-                                            <div x-show="promptModule.contentGeneration.provider !== 'openai'">
-                                                <label class="block text-sm font-medium text-gray-700 mb-2">후보 단어 수 (Top K)</label>
-                                                <input type="number"
-                                                       x-model.number="promptModule.contentGeneration.topK"
-                                                       min="1" max="100"
-                                                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
-                                                <div class="flex justify-between text-xs text-gray-500 mt-1">
-                                                    <span>결정적 (1)</span>
-                                                    <span>다양함 (100)</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- 4. 이미지 생성 설정 섹션 -->
+/** 5. 이미지 생성 설정 섹션 */
+function getPromptImageSection() {
+    return `
+                            <!-- 5. 이미지 생성 설정 섹션 -->
                             <div class="space-y-4">
                                 <div class="flex items-center justify-between">
                                     <h3 class="text-base font-semibold text-gray-900 flex items-center gap-2">
@@ -279,7 +139,6 @@ function getPromptModuleFormTemplate() {
                                     <!-- DALL-E 설정 -->
                                     <div x-show="promptModule.imageGeneration.provider === 'dalle'" x-transition class="space-y-4">
                                         <div class="grid grid-cols-2 gap-4">
-                                            <!-- 이미지 크기 -->
                                             <div>
                                                 <label class="block text-sm font-medium text-gray-700 mb-2">이미지 크기</label>
                                                 <select x-model="promptModule.imageGeneration.dalle.size"
@@ -289,8 +148,6 @@ function getPromptModuleFormTemplate() {
                                                     <option value="1024x1792">1024x1792 (세로)</option>
                                                 </select>
                                             </div>
-
-                                            <!-- 이미지 품질 -->
                                             <div>
                                                 <label class="block text-sm font-medium text-gray-700 mb-2">품질</label>
                                                 <select x-model="promptModule.imageGeneration.dalle.quality"
@@ -300,8 +157,6 @@ function getPromptModuleFormTemplate() {
                                                 </select>
                                             </div>
                                         </div>
-
-                                        <!-- 스타일 -->
                                         <div>
                                             <label class="block text-sm font-medium text-gray-700 mb-2">스타일</label>
                                             <div class="grid grid-cols-2 gap-2">
@@ -324,7 +179,6 @@ function getPromptModuleFormTemplate() {
                                     <!-- Nano Banana 설정 -->
                                     <div x-show="promptModule.imageGeneration.provider === 'nanobanana'" x-transition class="space-y-4">
                                         <div class="grid grid-cols-2 gap-4">
-                                            <!-- 비율 -->
                                             <div>
                                                 <label class="block text-sm font-medium text-gray-700 mb-2">이미지 비율</label>
                                                 <select x-model="promptModule.imageGeneration.nanobanana.aspectRatio"
@@ -336,8 +190,6 @@ function getPromptModuleFormTemplate() {
                                                     <option value="3:4">3:4</option>
                                                 </select>
                                             </div>
-
-                                            <!-- 스타일 -->
                                             <div>
                                                 <label class="block text-sm font-medium text-gray-700 mb-2">스타일</label>
                                                 <select x-model="promptModule.imageGeneration.nanobanana.style"
@@ -372,9 +224,13 @@ function getPromptModuleFormTemplate() {
                                                class="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
                                     </div>
                                 </div>
-                            </div>
+                            </div>`;
+}
 
-                            <!-- 5. 블로그 선택 섹션 (카테고리 연동) -->
+/** 6. 블로그 선택 섹션 */
+function getPromptBlogSection() {
+    return `
+                            <!-- 6. 블로그 선택 섹션 (카테고리 연동) -->
                             <div class="space-y-4">
                                 <h3 class="text-base font-semibold text-gray-900 flex items-center gap-2">
                                     📝 블로그 선택
@@ -461,7 +317,20 @@ function getPromptModuleFormTemplate() {
                                         </button>
                                     </div>
                                 </div>
-                            </div>
+                            </div>`;
+}
+
+/** 전체 프롬프트 모듈 폼 템플릿 (섹션 조합) */
+function getPromptModuleFormTemplate() {
+    return `
+                        <!-- 프롬프트 모듈 설정 -->
+                        <div x-show="formData.type_code === 'prompt'" class="space-y-6">
+${getPromptCategorySection()}
+${getPromptTitleSection()}
+${getPromptReferenceSection()}
+${getPromptContentGenSection()}
+${getPromptImageSection()}
+${getPromptBlogSection()}
                         </div>
 `;
 }
