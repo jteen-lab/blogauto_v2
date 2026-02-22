@@ -549,6 +549,19 @@ function flowListApp() {
             return flow.blog_links || flow.flow_blogs || [];
         },
 
+        // Flow에 GP 모듈이 포함되어 있는지 확인
+        flowHasGP(flow) {
+            const modules = this.getFlowModules(flow);
+            return modules.some(m => m.module?.module_type?.code === 'growth_profile');
+        },
+
+        // Flow의 GP 모듈 이름 반환
+        getGPModuleName(flow) {
+            const modules = this.getFlowModules(flow);
+            const gp = modules.find(m => m.module?.module_type?.code === 'growth_profile');
+            return gp?.module?.name || '';
+        },
+
         // 모듈 아이콘 반환
         getModuleIcon(typeCode) {
             const icons = {
@@ -556,7 +569,8 @@ function flowListApp() {
                 publish: '📤',
                 generate: '✨',
                 prompt: '📝',
-                collect: '🔍'
+                collect: '🔍',
+                growth_profile: '📈'
             };
             return icons[typeCode] || '📦';
         },
@@ -567,7 +581,8 @@ function flowListApp() {
                 republish: '재발행',
                 publish: '발행',
                 generate: '생성',
-                prompt: '프롬프트'
+                prompt: '프롬프트',
+                growth_profile: '성장 프로파일'
             };
             return labels[typeCode] || typeCode;
         },
@@ -597,7 +612,8 @@ function flowListApp() {
                 publish: 'bg-rose-200',
                 generate: 'bg-amber-200',
                 prompt: 'bg-green-200',
-                collect: 'bg-purple-200'
+                collect: 'bg-purple-200',
+                growth_profile: 'bg-emerald-200'
             };
             return colors[typeCode] || 'bg-gray-200';
         },
@@ -609,7 +625,8 @@ function flowListApp() {
                 publish: '발행',
                 generate: '생성',
                 prompt: '프롬프트',
-                collect: '수집'
+                collect: '수집',
+                growth_profile: '성장 프로파일'
             };
             return names[typeCode] || typeCode;
         },
@@ -793,6 +810,26 @@ function flowListApp() {
                     items.push({ label: '시간', value: settings.fixed_times.join(', ') });
                 } else if (settings.schedule_mode === 'interval' && settings.interval_hours) {
                     items.push({ label: '간격', value: `${settings.interval_hours}시간` });
+                }
+            } else if (typeCode === 'growth_profile') {
+                // 성장 프로파일 모듈 정보 표시
+                const settings = module.settings || {};
+                const stages = settings.stages || [];
+                if (stages.length > 0) {
+                    items.push({ label: '구간', value: `${stages.length}단계` });
+                }
+                // 활성 모듈 표시
+                const activeModules = [];
+                const firstStage = stages[0] || {};
+                if (firstStage.generate?.enabled) activeModules.push('생성');
+                if (firstStage.publish?.enabled) activeModules.push('발행');
+                if (firstStage.republish?.enabled) activeModules.push('재발행');
+                if (activeModules.length > 0) {
+                    items.push({ label: '활성', value: activeModules.join('/') });
+                }
+                // 워밍업 표시
+                if (settings.warmup?.enabled) {
+                    items.push({ label: '워밍업', value: `${settings.warmup.warmup_days || 0}일` });
                 }
             }
 
@@ -1188,11 +1225,30 @@ function getFlowBlogs(flow) {
     return flow.blog_links || flow.flow_blogs || [];
 }
 
+// GP 모듈 포함 여부 (전역 함수)
+function flowHasGP(flow) {
+    if (window.flowListApp) {
+        return window.flowListApp.flowHasGP(flow);
+    }
+    const modules = flow.module_links || flow.flow_modules || [];
+    return modules.some(m => m.module?.module_type?.code === 'growth_profile');
+}
+
+// GP 모듈 이름 (전역 함수)
+function getGPModuleName(flow) {
+    if (window.flowListApp) {
+        return window.flowListApp.getGPModuleName(flow);
+    }
+    const modules = flow.module_links || flow.flow_modules || [];
+    const gp = modules.find(m => m.module?.module_type?.code === 'growth_profile');
+    return gp?.module?.name || '';
+}
+
 // 모듈 아이콘 (전역 함수)
 function getModuleIcon(typeCode) {
     if (window.flowListApp) {
         return window.flowListApp.getModuleIcon(typeCode);
     }
-    const icons = { republish: '🔄', publish: '📤', generate: '✨', prompt: '📝', collect: '🔍' };
+    const icons = { republish: '🔄', publish: '📤', generate: '✨', prompt: '📝', collect: '🔍', growth_profile: '📈' };
     return icons[typeCode] || '📦';
 }

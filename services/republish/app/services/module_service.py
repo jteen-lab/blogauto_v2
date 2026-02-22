@@ -193,8 +193,6 @@ class ModuleService:
                 schedule_matrix=request.schedule_matrix,
                 manual_interval_minutes=request.manual_interval_minutes,
                 min_post_count=request.min_post_count,
-                post_range_start=request.post_range_start,
-                post_range_end=request.post_range_end,
                 interval_mode=request.interval_mode,
                 auto_daily_count=request.auto_daily_count,
                 jitter_enabled=request.jitter_enabled,
@@ -249,7 +247,7 @@ class ModuleService:
 
             # None도 유효한 값으로 처리해야 하는 필드 목록
             # cooldown_days는 collect 타입에서는 사용하지 않으므로 제외
-            nullable_fields = {'post_range_end', 'description'}
+            nullable_fields = {'description'}
 
             # 업데이트 필드 적용
             # exclude_none=True: None은 제외, 빈 문자열("")은 포함
@@ -311,8 +309,6 @@ class ModuleService:
                 schedule_matrix=original_module.schedule_matrix,
                 manual_interval_minutes=original_module.manual_interval_minutes,
                 min_post_count=original_module.min_post_count,
-                post_range_start=original_module.post_range_start,
-                post_range_end=original_module.post_range_end,
                 interval_mode=original_module.interval_mode,
                 auto_daily_count=original_module.auto_daily_count,
                 jitter_enabled=original_module.jitter_enabled,

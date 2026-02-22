@@ -180,6 +180,7 @@ async def get_dashboard_stats(db: AsyncSession = Depends(get_db_session)):
         generate_modules = module_by_code.get("generate", 0)
         publish_modules = module_by_code.get("publish", 0)
         republish_modules = module_by_code.get("republish", 0)
+        growth_profile_modules = module_by_code.get("growth_profile", 0)
 
         # === 플로우 관련 ===
         result = await db.execute(select(func.count(Flow.id)))
@@ -277,6 +278,7 @@ async def get_dashboard_stats(db: AsyncSession = Depends(get_db_session)):
             "generate_modules": generate_modules,
             "publish_modules": publish_modules,
             "republish_modules": republish_modules,
+            "growth_profile_modules": growth_profile_modules,
             # 플로우
             "total_flows": total_flows,
             "active_flows": active_flows,
@@ -315,7 +317,7 @@ async def get_dashboard_stats(db: AsyncSession = Depends(get_db_session)):
             "active_blogs": 0, "inactive_blogs": 0,
             "topics": 0, "subtopics": 0, "keywords": 0,
             "total_modules": 0, "prompt_modules": 0, "generate_modules": 0,
-            "publish_modules": 0, "republish_modules": 0,
+            "publish_modules": 0, "republish_modules": 0, "growth_profile_modules": 0,
             "total_flows": 0, "active_flows": 0, "inactive_flows": 0,
             "week_generate": 0, "week_publish": 0, "week_republish": 0,
             "today_generate": 0, "today_publish": 0, "today_republish": 0,

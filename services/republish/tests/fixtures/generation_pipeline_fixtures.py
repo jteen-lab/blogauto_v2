@@ -357,3 +357,70 @@ def create_auto_id_add(start_id: int = 100):
             counter[0] += 1
             obj.id = counter[0]
     return _add
+
+
+# ============================================================
+# Phase D: 워밍업/발행 Mock 팩토리
+# ============================================================
+
+def create_mock_warmup_status(
+    is_active: bool = False,
+    days_elapsed: int = 0,
+    daily_max: int = 3,
+    today_published: int = 0,
+    can_publish: bool = True,
+    effective_interval: Optional[int] = None,
+):
+    """WarmupStatus Mock 팩토리"""
+    from app.services.generation.warmup_manager import WarmupStatus
+    return WarmupStatus(
+        is_active=is_active,
+        days_elapsed=days_elapsed,
+        daily_max=daily_max,
+        today_published=today_published,
+        can_publish=can_publish,
+        effective_interval=effective_interval,
+    )
+
+
+def create_mock_fes(
+    fes_id: int = 1,
+    flow_id: int = 1,
+    module_id: int = 1,
+    blog_id: Optional[int] = None,
+    last_executed_at: Optional[datetime] = None,
+    next_execution_at: Optional[datetime] = None,
+    is_paused: bool = False,
+) -> MagicMock:
+    """FlowExecutionState Mock 팩토리"""
+    fes = MagicMock()
+    fes.id = fes_id
+    fes.flow_id = flow_id
+    fes.module_id = module_id
+    fes.blog_id = blog_id
+    fes.last_executed_at = last_executed_at
+    fes.next_execution_at = next_execution_at
+    fes.is_paused = is_paused
+    fes.execution_count = 0
+    fes.success_count = 0
+    fes.failure_count = 0
+    fes.created_at = datetime(2026, 1, 1)
+    fes.updated_at = datetime(2026, 1, 1)
+    return fes
+
+
+def create_warmup_settings(
+    enabled: bool = True,
+    warmup_days: int = 14,
+    initial_daily_posts: int = 1,
+    max_daily_posts: int = 3,
+    ramp_rate: float = 0.5,
+) -> dict:
+    """warmup 설정 dict 팩토리"""
+    return {
+        "enabled": enabled,
+        "warmup_days": warmup_days,
+        "initial_daily_posts": initial_daily_posts,
+        "max_daily_posts": max_daily_posts,
+        "ramp_rate": ramp_rate,
+    }

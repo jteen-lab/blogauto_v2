@@ -15,6 +15,7 @@ from ...models.module import Module
 from ...models.blog import Blog
 from .inventory_trigger import InventoryTrigger
 from .generator import ContentGenerator
+from .flow_execution_context import StageParams
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ class FlowGenerateExecutor:
         self,
         module: Module,
         blog: Blog,
-        inventory_settings: Optional[dict] = None,
+        stage_params: Optional[StageParams] = None,
     ) -> Dict[str, Any]:
         """
         단일 블로그에 대해 생성 모듈 실행
@@ -46,7 +47,7 @@ class FlowGenerateExecutor:
         Args:
             module: prompt 타입 모듈
             blog: 대상 블로그
-            inventory_settings: 재고 설정 (generate 모듈의 settings)
+            stage_params: GP에서 결정된 스테이지 파라미터 (None이면 기본 임계값 사용)
 
         Returns:
             dict: 실행 결과
@@ -60,10 +61,15 @@ class FlowGenerateExecutor:
         )
 
         try:
-            # 1. 재고 확인 (generate 모듈 설정 우선, 없으면 prompt 모듈 설정)
-            inv_settings = inventory_settings or module.settings or {}
+            # 1. 재고 확인 (GP StageParams 기반)
+            min_inventory = None
+            growth_stage = "unknown"
+            if stage_params:
+                min_inventory = stage_params.generate.min_inventory
+                growth_stage = stage_params.stage_name
+
             check_result = await self.inventory_trigger.check_inventory(
-                blog_id, module_settings=inv_settings
+                blog_id, min_inventory=min_inventory,
             )
             logger.debug(
                 f"[FLOW_GEN] 재고 확인 결과 | blog_id={blog_id} | "
@@ -157,7 +163,7 @@ class FlowGenerateExecutor:
         self,
         module: Module,
         blogs: List[Blog],
-        inventory_settings: Optional[dict] = None,
+        blog_stage_map: Optional[Dict[int, StageParams]] = None,
     ) -> List[Dict[str, Any]]:
         """
         여러 블로그에 대해 순차적으로 생성 모듈 실행
@@ -165,15 +171,16 @@ class FlowGenerateExecutor:
         Args:
             module: prompt 타입 모듈
             blogs: 대상 블로그 목록
-            inventory_settings: 재고 설정 (generate 모듈의 settings)
+            blog_stage_map: {blog_id: StageParams} 매핑 (GP 컨텍스트)
 
         Returns:
             list: 블로그별 실행 결과 목록
         """
         results = []
         for blog in blogs:
+            stage = blog_stage_map.get(blog.id) if blog_stage_map else None
             result = await self.execute_for_blog(
-                module, blog, inventory_settings=inventory_settings
+                module, blog, stage_params=stage
             )
             result["blog_id"] = blog.id
             result["blog_name"] = blog.name

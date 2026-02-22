@@ -47,8 +47,6 @@ class ModuleCreateRequest(BaseModel):
 
     # 재발행 설정 (republish 타입)
     min_post_count: int = Field(10, ge=1, description="활성화 최소 포스트 수")
-    post_range_start: int = Field(1, ge=1, description="포스트 범위 시작")
-    post_range_end: Optional[int] = Field(None, ge=1, description="포스트 범위 끝")
     interval_mode: IntervalMode = Field(IntervalMode.MANUAL, description="간격 모드")
     auto_daily_count: Optional[int] = Field(None, ge=1, le=100, description="자동 모드 일일 목표")
 
@@ -71,15 +69,6 @@ class ModuleCreateRequest(BaseModel):
 
     # 타입별 추가 설정
     settings: Dict[str, Any] = Field(default_factory=dict, description="타입별 설정")
-
-    @field_validator("post_range_end")
-    @classmethod
-    def validate_post_range(cls, v, info):
-        """포스트 범위 유효성 검사"""
-        if v is not None and "post_range_start" in info.data:
-            if v <= info.data["post_range_start"]:
-                raise ValueError("post_range_end must be greater than post_range_start")
-        return v
 
     @field_validator("auto_daily_count")
     @classmethod
@@ -107,8 +96,6 @@ class ModuleUpdateRequest(BaseModel):
 
     # 재발행 설정
     min_post_count: Optional[int] = Field(None, ge=1)
-    post_range_start: Optional[int] = Field(None, ge=1)
-    post_range_end: Optional[int] = Field(None, ge=1)
     interval_mode: Optional[IntervalMode] = None
     auto_daily_count: Optional[int] = Field(None, ge=1, le=100)
 
@@ -149,8 +136,6 @@ class ModuleResponse(BaseModel):
     # 편집을 위한 상세 필드들 (Optional)
     schedule_matrix: Optional[Union[List[List[bool]], Dict[str, Any]]] = None
     min_post_count: Optional[int] = None
-    post_range_start: Optional[int] = None
-    post_range_end: Optional[int] = None
     auto_daily_count: Optional[int] = None
 
     # 타입별 설정 (collect 등)
@@ -183,8 +168,6 @@ class ModuleDetailResponse(ModuleResponse):
     platform_overrides: Dict[str, Any]
     settings: Dict[str, Any]
 
-    # 계산된 값
-    calculated_interval_minutes: Optional[int] = None
 
 
 class ModuleListResponse(BaseModel):

@@ -39,8 +39,6 @@ class Module(Base):
 
     # 기존 republish_profile 설정들
     min_post_count = Column(Integer, default=10, comment="활성화 최소 포스트 수")
-    post_range_start = Column(Integer, default=1, comment="포스트 범위 시작")
-    post_range_end = Column(Integer, nullable=True, comment="포스트 범위 끝")
     interval_mode = Column(String(10), default="manual", comment="간격 모드")
     auto_daily_count = Column(Integer, nullable=True, comment="자동 모드 일일 목표")
 
@@ -79,14 +77,6 @@ class Module(Base):
         back_populates="module",
         cascade="all, delete-orphan"
     )
-
-    @property
-    def calculated_interval_minutes(self) -> int:
-        """자동 모드일 때 간격 계산"""
-        if self.interval_mode == "auto" and self.auto_daily_count:
-            # 24시간 = 1440분 / 일일 목표 횟수
-            return max(5, int(1440 / self.auto_daily_count))
-        return self.manual_interval_minutes or 60
 
     def get_setting(self, key: str, default: Any = None) -> Any:
         """타입별 설정 값 조회"""

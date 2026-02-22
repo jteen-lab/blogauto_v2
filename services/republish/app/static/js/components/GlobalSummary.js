@@ -17,7 +17,7 @@ function globalSummary() {
             // 초기값 설정 (API 로드 전 0 표시)
             total_blogs: 0, wordpress: 0, blogger: 0, active_blogs: 0, inactive_blogs: 0,
             topics: 0, subtopics: 0, keywords: 0,
-            total_modules: 0, prompt_modules: 0, generate_modules: 0, publish_modules: 0, republish_modules: 0,
+            total_modules: 0, prompt_modules: 0, generate_modules: 0, publish_modules: 0, republish_modules: 0, growth_profile_modules: 0,
             total_flows: 0, active_flows: 0, inactive_flows: 0,
             week_generate: 0, week_publish: 0, week_republish: 0,
             today_generate: 0, today_publish: 0, today_republish: 0
@@ -50,6 +50,7 @@ function globalSummary() {
             { key: 'generate_modules', label: '생성 모듈', group: 'module', bgClass: 'bg-purple-50', textClass: 'text-purple-600' },
             { key: 'publish_modules', label: '발행 모듈', group: 'module', bgClass: 'bg-purple-50', textClass: 'text-purple-600' },
             { key: 'republish_modules', label: '재발행 모듈', group: 'module', bgClass: 'bg-purple-50', textClass: 'text-purple-600' },
+            { key: 'growth_profile_modules', label: 'GP 모듈', group: 'module', bgClass: 'bg-emerald-50', textClass: 'text-emerald-600' },
             // 플로우 (3개)
             { key: 'total_flows', label: '전체 플로우', group: 'flow', bgClass: 'bg-cyan-50', textClass: 'text-cyan-600' },
             { key: 'active_flows', label: '활성 플로우', group: 'flow', bgClass: 'bg-cyan-50', textClass: 'text-cyan-600' },

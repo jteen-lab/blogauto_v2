@@ -36,6 +36,12 @@ class ModuleType(Base):
         """기본 모듈 타입 목록 반환"""
         return [
             {
+                "code": "growth_profile",
+                "name": "성장 프로파일",
+                "icon": "📈",
+                "display_order": 0
+            },
+            {
                 "code": "prompt",
                 "name": "프롬프트",
                 "icon": "💭",

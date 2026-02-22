@@ -10,7 +10,7 @@ Features:
 from datetime import datetime
 from typing import Optional
 import pytz
-from sqlalchemy import Column, Integer, DateTime, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, DateTime, ForeignKey, Boolean, Index
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
@@ -23,6 +23,13 @@ KST = pytz.timezone('Asia/Seoul')
 class FlowExecutionState(Base):
     """플로우 실행 상태 - 모듈별 실행 추적"""
     __tablename__ = "flow_execution_states"
+    __table_args__ = (
+        Index(
+            'ix_fes_flow_module_blog',
+            'flow_id', 'module_id', 'blog_id',
+            unique=True,
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     flow_id = Column(
@@ -36,6 +43,13 @@ class FlowExecutionState(Base):
         ForeignKey("modules.id", ondelete="CASCADE"),
         nullable=False,
         index=True
+    )
+    blog_id = Column(
+        Integer,
+        ForeignKey("blogs.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+        comment="블로그별 간격 추적용 (nullable: 기존 레코드 호환)"
     )
 
     # 실행 상태 추적
@@ -95,6 +109,7 @@ class FlowExecutionState(Base):
     # 관계
     flow = relationship("Flow", backref="execution_states")
     module = relationship("Module", backref="execution_states")
+    blog = relationship("Blog")
 
     def record_execution(self, success: bool) -> None:
         """실행 기록 (timezone aware)"""
@@ -260,5 +275,6 @@ class FlowExecutionState(Base):
     def __repr__(self) -> str:
         return (
             f"<FlowExecutionState(flow_id={self.flow_id}, "
-            f"module_id={self.module_id}, paused={self.is_paused})>"
+            f"module_id={self.module_id}, blog_id={self.blog_id}, "
+            f"paused={self.is_paused})>"
         )

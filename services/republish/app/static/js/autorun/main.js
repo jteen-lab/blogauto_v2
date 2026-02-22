@@ -295,7 +295,8 @@ function getModuleIcon(code) {
         'generate': '✨',
         'prompt': '📝',
         'publish': '📤',
-        'collect': '🔍'
+        'collect': '🔍',
+        'growth_profile': '📈'
     };
     return icons[code] || '📦';
 }
@@ -359,6 +360,23 @@ function getModuleInfoItems(module) {
             items.push({ label: '시간', value: settings.fixed_times.join(', ') });
         } else if (settings.schedule_mode === 'interval' && settings.interval_hours) {
             items.push({ label: '간격', value: `${settings.interval_hours}시간` });
+        }
+    } else if (typeCode === 'growth_profile') {
+        const settings = module.settings || {};
+        const stages = settings.stages || [];
+        if (stages.length > 0) {
+            items.push({ label: '구간', value: `${stages.length}단계` });
+        }
+        const activeModules = [];
+        const firstStage = stages[0] || {};
+        if (firstStage.generate?.enabled) activeModules.push('생성');
+        if (firstStage.publish?.enabled) activeModules.push('발행');
+        if (firstStage.republish?.enabled) activeModules.push('재발행');
+        if (activeModules.length > 0) {
+            items.push({ label: '활성', value: activeModules.join('/') });
+        }
+        if (settings.warmup?.enabled) {
+            items.push({ label: '워밍업', value: `${settings.warmup.warmup_days || 0}일` });
         }
     }
 

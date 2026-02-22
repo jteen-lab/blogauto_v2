@@ -23,6 +23,11 @@ function moduleFormApp(module = null, moduleType = null) {
         // 프롬프트 모듈 상태
         promptModule: promptModuleState,
 
+        // Growth Profile 모듈 상태
+        gpModule: window.createGrowthProfileState
+            ? window.createGrowthProfileState()
+            : {},
+
         // API 상태 (수집 모듈용)
         apiStatus: {
             naver_ads: false,
@@ -177,6 +182,21 @@ function moduleFormApp(module = null, moduleType = null) {
                         console.log('[collect_type] 키워드만 선택 - 키워드 추출 옵션 비활성화');
                     }
                 });
+            }
+
+            // Growth Profile 초기화
+            if (typeCode === 'growth_profile') {
+                if (this.isEdit && this.module?.settings) {
+                    // 편집 모드: 기존 설정에서 복원
+                    if (this.gpModule.initFromSettings) {
+                        this.gpModule.initFromSettings(this.module.settings);
+                    }
+                } else if (!this.isEdit) {
+                    // 생성 모드: 기본 프리셋(balanced) 자동 로드
+                    if (this.gpModule.loadPreset) {
+                        this.gpModule.loadPreset('balanced');
+                    }
+                }
             }
 
             // 프롬프트 모듈인 경우 초기화
@@ -668,8 +688,22 @@ function moduleFormApp(module = null, moduleType = null) {
                 }
             }
 
+            // Growth Profile 검증 (gpModule이 초기화되었으면 validate, 아니면 formData.settings 체크)
+            if (this.formData.type_code === 'growth_profile') {
+                const hasGpStages = this.gpModule?.stages?.length > 0;
+                if (hasGpStages) {
+                    if (this.gpModule.validate && !this.gpModule.validate()) {
+                        this.showError(this.gpModule.validationError || 'Growth Profile 설정 오류');
+                        return false;
+                    }
+                } else if (!this.formData.settings?.stages?.length) {
+                    this.showError('프리셋을 선택해주세요');
+                    return false;
+                }
+            }
+
             // 기타 타입 설정 JSON 검증
-            if (this.formData.type_code !== 'republish' && this.formData.type_code !== 'collect' && this.formData.type_code !== 'data' && this.formData.type_code !== 'generate' && this.settingsJson) {
+            if (this.formData.type_code !== 'republish' && this.formData.type_code !== 'collect' && this.formData.type_code !== 'data' && this.formData.type_code !== 'generate' && this.formData.type_code !== 'prompt' && this.formData.type_code !== 'growth_profile' && this.settingsJson) {
                 try {
                     JSON.parse(this.settingsJson);
                 } catch (e) {
@@ -808,6 +842,14 @@ function moduleFormApp(module = null, moduleType = null) {
             } else if (this.formData.type_code === 'prompt') {
                 // 프롬프트 모듈 설정
                 data.settings = this.preparePromptModuleData();
+            } else if (this.formData.type_code === 'growth_profile') {
+                // Growth Profile 설정 (gpModule 상태 우선, 인라인 폼 formData.settings 폴백)
+                const gpSettings = this.gpModule?.toSettings ? this.gpModule.toSettings() : null;
+                if (gpSettings && gpSettings.stages && gpSettings.stages.length > 0) {
+                    data.settings = gpSettings;
+                } else {
+                    data.settings = this.formData.settings || {};
+                }
             } else {
                 // 설정 JSON 파싱
                 try {

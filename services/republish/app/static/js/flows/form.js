@@ -124,6 +124,12 @@ function flowFormData() {
             type: 'info' // success, error, info
         },
 
+        // GP(Growth Profile) 관련 상태
+        flowHasGP: false,
+        gpModuleName: '',
+        gpSettings: null,
+        blogStageMap: {},
+
         async init() {
             this.resetForm();
             await Promise.all([this.loadModules(), this.loadBlogs()]);
@@ -143,6 +149,7 @@ function flowFormData() {
             this.message = { text: '', type: 'info' };
             this.activeModuleTab = 'prompt';
             this.activeBlogTab = 'wordpress';
+            if (this.resetGPState) this.resetGPState();
         },
 
         async loadBlogs() {
@@ -217,7 +224,8 @@ function flowFormData() {
                 generate: 'bg-amber-200',
                 prompt: 'bg-green-200',
                 collect: 'bg-purple-200',
-                data: 'bg-teal-200'
+                data: 'bg-teal-200',
+                growth_profile: 'bg-emerald-200'
             };
             return colors[typeCode] || 'bg-gray-200';
         },
@@ -341,7 +349,8 @@ function flowFormData() {
                 generate: '✨',
                 prompt: '📝',
                 collect: '🔍',
-                data: '📊'
+                data: '📊',
+                growth_profile: '📈'
             };
             return icons[typeCode] || '📦';
         },
@@ -354,7 +363,8 @@ function flowFormData() {
                 generate: '생성',
                 prompt: '프롬프트',
                 collect: '수집',
-                data: '데이터'
+                data: '데이터',
+                growth_profile: '성장 프로파일'
             };
             return names[typeCode] || typeCode;
         },
@@ -416,6 +426,9 @@ function flowFormData() {
 
                 this.isEditMode = true;
 
+                // GP 모듈 감지 및 프리뷰 로드
+                this.detectGPModule(flow);
+
             } catch (error) {
                 this.showError('플로우 데이터를 불러올 수 없습니다');
                 console.error('플로우 데이터 로드 오류:', error);
@@ -443,6 +456,54 @@ function flowFormData() {
                 }
             }
             return null;
+        },
+
+        // GP 모듈 감지
+        detectGPModule(flow) {
+            const moduleLinks = flow.module_links || [];
+            const gpLink = moduleLinks.find(link =>
+                link.module?.module_type?.code === 'growth_profile'
+            );
+            if (gpLink) {
+                this.flowHasGP = true;
+                this.gpModuleName = gpLink.module.name || '';
+                this.gpSettings = gpLink.module.settings || {};
+                this.loadGPPreview(flow.id, this.gpSettings);
+            } else {
+                this.resetGPState();
+            }
+        },
+
+        // GP 프리뷰 로드
+        async loadGPPreview(flowId, gpSettings) {
+            try {
+                const resp = await fetch('/api/v1/growth-profile/preview', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ settings: gpSettings, flow_id: flowId }),
+                });
+                if (!resp.ok) return;
+                const data = await resp.json();
+                const stageMap = {};
+                (data.blogs || []).forEach(b => {
+                    stageMap[b.blog_id] = {
+                        stageName: b.stage_label || b.stage_name,
+                        summary: [b.generate, b.publish, b.republish].filter(Boolean).join(' / '),
+                    };
+                });
+                this.blogStageMap = stageMap;
+            } catch (error) {
+                console.error('GP 프리뷰 로드 오류:', error);
+            }
+        },
+
+        // GP 상태 리셋
+        resetGPState() {
+            this.flowHasGP = false;
+            this.gpModuleName = '';
+            this.gpSettings = null;
+            this.blogStageMap = {};
         },
 
         // 폼 제출

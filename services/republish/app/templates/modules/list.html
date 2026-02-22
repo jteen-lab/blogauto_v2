@@ -609,6 +609,13 @@
           <span class="font-medium text-gray-900 group-hover:text-teal-700">데이터</span>
           <span class="text-xs text-gray-500 mt-1">데이터 처리 및 이동</span>
         </button>
+
+        <button onclick="selectOption('moduleTypeSelector', 'growth_profile', '성장 프로파일')"
+                class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-emerald-300 hover:bg-emerald-50 transition-all duration-200 group col-span-2">
+          <span class="text-3xl mb-2 group-hover:scale-110 transition-transform duration-200">📈</span>
+          <span class="font-medium text-gray-900 group-hover:text-emerald-700">성장 프로파일</span>
+          <span class="text-xs text-gray-500 mt-1">블로그 성장 단계별 자동화 스케줄</span>
+        </button>
       </div>
     </div>
 
@@ -664,11 +671,14 @@
   <div class="h-safe-area-inset-bottom"></div>
 </div>
 
-<!-- 스크립트 로드 순서: prompt-form.js → template-sections.js → prompt-form-template.js → generate-form-template.js → form.js → list.js -->
+<!-- 스크립트 로드 순서: prompt-form.js → template-sections.js → prompt-form-template.js → generate-form-template.js → growth-profile-form.js → gp-template-sections.js → gp-template.js → form.js → list.js -->
 <script src="/static/js/modules/prompt-form.js?v=20260217"></script>
 <script src="/static/js/modules/prompt-form-template-sections.js?v=20260217"></script>
 <script src="/static/js/modules/prompt-form-template.js?v=20260217"></script>
 <script src="/static/js/modules/generate-form-template.js?v=20260209"></script>
-<script src="/static/js/modules/form.js?v=20260203"></script>
+<script src="/static/js/modules/growth-profile-form.js?v=20260222"></script>
+<script src="/static/js/modules/growth-profile-form-template-sections.js?v=20260222"></script>
+<script src="/static/js/modules/growth-profile-form-template.js?v=20260222b"></script>
+<script src="/static/js/modules/form.js?v=20260222"></script>
 <script src="/static/js/modules/list.js?v=20260203"></script>
 {% endblock %}

@@ -166,7 +166,7 @@ function moduleListApp() {
 
         // 동적 섹션 레이아웃 적용
         applyDynamicLayout() {
-            const moduleTypes = ['prompt', 'generate', 'publish', 'republish', 'collect', 'data'];
+            const moduleTypes = ['prompt', 'generate', 'publish', 'republish', 'collect', 'data', 'growth_profile'];
             const visibleSections = moduleTypes.filter(type => this.getModulesByType(type).length > 0);
             const sectionCount = visibleSections.length;
 
@@ -206,7 +206,8 @@ function moduleListApp() {
                 generate: '✨',
                 prompt: '📝',
                 collect: '🔍',
-                data: '📊'
+                data: '📊',
+                growth_profile: '📈'
             };
             return icons[typeCode] || '📦';
         },
@@ -223,7 +224,8 @@ function moduleListApp() {
                 'publish': '발행',
                 'republish': '재발행',
                 'collect': '수집',
-                'data': '데이터'
+                'data': '데이터',
+                'growth_profile': '성장 프로파일'
             };
             return fallbackNames[typeCode] || typeCode;
         },
@@ -1199,8 +1201,10 @@ function moduleListApp() {
 
                         ${window.getGenerateModuleFormTemplate ? window.getGenerateModuleFormTemplate() : '<!-- generate-form-template.js 로드 필요 -->'}
 
+                        ${window.getGrowthProfileFormTemplate ? window.getGrowthProfileFormTemplate() : '<!-- growth-profile-form-template.js 로드 필요 -->'}
+
                         <!-- 기타 타입 설정 -->
-                        <div x-show="formData.type_code !== 'republish' && formData.type_code !== 'collect' && formData.type_code !== 'data' && formData.type_code !== 'prompt' && formData.type_code !== 'generate'">
+                        <div x-show="formData.type_code !== 'republish' && formData.type_code !== 'collect' && formData.type_code !== 'data' && formData.type_code !== 'prompt' && formData.type_code !== 'generate' && formData.type_code !== 'growth_profile'">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-2">설정 정보 (JSON)</label>
                                 <textarea x-model="settingsJson"
@@ -1253,7 +1257,8 @@ function moduleListApp() {
                 'generate': 'bg-amber-200',
                 'publish': 'bg-rose-200',
                 'collect': 'bg-purple-200',
-                'data': 'bg-teal-200'
+                'data': 'bg-teal-200',
+                'growth_profile': 'bg-emerald-200'
             };
             return colors[typeCode] || 'bg-gray-200';
         },
@@ -2158,6 +2163,25 @@ function getModuleInfoRows(module) {
         if (settings.auto_group) {
             const threshold = settings.similarity_threshold || 75;
             rows.push({ label: '자동 그룹화', value: `활성 (${threshold}%)` });
+        }
+    } else if (typeCode === 'growth_profile') {
+        // 성장 프로파일 모듈
+        const settings = module.settings || {};
+        const stages = settings.stages || [];
+        rows.push({ label: '성장 구간', value: stages.length + '단계' });
+
+        // 활성 모듈 요약
+        const moduleTypes = [];
+        if (stages.some(s => s.generate?.enabled)) moduleTypes.push('생성');
+        if (stages.some(s => s.publish?.enabled)) moduleTypes.push('발행');
+        if (stages.some(s => s.republish?.enabled)) moduleTypes.push('재발행');
+        if (moduleTypes.length > 0) {
+            rows.push({ label: '활성 모듈', value: moduleTypes.join(' / ') });
+        }
+
+        // 워밍업 상태
+        if (settings.warmup?.enabled) {
+            rows.push({ label: '워밍업', value: (settings.warmup.warmup_days || 14) + '일' });
         }
     }
 

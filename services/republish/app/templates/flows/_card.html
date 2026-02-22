@@ -74,6 +74,14 @@
             return Math.max(0, this.allRows.length - this.maxVisible);
         }
     }">
+        <!-- GP 배지 -->
+        <template x-if="flowHasGP(flow)">
+            <div class="flex items-center gap-1.5 mb-2 px-2 py-1 bg-gradient-to-r from-emerald-50 to-blue-50 border border-emerald-200 rounded text-xs">
+                <span class="text-emerald-700 font-medium">📈 성장 전략</span>
+                <span class="text-emerald-500" x-text="getGPModuleName(flow)"></span>
+            </div>
+        </template>
+
         <!-- 설명 -->
         <div x-show="flow.description" class="text-xs text-gray-600 bg-gray-50 p-2 rounded-lg mb-3">
             <span x-text="flow.description"></span>

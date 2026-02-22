@@ -2,23 +2,19 @@
 재고 기반 생성 트리거 서비스
 
 블로그의 CrawledPost 재고 수준을 확인하고,
-BlogGrowthSetting 임계값과 비교하여 생성이 필요한지 판단합니다.
+Growth Profile 기반 임계값과 비교하여 생성이 필요한지 판단합니다.
 
 설계 문서: generation_module_workplan.md - Phase 4 - 4.2.3
 """
-import json
 import logging
 from typing import Optional, List
 from dataclasses import dataclass
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from ...models.blog import Blog
 from ...models.title import MainTitle
 from ...models.crawled_post import CrawledPost
-from ...models.blog_growth_setting import BlogGrowthSetting
 
 logger = logging.getLogger(__name__)
 
@@ -51,14 +47,14 @@ class InventoryTrigger:
 
     async def check_inventory(
         self, blog_id: int,
-        module_settings: Optional[dict] = None,
+        min_inventory: Optional[int] = None,
     ) -> InventoryCheckResult:
         """
         블로그의 재고 상태를 확인하고 생성 필요 여부를 판단
 
         Args:
             blog_id: 블로그 ID
-            module_settings: 모듈 설정 (Module.settings)
+            min_inventory: GP에서 결정된 최소 보유 수 (None이면 기본값 사용)
 
         Returns:
             InventoryCheckResult: 재고 확인 결과
@@ -66,10 +62,9 @@ class InventoryTrigger:
         # 1. 현재 재고 수량 조회
         inventory_count = await self._get_inventory_count(blog_id)
 
-        # 2. 임계값 조회 (모듈 설정 우선, BlogGrowthSetting 폴백)
-        threshold, growth_stage = await self._get_threshold(
-            blog_id, module_settings
-        )
+        # 2. 임계값 결정 (GP에서 직접 전달, 없으면 기본값)
+        threshold = min_inventory if min_inventory is not None else DEFAULT_INVENTORY_THRESHOLD
+        growth_stage = "gp_managed" if min_inventory is not None else "default"
 
         # 3. 생성 필요 여부 판단
         needs_generation = inventory_count < threshold
@@ -169,102 +164,6 @@ class InventoryTrigger:
         )
         result = await self.db.execute(query)
         return result.scalar() or 0
-
-    async def _get_threshold(
-        self, blog_id: int,
-        module_settings: Optional[dict] = None,
-    ) -> tuple[int, str]:
-        """
-        재고 임계값 조회 (모듈 설정 우선, BlogGrowthSetting 폴백)
-
-        Args:
-            blog_id: 블로그 ID
-            module_settings: 모듈 설정 (Module.settings)
-
-        Returns:
-            (임계값, 성장단계) 튜플
-        """
-        # 모듈 설정에서 재고 설정을 우선 사용
-        inv = (module_settings or {}).get("inventory", {})
-        if inv:
-            # Blog 조회 (현재 발행글 수 확인용)
-            query = select(Blog).where(Blog.id == blog_id)
-            result = await self.db.execute(query)
-            blog = result.scalar_one_or_none()
-
-            if not blog:
-                logger.warning(
-                    f"[INVENTORY] 블로그를 찾을 수 없음: id={blog_id}"
-                )
-                return DEFAULT_INVENTORY_THRESHOLD, "unknown"
-
-            current_post_count = blog.total_post_count or 0
-            rapid_threshold = inv.get("rapid_growth_threshold", 50)
-            growth_threshold = inv.get("growth_threshold", 150)
-
-            if current_post_count <= rapid_threshold:
-                threshold_val = inv.get("rapid_growth_inventory", 10)
-                logger.debug(
-                    f"[INVENTORY] 임계값 결정: 모듈설정 사용 | "
-                    f"단계=rapid_growth | 기준={threshold_val} | "
-                    f"posts={current_post_count}"
-                )
-                return threshold_val, "rapid_growth"
-            elif current_post_count <= growth_threshold:
-                threshold_val = inv.get("growth_inventory", 5)
-                logger.debug(
-                    f"[INVENTORY] 임계값 결정: 모듈설정 사용 | "
-                    f"단계=growth | 기준={threshold_val} | "
-                    f"posts={current_post_count}"
-                )
-                return threshold_val, "growth"
-            else:
-                threshold_val = inv.get("stable_inventory", 2)
-                logger.debug(
-                    f"[INVENTORY] 임계값 결정: 모듈설정 사용 | "
-                    f"단계=stable | 기준={threshold_val} | "
-                    f"posts={current_post_count}"
-                )
-                return threshold_val, "stable"
-
-        # 기존 BlogGrowthSetting 폴백 로직
-        # Blog 조회 (growth_setting 포함)
-        query = (
-            select(Blog)
-            .where(Blog.id == blog_id)
-            .options(selectinload(Blog.growth_setting))
-        )
-        result = await self.db.execute(query)
-        blog = result.scalar_one_or_none()
-
-        if not blog:
-            logger.warning(
-                f"[INVENTORY] 블로그를 찾을 수 없음: id={blog_id}"
-            )
-            return DEFAULT_INVENTORY_THRESHOLD, "unknown"
-
-        current_post_count = blog.total_post_count or 0
-
-        if blog.growth_setting:
-            threshold = blog.growth_setting.get_inventory_threshold(
-                current_post_count
-            )
-            stage = blog.growth_setting.get_growth_stage(
-                current_post_count
-            )
-            logger.debug(
-                f"[INVENTORY] 임계값 결정: BlogGrowthSetting 사용 | "
-                f"단계={stage} | 기준={threshold} | "
-                f"posts={current_post_count}"
-            )
-            return threshold, stage
-
-        # BlogGrowthSetting이 없으면 기본값 사용
-        logger.info(
-            f"[INVENTORY] blog_id={blog_id} | "
-            f"성장 설정 없음, 기본값 사용: {DEFAULT_INVENTORY_THRESHOLD}"
-        )
-        return DEFAULT_INVENTORY_THRESHOLD, "default"
 
     async def _find_available_title(
         self, blog_id: int

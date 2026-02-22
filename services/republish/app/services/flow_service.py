@@ -458,9 +458,13 @@ class FlowService:
                 logger.info(f"[ADD_MODULES] 모든 모듈이 이미 추가됨: {flow_id}")
                 return flow
 
-            # 모듈 소유권 확인
-            module_query = select(Module).where(
-                and_(Module.id.in_(new_module_ids), Module.user_id == user.id)
+            # 모듈 소유권 확인 (module_type도 함께 로드)
+            module_query = (
+                select(Module)
+                .where(
+                    and_(Module.id.in_(new_module_ids), Module.user_id == user.id)
+                )
+                .options(selectinload(Module.module_type))
             )
             module_result = await self.db.execute(module_query)
             valid_modules = module_result.scalars().all()
@@ -472,6 +476,39 @@ class FlowService:
                     status_code=400,
                     detail=f"유효하지 않은 모듈 ID: {list(invalid_ids)}",
                 )
+
+            # GP 1-per-flow 중복 검증 (Phase B)
+            gp_modules_to_add = [
+                m for m in valid_modules
+                if m.module_type and m.module_type.code == "growth_profile"
+            ]
+
+            if gp_modules_to_add:
+                # 기존 Flow에 이미 growth_profile 모듈이 있는지 확인
+                existing_gp_query = (
+                    select(FlowModule)
+                    .join(Module, FlowModule.module_id == Module.id)
+                    .join(ModuleType, Module.module_type_id == ModuleType.id)
+                    .where(
+                        FlowModule.flow_id == flow_id,
+                        ModuleType.code == "growth_profile",
+                    )
+                )
+                existing_gp_result = await self.db.execute(existing_gp_query)
+                existing_gp = existing_gp_result.first()
+
+                if existing_gp:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="이 Flow에는 이미 성장 프로파일이 설정되어 있습니다",
+                    )
+
+                # 추가하려는 GP 모듈이 2개 이상인지도 체크
+                if len(gp_modules_to_add) > 1:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="성장 프로파일은 Flow당 1개만 추가할 수 있습니다",
+                    )
 
             # 모듈-플로우 연결 생성
             for module_id in valid_module_ids:
