@@ -63,7 +63,8 @@ async def create_module(
 
     # 응답용 데이터 구성
     response_data = ModuleDetailResponse.model_validate(module)
-    response_data.calculated_interval_minutes = module.calculated_interval_minutes
+    if hasattr(module, 'calculated_interval_minutes'):
+        response_data.calculated_interval_minutes = module.calculated_interval_minutes
 
     return response_data
 
@@ -91,7 +92,8 @@ async def get_module(
 
     # 응답용 데이터 구성
     response_data = ModuleDetailResponse.model_validate(module)
-    response_data.calculated_interval_minutes = module.calculated_interval_minutes
+    if hasattr(module, 'calculated_interval_minutes'):
+        response_data.calculated_interval_minutes = module.calculated_interval_minutes
 
     return response_data
 
@@ -166,7 +168,8 @@ async def copy_module(
 
     # 응답용 데이터 구성
     response_data = ModuleDetailResponse.model_validate(module)
-    response_data.calculated_interval_minutes = module.calculated_interval_minutes
+    if hasattr(module, 'calculated_interval_minutes'):
+        response_data.calculated_interval_minutes = module.calculated_interval_minutes
 
     return response_data
 
