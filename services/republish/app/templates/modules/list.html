@@ -84,7 +84,8 @@
 
         .desktop-sections.sections-4,
         .desktop-sections.sections-5,
-        .desktop-sections.sections-6 {
+        .desktop-sections.sections-6,
+        .desktop-sections.sections-7 {
             max-width: 80rem; /* 1280px */
         }
 
@@ -112,9 +113,10 @@
             align-items: start;
         }
 
-        /* 5~6개 섹션: 최대 4열, 초과 섹션은 다음 줄로 줄바꿈 */
+        /* 5~7개 섹션: 최대 4열, 초과 섹션은 다음 줄로 줄바꿈 */
         .desktop-sections.sections-5,
-        .desktop-sections.sections-6 {
+        .desktop-sections.sections-6,
+        .desktop-sections.sections-7 {
             grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 1rem;
             align-items: start;
@@ -142,7 +144,8 @@
         }
 
         .desktop-sections.sections-5 .module-grid,
-        .desktop-sections.sections-6 .module-grid {
+        .desktop-sections.sections-6 .module-grid,
+        .desktop-sections.sections-7 .module-grid {
             grid-template-columns: minmax(0, 1fr);
             gap: 1rem;
         }
@@ -430,6 +433,27 @@
                 <span x-text="sectionExpanded ? '접기 ▲' : `더보기 (${getModulesByType('data').length - 1}개 더) ▼`"></span>
             </button>
         </div>
+
+        <!-- 성장 프로파일 섹션 -->
+        <div x-show="getModulesByType('growth_profile').length > 0" class="module-section" x-data="{ sectionExpanded: false }">
+            <div class="section-header">
+                <span class="text-2xl">📈</span>
+                <h3 class="section-title">성장 프로파일 모듈</h3>
+                <span class="section-count" x-text="getModulesByType('growth_profile').length"></span>
+            </div>
+            <div class="module-grid">
+                <template x-for="(module, idx) in getModulesByType('growth_profile')" :key="module.id + '-' + sortBy + '-' + sortOrder">
+                    <div x-show="sectionExpanded || idx < 1" x-transition>
+                        {% include "modules/_card.html" %}
+                    </div>
+                </template>
+            </div>
+            <button x-show="getModulesByType('growth_profile').length > 1"
+                    @click="sectionExpanded = !sectionExpanded; if(sectionExpanded) { $nextTick(() => reinitModuleSlides($el.previousElementSibling)) }"
+                    class="card-expand-btn mt-2">
+                <span x-text="sectionExpanded ? '접기 ▲' : `더보기 (${getModulesByType('growth_profile').length - 1}개 더) ▼`"></span>
+            </button>
+        </div>
     </div>
 
     <!-- 모바일: 탭 레이아웃 -->
@@ -478,6 +502,13 @@
                         class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap"
                         x-show="getModulesByType('data').length > 0">
                     데이터
+                </button>
+                <button type="button"
+                        @click="activeTab = 'growth_profile'"
+                        :class="activeTab === 'growth_profile' ? 'bg-green-50 text-green-700 border-green-500' : 'bg-white text-gray-500 hover:text-gray-700'"
+                        class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap"
+                        x-show="getModulesByType('growth_profile').length > 0">
+                    성장 프로파일
                 </button>
             </div>
 
@@ -532,6 +563,15 @@
                      x-effect="if (activeTab === 'data') $nextTick(() => reinitMobileTabSlides($el))">
                     <div class="module-grid">
                         <template x-for="module in getModulesByType('data')" :key="module.id + '-' + sortBy + '-' + sortOrder">
+                            {% include "modules/_card.html" %}
+                        </template>
+                    </div>
+                </div>
+
+                <div x-show="activeTab === 'growth_profile'"
+                     x-effect="if (activeTab === 'growth_profile') $nextTick(() => reinitMobileTabSlides($el))">
+                    <div class="module-grid">
+                        <template x-for="module in getModulesByType('growth_profile')" :key="module.id + '-' + sortBy + '-' + sortOrder">
                             {% include "modules/_card.html" %}
                         </template>
                     </div>

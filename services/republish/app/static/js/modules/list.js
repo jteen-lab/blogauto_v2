@@ -99,7 +99,7 @@ function moduleListApp() {
                         return valueA - valueB;
 
                     case 'module_type':
-                        const typeOrder = { 'prompt': 1, 'generate': 2, 'publish': 3, 'republish': 4, 'collect': 5, 'data': 6 };
+                        const typeOrder = { 'prompt': 1, 'generate': 2, 'publish': 3, 'republish': 4, 'collect': 5, 'data': 6, 'growth_profile': 7 };
                         valueA = typeOrder[a.module_type?.code] || 99;
                         valueB = typeOrder[b.module_type?.code] || 99;
                         return valueA - valueB;
@@ -177,7 +177,7 @@ function moduleListApp() {
             if (!desktopSections) return;
 
             // 기존 클래스 제거
-            desktopSections.classList.remove('sections-1', 'sections-2', 'sections-3', 'sections-4', 'sections-5', 'sections-6');
+            desktopSections.classList.remove('sections-1', 'sections-2', 'sections-3', 'sections-4', 'sections-5', 'sections-6', 'sections-7');
 
             // 섹션 수에 따른 클래스 추가
             desktopSections.classList.add(`sections-${sectionCount}`);
