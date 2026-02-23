@@ -2165,23 +2165,42 @@ function getModuleInfoRows(module) {
             rows.push({ label: '자동 그룹화', value: `활성 (${threshold}%)` });
         }
     } else if (typeCode === 'growth_profile') {
-        // 성장 프로파일 모듈
         const settings = module.settings || {};
         const stages = settings.stages || [];
-        rows.push({ label: '성장 구간', value: stages.length + '단계' });
-
-        // 활성 모듈 요약
-        const moduleTypes = [];
-        if (stages.some(s => s.generate?.enabled)) moduleTypes.push('생성');
-        if (stages.some(s => s.publish?.enabled)) moduleTypes.push('발행');
-        if (stages.some(s => s.republish?.enabled)) moduleTypes.push('재발행');
-        if (moduleTypes.length > 0) {
-            rows.push({ label: '활성 모듈', value: moduleTypes.join(' / ') });
+        // 워밍업
+        const wu = settings.warmup;
+        rows.push({ label: '🔥 워밍업',
+            value: wu?.enabled ? `${wu.warmup_days || 14}일, ${wu.initial_daily_posts || 1}→${wu.max_daily_posts || 3}회` : 'OFF' });
+        // 활성 시간대
+        const mx = settings.schedule_matrix;
+        if (mx) {
+            const range = (days) => {
+                let lo = 24, hi = -1;
+                for (const d of days) for (let h = 0; h < 24; h++)
+                    if (mx[d]?.[h]) { if (h < lo) lo = h; if (h > hi) hi = h; }
+                return lo <= hi ? `${lo}~${hi}시` : null;
+            };
+            const p = [], wd = range([0,1,2,3,4]), we = range([5,6]);
+            if (wd) p.push(`평일 ${wd}`);
+            if (we) p.push(`주말 ${we}`);
+            rows.push({ label: '⏰ 활성시간', value: p.length > 0 ? p.join(' / ') : '미설정' });
         }
-
-        // 워밍업 상태
-        if (settings.warmup?.enabled) {
-            rows.push({ label: '워밍업', value: (settings.warmup.warmup_days || 14) + '일' });
+        // 지터
+        const jt = settings.jitter;
+        rows.push({ label: '🎲 지터',
+            value: jt?.enabled ? `${jt.min_percent}% ~ +${jt.max_percent}%` : 'OFF' });
+        // 성장 구간 요약
+        rows.push({ label: '📊 구간', value: stages.length + '구간' });
+        for (const s of stages) {
+            const rng = (s.post_count_max != null) ? `~${s.post_count_max}` : `${s.post_count_min}+`;
+            const mods = [];
+            for (const [k, lb] of [['generate','생성'],['publish','발행'],['republish','재발행']]) {
+                if (s[k]?.enabled) {
+                    const cnt = s[k].interval_mode === 'auto' ? s[k].daily_count : null;
+                    mods.push(`${lb}${cnt || ''}`);
+                }
+            }
+            rows.push({ label: `  ${s.label || s.name}`, value: `(${rng}) ${mods.join('/')}` });
         }
     }
 

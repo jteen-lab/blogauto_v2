@@ -4,13 +4,83 @@ type_code === 'growth_profile' 일 때 표시
 Alpine.js: formData + gpModule (growth-profile-form.js의 createGrowthProfileState())
 -->
 
+<!-- 1-0. 워밍업 설정 -->
+<div id="gp-warmup-section" class="space-y-4 mb-6">
+    <h3 class="text-base font-semibold text-gray-900 flex items-center gap-2">🔥 워밍업 설정</h3>
+    <div class="p-4 bg-gray-50 rounded-lg space-y-4">
+        <label class="flex items-center cursor-pointer">
+            <input type="checkbox" x-model="gpModule.warmup.enabled"
+                   class="w-4 h-4 text-orange-600 rounded focus:ring-orange-500">
+            <span class="ml-2 text-sm font-medium text-gray-700">워밍업 활성화</span>
+            <span class="ml-2 text-xs text-gray-500">(새 블로그 초기 발행량 점진적 증가)</span>
+        </label>
+
+        <div x-show="gpModule.warmup.enabled" x-transition class="space-y-4 ml-6">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">워밍업 기간</label>
+                    <div class="flex items-center gap-1">
+                        <input type="number" x-model.number="gpModule.warmup.warmup_days"
+                               min="1" max="90"
+                               class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-orange-500">
+                        <span class="text-xs text-gray-500">일</span>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">초기 일일 발행</label>
+                    <div class="flex items-center gap-1">
+                        <input type="number" x-model.number="gpModule.warmup.initial_daily_posts"
+                               min="1" max="10"
+                               class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-orange-500">
+                        <span class="text-xs text-gray-500">회</span>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">최대 일일 발행</label>
+                    <div class="flex items-center gap-1">
+                        <input type="number" x-model.number="gpModule.warmup.max_daily_posts"
+                               min="1" max="50"
+                               class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-orange-500">
+                        <span class="text-xs text-gray-500">회</span>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">증가 속도</label>
+                    <div class="flex items-center gap-1">
+                        <input type="number" x-model.number="gpModule.warmup.ramp_rate"
+                               min="0.1" max="5" step="0.1"
+                               class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-orange-500">
+                        <span class="text-xs text-gray-500">/일</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 워밍업 시뮬레이션 -->
+            <div x-show="gpModule.warmupSimulation.length > 0" class="p-3 bg-orange-50 rounded-lg">
+                <p class="text-xs font-medium text-orange-800 mb-2">워밍업 시뮬레이션:</p>
+                <div class="flex flex-wrap gap-2">
+                    <template x-for="sim in gpModule.warmupSimulation" :key="sim.day">
+                        <span class="px-2 py-1 bg-white border border-orange-200 rounded text-xs text-orange-700">
+                            Day <span x-text="sim.day"></span>:
+                            <span x-text="sim.daily"></span>회/일
+                            (<span x-text="sim.interval"></span>분)
+                        </span>
+                    </template>
+                </div>
+            </div>
+
+            <p class="text-xs text-orange-600">워밍업은 발행(Publish)에만 적용됩니다. 생성과 재발행은 구간 설정을 따릅니다.</p>
+        </div>
+    </div>
+</div>
+
 <!-- 1-1. 프리셋 선택 (생성 모드에서만 표시) -->
 <div x-show="!isEdit" class="space-y-4 mb-6">
     <h3 class="text-base font-semibold text-gray-900 flex items-center gap-2">
         📋 기본 프로파일 선택
     </h3>
     <p class="text-sm text-gray-500">시작 프로파일을 선택하세요. 선택 후 세부 설정을 수정할 수 있습니다.</p>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         <template x-for="preset in gpModule.presets" :key="preset.key">
             <div class="border-2 rounded-lg p-4 cursor-pointer transition-all"
                  :class="gpModule.selectedPreset === preset.key
@@ -32,7 +102,7 @@ Alpine.js: formData + gpModule (growth-profile-form.js의 createGrowthProfileSta
 </div>
 
 <!-- 1-2. 활성 시간대 (schedule_matrix) -->
-<div class="space-y-4 mb-6">
+<div id="gp-schedule-section" class="space-y-4 mb-6">
     <h3 class="text-base font-semibold text-gray-900 flex items-center gap-2">📅 활성 시간대</h3>
     <!-- 빠른 설정 버튼 -->
     <div class="bg-gray-50 rounded-lg p-4">
@@ -102,7 +172,7 @@ Alpine.js: formData + gpModule (growth-profile-form.js의 createGrowthProfileSta
 </div>
 
 <!-- 1-3. 지터(랜덤 변동) 설정 -->
-<div class="space-y-4 mb-6">
+<div id="gp-jitter-section" class="space-y-4 mb-6">
     <h3 class="text-base font-semibold text-gray-900 flex items-center gap-2">🎲 지터(랜덤 변동) 설정</h3>
     <div class="p-4 bg-gray-50 rounded-lg space-y-3">
         <label class="flex items-center cursor-pointer">
@@ -134,7 +204,7 @@ Alpine.js: formData + gpModule (growth-profile-form.js의 createGrowthProfileSta
 </div>
 
 <!-- 1-4. 성장 구간 설정 (stages) -->
-<div class="space-y-4 mb-6">
+<div id="gp-stages-section" class="space-y-4 mb-6">
     <div class="flex items-center justify-between">
         <h3 class="text-base font-semibold text-gray-900 flex items-center gap-2">📈 성장 구간 설정</h3>
         <button type="button" @click="gpModule.addStage()"
@@ -369,124 +439,4 @@ Alpine.js: formData + gpModule (growth-profile-form.js의 createGrowthProfileSta
             </div>
         </div>
     </template>
-</div>
-
-<!-- 1-5. 워밍업 설정 -->
-<div class="space-y-4 mb-6">
-    <h3 class="text-base font-semibold text-gray-900 flex items-center gap-2">🔥 워밍업 설정</h3>
-    <div class="p-4 bg-gray-50 rounded-lg space-y-4">
-        <label class="flex items-center cursor-pointer">
-            <input type="checkbox" x-model="gpModule.warmup.enabled"
-                   class="w-4 h-4 text-orange-600 rounded focus:ring-orange-500">
-            <span class="ml-2 text-sm font-medium text-gray-700">워밍업 활성화</span>
-            <span class="ml-2 text-xs text-gray-500">(새 블로그 초기 발행량 점진적 증가)</span>
-        </label>
-
-        <div x-show="gpModule.warmup.enabled" x-transition class="space-y-4 ml-6">
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div>
-                    <label class="block text-xs text-gray-500 mb-1">워밍업 기간</label>
-                    <div class="flex items-center gap-1">
-                        <input type="number" x-model.number="gpModule.warmup.warmup_days"
-                               min="1" max="90"
-                               class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-orange-500">
-                        <span class="text-xs text-gray-500">일</span>
-                    </div>
-                </div>
-                <div>
-                    <label class="block text-xs text-gray-500 mb-1">초기 일일 발행</label>
-                    <div class="flex items-center gap-1">
-                        <input type="number" x-model.number="gpModule.warmup.initial_daily_posts"
-                               min="1" max="10"
-                               class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-orange-500">
-                        <span class="text-xs text-gray-500">회</span>
-                    </div>
-                </div>
-                <div>
-                    <label class="block text-xs text-gray-500 mb-1">최대 일일 발행</label>
-                    <div class="flex items-center gap-1">
-                        <input type="number" x-model.number="gpModule.warmup.max_daily_posts"
-                               min="1" max="50"
-                               class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-orange-500">
-                        <span class="text-xs text-gray-500">회</span>
-                    </div>
-                </div>
-                <div>
-                    <label class="block text-xs text-gray-500 mb-1">증가 속도</label>
-                    <div class="flex items-center gap-1">
-                        <input type="number" x-model.number="gpModule.warmup.ramp_rate"
-                               min="0.1" max="5" step="0.1"
-                               class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-orange-500">
-                        <span class="text-xs text-gray-500">/일</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 워밍업 시뮬레이션 -->
-            <div x-show="gpModule.warmupSimulation.length > 0" class="p-3 bg-orange-50 rounded-lg">
-                <p class="text-xs font-medium text-orange-800 mb-2">워밍업 시뮬레이션:</p>
-                <div class="flex flex-wrap gap-2">
-                    <template x-for="sim in gpModule.warmupSimulation" :key="sim.day">
-                        <span class="px-2 py-1 bg-white border border-orange-200 rounded text-xs text-orange-700">
-                            Day <span x-text="sim.day"></span>:
-                            <span x-text="sim.daily"></span>회/일
-                            (<span x-text="sim.interval"></span>분)
-                        </span>
-                    </template>
-                </div>
-            </div>
-
-            <p class="text-xs text-orange-600">워밍업은 발행(Publish)에만 적용됩니다. 생성과 재발행은 구간 설정을 따릅니다.</p>
-        </div>
-    </div>
-</div>
-
-<!-- 1-6. 프리뷰 -->
-<div class="space-y-4 mb-6">
-    <div class="flex items-center justify-between">
-        <h3 class="text-base font-semibold text-gray-900 flex items-center gap-2">👀 블로그별 적용 프리뷰</h3>
-        <button type="button" @click="gpModule.loadPreview()"
-                :disabled="gpModule.previewLoading"
-                class="px-3 py-1.5 text-xs bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50">
-            <span x-show="!gpModule.previewLoading">새로고침</span>
-            <span x-show="gpModule.previewLoading" class="flex items-center gap-1">
-                <svg class="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                로딩 중...
-            </span>
-        </button>
-    </div>
-
-    <!-- 로딩 -->
-    <div x-show="gpModule.previewLoading" class="p-4 text-center text-sm text-gray-500">
-        프리뷰 로딩 중...
-    </div>
-
-    <!-- 프리뷰 없음 -->
-    <div x-show="!gpModule.previewLoading && gpModule.previewBlogs.length === 0"
-         class="p-4 bg-gray-50 rounded-lg text-center">
-        <p class="text-sm text-gray-500">"새로고침" 버튼을 눌러 블로그별 적용 결과를 미리 확인하세요.</p>
-    </div>
-
-    <!-- 프리뷰 결과 -->
-    <div x-show="!gpModule.previewLoading && gpModule.previewBlogs.length > 0"
-         class="border border-gray-200 rounded-lg max-h-64 overflow-y-auto">
-        <template x-for="blog in gpModule.previewBlogs" :key="blog.id || blog.name">
-            <div class="flex items-center justify-between p-3 border-b border-gray-100 last:border-b-0 hover:bg-gray-50">
-                <div class="flex items-center gap-2">
-                    <span class="text-sm font-medium text-gray-900" x-text="blog.name"></span>
-                    <span class="text-xs text-gray-500" x-text="'(' + (blog.postCount || 0) + '개)'"></span>
-                </div>
-                <div class="flex items-center gap-2">
-                    <span class="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700"
-                          x-text="blog.stageName || '해당 없음'"></span>
-                    <span x-show="blog.generate" class="px-1.5 py-0.5 text-xs rounded bg-green-100 text-green-700">생성</span>
-                    <span x-show="blog.publish" class="px-1.5 py-0.5 text-xs rounded bg-blue-100 text-blue-700">발행</span>
-                    <span x-show="blog.republish" class="px-1.5 py-0.5 text-xs rounded bg-purple-100 text-purple-700">재발행</span>
-                </div>
-            </div>
-        </template>
-    </div>
 </div>
