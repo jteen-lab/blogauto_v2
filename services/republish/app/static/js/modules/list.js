@@ -235,7 +235,7 @@ function moduleListApp() {
         getFullFormTemplate() {
             return `
                 <div class="max-w-6xl mx-auto">
-                    <form @submit.prevent="submitForm()">
+                    <form @submit.prevent autocomplete="off">
                         <!-- 기본 정보 -->
                         <div class="space-y-6">
                         <div>
@@ -1224,7 +1224,8 @@ function moduleListApp() {
                                 class="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
                             취소
                         </button>
-                        <button type="submit"
+                        <button type="button"
+                                @click="submitForm()"
                                 :disabled="loading"
                                 class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed">
                             <span x-show="!loading" x-text="isEdit ? '수정' : '생성'"></span>

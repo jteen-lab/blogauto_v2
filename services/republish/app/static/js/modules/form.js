@@ -126,12 +126,8 @@ function moduleFormApp(module = null, moduleType = null) {
             il_conclusion_count: initialModule?.settings?.internal_links?.conclusion_count ?? 3,
             il_conclusion_list_style: initialModule?.settings?.internal_links?.conclusion_list_style || 'dash',
             il_similarity_threshold: initialModule?.settings?.internal_links?.similarity_threshold ?? 75,
-            // 생성 모듈 필드들 - 재고 관리 설정
-            inv_rapid_growth_threshold: initialModule?.settings?.inventory?.rapid_growth_threshold ?? 50,
-            inv_rapid_growth_inventory: initialModule?.settings?.inventory?.rapid_growth_inventory ?? 10,
-            inv_growth_threshold: initialModule?.settings?.inventory?.growth_threshold ?? 150,
-            inv_growth_inventory: initialModule?.settings?.inventory?.growth_inventory ?? 5,
-            inv_stable_inventory: initialModule?.settings?.inventory?.stable_inventory ?? 2
+            // 생성 모듈 필드들 - 텍스트 치환 설정
+            text_replace_enabled: initialModule?.settings?.substitution?.text_replace_enabled ?? false
         },
 
         // 수집 시간 입력용
@@ -636,21 +632,6 @@ function moduleFormApp(module = null, moduleType = null) {
 
             // 생성 모듈 검증
             if (this.formData.type_code === 'generate') {
-                // 간격 설정 검증
-                if (this.formData.interval_mode === 'auto') {
-                    if (!this.formData.auto_daily_count || this.formData.auto_daily_count < 1) {
-                        this.showError('하루 목표 생성 횟수는 1회 이상이어야 합니다');
-                        return false;
-                    }
-                }
-                if (!this.formData.manual_interval_minutes || this.formData.manual_interval_minutes < 15) {
-                    this.showError('생성 간격은 최소 15분 이상이어야 합니다');
-                    return false;
-                }
-                if (this.activeHoursCount === 0) {
-                    this.showError('최소 1시간 이상의 활성 스케줄을 설정해주세요');
-                    return false;
-                }
                 // 내부링크 검증
                 if (this.formData.il_enabled) {
                     if (this.formData.il_intro_count < 1 || this.formData.il_intro_count > 5) {
@@ -673,11 +654,6 @@ function moduleFormApp(module = null, moduleType = null) {
                         this.showError('유사도 임계값은 50~100% 범위여야 합니다');
                         return false;
                     }
-                }
-                // 재고 설정 검증
-                if (this.formData.inv_rapid_growth_threshold >= this.formData.inv_growth_threshold) {
-                    this.showError('급성장기 기준은 성장기 기준보다 작아야 합니다');
-                    return false;
                 }
             }
 
@@ -815,12 +791,6 @@ function moduleFormApp(module = null, moduleType = null) {
                     similarity_threshold: this.formData.similarity_threshold
                 };
             } else if (this.formData.type_code === 'generate') {
-                // 생성 모듈: 스케줄러 필드 (top-level)
-                data.schedule_matrix = this.schedule;
-                data.interval_mode = this.formData.interval_mode;
-                data.manual_interval_minutes = this.formData.manual_interval_minutes;
-                data.auto_daily_count = this.formData.auto_daily_count;
-
                 // 생성 모듈 설정
                 data.settings = {
                     internal_links: {
@@ -831,12 +801,8 @@ function moduleFormApp(module = null, moduleType = null) {
                         conclusion_list_style: this.formData.il_conclusion_list_style,
                         similarity_threshold: this.formData.il_similarity_threshold
                     },
-                    inventory: {
-                        rapid_growth_threshold: this.formData.inv_rapid_growth_threshold,
-                        rapid_growth_inventory: this.formData.inv_rapid_growth_inventory,
-                        growth_threshold: this.formData.inv_growth_threshold,
-                        growth_inventory: this.formData.inv_growth_inventory,
-                        stable_inventory: this.formData.inv_stable_inventory
+                    substitution: {
+                        text_replace_enabled: this.formData.text_replace_enabled
                     }
                 };
             } else if (this.formData.type_code === 'prompt') {
