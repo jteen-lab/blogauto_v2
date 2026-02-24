@@ -113,11 +113,17 @@ class FlowGenerateExecutor:
             )
 
             # 3. ContentGenerator로 글 생성
+            module_settings = module.settings or {}
+            text_replace_enabled = module_settings.get(
+                "substitution", {}
+            ).get("text_replace_enabled", True)
+
             generator = ContentGenerator(self.db, self.user_id)
             gen_result = await generator.generate(
                 blog_id=blog_id,
                 prompt_module_id=module_id,
                 source_title_id=title_id,
+                text_replace_enabled=text_replace_enabled,
             )
 
             if gen_result.success:

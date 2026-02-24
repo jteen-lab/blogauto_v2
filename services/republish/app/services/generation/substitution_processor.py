@@ -37,6 +37,7 @@ class SubstitutionProcessor:
         self,
         content: str,
         blog_id: int,
+        text_replace_enabled: bool = True,
     ) -> str:
         """
         전체 치환 파이프라인 실행
@@ -44,6 +45,7 @@ class SubstitutionProcessor:
         Args:
             content: 마크다운 형태의 글 본문
             blog_id: 블로그 ID
+            text_replace_enabled: 텍스트 치환 활성화 여부
 
         Returns:
             치환 완료된 최종 HTML
@@ -56,13 +58,18 @@ class SubstitutionProcessor:
         placeholders = blog.placeholders or {}
         blog_url = blog.url or ""
 
-        # 1. 텍스트 치환 (마크다운 상태에서)
-        text_rules = placeholders.get("text_replace", [])
-        if text_rules:
-            content = self._apply_text_substitutions(content, text_rules)
-            logger.debug(
-                f"[SUBSTITUTION] 텍스트 치환 완료: {len(text_rules)}개 규칙"
-            )
+        # 1. 텍스트 치환 (마크다운 상태에서, 활성화된 경우만)
+        if text_replace_enabled:
+            text_rules = placeholders.get("text_replace", [])
+            if text_rules:
+                content = self._apply_text_substitutions(content, text_rules)
+                logger.debug(
+                    f"[SUBSTITUTION] 텍스트 치환 완료: {len(text_rules)}개 규칙"
+                )
+            else:
+                logger.debug("[SUBSTITUTION] 텍스트 치환 활성화됨, 규칙 없음")
+        else:
+            logger.debug("[SUBSTITUTION] 텍스트 치환 비활성화")
 
         # 2. HTML 변환
         html_content = self._markdown_to_html(content)

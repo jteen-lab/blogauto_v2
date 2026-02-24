@@ -86,6 +86,7 @@ class ContentGenerator:
         blog_id: int,
         prompt_module_id: int,
         source_title_id: int,
+        text_replace_enabled: bool = True,
     ) -> GenerationResult:
         """
         전체 생성 파이프라인 실행
@@ -94,6 +95,7 @@ class ContentGenerator:
             blog_id: 블로그 ID
             prompt_module_id: 프롬프트 모듈 ID
             source_title_id: 원본 정식 제목 ID
+            text_replace_enabled: 텍스트 치환 활성화 여부
 
         Returns:
             GenerationResult: 생성 결과
@@ -107,7 +109,8 @@ class ContentGenerator:
 
         try:
             return await self._execute_pipeline(
-                blog_id, prompt_module_id, source_title_id, start_time
+                blog_id, prompt_module_id, source_title_id, start_time,
+                text_replace_enabled=text_replace_enabled,
             )
         except Exception as e:
             elapsed = int(time.time() - start_time)
@@ -124,6 +127,7 @@ class ContentGenerator:
         prompt_module_id: int,
         source_title_id: int,
         start_time: float,
+        text_replace_enabled: bool = True,
     ) -> GenerationResult:
         """파이프라인 실행 로직"""
         # 1. 원본 제목 로드
@@ -194,6 +198,7 @@ class ContentGenerator:
         final_html = await self.substitution_processor.process(
             content=content_with_links,
             blog_id=blog_id,
+            text_replace_enabled=text_replace_enabled,
         )
 
         # 7. GenerationHistory 저장
