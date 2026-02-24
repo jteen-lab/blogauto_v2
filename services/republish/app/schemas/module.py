@@ -153,6 +153,9 @@ class ModuleDetailResponse(ModuleResponse):
     """모듈 상세 응답"""
     # 상속받지 않는 추가 상세 필드들
 
+    # 계산된 간격 (분)
+    calculated_interval_minutes: Optional[int] = None
+
     # 불규칙 간격 설정
     jitter_enabled: bool
     jitter_min_percent: int
