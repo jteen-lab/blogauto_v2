@@ -173,7 +173,7 @@ function createGrowthProfileState() {
                     max_daily_posts: this.warmup.max_daily_posts || 3,
                     ramp_rate: this.warmup.ramp_rate || 0.5 });
             }
-            // custom_profiles 복원
+            // custom_profiles 복원 (selectedPreset보다 먼저 복원해야 커스텀 프리셋 참조 가능)
             if (settings.custom_profiles && Array.isArray(settings.custom_profiles)) {
                 this.customProfiles = settings.custom_profiles;
                 let maxId = 0;
@@ -185,6 +185,10 @@ function createGrowthProfileState() {
                         warmupEnabled: cp.data?.warmup?.enabled || false, isCustom: true });
                 }
                 this._nextCustomId = maxId + 1;
+            }
+            // 저장된 selectedPreset 복원 (커스텀 프로파일 복원 후 실행)
+            if (settings.selectedPreset) {
+                this.selectedPreset = settings.selectedPreset;
             }
             console.log('[GrowthProfile] 기존 설정에서 복원 완료');
             this.loadAllPresetDetails();
@@ -205,6 +209,7 @@ function createGrowthProfileState() {
         toSettings() {
             this._saveCurrentToCustom();
             return {
+                selectedPreset: this.selectedPreset,
                 schedule_matrix: this.schedule_matrix,
                 jitter: this.jitter,
                 stages: this.stages.map(s => ({
