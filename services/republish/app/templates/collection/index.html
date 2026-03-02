@@ -522,7 +522,7 @@ function dataManagementApp() {
         selectedBlogId: '',
         matchingSummary: null,
         matchingFilter: 'all',  // 'all' | 'matched' | 'unmatched' | 'unmatched_crawled'
-        blogMatchingConfig: null,  // 블로그 매칭 설정 (enable_manual_matching 등)
+        blogMatchingConfig: null,  // 블로그 매칭 설정
         unmatchedCrawledPosts: [],  // 미매칭 크롤링 포스트 목록
         selectedUnmatchedCrawled: [],  // 선택된 미매칭 크롤링 포스트 ID
 
@@ -874,7 +874,13 @@ function dataManagementApp() {
             }
 
             try {
-                // 매칭 요약 로드
+                // V3 자동 매칭 실행 (크롤링 포스트와 정식제목 유사도 매칭)
+                await fetch(
+                    `${API_BASE}/blogs/${this.selectedBlogId}/auto-match`,
+                    { method: 'POST', credentials: 'include' }
+                );
+
+                // 매칭 요약 로드 (auto-match 결과 반영)
                 const summaryRes = await fetch(
                     `${API_BASE}/blogs/${this.selectedBlogId}/matching-summary`,
                     { credentials: 'include' }
@@ -1108,8 +1114,8 @@ function dataManagementApp() {
                 this.mainTitleSortDir = 'asc';
             }
             this.mainTitlePage = 1;
-            // 전체 보기 + 수동 매칭 활성화 시 미매칭 크롤링 포스트도 함께 정렬
-            if (this.matchingFilter === 'all' && this.blogMatchingConfig?.enable_manual_matching) {
+            // 전체 보기 시 미매칭 크롤링 포스트도 함께 정렬
+            if (this.matchingFilter === 'all') {
                 this.loadMainTitlesWithCrawled();
             } else {
                 this.loadMainTitles();
@@ -1120,8 +1126,8 @@ function dataManagementApp() {
         resetMainTitleSearch() {
             this.mainTitleSearch = '';
             this.mainTitlePage = 1;
-            // 전체 보기 + 수동 매칭 활성화 시 미매칭 크롤링 포스트도 함께 로드
-            if (this.matchingFilter === 'all' && this.blogMatchingConfig?.enable_manual_matching) {
+            // 전체 보기 시 미매칭 크롤링 포스트도 함께 로드
+            if (this.matchingFilter === 'all') {
                 this.loadMainTitlesWithCrawled();
             } else {
                 this.loadMainTitles();
@@ -1309,8 +1315,8 @@ function dataManagementApp() {
                     fetch(`${API_BASE}/titles?${params}`, { credentials: 'include' })
                 ];
 
-                // 수동 매칭 활성화 시 미매칭 크롤링 포스트도 로드
-                if (this.selectedBlogId && this.blogMatchingConfig?.enable_manual_matching) {
+                // 블로그 선택 시 미매칭 크롤링 포스트도 로드
+                if (this.selectedBlogId) {
                     let crawledUrl = `${API_BASE}/blogs/${this.selectedBlogId}/crawled-posts?match_status=unmatched`;
                     // 검색어가 있으면 미매칭 크롤링 포스트에도 적용
                     if (this.mainTitleSearch) {

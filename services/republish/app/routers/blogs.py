@@ -436,7 +436,6 @@ async def get_blog_matching_settings(
     return BlogMatchingConfigResponse(
         allow_duplicate_similar_posts=config.get("allow_duplicate_similar_posts", False),
         matching_threshold=config.get("matching_threshold", 65),
-        enable_manual_matching=config.get("enable_manual_matching", False),
     )
 
 
@@ -475,7 +474,6 @@ async def update_blog_matching_settings(
     new_config = {
         "allow_duplicate_similar_posts": request.allow_duplicate_similar_posts,
         "matching_threshold": request.matching_threshold,
-        "enable_manual_matching": request.enable_manual_matching,
     }
     blog.matching_config = new_config
     flag_modified(blog, "matching_config")
@@ -491,7 +489,6 @@ async def update_blog_matching_settings(
     return BlogMatchingConfigResponse(
         allow_duplicate_similar_posts=request.allow_duplicate_similar_posts,
         matching_threshold=request.matching_threshold,
-        enable_manual_matching=request.enable_manual_matching,
     )
 
 
@@ -530,6 +527,56 @@ async def get_blog_matching_stats(
         unmatched_posts=crawled_stats.unmatched if crawled_stats else 0,
         last_matched_at=blog.last_matched_at,
     )
+
+
+@router.post(
+    "/{blog_id}/auto-match",
+    summary="블로그 자동 매칭 실행",
+    description="정식제목 탭에서 블로그 선택 시 V3 엔진으로 자동 유사도 매칭",
+    responses=responses,
+)
+async def auto_match_blog_posts(
+    blog_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """
+    블로그 자동 매칭 (V3 SimilarityService 사용)
+
+    정식제목 탭에서 블로그 선택 시 호출되어
+    pending/unmatched 크롤링 포스트를 자동으로 매칭합니다.
+
+    Returns:
+        matched: 매칭 성공 수
+        unmatched: 미매칭 수
+        skipped: 건너뛴 수
+    """
+    from ..services.auto_match_service import AutoMatchService
+
+    # 블로그 조회 및 권한 확인
+    blog_service = BlogService(db)
+    await blog_service.get_blog_by_id(current_user, blog_id)
+
+    # 매칭 설정에서 임계값 가져오기
+    from ..models.blog import Blog
+    blog = await db.get(Blog, blog_id)
+    config = (blog.matching_config or {}) if blog else {}
+    threshold = config.get("matching_threshold", 65)
+
+    logger.info(
+        f"블로그 자동 매칭 API 요청 | "
+        f"블로그ID={blog_id} | 사용자={current_user.id} | "
+        f"임계값={threshold}%"
+    )
+
+    # 자동 매칭 실행
+    service = AutoMatchService(db)
+    result = await service.auto_match(blog_id, threshold)
+
+    return {
+        "success": True,
+        **result
+    }
 
 
 @router.post(

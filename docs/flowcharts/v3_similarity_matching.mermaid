@@ -1,0 +1,36 @@
+%% V3 SimilarityService 기반 자동 매칭 흐름
+%% 정식제목 탭에서 블로그 선택 시 동작
+
+graph TD
+    User["사용자: 정식제목 탭에서 블로그 선택"] --> Trigger["@change=loadMatchingPairs()"]
+    Trigger --> AutoMatch["POST /blogs/{id}/auto-match<br/>V3 자동 매칭 API 호출"]
+
+    AutoMatch --> GetPosts["_get_matchable_posts()<br/>pending + unmatched 크롤링 포스트 조회"]
+    GetPosts --> CheckPosts{포스트 있음?}
+    CheckPosts -->|No| Skip["매칭 건너뜀<br/>{matched:0, unmatched:0, skipped:0}"]
+    CheckPosts -->|Yes| GetTitles["_get_category_filtered_titles()<br/>BlogCategory 기반 MainTitle 필터"]
+
+    GetTitles --> CategoryCheck{활성 카테고리 있음?}
+    CategoryCheck -->|Yes| FilteredTitles["subtopic_id/topic_id OR 조건으로<br/>MainTitle 필터링"]
+    CategoryCheck -->|No| AllTitles["전체 MainTitle 사용"]
+
+    FilteredTitles --> CheckTitles{MainTitle 있음?}
+    AllTitles --> CheckTitles
+    CheckTitles -->|No| MarkAllUnmatched["모든 포스트 unmatched 처리"]
+    CheckTitles -->|Yes| Loop["각 CrawledPost 순회"]
+
+    Loop --> V3Calc["SimilarityService.calculate_similarity_v2()<br/>1. 지역명 추출/비교 (불일치→0점)<br/>2. 지역명 제거 후 텍스트 유사도<br/>3. rapidfuzz token_sort_ratio<br/>4. 키워드 보너스 (+0~15점)"]
+    V3Calc --> Compare{"best_score >= threshold?<br/>(기본 65%)"}
+    Compare -->|Yes| Matched["mark_matched(title_id, score)"]
+    Compare -->|No| Unmatched["mark_unmatched(score)"]
+    Matched --> Next{다음 포스트?}
+    Unmatched --> Next
+    Next -->|Yes| Loop
+    Next -->|No| Commit["DB 커밋 + Blog.last_matched_at 업데이트"]
+
+    Skip --> LoadData
+    MarkAllUnmatched --> LoadData
+    Commit --> LoadData
+
+    LoadData["기존 데이터 로드:<br/>1. GET matching-summary<br/>2. GET matching-settings<br/>3. loadMainTitlesWithCrawled()"]
+    LoadData --> Display["UI에 매칭 결과 반영<br/>- 매칭된 정식제목+크롤링포스트 표시<br/>- 미매칭 크롤링포스트 별도 표시"]
