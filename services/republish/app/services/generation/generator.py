@@ -10,12 +10,14 @@
 4. 글 생성 (AIService)
 5. 내부링크 삽입 (InternalLinker)
 6. 치환 처리 (SubstitutionProcessor)
+6.5. 이미지 생성 (ImageGenerator) - Phase C
 7. 저장 (CrawledPost + GenerationHistory)
 8. 원본 제목 사용 처리 (mark_used)
 
 설계 문서: generation_module_workplan.md - Phase 3 - 3.2.1
 """
 import logging
+import random
 import time
 from typing import Optional
 from dataclasses import dataclass
@@ -32,6 +34,7 @@ from .title_recombiner import TitleRecombiner
 from .reference_collector import ReferenceCollector
 from .internal_linker import InternalLinker
 from .substitution_processor import SubstitutionProcessor
+from .image_generator import ImageGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +64,8 @@ class GenerationResult:
     content_length: int = 0
     ai_model_title: Optional[str] = None
     ai_model_content: Optional[str] = None
+    ai_model_image: Optional[str] = None
+    image_url: Optional[str] = None
     error: Optional[str] = None
 
 
@@ -80,6 +85,7 @@ class ContentGenerator:
         self.reference_collector = ReferenceCollector(db, user_id)
         self.internal_linker = InternalLinker(db)
         self.substitution_processor = SubstitutionProcessor(db)
+        self.image_generator = ImageGenerator(db, user_id)
 
     async def generate(
         self,
@@ -149,10 +155,19 @@ class ContentGenerator:
             f"title='{source_title.title[:30]}' | blog={blog.name}"
         )
 
-        # 2. 제목 재조합
+        # 2. 제목 재조합 (blog.title_ai 설정 사용, 스타일 랜덤 선택)
+        ai_config = blog.ai_config or {}
+        title_ai = ai_config.get("title_ai", {})
+        title_provider = title_ai.get("provider")
+        tr = settings.get("title_recombine", {})
+        tr_styles = tr.get("styles", [])
+        selected_style = random.choice(tr_styles) if tr_styles else None
         recombine_result = await self.title_recombiner.recombine(
             original_title=source_title.title,
             module_id=prompt_module_id,
+            provider=title_provider,
+            model=title_ai.get("model"),
+            style=selected_style,
         )
         working_title = recombine_result.recombined_title
         logger.info(
@@ -170,10 +185,7 @@ class ContentGenerator:
         )
 
         # 4. 글 생성
-        logger.debug(
-            f"[GENERATOR] 4단계 시작: AI 글 생성 | "
-            f"provider={blog.ai_config.get('writing_ai', {}).get('provider', 'auto')}"
-        )
+        logger.debug("[GENERATOR] 4단계 시작: AI 글 생성")
         content_result = await self._generate_content_with_meta(
             title=working_title,
             reference_injection=ref_result.to_prompt_injection(),
@@ -201,6 +213,25 @@ class ContentGenerator:
             text_replace_enabled=text_replace_enabled,
         )
 
+        # 6.5 이미지 생성 (실패해도 글 생성은 계속)
+        image_url = None
+        ai_model_image = None
+        try:
+            img_result = await self.image_generator.generate(
+                blog=blog, title=working_title, module_settings=settings,
+            )
+            if img_result.success and img_result.image_url:
+                image_url = img_result.image_url
+                ai_model_image = img_result.ai_model
+                logger.info(
+                    f"[GENERATOR] 이미지 생성 완료 | "
+                    f"mode={img_result.image_mode}"
+                )
+        except Exception as e:
+            logger.warning(
+                f"[GENERATOR] 이미지 생성 실패 (글 생성은 계속): {e}"
+            )
+
         # 7. GenerationHistory 저장
         elapsed = int(time.time() - start_time)
         history = GenerationHistory(
@@ -210,6 +241,8 @@ class ContentGenerator:
             recombined_title=working_title,
             ai_model_title=recombine_result.ai_model,
             ai_model_content=ai_content_model,
+            ai_model_image=ai_model_image,
+            image_url=image_url,
             reference_count=ref_result.count,
             generation_time_seconds=elapsed,
             content_length=len(final_html),
@@ -224,6 +257,7 @@ class ContentGenerator:
             source="generated",
             generation_history_id=history.id,
             match_status="unmatched",
+            image_url=image_url,
         )
         self.db.add(crawled_post)
         await self.db.flush()
@@ -256,6 +290,8 @@ class ContentGenerator:
             content_length=len(final_html),
             ai_model_title=recombine_result.ai_model,
             ai_model_content=ai_content_model,
+            ai_model_image=ai_model_image,
+            image_url=image_url,
         )
 
     async def _generate_content_with_meta(
@@ -266,7 +302,12 @@ class ContentGenerator:
         blog: Blog,
     ) -> dict:
         """
-        AI로 글 생성 (메타데이터 포함)
+        AI로 글 생성 (프롬프트 모듈 설정 우선 적용)
+
+        설정 우선순위:
+        1순위: Module.settings.content_generation (프롬프트 모듈)
+        2순위: Blog.ai_config (블로그 설정)
+        3순위: 하드코딩된 기본값
 
         Args:
             title: 재조합된 제목
@@ -277,30 +318,51 @@ class ContentGenerator:
         Returns:
             dict: {"content": str, "model": str, "provider": str}
         """
-        # 프롬프트 구성
-        prompt_template = settings.get(
-            "generation_prompt", DEFAULT_CONTENT_PROMPT
-        )
+        cg = settings.get("content_generation", {})
+        ai_config = blog.ai_config or {}
+        writing_ai = ai_config.get("writing_ai", {})
 
+        # 프롬프트: 모듈 새 형식 -> 모듈 레거시 키 -> 기본값
+        prompt_template = (
+            cg.get("user_prompt_template")
+            or settings.get("generation_prompt")
+            or DEFAULT_CONTENT_PROMPT
+        )
         full_prompt = prompt_template.replace(
             "{title}", title
         ).replace(
             "{reference_materials}", reference_injection
         )
 
-        # AI 설정 로드
-        ai_config = blog.ai_config or {}
-        writing_ai = ai_config.get("writing_ai", {})
-        provider = writing_ai.get("provider")
+        # AI 제공자: 모듈 설정(활성화 시) -> 블로그 설정
+        # content_generation.enabled=false이면 module provider 무시
+        module_provider = (
+            cg.get("provider") if cg.get("enabled", False) else None
+        )
+        provider = module_provider or writing_ai.get("provider")
         model = writing_ai.get("model")
+
+        # 세부 설정: 모듈 설정 -> 기본값
+        temperature = cg.get("temperature", 0.7)
+        max_tokens = cg.get("max_tokens", 4000)
+        system_prompt = cg.get("system_prompt") or None
+
+        logger.info(
+            f"[GENERATOR] AI 설정 | "
+            f"provider={provider} "
+            f"(source={'module' if module_provider else 'blog'}), "
+            f"temp={temperature}, tokens={max_tokens}, "
+            f"sys_prompt={'Y' if system_prompt else 'N'}"
+        )
 
         # AI 호출
         result = await self.ai_service.generate(
             prompt=full_prompt,
             provider=provider,
             model=model,
-            max_tokens=4000,
-            temperature=0.7,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            system_prompt=system_prompt,
         )
 
         if not result:

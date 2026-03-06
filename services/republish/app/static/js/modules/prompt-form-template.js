@@ -81,6 +81,7 @@ function getPromptTitleSection() {
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 mb-2">추가 지시사항 (선택)</label>
                                         <textarea x-model="promptModule.titleRecombine.customPrompt" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm" placeholder="예: 한국 시장에 맞는 표현 사용, 이모지 포함하지 않기"></textarea>
+                                        <p class="text-xs text-gray-400 mt-1">기본 재조합 프롬프트에 추가됩니다. 예: "반말체로 작성", "15자 이내로 짧게"</p>
                                     </div>
                                 </div>
                             </div>`;
@@ -320,17 +321,27 @@ function getPromptBlogSection() {
                             </div>`;
 }
 
-/** 전체 프롬프트 모듈 폼 템플릿 (섹션 조합) */
+/** 전체 프롬프트 모듈 폼 템플릿 (설정-테스트 인터리빙 구조) */
 function getPromptModuleFormTemplate() {
     return `
                         <!-- 프롬프트 모듈 설정 -->
                         <div x-show="formData.type_code === 'prompt'" class="space-y-6">
 ${getPromptCategorySection()}
-${getPromptTitleSection()}
-${getPromptReferenceSection()}
-${getPromptContentGenSection()}
-${getPromptImageSection()}
 ${getPromptBlogSection()}
+${getTestBlogAndTitleSection()}
+${getPromptTitleSection()}
+${getTestRecombineSection()}
+${getPromptReferenceSection()}
+${getTestReferenceSection()}
+${getPromptContentGenSection()}
+${getTestContentSection()}
+${getPromptInternalLinksSection()}
+${getTestInternalLinksSection()}
+${getPromptSubstitutionSection()}
+${getPromptImageSection()}
+${getTestImageSection()}
+${getTestSubstitutionSection()}
+${getTestFullPipelineSection()}
                         </div>
 `;
 }
