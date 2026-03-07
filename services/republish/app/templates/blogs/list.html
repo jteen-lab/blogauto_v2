@@ -1055,8 +1055,7 @@ function blogSettingsApp() {
         // Phase 3: 매칭 설정
         matchingSettings: {
             allow_duplicate_similar_posts: false,
-            matching_threshold: 65,
-            enable_manual_matching: false
+            matching_threshold: 65
         },
         matchingStats: {
             crawled_count: 0,
@@ -1086,8 +1085,7 @@ function blogSettingsApp() {
             this.activeTab = 'image';
             this.matchingSettings = {
                 allow_duplicate_similar_posts: false,
-                matching_threshold: 65,
-                enable_manual_matching: false
+                matching_threshold: 65
             };
             this.matchingStats = {
                 crawled_count: 0,
@@ -1107,8 +1105,7 @@ function blogSettingsApp() {
                     const data = await response.json();
                     this.matchingSettings = {
                         allow_duplicate_similar_posts: data.allow_duplicate_similar_posts ?? false,
-                        matching_threshold: data.matching_threshold ?? 65,
-                        enable_manual_matching: data.enable_manual_matching ?? false
+                        matching_threshold: data.matching_threshold ?? 65
                     };
                 }
             } catch (error) {

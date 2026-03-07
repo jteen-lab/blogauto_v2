@@ -181,9 +181,17 @@ class FlowService:
             await self.db.flush()
 
             # 초기 모듈 연결
+            valid_modules = []
             if request.module_ids:
-                module_query = select(Module).where(
-                    and_(Module.id.in_(request.module_ids), Module.user_id == user.id)
+                module_query = (
+                    select(Module)
+                    .where(
+                        and_(
+                            Module.id.in_(request.module_ids),
+                            Module.user_id == user.id,
+                        )
+                    )
+                    .options(selectinload(Module.module_type))
                 )
                 module_result = await self.db.execute(module_query)
                 valid_modules = module_result.scalars().all()
@@ -207,6 +215,16 @@ class FlowService:
                     link = FlowBlog(flow_id=flow.id, blog_id=blog.id)
                     self.db.add(link)
                 logger.info(f"[CREATE_FLOW] {len(valid_blogs)}개 블로그 연결")
+
+            # 프롬프트 모듈 블로그 자동 연결
+            if valid_modules:
+                sync_count = await self._sync_prompt_module_blogs(
+                    flow.id, user.id, valid_modules
+                )
+                if sync_count > 0:
+                    logger.info(
+                        f"[CREATE_FLOW] 프롬프트 블로그 {sync_count}개 자동 연결"
+                    )
 
             await self.db.commit()
             await self.db.refresh(flow)
@@ -257,22 +275,32 @@ class FlowService:
                 if hasattr(flow, field):
                     setattr(flow, field, value)
 
+            update_valid_modules = []
             if module_ids is not None:
                 await self.db.execute(
                     delete(FlowModule).where(FlowModule.flow_id == flow_id)
                 )
                 if module_ids:
-                    module_query = select(Module).where(
-                        and_(Module.id.in_(module_ids), Module.user_id == user.id)
+                    module_query = (
+                        select(Module)
+                        .where(
+                            and_(
+                                Module.id.in_(module_ids),
+                                Module.user_id == user.id,
+                            )
+                        )
+                        .options(selectinload(Module.module_type))
                     )
                     module_result = await self.db.execute(module_query)
-                    valid_modules = module_result.scalars().all()
-                    for idx, module in enumerate(valid_modules):
+                    update_valid_modules = module_result.scalars().all()
+                    for idx, module in enumerate(update_valid_modules):
                         link = FlowModule(
                             flow_id=flow.id, module_id=module.id, execution_order=idx
                         )
                         self.db.add(link)
-                    logger.info(f"[UPDATE_FLOW] {len(valid_modules)}개 모듈 재연결")
+                    logger.info(
+                        f"[UPDATE_FLOW] {len(update_valid_modules)}개 모듈 재연결"
+                    )
 
             if blog_ids is not None:
                 await self.db.execute(
@@ -288,6 +316,20 @@ class FlowService:
                         link = FlowBlog(flow_id=flow.id, blog_id=blog.id)
                         self.db.add(link)
                     logger.info(f"[UPDATE_FLOW] {len(valid_blogs)}개 블로그 재연결")
+
+            # 블로그 변경사항을 세션에 확정 (sync 전 필수)
+            if blog_ids is not None or module_ids is not None:
+                await self.db.flush()
+
+            # 프롬프트 모듈 블로그 자동 연결
+            if module_ids is not None and update_valid_modules:
+                sync_count = await self._sync_prompt_module_blogs(
+                    flow.id, user.id, update_valid_modules
+                )
+                if sync_count > 0:
+                    logger.info(
+                        f"[UPDATE_FLOW] 프롬프트 블로그 {sync_count}개 자동 연결"
+                    )
 
             await self.db.commit()
             await self.db.refresh(flow)
@@ -515,6 +557,20 @@ class FlowService:
                 link = FlowModule(flow_id=flow_id, module_id=module_id)
                 self.db.add(link)
 
+            # 프롬프트 모듈 블로그 자동 연결
+            prompt_modules = [
+                m for m in valid_modules
+                if m.module_type and m.module_type.code == "prompt"
+            ]
+            if prompt_modules:
+                sync_count = await self._sync_prompt_module_blogs(
+                    flow_id, user.id, prompt_modules
+                )
+                if sync_count > 0:
+                    logger.info(
+                        f"[ADD_MODULES] 프롬프트 블로그 {sync_count}개 자동 연결"
+                    )
+
             await self.db.commit()
             await self.db.refresh(flow)
 
@@ -685,3 +741,74 @@ class FlowService:
             raise HTTPException(
                 status_code=500, detail="블로그를 제거하는 중 오류가 발생했습니다"
             )
+
+    # ===========================================
+    # 프롬프트 모듈 블로그 동기화
+    # ===========================================
+
+    async def _sync_prompt_module_blogs(
+        self, flow_id: int, user_id: int, modules: List[Module]
+    ) -> int:
+        """프롬프트 모듈의 블로그를 플로우에 자동 연결
+
+        프롬프트 모듈의 settings.blogs에 정의된 블로그 ID들을
+        FlowBlog에 자동으로 추가합니다. 이미 연결된 블로그는 건너뜁니다.
+
+        Args:
+            flow_id: 플로우 ID
+            user_id: 사용자 ID
+            modules: Module 객체 리스트 (module_type이 로드된 상태)
+
+        Returns:
+            int: 추가된 블로그 수
+        """
+        # 프롬프트 모듈에서 블로그 ID 수집
+        prompt_blog_ids: set = set()
+        for module in modules:
+            if module.module_type and module.module_type.code == "prompt":
+                settings = module.settings or {}
+                blog_ids = settings.get("blogs", [])
+                if isinstance(blog_ids, list):
+                    for bid in blog_ids:
+                        if isinstance(bid, int):
+                            prompt_blog_ids.add(bid)
+                        elif isinstance(bid, dict) and isinstance(
+                            bid.get("id"), int
+                        ):
+                            prompt_blog_ids.add(bid["id"])
+
+        if not prompt_blog_ids:
+            return 0
+
+        # 이미 연결된 블로그 제외
+        existing_query = select(FlowBlog.blog_id).where(
+            FlowBlog.flow_id == flow_id
+        )
+        existing_result = await self.db.execute(existing_query)
+        existing_blog_ids = {row[0] for row in existing_result.fetchall()}
+
+        new_blog_ids = prompt_blog_ids - existing_blog_ids
+        if not new_blog_ids:
+            return 0
+
+        # 블로그 소유권 검증
+        blog_query = select(Blog.id).where(
+            and_(Blog.id.in_(new_blog_ids), Blog.user_id == user_id)
+        )
+        blog_result = await self.db.execute(blog_query)
+        valid_blog_ids = {row[0] for row in blog_result.fetchall()}
+
+        # FlowBlog 생성
+        added_count = 0
+        for blog_id in valid_blog_ids:
+            link = FlowBlog(flow_id=flow_id, blog_id=blog_id)
+            self.db.add(link)
+            added_count += 1
+
+        if added_count > 0:
+            logger.info(
+                f"[SYNC_PROMPT_BLOGS] 프롬프트 모듈 블로그 {added_count}개 "
+                f"자동 연결: flow_id={flow_id}"
+            )
+
+        return added_count

@@ -308,11 +308,11 @@
     <!-- 데스크탑: 모듈 목록 (타입별 섹션으로 구분) -->
     <!-- sortBy, sortOrder를 참조하여 반응성 보장 -->
     <div x-show="!loading && modules.length > 0" class="desktop-sections" :data-sort-key="sortBy + '-' + sortOrder">
-        <!-- 프롬프트 섹션 -->
+        <!-- 프롬프트/생성 섹션 (prompt + generate 통합) -->
         <div x-show="getModulesByType('prompt').length > 0" class="module-section" x-data="{ sectionExpanded: false }">
             <div class="section-header">
                 <span class="text-2xl">📝</span>
-                <h3 class="section-title">프롬프트 모듈</h3>
+                <h3 class="section-title">프롬프트/생성 모듈</h3>
                 <span class="section-count" x-text="getModulesByType('prompt').length"></span>
             </div>
             <div class="module-grid">
@@ -326,27 +326,6 @@
                     @click="sectionExpanded = !sectionExpanded; if(sectionExpanded) { $nextTick(() => reinitModuleSlides($el.previousElementSibling)) }"
                     class="card-expand-btn mt-2">
                 <span x-text="sectionExpanded ? '접기 ▲' : `더보기 (${getModulesByType('prompt').length - 1}개 더) ▼`"></span>
-            </button>
-        </div>
-
-        <!-- 생성 섹션 -->
-        <div x-show="getModulesByType('generate').length > 0" class="module-section" x-data="{ sectionExpanded: false }">
-            <div class="section-header">
-                <span class="text-2xl">✨</span>
-                <h3 class="section-title">생성 모듈</h3>
-                <span class="section-count" x-text="getModulesByType('generate').length"></span>
-            </div>
-            <div class="module-grid">
-                <template x-for="(module, idx) in getModulesByType('generate')" :key="module.id + '-' + sortBy + '-' + sortOrder">
-                    <div x-show="sectionExpanded || idx < 1" x-transition>
-                        {% include "modules/_card.html" %}
-                    </div>
-                </template>
-            </div>
-            <button x-show="getModulesByType('generate').length > 1"
-                    @click="sectionExpanded = !sectionExpanded; if(sectionExpanded) { $nextTick(() => reinitModuleSlides($el.previousElementSibling)) }"
-                    class="card-expand-btn mt-2">
-                <span x-text="sectionExpanded ? '접기 ▲' : `더보기 (${getModulesByType('generate').length - 1}개 더) ▼`"></span>
             </button>
         </div>
 
@@ -466,14 +445,7 @@
                         :class="activeTab === 'prompt' ? 'bg-blue-50 text-blue-700 border-blue-500' : 'bg-white text-gray-500 hover:text-gray-700'"
                         class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap"
                         x-show="getModulesByType('prompt').length > 0">
-                    프롬프트
-                </button>
-                <button type="button"
-                        @click="activeTab = 'generate'"
-                        :class="activeTab === 'generate' ? 'bg-blue-50 text-blue-700 border-blue-500' : 'bg-white text-gray-500 hover:text-gray-700'"
-                        class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap"
-                        x-show="getModulesByType('generate').length > 0">
-                    생성
+                    프롬프트/생성
                 </button>
                 <button type="button"
                         @click="activeTab = 'publish'"
@@ -518,15 +490,6 @@
                      x-effect="if (activeTab === 'prompt') $nextTick(() => reinitMobileTabSlides($el))">
                     <div class="module-grid">
                         <template x-for="module in getModulesByType('prompt')" :key="module.id + '-' + sortBy + '-' + sortOrder">
-                            {% include "modules/_card.html" %}
-                        </template>
-                    </div>
-                </div>
-
-                <div x-show="activeTab === 'generate'"
-                     x-effect="if (activeTab === 'generate') $nextTick(() => reinitMobileTabSlides($el))">
-                    <div class="module-grid">
-                        <template x-for="module in getModulesByType('generate')" :key="module.id + '-' + sortBy + '-' + sortOrder">
                             {% include "modules/_card.html" %}
                         </template>
                     </div>
@@ -608,18 +571,11 @@
     <!-- 옵션 그리드 -->
     <div class="px-6 pb-6">
       <div class="grid grid-cols-2 gap-3">
-        <button onclick="selectOption('moduleTypeSelector', 'prompt', '프롬프트')"
+        <button onclick="selectOption('moduleTypeSelector', 'prompt', '프롬프트/생성')"
                 class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all duration-200 group">
           <span class="text-3xl mb-2 group-hover:scale-110 transition-transform duration-200">📝</span>
-          <span class="font-medium text-gray-900 group-hover:text-blue-700">프롬프트</span>
-          <span class="text-xs text-gray-500 mt-1">텍스트 프롬프트 생성</span>
-        </button>
-
-        <button onclick="selectOption('moduleTypeSelector', 'generate', '생성')"
-                class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all duration-200 group">
-          <span class="text-3xl mb-2 group-hover:scale-110 transition-transform duration-200">✨</span>
-          <span class="font-medium text-gray-900 group-hover:text-blue-700">생성</span>
-          <span class="text-xs text-gray-500 mt-1">콘텐츠 자동 생성</span>
+          <span class="font-medium text-gray-900 group-hover:text-blue-700">프롬프트/생성</span>
+          <span class="text-xs text-gray-500 mt-1">AI 프롬프트 기반 글 생성</span>
         </button>
 
         <button onclick="selectOption('moduleTypeSelector', 'publish', '발행')"
@@ -711,14 +667,17 @@
   <div class="h-safe-area-inset-bottom"></div>
 </div>
 
-<!-- 스크립트 로드 순서: prompt-form.js → template-sections.js → prompt-form-template.js → generate-form-template.js → growth-profile-form.js → gp-template-sections.js → gp-template.js → form.js → list.js -->
-<script src="/static/js/modules/prompt-form.js?v=20260217"></script>
-<script src="/static/js/modules/prompt-form-template-sections.js?v=20260217"></script>
-<script src="/static/js/modules/prompt-form-template.js?v=20260217"></script>
+<!-- 스크립트 로드 순서: 상태→섹션 템플릿→테스트 상태→테스트 템플릿→메인 템플릿→form→list -->
+<script src="/static/js/modules/prompt-form.js?v=20260305"></script>
+<script src="/static/js/modules/prompt-form-template-sections.js?v=20260305"></script>
+<script src="/static/js/modules/prompt-form-template-generate.js?v=20260305"></script>
+<script src="/static/js/modules/prompt-test.js?v=20260305"></script>
+<script src="/static/js/modules/prompt-test-template.js?v=20260305"></script>
+<script src="/static/js/modules/prompt-form-template.js?v=20260305"></script>
 <script src="/static/js/modules/generate-form-template.js?v=20260209"></script>
 <script src="/static/js/modules/growth-profile-form.js?v=20260223"></script>
 <script src="/static/js/modules/growth-profile-form-template-sections.js?v=20260223"></script>
 <script src="/static/js/modules/growth-profile-form-template.js?v=20260223"></script>
-<script src="/static/js/modules/form.js?v=20260224"></script>
+<script src="/static/js/modules/form.js?v=20260305"></script>
 <script src="/static/js/modules/list.js?v=20260224"></script>
 {% endblock %}

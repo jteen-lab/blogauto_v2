@@ -82,36 +82,7 @@
         </div>
 
         <!-- 미매칭 수동 매칭 옵션 -->
-        <div class="border-t border-gray-200 pt-4">
-            <div class="flex items-center justify-between mb-3">
-                <div class="flex-1">
-                    <div class="flex items-center gap-2">
-                        <label class="text-sm font-medium text-gray-700">미매칭 수동 매칭</label>
-                        <span class="px-2 py-0.5 text-xs bg-purple-100 text-purple-700 rounded">고급</span>
-                    </div>
-                    <p class="text-xs text-gray-500 mt-1">ON: 데이터 관리에서 미매칭 제목을 수동으로 매칭할 수 있습니다</p>
-                </div>
-                <button type="button"
-                        @click="matchingSettings.enable_manual_matching = !matchingSettings.enable_manual_matching; saveMatchingSettings()"
-                        :class="matchingSettings.enable_manual_matching ? 'bg-purple-600' : 'bg-gray-300'"
-                        class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out">
-                    <span :class="matchingSettings.enable_manual_matching ? 'translate-x-5' : 'translate-x-0'"
-                          class="inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out mt-0.5 ml-0.5"></span>
-                </button>
-            </div>
-
-            <!-- 수동 매칭 안내 (조건부 표시) -->
-            <div x-show="matchingSettings.enable_manual_matching" x-transition class="pl-4 border-l-2 border-purple-300 mt-4">
-                <div class="bg-purple-50 rounded-lg p-3">
-                    <p class="text-xs text-purple-700">
-                        <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
-                        데이터 관리 페이지에서 미매칭 포스트 목록을 확인하고, 메인 타이틀과 1:1로 수동 매칭할 수 있습니다.
-                    </p>
-                </div>
-            </div>
-        </div>
+        <!-- 수동 매칭은 항상 활성화 (데이터 관리에서 미매칭 포스트 표시) -->
     </div>
 
     <!-- 매칭 작업 버튼 -->

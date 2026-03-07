@@ -172,12 +172,23 @@ function getTestReferenceSection() {
                     <div class="p-3 bg-green-50 border border-green-200 rounded-lg space-y-1 text-sm">
                         <div class="text-green-800">수집된 참조자료: <span x-text="promptTest.results.references.result?.total_collected"></span>건</div>
                         <div class="text-green-700 text-xs">소요: <span x-text="promptTest.results.references.result?.generation_time_seconds"></span>초</div>
+                        <!-- 사용된 설정 정보 -->
+                        <template x-if="promptTest.results.references.result?.settings_used">
+                            <div class="text-xs text-gray-500 flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                                <span>요약: <span x-text="promptTest.results.references.result.settings_used.summary_method || '-'"></span></span>
+                                <span>스타일: <span x-text="promptTest.results.references.result.settings_used.summary_style || '-'"></span></span>
+                                <span x-show="promptTest.results.references.result.settings_used.summary_method === 'ai'">AI: <span x-text="promptTest.results.references.result.settings_used.ai_provider || '-'"></span>/<span x-text="promptTest.results.references.result.settings_used.ai_model || '-'"></span></span>
+                                <span x-show="promptTest.results.references.result.settings_used.summary_method !== 'ai'">알고리즘: <span x-text="promptTest.results.references.result.settings_used.algorithm_type || '-'"></span></span>
+                                <span>최대: <span x-text="promptTest.results.references.result.settings_used.max_length || '-'"></span>자</span>
+                            </div>
+                        </template>
                         <details class="text-xs mt-1"><summary class="cursor-pointer text-green-600 hover:underline">요약 보기</summary>
                             <div class="mt-1 space-y-1 pl-2">
                                 <template x-for="(s, i) in (promptTest.results.references.result?.summaries || [])" :key="i">
                                     <div class="p-2 bg-white rounded border border-green-100">
                                         <div class="text-gray-500 truncate" x-text="s.source_url"></div>
-                                        <div class="text-gray-700 mt-0.5" x-text="s.summary"></div>
+                                        <div class="text-gray-700 mt-0.5 whitespace-pre-wrap max-h-40 overflow-y-auto" x-text="s.summary"></div>
+                                        <div class="text-gray-400 text-right mt-0.5" x-text="(s.summary || '').length + '자'"></div>
                                     </div>
                                 </template>
                             </div>

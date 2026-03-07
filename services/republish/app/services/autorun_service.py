@@ -160,8 +160,8 @@ class AutorunService:
                             "name": link.module.module_type.name if link.module.module_type else "재발행"
                         },
                         # 슬라이드 정보에 필요한 필드들
-                        "post_range_start": link.module.post_range_start,
-                        "post_range_end": link.module.post_range_end,
+                        "post_range_start": (link.module.settings or {}).get("post_range_start"),
+                        "post_range_end": (link.module.settings or {}).get("post_range_end"),
                         "interval_mode": link.module.interval_mode,
                         "manual_interval_minutes": link.module.manual_interval_minutes,
                         "auto_daily_count": link.module.auto_daily_count,

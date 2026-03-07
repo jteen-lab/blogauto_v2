@@ -176,14 +176,48 @@ class PipelineTester:
 
     async def test_collect_references(
         self, module_id: int, search_query: str,
+        ref_settings: Optional[dict] = None,
+        blog_id: Optional[int] = None,
     ) -> dict:
-        """Step 3: 참조자료 수집 테스트"""
+        """Step 3: 참조자료 수집 테스트
+
+        Args:
+            module_id: 모듈 ID
+            search_query: 검색어
+            ref_settings: UI에서 전달된 참조자료 설정 (선택)
+            blog_id: 블로그 ID (reference_ai 오버라이드용)
+        """
         module = await self.db.get(Module, module_id)
         settings = module.settings or {} if module else {}
-        ref_settings = settings.get("reference", {})
+        db_ref_settings = settings.get("reference", {})
+        # UI에서 전달된 설정이 있으면 사용, 없으면 DB 설정 사용
+        effective_settings = ref_settings if ref_settings else db_ref_settings
+
+        # 블로그 ai_config.reference_ai로 AI 설정 오버라이드
+        ref_ai_source = "module"
+        if blog_id:
+            blog = await self.db.get(Blog, blog_id)
+            if blog:
+                ref_ai = (blog.ai_config or {}).get("reference_ai", {})
+                if ref_ai.get("provider"):
+                    effective_settings = effective_settings.copy()
+                    effective_settings["ai_provider"] = ref_ai["provider"]
+                    if ref_ai.get("model"):
+                        effective_settings["ai_model"] = ref_ai["model"]
+                    ref_ai_source = "blog_reference_ai"
+
         start = time.time()
-        result = await self.reference_collector.collect_and_summarize(
-            search_query=search_query, module_id=module_id)
+        # 블로그 오버라이드가 적용된 경우 ref_settings로 직접 전달
+        if ref_ai_source == "blog_reference_ai" or ref_settings:
+            result = await self.reference_collector.collect_and_summarize(
+                search_query=search_query,
+                ref_settings=effective_settings,
+            )
+        else:
+            result = await self.reference_collector.collect_and_summarize(
+                search_query=search_query,
+                module_id=module_id,
+            )
         elapsed = int(time.time() - start)
         return {
             "step": "collect_references", "success": True,
@@ -191,16 +225,21 @@ class PipelineTester:
                 "search_query": search_query,
                 "total_collected": result.count,
                 "summaries": [
-                    {"source_url": s.url, "summary": s.summary[:200],
+                    {"source_url": s.url, "summary": s.summary,
                      "length": len(s.summary)} for s in result.summaries
                 ],
-                "reference_injection": result.to_prompt_injection()[:500],
+                "reference_injection": result.to_prompt_injection(),
                 "generation_time_seconds": elapsed,
                 "settings_used": {
-                    "max_search": ref_settings.get("max_search"),
-                    "crawl_target": ref_settings.get("crawl_target"),
-                    "summary_count": ref_settings.get("summary_count"),
-                    "summary_method": ref_settings.get("summary_method"),
+                    "max_search": effective_settings.get("max_search"),
+                    "crawl_target": effective_settings.get("crawl_target"),
+                    "summary_count": effective_settings.get("summary_count"),
+                    "summary_method": effective_settings.get("summary_method"),
+                    "summary_style": effective_settings.get("summary_style"),
+                    "ai_provider": effective_settings.get("ai_provider"),
+                    "ai_model": effective_settings.get("ai_model"),
+                    "ai_source": ref_ai_source,
+                    "max_length": effective_settings.get("max_length"),
                 },
             },
         }
@@ -353,7 +392,9 @@ class PipelineTester:
         )
 
         # Step 3: 참조자료 수집
-        step3 = await self.test_collect_references(module_id, working_title)
+        step3 = await self.test_collect_references(
+            module_id, working_title, blog_id=blog_id,
+        )
         steps["3_references"] = self._summarize(step3)
         ref_text = (
             step3["result"].get("reference_injection", "")
@@ -433,17 +474,14 @@ class PipelineTester:
         )
         full_prompt = prompt_template.replace(
             "{title}", title).replace("{reference_materials}", ref_injection)
-        # content_generation.enabled=false이면 module provider 무시
-        module_provider = (
-            cg.get("provider") if cg.get("enabled", False) else None
-        )
-        provider = module_provider or writing_ai.get("provider")
+        # AI 제공자: 블로그 ai_config.writing_ai 설정만 사용
+        provider = writing_ai.get("provider")
         model = writing_ai.get("model")
         temperature = cg.get("temperature", 0.7)
         max_tokens = cg.get("max_tokens", 4000)
         system_prompt = cg.get("system_prompt") or None
         settings_info = {
-            "provider_source": "module" if module_provider else "blog",
+            "provider_source": "blog.writing_ai",
             "temperature": temperature, "max_tokens": max_tokens,
             "has_system_prompt": system_prompt is not None,
             "prompt_source": self._get_prompt_source(cg, settings),

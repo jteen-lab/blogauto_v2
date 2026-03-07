@@ -72,6 +72,11 @@ class GenerationHistory(Base):
         nullable=True,
         comment="이미지 생성에 사용된 AI 모델",
     )
+    image_url: Mapped[Optional[str]] = mapped_column(
+        String(1000),
+        nullable=True,
+        comment="생성된 이미지 URL",
+    )
 
     # 통계
     reference_count: Mapped[int] = mapped_column(

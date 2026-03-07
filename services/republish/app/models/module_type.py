@@ -43,7 +43,7 @@ class ModuleType(Base):
             },
             {
                 "code": "prompt",
-                "name": "프롬프트",
+                "name": "프롬프트/생성",
                 "icon": "💭",
                 "display_order": 1
             },

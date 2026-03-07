@@ -204,6 +204,17 @@
                 📝 포함할 블로그 선택 (선택)
             </label>
 
+            <!-- 프롬프트 모듈 블로그 자동 연동 안내 -->
+            <template x-if="promptLinkedBlogIds.length > 0">
+                <div class="mb-3 px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-sm">
+                    <span class="text-green-800 font-medium">📝 프롬프트 모듈 연동</span>
+                    <span class="text-green-600 ml-1">
+                        프롬프트 모듈에 연결된 블로그
+                        <span x-text="promptLinkedBlogIds.length"></span>개가 자동 선택되었습니다
+                    </span>
+                </div>
+            </template>
+
             <div class="border border-gray-200 rounded-lg">
                 <div class="flex border-b border-gray-200">
                     <button type="button"
@@ -241,9 +252,14 @@
                                             <input type="checkbox"
                                                    :value="blog.id"
                                                    x-model="formData.selectedBlogs"
-                                                   class="w-4 h-4 text-blue-600 bg-white border-gray-300 rounded focus:ring-blue-500">
+                                                   :disabled="isPromptLinkedBlog(blog.id)"
+                                                   class="w-4 h-4 text-blue-600 bg-white border-gray-300 rounded focus:ring-blue-500"
+                                                   :class="isPromptLinkedBlog(blog.id) ? 'opacity-60' : ''">
                                             <span class="text-lg" x-text="blog.platform === 'blogger' ? '📙' : '🌐'"></span>
                                             <h4 class="font-semibold text-sm" x-text="blog.name"></h4>
+                                            <template x-if="isPromptLinkedBlog(blog.id)">
+                                                <span class="px-1.5 py-0.5 text-xs rounded bg-green-100 text-green-700 font-normal">프롬프트 연동</span>
+                                            </template>
                                         </div>
                                     </div>
                                     <div class="px-4 py-3">

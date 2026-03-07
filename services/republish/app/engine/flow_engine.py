@@ -96,7 +96,9 @@ class FlowEngine:
             if not blogs:
                 logger.info(
                     f"[FLOW_ENGINE] No matching blogs | FlowID={flow.id} | "
-                    f"ModuleName={module.name} | Range={module.post_range_start}-{module.post_range_end}"
+                    f"ModuleName={module.name} | Range="
+                    f"{(module.settings or {}).get('post_range_start')}-"
+                    f"{(module.settings or {}).get('post_range_end')}"
                 )
                 return {
                     "success": True,
@@ -230,9 +232,12 @@ class FlowEngine:
             필터링된 블로그 목록
         """
         blogs = []
+        module_settings = module.settings or {}
+        range_start = module_settings.get("post_range_start")
+        range_end = module_settings.get("post_range_end")
         has_range_condition = (
-            module.post_range_start is not None or
-            module.post_range_end is not None
+            range_start is not None or
+            range_end is not None
         )
 
         for link in flow.blog_links:
@@ -253,28 +258,28 @@ class FlowEngine:
                     post_count = blog.total_post_count
 
                 # 범위 시작 조건 (post_range_start 이상)
-                if module.post_range_start is not None:
-                    if post_count < module.post_range_start:
+                if range_start is not None:
+                    if post_count < range_start:
                         logger.debug(
                             f"[FLOW_ENGINE] Blog filtered out (below range) | "
                             f"Blog={blog.name} | PostCount={post_count} | "
-                            f"RangeStart={module.post_range_start}"
+                            f"RangeStart={range_start}"
                         )
                         continue
 
                 # 범위 끝 조건 (post_range_end 이하)
-                if module.post_range_end is not None:
-                    if post_count > module.post_range_end:
+                if range_end is not None:
+                    if post_count > range_end:
                         logger.debug(
                             f"[FLOW_ENGINE] Blog filtered out (above range) | "
                             f"Blog={blog.name} | PostCount={post_count} | "
-                            f"RangeEnd={module.post_range_end}"
+                            f"RangeEnd={range_end}"
                         )
                         continue
 
                 logger.debug(
                     f"[FLOW_ENGINE] Blog matched | Blog={blog.name} | "
-                    f"PostCount={post_count} | Range={module.post_range_start}-{module.post_range_end}"
+                    f"PostCount={post_count} | Range={range_start}-{range_end}"
                 )
 
             blogs.append(blog)

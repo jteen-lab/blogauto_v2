@@ -252,9 +252,12 @@ class TestPromptModuleWithGP:
         """T10: min_inventory=10 전달 확인"""
         ex = _executor_with_mock_inv(_inv_result(inv=15, needs=False))
         sp = _balanced_stage(0)
+        pm = _prompt_module()
         assert sp.generate.min_inventory == 10
-        await ex.execute_for_blog(_prompt_module(), _blog(1, "A", 30), stage_params=sp)
-        ex.inventory_trigger.check_inventory.assert_awaited_once_with(1, min_inventory=10)
+        await ex.execute_for_blog(pm, _blog(1, "A", 30), stage_params=sp)
+        ex.inventory_trigger.check_inventory.assert_awaited_once_with(
+            1, min_inventory=10, module_settings=pm.settings,
+        )
 
     @pytest.mark.asyncio
     async def test_generate_inventory_sufficient_skips(self):
@@ -339,15 +342,21 @@ class TestFlowGenerateExecutorGP:
     async def test_stage_params_passed_to_inventory(self):
         """T17: stage_params -> min_inventory 전달"""
         ex = _executor_with_mock_inv(_inv_result(inv=20, needs=False))
-        await ex.execute_for_blog(_prompt_module(), _blog(1, "A", 30), _balanced_stage(0))
-        ex.inventory_trigger.check_inventory.assert_awaited_once_with(1, min_inventory=10)
+        pm = _prompt_module()
+        await ex.execute_for_blog(pm, _blog(1, "A", 30), _balanced_stage(0))
+        ex.inventory_trigger.check_inventory.assert_awaited_once_with(
+            1, min_inventory=10, module_settings=pm.settings,
+        )
 
     @pytest.mark.asyncio
     async def test_stage_params_none_uses_default(self):
         """T18: stage_params=None -> min_inventory=None"""
         ex = _executor_with_mock_inv(_inv_result(inv=5, thr=3, stage="default", needs=False))
-        await ex.execute_for_blog(_prompt_module(), _blog(1, "A", 30), stage_params=None)
-        ex.inventory_trigger.check_inventory.assert_awaited_once_with(1, min_inventory=None)
+        pm = _prompt_module()
+        await ex.execute_for_blog(pm, _blog(1, "A", 30), stage_params=None)
+        ex.inventory_trigger.check_inventory.assert_awaited_once_with(
+            1, min_inventory=None, module_settings=pm.settings,
+        )
 
     @pytest.mark.asyncio
     async def test_execute_for_blogs_with_stage_map(self):
@@ -436,8 +445,11 @@ class TestEdgeCases:
         assert ctx.get_stage_for_blog(999) is None
 
         ex = _executor_with_mock_inv(_inv_result(blog_id=999, inv=5, thr=3, stage="default"))
-        await ex.execute_for_blog(_prompt_module(), _blog(999, "X", 100), stage_params=None)
-        ex.inventory_trigger.check_inventory.assert_awaited_once_with(999, min_inventory=None)
+        pm = _prompt_module()
+        await ex.execute_for_blog(pm, _blog(999, "X", 100), stage_params=None)
+        ex.inventory_trigger.check_inventory.assert_awaited_once_with(
+            999, min_inventory=None, module_settings=pm.settings,
+        )
 
     def test_gp_with_single_stage_all_blogs_same(self):
         """T25: 단일 구간 -> 모든 블로그 동일 stage"""

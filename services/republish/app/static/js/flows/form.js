@@ -124,6 +124,9 @@ function flowFormData() {
             type: 'info' // success, error, info
         },
 
+        // 프롬프트 모듈 블로그 연동
+        promptLinkedBlogIds: [],
+
         // GP(Growth Profile) 관련 상태
         flowHasGP: false,
         gpModuleName: '',
@@ -133,6 +136,12 @@ function flowFormData() {
         async init() {
             this.resetForm();
             await Promise.all([this.loadModules(), this.loadBlogs()]);
+
+            // 모듈 선택 변경 감시 → 프롬프트 블로그 자동 동기화
+            this.$watch('formData.selectedModules', () => {
+                this.syncPromptModuleBlogs();
+            });
+
             console.log('플로우 폼 초기화 완료');
         },
 
@@ -149,6 +158,7 @@ function flowFormData() {
             this.message = { text: '', type: 'info' };
             this.activeModuleTab = 'prompt';
             this.activeBlogTab = 'wordpress';
+            this.promptLinkedBlogIds = [];
             if (this.resetGPState) this.resetGPState();
         },
 
@@ -426,6 +436,9 @@ function flowFormData() {
 
                 this.isEditMode = true;
 
+                // 프롬프트 모듈 블로그 동기화
+                this.syncPromptModuleBlogs();
+
                 // GP 모듈 감지 및 프리뷰 로드
                 this.detectGPModule(flow);
 
@@ -433,6 +446,64 @@ function flowFormData() {
                 this.showError('플로우 데이터를 불러올 수 없습니다');
                 console.error('플로우 데이터 로드 오류:', error);
             }
+        },
+
+        // 프롬프트 모듈 블로그 자동 동기화
+        syncPromptModuleBlogs() {
+            const selectedPromptModules = this.modules.filter(m =>
+                m.module_type?.code === 'prompt' &&
+                this.formData.selectedModules.includes(m.id)
+            );
+
+            // 프롬프트 모듈들의 블로그 ID 수집
+            const newLinkedIds = new Set();
+            for (const mod of selectedPromptModules) {
+                const blogIds = mod.settings?.blogs || [];
+                blogIds.forEach(item => {
+                    const id = typeof item === 'number' ? item : item?.id;
+                    if (typeof id === 'number') newLinkedIds.add(id);
+                });
+            }
+
+            const prevLinkedIds = new Set(this.promptLinkedBlogIds);
+            const newLinkedArray = [...newLinkedIds];
+
+            // 이전에 자동 추가된 블로그 중 더이상 연동 대상이 아닌 것 제거
+            for (const blogId of prevLinkedIds) {
+                if (!newLinkedIds.has(blogId)) {
+                    const idx = this.formData.selectedBlogs.indexOf(blogId);
+                    if (idx !== -1) {
+                        this.formData.selectedBlogs.splice(idx, 1);
+                    }
+                }
+            }
+
+            // 새로 연동된 블로그 추가
+            for (const blogId of newLinkedIds) {
+                if (!this.formData.selectedBlogs.includes(blogId)) {
+                    this.formData.selectedBlogs.push(blogId);
+                }
+            }
+
+            this.promptLinkedBlogIds = newLinkedArray;
+
+            // 프롬프트 연동 블로그가 있으면 안내
+            if (newLinkedArray.length > 0) {
+                console.log('[syncPromptModuleBlogs] 프롬프트 연동 블로그:', newLinkedArray.length, '개');
+            }
+        },
+
+        // 프롬프트 연동 블로그 여부 확인
+        isPromptLinkedBlog(blogId) {
+            return this.promptLinkedBlogIds.includes(blogId);
+        },
+
+        // 선택된 프롬프트 모듈 존재 여부
+        hasSelectedPromptModule() {
+            return this.modules.some(m =>
+                m.module_type?.code === 'prompt' &&
+                this.formData.selectedModules.includes(m.id)
+            );
         },
 
         // 폼 유효성 검사 (버튼 활성화용 - alert 없음)

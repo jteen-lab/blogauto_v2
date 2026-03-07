@@ -34,8 +34,8 @@ class TestReferenceSummaryServiceInit:
         service = ReferenceSummaryService(mock_db, user_id=1)
 
         assert service.db == mock_db
-        assert service.SELECT_COUNT == 3
-        assert service.MAX_SUMMARY_LENGTH == 500
+        assert service.select_count == 3
+        assert service.max_length == 500
 
 
 class TestSelectRandomDocuments:
@@ -175,8 +175,8 @@ class TestSummarizeSingle:
             assert summary.is_ai_summary is False
             # 원본 앞부분이 포함되어 있는지 확인
             assert "원본 내용" in summary.summary
-            # MAX_SUMMARY_LENGTH 이하인지 확인
-            assert len(summary.summary) <= service.MAX_SUMMARY_LENGTH + 3  # "..." 포함
+            # max_length 이하인지 확인
+            assert len(summary.summary) <= service.max_length + 3  # "..." 포함
 
     @pytest.mark.asyncio
     async def test_truncates_long_content_for_ai(self):
@@ -198,8 +198,9 @@ class TestSummarizeSingle:
             await service._summarize_single(doc)
 
             # _call_ai_summary에 전달된 콘텐츠 길이 확인
+            from app.services.reference_summary_service import MAX_INPUT_LENGTH
             call_args = mock_ai.call_args[0][0]
-            assert len(call_args) <= service.MAX_INPUT_LENGTH
+            assert len(call_args) <= MAX_INPUT_LENGTH
 
 
 class TestCallAiSummary:
@@ -419,5 +420,5 @@ class TestSummaryOutputFormat:
 
             summary = await service._summarize_single(doc)
 
-            # MAX_SUMMARY_LENGTH 이하로 제한
-            assert len(summary.summary) <= service.MAX_SUMMARY_LENGTH
+            # max_length 이하로 제한
+            assert len(summary.summary) <= service.max_length

@@ -154,8 +154,13 @@ function moduleListApp() {
         },
 
         // 타입별 모듈 목록 반환 (정렬 적용)
+        // prompt 요청 시 generate 타입도 함께 반환 (통합 섹션)
         getModulesByType(typeCode) {
-            const filtered = this.modules.filter(module => module.module_type.code === typeCode);
+            const filtered = this.modules.filter(module => {
+                const code = module.module_type.code;
+                if (typeCode === 'prompt') return code === 'prompt' || code === 'generate';
+                return code === typeCode;
+            });
             return this.getSortedModules(filtered);
         },
 
@@ -166,7 +171,7 @@ function moduleListApp() {
 
         // 동적 섹션 레이아웃 적용
         applyDynamicLayout() {
-            const moduleTypes = ['prompt', 'generate', 'publish', 'republish', 'collect', 'data', 'growth_profile'];
+            const moduleTypes = ['prompt', 'publish', 'republish', 'collect', 'data', 'growth_profile'];
             const visibleSections = moduleTypes.filter(type => this.getModulesByType(type).length > 0);
             const sectionCount = visibleSections.length;
 
@@ -1611,13 +1616,39 @@ function moduleListApp() {
             if (!confirm(`'${module.name}' 모듈을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) return;
 
             try {
-                const response = await fetch(`/api/v1/modules/${moduleId}`, {
+                // 1차 삭제 시도 (force=false)
+                let response = await fetch(`/api/v1/modules/${moduleId}`, {
                     method: 'DELETE',
                     credentials: 'include'
                 });
 
-                if (!response.ok) {
-                    throw new Error('모듈 삭제 실패');
+                // 플로우에서 사용 중인 경우 (409 Conflict)
+                if (response.status === 409) {
+                    const errorData = await response.json().catch(() => ({}));
+                    const detailObj = errorData.detail || {};
+                    const message = typeof detailObj === 'string' ? detailObj
+                        : (detailObj.message || '플로우에서 사용 중인 모듈입니다');
+                    const flowNames = (detailObj.flows || []).map(f => f.name).join(', ');
+                    const displayMsg = flowNames
+                        ? `${message}\n사용 중인 플로우: ${flowNames}`
+                        : message;
+
+                    // 강제 삭제 확인
+                    if (confirm(`${displayMsg}\n\n플로우에서 모듈을 제거하고 삭제하시겠습니까?`)) {
+                        response = await fetch(`/api/v1/modules/${moduleId}?force=true`, {
+                            method: 'DELETE',
+                            credentials: 'include'
+                        });
+                        if (!response.ok) {
+                            const err2 = await response.json().catch(() => ({}));
+                            throw new Error(err2.detail || '강제 삭제 실패');
+                        }
+                    } else {
+                        return; // 사용자가 취소
+                    }
+                } else if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.detail || '모듈 삭제 실패');
                 }
 
                 this.showSuccess('모듈이 삭제되었습니다');
@@ -1648,7 +1679,7 @@ function moduleListApp() {
                 }
 
             } catch (error) {
-                this.showError('모듈 삭제 중 오류가 발생했습니다');
+                this.showError(error.message || '모듈 삭제 중 오류가 발생했습니다');
                 console.error('모듈 삭제 오류:', error);
             }
         },

@@ -50,6 +50,13 @@ class CollectReferencesRequest(BaseModel):
     """참조자료 수집 테스트 요청"""
     module_id: int = Field(..., description="프롬프트 모듈 ID")
     search_query: str = Field(..., description="검색어")
+    blog_id: Optional[int] = Field(
+        None, description="블로그 ID (reference_ai 오버라이드용)",
+    )
+    # UI에서 직접 전달하는 참조 설정 (None이면 DB 설정 사용)
+    ref_settings: Optional[dict] = Field(
+        None, description="UI에서 전달된 참조자료 설정 (None이면 DB 설정 사용)",
+    )
 
 
 class GenerateContentRequest(BaseModel):
@@ -151,6 +158,8 @@ async def test_collect_references(
     return await tester.test_collect_references(
         module_id=req.module_id,
         search_query=req.search_query,
+        ref_settings=req.ref_settings,
+        blog_id=req.blog_id,
     )
 
 

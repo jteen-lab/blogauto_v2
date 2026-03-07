@@ -2,7 +2,7 @@
 InventoryTrigger 재고 확인 로직 통합 테스트
 
 블로그의 CrawledPost 재고 수준을 확인하고,
-모듈 설정 또는 BlogGrowthSetting 임계값과 비교하여
+GP(min_inventory) 또는 기본 임계값과 비교하여
 생성 필요 여부를 판단하는 로직을 검증합니다.
 
 테스트 대상: app/services/generation/inventory_trigger.py
@@ -35,7 +35,6 @@ def build_execute_side_effect(responses: list):
     Args:
         responses: 각 호출에 대한 (method, value) 튜플 리스트
             - ("scalar", value): result.scalar() 반환
-            - ("scalar_one_or_none", value): result.scalar_one_or_none() 반환
             - ("scalars_all", value): result.scalars().all() 반환
     """
     call_count = [0]
@@ -47,7 +46,6 @@ def build_execute_side_effect(responses: list):
         if idx >= len(responses):
             result = MagicMock()
             result.scalar = MagicMock(return_value=None)
-            result.scalar_one_or_none = MagicMock(return_value=None)
             scalars_mock = MagicMock()
             scalars_mock.all = MagicMock(return_value=[])
             result.scalars = MagicMock(return_value=scalars_mock)
@@ -58,8 +56,6 @@ def build_execute_side_effect(responses: list):
 
         if method == "scalar":
             result.scalar = MagicMock(return_value=value)
-        elif method == "scalar_one_or_none":
-            result.scalar_one_or_none = MagicMock(return_value=value)
         elif method == "scalars_all":
             scalars_mock = MagicMock()
             scalars_mock.all = MagicMock(return_value=value)
@@ -78,30 +74,29 @@ class TestInventoryCheck:
     """InventoryTrigger.check_inventory() 통합 테스트"""
 
     @pytest.mark.asyncio
-    async def test_rapid_growth_needs_generation(
-        self, mock_db, sample_blog, sample_title,
+    async def test_gp_managed_needs_generation(
+        self, mock_db, sample_title,
     ):
-        """급성장기 블로그에서 재고 0일 때 생성이 필요하다고 판단"""
-        # 모듈 설정: inventory 포함
+        """GP가 min_inventory=10 제공 시 재고 0이면 생성 필요"""
         settings = create_module_settings_all_enabled()
 
-        # db.execute 호출 순서:
+        # db.execute 호출 순서 (module_settings에 categories 없음):
         # 1) _get_inventory_count → scalar=0
-        # 2) _get_threshold → Blog 조회 (post_count=10, rapid_growth)
-        # 3) _find_available_title 1차 → 매칭 제목 있음
+        # 2) _get_blog_category_filter_ids → BlogCategory 없음
+        # 3) _query_title_with_filters(matched_only=True) → 매칭 제목 있음
         mock_db.execute = AsyncMock(side_effect=build_execute_side_effect([
             ("scalar", 0),
-            ("scalar_one_or_none", sample_blog),
-            ("scalar_one_or_none", sample_title),
+            ("scalars_all", []),            # BlogCategory 없음
+            ("scalars_all", [sample_title]),  # 1차 매칭 제목
         ]))
 
         trigger = InventoryTrigger(mock_db)
         result = await trigger.check_inventory(
-            blog_id=1, module_settings=settings,
+            blog_id=1, min_inventory=10, module_settings=settings,
         )
 
         assert result.needs_generation is True
-        assert result.growth_stage == "rapid_growth"
+        assert result.growth_stage == "gp_managed"
         assert result.threshold == 10
         assert result.current_inventory == 0
         assert result.available_title_id == sample_title.id
@@ -109,19 +104,16 @@ class TestInventoryCheck:
     @pytest.mark.asyncio
     async def test_sufficient_inventory_skips(self, mock_db):
         """재고가 충분하면 생성을 건너뛴다"""
-        blog = create_mock_blog(blog_id=1, total_post_count=10)
         settings = create_module_settings_all_enabled()
 
-        # 재고 5 >= 임계값(rapid_growth_inventory=10)은 아님
-        # 재고 10 >= 10이면 건너뜀
+        # 재고 10 >= min_inventory 10 → 건너뜀 (제목 조회 없음)
         mock_db.execute = AsyncMock(side_effect=build_execute_side_effect([
-            ("scalar", 10),           # 재고 10개
-            ("scalar_one_or_none", blog),  # Blog (급성장기: threshold=10)
+            ("scalar", 10),  # 재고 10개 (충분)
         ]))
 
         trigger = InventoryTrigger(mock_db)
         result = await trigger.check_inventory(
-            blog_id=1, module_settings=settings,
+            blog_id=1, min_inventory=10, module_settings=settings,
         )
 
         assert result.needs_generation is False
@@ -130,86 +122,70 @@ class TestInventoryCheck:
         assert result.available_title_id is None
 
     @pytest.mark.asyncio
-    async def test_growth_stage_threshold_5(self, mock_db):
-        """성장기 블로그(80글)는 임계값 5, 단계 growth"""
-        blog = create_mock_blog(blog_id=2, total_post_count=80)
+    async def test_gp_custom_threshold(self, mock_db):
+        """GP가 min_inventory=5를 제공하면 해당 값이 임계값으로 사용"""
         title = create_mock_main_title(title_id=5, title="성장기 제목")
         settings = create_module_settings_all_enabled()
 
-        # post_count=80 > rapid_growth_threshold(50), <= growth_threshold(150)
         mock_db.execute = AsyncMock(side_effect=build_execute_side_effect([
             ("scalar", 0),
-            ("scalar_one_or_none", blog),
-            ("scalar_one_or_none", title),
+            ("scalars_all", []),       # BlogCategory 없음
+            ("scalars_all", [title]),  # 1차 매칭 제목
         ]))
 
         trigger = InventoryTrigger(mock_db)
         result = await trigger.check_inventory(
-            blog_id=2, module_settings=settings,
+            blog_id=2, min_inventory=5, module_settings=settings,
         )
 
         assert result.threshold == 5
-        assert result.growth_stage == "growth"
+        assert result.growth_stage == "gp_managed"
         assert result.needs_generation is True
 
     @pytest.mark.asyncio
-    async def test_module_settings_override(self, mock_db):
-        """모듈 inventory 설정이 BlogGrowthSetting보다 우선 적용된다"""
-        # BlogGrowthSetting이 있는 블로그
-        growth_setting = create_mock_growth_setting(
-            rapid_growth_inventory=20,
-        )
-        blog = create_mock_blog(
-            blog_id=1, total_post_count=10,
-            growth_setting=growth_setting,
-        )
+    async def test_module_categories_filter(self, mock_db):
+        """module_settings.categories가 있으면 BlogCategory 조회 없이 필터링"""
         title = create_mock_main_title(title_id=1)
-
-        # 모듈 설정의 rapid_growth_inventory=10이 우선
         settings = create_module_settings_all_enabled()
+        settings["categories"] = [
+            {"topic_id": 1, "subtopic_id": 3},
+            {"topic_id": 2},
+        ]
 
+        # categories가 있으므로 BlogCategory 조회 스킵
+        # db.execute 호출 순서:
+        # 1) _get_inventory_count → scalar=0
+        # 2) _query_title_with_filters(matched_only=True) → 매칭 제목
         mock_db.execute = AsyncMock(side_effect=build_execute_side_effect([
             ("scalar", 0),
-            ("scalar_one_or_none", blog),
-            ("scalar_one_or_none", title),
+            ("scalars_all", [title]),  # 1차 매칭+카테고리 제목
+        ]))
+
+        trigger = InventoryTrigger(mock_db)
+        result = await trigger.check_inventory(
+            blog_id=1, min_inventory=10, module_settings=settings,
+        )
+
+        assert result.threshold == 10
+        assert result.growth_stage == "gp_managed"
+        assert result.available_title_id == title.id
+
+    @pytest.mark.asyncio
+    async def test_no_min_inventory_uses_default(self, mock_db):
+        """min_inventory 미전달 시 DEFAULT_INVENTORY_THRESHOLD(3) 사용"""
+        title = create_mock_main_title(title_id=1)
+        settings = {"generation_prompt": "제목: {title}\n글 작성"}
+
+        # min_inventory 미전달, categories도 없음
+        mock_db.execute = AsyncMock(side_effect=build_execute_side_effect([
+            ("scalar", 0),
+            ("scalars_all", []),       # BlogCategory 없음
+            ("scalars_all", [title]),  # 1차 매칭 제목
         ]))
 
         trigger = InventoryTrigger(mock_db)
         result = await trigger.check_inventory(
             blog_id=1, module_settings=settings,
-        )
-
-        # BlogGrowthSetting의 20이 아닌 모듈 설정의 10이 적용
-        assert result.threshold == 10
-        assert result.growth_stage == "rapid_growth"
-
-    @pytest.mark.asyncio
-    async def test_no_growth_setting_default(self, mock_db):
-        """BlogGrowthSetting이 없으면 기본값 3을 사용한다"""
-        blog = create_mock_blog(
-            blog_id=1, total_post_count=10,
-            growth_setting=None,
-        )
-        title = create_mock_main_title(title_id=1)
-
-        # module_settings에 inventory 없음 -> BlogGrowthSetting 폴백
-        settings_no_inventory = {
-            "generation_prompt": "제목: {title}\n글 작성",
-        }
-
-        # db.execute 호출 순서 (inventory 없는 경우):
-        # 1) _get_inventory_count → scalar=0
-        # 2) _get_threshold → Blog+selectinload 조회 (growth_setting=None)
-        # 3) _find_available_title 1차 → 매칭 제목 있음
-        mock_db.execute = AsyncMock(side_effect=build_execute_side_effect([
-            ("scalar", 0),
-            ("scalar_one_or_none", blog),
-            ("scalar_one_or_none", title),
-        ]))
-
-        trigger = InventoryTrigger(mock_db)
-        result = await trigger.check_inventory(
-            blog_id=1, module_settings=settings_no_inventory,
         )
 
         assert result.threshold == DEFAULT_INVENTORY_THRESHOLD
@@ -217,21 +193,23 @@ class TestInventoryCheck:
         assert result.needs_generation is True
 
     @pytest.mark.asyncio
-    async def test_no_available_title_skips(self, mock_db, sample_blog):
+    async def test_no_available_title_skips(self, mock_db):
         """재고 부족이지만 사용 가능한 제목이 없으면 생성을 건너뛴다"""
         settings = create_module_settings_all_enabled()
 
-        # _find_available_title에서 1차, 2차 모두 None
+        # BlogCategory 없음 → 카테고리 미설정 → 3회 title 조회 모두 빈 결과
+        # 1차: matched_only=True, 2차: matched_only=False, 3차: 전체 폴백
         mock_db.execute = AsyncMock(side_effect=build_execute_side_effect([
             ("scalar", 0),
-            ("scalar_one_or_none", sample_blog),
-            ("scalar_one_or_none", None),  # 1차 매칭 제목 없음
-            ("scalar_one_or_none", None),  # 2차 폴백도 없음
+            ("scalars_all", []),  # BlogCategory 없음
+            ("scalars_all", []),  # 1차 매칭: 없음
+            ("scalars_all", []),  # 2차 폴백: 없음
+            ("scalars_all", []),  # 3차 전체 폴백: 없음
         ]))
 
         trigger = InventoryTrigger(mock_db)
         result = await trigger.check_inventory(
-            blog_id=1, module_settings=settings,
+            blog_id=1, min_inventory=10, module_settings=settings,
         )
 
         assert result.needs_generation is False
@@ -239,8 +217,8 @@ class TestInventoryCheck:
         assert result.available_title_text is None
 
     @pytest.mark.asyncio
-    async def test_matched_title_priority(self, mock_db, sample_blog):
-        """매칭된 제목이 폴백 제목보다 우선 선택된다"""
+    async def test_matched_title_priority(self, mock_db):
+        """매칭된 제목이 1차에서 바로 선택된다"""
         settings = create_module_settings_all_enabled()
         matched = create_mock_main_title(
             title_id=10,
@@ -251,26 +229,29 @@ class TestInventoryCheck:
         # 1차 매칭에서 바로 찾으므로 2차 폴백 호출 없음
         mock_db.execute = AsyncMock(side_effect=build_execute_side_effect([
             ("scalar", 0),
-            ("scalar_one_or_none", sample_blog),
-            ("scalar_one_or_none", matched),
+            ("scalars_all", []),         # BlogCategory 없음
+            ("scalars_all", [matched]),  # 1차 매칭: 있음
         ]))
 
         trigger = InventoryTrigger(mock_db)
         result = await trigger.check_inventory(
-            blog_id=1, module_settings=settings,
+            blog_id=1, min_inventory=10, module_settings=settings,
         )
 
         assert result.available_title_id == matched.id
         assert result.available_title_text == "매칭된 제목"
 
     @pytest.mark.asyncio
-    async def test_blog_not_found(self, mock_db):
-        """블로그를 찾을 수 없으면 기본 임계값과 unknown 단계를 반환"""
+    async def test_default_threshold_no_title(self, mock_db):
+        """min_inventory 없고 제목도 없으면 기본 임계값 + 생성 불가"""
         settings = create_module_settings_all_enabled()
 
         mock_db.execute = AsyncMock(side_effect=build_execute_side_effect([
             ("scalar", 0),
-            ("scalar_one_or_none", None),  # Blog 없음
+            ("scalars_all", []),  # BlogCategory 없음
+            ("scalars_all", []),  # 1차 매칭: 없음
+            ("scalars_all", []),  # 2차 폴백: 없음
+            ("scalars_all", []),  # 3차 전체 폴백: 없음
         ]))
 
         trigger = InventoryTrigger(mock_db)
@@ -279,11 +260,8 @@ class TestInventoryCheck:
         )
 
         assert result.threshold == DEFAULT_INVENTORY_THRESHOLD
-        assert result.growth_stage == "unknown"
-        # 재고 0 < 3 이므로 생성 필요하지만 제목 없어서 False
-        # blog_not_found 시 _get_threshold에서 바로 return하므로
-        # needs_generation = (0 < 3) = True -> _find_available_title 호출
-        # 하지만 execute 응답이 더 없으므로 None -> False로 다운그레이드
+        assert result.growth_stage == "default"
+        # 재고 0 < 3이므로 생성 필요하지만 제목 없어서 False로 다운그레이드
         assert result.needs_generation is False
 
 
@@ -307,12 +285,15 @@ class TestFindAvailableTitles:
             title_id=3, title="폴백 제목", matched_blog_ids=None,
         )
 
-        # find_available_titles(blog_id=1, limit=5):
-        # 1차 조회: 매칭된 제목 2개 (limit=5이므로 부족 -> 폴백 조회)
-        # 2차 조회: 폴백 제목 1개
+        # find_available_titles(blog_id=1, limit=5, module_settings=None):
+        # module_settings 없음 -> _get_blog_category_filter_ids() 호출
+        # 1) BlogCategory 조회 -> 빈 결과 (카테고리 미설정)
+        # 2) _query_titles_list(매칭) -> 매칭 2개 (부족 -> 보충 조회)
+        # 3) _query_titles_list(보충) -> 폴백 1개
         mock_db.execute = AsyncMock(side_effect=build_execute_side_effect([
-            ("scalars_all", [matched_1, matched_2]),
-            ("scalars_all", [fallback]),
+            ("scalars_all", []),                    # BlogCategory 조회 (없음)
+            ("scalars_all", [matched_1, matched_2]),  # 1차 매칭 제목
+            ("scalars_all", [fallback]),               # 2차 보충 제목
         ]))
 
         trigger = InventoryTrigger(mock_db)

@@ -75,7 +75,8 @@ class TestExecuteForBlog:
         assert result["reference_count"] == 3
         assert "post_title" in result
         mock_gen_instance.generate.assert_awaited_once_with(
-            blog_id=1, prompt_module_id=1, source_title_id=1
+            blog_id=1, prompt_module_id=1, source_title_id=1,
+            text_replace_enabled=True,
         )
 
     @pytest.mark.asyncio

@@ -105,37 +105,8 @@ function getPromptImageSection() {
                                 </div>
 
                                 <div x-show="promptModule.imageGeneration.enabled" x-transition class="space-y-4 p-4 bg-green-50 rounded-lg">
-                                    <!-- 이미지 AI 선택 -->
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-2">이미지 생성 AI</label>
-                                        <div class="grid grid-cols-2 gap-3">
-                                            <!-- DALL-E -->
-                                            <label class="flex items-center p-3 border-2 rounded-lg cursor-pointer transition-colors"
-                                                   :class="promptModule.imageGeneration.provider === 'dalle'
-                                                           ? 'bg-green-100 border-green-400' : 'bg-white border-gray-200 hover:border-gray-300'">
-                                                <input type="radio" value="dalle"
-                                                       x-model="promptModule.imageGeneration.provider"
-                                                       class="w-4 h-4 text-green-600 focus:ring-green-500">
-                                                <div class="ml-3">
-                                                    <span class="font-medium">🎨 DALL-E 3</span>
-                                                    <p class="text-xs text-gray-500">OpenAI 이미지 생성</p>
-                                                </div>
-                                            </label>
-
-                                            <!-- Nano Banana -->
-                                            <label class="flex items-center p-3 border-2 rounded-lg cursor-pointer transition-colors"
-                                                   :class="promptModule.imageGeneration.provider === 'nanobanana'
-                                                           ? 'bg-green-100 border-green-400' : 'bg-white border-gray-200 hover:border-gray-300'">
-                                                <input type="radio" value="nanobanana"
-                                                       x-model="promptModule.imageGeneration.provider"
-                                                       class="w-4 h-4 text-green-600 focus:ring-green-500">
-                                                <div class="ml-3">
-                                                    <span class="font-medium">🍌 Nano Banana</span>
-                                                    <p class="text-xs text-gray-500">빠른 이미지 생성</p>
-                                                </div>
-                                            </label>
-                                        </div>
-                                    </div>
+                                    <!-- 이미지 AI 안내 -->
+                                    <p class="text-xs text-gray-400">이미지 생성 AI 서비스 및 모델은 블로그 설정 > AI 탭에서 설정합니다.</p>
 
                                     <!-- DALL-E 설정 -->
                                     <div x-show="promptModule.imageGeneration.provider === 'dalle'" x-transition class="space-y-4">

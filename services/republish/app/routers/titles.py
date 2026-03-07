@@ -5,16 +5,19 @@ Features:
 - MainTitle CRUD
 - 페이지네이션, 검색, 필터링
 """
-from typing import Optional, List
+from typing import Optional, List, TYPE_CHECKING
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, or_
+
+if TYPE_CHECKING:
+    from sqlalchemy.sql.elements import ColumnElement
 
 from ..core.database import get_db_session
 from ..core.logger import get_logger
 from ..models.title import MainTitle, TitleGroup
 from ..models.keyword import KeywordCategory
-from ..models.category import Topic, SubTopic
+from ..models.category import Topic, SubTopic, BlogCategory
 from ..models.user import User
 from ..routers.auth import get_current_user
 from ..schemas.title import (
@@ -28,6 +31,63 @@ from ..schemas.title import (
 
 router = APIRouter(prefix="/titles", tags=["titles"])
 logger = get_logger("titles", "app.log")
+
+
+async def _build_blog_category_filter(
+    blog_id: int,
+    db: AsyncSession,
+) -> Optional["ColumnElement"]:
+    """
+    블로그 카테고리 기반 MainTitle 필터 조건을 생성합니다.
+
+    BlogCategory에서 해당 blog_id의 활성 카테고리를 조회한 뒤,
+    subtopic_id가 있으면 subtopic 기준, topic_id만 있으면 topic 기준으로
+    MainTitle을 필터링하는 OR 조건을 반환합니다.
+
+    Args:
+        blog_id: 블로그 ID
+        db: 비동기 DB 세션
+
+    Returns:
+        SQLAlchemy WHERE 조건 또는 None (카테고리가 없는 경우)
+    """
+    # 해당 블로그의 활성 카테고리 조회
+    bc_query = select(BlogCategory).where(
+        BlogCategory.blog_id == blog_id,
+        BlogCategory.is_active == True,
+    )
+    bc_result = await db.execute(bc_query)
+    blog_categories = bc_result.scalars().all()
+
+    if not blog_categories:
+        logger.debug(f"[TITLE_FILTER] blog_id={blog_id}: 활성 카테고리 없음, 필터 미적용")
+        return None
+
+    # subtopic_id / topic_id 분리 수집
+    subtopic_ids: set[int] = set()
+    topic_only_ids: set[int] = set()
+
+    for bc in blog_categories:
+        if bc.subtopic_id:
+            subtopic_ids.add(bc.subtopic_id)
+        elif bc.topic_id:
+            topic_only_ids.add(bc.topic_id)
+
+    # OR 조건 구성
+    conditions: list = []
+    if subtopic_ids:
+        conditions.append(MainTitle.subtopic_id.in_(list(subtopic_ids)))
+    if topic_only_ids:
+        conditions.append(MainTitle.topic_id.in_(list(topic_only_ids)))
+
+    if not conditions:
+        return None
+
+    logger.debug(
+        f"[TITLE_FILTER] blog_id={blog_id}: "
+        f"subtopic_ids={subtopic_ids}, topic_only_ids={topic_only_ids}"
+    )
+    return or_(*conditions)
 
 
 @router.get("", response_model=MainTitleListResponse)
@@ -61,7 +121,6 @@ async def list_main_titles(
     - blog_id: 블로그 ID (매칭 필터링에 사용)
     - matching_filter: 매칭 필터 (all: 전체, matched: 매칭됨, unmatched: 독립포스트)
     """
-    from sqlalchemy import or_
     from ..models.crawled_post import CrawledPost
 
     query = select(MainTitle)
@@ -96,6 +155,12 @@ async def list_main_titles(
                 ~MainTitle.group_id.in_(select(TitleGroup.id).where(TitleGroup.member_count >= 2))
             )
         )
+
+    # 블로그 카테고리 기반 필터링: blog_id가 있으면 해당 블로그 카테고리의 제목만 표시
+    if blog_id:
+        category_filter = await _build_blog_category_filter(blog_id, db)
+        if category_filter is not None:
+            query = query.where(category_filter)
 
     # Phase 2-2: 블로그-제목 매칭 필터
     if blog_id and matching_filter and matching_filter != "all":

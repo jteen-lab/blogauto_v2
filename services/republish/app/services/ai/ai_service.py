@@ -32,6 +32,7 @@ class AIService:
         model: Optional[str] = None,
         max_tokens: int = 4000,
         temperature: float = 0.7,
+        system_prompt: Optional[str] = None,
     ) -> Optional[dict]:
         """
         텍스트 생성 (제목 재조합, 글 생성 등)
@@ -42,21 +43,36 @@ class AIService:
             model: 모델명 (None이면 기본값)
             max_tokens: 최대 토큰 수
             temperature: 생성 온도
+            system_prompt: 시스템 프롬프트 (있으면 AI에 전달)
 
         Returns:
             dict: {"content": str, "model": str, "provider": str}
             또는 None (실패 시)
         """
+        logger.info(
+            f"[AI_SERVICE] generate 호출 | provider={provider} | "
+            f"model={model} | max_tokens={max_tokens}"
+        )
         providers = self._get_provider_order(provider)
 
         for prov in providers:
             result = await self._try_provider(
-                prov, prompt, model, max_tokens, temperature
+                prov, prompt, model, max_tokens, temperature,
+                system_prompt,
             )
             if result:
                 return result
 
-        logger.error("[AI_SERVICE] 모든 AI 제공자 호출 실패")
+        if not providers:
+            logger.error(
+                f"[AI_SERVICE] AI 제공자가 지정되지 않아 생성 불가 "
+                f"(입력 provider={provider!r})"
+            )
+        else:
+            logger.error(
+                f"[AI_SERVICE] 선택된 제공자 {[p.value for p in providers]} "
+                f"호출 실패 - API 키 상태 확인 필요"
+            )
         return None
 
     async def summarize(
@@ -91,21 +107,29 @@ class AIService:
         return result["content"] if result else None
 
     def _get_provider_order(self, preferred: Optional[str]) -> list:
-        """제공자 우선순위 결정"""
-        all_providers = [AIProvider.OPENAI, AIProvider.ANTHROPIC, AIProvider.GOOGLE]
-        if not preferred:
-            return all_providers
+        """
+        사용자가 선택한 제공자만 반환 (폴백 없음)
 
+        사용자가 프롬프트 설정에서 선택한 AI 서비스만 시도합니다.
+        선택하지 않은 서비스로 자동 전환하지 않습니다.
+        """
         preferred_map = {
             "openai": AIProvider.OPENAI,
             "anthropic": AIProvider.ANTHROPIC,
             "google": AIProvider.GOOGLE,
         }
+
+        if not preferred:
+            logger.warning("[AI_SERVICE] AI 제공자가 지정되지 않음 - 호출 불가")
+            return []
+
         prov = preferred_map.get(preferred.lower())
         if prov:
-            others = [p for p in all_providers if p != prov]
-            return [prov] + others
-        return all_providers
+            logger.info(f"[AI_SERVICE] 사용자 선택 제공자: {prov.value}")
+            return [prov]
+
+        logger.warning(f"[AI_SERVICE] 알 수 없는 제공자: {preferred}")
+        return []
 
     async def _try_provider(
         self,
@@ -114,29 +138,44 @@ class AIService:
         model: Optional[str],
         max_tokens: int,
         temperature: float,
+        system_prompt: Optional[str] = None,
     ) -> Optional[dict]:
         """특정 제공자로 생성 시도"""
         key = await self.key_manager.get_available_key(provider)
         if not key:
+            # 키 미사용 원인 상세 로깅
+            all_keys = await self.key_manager.get_keys_by_provider(provider)
+            if not all_keys:
+                logger.error(
+                    f"[AI_SERVICE] {provider.value}: 등록된 API 키 없음"
+                )
+            else:
+                for k in all_keys:
+                    logger.warning(
+                        f"[AI_SERVICE] {provider.value} 키 상태: "
+                        f"id={k.id}, label={k.label}, status={k.status}, "
+                        f"is_active={k.is_active}, "
+                        f"last_error={k.last_error_message or 'N/A'}"
+                    )
             return None
 
         try:
             if provider == AIProvider.OPENAI:
                 content = await self._call_openai(
                     key.api_key, prompt, model or "gpt-4o-mini",
-                    max_tokens, temperature,
+                    max_tokens, temperature, system_prompt,
                 )
                 used_model = model or "gpt-4o-mini"
             elif provider == AIProvider.ANTHROPIC:
                 content = await self._call_anthropic(
                     key.api_key, prompt, model or "claude-3-haiku-20240307",
-                    max_tokens, temperature,
+                    max_tokens, temperature, system_prompt,
                 )
                 used_model = model or "claude-3-haiku-20240307"
             elif provider == AIProvider.GOOGLE:
                 content = await self._call_google(
                     key.api_key, prompt, model or "gemini-2.0-flash",
-                    max_tokens, temperature,
+                    max_tokens, temperature, system_prompt,
                 )
                 used_model = model or "gemini-2.0-flash"
             else:
@@ -159,7 +198,8 @@ class AIService:
                 if next_key:
                     logger.info(f"[AI_SERVICE] Rate limit → 다음 키 시도")
                     return await self._try_provider(
-                        provider, prompt, model, max_tokens, temperature
+                        provider, prompt, model, max_tokens, temperature,
+                        system_prompt,
                     )
             else:
                 await self.key_manager.mark_key_error(key.id, error_msg[:200])
@@ -173,14 +213,20 @@ class AIService:
         model: str,
         max_tokens: int,
         temperature: float,
+        system_prompt: Optional[str] = None,
     ) -> Optional[str]:
         """OpenAI API 호출"""
         import openai
 
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+
         client = openai.AsyncOpenAI(api_key=api_key)
         resp = await client.chat.completions.create(
             model=model,
-            messages=[{"role": "user", "content": prompt}],
+            messages=messages,
             max_tokens=max_tokens,
             temperature=temperature,
         )
@@ -193,17 +239,22 @@ class AIService:
         model: str,
         max_tokens: int,
         temperature: float,
+        system_prompt: Optional[str] = None,
     ) -> Optional[str]:
         """Anthropic API 호출"""
         import anthropic
 
+        kwargs = {
+            "model": model,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        if system_prompt:
+            kwargs["system"] = system_prompt
+
         client = anthropic.AsyncAnthropic(api_key=api_key)
-        resp = await client.messages.create(
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            messages=[{"role": "user", "content": prompt}],
-        )
+        resp = await client.messages.create(**kwargs)
         return resp.content[0].text.strip()
 
     async def _call_google(
@@ -213,6 +264,7 @@ class AIService:
         model: str,
         max_tokens: int,
         temperature: float,
+        system_prompt: Optional[str] = None,
     ) -> Optional[str]:
         """Google Gemini API 호출"""
         import httpx
@@ -228,6 +280,10 @@ class AIService:
                 "temperature": temperature,
             },
         }
+        if system_prompt:
+            payload["systemInstruction"] = {
+                "parts": [{"text": system_prompt}]
+            }
 
         async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.post(url, json=payload)

@@ -175,11 +175,28 @@ class ContentGenerator:
             f"'{source_title.title[:30]}' → '{working_title[:30]}'"
         )
 
-        # 3. 참조자료 수집
-        ref_result = await self.reference_collector.collect_and_summarize(
-            search_query=working_title,
-            module_id=prompt_module_id,
-        )
+        # 3. 참조자료 수집 (blog.reference_ai 우선, 없으면 모듈 설정)
+        ref_ai = ai_config.get("reference_ai", {})
+        if ref_ai.get("provider"):
+            # 블로그 AI 설정으로 모듈 참조자료 설정 오버라이드
+            ref_settings = settings.get("reference", {}).copy()
+            ref_settings["ai_provider"] = ref_ai["provider"]
+            if ref_ai.get("model"):
+                ref_settings["ai_model"] = ref_ai["model"]
+            logger.info(
+                f"[GENERATOR] 참조자료 AI: blog.reference_ai "
+                f"| provider={ref_ai['provider']} "
+                f"| model={ref_ai.get('model')}"
+            )
+            ref_result = await self.reference_collector.collect_and_summarize(
+                search_query=working_title,
+                ref_settings=ref_settings,
+            )
+        else:
+            ref_result = await self.reference_collector.collect_and_summarize(
+                search_query=working_title,
+                module_id=prompt_module_id,
+            )
         logger.info(
             f"[GENERATOR] 참조자료 수집 | count={ref_result.count}"
         )
@@ -302,12 +319,11 @@ class ContentGenerator:
         blog: Blog,
     ) -> dict:
         """
-        AI로 글 생성 (프롬프트 모듈 설정 우선 적용)
+        AI로 글 생성 (블로그 AI 설정 기준)
 
         설정 우선순위:
-        1순위: Module.settings.content_generation (프롬프트 모듈)
-        2순위: Blog.ai_config (블로그 설정)
-        3순위: 하드코딩된 기본값
+        - AI 제공자/모델: Blog.ai_config.writing_ai (블로그 설정만 사용)
+        - 프롬프트/세부설정: Module.settings.content_generation → 기본값
 
         Args:
             title: 재조합된 제목
@@ -334,12 +350,8 @@ class ContentGenerator:
             "{reference_materials}", reference_injection
         )
 
-        # AI 제공자: 모듈 설정(활성화 시) -> 블로그 설정
-        # content_generation.enabled=false이면 module provider 무시
-        module_provider = (
-            cg.get("provider") if cg.get("enabled", False) else None
-        )
-        provider = module_provider or writing_ai.get("provider")
+        # AI 제공자: 블로그 ai_config.writing_ai 설정만 사용
+        provider = writing_ai.get("provider")
         model = writing_ai.get("model")
 
         # 세부 설정: 모듈 설정 -> 기본값
@@ -349,8 +361,7 @@ class ContentGenerator:
 
         logger.info(
             f"[GENERATOR] AI 설정 | "
-            f"provider={provider} "
-            f"(source={'module' if module_provider else 'blog'}), "
+            f"provider={provider} (source=blog.writing_ai), "
             f"temp={temperature}, tokens={max_tokens}, "
             f"sys_prompt={'Y' if system_prompt else 'N'}"
         )

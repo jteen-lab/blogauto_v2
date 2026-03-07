@@ -68,8 +68,10 @@ class FlowGenerateExecutor:
                 min_inventory = stage_params.generate.min_inventory
                 growth_stage = stage_params.stage_name
 
+            module_settings = module.settings or {}
             check_result = await self.inventory_trigger.check_inventory(
                 blog_id, min_inventory=min_inventory,
+                module_settings=module_settings,
             )
             logger.debug(
                 f"[FLOW_GEN] 재고 확인 결과 | blog_id={blog_id} | "

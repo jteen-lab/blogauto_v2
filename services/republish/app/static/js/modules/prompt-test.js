@@ -173,17 +173,31 @@ const promptTestMethods = {
         return icons[style] || '\uD83D\uDD04';
     },
 
-    // Step: 참조자료 수집
+    // Step: 참조자료 수집 (UI 참조자료 설정 + 블로그 reference_ai 사용)
     async runStepReferences() {
         console.log('[PromptTest] runStepReferences 호출됨');
         const moduleId = this.getTestModuleId();
+        const blogId = this.getTestBlogId();
         const query = this.promptTest.searchQuery?.trim();
         if (!moduleId) return this._setTestError('references', '모듈 ID가 필요합니다');
+        if (!blogId) return this._setTestError('references', '블로그를 선택하세요');
         if (!query) return this._setTestError('references', '검색어를 입력하세요');
         this._startTest('references');
         try {
+            const ref = this.promptModule.reference || {};
             const data = await this._testFetch('/api/v1/generation/test/collect-references', {
-                module_id: moduleId, search_query: query,
+                module_id: moduleId,
+                search_query: query,
+                blog_id: blogId,
+                ref_settings: {
+                    max_search: ref.maxSearch || 30,
+                    crawl_target: ref.crawlTarget || 10,
+                    summary_count: ref.summaryCount || 3,
+                    summary_method: ref.summaryMethod || 'ai',
+                    summary_style: ref.summaryStyle || 'concise',
+                    algorithm_type: ref.algorithmType || 'textrank',
+                    max_length: ref.maxLength || 500,
+                },
             });
             this.promptTest.results.references = data;
             if (data.success && data.result?.reference_injection) {

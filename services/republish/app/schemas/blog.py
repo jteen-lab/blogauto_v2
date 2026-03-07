@@ -221,9 +221,6 @@ class BlogMatchingConfigRequest(BaseModel):
     matching_threshold: int = Field(
         65, ge=50, le=100, description="유사도 매칭 임계값(%)"
     )
-    enable_manual_matching: bool = Field(
-        False, description="미매칭 수동 매칭 활성화"
-    )
 
 
 class BlogMatchingConfigResponse(BaseModel):
@@ -234,9 +231,6 @@ class BlogMatchingConfigResponse(BaseModel):
     )
     matching_threshold: int = Field(
         65, description="유사도 매칭 임계값(%)"
-    )
-    enable_manual_matching: bool = Field(
-        False, description="미매칭 수동 매칭 활성화"
     )
 
     class Config:

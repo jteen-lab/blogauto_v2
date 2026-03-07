@@ -178,16 +178,22 @@ async def copy_module(
     "/{module_id}",
     status_code=204,
     summary="모듈 삭제",
-    description="모듈을 삭제합니다. 플로우에서 사용 중인 모듈은 삭제할 수 없습니다."
+    description="모듈을 삭제합니다. 플로우에서 사용 중인 모듈은 force=true로 강제 삭제할 수 있습니다."
 )
 async def delete_module(
     module_id: int,
+    force: bool = Query(False, description="플로우 연결을 해제하고 강제 삭제"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session)
 ):
-    """모듈 삭제"""
+    """모듈 삭제
+
+    Args:
+        module_id: 삭제할 모듈 ID
+        force: True이면 플로우 연결 해제 후 강제 삭제
+    """
     service = ModuleService(db)
-    success = await service.delete_module(current_user, module_id)
+    success = await service.delete_module(current_user, module_id, force=force)
 
     if not success:
         raise HTTPException(

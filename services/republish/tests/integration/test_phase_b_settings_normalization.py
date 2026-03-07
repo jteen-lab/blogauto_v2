@@ -96,10 +96,10 @@ class TestContentGenerationSettings:
     """ContentGenerator._generate_content_with_meta() 설정 정규화 테스트"""
 
     @pytest.mark.asyncio
-    async def test_module_provider_overrides_blog(
+    async def test_blog_writing_ai_always_used(
         self, mock_db, sample_title
     ):
-        """모듈 provider="google"이 블로그 provider="openai"보다 우선"""
+        """블로그 writing_ai.provider가 모듈 provider보다 항상 우선"""
         blog, module = _make_blog_module(
             ai_config={
                 "writing_ai": {"provider": "openai", "model": "gpt-4o-mini"},
@@ -113,7 +113,8 @@ class TestContentGenerationSettings:
         _, kwargs = await _run_and_get_ai_kwargs(
             mock_db, blog, module, sample_title
         )
-        assert kwargs["provider"] == "google"
+        # 모듈에 google이 설정되어도 블로그 writing_ai의 openai가 사용됨
+        assert kwargs["provider"] == "openai"
 
     @pytest.mark.asyncio
     async def test_blog_provider_fallback(self, mock_db, sample_title):

@@ -88,6 +88,13 @@ class CrawledPost(Base):
         comment="생성 이력 FK (자동 생성된 글만)",
     )
 
+    # 이미지
+    image_url: Mapped[Optional[str]] = mapped_column(
+        String(1000),
+        nullable=True,
+        comment="생성된 이미지 URL",
+    )
+
     # 소스 정보
     source: Mapped[str] = mapped_column(
         String(20),

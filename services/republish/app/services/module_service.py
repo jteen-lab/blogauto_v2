@@ -339,10 +339,30 @@ class ModuleService:
                 detail="모듈을 복사하는 중 오류가 발생했습니다"
             )
 
-    async def delete_module(self, user: User, module_id: int) -> bool:
-        """모듈 삭제"""
+    async def delete_module(
+        self,
+        user: User,
+        module_id: int,
+        force: bool = False
+    ) -> bool:
+        """모듈 삭제
+
+        Args:
+            user: 현재 사용자
+            module_id: 삭제할 모듈 ID
+            force: True이면 플로우 연결을 해제하고 강제 삭제
+
+        Returns:
+            삭제 성공 여부
+
+        Raises:
+            HTTPException: 404(모듈 없음), 409(플로우 사용 중, force=False), 500(서버 오류)
+        """
         try:
-            logger.info(f"[DELETE_MODULE] 사용자 {user.id} 모듈 삭제: {module_id}")
+            logger.info(
+                f"[DELETE_MODULE] 사용자 {user.id} 모듈 삭제: {module_id} "
+                f"(force={force})"
+            )
 
             # 모듈 조회 (소유권 확인 포함)
             module = await self.get_module(user, module_id)
@@ -350,26 +370,51 @@ class ModuleService:
                 return False
 
             # 플로우에서 사용 중인지 확인
-            flow_check_query = select(FlowModule).where(FlowModule.module_id == module_id)
+            flow_check_query = select(FlowModule).where(
+                FlowModule.module_id == module_id
+            )
             flow_result = await self.db.execute(flow_check_query)
             flow_links = flow_result.scalars().all()
 
-            if flow_links:
-                # 사용 중인 플로우 이름 수집 (최대 3개)
-                flow_ids = [link.flow_id for link in flow_links[:3]]
-                flow_names = []
-                for flow_id in flow_ids:
-                    from ..models.flow import Flow
-                    flow_query = select(Flow.name).where(Flow.id == flow_id)
+            if flow_links and not force:
+                # force=False: 사용 중인 플로우 정보를 포함한 경고 응답
+                from ..models.flow import Flow
+
+                flow_info = []
+                for link in flow_links:
+                    flow_query = select(Flow.id, Flow.name).where(
+                        Flow.id == link.flow_id
+                    )
                     flow_result = await self.db.execute(flow_query)
-                    flow_name = flow_result.scalar()
-                    if flow_name:
-                        flow_names.append(flow_name)
+                    row = flow_result.first()
+                    if row:
+                        flow_info.append({"id": row.id, "name": row.name})
+
+                flow_names = [f["name"] for f in flow_info]
+                logger.warning(
+                    f"[DELETE_MODULE] 모듈 {module_id}이 "
+                    f"{len(flow_links)}개 플로우에서 사용 중: {flow_names}"
+                )
 
                 raise HTTPException(
-                    status_code=400,
-                    detail=f"플로우에서 사용 중인 모듈은 삭제할 수 없습니다. 사용 중인 플로우: {', '.join(flow_names)}"
+                    status_code=409,
+                    detail={
+                        "message": "이 모듈은 플로우에서 사용 중입니다. 삭제하면 해당 플로우에서 제거됩니다.",
+                        "flows": flow_info,
+                        "flow_count": len(flow_links)
+                    }
                 )
+
+            if flow_links and force:
+                # force=True: FlowModule 연결 레코드 명시적 삭제
+                logger.info(
+                    f"[DELETE_MODULE] 강제 삭제 - "
+                    f"{len(flow_links)}개 FlowModule 연결 해제"
+                )
+                delete_links_query = delete(FlowModule).where(
+                    FlowModule.module_id == module_id
+                )
+                await self.db.execute(delete_links_query)
 
             await self.db.delete(module)
             await self.db.commit()

@@ -95,102 +95,7 @@ function getPromptReferenceSection() {
 
                                     <!-- AI 요약 상세 설정 -->
                                     <div x-show="promptModule.reference.summaryMethod === 'ai'" x-transition class="space-y-4 pl-1">
-                                        <!-- AI 서비스 선택 -->
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-2">AI 서비스</label>
-                                            <div class="grid grid-cols-3 gap-2">
-                                                <label class="flex items-center p-2.5 border rounded-lg cursor-pointer transition-colors"
-                                                       :class="promptModule.reference.aiProvider === 'openai'
-                                                           ? 'bg-blue-50 border-blue-400' : 'bg-white border-gray-200 hover:border-gray-300'">
-                                                    <input type="radio" value="openai"
-                                                           x-model="promptModule.reference.aiProvider"
-                                                           class="w-3.5 h-3.5 text-blue-600 focus:ring-blue-500">
-                                                    <span class="ml-2 text-sm font-medium">ChatGPT</span>
-                                                </label>
-                                                <label class="flex items-center p-2.5 border rounded-lg cursor-pointer transition-colors"
-                                                       :class="promptModule.reference.aiProvider === 'anthropic'
-                                                           ? 'bg-orange-50 border-orange-400' : 'bg-white border-gray-200 hover:border-gray-300'">
-                                                    <input type="radio" value="anthropic"
-                                                           x-model="promptModule.reference.aiProvider"
-                                                           class="w-3.5 h-3.5 text-orange-600 focus:ring-orange-500">
-                                                    <span class="ml-2 text-sm font-medium">Claude</span>
-                                                </label>
-                                                <label class="flex items-center p-2.5 border rounded-lg cursor-pointer transition-colors"
-                                                       :class="promptModule.reference.aiProvider === 'google'
-                                                           ? 'bg-emerald-50 border-emerald-400' : 'bg-white border-gray-200 hover:border-gray-300'">
-                                                    <input type="radio" value="google"
-                                                           x-model="promptModule.reference.aiProvider"
-                                                           class="w-3.5 h-3.5 text-emerald-600 focus:ring-emerald-500">
-                                                    <span class="ml-2 text-sm font-medium">Gemini</span>
-                                                </label>
-                                            </div>
-                                        </div>
-
-                                        <!-- AI 모델 선택 -->
-                                        <div x-effect="
-                                            const defaults = {openai:'gpt-4.1-mini', anthropic:'claude-haiku-4-5-20251001', google:'gemini-2.5-flash'};
-                                            const valid = {
-                                                openai: ['gpt-4.1-nano','gpt-4.1-mini','gpt-4.1','gpt-4o-mini','gpt-4o','gpt-5-nano','gpt-5-mini','gpt-5','gpt-5.2'],
-                                                anthropic: ['claude-3-haiku-20240307','claude-haiku-4-5-20251001','claude-sonnet-4-20250514','claude-sonnet-4-5-20250929','claude-opus-4-5-20251101','claude-opus-4-6'],
-                                                google: ['gemini-2.5-flash-lite','gemini-2.5-flash','gemini-2.5-pro','gemini-3-flash-preview','gemini-3-pro-preview']
-                                            };
-                                            if (!(valid[promptModule.reference.aiProvider]||[]).includes(promptModule.reference.aiModel)) {
-                                                promptModule.reference.aiModel = defaults[promptModule.reference.aiProvider] || 'gpt-4.1-mini';
-                                            }
-                                        ">
-                                            <label class="block text-sm font-medium text-gray-700 mb-2">AI 모델</label>
-                                            <!-- OpenAI -->
-                                            <select x-show="promptModule.reference.aiProvider === 'openai'"
-                                                    x-model="promptModule.reference.aiModel"
-                                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-sm">
-                                                <optgroup label="GPT-4.1 (비추론)">
-                                                    <option value="gpt-4.1-nano">GPT-4.1 Nano (최저비용)</option>
-                                                    <option value="gpt-4.1-mini">GPT-4.1 Mini (추천)</option>
-                                                    <option value="gpt-4.1">GPT-4.1 (고품질)</option>
-                                                </optgroup>
-                                                <optgroup label="GPT-4o (레거시)">
-                                                    <option value="gpt-4o-mini">GPT-4o Mini</option>
-                                                    <option value="gpt-4o">GPT-4o</option>
-                                                </optgroup>
-                                                <optgroup label="GPT-5 (추론)">
-                                                    <option value="gpt-5-nano">GPT-5 Nano (최저비용)</option>
-                                                    <option value="gpt-5-mini">GPT-5 Mini</option>
-                                                    <option value="gpt-5">GPT-5</option>
-                                                    <option value="gpt-5.2">GPT-5.2 (플래그십)</option>
-                                                </optgroup>
-                                            </select>
-                                            <!-- Anthropic -->
-                                            <select x-show="promptModule.reference.aiProvider === 'anthropic'"
-                                                    x-model="promptModule.reference.aiModel"
-                                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-sm">
-                                                <optgroup label="Claude 4.5~4.6 (최신)">
-                                                    <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (추천, 저비용)</option>
-                                                    <option value="claude-sonnet-4-5-20250929">Claude Sonnet 4.5</option>
-                                                    <option value="claude-opus-4-5-20251101">Claude Opus 4.5</option>
-                                                    <option value="claude-opus-4-6">Claude Opus 4.6 (플래그십)</option>
-                                                </optgroup>
-                                                <optgroup label="Claude 4 (레거시)">
-                                                    <option value="claude-sonnet-4-20250514">Claude Sonnet 4</option>
-                                                </optgroup>
-                                                <optgroup label="Claude 3 (레거시)">
-                                                    <option value="claude-3-haiku-20240307">Claude 3 Haiku (최저비용)</option>
-                                                </optgroup>
-                                            </select>
-                                            <!-- Google -->
-                                            <select x-show="promptModule.reference.aiProvider === 'google'"
-                                                    x-model="promptModule.reference.aiModel"
-                                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-sm">
-                                                <optgroup label="Gemini 3 (최신)">
-                                                    <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
-                                                    <option value="gemini-3-pro-preview">Gemini 3 Pro Preview (고품질)</option>
-                                                </optgroup>
-                                                <optgroup label="Gemini 2.5 (안정)">
-                                                    <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite (최저비용)</option>
-                                                    <option value="gemini-2.5-flash">Gemini 2.5 Flash (추천)</option>
-                                                    <option value="gemini-2.5-pro">Gemini 2.5 Pro (고품질)</option>
-                                                </optgroup>
-                                            </select>
-                                        </div>
+                                        <p class="text-xs text-gray-400">AI 서비스 및 모델은 블로그 설정 > AI 탭에서 설정합니다.</p>
 
                                         <!-- 요약 스타일 -->
                                         <div>
@@ -261,23 +166,8 @@ function getPromptContentGenSection() {
                                 </div>
 
                                 <div x-show="promptModule.contentGeneration.enabled" x-transition class="space-y-4 p-4 bg-purple-50 rounded-lg">
-                                    <!-- AI 모델 선택 -->
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-2">AI 모델</label>
-                                        <div class="grid grid-cols-3 gap-2">
-                                            <template x-for="provider in promptModule.aiProviders" :key="provider.value">
-                                                <label class="flex items-center p-3 border rounded-lg cursor-pointer transition-colors"
-                                                       :class="promptModule.contentGeneration.provider === provider.value
-                                                               ? 'bg-purple-100 border-purple-400' : 'bg-white border-gray-200 hover:border-gray-300'">
-                                                    <input type="radio"
-                                                           :value="provider.value"
-                                                           x-model="promptModule.contentGeneration.provider"
-                                                           class="w-4 h-4 text-purple-600 focus:ring-purple-500">
-                                                    <span class="ml-2 text-sm font-medium" x-text="provider.label"></span>
-                                                </label>
-                                            </template>
-                                        </div>
-                                    </div>
+                                    <!-- AI 모델 안내 -->
+                                    <p class="text-xs text-gray-400">AI 서비스 및 모델은 블로그 설정 > AI 탭에서 설정합니다.</p>
 
                                     <!-- Temperature 슬라이더 -->
                                     <div>

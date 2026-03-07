@@ -269,6 +269,10 @@ class AIConfig(BaseModel):
         default_factory=AIServiceConfig,
         description="제목 생성 AI 설정"
     )
+    reference_ai: AIServiceConfig = Field(
+        default_factory=AIServiceConfig,
+        description="참조자료 요약 AI 설정"
+    )
     image_ai: AIServiceConfig = Field(
         default_factory=AIServiceConfig,
         description="이미지 생성 AI 설정"

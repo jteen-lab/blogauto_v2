@@ -23,6 +23,11 @@ function moduleFormApp(module = null, moduleType = null) {
         // 프롬프트 모듈 상태
         promptModule: promptModuleState,
 
+        // 파이프라인 테스트 상태
+        promptTest: window.createPromptTestState
+            ? window.createPromptTestState()
+            : {},
+
         // Growth Profile 모듈 상태
         gpModule: window.createGrowthProfileState
             ? window.createGrowthProfileState()
@@ -1003,7 +1008,8 @@ function moduleFormApp(module = null, moduleType = null) {
         // removeCategory, loadBlogsByCategories, toggleTitleStyle,
         // toggleBlogSelection, selectAllMatchedBlogs, removeBlog,
         // getBlogName, validatePromptModule, preparePromptModuleData
-        ...(window.promptModuleMethods || {})
+        ...(window.promptModuleMethods || {}),
+        ...(window.promptTestMethods || {})
     };
 }
 

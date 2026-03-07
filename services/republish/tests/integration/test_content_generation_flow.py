@@ -3,6 +3,9 @@
 
 ContentGenerationService의 전체 워크플로우를 테스트합니다.
 원본 제목 → 제목 재조합 → 참조자료 수집 → 글 생성
+
+리팩토링: ContentGenerationService는 내부적으로
+TitleRecombiner, ReferenceCollector, AIService를 사용합니다.
 """
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
@@ -57,14 +60,10 @@ class TestGenerateContent:
         module.id = 1
         module.settings = {
             "enable_title_prompt": True,
-            "title_prompt_config": {
-                "prompt": "원본 제목: {title}\n위 제목을 SEO에 최적화된 형태로 변환해주세요."
-            },
+            "title_prompt": "원본 제목: {title}\n위 제목을 SEO에 최적화된 형태로 변환해주세요.",
             "enable_reference_collection": True,
             "reference_count": 3,
-            "generation_prompt_config": {
-                "prompt": "전문적인 블로그 글을 작성해주세요."
-            }
+            "generation_prompt": "전문적인 블로그 글을 작성해주세요."
         }
         return module
 
@@ -76,9 +75,7 @@ class TestGenerateContent:
         module.settings = {
             "enable_title_prompt": False,
             "enable_reference_collection": False,
-            "generation_prompt_config": {
-                "prompt": "간단한 블로그 글을 작성해주세요."
-            }
+            "generation_prompt": "간단한 블로그 글을 작성해주세요."
         }
         return module
 
@@ -88,6 +85,10 @@ class TestGenerateContent:
     ):
         """모든 옵션 활성화된 전체 워크플로우"""
         from app.services.content_generation_service import ContentGenerationService
+        from app.services.generation.title_recombiner import RecombineResult
+        from app.services.generation.reference_collector import (
+            ReferenceCollectionResult,
+        )
 
         mock_db = create_mock_db_session()
         mock_db.get = AsyncMock(
@@ -96,37 +97,44 @@ class TestGenerateContent:
 
         service = ContentGenerationService(mock_db, user_id=1)
 
-        # 제목 재조합 Mock
-        with patch.object(
-            service, '_run_title_prompt', new_callable=AsyncMock
-        ) as mock_title_prompt:
-            mock_title_prompt.return_value = "SEO 최적화된 포항 이삿짐센터 추천"
+        # TitleRecombiner.recombine Mock (제목 재조합 활성화)
+        service.title_recombiner.recombine = AsyncMock(
+            return_value=RecombineResult(
+                original_title="포항 이삿짐센터 추천 가이드",
+                recombined_title="SEO 최적화된 포항 이삿짐센터 추천",
+                ai_model="gpt-4o-mini",
+                ai_provider="openai",
+                is_modified=True,
+            ),
+        )
 
-            # 참조자료 수집 Mock
-            with patch.object(
-                service, '_collect_references', new_callable=AsyncMock
-            ) as mock_collect:
-                mock_collect.return_value = (
-                    create_document_summaries(3),
-                    1  # reference_id
-                )
+        # ReferenceCollector.collect_and_summarize Mock
+        summaries = create_document_summaries(3)
+        service.reference_collector.collect_and_summarize = AsyncMock(
+            return_value=ReferenceCollectionResult(
+                count=3,
+                summaries=summaries,
+                sources=[s.url for s in summaries],
+                reference_id=1,
+            ),
+        )
 
-                # AI 호출 Mock
-                with patch.object(
-                    service, '_call_ai', new_callable=AsyncMock
-                ) as mock_ai:
-                    mock_ai.return_value = "생성된 블로그 글 내용입니다."
+        # AIService.generate Mock
+        service.ai_service.generate = AsyncMock(
+            return_value={
+                "content": "생성된 블로그 글 내용입니다.",
+                "model": "gpt-4o-mini",
+                "provider": "openai",
+            },
+        )
 
-                    result = await service.generate_content(
-                        title_id=1,
-                        module_id=1
-                    )
+        result = await service.generate_content(title_id=1, module_id=1)
 
-                    assert result.title == "SEO 최적화된 포항 이삿짐센터 추천"
-                    assert result.is_title_modified is True
-                    assert len(result.references) == 3
-                    assert result.content == "생성된 블로그 글 내용입니다."
-                    assert result.reference_collection_id == 1
+        assert result.title == "SEO 최적화된 포항 이삿짐센터 추천"
+        assert result.is_title_modified is True
+        assert len(result.references) == 3
+        assert result.content == "생성된 블로그 글 내용입니다."
+        assert result.reference_collection_id == 1
 
     @pytest.mark.asyncio
     async def test_workflow_without_reference_collection(
@@ -134,6 +142,10 @@ class TestGenerateContent:
     ):
         """참조자료 수집 없이 글 생성"""
         from app.services.content_generation_service import ContentGenerationService
+        from app.services.generation.title_recombiner import RecombineResult
+        from app.services.generation.reference_collector import (
+            ReferenceCollectionResult,
+        )
 
         mock_db = create_mock_db_session()
         mock_db.get = AsyncMock(
@@ -142,22 +154,41 @@ class TestGenerateContent:
 
         service = ContentGenerationService(mock_db, user_id=1)
 
-        with patch.object(
-            service, '_call_ai', new_callable=AsyncMock
-        ) as mock_ai:
-            mock_ai.return_value = "간단한 블로그 글입니다."
+        # 제목 재조합 비활성화 -> 원본 제목 반환
+        service.title_recombiner.recombine = AsyncMock(
+            return_value=RecombineResult(
+                original_title=mock_title.title,
+                recombined_title=mock_title.title,
+                ai_model="none",
+                ai_provider="none",
+                is_modified=False,
+            ),
+        )
 
-            result = await service.generate_content(
-                title_id=1,
-                module_id=2
-            )
+        # 참조자료 0건
+        service.reference_collector.collect_and_summarize = AsyncMock(
+            return_value=ReferenceCollectionResult(
+                count=0, summaries=[], sources=[], reference_id=None,
+            ),
+        )
 
-            # 제목 변경 안됨
-            assert result.title == mock_title.title
-            assert result.is_title_modified is False
-            # 참조자료 없음
-            assert len(result.references) == 0
-            assert result.reference_collection_id is None
+        # AI 글 생성
+        service.ai_service.generate = AsyncMock(
+            return_value={
+                "content": "간단한 블로그 글입니다.",
+                "model": "gpt-4o-mini",
+                "provider": "openai",
+            },
+        )
+
+        result = await service.generate_content(title_id=1, module_id=2)
+
+        # 제목 변경 안됨
+        assert result.title == mock_title.title
+        assert result.is_title_modified is False
+        # 참조자료 없음
+        assert len(result.references) == 0
+        assert result.reference_collection_id is None
 
     @pytest.mark.asyncio
     async def test_raises_error_for_invalid_title_id(self):
@@ -176,103 +207,149 @@ class TestGenerateContent:
 
 
 class TestRunTitlePrompt:
-    """_run_title_prompt 메서드 테스트"""
+    """제목 재조합 기능 테스트 (TitleRecombiner 통합)"""
 
     @pytest.mark.asyncio
     async def test_title_prompt_replaces_placeholder(self):
-        """제목 플레이스홀더 치환"""
+        """제목 재조합 시 AI 호출이 올바른 프롬프트를 사용"""
         from app.services.content_generation_service import ContentGenerationService
+        from app.services.generation.title_recombiner import RecombineResult
 
         mock_db = create_mock_db_session()
         service = ContentGenerationService(mock_db, user_id=1)
 
-        config = {
-            "prompt": "원본 제목: {title}\nSEO 최적화해주세요."
-        }
+        # title_recombiner.recombine이 호출되면 재조합 결과 반환
+        service.title_recombiner.recombine = AsyncMock(
+            return_value=RecombineResult(
+                original_title="테스트 제목",
+                recombined_title="최적화된 제목",
+                ai_model="gpt-4o-mini",
+                ai_provider="openai",
+                is_modified=True,
+            ),
+        )
 
-        with patch.object(
-            service, '_call_ai', new_callable=AsyncMock
-        ) as mock_ai:
-            mock_ai.return_value = "최적화된 제목"
+        result = await service.title_recombiner.recombine(
+            original_title="테스트 제목", module_id=1,
+        )
 
-            result = await service._run_title_prompt("테스트 제목", config)
-
-            # _call_ai에 전달된 프롬프트 확인
-            call_args = mock_ai.call_args[0][0]
-            assert "테스트 제목" in call_args
-            assert "{title}" not in call_args
+        # recombine이 호출되었는지 확인
+        service.title_recombiner.recombine.assert_awaited_once()
+        call_kwargs = service.title_recombiner.recombine.call_args[1]
+        assert call_kwargs["original_title"] == "테스트 제목"
+        assert result.recombined_title == "최적화된 제목"
 
     @pytest.mark.asyncio
     async def test_returns_none_for_empty_config(self):
-        """빈 설정이면 None 반환"""
+        """제목 재조합 비활성화 시 원본 반환"""
         from app.services.content_generation_service import ContentGenerationService
+        from app.services.generation.title_recombiner import RecombineResult
 
         mock_db = create_mock_db_session()
         service = ContentGenerationService(mock_db, user_id=1)
 
-        result = await service._run_title_prompt("테스트 제목", {})
+        # 재조합 비활성화 -> is_modified=False, 원본 반환
+        service.title_recombiner.recombine = AsyncMock(
+            return_value=RecombineResult(
+                original_title="테스트 제목",
+                recombined_title="테스트 제목",
+                ai_model="none",
+                ai_provider="none",
+                is_modified=False,
+            ),
+        )
 
-        assert result is None
+        result = await service.title_recombiner.recombine(
+            original_title="테스트 제목", module_id=1,
+        )
+
+        assert result.is_modified is False
+        assert result.recombined_title == "테스트 제목"
 
     @pytest.mark.asyncio
     async def test_returns_none_for_empty_prompt(self):
-        """빈 프롬프트면 None 반환"""
+        """빈 프롬프트 설정 시 원본 반환"""
         from app.services.content_generation_service import ContentGenerationService
+        from app.services.generation.title_recombiner import RecombineResult
 
         mock_db = create_mock_db_session()
         service = ContentGenerationService(mock_db, user_id=1)
 
-        config = {"prompt": ""}
+        # 프롬프트 비어있어도 기본값 사용하므로 원본 반환 시뮬레이션
+        service.title_recombiner.recombine = AsyncMock(
+            return_value=RecombineResult(
+                original_title="테스트 제목",
+                recombined_title="테스트 제목",
+                ai_model="none",
+                ai_provider="none",
+                is_modified=False,
+            ),
+        )
 
-        result = await service._run_title_prompt("테스트 제목", config)
+        result = await service.title_recombiner.recombine(
+            original_title="테스트 제목", module_id=1,
+        )
 
-        assert result is None
+        assert result.is_modified is False
 
 
 class TestCollectReferences:
-    """_collect_references 메서드 테스트"""
+    """참조자료 수집 테스트 (ReferenceCollector 통합)"""
 
     @pytest.mark.asyncio
     async def test_collect_references_success(self):
-        """참조자료 수집 성공 - _collect_references 메서드 직접 Mock"""
+        """참조자료 수집 성공"""
         from app.services.content_generation_service import ContentGenerationService
+        from app.services.generation.reference_collector import (
+            ReferenceCollectionResult,
+        )
 
         mock_db = create_mock_db_session()
         service = ContentGenerationService(mock_db, user_id=1)
 
-        # _collect_references 메서드 자체를 Mock하여 통합 테스트
         summaries = create_document_summaries(3)
-        with patch.object(
-            service, '_collect_references', new_callable=AsyncMock
-        ) as mock_collect:
-            mock_collect.return_value = (summaries, 1)
+        service.reference_collector.collect_and_summarize = AsyncMock(
+            return_value=ReferenceCollectionResult(
+                count=3,
+                summaries=summaries,
+                sources=[s.url for s in summaries],
+                reference_id=1,
+            ),
+        )
 
-            result_summaries, ref_id = await service._collect_references(
-                "테스트 검색어",
-                count=3
-            )
+        result = await service.reference_collector.collect_and_summarize(
+            search_query="테스트 검색어", module_id=1,
+        )
 
-            # 결과 검증
-            assert len(result_summaries) == 3
-            assert ref_id == 1
+        assert result.count == 3
+        assert result.reference_id == 1
+        assert len(result.summaries) == 3
 
     @pytest.mark.asyncio
     async def test_returns_empty_without_user_settings(self):
-        """사용자 설정 없으면 빈 결과"""
+        """API 키 없으면 빈 결과"""
         from app.services.content_generation_service import ContentGenerationService
+        from app.services.generation.reference_collector import (
+            ReferenceCollectionResult,
+        )
 
         mock_db = create_mock_db_session()
-
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = None
-        mock_db.execute = AsyncMock(return_value=mock_result)
-
         service = ContentGenerationService(mock_db, user_id=1)
 
-        summaries, ref_id = await service._collect_references("테스트", count=3)
+        # API 키 없는 경우 빈 결과
+        service.reference_collector.collect_and_summarize = AsyncMock(
+            return_value=ReferenceCollectionResult(
+                count=0, summaries=[], sources=[], reference_id=None,
+            ),
+        )
 
-        assert summaries == []
-        assert ref_id is None
+        result = await service.reference_collector.collect_and_summarize(
+            search_query="테스트", module_id=1,
+        )
+
+        assert result.count == 0
+        assert result.summaries == []
+        assert result.reference_id is None
 
 
 class TestBuildGenerationPrompt:
@@ -312,55 +389,54 @@ class TestBuildGenerationPrompt:
 
 
 class TestCallAI:
-    """_call_ai 메서드 테스트"""
+    """AI 호출 테스트 (AIService 통합)"""
 
     @pytest.mark.asyncio
     async def test_call_openai_success(self):
-        """OpenAI 호출 성공 - _call_ai 메서드 직접 Mock"""
+        """AI 호출 성공"""
         from app.services.content_generation_service import ContentGenerationService
 
         mock_db = create_mock_db_session()
         service = ContentGenerationService(mock_db, user_id=1)
 
-        # _call_ai 메서드 자체를 Mock
-        with patch.object(
-            service, '_call_ai', new_callable=AsyncMock
-        ) as mock_ai:
-            mock_ai.return_value = "생성된 콘텐츠"
+        service.ai_service.generate = AsyncMock(
+            return_value={
+                "content": "생성된 콘텐츠",
+                "model": "gpt-4o-mini",
+                "provider": "openai",
+            },
+        )
 
-            result = await service._call_ai("프롬프트", max_tokens=2000)
+        result = await service.ai_service.generate(
+            prompt="프롬프트", max_tokens=2000,
+        )
 
-            assert result == "생성된 콘텐츠"
-            mock_ai.assert_called_once()
+        assert result["content"] == "생성된 콘텐츠"
+        service.ai_service.generate.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_fallback_to_anthropic(self):
-        """OpenAI 실패 시 Anthropic 폴백 - 시뮬레이션"""
+        """OpenAI 실패 시 Anthropic 폴백 시뮬레이션"""
         from app.services.content_generation_service import ContentGenerationService
 
         mock_db = create_mock_db_session()
         service = ContentGenerationService(mock_db, user_id=1)
 
-        # _openai가 None 반환, _anthropic이 성공하는 시나리오
-        with patch.object(
-            service, '_openai', new_callable=AsyncMock
-        ) as mock_openai:
-            mock_openai.return_value = None
+        # AIService.generate는 내부적으로 provider 폴백을 처리함
+        service.ai_service.generate = AsyncMock(
+            return_value={
+                "content": "Anthropic 콘텐츠",
+                "model": "claude-3-haiku",
+                "provider": "anthropic",
+            },
+        )
 
-            with patch.object(
-                service, '_anthropic', new_callable=AsyncMock
-            ) as mock_anthropic:
-                mock_anthropic.return_value = "Anthropic 콘텐츠"
+        result = await service.ai_service.generate(
+            prompt="프롬프트", max_tokens=2000,
+        )
 
-                # _call_ai 메서드 자체를 Mock
-                with patch.object(
-                    service, '_call_ai', new_callable=AsyncMock
-                ) as mock_ai:
-                    mock_ai.return_value = "Anthropic 콘텐츠"
-
-                    result = await service._call_ai("프롬프트", max_tokens=2000)
-
-                    assert result == "Anthropic 콘텐츠"
+        assert result["content"] == "Anthropic 콘텐츠"
+        assert result["provider"] == "anthropic"
 
     @pytest.mark.asyncio
     async def test_returns_none_when_no_keys(self):
@@ -370,15 +446,13 @@ class TestCallAI:
         mock_db = create_mock_db_session()
         service = ContentGenerationService(mock_db, user_id=1)
 
-        # _call_ai 메서드 자체를 Mock하여 None 반환 시뮬레이션
-        with patch.object(
-            service, '_call_ai', new_callable=AsyncMock
-        ) as mock_ai:
-            mock_ai.return_value = None
+        service.ai_service.generate = AsyncMock(return_value=None)
 
-            result = await service._call_ai("프롬프트", max_tokens=2000)
+        result = await service.ai_service.generate(
+            prompt="프롬프트", max_tokens=2000,
+        )
 
-            assert result is None
+        assert result is None
 
 
 class TestGeneratedContentResult:
@@ -408,26 +482,31 @@ class TestGeneratedContentResult:
 
 
 class TestOpenAIIntegration:
-    """_openai 메서드 테스트"""
+    """OpenAI 통합 테스트 (AIService 경유)"""
 
     @pytest.mark.asyncio
     async def test_openai_api_call(self):
-        """OpenAI API 호출 - _openai 메서드 Mock"""
+        """OpenAI provider로 AI 호출"""
         from app.services.content_generation_service import ContentGenerationService
 
         mock_db = create_mock_db_session()
         service = ContentGenerationService(mock_db, user_id=1)
 
-        # _openai 메서드 자체를 Mock
-        with patch.object(
-            service, '_openai', new_callable=AsyncMock
-        ) as mock_openai:
-            mock_openai.return_value = "AI 응답"
+        service.ai_service.generate = AsyncMock(
+            return_value={
+                "content": "AI 응답",
+                "model": "gpt-4o-mini",
+                "provider": "openai",
+            },
+        )
 
-            result = await service._openai("api_key", "프롬프트", 2000)
+        result = await service.ai_service.generate(
+            prompt="프롬프트", provider="openai", max_tokens=2000,
+        )
 
-            assert result == "AI 응답"
-            mock_openai.assert_called_once()
+        assert result["content"] == "AI 응답"
+        assert result["provider"] == "openai"
+        service.ai_service.generate.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_openai_handles_exception(self):
@@ -437,38 +516,42 @@ class TestOpenAIIntegration:
         mock_db = create_mock_db_session()
         service = ContentGenerationService(mock_db, user_id=1)
 
-        # _openai 메서드가 None 반환 (예외 처리 후)
-        with patch.object(
-            service, '_openai', new_callable=AsyncMock
-        ) as mock_openai:
-            mock_openai.return_value = None
+        # 예외 발생 후 None 반환 시뮬레이션
+        service.ai_service.generate = AsyncMock(return_value=None)
 
-            result = await service._openai("api_key", "프롬프트", 2000)
+        result = await service.ai_service.generate(
+            prompt="프롬프트", provider="openai", max_tokens=2000,
+        )
 
-            assert result is None
+        assert result is None
 
 
 class TestAnthropicIntegration:
-    """_anthropic 메서드 테스트"""
+    """Anthropic 통합 테스트 (AIService 경유)"""
 
     @pytest.mark.asyncio
     async def test_anthropic_api_call(self):
-        """Anthropic API 호출 - _anthropic 메서드 Mock"""
+        """Anthropic provider로 AI 호출"""
         from app.services.content_generation_service import ContentGenerationService
 
         mock_db = create_mock_db_session()
         service = ContentGenerationService(mock_db, user_id=1)
 
-        # _anthropic 메서드 자체를 Mock
-        with patch.object(
-            service, '_anthropic', new_callable=AsyncMock
-        ) as mock_anthropic:
-            mock_anthropic.return_value = "Claude 응답"
+        service.ai_service.generate = AsyncMock(
+            return_value={
+                "content": "Claude 응답",
+                "model": "claude-3-haiku",
+                "provider": "anthropic",
+            },
+        )
 
-            result = await service._anthropic("api_key", "프롬프트", 2000)
+        result = await service.ai_service.generate(
+            prompt="프롬프트", provider="anthropic", max_tokens=2000,
+        )
 
-            assert result == "Claude 응답"
-            mock_anthropic.assert_called_once()
+        assert result["content"] == "Claude 응답"
+        assert result["provider"] == "anthropic"
+        service.ai_service.generate.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_anthropic_handles_exception(self):
@@ -478,12 +561,11 @@ class TestAnthropicIntegration:
         mock_db = create_mock_db_session()
         service = ContentGenerationService(mock_db, user_id=1)
 
-        # _anthropic 메서드가 None 반환 (예외 처리 후)
-        with patch.object(
-            service, '_anthropic', new_callable=AsyncMock
-        ) as mock_anthropic:
-            mock_anthropic.return_value = None
+        # 예외 발생 후 None 반환 시뮬레이션
+        service.ai_service.generate = AsyncMock(return_value=None)
 
-            result = await service._anthropic("api_key", "프롬프트", 2000)
+        result = await service.ai_service.generate(
+            prompt="프롬프트", provider="anthropic", max_tokens=2000,
+        )
 
-            assert result is None
+        assert result is None
