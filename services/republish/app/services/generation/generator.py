@@ -201,6 +201,34 @@ class ContentGenerator:
             f"[GENERATOR] 참조자료 수집 | count={ref_result.count}"
         )
 
+        # 카테고리/키워드 정보 (프롬프트 플레이스홀더용)
+        category_name = ""
+        keywords_text = ""
+        if source_title.subtopic_id or source_title.topic_id:
+            from ...models.category import Topic, SubTopic
+            if source_title.subtopic_id:
+                subtopic = await self.db.get(SubTopic, source_title.subtopic_id)
+                if subtopic:
+                    topic = await self.db.get(Topic, subtopic.topic_id)
+                    category_name = (
+                        f"{topic.name} > {subtopic.name}" if topic
+                        else subtopic.name
+                    )
+            elif source_title.topic_id:
+                topic = await self.db.get(Topic, source_title.topic_id)
+                if topic:
+                    category_name = topic.name
+        if source_title.keywords:
+            import json
+            try:
+                kw_list = json.loads(source_title.keywords)
+                if isinstance(kw_list, list):
+                    keywords_text = ", ".join(str(k) for k in kw_list)
+                elif isinstance(kw_list, str):
+                    keywords_text = kw_list
+            except (json.JSONDecodeError, TypeError):
+                keywords_text = source_title.keywords or ""
+
         # 4. 글 생성
         logger.debug("[GENERATOR] 4단계 시작: AI 글 생성")
         content_result = await self._generate_content_with_meta(
@@ -208,6 +236,8 @@ class ContentGenerator:
             reference_injection=ref_result.to_prompt_injection(),
             settings=settings,
             blog=blog,
+            category_name=category_name,
+            keywords_text=keywords_text,
         )
         content_markdown = content_result["content"]
         ai_content_model = content_result.get("model")
@@ -317,6 +347,8 @@ class ContentGenerator:
         reference_injection: str,
         settings: dict,
         blog: Blog,
+        category_name: str = "",
+        keywords_text: str = "",
     ) -> dict:
         """
         AI로 글 생성 (블로그 AI 설정 기준)
@@ -330,6 +362,8 @@ class ContentGenerator:
             reference_injection: 참조자료 프롬프트 텍스트
             settings: 모듈 설정
             blog: 블로그 객체
+            category_name: 카테고리 이름 (프롬프트 {category} 치환용)
+            keywords_text: 키워드 텍스트 (프롬프트 {keywords} 치환용)
 
         Returns:
             dict: {"content": str, "model": str, "provider": str}
@@ -348,6 +382,10 @@ class ContentGenerator:
             "{title}", title
         ).replace(
             "{reference_materials}", reference_injection
+        ).replace(
+            "{category}", category_name
+        ).replace(
+            "{keywords}", keywords_text
         )
 
         # AI 제공자: 블로그 ai_config.writing_ai 설정만 사용
@@ -358,6 +396,11 @@ class ContentGenerator:
         temperature = cg.get("temperature", 0.7)
         max_tokens = cg.get("max_tokens", 4000)
         system_prompt = cg.get("system_prompt") or None
+        # 고급 AI 설정
+        top_p = cg.get("top_p")
+        top_k = cg.get("top_k")
+        frequency_penalty = cg.get("frequency_penalty")
+        presence_penalty = cg.get("presence_penalty")
 
         logger.info(
             f"[GENERATOR] AI 설정 | "
@@ -374,6 +417,10 @@ class ContentGenerator:
             max_tokens=max_tokens,
             temperature=temperature,
             system_prompt=system_prompt,
+            top_p=top_p,
+            top_k=top_k,
+            frequency_penalty=frequency_penalty,
+            presence_penalty=presence_penalty,
         )
 
         if not result:

@@ -107,6 +107,9 @@ def create_mock_main_title(
     title: str = "포항 이삿짐센터 추천 가이드",
     status: str = "available",
     matched_blog_ids: Optional[str] = "[1]",
+    topic_id: Optional[int] = None,
+    subtopic_id: Optional[int] = None,
+    keywords: Optional[str] = None,
 ) -> MagicMock:
     """Mock MainTitle 생성 (mark_used 포함)"""
     mock = MagicMock()
@@ -114,6 +117,9 @@ def create_mock_main_title(
     mock.title = title
     mock.status = status
     mock.matched_blog_ids = matched_blog_ids
+    mock.topic_id = topic_id
+    mock.subtopic_id = subtopic_id
+    mock.keywords = keywords
     mock.created_at = datetime(2026, 1, 1)
 
     def _mark_used():

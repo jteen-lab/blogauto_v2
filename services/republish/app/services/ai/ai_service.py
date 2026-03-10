@@ -33,6 +33,10 @@ class AIService:
         max_tokens: int = 4000,
         temperature: float = 0.7,
         system_prompt: Optional[str] = None,
+        top_p: Optional[float] = None,
+        top_k: Optional[int] = None,
+        frequency_penalty: Optional[float] = None,
+        presence_penalty: Optional[float] = None,
     ) -> Optional[dict]:
         """
         텍스트 생성 (제목 재조합, 글 생성 등)
@@ -44,6 +48,10 @@ class AIService:
             max_tokens: 최대 토큰 수
             temperature: 생성 온도
             system_prompt: 시스템 프롬프트 (있으면 AI에 전달)
+            top_p: 누클레우스 샘플링 확률 (OpenAI, Anthropic, Google)
+            top_k: 상위 K개 토큰 샘플링 (Anthropic, Google만 지원)
+            frequency_penalty: 빈도 패널티 (OpenAI만 지원)
+            presence_penalty: 존재 패널티 (OpenAI만 지원)
 
         Returns:
             dict: {"content": str, "model": str, "provider": str}
@@ -58,7 +66,8 @@ class AIService:
         for prov in providers:
             result = await self._try_provider(
                 prov, prompt, model, max_tokens, temperature,
-                system_prompt,
+                system_prompt, top_p, top_k,
+                frequency_penalty, presence_penalty,
             )
             if result:
                 return result
@@ -139,6 +148,10 @@ class AIService:
         max_tokens: int,
         temperature: float,
         system_prompt: Optional[str] = None,
+        top_p: Optional[float] = None,
+        top_k: Optional[int] = None,
+        frequency_penalty: Optional[float] = None,
+        presence_penalty: Optional[float] = None,
     ) -> Optional[dict]:
         """특정 제공자로 생성 시도"""
         key = await self.key_manager.get_available_key(provider)
@@ -161,21 +174,29 @@ class AIService:
 
         try:
             if provider == AIProvider.OPENAI:
+                # OpenAI: top_p, frequency_penalty, presence_penalty 지원 (top_k 미지원)
                 content = await self._call_openai(
                     key.api_key, prompt, model or "gpt-4o-mini",
                     max_tokens, temperature, system_prompt,
+                    top_p=top_p,
+                    frequency_penalty=frequency_penalty,
+                    presence_penalty=presence_penalty,
                 )
                 used_model = model or "gpt-4o-mini"
             elif provider == AIProvider.ANTHROPIC:
+                # Anthropic: top_p, top_k 지원 (frequency/presence_penalty 미지원)
                 content = await self._call_anthropic(
                     key.api_key, prompt, model or "claude-3-haiku-20240307",
                     max_tokens, temperature, system_prompt,
+                    top_p=top_p, top_k=top_k,
                 )
                 used_model = model or "claude-3-haiku-20240307"
             elif provider == AIProvider.GOOGLE:
+                # Google: top_p, top_k 지원 (frequency/presence_penalty 미지원)
                 content = await self._call_google(
                     key.api_key, prompt, model or "gemini-2.0-flash",
                     max_tokens, temperature, system_prompt,
+                    top_p=top_p, top_k=top_k,
                 )
                 used_model = model or "gemini-2.0-flash"
             else:
@@ -199,7 +220,8 @@ class AIService:
                     logger.info(f"[AI_SERVICE] Rate limit → 다음 키 시도")
                     return await self._try_provider(
                         provider, prompt, model, max_tokens, temperature,
-                        system_prompt,
+                        system_prompt, top_p, top_k,
+                        frequency_penalty, presence_penalty,
                     )
             else:
                 await self.key_manager.mark_key_error(key.id, error_msg[:200])
@@ -214,8 +236,11 @@ class AIService:
         max_tokens: int,
         temperature: float,
         system_prompt: Optional[str] = None,
+        top_p: Optional[float] = None,
+        frequency_penalty: Optional[float] = None,
+        presence_penalty: Optional[float] = None,
     ) -> Optional[str]:
-        """OpenAI API 호출"""
+        """OpenAI API 호출 (top_k는 미지원)"""
         import openai
 
         messages = []
@@ -223,13 +248,22 @@ class AIService:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
 
+        kwargs = {
+            "model": model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        }
+        # None이 아닌 경우에만 추가 (기존 동작 유지)
+        if top_p is not None:
+            kwargs["top_p"] = top_p
+        if frequency_penalty is not None:
+            kwargs["frequency_penalty"] = frequency_penalty
+        if presence_penalty is not None:
+            kwargs["presence_penalty"] = presence_penalty
+
         client = openai.AsyncOpenAI(api_key=api_key)
-        resp = await client.chat.completions.create(
-            model=model,
-            messages=messages,
-            max_tokens=max_tokens,
-            temperature=temperature,
-        )
+        resp = await client.chat.completions.create(**kwargs)
         return resp.choices[0].message.content.strip()
 
     async def _call_anthropic(
@@ -240,8 +274,10 @@ class AIService:
         max_tokens: int,
         temperature: float,
         system_prompt: Optional[str] = None,
+        top_p: Optional[float] = None,
+        top_k: Optional[int] = None,
     ) -> Optional[str]:
-        """Anthropic API 호출"""
+        """Anthropic API 호출 (frequency_penalty, presence_penalty는 미지원)"""
         import anthropic
 
         kwargs = {
@@ -252,6 +288,11 @@ class AIService:
         }
         if system_prompt:
             kwargs["system"] = system_prompt
+        # None이 아닌 경우에만 추가 (기존 동작 유지)
+        if top_p is not None:
+            kwargs["top_p"] = top_p
+        if top_k is not None:
+            kwargs["top_k"] = top_k
 
         client = anthropic.AsyncAnthropic(api_key=api_key)
         resp = await client.messages.create(**kwargs)
@@ -265,20 +306,29 @@ class AIService:
         max_tokens: int,
         temperature: float,
         system_prompt: Optional[str] = None,
+        top_p: Optional[float] = None,
+        top_k: Optional[int] = None,
     ) -> Optional[str]:
-        """Google Gemini API 호출"""
+        """Google Gemini API 호출 (frequency_penalty, presence_penalty는 미지원)"""
         import httpx
 
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/"
             f"models/{model}:generateContent?key={api_key}"
         )
+        generation_config = {
+            "maxOutputTokens": max_tokens,
+            "temperature": temperature,
+        }
+        # None이 아닌 경우에만 추가 (기존 동작 유지)
+        if top_p is not None:
+            generation_config["topP"] = top_p
+        if top_k is not None:
+            generation_config["topK"] = top_k
+
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {
-                "maxOutputTokens": max_tokens,
-                "temperature": temperature,
-            },
+            "generationConfig": generation_config,
         }
         if system_prompt:
             payload["systemInstruction"] = {

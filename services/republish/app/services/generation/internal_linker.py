@@ -102,9 +102,18 @@ class InternalLinker:
         similarity_threshold = link_settings.get(
             "similarity_threshold", DEFAULT_SIMILARITY_THRESHOLD
         )
+        body_count = link_settings.get("body_count", 1)
+        body_link_type = link_settings.get("body_link_type", "quote")
 
         # SimilarityService 인스턴스 생성
         sim_service = SimilarityService(threshold=similarity_threshold)
+
+        logger.info(
+            f"[INTERNAL_LINK] 설정 | intro={intro_count} "
+            f"| type={intro_link_type} | body={body_count} "
+            f"| body_type={body_link_type} | conclusion={conclusion_count} "
+            f"| style={conclusion_list_style} | threshold={similarity_threshold}"
+        )
 
         # 블로그 내 전체 포스트 1회 로드
         all_posts = await self._load_blog_posts(blog_id, current_title)
@@ -125,7 +134,8 @@ class InternalLinker:
         # 2. 본문 섹션 링크 삽입 (섹션 제목별 유사도 매칭)
         section_headings = self._extract_section_headings(content)
         content = self._insert_section_links(
-            content, all_posts, section_headings, used_urls, sim_service
+            content, all_posts, section_headings, used_urls, sim_service,
+            body_count=body_count, body_link_type=body_link_type,
         )
 
         # 3. 결론 뒤 링크 삽입 (랜덤 포스트)
@@ -151,11 +161,18 @@ class InternalLinker:
             .where(
                 CrawledPost.blog_id == blog_id,
                 CrawledPost.url.isnot(None),
+                CrawledPost.url != "",
+                ~CrawledPost.url.startswith("https://pending-content"),
                 CrawledPost.title != current_title,
             )
         )
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        posts = list(result.scalars().all())
+        logger.debug(
+            f"[INTERNAL_LINK] 포스트 로드 | blog_id={blog_id} "
+            f"| count={len(posts)}"
+        )
+        return posts
 
     def _find_similar_by_score(
         self,
@@ -205,10 +222,15 @@ class InternalLinker:
 
     def _extract_section_headings(self, content: str) -> List[str]:
         """본론 ## 헤딩 텍스트 추출 (서론 첫번째/결론 마지막 제외)"""
-        headings = re.findall(r'\n## (.+)', content)
+        headings = re.findall(r'^## (.+)', content, re.MULTILINE)
         if len(headings) <= 2:
             return []
-        return headings[1:-1]
+        body_headings = headings[1:-1]
+        logger.debug(
+            f"[INTERNAL_LINK] 헤딩 추출 | 전체={len(headings)} "
+            f"| 본론={len(body_headings)} | {body_headings}"
+        )
+        return body_headings
 
     # ── 링크 삽입 ──────────────────────────────────
 
@@ -223,6 +245,7 @@ class InternalLinker:
         """서론 뒤에 링크 삽입 (버튼 또는 일반)"""
         available = [p for p in posts if p.url and p.url not in used_urls]
         if not available:
+            logger.debug("[INTERNAL_LINK] 서론: 삽입 가능한 유사 포스트 없음")
             return content
 
         links_to_insert = available[:max_count]
@@ -235,18 +258,24 @@ class InternalLinker:
         for post in links_to_insert:
             used_urls.add(post.url)
 
-        # 첫 번째 ## 헤딩 앞에 삽입 (서론 끝)
-        match = re.search(r'\n(## .+)', content)
-        if match:
-            insert_pos = match.start()
+        # 두 번째 ## 헤딩(첫 본론) 앞에 삽입 (서론 끝 위치)
+        headings = list(re.finditer(r'^## .+', content, re.MULTILINE))
+        if len(headings) >= 2:
+            insert_pos = headings[1].start()
             content = (
                 content[:insert_pos]
-                + "\n\n" + link_block + "\n"
+                + link_block + "\n\n"
                 + content[insert_pos:]
             )
+        elif headings:
+            # 헤딩 1개뿐이면 끝에 추가
+            content += "\n\n" + link_block
         else:
             content += "\n\n" + link_block
 
+        logger.debug(
+            f"[INTERNAL_LINK] 서론 링크 {len(links_to_insert)}개 삽입"
+        )
         return content
 
     def _insert_section_links(
@@ -256,18 +285,45 @@ class InternalLinker:
         section_headings: List[str],
         used_urls: set,
         sim_service: SimilarityService,
+        body_count: int = 1,
+        body_link_type: str = "quote",
     ) -> str:
-        """본문 섹션 뒤에 유사 링크 삽입 (섹션당 0~1개, 유사도 기반)"""
+        """
+        본문 섹션 뒤에 유사 링크 삽입 (유사도 기반)
+
+        Args:
+            content: 마크다운 본문
+            all_posts: 전체 포스트 목록
+            section_headings: 본론 헤딩 텍스트 목록
+            used_urls: 이미 사용된 URL 집합
+            sim_service: 유사도 서비스
+            body_count: 섹션당 삽입할 링크 수 (0이면 스킵)
+            body_link_type: 링크 유형 ("quote" 또는 "normal")
+
+        Returns:
+            링크가 삽입된 마크다운 글
+        """
+        if body_count <= 0:
+            logger.debug("[INTERNAL_LINK] 본론: body_count=0, 스킵")
+            return content
+
         if not section_headings or not all_posts:
             return content
 
-        headings = list(re.finditer(r'\n(## .+)', content))
+        headings = list(re.finditer(
+            r'^(## .+)', content, re.MULTILINE
+        ))
         if len(headings) < 3:
+            logger.debug(
+                f"[INTERNAL_LINK] 본론: 헤딩 {len(headings)}개 "
+                f"(최소 3개 필요)"
+            )
             return content
 
-        # 본론 섹션 인덱스 (첫 번째=서론 뒤 첫 섹션, 마지막=결론 제외)
+        # 본론 섹션 인덱스 (첫 번째=서론 뒤, 마지막=결론 제외)
         body_indices = list(range(1, len(headings) - 1))
         offset = 0
+        inserted = 0
 
         for idx, heading_idx in enumerate(body_indices):
             if idx >= len(section_headings):
@@ -279,15 +335,27 @@ class InternalLinker:
                 if p.url and p.url not in used_urls
             ]
 
-            best_post = self._find_best_match_for_section(
-                section_title, available, sim_service
+            # body_count만큼 유사 포스트 매칭
+            matched_posts = self._find_similar_by_score(
+                section_title, available, sim_service, limit=body_count
             )
-            if not best_post:
+            if not matched_posts:
                 continue
 
-            link_text = (
-                f"\n\n> 관련 글: [{best_post.title}]({best_post.url})\n"
-            )
+            # 링크 텍스트 생성 (body_link_type에 따라)
+            link_lines = []
+            for post in matched_posts:
+                if body_link_type == "normal":
+                    link_lines.append(
+                        f"[{post.title}]({post.url})"
+                    )
+                else:  # "quote" (기본값)
+                    link_lines.append(
+                        f"> 관련 글: [{post.title}]({post.url})"
+                    )
+                used_urls.add(post.url)
+
+            link_text = "\n\n" + "\n\n".join(link_lines) + "\n"
 
             # 다음 헤딩 바로 앞에 삽입
             next_heading_pos = (
@@ -301,8 +369,12 @@ class InternalLinker:
                 + content[next_heading_pos:]
             )
             offset += len(link_text)
-            used_urls.add(best_post.url)
+            inserted += len(matched_posts)
 
+        logger.debug(
+            f"[INTERNAL_LINK] 본론 링크 {inserted}개 삽입 "
+            f"(섹션 {len(body_indices)}개 중)"
+        )
         return content
 
     def _insert_conclusion_links(
@@ -334,7 +406,7 @@ class InternalLinker:
             return content
 
         link_block = (
-            "\n\n---\n\n**함께 보면 좋은 글**\n\n"
+            "\n\n---\n\n### 함께 보면 좋은 글\n\n"
             + "\n".join(link_lines)
         )
         content += link_block

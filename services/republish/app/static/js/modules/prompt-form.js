@@ -77,6 +77,8 @@ function createPromptModuleState() {
             similarityThreshold: 75,
             introCount: 3,
             introLinkType: 'button',
+            bodyCount: 1,
+            bodyLinkType: 'quote',
             conclusionCount: 3,
             conclusionListStyle: 'dash'
         },
@@ -208,6 +210,8 @@ const promptModuleMethods = {
                 similarityThreshold: il.similarity_threshold ?? 75,
                 introCount: il.intro_count ?? 3,
                 introLinkType: il.intro_link_type || 'button',
+                bodyCount: il.body_count ?? 1,
+                bodyLinkType: il.body_link_type || 'quote',
                 conclusionCount: il.conclusion_count ?? 3,
                 conclusionListStyle: il.conclusion_list_style || 'dash'
             };
@@ -442,6 +446,8 @@ const promptModuleMethods = {
                 similarity_threshold: this.promptModule.internalLinks.similarityThreshold,
                 intro_count: this.promptModule.internalLinks.introCount,
                 intro_link_type: this.promptModule.internalLinks.introLinkType,
+                body_count: this.promptModule.internalLinks.bodyCount,
+                body_link_type: this.promptModule.internalLinks.bodyLinkType,
                 conclusion_count: this.promptModule.internalLinks.conclusionCount,
                 conclusion_list_style: this.promptModule.internalLinks.conclusionListStyle
             },

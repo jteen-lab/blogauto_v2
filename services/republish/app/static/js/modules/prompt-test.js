@@ -230,7 +230,7 @@ const promptTestMethods = {
         finally { this._endTest(); }
     },
 
-    // Step: 내부링크 추가
+    // Step: 내부링크 추가 (UI 내부링크 설정을 il_settings로 전달)
     async runStepInternalLinks() {
         console.log('[PromptTest] runStepInternalLinks 호출됨');
         const moduleId = this.getTestModuleId();
@@ -241,8 +241,19 @@ const promptTestMethods = {
         if (!content) return this._setTestError('internalLinks', '글 생성 테스트를 먼저 실행하세요');
         this._startTest('internalLinks');
         try {
+            const il = this.promptModule.internalLinks || {};
             const data = await this._testFetch('/api/v1/generation/test/add-internal-links', {
                 blog_id: blogId, module_id: moduleId, title: title || '', content: content,
+                il_settings: {
+                    enabled: il.enabled ?? false,
+                    similarity_threshold: il.similarityThreshold ?? 75,
+                    intro_count: il.introCount ?? 3,
+                    intro_link_type: il.introLinkType || 'button',
+                    body_count: il.bodyCount ?? 1,
+                    body_link_type: il.bodyLinkType || 'quote',
+                    conclusion_count: il.conclusionCount ?? 3,
+                    conclusion_list_style: il.conclusionListStyle || 'dash',
+                },
             });
             this.promptTest.results.internalLinks = data;
         } catch (e) { this._setTestError('internalLinks', e.message); }

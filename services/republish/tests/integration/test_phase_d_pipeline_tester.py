@@ -3,6 +3,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.services.generation.pipeline_tester import PipelineTester
+from app.services.generation.pipeline_full_tester import FullPipelineTester
 from app.services.generation.image_generator import ImageResult
 from app.services.generation.title_recombiner import RecombineStyleResult
 from tests.fixtures.generation_pipeline_fixtures import (
@@ -401,7 +402,7 @@ class TestGenerateImage:
 class TestFullPipeline:
     """Step 6: 전체 파이프라인 테스트"""
 
-    def _setup_tester(self, mock_db) -> PipelineTester:
+    def _setup_tester(self, mock_db) -> FullPipelineTester:
         """전체 파이프라인용 Tester 준비"""
         module = create_mock_module(module_id=1)
         blog = create_mock_blog(blog_id=1)
@@ -417,7 +418,8 @@ class TestFullPipeline:
             ),
         )
 
-        tester = _make_tester(mock_db)
+        full_tester = FullPipelineTester(mock_db, user_id=1)
+        tester = full_tester.tester
 
         # Step 1: 제목 선택
         tester.inventory_trigger.find_available_titles = AsyncMock(
@@ -466,7 +468,7 @@ class TestFullPipeline:
             return_value=SAMPLE_HTML,
         )
 
-        return tester
+        return full_tester
 
     @pytest.mark.asyncio
     async def test_full_pipeline_dry_run(self, mock_db):
@@ -504,7 +506,7 @@ class TestFullPipeline:
     async def test_step1_failure_stops_pipeline(self, mock_db):
         """Step 1 실패 시 이후 단계 실행 안 함"""
         tester = self._setup_tester(mock_db)
-        tester.inventory_trigger.find_available_titles = AsyncMock(
+        tester.tester.inventory_trigger.find_available_titles = AsyncMock(
             return_value=[],
         )
 

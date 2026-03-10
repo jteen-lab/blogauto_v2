@@ -53,6 +53,31 @@ function getPromptInternalLinksSection() {
                                         </div>
                                     </div>
 
+                                    <!-- 본론 링크 설정 -->
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                                본론 링크 개수
+                                                <span class="text-xs text-gray-400">(0이면 비활성)</span>
+                                            </label>
+                                            <input type="number"
+                                                   x-model.number="promptModule.internalLinks.bodyCount"
+                                                   min="0" max="3"
+                                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 text-sm">
+                                            <p class="mt-0.5 text-xs text-gray-400">0~3개 (섹션당)</p>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 mb-2">본론 링크 유형</label>
+                                            <select x-model="promptModule.internalLinks.bodyLinkType"
+                                                    :disabled="promptModule.internalLinks.bodyCount === 0"
+                                                    :class="promptModule.internalLinks.bodyCount === 0 ? 'opacity-50' : ''"
+                                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 text-sm">
+                                                <option value="quote">인용형 (&gt; 관련 글)</option>
+                                                <option value="normal">일반 링크</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
                                     <!-- 결론 링크 설정 -->
                                     <div class="grid grid-cols-2 gap-4">
                                         <div>

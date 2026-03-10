@@ -17,6 +17,7 @@ from ..core.database import get_db_session
 from ..models.user import User
 from ..routers.auth import get_current_user
 from ..services.generation.pipeline_tester import PipelineTester
+from ..services.generation.pipeline_full_tester import FullPipelineTester
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -75,6 +76,9 @@ class AddInternalLinksRequest(BaseModel):
     module_id: int = Field(..., description="프롬프트 모듈 ID")
     title: str = Field(..., description="현재 글 제목")
     content: str = Field(..., description="마크다운 본문")
+    il_settings: Optional[dict] = Field(
+        None, description="UI에서 전달된 내부링크 설정 (None이면 DB 설정 사용)",
+    )
 
 
 class GenerateImageRequest(BaseModel):
@@ -201,6 +205,7 @@ async def test_add_internal_links(
         module_id=req.module_id,
         current_title=req.title,
         content=req.content,
+        il_settings=req.il_settings,
     )
 
 
@@ -254,7 +259,7 @@ async def test_full_pipeline(
     모든 단계를 순서대로 실행합니다.
     dry_run=True면 DB에 저장하지 않습니다.
     """
-    tester = PipelineTester(db, user.id)
+    tester = FullPipelineTester(db, user.id)
     return await tester.test_full_pipeline(
         blog_id=req.blog_id,
         module_id=req.module_id,
