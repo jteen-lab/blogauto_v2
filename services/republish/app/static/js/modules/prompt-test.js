@@ -260,7 +260,7 @@ const promptTestMethods = {
         finally { this._endTest(); }
     },
 
-    // Step: 이미지 생성
+    // Step: 이미지 생성 (템플릿 모드: Canvas 렌더링, AI 모드: 서버 API)
     async runStepImage() {
         console.log('[PromptTest] runStepImage 호출됨');
         const moduleId = this.getTestModuleId();
@@ -268,6 +268,57 @@ const promptTestMethods = {
         const title = this.promptTest.imageTitle?.trim();
         if (!moduleId || !blogId) return this._setTestError('image', '모듈 ID와 블로그를 선택하세요');
         if (!title) return this._setTestError('image', '제목을 입력하세요');
+
+        const blogImageMode = this.getSelectedBlogImageMode();
+        const useTemplate = blogImageMode === 'template'
+            || (blogImageMode === 'both' && this.promptModule.imageGeneration.coverSource === 'template');
+
+        if (useTemplate) {
+            await this._runTemplateImageTest(blogId, title);
+        } else {
+            await this._runAIImageTest(moduleId, blogId, title);
+        }
+    },
+
+    // 템플릿 이미지: Canvas 렌더링 (서버 호출 없음)
+    async _runTemplateImageTest(blogId, title) {
+        this._startTest('image');
+        try {
+            const startTime = performance.now();
+
+            // Canvas 요소 확인 (템플릿에서 동적 생성)
+            await this.$nextTick();
+            const canvas = document.getElementById('testImageCanvas');
+            if (!canvas) {
+                this.promptTest.results.image = {
+                    success: false, error: 'Canvas 요소를 찾을 수 없습니다'
+                };
+                return;
+            }
+
+            // TemplateImageRenderer로 렌더링
+            const result = await window.TemplateImageRenderer.renderForBlog(canvas, blogId, title);
+            const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+
+            if (result.success) {
+                this.promptTest.results.image = {
+                    success: true,
+                    result: {
+                        image_mode: 'template',
+                        blog_image_mode: this.getSelectedBlogImageMode(),
+                        generation_time_seconds: elapsed,
+                        canvas_rendered: true,
+                    }
+                };
+            } else {
+                this.promptTest.results.image = { success: false, error: result.error };
+            }
+        } catch (e) { this._setTestError('image', e.message); }
+        finally { this._endTest(); }
+    },
+
+    // AI 이미지: 기존 서버 API 호출
+    async _runAIImageTest(moduleId, blogId, title) {
         this._startTest('image');
         try {
             const data = await this._testFetch('/api/v1/generation/test/generate-image', {

@@ -100,8 +100,14 @@ function createPromptModuleState() {
             nanobanana: {
                 aspectRatio: '16:9',
                 style: 'realistic'
-            }
-        }
+            },
+            titleOverlay: false,        // AI 이미지에 제목 오버레이
+            coverSource: 'template',    // both 모드: 대표이미지 소스
+            sectionSource: 'ai'         // both 모드: 섹션이미지 소스
+        },
+
+        // 블로그별 이미지 모드 캐시 (blog_id → image_mode)
+        blogImageModes: {}
     };
 }
 
@@ -198,7 +204,10 @@ const promptModuleMethods = {
                 promptTemplate: ig.prompt_template || '',
                 imagesPerPost: ig.images_per_post || 1,
                 dalle: ig.dalle || { size: '1024x1024', quality: 'standard', style: 'vivid' },
-                nanobanana: ig.nanobanana || { aspectRatio: '16:9', style: 'realistic' }
+                nanobanana: ig.nanobanana || { aspectRatio: '16:9', style: 'realistic' },
+                titleOverlay: ig.title_overlay ?? false,
+                coverSource: ig.cover_source || 'template',
+                sectionSource: ig.section_source || 'ai'
             };
         }
 
@@ -298,9 +307,22 @@ const promptModuleMethods = {
                 const data = await resp.json();
                 this.promptModule.matchedBlogs = data.matched_blogs || [];
                 this.promptModule.unmatchedBlogs = data.unmatched_blogs || [];
+                // 블로그별 image_mode 캐시 업데이트
+                const allBlogs = [...this.promptModule.matchedBlogs, ...this.promptModule.unmatchedBlogs];
+                for (const b of allBlogs) {
+                    if (b.image_mode) this.promptModule.blogImageModes[b.id] = b.image_mode;
+                }
             }
         } catch (e) { console.error('블로그 조회 실패:', e); }
         finally { this.promptModule.blogsLoading = false; }
+    },
+
+    // 선택된 블로그들의 대표 image_mode 반환 (첫 번째 블로그 기준, 없으면 'template')
+    getSelectedBlogImageMode() {
+        const selectedIds = this.promptModule.selectedBlogs || [];
+        if (selectedIds.length === 0) return 'template';
+        const firstId = selectedIds[0];
+        return this.promptModule.blogImageModes[firstId] || 'template';
     },
     toggleTitleStyle(styleValue) {
         const idx = this.promptModule.titleRecombine.selectedStyles.indexOf(styleValue);
@@ -460,7 +482,10 @@ const promptModuleMethods = {
                 prompt_template: this.promptModule.imageGeneration.promptTemplate,
                 images_per_post: this.promptModule.imageGeneration.imagesPerPost,
                 dalle: this.promptModule.imageGeneration.dalle,
-                nanobanana: this.promptModule.imageGeneration.nanobanana
+                nanobanana: this.promptModule.imageGeneration.nanobanana,
+                title_overlay: this.promptModule.imageGeneration.titleOverlay,
+                cover_source: this.promptModule.imageGeneration.coverSource,
+                section_source: this.promptModule.imageGeneration.sectionSource
             }
         };
     }

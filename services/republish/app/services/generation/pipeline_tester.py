@@ -327,7 +327,7 @@ class PipelineTester:
     async def test_generate_image(
         self, module_id: int, blog_id: int, title: str,
     ) -> dict:
-        """Step 6: 이미지 생성 테스트"""
+        """Step 6: 이미지 생성 테스트 (image_mode별 동작 분기)"""
         module = await self.db.get(Module, module_id)
         blog = await self.db.get(Blog, blog_id)
         if not module:
@@ -336,6 +336,8 @@ class PipelineTester:
             return self._error("generate_image", "블로그를 찾을 수 없습니다")
 
         settings = module.settings or {}
+        img_settings = settings.get("image_generation", {})
+        blog_image_mode = getattr(blog, "image_mode", None) or "template"
 
         start = time.time()
         result = await self.image_generator.generate(
@@ -343,8 +345,23 @@ class PipelineTester:
         )
         elapsed = int(time.time() - start)
 
-        img_settings = settings.get("image_generation", {})
+        return self._build_image_result(
+            result, elapsed, img_settings, blog_image_mode,
+        )
 
+    def _build_image_result(
+        self, result, elapsed: int, img_settings: dict,
+        blog_image_mode: str,
+    ) -> dict:
+        """이미지 테스트 결과 딕셔너리 생성"""
+        both_info = {}
+        if blog_image_mode == "both":
+            both_info = {
+                "cover_source": img_settings.get("cover_source", "ai"),
+                "section_source": img_settings.get(
+                    "section_source", "template"
+                ),
+            }
         return {
             "step": "generate_image",
             "success": result.success,
@@ -354,8 +371,11 @@ class PipelineTester:
                 "provider": result.provider,
                 "ai_model": result.ai_model,
                 "generation_time_seconds": elapsed,
-                "blog_image_mode": getattr(blog, "image_mode", None),
+                "blog_image_mode": blog_image_mode,
                 "enabled": img_settings.get("enabled", False),
+                "title_overlay": img_settings.get("title_overlay", False),
+                "section_images": result.section_images,
+                **both_info,
             },
             **({"error": result.error} if result.error else {}),
         }

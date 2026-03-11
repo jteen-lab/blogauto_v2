@@ -264,18 +264,62 @@ function getTestInternalLinksSection() {
 function getTestImageSection() {
     const inner = `
             <p class="text-xs text-gray-500">블로그 설정에 따라 AI 또는 템플릿 이미지를 생성합니다.</p>
+            <!-- 블로그 이미지 모드 안내 -->
+            <div x-show="getSelectedBlogImageMode() === 'template'"
+                 class="p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-700">
+                블로그가 템플릿 이미지 모드입니다. Canvas로 미리보기를 생성합니다.
+            </div>
+            <div x-show="getSelectedBlogImageMode() === 'both'"
+                 class="p-2 bg-purple-50 border border-purple-200 rounded text-xs text-purple-700">
+                AI + 템플릿 병행 모드 - 대표이미지(<span x-text="promptModule.imageGeneration.coverSource"></span>)
+                / 섹션이미지(<span x-text="promptModule.imageGeneration.sectionSource"></span>)
+            </div>
             <div><label class="block text-xs font-medium text-gray-600 mb-1">이미지 제목</label>
                 <input type="text" x-model="promptTest.imageTitle" placeholder="이전 단계에서 자동 입력 또는 직접 입력"
                        class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"></div>
             ${_testBtn('runStepImage', '실행', 'image')}
+            <!-- Canvas: 템플릿 모드 렌더링용 (숨겨진 상태로 항상 존재) -->
+            <canvas id="testImageCanvas" style="display:none;"></canvas>
             <template x-if="promptTest.results.image"><div class="mt-2">
                 <template x-if="promptTest.results.image.success">
                     <div class="p-3 bg-green-50 border border-green-200 rounded-lg space-y-1 text-sm">
-                        <div class="text-green-800">모드: <span x-text="promptTest.results.image.result?.image_mode || '없음'"></span></div>
-                        <div x-show="promptTest.results.image.result?.image_url" class="text-green-700 text-xs">URL: <span x-text="promptTest.results.image.result?.image_url"></span></div>
-                        <div x-show="promptTest.results.image.result?.image_url" class="mt-1">
-                            <img :src="promptTest.results.image.result?.image_url" class="max-w-xs rounded border" alt="생성된 이미지"></div>
-                        <div x-show="!promptTest.results.image.result?.image_url" class="text-green-600 text-xs">이미지가 생성되지 않았습니다 (비활성화 또는 mode=none)</div>
+                        <div class="text-green-800">모드: <span x-text="promptTest.results.image.result?.image_mode || '없음'"></span>
+                            <span x-show="promptTest.results.image.result?.blog_image_mode"
+                                  class="text-xs text-gray-500 ml-1">(블로그: <span x-text="promptTest.results.image.result?.blog_image_mode"></span>)</span>
+                        </div>
+                        <!-- 템플릿 Canvas 미리보기 -->
+                        <template x-if="promptTest.results.image.result?.canvas_rendered">
+                            <div class="mt-1 space-y-1">
+                                <div class="text-green-600 text-xs">Canvas 렌더링 완료 (서버 호출 없음)</div>
+                                <img id="testImagePreview" class="max-w-full rounded border" alt="템플릿 이미지 미리보기"
+                                     x-init="$nextTick(() => {
+                                         const cvs = document.getElementById('testImageCanvas');
+                                         const img = document.getElementById('testImagePreview');
+                                         if (cvs && img) img.src = cvs.toDataURL('image/png');
+                                     })">
+                            </div>
+                        </template>
+                        <!-- AI 모드: 대표 이미지 URL -->
+                        <template x-if="!promptTest.results.image.result?.canvas_rendered">
+                            <div>
+                                <div x-show="promptTest.results.image.result?.image_url" class="text-green-700 text-xs">대표 이미지 URL: <span x-text="promptTest.results.image.result?.image_url"></span></div>
+                                <div x-show="promptTest.results.image.result?.image_url" class="mt-1">
+                                    <img :src="promptTest.results.image.result?.image_url" class="max-w-xs rounded border" alt="대표 이미지"></div>
+                                <!-- 섹션 이미지 (section_images 배열) -->
+                                <template x-if="promptTest.results.image.result?.section_images?.length > 0">
+                                    <div class="space-y-1 mt-2">
+                                        <div class="text-xs font-medium text-green-700">섹션 이미지 (<span x-text="promptTest.results.image.result.section_images.length"></span>장):</div>
+                                        <template x-for="(sImg, sIdx) in promptTest.results.image.result.section_images" :key="sIdx">
+                                            <div class="flex items-center gap-2">
+                                                <img :src="sImg.image_url || sImg" class="w-20 h-20 object-cover rounded border" :alt="'섹션 이미지 ' + (sIdx + 1)">
+                                                <span class="text-xs text-gray-500" x-text="sImg.image_url || sImg"></span>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+                                <div x-show="!promptTest.results.image.result?.image_url && !promptTest.results.image.result?.section_images?.length" class="text-green-600 text-xs">이미지가 생성되지 않았습니다 (비활성화 또는 mode=none)</div>
+                            </div>
+                        </template>
                         <div class="text-green-700 text-xs">소요: <span x-text="promptTest.results.image.result?.generation_time_seconds"></span>초</div>
                     </div>
                 </template>

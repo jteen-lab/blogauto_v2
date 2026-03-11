@@ -210,6 +210,7 @@ async def get_blogs_by_categories(
             'name': blog.name,
             'url': blog.url,
             'platform': blog.platform,
+            'image_mode': blog.image_mode,
         }
 
         if is_matched:

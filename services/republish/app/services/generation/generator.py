@@ -263,6 +263,7 @@ class ContentGenerator:
         # 6.5 이미지 생성 (실패해도 글 생성은 계속)
         image_url = None
         ai_model_image = None
+        section_images = None
         try:
             img_result = await self.image_generator.generate(
                 blog=blog, title=working_title, module_settings=settings,
@@ -270,9 +271,11 @@ class ContentGenerator:
             if img_result.success and img_result.image_url:
                 image_url = img_result.image_url
                 ai_model_image = img_result.ai_model
+                section_images = img_result.section_images
                 logger.info(
                     f"[GENERATOR] 이미지 생성 완료 | "
-                    f"mode={img_result.image_mode}"
+                    f"mode={img_result.image_mode} | "
+                    f"sections={len(section_images) if section_images else 0}"
                 )
         except Exception as e:
             logger.warning(
