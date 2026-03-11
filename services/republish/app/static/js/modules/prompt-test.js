@@ -269,6 +269,21 @@ const promptTestMethods = {
         if (!moduleId || !blogId) return this._setTestError('image', '모듈 ID와 블로그를 선택하세요');
         if (!title) return this._setTestError('image', '제목을 입력하세요');
 
+        // 블로그 최신 image_mode 캐시 갱신
+        if (blogId) {
+            try {
+                const resp = await fetch(`/api/v1/blogs/${blogId}/settings/image`);
+                if (resp.ok) {
+                    const imgData = await resp.json();
+                    this.promptModule.blogImageModes[blogId] = imgData.image_mode;
+                    console.log('[PromptTest] blogImageMode 캐시 갱신:', blogId, imgData.image_mode);
+                }
+            } catch (e) {
+                // 캐시 갱신 실패는 무시 - 기존 캐시 사용
+                console.warn('[PromptTest] blogImageMode 캐시 갱신 실패:', e.message);
+            }
+        }
+
         const blogImageMode = this.getSelectedBlogImageMode();
         const useTemplate = blogImageMode === 'template'
             || (blogImageMode === 'both' && this.promptModule.imageGeneration.coverSource === 'template');

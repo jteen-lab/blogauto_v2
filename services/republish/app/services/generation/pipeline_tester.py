@@ -337,6 +337,12 @@ class PipelineTester:
 
         settings = module.settings or {}
         img_settings = settings.get("image_generation", {})
+
+        # 테스트 요청이므로 enabled를 강제 활성화
+        img_settings["enabled"] = True
+        settings["image_generation"] = img_settings
+        logger.debug("[PIPELINE_TEST] 이미지 생성 테스트 - enabled 강제 활성화")
+
         blog_image_mode = getattr(blog, "image_mode", None) or "template"
 
         start = time.time()

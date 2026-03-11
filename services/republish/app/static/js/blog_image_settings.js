@@ -24,6 +24,22 @@ function imageSettingsApp() {
         // AI 이미지 서비스: openai (DALL-E), nanobanana (Nano Banana)
         aiImageService: 'openai',
 
+        // AI 이미지 모델
+        aiImageModel: 'dall-e-3',
+
+        // 서비스별 사용 가능한 모델 목록
+        AI_IMAGE_MODELS: {
+            openai: [
+                { value: 'dall-e-3', label: 'DALL-E 3 (추천)' },
+                { value: 'dall-e-2', label: 'DALL-E 2' },
+                { value: 'gpt-image-1', label: 'GPT Image 1' },
+            ],
+            nanobanana: [
+                { value: 'gemini-3-pro-image-preview', label: 'Gemini 3 Pro (추천)' },
+                { value: 'gemini-2.5-flash-image', label: 'Gemini 2.5 Flash Image' },
+            ],
+        },
+
         // 오버레이 설정
         overlayConfig: {
             template_image: null,
@@ -75,7 +91,22 @@ function imageSettingsApp() {
         /**
          * 초기화 - Alpine.js가 자동 호출
          */
+        /**
+         * 현재 AI 서비스에 맞는 모델 목록 반환
+         */
+        getAvailableModels() {
+            return this.AI_IMAGE_MODELS[this.aiImageService] || [];
+        },
+
         init() {
+            // AI 서비스 변경 시 모델을 해당 서비스의 기본값으로 리셋
+            this.$watch('aiImageService', (newService) => {
+                const models = this.AI_IMAGE_MODELS[newService];
+                if (models && models.length > 0) {
+                    this.aiImageModel = models[0].value;
+                }
+            });
+
             // 전역 이벤트 리스너 등록 - blogSettingsApp에서 setBlog 호출 시
             window.addEventListener('blog-settings-loaded', (e) => {
                 if (e.detail && e.detail.blogId) {
@@ -152,6 +183,7 @@ function imageSettingsApp() {
         applySettings(data) {
             if (data.image_mode) this.imageMode = data.image_mode;
             if (data.ai_image_service) this.aiImageService = data.ai_image_service;
+            if (data.ai_image_model) this.aiImageModel = data.ai_image_model;
 
             if (data.overlay_config) {
                 const config = data.overlay_config;
@@ -409,110 +441,10 @@ function imageSettingsApp() {
             this.drawPaddingGuide(ctx, img.width, img.height, config.padding);
         },
 
-        drawPaddingGuide(ctx, width, height, padding) {
-            ctx.save();
-
-            // 점선 스타일 설정
-            ctx.setLineDash([8, 4]);
-            ctx.strokeStyle = 'rgba(99, 102, 241, 0.7)'; // 인디고 색상
-            ctx.lineWidth = 2;
-
-            // 텍스트 영역 사각형 (패딩 내부)
-            const x = padding.left;
-            const y = padding.top;
-            const w = width - padding.left - padding.right;
-            const h = height - padding.top - padding.bottom;
-
-            ctx.strokeRect(x, y, w, h);
-            // 코너 마커
-            ctx.setLineDash([]);
-            ctx.fillStyle = 'rgba(99, 102, 241, 0.9)';
-            const m = 8, hm = m/2;
-            [[x, y], [x + w, y], [x, y + h], [x + w, y + h]].forEach(([cx, cy]) => {
-                ctx.fillRect(cx - hm, cy - hm, m, m);
-            });
-            ctx.restore();
-        },
-
-        /**
-         * 텍스트를 단어(공백) 단위로 줄바꿈
-         * - 단어 중간에서 잘리지 않음
-         * - 명시적 줄바꿈(\n) 지원
-         * - 단어가 maxWidth보다 길면 문자 단위로 분할 (폴백)
-         */
-        wrapText(ctx, text, maxWidth) {
-            const lines = [];
-            text.split('\n').forEach(paragraph => {
-                if (!paragraph) { lines.push(''); return; }
-
-                // 단어 단위로 분리 (공백 포함하여 분리)
-                const words = paragraph.split(/(\s+)/);
-                let currentLine = '';
-
-                for (const word of words) {
-                    // 공백만 있는 경우 현재 줄에 추가
-                    if (!word.trim()) {
-                        currentLine += word;
-                        continue;
-                    }
-
-                    const testLine = currentLine + word;
-                    const testWidth = ctx.measureText(testLine).width;
-
-                    if (testWidth > maxWidth && currentLine.trim()) {
-                        // 현재 줄 저장하고 새 줄 시작
-                        lines.push(currentLine.trim());
-                        currentLine = word;
-                    } else if (testWidth > maxWidth && !currentLine.trim()) {
-                        // 단어 자체가 maxWidth보다 긴 경우 - 문자 단위 폴백
-                        let tempLine = '';
-                        for (const char of word) {
-                            const charTest = tempLine + char;
-                            if (ctx.measureText(charTest).width > maxWidth && tempLine) {
-                                lines.push(tempLine);
-                                tempLine = char;
-                            } else {
-                                tempLine = charTest;
-                            }
-                        }
-                        currentLine = tempLine;
-                    } else {
-                        currentLine = testLine;
-                    }
-                }
-
-                if (currentLine.trim()) lines.push(currentLine.trim());
-            });
-            return lines;
-        },
-
-        drawText(ctx, text, x, y, config) {
-            ctx.save();
-
-            // 그림자
-            if (config.shadow_enabled) {
-                ctx.shadowColor = config.shadow_color;
-                ctx.shadowBlur = config.shadow_blur;
-                ctx.shadowOffsetX = config.shadow_offset_x;
-                ctx.shadowOffsetY = config.shadow_offset_y;
-            }
-
-            // 외곽선
-            if (config.stroke_enabled && config.stroke_width > 0) {
-                ctx.strokeStyle = config.stroke_color;
-                ctx.lineWidth = config.stroke_width * 2;
-                ctx.lineJoin = 'round';
-                ctx.miterLimit = 2;
-                ctx.strokeText(text, x, y);
-            }
-
-            if (!config.shadow_enabled) ctx.shadowColor = 'transparent';
-
-            // 텍스트
-            ctx.fillStyle = config.text_color;
-            ctx.fillText(text, x, y);
-            ctx.restore();
-        },
+        // 캔버스 미리보기 헬퍼 (blog_image_preview.js에서 제공)
+        drawPaddingGuide: imagePreviewMixin.drawPaddingGuide,
+        wrapText: imagePreviewMixin.wrapText,
+        drawText: imagePreviewMixin.drawText,
 
         async saveSettings() {
             const blogId = this.getBlogId();
@@ -526,6 +458,7 @@ function imageSettingsApp() {
                 const payload = {
                     image_mode: this.imageMode,
                     ai_image_service: this.aiImageService,
+                    ai_image_model: this.aiImageModel,
                     overlay_config: this.overlayConfig
                 };
 

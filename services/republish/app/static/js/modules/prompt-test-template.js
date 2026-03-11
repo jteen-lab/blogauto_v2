@@ -302,6 +302,11 @@ function getTestImageSection() {
                         <!-- AI 모드: 대표 이미지 URL -->
                         <template x-if="!promptTest.results.image.result?.canvas_rendered">
                             <div>
+                                <!-- AI 서비스/모델 정보 -->
+                                <div class="text-green-700 text-xs flex flex-wrap gap-x-3 gap-y-0.5 mb-1">
+                                    <span>AI 서비스: <span x-text="promptTest.results.image.result?.provider || '-'"></span></span>
+                                    <span>모델: <span x-text="promptTest.results.image.result?.ai_model || '-'"></span></span>
+                                </div>
                                 <div x-show="promptTest.results.image.result?.image_url" class="text-green-700 text-xs">대표 이미지 URL: <span x-text="promptTest.results.image.result?.image_url"></span></div>
                                 <div x-show="promptTest.results.image.result?.image_url" class="mt-1">
                                     <img :src="promptTest.results.image.result?.image_url" class="max-w-xs rounded border" alt="대표 이미지"></div>

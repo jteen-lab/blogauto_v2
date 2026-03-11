@@ -67,11 +67,13 @@ class ImageGenerator:
         image_mode = getattr(blog, "image_mode", None) or "template"
         img_settings = module_settings.get("image_generation", {})
 
-        # template 모드: enabled 체크 없이 항상 생성
-        # ai/openai/both 모드: enabled 필수
-        if image_mode != "template":
+        # template/ai/openai 모드: blog.image_mode로 이미 결정됨 → 항상 생성
+        # both 모드: blog.image_mode로 결정됨 → 항상 생성
+        # none 모드: _dispatch에서 건너뜀
+        # enabled 플래그는 image_mode 미설정 시 폴백용으로만 사용
+        if image_mode not in ("template", "openai", "ai", "both"):
             if not img_settings.get("enabled", False):
-                logger.debug("[IMAGE_GEN] AI 이미지 비활성화 - 건너뜀")
+                logger.debug("[IMAGE_GEN] 이미지 생성 비활성화 - 건너뜀")
                 return ImageResult(success=True)
 
         logger.info(
@@ -240,9 +242,15 @@ class ImageGenerator:
         if image_ai.get("provider"):
             effective_settings = img_settings.copy()
             effective_settings["provider"] = image_ai["provider"]
+            # model도 dalle 설정에 전달
+            if image_ai.get("model"):
+                dalle_settings = effective_settings.get("dalle", {}).copy()
+                dalle_settings["model"] = image_ai["model"]
+                effective_settings["dalle"] = dalle_settings
             logger.info(
-                f"[IMAGE_GEN] AI provider 오버라이드: "
-                f"blog.image_ai.provider={image_ai['provider']}"
+                f"[IMAGE_GEN] AI 오버라이드: "
+                f"provider={image_ai['provider']}, "
+                f"model={image_ai.get('model', '기본값')}"
             )
         else:
             effective_settings = img_settings

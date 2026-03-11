@@ -94,7 +94,7 @@ class AIImageService:
         size = dalle_settings.get("size", "1024x1024")
         quality = dalle_settings.get("quality", "standard")
         style = dalle_settings.get("style", "natural")
-        model = "dall-e-3"
+        model = dalle_settings.get("model", "dall-e-3")
 
         try:
             remote_url = await self._call_dalle_api(
