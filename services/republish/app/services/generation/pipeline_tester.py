@@ -326,8 +326,16 @@ class PipelineTester:
 
     async def test_generate_image(
         self, module_id: int, blog_id: int, title: str,
+        image_settings: Optional[dict] = None,
     ) -> dict:
-        """Step 6: 이미지 생성 테스트 (image_mode별 동작 분기)"""
+        """Step 6: 이미지 생성 테스트 (image_mode별 동작 분기)
+
+        Args:
+            module_id: 모듈 ID
+            blog_id: 블로그 ID
+            title: 이미지 제목
+            image_settings: UI에서 전달된 이미지 설정 (선택, None이면 DB 설정 사용)
+        """
         module = await self.db.get(Module, module_id)
         blog = await self.db.get(Blog, blog_id)
         if not module:
@@ -336,12 +344,19 @@ class PipelineTester:
             return self._error("generate_image", "블로그를 찾을 수 없습니다")
 
         settings = module.settings or {}
-        img_settings = settings.get("image_generation", {})
+        db_img_settings = settings.get("image_generation", {})
+
+        # UI 설정 우선, 없으면 DB 설정 (복사본 사용)
+        img_settings = (image_settings or db_img_settings).copy()
 
         # 테스트 요청이므로 enabled를 강제 활성화
         img_settings["enabled"] = True
         settings["image_generation"] = img_settings
-        logger.debug("[PIPELINE_TEST] 이미지 생성 테스트 - enabled 강제 활성화")
+        logger.debug(
+            "[PIPELINE_TEST] 이미지 생성 테스트 - "
+            "설정 소스: %s, enabled 강제 활성화",
+            "ui" if image_settings else "db",
+        )
 
         blog_image_mode = getattr(blog, "image_mode", None) or "template"
 
@@ -351,13 +366,15 @@ class PipelineTester:
         )
         elapsed = int(time.time() - start)
 
+        settings_source = "ui" if image_settings else "db"
         return self._build_image_result(
             result, elapsed, img_settings, blog_image_mode,
+            settings_source,
         )
 
     def _build_image_result(
         self, result, elapsed: int, img_settings: dict,
-        blog_image_mode: str,
+        blog_image_mode: str, settings_source: str = "db",
     ) -> dict:
         """이미지 테스트 결과 딕셔너리 생성"""
         both_info = {}
@@ -381,6 +398,13 @@ class PipelineTester:
                 "enabled": img_settings.get("enabled", False),
                 "title_overlay": img_settings.get("title_overlay", False),
                 "section_images": result.section_images,
+                "settings_used": {
+                    "source": settings_source,
+                    "aspect_ratio": img_settings.get("aspect_ratio"),
+                    "style": img_settings.get("style"),
+                    "quality": img_settings.get("quality"),
+                    "prompt_template": img_settings.get("prompt_template"),
+                },
                 **both_info,
             },
             **({"error": result.error} if result.error else {}),

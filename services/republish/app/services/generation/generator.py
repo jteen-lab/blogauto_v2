@@ -66,6 +66,7 @@ class GenerationResult:
     ai_model_content: Optional[str] = None
     ai_model_image: Optional[str] = None
     image_url: Optional[str] = None
+    section_images: Optional[list] = None
     error: Optional[str] = None
 
 
@@ -266,12 +267,16 @@ class ContentGenerator:
         section_images = None
         try:
             img_result = await self.image_generator.generate(
-                blog=blog, title=working_title, module_settings=settings,
+                blog=blog, title=working_title,
+                module_settings=settings, final_html=final_html,
             )
             if img_result.success and img_result.image_url:
                 image_url = img_result.image_url
                 ai_model_image = img_result.ai_model
                 section_images = img_result.section_images
+                # both 모드: 섹션 이미지가 삽입된 HTML로 교체
+                if img_result.final_html:
+                    final_html = img_result.final_html
                 logger.info(
                     f"[GENERATOR] 이미지 생성 완료 | "
                     f"mode={img_result.image_mode} | "
@@ -284,6 +289,12 @@ class ContentGenerator:
 
         # 7. GenerationHistory 저장
         elapsed = int(time.time() - start_time)
+        # section_images JSON 직렬화 (DB 저장용)
+        import json
+        section_images_json = (
+            json.dumps(section_images, ensure_ascii=False)
+            if section_images else None
+        )
         history = GenerationHistory(
             blog_id=blog_id,
             source_title_id=source_title_id,
@@ -293,6 +304,7 @@ class ContentGenerator:
             ai_model_content=ai_content_model,
             ai_model_image=ai_model_image,
             image_url=image_url,
+            section_images=section_images_json,
             reference_count=ref_result.count,
             generation_time_seconds=elapsed,
             content_length=len(final_html),
@@ -342,6 +354,7 @@ class ContentGenerator:
             ai_model_content=ai_content_model,
             ai_model_image=ai_model_image,
             image_url=image_url,
+            section_images=section_images,
         )
 
     async def _generate_content_with_meta(

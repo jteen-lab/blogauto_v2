@@ -144,120 +144,64 @@ function getPromptImageSection() {
                                         <p class="text-xs text-gray-400 mt-1 ml-6">AI 생성 이미지 위에 재조합된 제목을 오버레이합니다. 블로그 이미지 설정의 폰트/오버레이 설정이 적용됩니다.</p>
                                     </div>
 
-                                    <!-- both 모드 전용: 대표/섹션 이미지 소스 선택 -->
-                                    <div x-show="getSelectedBlogImageMode() === 'both'" class="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-2">대표 이미지 소스</label>
-                                            <select x-model="promptModule.imageGeneration.coverSource"
-                                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm">
-                                                <option value="template">템플릿 이미지</option>
-                                                <option value="ai">AI 생성 이미지</option>
-                                            </select>
-                                            <p class="text-xs text-gray-400 mt-1">글의 대표(썸네일) 이미지</p>
-                                        </div>
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-2">섹션 이미지 소스</label>
-                                            <select x-model="promptModule.imageGeneration.sectionSource"
-                                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm">
-                                                <option value="ai">AI 생성 이미지</option>
-                                                <option value="template">템플릿 이미지</option>
-                                            </select>
-                                            <p class="text-xs text-gray-400 mt-1">글 본문 내 섹션 이미지</p>
-                                        </div>
+                                    <!-- both 모드 안내 (소스 설정은 블로그 설정 이미지 탭에서 관리) -->
+                                    <div x-show="getSelectedBlogImageMode() === 'both'"
+                                         class="p-3 bg-teal-50 border border-teal-200 rounded-lg">
+                                        <p class="text-xs text-teal-700">
+                                            대표/섹션 이미지 소스(AI/템플릿)는 <strong>블로그 설정 > 이미지 탭</strong>에서 블로그별로 설정합니다.
+                                        </p>
                                     </div>
 
-                                    <!-- AI 이미지 상세 설정 -->
-                                    <div class="space-y-4">
-                                        <!-- 이미지 AI 안내 -->
-                                        <p class="text-xs text-gray-400">이미지 생성 AI 서비스 및 모델은 블로그 설정 > AI 탭에서 설정합니다.</p>
+                                    <!-- 이미지 비율 -->
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">이미지 비율</label>
+                                        <select x-model="promptModule.imageGeneration.aspectRatio"
+                                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm">
+                                            <option value="16:9">16:9 (가로 와이드)</option>
+                                            <option value="4:3">4:3 (가로)</option>
+                                            <option value="1:1">1:1 (정사각형)</option>
+                                            <option value="3:4">3:4 (세로)</option>
+                                            <option value="9:16">9:16 (세로 와이드)</option>
+                                        </select>
+                                    </div>
 
-                                        <!-- DALL-E 설정 -->
-                                        <div x-show="promptModule.imageGeneration.provider === 'dalle'" x-transition class="space-y-4">
-                                            <div class="grid grid-cols-2 gap-4">
-                                                <div>
-                                                    <label class="block text-sm font-medium text-gray-700 mb-2">이미지 크기</label>
-                                                    <select x-model="promptModule.imageGeneration.dalle.size"
-                                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
-                                                        <option value="1024x1024">1024x1024 (정사각형)</option>
-                                                        <option value="1792x1024">1792x1024 (가로)</option>
-                                                        <option value="1024x1792">1024x1792 (세로)</option>
-                                                    </select>
-                                                </div>
-                                                <div>
-                                                    <label class="block text-sm font-medium text-gray-700 mb-2">품질</label>
-                                                    <select x-model="promptModule.imageGeneration.dalle.quality"
-                                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
-                                                        <option value="standard">Standard</option>
-                                                        <option value="hd">HD (고품질)</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <label class="block text-sm font-medium text-gray-700 mb-2">스타일</label>
-                                                <div class="grid grid-cols-2 gap-2">
-                                                    <label class="flex items-center p-2 border rounded-lg cursor-pointer"
-                                                           :class="promptModule.imageGeneration.dalle.style === 'vivid' ? 'bg-green-100 border-green-400' : 'bg-white'">
-                                                        <input type="radio" value="vivid" x-model="promptModule.imageGeneration.dalle.style"
-                                                               class="w-4 h-4 text-green-600">
-                                                        <span class="ml-2 text-sm">Vivid (생동감)</span>
-                                                    </label>
-                                                    <label class="flex items-center p-2 border rounded-lg cursor-pointer"
-                                                           :class="promptModule.imageGeneration.dalle.style === 'natural' ? 'bg-green-100 border-green-400' : 'bg-white'">
-                                                        <input type="radio" value="natural" x-model="promptModule.imageGeneration.dalle.style"
-                                                               class="w-4 h-4 text-green-600">
-                                                        <span class="ml-2 text-sm">Natural (자연스러움)</span>
-                                                    </label>
-                                                </div>
-                                            </div>
-                                        </div>
+                                    <!-- 이미지 스타일 -->
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">이미지 스타일</label>
+                                        <select x-model="promptModule.imageGeneration.style"
+                                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm">
+                                            <option value="realistic">사실적 (Realistic)</option>
+                                            <option value="vivid">비비드 (Vivid)</option>
+                                            <option value="artistic">예술적 (Artistic)</option>
+                                            <option value="cartoon">카툰 (Cartoon)</option>
+                                            <option value="minimal">미니멀 (Minimal)</option>
+                                        </select>
+                                    </div>
 
-                                        <!-- Nano Banana 설정 -->
-                                        <div x-show="promptModule.imageGeneration.provider === 'nanobanana'" x-transition class="space-y-4">
-                                            <div class="grid grid-cols-2 gap-4">
-                                                <div>
-                                                    <label class="block text-sm font-medium text-gray-700 mb-2">이미지 비율</label>
-                                                    <select x-model="promptModule.imageGeneration.nanobanana.aspectRatio"
-                                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
-                                                        <option value="1:1">1:1 (정사각형)</option>
-                                                        <option value="16:9">16:9 (가로)</option>
-                                                        <option value="9:16">9:16 (세로)</option>
-                                                        <option value="4:3">4:3</option>
-                                                        <option value="3:4">3:4</option>
-                                                    </select>
-                                                </div>
-                                                <div>
-                                                    <label class="block text-sm font-medium text-gray-700 mb-2">스타일</label>
-                                                    <select x-model="promptModule.imageGeneration.nanobanana.style"
-                                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
-                                                        <option value="realistic">사실적</option>
-                                                        <option value="artistic">예술적</option>
-                                                        <option value="cartoon">카툰</option>
-                                                        <option value="minimal">미니멀</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-                                        </div>
+                                    <!-- 이미지 품질 -->
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">이미지 품질</label>
+                                        <select x-model="promptModule.imageGeneration.quality"
+                                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm">
+                                            <option value="standard">Standard</option>
+                                            <option value="hd">HD</option>
+                                        </select>
+                                        <p class="text-xs text-gray-400 mt-1">DALL-E 모델 선택 시에만 적용됩니다. 다른 모델이나 템플릿 이미지 사용 시 선택해도 적용되지 않습니다.</p>
+                                    </div>
 
-                                        <!-- 이미지 프롬프트 템플릿 -->
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-2">
-                                                이미지 프롬프트 템플릿
-                                                <span class="text-xs text-gray-500">(변수: {title}, {keywords})</span>
-                                            </label>
-                                            <textarea x-model="promptModule.imageGeneration.promptTemplate"
-                                                      rows="3"
-                                                      class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm"
-                                                      placeholder="{title} 주제의 블로그 대표 이미지. {keywords} 키워드를 시각적으로 표현. 깔끔하고 전문적인 디자인."></textarea>
-                                        </div>
+                                    <!-- AI 이미지 안내 -->
+                                    <p class="text-xs text-gray-400">이미지 생성 AI 서비스 및 모델은 블로그 설정 > AI 탭에서 설정합니다.</p>
 
-                                        <!-- 이미지 개수 -->
-                                        <div>
-                                            <label class="block text-sm font-medium text-gray-700 mb-2">글당 생성 이미지 수</label>
-                                            <input type="number"
-                                                   x-model.number="promptModule.imageGeneration.imagesPerPost"
-                                                   min="1" max="5"
-                                                   class="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
-                                        </div>
+                                    <!-- 이미지 프롬프트 템플릿 -->
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                                            이미지 프롬프트 템플릿
+                                            <span class="text-xs text-gray-500">(변수: {title}, {keywords})</span>
+                                        </label>
+                                        <textarea x-model="promptModule.imageGeneration.promptTemplate"
+                                                  rows="3"
+                                                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-sm"
+                                                  placeholder="{title} 주제의 블로그 대표 이미지. {keywords} 키워드를 시각적으로 표현. 깔끔하고 전문적인 디자인."></textarea>
                                     </div>
                                 </div>
                             </div>`;

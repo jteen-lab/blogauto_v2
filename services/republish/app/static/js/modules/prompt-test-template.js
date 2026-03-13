@@ -271,8 +271,7 @@ function getTestImageSection() {
             </div>
             <div x-show="getSelectedBlogImageMode() === 'both'"
                  class="p-2 bg-purple-50 border border-purple-200 rounded text-xs text-purple-700">
-                AI + 템플릿 병행 모드 - 대표이미지(<span x-text="promptModule.imageGeneration.coverSource"></span>)
-                / 섹션이미지(<span x-text="promptModule.imageGeneration.sectionSource"></span>)
+                AI + 템플릿 병행 모드 (소스 설정은 블로그 설정 > 이미지 탭에서 관리)
             </div>
             <div><label class="block text-xs font-medium text-gray-600 mb-1">이미지 제목</label>
                 <input type="text" x-model="promptTest.imageTitle" placeholder="이전 단계에서 자동 입력 또는 직접 입력"

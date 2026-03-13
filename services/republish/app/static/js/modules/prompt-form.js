@@ -86,24 +86,15 @@ function createPromptModuleState() {
         // 텍스트 치환 활성화
         textReplaceEnabled: true,
 
-        // 이미지 생성 설정
+        // 이미지 생성 설정 (provider는 블로그 설정에서 결정, 통합 파라미터)
+        // cover_source/section_source는 블로그 설정 이미지 탭에서 관리 (Phase 4)
         imageGeneration: {
             enabled: false,
-            provider: 'dalle',    // 폴백용 기본값 (블로그 AI 설정에서 덮어씀)
+            aspectRatio: '16:9',        // 통합: 이미지 비율
+            style: 'realistic',         // 통합: 이미지 스타일
+            quality: 'standard',        // 통합: 이미지 품질 (DALL-E만 적용)
             promptTemplate: '{title}에 대한 전문적인 블로그 헤더 이미지, {keywords} 포함, 현대적인 디자인, 깔끔한 구성',
-            imagesPerPost: 1,
-            dalle: {
-                size: '1024x1024',
-                quality: 'standard',
-                style: 'vivid'
-            },
-            nanobanana: {
-                aspectRatio: '16:9',
-                style: 'realistic'
-            },
-            titleOverlay: false,        // AI 이미지에 제목 오버레이
-            coverSource: 'template',    // both 모드: 대표이미지 소스
-            sectionSource: 'ai'         // both 모드: 섹션이미지 소스
+            titleOverlay: false         // AI 이미지에 제목 오버레이
         },
 
         // 블로그별 이미지 모드 캐시 (blog_id → image_mode)
@@ -195,19 +186,35 @@ const promptModuleMethods = {
             };
         }
 
-        // 이미지 생성 설정
+        // 이미지 생성 설정 (통합 파라미터 + 레거시 마이그레이션)
         if (settings.image_generation) {
             const ig = settings.image_generation;
+            // 레거시 dalle{}/nanobanana{} → 통합 키 마이그레이션
+            let aspectRatio = ig.aspect_ratio || '16:9';
+            let style = ig.style || 'realistic';
+            let quality = ig.quality || 'standard';
+            if (!ig.aspect_ratio && (ig.dalle || ig.nanobanana)) {
+                if (ig.nanobanana?.aspectRatio) {
+                    aspectRatio = ig.nanobanana.aspectRatio;
+                } else if (ig.dalle?.size) {
+                    const sizeMap = {'1792x1024': '16:9', '1024x1792': '9:16', '1024x1024': '1:1'};
+                    aspectRatio = sizeMap[ig.dalle.size] || '16:9';
+                }
+                if (ig.nanobanana?.style) {
+                    style = ig.nanobanana.style;
+                } else if (ig.dalle?.style) {
+                    const styleMap = {'natural': 'realistic', 'vivid': 'vivid'};
+                    style = styleMap[ig.dalle.style] || 'realistic';
+                }
+                if (ig.dalle?.quality) quality = ig.dalle.quality;
+            }
             this.promptModule.imageGeneration = {
                 enabled: ig.enabled ?? false,
-                provider: ig.provider || 'dalle',
+                aspectRatio: aspectRatio,
+                style: style,
+                quality: quality,
                 promptTemplate: ig.prompt_template || '',
-                imagesPerPost: ig.images_per_post || 1,
-                dalle: ig.dalle || { size: '1024x1024', quality: 'standard', style: 'vivid' },
-                nanobanana: ig.nanobanana || { aspectRatio: '16:9', style: 'realistic' },
-                titleOverlay: ig.title_overlay ?? false,
-                coverSource: ig.cover_source || 'template',
-                sectionSource: ig.section_source || 'ai'
+                titleOverlay: ig.title_overlay ?? false
             };
         }
 
@@ -400,14 +407,6 @@ const promptModuleMethods = {
             }
         }
 
-        // 이미지 생성 활성화 시 검증
-        if (this.promptModule.imageGeneration.enabled) {
-            if (!this.promptModule.imageGeneration.provider) {
-                this.showError('이미지 AI를 선택해주세요');
-                return false;
-            }
-        }
-
         // 최소 1개 기능 활성화 검증
         if (!this.promptModule.titleRecombine.enabled &&
             !this.promptModule.contentGeneration.enabled &&
@@ -475,17 +474,15 @@ const promptModuleMethods = {
             },
             // 텍스트 치환
             text_replace_enabled: this.promptModule.textReplaceEnabled,
-            // 이미지 생성 설정
+            // 이미지 생성 설정 (통합 파라미터, provider는 블로그 설정에서 결정)
+            // cover_source/section_source는 블로그 설정 이미지 탭에서 관리
             image_generation: {
                 enabled: this.promptModule.imageGeneration.enabled,
-                provider: this.promptModule.imageGeneration.provider,
+                aspect_ratio: this.promptModule.imageGeneration.aspectRatio,
+                style: this.promptModule.imageGeneration.style,
+                quality: this.promptModule.imageGeneration.quality,
                 prompt_template: this.promptModule.imageGeneration.promptTemplate,
-                images_per_post: this.promptModule.imageGeneration.imagesPerPost,
-                dalle: this.promptModule.imageGeneration.dalle,
-                nanobanana: this.promptModule.imageGeneration.nanobanana,
-                title_overlay: this.promptModule.imageGeneration.titleOverlay,
-                cover_source: this.promptModule.imageGeneration.coverSource,
-                section_source: this.promptModule.imageGeneration.sectionSource
+                title_overlay: this.promptModule.imageGeneration.titleOverlay
             }
         };
     }

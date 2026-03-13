@@ -49,18 +49,21 @@ def _make_blog_with_image_mode(
 
 def _make_module_with_image(
     enabled: bool = True,
-    provider: str = "dalle",
     prompt_template: str = None,
+    aspect_ratio: str = "16:9",
+    style: str = "realistic",
+    quality: str = "standard",
 ) -> MagicMock:
-    """이미지 생성 설정이 포함된 Mock Module 생성"""
+    """이미지 생성 설정이 포함된 Mock Module 생성 (통합 파라미터)"""
     settings = {
         "content_generation": {"provider": "openai"},
         "generation_prompt": "제목: {title}\n{reference_materials}",
         "image_generation": {
             "enabled": enabled,
-            "provider": provider,
+            "aspect_ratio": aspect_ratio,
+            "style": style,
+            "quality": quality,
             "prompt_template": prompt_template or "블로그 이미지: {title}",
-            "dalle": {"size": "1024x1024", "quality": "standard", "style": "natural"},
         },
     }
     return create_mock_module(module_id=1, settings=settings)
@@ -75,9 +78,13 @@ class TestImageGeneratorRouting:
 
     @pytest.mark.asyncio
     async def test_disabled_skips_generation(self, mock_db):
-        """image_generation.enabled=False면 이미지 생성 건너뜀"""
+        """image_mode가 알려지지 않은 값이고 enabled=False면 건너뜀
+
+        Note: image_mode가 template/openai/ai/both이면
+        enabled 체크를 우회하므로, 미지정 모드에서만 테스트
+        """
         gen = ImageGenerator(mock_db, user_id=1)
-        blog = _make_blog_with_image_mode("openai")
+        blog = _make_blog_with_image_mode("custom")
         settings = {"image_generation": {"enabled": False}}
 
         result = await gen.generate(blog, "테스트 제목", settings)
@@ -87,9 +94,9 @@ class TestImageGeneratorRouting:
 
     @pytest.mark.asyncio
     async def test_no_image_settings_skips(self, mock_db):
-        """image_generation 키 자체가 없으면 건너뜀"""
+        """image_mode가 알려지지 않은 값이고 image_generation 키 없으면 건너뜀"""
         gen = ImageGenerator(mock_db, user_id=1)
-        blog = _make_blog_with_image_mode("openai")
+        blog = _make_blog_with_image_mode("custom")
 
         result = await gen.generate(blog, "테스트 제목", {})
 
@@ -153,25 +160,29 @@ class TestImageGeneratorRouting:
 
     @pytest.mark.asyncio
     async def test_both_mode_ai_success(self, mock_db):
-        """image_mode='both'일 때 AI 성공하면 AI 결과 반환"""
+        """image_mode='both'일 때 AI 성공하면 both 모드 결과 반환"""
         gen = ImageGenerator(mock_db, user_id=1)
         gen.ai_image.generate = AsyncMock(return_value={
             "image_url": "/static/generated/images/ai.png",
             "provider": "dalle",
             "model": "dall-e-3",
         })
-        gen.template_image.generate = AsyncMock()
+        gen.template_image.generate = AsyncMock(return_value={
+            "image_url": "/static/generated/images/section.png",
+            "provider": "template",
+            "model": None,
+        })
         blog = _make_blog_with_image_mode("both")
         settings = {"image_generation": {"enabled": True}}
 
         result = await gen.generate(blog, "테스트 제목", settings)
 
-        assert result.image_mode == "ai"
-        gen.template_image.generate.assert_not_awaited()
+        assert result.image_mode == "both"
+        assert result.image_url == "/static/generated/images/ai.png"
 
     @pytest.mark.asyncio
     async def test_both_mode_ai_fails_fallback_template(self, mock_db):
-        """image_mode='both'일 때 AI 실패하면 템플릿으로 폴백"""
+        """image_mode='both'일 때 AI 실패하면 템플릿 폴백 후 both 반환"""
         gen = ImageGenerator(mock_db, user_id=1)
         gen.ai_image.generate = AsyncMock(return_value=None)
         gen.template_image.generate = AsyncMock(return_value={
@@ -185,8 +196,8 @@ class TestImageGeneratorRouting:
         result = await gen.generate(blog, "테스트 제목", settings)
 
         assert result.success is True
-        assert result.image_mode == "template"
-        gen.template_image.generate.assert_awaited_once()
+        assert result.image_mode == "both"
+        assert result.image_url == "/static/generated/images/fallback.png"
 
     @pytest.mark.asyncio
     async def test_none_mode_skips(self, mock_db):
@@ -206,7 +217,7 @@ class TestImageGeneratorRouting:
 # ============================================================
 
 class TestAIImageService:
-    """AIImageService 호출 검증"""
+    """AIImageService 호출 검증 (Phase 3: 변환된 파라미터 수신)"""
 
     @pytest.mark.asyncio
     async def test_dalle_prompt_template_applied(self, mock_db):
@@ -223,21 +234,21 @@ class TestAIImageService:
         async def mock_dalle_api(api_key, prompt, model, size, quality, style):
             nonlocal captured_prompt
             captured_prompt = prompt
-            return "https://example.com/generated.png"
+            return b"fake-image-bytes"
 
         service._call_dalle_api = mock_dalle_api
-        service._save_image_from_url = AsyncMock(
+        service._save_image_bytes = AsyncMock(
             return_value="/static/generated/images/result.png",
         )
         service.key_manager.mark_key_used = AsyncMock()
 
-        settings = {
-            "provider": "dalle",
-            "prompt_template": "블로그 이미지: {title}",
-            "dalle": {"size": "1024x1024", "quality": "standard", "style": "natural"},
-        }
-
-        result = await service.generate("테스트 주제", settings, blog_id=1)
+        result = await service.generate(
+            title="테스트 주제",
+            provider="dalle",
+            provider_params={"size": "1024x1024", "quality": "standard", "style": "natural", "model": "dall-e-3"},
+            prompt_template="블로그 이미지: {title}",
+            blog_id=1,
+        )
 
         assert result is not None
         assert captured_prompt == "블로그 이미지: 테스트 주제"
@@ -250,17 +261,31 @@ class TestAIImageService:
         service = AIImageService(mock_db, user_id=1)
         service.key_manager.get_available_key = AsyncMock(return_value=None)
 
-        result = await service.generate("테스트", {"provider": "dalle"}, 1)
+        result = await service.generate(
+            title="테스트",
+            provider="dalle",
+            provider_params={"size": "1024x1024", "quality": "standard", "style": "natural", "model": "dall-e-3"},
+            prompt_template="",
+            blog_id=1,
+        )
 
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_nanobanana_not_implemented(self, mock_db):
-        """Nanobanana provider는 아직 미구현으로 None 반환"""
+    async def test_nanobanana_no_key_returns_none(self, mock_db):
+        """Nanobanana provider에 Google API 키 없으면 None 반환"""
         from app.services.generation.ai_image_service import AIImageService
 
         service = AIImageService(mock_db, user_id=1)
-        result = await service.generate("테스트", {"provider": "nanobanana"}, 1)
+        service.key_manager.get_available_key = AsyncMock(return_value=None)
+
+        result = await service.generate(
+            title="테스트",
+            provider="nanobanana",
+            provider_params={"aspect_ratio": "16:9", "style": "realistic", "model": "gemini-2.0-flash-exp"},
+            prompt_template="",
+            blog_id=1,
+        )
 
         assert result is None
 
@@ -416,6 +441,7 @@ class TestGeneratorPipelineImage:
         call_kwargs = gen.image_generator.generate.call_args[1]
         assert call_kwargs["title"] == "SEO 최적화된 테스트 제목"
         assert "image_generation" in call_kwargs["module_settings"]
+        assert "final_html" in call_kwargs
 
 
 # ============================================================
@@ -434,6 +460,7 @@ class TestImageResult:
         assert result.ai_model is None
         assert result.generation_time_seconds == 0
         assert result.error is None
+        assert result.final_html is None
 
     def test_full_values(self):
         """모든 필드 설정"""
@@ -444,6 +471,8 @@ class TestImageResult:
             provider="dalle",
             ai_model="dall-e-3",
             generation_time_seconds=5,
+            final_html="<h2>섹션</h2><p>내용</p>",
         )
         assert result.image_url == "/static/generated/images/test.png"
         assert result.ai_model == "dall-e-3"
+        assert result.final_html is not None

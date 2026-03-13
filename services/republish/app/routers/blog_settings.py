@@ -74,9 +74,11 @@ async def get_blog_settings(
 
     logger.info(f"블로그 설정 조회 | blog_id={blog_id} | user_id={current_user.id}")
 
-    # overlay_config에서 ai_image_service 추출
+    # overlay_config에서 ai_image_service, cover/section_source 추출
     overlay_config = dict(blog.overlay_config or {})
     ai_image_service = overlay_config.pop("ai_image_service", "openai")
+    cover_source = overlay_config.pop("cover_source", "ai")
+    section_source = overlay_config.pop("section_source", "template")
 
     # ai_config.image_ai에서 model 정보 조회
     ai_config_data = blog.ai_config or {}
@@ -89,6 +91,8 @@ async def get_blog_settings(
             "image_mode": blog.image_mode,
             "ai_image_service": ai_image_service,
             "ai_image_model": ai_image_model,
+            "cover_source": cover_source,
+            "section_source": section_source,
             "overlay_config": overlay_config
         },
         category_settings=None,
@@ -116,10 +120,13 @@ async def get_image_settings(
 ) -> ImageSettingsResponse:
     """이미지 설정 조회."""
     blog = await get_blog_or_404(blog_id, current_user, db)
-    overlay_config = blog.overlay_config or {}
+    overlay_config = dict(blog.overlay_config or {})
 
     # ai_image_service는 overlay_config 내에 저장됨
     ai_image_service = overlay_config.pop("ai_image_service", "openai")
+    # both 모드 소스 설정도 overlay_config에 저장됨
+    cover_source = overlay_config.pop("cover_source", "ai")
+    section_source = overlay_config.pop("section_source", "template")
 
     # ai_config.image_ai에서 model 정보 조회
     ai_config = blog.ai_config or {}
@@ -131,6 +138,8 @@ async def get_image_settings(
         image_mode=blog.image_mode,
         ai_image_service=ai_image_service,
         ai_image_model=ai_image_model,
+        cover_source=cover_source,
+        section_source=section_source,
         overlay_config=overlay_config
     )
 
@@ -152,11 +161,13 @@ async def save_image_settings(
 
     blog.image_mode = request.image_mode
 
-    # ai_image_service를 overlay_config에 함께 저장
+    # ai_image_service, cover_source, section_source를 overlay_config에 함께 저장
     # 기존 파일 경로 보존
     existing_config = dict(blog.overlay_config or {})
     overlay_data = request.overlay_config.model_dump()
     overlay_data["ai_image_service"] = request.ai_image_service
+    overlay_data["cover_source"] = request.cover_source
+    overlay_data["section_source"] = request.section_source
     # 기존 파일 경로 유지
     if "template_image" in existing_config:
         overlay_data["template_image"] = existing_config["template_image"]
@@ -180,7 +191,8 @@ async def save_image_settings(
     logger.info(
         f"이미지 설정 저장 | blog_id={blog_id} | "
         f"mode={request.image_mode} | ai_service={request.ai_image_service} | "
-        f"ai_model={request.ai_image_model}"
+        f"ai_model={request.ai_image_model} | "
+        f"cover={request.cover_source} | section={request.section_source}"
     )
 
     return ImageSettingsResponse(
@@ -188,6 +200,8 @@ async def save_image_settings(
         image_mode=blog.image_mode,
         ai_image_service=request.ai_image_service,
         ai_image_model=request.ai_image_model,
+        cover_source=request.cover_source,
+        section_source=request.section_source,
         overlay_config=request.overlay_config.model_dump()
     )
 

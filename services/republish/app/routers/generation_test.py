@@ -86,6 +86,10 @@ class GenerateImageRequest(BaseModel):
     module_id: int = Field(..., description="프롬프트 모듈 ID")
     blog_id: int = Field(..., description="블로그 ID")
     title: str = Field(..., description="이미지 제목")
+    image_settings: Optional[dict] = Field(
+        None,
+        description="UI에서 전달된 이미지 생성 설정 (None이면 DB 설정 사용)",
+    )
 
 
 class SubstitutionHtmlRequest(BaseModel):
@@ -225,6 +229,7 @@ async def test_generate_image(
         module_id=req.module_id,
         blog_id=req.blog_id,
         title=req.title,
+        image_settings=req.image_settings,
     )
 
 

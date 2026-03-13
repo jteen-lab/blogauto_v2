@@ -285,8 +285,8 @@ const promptTestMethods = {
         }
 
         const blogImageMode = this.getSelectedBlogImageMode();
-        const useTemplate = blogImageMode === 'template'
-            || (blogImageMode === 'both' && this.promptModule.imageGeneration.coverSource === 'template');
+        // both 모드: 소스 설정은 블로그 설정에서 관리, 테스트는 AI로 실행
+        const useTemplate = blogImageMode === 'template';
 
         if (useTemplate) {
             await this._runTemplateImageTest(blogId, title);
@@ -332,12 +332,21 @@ const promptTestMethods = {
         finally { this._endTest(); }
     },
 
-    // AI 이미지: 기존 서버 API 호출
+    // AI 이미지: 현재 UI 설정을 서버 API로 전달
     async _runAIImageTest(moduleId, blogId, title) {
         this._startTest('image');
         try {
+            // 현재 UI의 이미지 생성 설정을 직접 전달 (저장 없이 테스트)
+            const ig = this.promptModule.imageGeneration || {};
             const data = await this._testFetch('/api/v1/generation/test/generate-image', {
                 module_id: moduleId, blog_id: blogId, title: title,
+                image_settings: {
+                    aspect_ratio: ig.aspectRatio || '16:9',
+                    style: ig.style || 'realistic',
+                    quality: ig.quality || 'standard',
+                    prompt_template: ig.promptTemplate || '',
+                    title_overlay: ig.titleOverlay || false,
+                },
             });
             this.promptTest.results.image = data;
         } catch (e) { this._setTestError('image', e.message); }

@@ -380,11 +380,36 @@
             </div>
         </div>
 
-        <!-- 혼용 모드 안내 -->
+        <!-- 혼용 모드 소스 설정 -->
         <div x-show="imageMode === 'both'" x-transition class="mb-6">
-            <div class="p-4 bg-teal-50 rounded-lg border border-teal-200">
-                <p class="text-sm text-teal-800">
-                    <strong>혼용 모드:</strong> 발행 시 템플릿 이미지와 AI 생성 이미지가 랜덤하게 선택됩니다.
+            <h3 class="text-base font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                <svg class="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+                </svg>
+                이미지 소스 설정
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">대표 이미지 소스</label>
+                    <select x-model="coverSource"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 text-sm">
+                        <option value="ai">AI 생성 이미지</option>
+                        <option value="template">템플릿 이미지</option>
+                    </select>
+                    <p class="text-xs text-gray-400 mt-1">글의 대표(썸네일) 이미지 생성 방식</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">섹션 이미지 소스</label>
+                    <select x-model="sectionSource"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 text-sm">
+                        <option value="ai">AI 생성 이미지</option>
+                        <option value="template">템플릿 이미지</option>
+                    </select>
+                    <p class="text-xs text-gray-400 mt-1">글 본문 내 섹션 이미지 생성 방식</p>
+                </div>
+            </div>
+            <div class="mt-3 p-3 bg-teal-50 rounded-lg border border-teal-200">
+                <p class="text-xs text-teal-700">
                     템플릿 이미지를 업로드하고 선택한 AI 서비스의 API 키도 등록해 주세요.
                 </p>
             </div>

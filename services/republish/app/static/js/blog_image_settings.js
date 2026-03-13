@@ -27,6 +27,10 @@ function imageSettingsApp() {
         // AI 이미지 모델
         aiImageModel: 'dall-e-3',
 
+        // both 모드: 대표/섹션 이미지 소스
+        coverSource: 'ai',
+        sectionSource: 'template',
+
         // 서비스별 사용 가능한 모델 목록
         AI_IMAGE_MODELS: {
             openai: [
@@ -184,6 +188,8 @@ function imageSettingsApp() {
             if (data.image_mode) this.imageMode = data.image_mode;
             if (data.ai_image_service) this.aiImageService = data.ai_image_service;
             if (data.ai_image_model) this.aiImageModel = data.ai_image_model;
+            if (data.cover_source) this.coverSource = data.cover_source;
+            if (data.section_source) this.sectionSource = data.section_source;
 
             if (data.overlay_config) {
                 const config = data.overlay_config;
@@ -459,6 +465,8 @@ function imageSettingsApp() {
                     image_mode: this.imageMode,
                     ai_image_service: this.aiImageService,
                     ai_image_model: this.aiImageModel,
+                    cover_source: this.coverSource,
+                    section_source: this.sectionSource,
                     overlay_config: this.overlayConfig
                 };
 

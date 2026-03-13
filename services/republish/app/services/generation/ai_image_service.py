@@ -43,74 +43,79 @@ class AIImageService:
         self.key_manager = AIKeyManager(db, user_id)
 
     async def generate(
-        self, title: str, settings: dict, blog_id: int,
+        self, title: str, provider: str, provider_params: dict,
+        prompt_template: str, blog_id: int,
     ) -> Optional[dict]:
         """
-        AI로 이미지 생성
+        AI로 이미지 생성 (변환된 provider별 파라미터 수신)
 
         Args:
             title: 이미지 프롬프트에 사용할 제목
-            settings: image_generation 설정
+            provider: 정규화된 provider (dalle/nanobanana)
+            provider_params: 변환 레이어에서 생성된 provider별 파라미터
+            prompt_template: 이미지 프롬프트 템플릿
             blog_id: 블로그 ID (파일명에 사용)
 
         Returns:
             dict: {"image_url": str, "provider": str, "model": str}
             또는 None (실패 시)
         """
-        provider_name = settings.get("provider", "dalle")
-        prompt_template = (
-            settings.get("prompt_template") or DEFAULT_PROMPT_TEMPLATE
-        )
-        prompt = prompt_template.replace("{title}", title)
+        effective_template = prompt_template or DEFAULT_PROMPT_TEMPLATE
+        prompt = effective_template.replace("{title}", title)
 
         logger.info(
             f"[AI_IMAGE] 이미지 생성 시작 | "
-            f"provider={provider_name} | title={title[:30]}"
+            f"provider={provider} | title={title[:30]}"
         )
 
-        if provider_name == "dalle":
+        if provider == "dalle":
             return await self._generate_with_dalle(
-                prompt, settings, blog_id,
+                prompt, provider_params, blog_id,
             )
-        elif provider_name == "nanobanana":
-            logger.warning("[AI_IMAGE] Nanobanana 미구현 - 건너뜀")
-            return None
+        elif provider == "nanobanana":
+            return await self._generate_with_nanobanana(
+                prompt, provider_params, blog_id,
+            )
         else:
             logger.warning(
-                f"[AI_IMAGE] 알 수 없는 provider: {provider_name}"
+                f"[AI_IMAGE] 알 수 없는 provider: {provider}"
             )
             return None
 
     async def _generate_with_dalle(
-        self, prompt: str, settings: dict, blog_id: int,
+        self, prompt: str, params: dict, blog_id: int,
     ) -> Optional[dict]:
-        """DALL-E API로 이미지 생성"""
+        """
+        DALL-E API로 이미지 생성 (b64_json 모드)
+
+        Args:
+            prompt: 이미지 생성 프롬프트
+            params: 변환된 DALL-E 파라미터
+                - size: "1024x1024" | "1792x1024" | "1024x1792"
+                - quality: "standard" | "hd"
+                - style: "natural" | "vivid"
+                - model: "dall-e-3" 등
+            blog_id: 블로그 ID
+        """
         key = await self.key_manager.get_available_key(AIProvider.OPENAI)
         if not key:
             logger.error("[AI_IMAGE] OpenAI API 키 없음 - DALL-E 사용 불가")
             return None
 
-        dalle_settings = settings.get("dalle", {})
-        size = dalle_settings.get("size", "1024x1024")
-        quality = dalle_settings.get("quality", "standard")
-        style = dalle_settings.get("style", "natural")
-        model = dalle_settings.get("model", "dall-e-3")
+        size = params.get("size", "1024x1024")
+        quality = params.get("quality", "standard")
+        style = params.get("style", "natural")
+        model = params.get("model", "dall-e-3")
 
         try:
-            remote_url = await self._call_dalle_api(
-                api_key=key.api_key,
-                prompt=prompt,
-                model=model,
-                size=size,
-                quality=quality,
-                style=style,
+            image_bytes = await self._call_dalle_api(
+                api_key=key.api_key, prompt=prompt, model=model,
+                size=size, quality=quality, style=style,
             )
-            if not remote_url:
+            if not image_bytes:
                 return None
 
-            local_path = await self._save_image_from_url(
-                remote_url, blog_id,
-            )
+            local_path = await self._save_image_bytes(image_bytes, blog_id)
             if not local_path:
                 return None
 
@@ -120,7 +125,6 @@ class AIImageService:
                 "provider": "dalle",
                 "model": model,
             }
-
         except Exception as e:
             error_msg = str(e)
             await self.key_manager.mark_key_error(key.id, error_msg[:200])
@@ -128,21 +132,19 @@ class AIImageService:
             return None
 
     async def _call_dalle_api(
-        self,
-        api_key: str,
-        prompt: str,
-        model: str,
-        size: str,
-        quality: str,
-        style: str,
-    ) -> Optional[str]:
+        self, api_key: str, prompt: str, model: str,
+        size: str, quality: str, style: str,
+    ) -> Optional[bytes]:
         """
-        OpenAI DALL-E API 호출
+        OpenAI DALL-E API 호출 (b64_json 모드)
+
+        base64 이미지 데이터를 직접 수신하여 SAS URL 다운로드 문제를 우회합니다.
 
         Returns:
-            생성된 이미지의 원격 URL 또는 None
+            생성된 이미지의 바이트 데이터 또는 None
         """
         import openai
+        import base64
 
         client = openai.AsyncOpenAI(api_key=api_key)
         resp = await client.images.generate(
@@ -151,24 +153,124 @@ class AIImageService:
             size=size,
             quality=quality,
             style=style,
+            response_format="b64_json",
             n=1,
         )
 
-        if resp.data and resp.data[0].url:
-            return resp.data[0].url
+        if resp.data and resp.data[0].b64_json:
+            logger.info("[AI_IMAGE] DALL-E: 이미지 데이터 수신 완료")
+            return base64.b64decode(resp.data[0].b64_json)
         return None
 
-    async def _save_image_from_url(
-        self, url: str, blog_id: int,
-    ) -> Optional[str]:
+    async def _generate_with_nanobanana(
+        self, prompt: str, params: dict, blog_id: int,
+    ) -> Optional[dict]:
         """
-        원격 URL에서 이미지 다운로드 후 로컬 저장
+        Nanobanana (Google Gemini) API로 이미지 생성
 
-        Returns:
-            저장된 이미지의 상대 URL (예: /static/generated/images/1_xxx.png)
+        Args:
+            prompt: 이미지 생성 프롬프트
+            params: 변환된 Nanobanana 파라미터
+                - aspect_ratio: "16:9" | "9:16" | "1:1" | "4:3" | "3:4"
+                - style: "realistic" | "artistic" | "cartoon" | "minimal"
+                - model: "gemini-2.0-flash-exp" 등
+            blog_id: 블로그 ID
         """
+        key = await self.key_manager.get_available_key(AIProvider.GOOGLE)
+        if not key:
+            logger.error("[AI_IMAGE] Google API 키 없음 - Nanobanana 불가")
+            return None
+
+        model = params.get("model", "gemini-2.0-flash-exp")
+        aspect_ratio = params.get("aspect_ratio", "16:9")
+        style = params.get("style", "realistic")
+
+        try:
+            image_bytes = await self._call_gemini_image_api(
+                api_key=key.api_key, prompt=prompt, model=model,
+                aspect_ratio=aspect_ratio, style=style,
+            )
+            if not image_bytes:
+                return None
+
+            local_path = await self._save_image_bytes(image_bytes, blog_id)
+            if not local_path:
+                return None
+
+            await self.key_manager.mark_key_used(key.id)
+            return {
+                "image_url": local_path,
+                "provider": "nanobanana",
+                "model": model,
+            }
+        except Exception as e:
+            error_msg = str(e)
+            await self.key_manager.mark_key_error(key.id, error_msg[:200])
+            logger.error(f"[AI_IMAGE] Nanobanana 실패: {error_msg[:100]}")
+            return None
+
+    async def _call_gemini_image_api(
+        self, api_key: str, prompt: str, model: str,
+        aspect_ratio: str, style: str,
+    ) -> Optional[bytes]:
+        """Google Gemini REST API로 이미지 생성 요청"""
         import httpx
 
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/"
+            f"models/{model}:generateContent?key={api_key}"
+        )
+        payload = {
+            "contents": [{"parts": [{"text": (
+                f"{prompt} Style: {style}, aspect ratio: {aspect_ratio}"
+            )}]}],
+            "generationConfig": {
+                "responseModalities": ["IMAGE", "TEXT"],
+            },
+        }
+
+        logger.info(
+            f"[AI_IMAGE] Gemini 호출 | model={model} | "
+            f"aspect={aspect_ratio} | style={style}"
+        )
+
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(url, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+
+        return self._extract_image_from_gemini(data)
+
+    def _extract_image_from_gemini(
+        self, data: dict,
+    ) -> Optional[bytes]:
+        """Gemini API 응답에서 이미지 바이트 추출"""
+        import base64
+
+        candidates = data.get("candidates", [])
+        if not candidates:
+            logger.error("[AI_IMAGE] Gemini: candidates 없음")
+            return None
+
+        parts = candidates[0].get("content", {}).get("parts", [])
+        for part in parts:
+            inline_data = part.get("inlineData")
+            if inline_data and inline_data.get("data"):
+                logger.info("[AI_IMAGE] Gemini: 이미지 데이터 수신 완료")
+                return base64.b64decode(inline_data["data"])
+
+        logger.error("[AI_IMAGE] Gemini: 이미지 데이터 없음")
+        return None
+
+    async def _save_image_bytes(
+        self, image_bytes: bytes, blog_id: int,
+    ) -> Optional[str]:
+        """
+        바이트 데이터를 이미지 파일로 로컬 저장
+
+        Returns:
+            저장된 이미지의 상대 URL
+        """
         IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 
         filename = (
@@ -177,15 +279,14 @@ class AIImageService:
         filepath = IMAGE_DIR / filename
 
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
-                resp = await client.get(url)
-                resp.raise_for_status()
-                filepath.write_bytes(resp.content)
-
+            filepath.write_bytes(image_bytes)
             relative_url = f"/static/generated/images/{filename}"
-            logger.info(f"[AI_IMAGE] 이미지 저장 완료: {relative_url}")
+            logger.info(
+                f"[AI_IMAGE] 이미지 저장 완료: {relative_url}"
+            )
             return relative_url
 
         except Exception as e:
-            logger.error(f"[AI_IMAGE] 이미지 다운로드/저장 실패: {e}")
+            logger.error(f"[AI_IMAGE] 이미지 저장 실패: {e}")
             return None
+

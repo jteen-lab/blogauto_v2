@@ -12,11 +12,14 @@ Blog.image_mode에 따라 AI 이미지 또는 템플릿 이미지를 생성합�
   - "template": image_generation.enabled 무시, 항상 TemplateImageService로 생성
   - "openai"/"ai": image_generation.enabled 체크 후 AI 생성, title_overlay 옵션
   - "both": cover_source/section_source로 대표/섹션 이미지 유형 결정
+             + final_html에서 섹션 파싱 → 섹션별 이미지 자동 생성 및 삽입
   - None/"none": 이미지 생성 안 함
 
 설계 문서: generation_pipeline_enhancement_plan.md - Phase C - 5.3
+           image_generation_unified_settings_plan.md - Phase 5
 """
 import logging
+import re
 import time
 from typing import Optional, List
 from dataclasses import dataclass, field
@@ -26,8 +29,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...models.blog import Blog
 from .ai_image_service import AIImageService
 from .template_image_service import TemplateImageService
+from .image_param_converter import (
+    normalize_provider, convert_to_provider_params,
+    migrate_legacy_image_settings,
+)
 
 logger = logging.getLogger(__name__)
+
+# 섹션 헤딩 파싱용 패턴
+_H2_PATTERN = re.compile(r'<h2[^>]*>(.*?)</h2>', re.IGNORECASE | re.DOTALL)
+_HTML_TAG_PATTERN = re.compile(r'<[^>]+>')
 
 
 @dataclass
@@ -41,6 +52,7 @@ class ImageResult:
     generation_time_seconds: int = 0
     error: Optional[str] = None
     section_images: Optional[List[dict]] = field(default=None)
+    final_html: Optional[str] = None
 
 
 class ImageGenerator:
@@ -61,11 +73,25 @@ class ImageGenerator:
 
     async def generate(
         self, blog: Blog, title: str, module_settings: dict,
+        final_html: Optional[str] = None,
     ) -> ImageResult:
-        """블로그 설정에 따라 이미지 생성"""
+        """
+        블로그 설정에 따라 이미지 생성
+
+        Args:
+            blog: Blog 객체
+            title: 포스트 제목
+            module_settings: 모듈 설정
+            final_html: 생성된 글 HTML (both 모드에서 섹션 이미지 삽입용)
+
+        Returns:
+            ImageResult (both 모드: final_html에 섹션 이미지 삽입됨)
+        """
         start_time = time.time()
         image_mode = getattr(blog, "image_mode", None) or "template"
         img_settings = module_settings.get("image_generation", {})
+        # 레거시 dalle{}/nanobanana{} 구조 자동 변환
+        img_settings = migrate_legacy_image_settings(img_settings)
 
         # template/ai/openai 모드: blog.image_mode로 이미 결정됨 → 항상 생성
         # both 모드: blog.image_mode로 결정됨 → 항상 생성
@@ -82,7 +108,7 @@ class ImageGenerator:
 
         try:
             result = await self._dispatch(
-                blog, title, img_settings, image_mode,
+                blog, title, img_settings, image_mode, final_html,
             )
             result.generation_time_seconds = int(time.time() - start_time)
             if result.success and result.image_url:
@@ -107,6 +133,7 @@ class ImageGenerator:
         title: str,
         img_settings: dict,
         image_mode: str,
+        final_html: Optional[str] = None,
     ) -> ImageResult:
         """
         image_mode에 따라 적절한 서비스로 라우팅
@@ -116,6 +143,7 @@ class ImageGenerator:
             title: 포스트 제목
             img_settings: image_generation 설정
             image_mode: 이미지 모드 (template/ai/openai/both)
+            final_html: 생성된 글 HTML (both 모드 섹션 이미지용)
 
         Returns:
             ImageResult
@@ -130,7 +158,7 @@ class ImageGenerator:
 
         if image_mode == "both":
             return await self._generate_both(
-                blog, title, img_settings,
+                blog, title, img_settings, final_html,
             )
 
         logger.debug(
@@ -179,27 +207,48 @@ class ImageGenerator:
 
     async def _generate_both(
         self, blog: Blog, title: str, img_settings: dict,
+        final_html: Optional[str] = None,
     ) -> ImageResult:
-        """both 모드: cover_source/section_source로 소스 결정"""
-        cover_source = img_settings.get("cover_source", "ai")
-        section_source = img_settings.get("section_source", "template")
-        logger.info(
-            f"[IMAGE_GEN] both 모드 | "
-            f"cover={cover_source}, section={section_source}"
-        )
+        """
+        both 모드: 대표이미지 + 섹션별 이미지 자동 생성
+
+        final_html에서 <h2> 태그를 파싱하여 섹션 수만큼
+        이미지를 생성하고, HTML에 <img> 태그를 삽입합니다.
+        """
+        overlay = getattr(blog, "overlay_config", None) or {}
+        cover_source = overlay.get("cover_source", "ai")
+        section_source = overlay.get("section_source", "template")
 
         # 1) 대표이미지 생성
         cover_result = await self._generate_by_source(
             blog, title, img_settings, cover_source, fallback=True,
         )
 
-        # 2) 섹션이미지 생성 (향후 확장용, 현재 1장)
-        section_images = await self._generate_section_image(
-            blog, title, img_settings, section_source,
-        )
+        # 2) 섹션 파싱 → 섹션별 이미지 생성 → HTML 삽입
+        section_images = []
+        result_html = final_html
+        if final_html:
+            sections = self._parse_sections(final_html)
+            logger.info(
+                f"[IMAGE_GEN] both 모드 | cover={cover_source}, "
+                f"section={section_source}, 섹션 수={len(sections)}"
+            )
+            if sections:
+                section_images = await self._generate_section_images(
+                    blog, sections, img_settings, section_source,
+                )
+                result_html = self._insert_section_images(
+                    final_html, section_images,
+                )
+        else:
+            logger.info(
+                f"[IMAGE_GEN] both 모드 | cover={cover_source}, "
+                f"section={section_source} (final_html 없음 - 섹션 이미지 생략)"
+            )
 
         cover_result.image_mode = "both"
         cover_result.section_images = section_images or None
+        cover_result.final_html = result_html
         return cover_result
 
     async def _generate_by_source(
@@ -217,46 +266,125 @@ class ImageGenerator:
             return result
         return await self._generate_template(blog, title)
 
-    async def _generate_section_image(
-        self, blog: Blog, title: str, img_settings: dict,
+    def _parse_sections(self, final_html: str) -> List[dict]:
+        """
+        final_html에서 <h2> 태그를 파싱하여 섹션 목록 반환
+
+        Returns:
+            [{"heading": str, "end_position": int}, ...]
+        """
+        sections = []
+        for match in _H2_PATTERN.finditer(final_html):
+            heading_text = _HTML_TAG_PATTERN.sub("", match.group(1)).strip()
+            if heading_text:
+                sections.append({
+                    "heading": heading_text,
+                    "end_position": match.end(),
+                })
+        return sections
+
+    async def _generate_section_images(
+        self, blog: Blog, sections: List[dict], img_settings: dict,
         section_source: str,
     ) -> List[dict]:
-        """섹션이미지 생성 (향후 확장용, 현재 1장)"""
+        """섹션별 이미지 생성 (각 섹션 헤딩을 프롬프트로 사용)"""
         section_images: List[dict] = []
-        if section_source == "ai":
-            sec = await self._generate_ai(blog, title, img_settings)
-        else:
-            sec = await self._generate_template(blog, title)
-        if sec.success and sec.image_url:
-            section_images.append({
-                "image_url": sec.image_url, "source": section_source,
-            })
+        for section in sections:
+            heading = section["heading"]
+            try:
+                if section_source == "ai":
+                    sec = await self._generate_ai(blog, heading, img_settings)
+                else:
+                    sec = await self._generate_template(blog, heading)
+                if sec.success and sec.image_url:
+                    section_images.append({
+                        "heading": heading,
+                        "image_url": sec.image_url,
+                        "source": section_source,
+                        "end_position": section["end_position"],
+                    })
+                else:
+                    logger.warning(
+                        f"[IMAGE_GEN] 섹션 이미지 실패: {heading[:30]}"
+                    )
+            except Exception as e:
+                logger.warning(
+                    f"[IMAGE_GEN] 섹션 이미지 오류: {heading[:30]} - {e}"
+                )
+        logger.info(
+            f"[IMAGE_GEN] 섹션 이미지 생성 완료: "
+            f"{len(section_images)}/{len(sections)}장"
+        )
         return section_images
+
+    def _insert_section_images(
+        self, final_html: str, section_images: List[dict],
+    ) -> str:
+        """
+        섹션 이미지를 final_html의 각 <h2> 뒤에 삽입
+
+        end_position 역순으로 삽입하여 위치 이동 방지
+        """
+        if not section_images:
+            return final_html
+        sorted_imgs = sorted(
+            section_images,
+            key=lambda x: x.get("end_position", 0),
+            reverse=True,
+        )
+        for img in sorted_imgs:
+            if not img.get("image_url"):
+                continue
+            pos = img["end_position"]
+            heading = img.get("heading", "")
+            img_tag = (
+                f'\n<div class="section-image">'
+                f'<img src="{img["image_url"]}" '
+                f'alt="{heading}" loading="lazy" />'
+                f'</div>\n'
+            )
+            final_html = final_html[:pos] + img_tag + final_html[pos:]
+        return final_html
 
     async def _generate_ai(
         self, blog: Blog, title: str, img_settings: dict,
     ) -> ImageResult:
-        """AI 이미지 서비스로 생성 (블로그 image_ai 설정 우선)"""
+        """
+        AI 이미지 서비스로 생성
+
+        블로그의 ai_config.image_ai에서 provider/model을 가져오고,
+        모듈의 통합 파라미터(aspect_ratio, style, quality)를
+        변환 레이어로 provider별 파라미터로 변환합니다.
+        """
         ai_config = blog.ai_config or {}
         image_ai = ai_config.get("image_ai", {})
-        if image_ai.get("provider"):
-            effective_settings = img_settings.copy()
-            effective_settings["provider"] = image_ai["provider"]
-            # model도 dalle 설정에 전달
-            if image_ai.get("model"):
-                dalle_settings = effective_settings.get("dalle", {}).copy()
-                dalle_settings["model"] = image_ai["model"]
-                effective_settings["dalle"] = dalle_settings
-            logger.info(
-                f"[IMAGE_GEN] AI 오버라이드: "
-                f"provider={image_ai['provider']}, "
-                f"model={image_ai.get('model', '기본값')}"
-            )
-        else:
-            effective_settings = img_settings
+
+        # provider 결정: 블로그 설정 우선
+        raw_provider = image_ai.get("provider", "dalle")
+        provider = normalize_provider(raw_provider)
+        model = image_ai.get("model")
+
+        logger.info(
+            f"[IMAGE_GEN] AI 파라미터 변환 | "
+            f"provider={provider}, model={model or '기본값'}"
+        )
+
+        # 통합 파라미터 → provider별 파라미터 변환
+        provider_params = convert_to_provider_params(
+            unified_settings=img_settings,
+            provider=provider,
+            model=model,
+        )
+
+        # 프롬프트 템플릿 전달
+        prompt_template = img_settings.get("prompt_template", "")
 
         result = await self.ai_image.generate(
-            title=title, settings=effective_settings, blog_id=blog.id,
+            title=title,
+            provider=provider,
+            provider_params=provider_params,
+            prompt_template=prompt_template,
+            blog_id=blog.id,
         )
 
         if result:

@@ -6,7 +6,7 @@
 from datetime import datetime
 from typing import Optional, TYPE_CHECKING
 
-from sqlalchemy import Integer, String, DateTime, ForeignKey
+from sqlalchemy import Integer, String, Text, DateTime, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 
@@ -75,7 +75,12 @@ class GenerationHistory(Base):
     image_url: Mapped[Optional[str]] = mapped_column(
         String(1000),
         nullable=True,
-        comment="생성된 이미지 URL",
+        comment="생성된 대표 이미지 URL",
+    )
+    section_images: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        comment="섹션별 이미지 JSON [{heading, image_url, source}]",
     )
 
     # 통계

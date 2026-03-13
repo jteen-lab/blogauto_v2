@@ -94,6 +94,16 @@ class ImageSettingsRequest(BaseModel):
         default=None,
         description="AI 이미지 모델명 (예: dall-e-3, gpt-image-1)"
     )
+    cover_source: str = Field(
+        default="ai",
+        pattern="^(ai|template)$",
+        description="both 모드: 대표이미지 소스 (ai, template)"
+    )
+    section_source: str = Field(
+        default="template",
+        pattern="^(ai|template)$",
+        description="both 모드: 섹션이미지 소스 (ai, template)"
+    )
     overlay_config: OverlayConfig = Field(
         default_factory=OverlayConfig,
         description="오버레이 설정"
@@ -112,6 +122,14 @@ class ImageSettingsResponse(BaseModel):
     ai_image_model: Optional[str] = Field(
         default=None,
         description="AI 이미지 모델명"
+    )
+    cover_source: str = Field(
+        default="ai",
+        description="both 모드: 대표이미지 소스"
+    )
+    section_source: str = Field(
+        default="template",
+        description="both 모드: 섹션이미지 소스"
     )
     overlay_config: Dict[str, Any] = Field(..., description="오버레이 설정")
 
