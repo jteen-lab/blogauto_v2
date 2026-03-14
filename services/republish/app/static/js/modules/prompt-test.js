@@ -17,6 +17,9 @@ function createPromptTestState() {
         showImage: false,
         showSubstitution: false,
         showFullPipeline: false,
+        // 전체 파이프라인 순차 실행 상태
+        fullPipelineRunning: false,
+        fullPipelineCurrentStep: 0,
         // 테스트 블로그 선택
         testBlogId: null,
         // 각 단계 결과 (문자열 키 기반)
@@ -256,6 +259,10 @@ const promptTestMethods = {
                 },
             });
             this.promptTest.results.internalLinks = data;
+            // 내부링크 추가된 콘텐츠를 다음 단계(치환 테스트)에 전달
+            if (data.success && data.result?.content_with_links) {
+                this.promptTest.internalLinksContent = data.result.content_with_links;
+            }
         } catch (e) { this._setTestError('internalLinks', e.message); }
         finally { this._endTest(); }
     },
@@ -371,20 +378,41 @@ const promptTestMethods = {
         finally { this._endTest(); }
     },
 
-    // Step: 전체 파이프라인
+    // 전체 파이프라인: 개별 단계를 순차 실행하여 각 인라인 테스트 블록에 결과 표시
     async runStepFullPipeline() {
-        console.log('[PromptTest] runStepFullPipeline 호출됨');
+        console.log('[PromptTest] runStepFullPipeline 호출됨 (순차 실행 모드)');
         const moduleId = this.getTestModuleId();
         const blogId = this.getTestBlogId();
-        if (!moduleId || !blogId) return this._setTestError('fullPipeline', '모듈 ID와 블로그를 선택하세요');
-        this._startTest('fullPipeline');
-        try {
-            const data = await this._testFetch('/api/v1/generation/test/full-pipeline', {
-                blog_id: blogId, module_id: moduleId, dry_run: this.promptTest.dryRun,
-            });
-            this.promptTest.results.fullPipeline = data;
-        } catch (e) { this._setTestError('fullPipeline', e.message); }
-        finally { this._endTest(); }
+        if (!moduleId || !blogId) {
+            alert('모듈 ID와 블로그를 선택하세요');
+            return;
+        }
+        this.clearAllTestResults();
+        this.promptTest.fullPipelineRunning = true;
+
+        const steps = [
+            { n: 1, key: 'selectTitle', toggle: 'showSelectTitle', fn: 'runStepSelectTitle', label: '제목 선택' },
+            { n: 2, key: 'recombine', toggle: 'showRecombine', fn: 'runStepRecombine', label: '제목 재조합' },
+            { n: 3, key: 'references', toggle: 'showReferences', fn: 'runStepReferences', label: '참조자료 수집' },
+            { n: 4, key: 'content', toggle: 'showContent', fn: 'runStepContent', label: '글 생성' },
+            { n: 5, key: 'internalLinks', toggle: 'showInternalLinks', fn: 'runStepInternalLinks', label: '내부링크' },
+            { n: 6, key: 'image', toggle: 'showImage', fn: 'runStepImage', label: '이미지 생성' },
+            { n: 7, key: 'substitution', toggle: 'showSubstitution', fn: 'runStepSubstitution', label: '변환 및 치환' },
+        ];
+        for (const step of steps) {
+            this.promptTest.fullPipelineCurrentStep = step.n;
+            this.promptTest.activeStep = step.n;
+            // 인라인 테스트 블록 자동 펼침
+            this.promptTest[step.toggle] = true;
+            await this[step.fn]();
+            // 실패 시 중단
+            if (this.promptTest.results[step.key]?.success === false) {
+                console.warn(`[PromptTest] 전체 실행 중단: ${step.label} 실패`);
+                break;
+            }
+        }
+        this.promptTest.fullPipelineRunning = false;
+        this.promptTest.fullPipelineCurrentStep = 0;
     },
 
     /**
@@ -447,6 +475,8 @@ const promptTestMethods = {
         for (const k of keys) this.promptTest.results[k] = null;
         this.promptTest.loading = false;
         this.promptTest.loadingKey = null;
+        this.promptTest.fullPipelineRunning = false;
+        this.promptTest.fullPipelineCurrentStep = 0;
     },
 };
 

@@ -340,11 +340,27 @@ function getTestSubstitutionSection() {
             <template x-if="promptTest.results.substitution"><div class="mt-2">
                 <template x-if="promptTest.results.substitution.success">
                     <div class="p-3 bg-green-50 border border-green-200 rounded-lg space-y-1 text-sm">
-                        <div class="text-green-800">변환 완료</div>
+                        <div class="text-green-800">변환 완료 (<span x-text="promptTest.results.substitution.result?.input_length"></span>자 → <span x-text="promptTest.results.substitution.result?.html_length"></span>자)</div>
                         <div class="text-green-700 text-xs">소요: <span x-text="promptTest.results.substitution.result?.generation_time_seconds"></span>초</div>
-                        <details class="text-xs mt-1"><summary class="cursor-pointer text-green-600 hover:underline">HTML 결과 보기</summary>
+                        <template x-if="promptTest.results.substitution.result?.settings_used">
+                            <div class="text-xs text-gray-600 space-y-0.5 mt-1">
+                                <div>적용된 규칙: HTML태그 <span class="font-medium" x-text="promptTest.results.substitution.result.settings_used.html_tags_count"></span>개
+                                    | CSS클래스 <span class="font-medium" x-text="promptTest.results.substitution.result.settings_used.css_classes_count"></span>개
+                                    | 텍스트치환 <span class="font-medium" x-text="promptTest.results.substitution.result.settings_used.text_replace_count"></span>개</div>
+                                <template x-if="promptTest.results.substitution.result.settings_used.html_tags_count > 0">
+                                    <div class="text-gray-500">태그 치환: <span x-text="JSON.stringify(promptTest.results.substitution.result.settings_used.html_tags)"></span></div>
+                                </template>
+                                <template x-if="promptTest.results.substitution.result.settings_used.css_classes_count > 0">
+                                    <div class="text-gray-500">클래스 추가: <span x-text="JSON.stringify(promptTest.results.substitution.result.settings_used.css_classes)"></span></div>
+                                </template>
+                            </div>
+                        </template>
+                        <details class="text-xs mt-1"><summary class="cursor-pointer text-green-600 hover:underline">렌더링 미리보기</summary>
                             <div class="mt-1 p-2 bg-white rounded border border-green-100 prose prose-sm max-w-none"
                                  x-html="promptTest.results.substitution.result?.final_html"></div></details>
+                        <details class="text-xs mt-1"><summary class="cursor-pointer text-blue-600 hover:underline">HTML 소스코드 보기</summary>
+                            <pre class="mt-1 p-2 bg-gray-50 rounded border border-blue-100 text-xs overflow-x-auto whitespace-pre-wrap break-all max-h-96"
+                                 x-text="promptTest.results.substitution.result?.final_html"></pre></details>
                     </div>
                 </template>
                 ${_testError('substitution')}
@@ -352,41 +368,36 @@ function getTestSubstitutionSection() {
     return _testBlockWrapper('substitution', '변환 및 치환 적용 테스트', inner);
 }
 
-/** 전체 파이프라인 테스트 */
+/** 전체 파이프라인 실행 - 제목 선택 테스트 아래에 배치 */
 function getTestFullPipelineSection() {
-    const inner = `
-            <p class="text-xs text-gray-500">모든 단계를 순서대로 실행합니다.</p>
-            <label class="flex items-center gap-2">
-                <input type="checkbox" x-model="promptTest.dryRun" class="rounded text-indigo-600 focus:ring-indigo-500">
-                <span class="text-sm text-gray-700">Dry Run (DB 저장 안 함)</span>
-            </label>
-            ${_testBtn('runStepFullPipeline', '전체 실행', 'fullPipeline')}
-            <template x-if="promptTest.results.fullPipeline"><div class="mt-2">
-                <template x-if="promptTest.results.fullPipeline.success !== undefined">
-                    <div :class="promptTest.results.fullPipeline.success ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'"
-                         class="p-3 border rounded-lg space-y-2 text-sm">
-                        <div :class="promptTest.results.fullPipeline.success ? 'text-green-800' : 'text-red-800'" class="font-medium">
-                            <span x-text="promptTest.results.fullPipeline.success ? '전체 파이프라인 성공' : '파이프라인 실패'"></span>
-                            <span class="font-normal text-xs ml-2">(총 <span x-text="promptTest.results.fullPipeline.total_time_seconds"></span>초
-                                | dry_run: <span x-text="promptTest.results.fullPipeline.dry_run ? '예' : '아니오'"></span>)</span>
-                        </div>
-                        <template x-if="promptTest.results.fullPipeline.steps"><div class="space-y-1">
-                            <template x-for="(val, key) in promptTest.results.fullPipeline.steps" :key="key">
-                                <div class="flex items-center gap-2 text-xs">
-                                    <span :class="val.success ? 'text-green-600' : 'text-red-600'" x-text="val.success ? '✅' : '❌'"></span>
-                                    <span class="text-gray-700" x-text="key"></span>
-                                    <span x-show="val.title" class="text-gray-500 truncate max-w-xs" x-text="val.title"></span>
-                                    <span x-show="val.error" class="text-red-500" x-text="val.error"></span>
-                                </div>
-                            </template>
-                        </div></template>
-                        <template x-if="promptTest.results.fullPipeline.error && !promptTest.results.fullPipeline.steps">
-                            <div class="text-red-700 text-xs" x-text="promptTest.results.fullPipeline.error"></div>
-                        </template>
-                    </div>
-                </template>
-            </div></template>`;
-    return _testBlockWrapper('fullPipeline', '전체 파이프라인 테스트', inner);
+    return `
+<div x-show="isEdit" class="mt-3">
+    <div class="p-3 bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-lg">
+        <div class="flex items-center justify-between">
+            <div>
+                <div class="text-sm font-medium text-indigo-800">🚀 전체 파이프라인 실행</div>
+                <div class="text-xs text-indigo-600">7개 단계를 순차 실행하여 각 테스트 창에 결과를 표시합니다</div>
+            </div>
+            <button type="button" @click="runStepFullPipeline()"
+                    :disabled="promptTest.fullPipelineRunning || promptTest.loading"
+                    class="px-5 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+                <span x-show="!promptTest.fullPipelineRunning">전체 실행</span>
+                <span x-show="promptTest.fullPipelineRunning" class="flex items-center gap-1">
+                    <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                    <span x-text="promptTest.fullPipelineCurrentStep + '/7'"></span>
+                </span>
+            </button>
+        </div>
+        <div x-show="promptTest.fullPipelineRunning" x-transition class="mt-2">
+            <div class="w-full bg-indigo-100 rounded-full h-1.5">
+                <div class="bg-indigo-600 h-1.5 rounded-full transition-all duration-300"
+                     :style="'width: ' + ((promptTest.fullPipelineCurrentStep / 7) * 100) + '%'"></div>
+            </div>
+            <div class="text-xs text-indigo-600 mt-1"
+                 x-text="['','제목 선택','제목 재조합','참조자료 수집','글 생성','내부링크','이미지 생성','변환 및 치환'][promptTest.fullPipelineCurrentStep] + ' 실행중...'"></div>
+        </div>
+    </div>
+</div>`;
 }
 
 // 전역 노출

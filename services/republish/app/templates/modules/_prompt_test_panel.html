@@ -3,6 +3,7 @@
 편집 모드 + prompt 모듈일 때만 표시
 메서드: prompt-test.js의 runStepSelectTitle/runStepRecombine 등 사용
 결과키: promptTest.results.selectTitle/recombine 등 (문자열 키)
+7단계: 제목선택 → 재조합 → 참조수집 → 글생성 → 내부링크 → 이미지 → 치환
 -->
 
 <div x-show="isEdit && formData.type_code === 'prompt'" class="space-y-4">
@@ -38,15 +39,16 @@
                 </button>
             </div>
 
-            <!-- 탭 네비게이션 -->
+            <!-- 탭 네비게이션 (7단계) -->
             <div class="flex border-b border-gray-200 overflow-x-auto">
                 <template x-for="step in [
                     {n:1, key:'selectTitle', label:'1.제목선택'},
                     {n:2, key:'recombine', label:'2.재조합'},
                     {n:3, key:'references', label:'3.참조수집'},
                     {n:4, key:'content', label:'4.글생성'},
-                    {n:5, key:'image', label:'5.이미지'},
-                    {n:6, key:'fullPipeline', label:'6.전체'}
+                    {n:5, key:'internalLinks', label:'5.내부링크'},
+                    {n:6, key:'image', label:'6.이미지'},
+                    {n:7, key:'substitution', label:'7.치환'}
                 ]" :key="step.n">
                     <button type="button"
                             @click="promptTest.activeStep = step.n"
@@ -60,6 +62,9 @@
                               class="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full"></span>
                         <span x-show="promptTest.results[step.key]?.success === false"
                               class="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                        <!-- 전체 실행 중 현재 단계 표시 -->
+                        <span x-show="promptTest.fullPipelineRunning && promptTest.fullPipelineCurrentStep === step.n"
+                              class="absolute -top-1 -right-1 w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></span>
                     </button>
                 </template>
             </div>
@@ -69,8 +74,8 @@
                 <p class="text-xs text-gray-500">사용 가능한 제목 후보를 조회하고 랜덤으로 하나를 선택합니다. (DB 변경 없음)</p>
                 <button type="button" @click="runStepSelectTitle()" :disabled="promptTest.loading"
                         class="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
-                    <span x-show="!promptTest.loading">실행</span>
-                    <span x-show="promptTest.loading && promptTest.activeStep === 1" class="flex items-center gap-1">
+                    <span x-show="!(promptTest.loading && promptTest.loadingKey === 'selectTitle')">실행</span>
+                    <span x-show="promptTest.loading && promptTest.loadingKey === 'selectTitle'" class="flex items-center gap-1">
                         <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
                         실행중...
                     </span>
@@ -110,8 +115,8 @@
                 </div>
                 <button type="button" @click="runStepRecombine()" :disabled="promptTest.loading"
                         class="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
-                    <span x-show="!promptTest.loading">실행</span>
-                    <span x-show="promptTest.loading && promptTest.activeStep === 2" class="flex items-center gap-1">
+                    <span x-show="!(promptTest.loading && promptTest.loadingKey === 'recombine')">실행</span>
+                    <span x-show="promptTest.loading && promptTest.loadingKey === 'recombine'" class="flex items-center gap-1">
                         <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
                         실행중...
                     </span>
@@ -121,8 +126,6 @@
                         <template x-if="promptTest.results.recombine.success">
                             <div class="p-3 bg-green-50 border border-green-200 rounded-lg space-y-2 text-sm">
                                 <div class="text-green-800">원본: <span class="font-normal" x-text="promptTest.results.recombine.result?.original_title"></span></div>
-
-                                <!-- 스타일별 결과 (style_results 있을 때) -->
                                 <template x-if="promptTest.results.recombine.result?.style_results?.length > 0">
                                     <div class="space-y-1.5">
                                         <div class="text-xs font-medium text-green-700 border-b border-green-200 pb-1">
@@ -143,12 +146,9 @@
                                         </template>
                                     </div>
                                 </template>
-
-                                <!-- style_results 없을 때 (하위호환) -->
                                 <template x-if="!promptTest.results.recombine.result?.style_results?.length">
                                     <div class="text-green-800 font-medium">재조합: <span class="font-normal" x-text="promptTest.results.recombine.result?.recombined_title"></span></div>
                                 </template>
-
                                 <div class="text-green-700 text-xs border-t border-green-200 pt-1.5 mt-1.5">
                                     AI: <span x-text="promptTest.results.recombine.result?.ai_provider"></span>
                                     | Provider 소스: <span x-text="promptTest.results.recombine.result?.settings_used?.provider_source || '-'"></span>
@@ -173,8 +173,8 @@
                 </div>
                 <button type="button" @click="runStepReferences()" :disabled="promptTest.loading"
                         class="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
-                    <span x-show="!promptTest.loading">실행</span>
-                    <span x-show="promptTest.loading && promptTest.activeStep === 3" class="flex items-center gap-1">
+                    <span x-show="!(promptTest.loading && promptTest.loadingKey === 'references')">실행</span>
+                    <span x-show="promptTest.loading && promptTest.loadingKey === 'references'" class="flex items-center gap-1">
                         <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
                         실행중...
                     </span>
@@ -207,7 +207,7 @@
 
             <!-- Step 4: 글 생성 -->
             <div x-show="promptTest.activeStep === 4" class="space-y-3">
-                <p class="text-xs text-gray-500">AI로 글을 생성하고 치환 처리합니다. (DB 변경 없음)</p>
+                <p class="text-xs text-gray-500">AI로 글을 생성합니다. (DB 변경 없음)</p>
                 <div class="grid grid-cols-1 gap-2">
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1">제목</label>
@@ -222,8 +222,8 @@
                 </div>
                 <button type="button" @click="runStepContent()" :disabled="promptTest.loading"
                         class="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
-                    <span x-show="!promptTest.loading">실행</span>
-                    <span x-show="promptTest.loading && promptTest.activeStep === 4" class="flex items-center gap-1">
+                    <span x-show="!(promptTest.loading && promptTest.loadingKey === 'content')">실행</span>
+                    <span x-show="promptTest.loading && promptTest.loadingKey === 'content'" class="flex items-center gap-1">
                         <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
                         실행중...
                     </span>
@@ -243,13 +243,6 @@
                                     <pre class="mt-1 p-2 bg-white rounded border border-green-100 overflow-x-auto text-gray-700 whitespace-pre-wrap"
                                          x-text="promptTest.results.content.result?.content_markdown"></pre>
                                 </details>
-                                <template x-if="promptTest.results.content.result?.content_html">
-                                    <details class="text-xs mt-1">
-                                        <summary class="cursor-pointer text-green-600 hover:underline">HTML 미리보기</summary>
-                                        <div class="mt-1 p-2 bg-white rounded border border-green-100 prose prose-sm max-w-none"
-                                             x-html="promptTest.results.content.result?.content_html"></div>
-                                    </details>
-                                </template>
                             </div>
                         </template>
                         <template x-if="!promptTest.results.content.success">
@@ -259,18 +252,56 @@
                 </template>
             </div>
 
-            <!-- Step 5: 이미지 생성 -->
+            <!-- Step 5: 내부링크 추가 -->
             <div x-show="promptTest.activeStep === 5" class="space-y-3">
+                <p class="text-xs text-gray-500">생성된 글에 내부링크를 자동 삽입합니다. (글 생성 테스트 후 실행)</p>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">입력 콘텐츠</label>
+                    <textarea x-model="promptTest.internalLinksContent" rows="3" placeholder="글 생성 결과에서 자동 입력"
+                              class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"></textarea>
+                </div>
+                <button type="button" @click="runStepInternalLinks()" :disabled="promptTest.loading"
+                        class="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+                    <span x-show="!(promptTest.loading && promptTest.loadingKey === 'internalLinks')">실행</span>
+                    <span x-show="promptTest.loading && promptTest.loadingKey === 'internalLinks'" class="flex items-center gap-1">
+                        <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                        실행중...
+                    </span>
+                </button>
+                <template x-if="promptTest.results.internalLinks">
+                    <div class="mt-2">
+                        <template x-if="promptTest.results.internalLinks.success">
+                            <div class="p-3 bg-green-50 border border-green-200 rounded-lg space-y-1 text-sm">
+                                <div class="text-green-800">결과 길이: <span x-text="promptTest.results.internalLinks.result?.content_length || 0"></span>자</div>
+                                <div class="text-green-700 text-xs">소요: <span x-text="promptTest.results.internalLinks.result?.generation_time_seconds"></span>초</div>
+                                <details class="text-xs mt-1">
+                                    <summary class="cursor-pointer text-green-600 hover:underline">결과 미리보기</summary>
+                                    <pre class="mt-1 p-2 bg-white rounded border border-green-100 overflow-x-auto text-gray-700 whitespace-pre-wrap text-xs"
+                                         x-text="promptTest.results.internalLinks.result?.content_with_links"></pre>
+                                </details>
+                            </div>
+                        </template>
+                        <template x-if="!promptTest.results.internalLinks.success">
+                            <div class="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700" x-text="promptTest.results.internalLinks.error"></div>
+                        </template>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Step 6: 이미지 생성 -->
+            <div x-show="promptTest.activeStep === 6" class="space-y-3">
                 <p class="text-xs text-gray-500">블로그 설정에 따라 AI 또는 템플릿 이미지를 생성합니다.</p>
                 <div>
                     <label class="block text-xs font-medium text-gray-600 mb-1">이미지 제목</label>
                     <input type="text" x-model="promptTest.imageTitle" placeholder="이전 단계에서 자동 입력 또는 직접 입력"
                            class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
                 </div>
+                <!-- Canvas: 템플릿 모드 렌더링용 -->
+                <canvas id="testImageCanvas" style="display:none;"></canvas>
                 <button type="button" @click="runStepImage()" :disabled="promptTest.loading"
                         class="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
-                    <span x-show="!promptTest.loading">실행</span>
-                    <span x-show="promptTest.loading && promptTest.activeStep === 5" class="flex items-center gap-1">
+                    <span x-show="!(promptTest.loading && promptTest.loadingKey === 'image')">실행</span>
+                    <span x-show="promptTest.loading && promptTest.loadingKey === 'image'" class="flex items-center gap-1">
                         <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
                         실행중...
                     </span>
@@ -283,24 +314,41 @@
                                     <span x-show="promptTest.results.image.result?.blog_image_mode"
                                           class="text-xs text-gray-500 ml-1">(블로그: <span x-text="promptTest.results.image.result?.blog_image_mode"></span>)</span>
                                 </div>
-                                <div x-show="promptTest.results.image.result?.image_url" class="text-green-700 text-xs">
-                                    대표 이미지 URL: <span x-text="promptTest.results.image.result?.image_url"></span>
-                                </div>
-                                <div x-show="promptTest.results.image.result?.image_url" class="mt-1">
-                                    <img :src="promptTest.results.image.result?.image_url" class="max-w-xs rounded border" alt="대표 이미지">
-                                </div>
-                                <!-- 섹션 이미지 -->
-                                <template x-if="promptTest.results.image.result?.section_images?.length > 0">
-                                    <div class="space-y-1 mt-2">
-                                        <div class="text-xs font-medium text-green-700">섹션 이미지 (<span x-text="promptTest.results.image.result.section_images.length"></span>장):</div>
-                                        <template x-for="(sImg, sIdx) in promptTest.results.image.result.section_images" :key="sIdx">
-                                            <div class="flex items-center gap-2">
-                                                <img :src="sImg.image_url || sImg" class="w-20 h-20 object-cover rounded border" :alt="'섹션 이미지 ' + (sIdx + 1)">
-                                            </div>
-                                        </template>
+                                <!-- 템플릿 Canvas 미리보기 -->
+                                <template x-if="promptTest.results.image.result?.canvas_rendered">
+                                    <div class="mt-1 space-y-1">
+                                        <div class="text-green-600 text-xs">Canvas 렌더링 완료 (서버 호출 없음)</div>
+                                        <img id="testImagePreview" class="max-w-full rounded border" alt="템플릿 이미지 미리보기"
+                                             x-init="$nextTick(() => {
+                                                 const cvs = document.getElementById('testImageCanvas');
+                                                 const img = document.getElementById('testImagePreview');
+                                                 if (cvs && img) img.src = cvs.toDataURL('image/png');
+                                             })">
                                     </div>
                                 </template>
-                                <div x-show="!promptTest.results.image.result?.image_url" class="text-green-600 text-xs">이미지가 생성되지 않았습니다 (비활성화 또는 mode=none)</div>
+                                <!-- AI 모드: 대표 이미지 -->
+                                <template x-if="!promptTest.results.image.result?.canvas_rendered">
+                                    <div>
+                                        <div class="text-green-700 text-xs flex flex-wrap gap-x-3 gap-y-0.5 mb-1">
+                                            <span>AI 서비스: <span x-text="promptTest.results.image.result?.provider || '-'"></span></span>
+                                            <span>모델: <span x-text="promptTest.results.image.result?.ai_model || '-'"></span></span>
+                                        </div>
+                                        <div x-show="promptTest.results.image.result?.image_url" class="text-green-700 text-xs">대표 이미지 URL: <span x-text="promptTest.results.image.result?.image_url"></span></div>
+                                        <div x-show="promptTest.results.image.result?.image_url" class="mt-1">
+                                            <img :src="promptTest.results.image.result?.image_url" class="max-w-xs rounded border" alt="대표 이미지"></div>
+                                        <template x-if="promptTest.results.image.result?.section_images?.length > 0">
+                                            <div class="space-y-1 mt-2">
+                                                <div class="text-xs font-medium text-green-700">섹션 이미지 (<span x-text="promptTest.results.image.result.section_images.length"></span>장):</div>
+                                                <template x-for="(sImg, sIdx) in promptTest.results.image.result.section_images" :key="sIdx">
+                                                    <div class="flex items-center gap-2">
+                                                        <img :src="sImg.image_url || sImg" class="w-20 h-20 object-cover rounded border" :alt="'섹션 이미지 ' + (sIdx + 1)">
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </template>
+                                        <div x-show="!promptTest.results.image.result?.image_url" class="text-green-600 text-xs">이미지가 생성되지 않았습니다</div>
+                                    </div>
+                                </template>
                                 <div class="text-green-700 text-xs">소요: <span x-text="promptTest.results.image.result?.generation_time_seconds"></span>초</div>
                             </div>
                         </template>
@@ -311,53 +359,50 @@
                 </template>
             </div>
 
-            <!-- Step 6: 전체 파이프라인 -->
-            <div x-show="promptTest.activeStep === 6" class="space-y-3">
-                <p class="text-xs text-gray-500">모든 단계를 순서대로 실행합니다.</p>
-                <label class="flex items-center gap-2">
-                    <input type="checkbox" x-model="promptTest.dryRun" class="rounded text-indigo-600 focus:ring-indigo-500">
-                    <span class="text-sm text-gray-700">Dry Run (DB 저장 안 함)</span>
-                </label>
-                <button type="button" @click="runStepFullPipeline()" :disabled="promptTest.loading"
+            <!-- Step 7: 변환 및 치환 적용 -->
+            <div x-show="promptTest.activeStep === 7" class="space-y-3">
+                <p class="text-xs text-gray-500">마크다운 → HTML 변환 및 블로그 치환 규칙을 적용합니다. (글 생성 후 실행)</p>
+                <button type="button" @click="runStepSubstitution()" :disabled="promptTest.loading"
                         class="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">
-                    <span x-show="!promptTest.loading">전체 실행</span>
-                    <span x-show="promptTest.loading && promptTest.activeStep === 6" class="flex items-center gap-1">
+                    <span x-show="!(promptTest.loading && promptTest.loadingKey === 'substitution')">실행</span>
+                    <span x-show="promptTest.loading && promptTest.loadingKey === 'substitution'" class="flex items-center gap-1">
                         <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
                         실행중...
                     </span>
                 </button>
-                <template x-if="promptTest.results.fullPipeline">
+                <template x-if="promptTest.results.substitution">
                     <div class="mt-2">
-                        <template x-if="promptTest.results.fullPipeline.success !== undefined">
-                            <div :class="promptTest.results.fullPipeline.success ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'"
-                                 class="p-3 border rounded-lg space-y-2 text-sm">
-                                <div :class="promptTest.results.fullPipeline.success ? 'text-green-800' : 'text-red-800'" class="font-medium">
-                                    <span x-text="promptTest.results.fullPipeline.success ? '전체 파이프라인 성공' : '파이프라인 실패'"></span>
-                                    <span class="font-normal text-xs ml-2">
-                                        (총 <span x-text="promptTest.results.fullPipeline.total_time_seconds"></span>초
-                                        | dry_run: <span x-text="promptTest.results.fullPipeline.dry_run ? '예' : '아니오'"></span>
-                                        <template x-if="promptTest.results.fullPipeline.saved">| 저장됨</template>)
-                                    </span>
-                                </div>
-                                <!-- 단계별 결과 -->
-                                <template x-if="promptTest.results.fullPipeline.steps">
-                                    <div class="space-y-1">
-                                        <template x-for="(val, key) in promptTest.results.fullPipeline.steps" :key="key">
-                                            <div class="flex items-center gap-2 text-xs">
-                                                <span :class="val.success ? 'text-green-600' : 'text-red-600'"
-                                                      x-text="val.success ? '✅' : '❌'"></span>
-                                                <span class="text-gray-700" x-text="key"></span>
-                                                <span x-show="val.title" class="text-gray-500 truncate max-w-xs" x-text="val.title"></span>
-                                                <span x-show="val.error" class="text-red-500" x-text="val.error"></span>
-                                            </div>
+                        <template x-if="promptTest.results.substitution.success">
+                            <div class="p-3 bg-green-50 border border-green-200 rounded-lg space-y-1 text-sm">
+                                <div class="text-green-800">변환 완료 (<span x-text="promptTest.results.substitution.result?.input_length"></span>자 → <span x-text="promptTest.results.substitution.result?.html_length"></span>자)</div>
+                                <div class="text-green-700 text-xs">소요: <span x-text="promptTest.results.substitution.result?.generation_time_seconds"></span>초</div>
+                                <template x-if="promptTest.results.substitution.result?.settings_used">
+                                    <div class="text-xs text-gray-600 space-y-0.5 mt-1">
+                                        <div>적용된 규칙: HTML태그 <span class="font-medium" x-text="promptTest.results.substitution.result.settings_used.html_tags_count"></span>개
+                                            | CSS클래스 <span class="font-medium" x-text="promptTest.results.substitution.result.settings_used.css_classes_count"></span>개
+                                            | 텍스트치환 <span class="font-medium" x-text="promptTest.results.substitution.result.settings_used.text_replace_count"></span>개</div>
+                                        <template x-if="promptTest.results.substitution.result.settings_used.html_tags_count > 0">
+                                            <div class="text-gray-500">태그 치환: <span x-text="JSON.stringify(promptTest.results.substitution.result.settings_used.html_tags)"></span></div>
+                                        </template>
+                                        <template x-if="promptTest.results.substitution.result.settings_used.css_classes_count > 0">
+                                            <div class="text-gray-500">클래스 추가: <span x-text="JSON.stringify(promptTest.results.substitution.result.settings_used.css_classes)"></span></div>
                                         </template>
                                     </div>
                                 </template>
-                                <!-- 에러 표시 -->
-                                <template x-if="promptTest.results.fullPipeline.error && !promptTest.results.fullPipeline.steps">
-                                    <div class="text-red-700 text-xs" x-text="promptTest.results.fullPipeline.error"></div>
-                                </template>
+                                <details class="text-xs mt-1">
+                                    <summary class="cursor-pointer text-green-600 hover:underline">렌더링 미리보기</summary>
+                                    <div class="mt-1 p-2 bg-white rounded border border-green-100 prose prose-sm max-w-none"
+                                         x-html="promptTest.results.substitution.result?.final_html"></div>
+                                </details>
+                                <details class="text-xs mt-1">
+                                    <summary class="cursor-pointer text-blue-600 hover:underline">HTML 소스코드 보기</summary>
+                                    <pre class="mt-1 p-2 bg-gray-50 rounded border border-blue-100 text-xs overflow-x-auto whitespace-pre-wrap break-all max-h-96"
+                                         x-text="promptTest.results.substitution.result?.final_html"></pre>
+                                </details>
                             </div>
+                        </template>
+                        <template x-if="!promptTest.results.substitution.success">
+                            <div class="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700" x-text="promptTest.results.substitution.error"></div>
                         </template>
                     </div>
                 </template>

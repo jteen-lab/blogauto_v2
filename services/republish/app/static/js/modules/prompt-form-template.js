@@ -308,6 +308,7 @@ function getPromptModuleFormTemplate() {
 ${getPromptCategorySection()}
 ${getPromptBlogSection()}
 ${getTestBlogAndTitleSection()}
+${getTestFullPipelineSection()}
 ${getPromptTitleSection()}
 ${getTestRecombineSection()}
 ${getPromptReferenceSection()}
@@ -320,7 +321,6 @@ ${getPromptSubstitutionSection()}
 ${getPromptImageSection()}
 ${getTestImageSection()}
 ${getTestSubstitutionSection()}
-${getTestFullPipelineSection()}
                         </div>
 `;
 }
