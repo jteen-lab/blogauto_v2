@@ -109,7 +109,7 @@ class SubstitutionProcessor:
         마크다운을 HTML로 변환
 
         기본적인 마크다운 문법을 지원합니다:
-        - 헤딩 (#, ##, ###, ####)
+        - 헤딩 (#, ##, ###, ####) + id 속성 (앵커 링크용)
         - 볼드 (**text**)
         - 이탤릭 (*text*)
         - 링크 [text](url)
@@ -119,18 +119,27 @@ class SubstitutionProcessor:
         - 코드 블록 (```)
         - 수평선 (---, ***)
         - 이미지 ![alt](url)
+        - 테이블 (| col1 | col2 |)
+        - 목차 자동 네비게이션 링크
         """
         if not content:
             return ""
 
         lines = content.split("\n")
+
+        # 1차 스캔: 헤딩 목록 수집 (목차 링크 생성용)
+        heading_map = self._collect_headings(lines)
+
         html_lines = []
         in_list = False
         in_ordered_list = False
         in_code_block = False
         in_blockquote = False
+        in_table = False
+        in_toc = False
+        heading_id_counter = {}
 
-        for line in lines:
+        for i, line in enumerate(lines):
             stripped = line.strip()
 
             # 코드 블록
@@ -146,6 +155,11 @@ class SubstitutionProcessor:
             if in_code_block:
                 html_lines.append(self._escape_html(line))
                 continue
+
+            # 테이블 종료 체크
+            if in_table and not stripped.startswith("|"):
+                html_lines.append("</tbody></table>")
+                in_table = False
 
             # 리스트 종료 체크
             if in_list and not re.match(r'^[\-\*]\s', stripped):
@@ -163,6 +177,12 @@ class SubstitutionProcessor:
 
             # 빈 줄
             if not stripped:
+                # 목차 섹션 종료: 자동 생성 목차 출력
+                if in_toc:
+                    html_lines.extend(
+                        self._render_auto_toc(lines, heading_map)
+                    )
+                    in_toc = False
                 html_lines.append("")
                 continue
 
@@ -171,12 +191,65 @@ class SubstitutionProcessor:
                 html_lines.append("<hr>")
                 continue
 
+            # 테이블 구분선 (|---|---|) → 건너뛰기
+            if re.match(r'^\|[\s\-:]+\|', stripped):
+                if not in_table:
+                    in_table = True
+                continue
+
+            # 테이블 행
+            if stripped.startswith("|") and stripped.endswith("|"):
+                cells = [
+                    c.strip()
+                    for c in stripped.strip("|").split("|")
+                ]
+                if not in_table:
+                    # 헤더 행
+                    in_table = True
+                    header_html = "".join(
+                        f"<th>{self._inline_format(c)}</th>"
+                        for c in cells
+                    )
+                    html_lines.append(
+                        f"<table><thead><tr>{header_html}"
+                        f"</tr></thead><tbody>"
+                    )
+                else:
+                    row_html = "".join(
+                        f"<td>{self._inline_format(c)}</td>"
+                        for c in cells
+                    )
+                    html_lines.append(f"<tr>{row_html}</tr>")
+                continue
+
             # 헤딩
             heading_match = re.match(r'^(#{1,6})\s+(.+)$', stripped)
             if heading_match:
+                # 목차 섹션 종료 (다음 헤딩 도달)
+                if in_toc:
+                    html_lines.extend(
+                        self._render_auto_toc(lines, heading_map)
+                    )
+                    in_toc = False
+
                 level = len(heading_match.group(1))
-                text = self._inline_format(heading_match.group(2))
-                html_lines.append(f"<h{level}>{text}</h{level}>")
+                raw_text = heading_match.group(2).strip()
+                text = self._inline_format(raw_text)
+                heading_id = self._make_heading_id(
+                    raw_text, heading_id_counter
+                )
+                html_lines.append(
+                    f'<h{level} id="{heading_id}">{text}</h{level}>'
+                )
+
+                # "목차" 헤딩이면 다음 줄부터 목차 항목 수집 시작
+                if raw_text.strip() == "목차":
+                    in_toc = True
+
+                continue
+
+            # 목차 섹션 내의 AI 작성 텍스트 → 무시 (자동 생성으로 대체)
+            if in_toc and stripped and not stripped.startswith(">"):
                 continue
 
             # 인용문
@@ -226,6 +299,10 @@ class SubstitutionProcessor:
             html_lines.append(f"<p>{text}</p>")
 
         # 열려있는 태그 닫기
+        if in_toc:
+            html_lines.extend(self._render_auto_toc(lines, heading_map))
+        if in_table:
+            html_lines.append("</tbody></table>")
         if in_list:
             html_lines.append("</ul>")
         if in_ordered_list:
@@ -236,6 +313,100 @@ class SubstitutionProcessor:
             html_lines.append("</code></pre>")
 
         return "\n".join(html_lines)
+
+    def _collect_headings(self, lines: list) -> dict:
+        """
+        마크다운 라인에서 헤딩 텍스트 → ID 매핑 수집
+
+        Args:
+            lines: 마크다운 라인 목록
+
+        Returns:
+            {헤딩텍스트: heading_id} 딕셔너리
+        """
+        heading_map = {}
+        counter = {}
+        for line in lines:
+            m = re.match(r'^(#{1,6})\s+(.+)$', line.strip())
+            if m:
+                raw_text = m.group(2).strip()
+                if raw_text == "목차":
+                    continue
+                heading_id = self._make_heading_id(raw_text, counter)
+                heading_map[raw_text] = heading_id
+        return heading_map
+
+    @staticmethod
+    def _make_heading_id(text: str, counter: dict) -> str:
+        """
+        헤딩 텍스트로 HTML id 속성 생성
+
+        Args:
+            text: 원본 헤딩 텍스트
+            counter: 중복 방지용 카운터 딕셔너리
+
+        Returns:
+            고유한 heading id 문자열
+        """
+        slug = re.sub(r'[^\w\s가-힣-]', '', text).strip()
+        slug = re.sub(r'\s+', '-', slug)
+        if not slug:
+            slug = "heading"
+        if slug in counter:
+            counter[slug] += 1
+            return f"{slug}-{counter[slug]}"
+        counter[slug] = 0
+        return slug
+
+    @staticmethod
+    def _render_auto_toc(lines: list, heading_map: dict) -> list:
+        """
+        실제 문서 헤딩에서 목차를 자동 생성
+
+        AI가 작성한 목차 텍스트를 무시하고, 문서 내 실제 헤딩을
+        스캔하여 앵커 링크가 포함된 목차를 생성합니다.
+        "목차" 헤딩과 동일 레벨의 헤딩만 수집하며,
+        종료 섹션(자주하는 질문, 결론, FAQ, 마무리)은 제외합니다.
+
+        Args:
+            lines: 전체 마크다운 라인 목록
+            heading_map: {헤딩텍스트: heading_id} 매핑
+
+        Returns:
+            HTML 라인 리스트
+        """
+        skip_headings = {"목차", "자주하는 질문", "결론", "FAQ", "마무리"}
+
+        # "목차" 헤딩의 레벨을 찾아서 같은 레벨만 수집
+        toc_level = None
+        for line in lines:
+            m = re.match(r'^(#{1,6})\s+(.+)$', line.strip())
+            if m and m.group(2).strip() == "목차":
+                toc_level = len(m.group(1))
+                break
+
+        if toc_level is None:
+            return []
+
+        toc_headings = []
+        for line in lines:
+            m = re.match(r'^(#{1,6})\s+(.+)$', line.strip())
+            if m:
+                level = len(m.group(1))
+                if level != toc_level:
+                    continue
+                raw_text = m.group(2).strip()
+                if raw_text in skip_headings:
+                    continue
+                heading_id = heading_map.get(raw_text)
+                if heading_id:
+                    toc_headings.append(
+                        f'<a href="#{heading_id}">{raw_text}</a>'
+                    )
+
+        if not toc_headings:
+            return []
+        return [f'<p>{"<br>".join(toc_headings)}</p>']
 
     def _inline_format(self, text: str) -> str:
         """인라인 마크다운 포맷 처리"""
