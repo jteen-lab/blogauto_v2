@@ -13,6 +13,11 @@ function moduleFormApp(module = null, moduleType = null) {
         ? window.createPromptModuleState()
         : {};
 
+    // 양방향 연동 상태 머지
+    if (window.createPromptModuleLinkingState) {
+        promptModuleState.linking = window.createPromptModuleLinkingState();
+    }
+
     return {
         // 폼 상태
         loading: false,
@@ -204,6 +209,10 @@ function moduleFormApp(module = null, moduleType = null) {
             if (typeCode === 'prompt') {
                 console.log('프롬프트 모듈 감지 - 카테고리 로드 시작');
                 this.loadCategories();
+                // 다른 모듈의 사용 현황 로드 (충돌 감지용, 신규/편집 공통)
+                if (this.loadUsedBlogCategories) {
+                    this.loadUsedBlogCategories();
+                }
                 // 편집 모드일 경우 기존 데이터 로드
                 if (this.isEdit) {
                     this.initPromptModuleFromData();
@@ -1009,6 +1018,7 @@ function moduleFormApp(module = null, moduleType = null) {
         // toggleBlogSelection, selectAllMatchedBlogs, removeBlog,
         // getBlogName, validatePromptModule, preparePromptModuleData
         ...(window.promptModuleMethods || {}),
+        ...(window.promptModuleLinkingMethods || {}),
         ...(window.promptTestMethods || {})
     };
 }

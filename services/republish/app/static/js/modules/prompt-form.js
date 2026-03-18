@@ -35,17 +35,15 @@ function createPromptModuleState() {
             { value: 'minimal', label: '심플', icon: '✨' }
         ],
 
-        // AI 프로바이더 옵션
         aiProviders: [
             { value: 'openai', label: 'ChatGPT' },
             { value: 'claude', label: 'Claude' },
             { value: 'gemini', label: 'Gemini' }
         ],
 
-        // 글 생성 설정
         contentGeneration: {
             enabled: false,
-            provider: 'openai',   // 폴백용 기본값 (블로그 AI 설정에서 덮어씀)
+            provider: 'openai',
             temperature: 0.7,
             maxTokens: 4096,
             topP: 0.9,
@@ -57,21 +55,19 @@ function createPromptModuleState() {
             showAdvanced: false
         },
 
-        // 참조자료 수집 설정 (필수 - 항상 활성화)
         reference: {
             enabled: true,
             maxSearch: 30,
             crawlTarget: 10,
             summaryCount: 3,
             summaryMethod: 'ai',
-            aiProvider: 'openai',   // 폴백용 기본값 (블로그 AI 설정에서 덮어씀)
-            aiModel: 'gpt-4.1-mini', // 폴백용 기본값 (블로그 AI 설정에서 덮어씀)
+            aiProvider: 'openai',
+            aiModel: 'gpt-4.1-mini',
             summaryStyle: 'concise',
             algorithmType: 'textrank',
             maxLength: 500
         },
 
-        // 내부링크 설정
         internalLinks: {
             enabled: false,
             similarityThreshold: 75,
@@ -83,21 +79,21 @@ function createPromptModuleState() {
             conclusionListStyle: 'dash'
         },
 
-        // 텍스트 치환 활성화
         textReplaceEnabled: true,
-
-        // 이미지 생성 설정 (provider는 블로그 설정에서 결정, 통합 파라미터)
-        // cover_source/section_source는 블로그 설정 이미지 탭에서 관리 (Phase 4)
         imageGeneration: {
             enabled: false,
-            aspectRatio: '16:9',        // 통합: 이미지 비율
-            style: 'realistic',         // 통합: 이미지 스타일
-            quality: 'standard',        // 통합: 이미지 품질 (DALL-E만 적용)
-            promptTemplate: '{title}에 대한 전문적인 블로그 헤더 이미지, {keywords} 포함, 현대적인 디자인, 깔끔한 구성',
-            titleOverlay: false         // AI 이미지에 제목 오버레이
+            aspectRatio: '16:9',
+            style: 'realistic',
+            quality: 'standard',
+            promptTemplate: '{title} 주제의 전문적인 블로그 대표 이미지, {keywords} 포함, 현대적인 디자인, 깔끔한 구성',
+            titleOverlay: false,
+            sectionCustom: false,
+            sectionPromptTemplate: '{title} 주제의 블로그 섹션 일러스트, 심플하고 집중적인 디자인',
+            sectionAspectRatio: '1:1',
+            sectionStyle: 'minimal',
+            sectionQuality: 'standard'
         },
 
-        // 블로그별 이미지 모드 캐시 (blog_id → image_mode)
         blogImageModes: {}
     };
 }
@@ -114,25 +110,6 @@ const promptModuleMethods = {
             }
         } catch (e) { console.error('카테고리 로드 실패:', e); }
         finally { this.promptModule.categoriesLoading = false; }
-    },
-
-    async loadBlogs() {
-        this.promptModule.blogsLoading = true;
-        try {
-            const resp = await fetch('/api/v1/blogs', { credentials: 'include' });
-            if (resp.ok) {
-                const data = await resp.json();
-                this.promptModule.blogs = data.blogs || data || [];
-            }
-        } catch (e) { console.error('블로그 로드 실패:', e); }
-        finally { this.promptModule.blogsLoading = false; }
-    },
-
-    getBlogsByPlatform(platform) {
-        return this.promptModule.blogs.filter(b => b.platform === platform);
-    },
-    getMatchedBlogsByPlatform(platform) {
-        return this.promptModule.matchedBlogs.filter(b => b.platform === platform);
     },
 
     // 편집 모드일 때 기존 데이터로 프롬프트 모듈 초기화
@@ -213,8 +190,13 @@ const promptModuleMethods = {
                 aspectRatio: aspectRatio,
                 style: style,
                 quality: quality,
-                promptTemplate: ig.prompt_template || '',
-                titleOverlay: ig.title_overlay ?? false
+                promptTemplate: ig.prompt_template || '{title} 주제의 전문적인 블로그 대표 이미지, {keywords} 포함, 현대적인 디자인, 깔끔한 구성',
+                titleOverlay: ig.title_overlay ?? false,
+                sectionCustom: ig.section_custom ?? false,
+                sectionPromptTemplate: ig.section_prompt_template || '{title} 주제의 블로그 섹션 일러스트, 심플하고 집중적인 디자인',
+                sectionAspectRatio: ig.section_aspect_ratio || '1:1',
+                sectionStyle: ig.section_style || 'minimal',
+                sectionQuality: ig.section_quality || 'standard'
             };
         }
 
@@ -244,13 +226,20 @@ const promptModuleMethods = {
                 topic_id: c.topic_id,
                 subtopic_id: c.subtopic_id || null
             }));
-            // 블로그 로드
-            this.loadBlogsByCategories();
+            // 카테고리 모드일 때만 블로그 로드
+            if (!settings.link_mode || settings.link_mode === 'category') {
+                this.loadBlogsByCategories();
+            }
         }
 
         // 선택된 블로그 (편집 모드)
         if (settings.blogs && settings.blogs.length > 0) {
             this.promptModule.selectedBlogs = settings.blogs.map(b => b.id || b);
+        }
+
+        // 양방향 연동 데이터 복원
+        if (this.initPromptModuleLinkingFromData) {
+            this.initPromptModuleLinkingFromData();
         }
     },
 
@@ -285,8 +274,24 @@ const promptModuleMethods = {
         this.onCategoryChange();
     },
     onCategoryChange() {
-        if (this.promptModule.selectedCategories.length > 0) this.loadBlogsByCategories();
-        else { this.promptModule.matchedBlogs = []; this.promptModule.unmatchedBlogs = []; }
+        if (this.promptModule.selectedCategories.length > 0) {
+            // usedMappings가 아직 로드되지 않았으면 병렬 로드
+            const loads = [this.loadBlogsByCategories()];
+            if (this.loadUsedBlogCategories && this.promptModule.linking.usedMappings.length === 0) {
+                loads.push(this.loadUsedBlogCategories());
+            }
+            Promise.all(loads).then(() => {
+                if (this.checkConflicts) this.checkConflicts();
+                if (this.buildBlogCategoryMap) this.buildBlogCategoryMap();
+            });
+        } else {
+            this.promptModule.matchedBlogs = [];
+            this.promptModule.unmatchedBlogs = [];
+            if (this.promptModule.linking) {
+                this.promptModule.linking.excludedBlogs = [];
+                this.promptModule.linking.blogCategoryMap = [];
+            }
+        }
     },
     getCategoryDisplayName(cat) {
         const topic = this.promptModule.topics.find(t => t.id === cat.topic_id);
@@ -301,75 +306,24 @@ const promptModuleMethods = {
         const idx = this.promptModule.selectedCategories.findIndex(c => c.topic_id === cat.topic_id && c.subtopic_id === cat.subtopic_id);
         if (idx !== -1) { this.promptModule.selectedCategories.splice(idx, 1); this.onCategoryChange(); }
     },
-    async loadBlogsByCategories() {
-        this.promptModule.blogsLoading = true;
-        try {
-            const topicIds = [...new Set(this.promptModule.selectedCategories.map(c => c.topic_id))];
-            const subtopicIds = this.promptModule.selectedCategories.filter(c => c.subtopic_id).map(c => c.subtopic_id);
-            const params = new URLSearchParams();
-            if (topicIds.length > 0) params.append('topic_ids', topicIds.join(','));
-            if (subtopicIds.length > 0) params.append('subtopic_ids', subtopicIds.join(','));
-            const resp = await fetch(`/api/v1/blogs/by-categories?${params.toString()}`, { credentials: 'include' });
-            if (resp.ok) {
-                const data = await resp.json();
-                this.promptModule.matchedBlogs = data.matched_blogs || [];
-                this.promptModule.unmatchedBlogs = data.unmatched_blogs || [];
-                // 블로그별 image_mode 캐시 업데이트
-                const allBlogs = [...this.promptModule.matchedBlogs, ...this.promptModule.unmatchedBlogs];
-                for (const b of allBlogs) {
-                    if (b.image_mode) this.promptModule.blogImageModes[b.id] = b.image_mode;
-                }
-            }
-        } catch (e) { console.error('블로그 조회 실패:', e); }
-        finally { this.promptModule.blogsLoading = false; }
-    },
-
-    // 선택된 블로그들의 대표 image_mode 반환 (첫 번째 블로그 기준, 없으면 'template')
-    getSelectedBlogImageMode() {
-        const selectedIds = this.promptModule.selectedBlogs || [];
-        if (selectedIds.length === 0) return 'template';
-        const firstId = selectedIds[0];
-        return this.promptModule.blogImageModes[firstId] || 'template';
-    },
     toggleTitleStyle(styleValue) {
         const idx = this.promptModule.titleRecombine.selectedStyles.indexOf(styleValue);
         if (idx !== -1) this.promptModule.titleRecombine.selectedStyles.splice(idx, 1);
         else this.promptModule.titleRecombine.selectedStyles.push(styleValue);
     },
-    toggleBlogSelection(blogId) {
-        const idx = this.promptModule.selectedBlogs.indexOf(blogId);
-        if (idx !== -1) {
-            this.promptModule.selectedBlogs.splice(idx, 1);
-        } else {
-            this.promptModule.selectedBlogs.push(blogId);
-        }
-    },
-
-    // 매칭된 블로그 전체 선택
-    selectAllMatchedBlogs() {
-        this.promptModule.selectedBlogs = this.promptModule.matchedBlogs.map(b => b.id);
-    },
-
-    // 블로그 제거
-    removeBlog(blogId) {
-        const idx = this.promptModule.selectedBlogs.indexOf(blogId);
-        if (idx !== -1) {
-            this.promptModule.selectedBlogs.splice(idx, 1);
-        }
-    },
-
-    // 블로그 이름 반환
-    getBlogName(blogId) {
-        const blog = this.promptModule.matchedBlogs.find(b => b.id === blogId) ||
-                     this.promptModule.unmatchedBlogs.find(b => b.id === blogId);
-        return blog ? blog.name : `블로그 ${blogId}`;
-    },
-
     // 프롬프트 모듈 유효성 검증
     validatePromptModule() {
-        // 카테고리 선택 검증
-        if (this.promptModule.selectedCategories.length === 0) {
+        const linkMode = this.promptModule.linking?.linkMode || 'category';
+
+        // 카테고리 모드: 카테고리 필수
+        if (linkMode === 'category' && this.promptModule.selectedCategories.length === 0) {
             this.showError('최소 1개 이상의 카테고리를 선택해주세요');
+            return false;
+        }
+
+        // 블로그 모드: 블로그 필수
+        if (linkMode === 'blog' && this.promptModule.selectedBlogs.length === 0) {
+            this.showError('최소 1개 이상의 블로그를 선택해주세요');
             return false;
         }
 
@@ -420,7 +374,19 @@ const promptModuleMethods = {
 
     // 프롬프트 모듈 요청 데이터 준비
     preparePromptModuleData() {
+        // 저장 전 blogCategoryMap 갱신
+        if (this.buildBlogCategoryMap) {
+            this.buildBlogCategoryMap();
+        }
+
+        // 양방향 연동 데이터
+        const linkingData = this.preparePromptModuleLinkingData
+            ? this.preparePromptModuleLinkingData()
+            : {};
+
         return {
+            // 양방향 연동 설정
+            ...linkingData,
             // 카테고리 연결
             categories: this.promptModule.selectedCategories.map(c => ({
                 topic_id: c.topic_id,
@@ -482,7 +448,12 @@ const promptModuleMethods = {
                 style: this.promptModule.imageGeneration.style,
                 quality: this.promptModule.imageGeneration.quality,
                 prompt_template: this.promptModule.imageGeneration.promptTemplate,
-                title_overlay: this.promptModule.imageGeneration.titleOverlay
+                title_overlay: this.promptModule.imageGeneration.titleOverlay,
+                section_custom: this.promptModule.imageGeneration.sectionCustom,
+                section_prompt_template: this.promptModule.imageGeneration.sectionPromptTemplate,
+                section_aspect_ratio: this.promptModule.imageGeneration.sectionAspectRatio,
+                section_style: this.promptModule.imageGeneration.sectionStyle,
+                section_quality: this.promptModule.imageGeneration.sectionQuality
             }
         };
     }
