@@ -49,6 +49,8 @@ from .routers.ai_api_keys import router as ai_api_keys_router  # AI API 키 다�
 from .routers.reference_collection import router as reference_collection_router  # 참조자료 수집
 from .api.growth_profile import router as growth_profile_router  # Growth Profile API
 from .routers.generation_test import router as generation_test_router  # Phase D: 파이프라인 테스트
+from .routers.generation_content import router as generation_content_router  # 생성 콘텐츠 조회/삭제
+from .routers.generation_pages import router as generation_page_router  # 생성 이력 페이지
 
 logger = get_logger("main", "app.log")
 
@@ -212,6 +214,7 @@ app.include_router(ai_api_keys_router)  # AI API 키 다계정 관리 (prefix �
 app.include_router(reference_collection_router, prefix=settings.api_v1_prefix)  # 참조자료 수집
 app.include_router(growth_profile_router, prefix=settings.api_v1_prefix)  # Growth Profile
 app.include_router(generation_test_router, prefix=settings.api_v1_prefix)  # Phase D: 파이프라인 테스트
+app.include_router(generation_content_router, prefix=settings.api_v1_prefix)  # 생성 콘텐츠 조회/삭제
 
 # 페이지 라우터 등록
 app.include_router(blogs_page_router)
@@ -222,6 +225,7 @@ app.include_router(modules_page_router)
 app.include_router(flows_page_router)
 app.include_router(autorun_page_router)
 app.include_router(collection_page_router)
+app.include_router(generation_page_router)  # 생성 이력 페이지
 
 # 정적 파일 서빙 (개발환경)
 if settings.is_development:

@@ -14,10 +14,13 @@ import uuid
 from pathlib import Path
 from typing import Optional, Tuple
 
+from ...core.config import settings
+
 logger = logging.getLogger(__name__)
 
-# 이미지 저장 경로
-IMAGE_DIR = Path(__file__).parent.parent.parent / "static" / "generated" / "images"
+# 이미지 저장 경로 (config 기반)
+IMAGE_DIR = Path(settings.image_storage_dir)
+IMAGE_URL_PREFIX = settings.image_url_prefix
 
 # 미디어 파일 루트 경로 (업로드된 이미지/폰트 저장 위치)
 MEDIA_ROOT = Path(__file__).parent.parent.parent.parent / "media"
@@ -400,7 +403,7 @@ class TemplateImageService:
 
         try:
             image.save(str(filepath), "PNG")
-            return f"/static/generated/images/{filename}"
+            return f"{IMAGE_URL_PREFIX}/{filename}"
         except Exception as e:
             logger.error(f"[TEMPLATE_IMAGE] 저장 실패: {e}")
             return None

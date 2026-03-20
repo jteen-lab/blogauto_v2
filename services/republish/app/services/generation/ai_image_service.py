@@ -7,6 +7,7 @@ AI API를 호출하여 이미지를 생성합니다.
 설계 문서: generation_pipeline_enhancement_plan.md - Phase C - 5.4
 """
 import logging
+import re
 import time
 import uuid
 from pathlib import Path
@@ -16,16 +17,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..ai_key_manager import AIKeyManager
 from ...schemas.ai_api_key import AIProvider
+from ...core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# 이미지 저장 경로
-IMAGE_DIR = Path(__file__).parent.parent.parent / "static" / "generated" / "images"
+# 이미지 저장 경로 (config 기반)
+IMAGE_DIR = Path(settings.image_storage_dir)
+IMAGE_URL_PREFIX = settings.image_url_prefix
 
-# 기본 이미지 프롬프트
+# 기본 이미지 프롬프트 (한글)
 DEFAULT_PROMPT_TEMPLATE = (
-    "A clean, professional blog header image for: {title}. "
-    "Modern design, suitable for a Korean blog post."
+    "{title} 주제의 전문적인 블로그 대표 이미지, "
+    "{keywords} 포함, 현대적인 디자인, 깔끔한 구성"
 )
 
 
@@ -45,6 +48,7 @@ class AIImageService:
     async def generate(
         self, title: str, provider: str, provider_params: dict,
         prompt_template: str, blog_id: int,
+        keywords: str = "",
     ) -> Optional[dict]:
         """
         AI로 이미지 생성 (변환된 provider별 파라미터 수신)
@@ -55,6 +59,7 @@ class AIImageService:
             provider_params: 변환 레이어에서 생성된 provider별 파라미터
             prompt_template: 이미지 프롬프트 템플릿
             blog_id: 블로그 ID (파일명에 사용)
+            keywords: 키워드 문자열 ({keywords} 치환용)
 
         Returns:
             dict: {"image_url": str, "provider": str, "model": str}
@@ -62,6 +67,16 @@ class AIImageService:
         """
         effective_template = prompt_template or DEFAULT_PROMPT_TEMPLATE
         prompt = effective_template.replace("{title}", title)
+        # {keywords} 치환: 데이터 없으면 플레이스홀더 제거
+        if keywords:
+            prompt = prompt.replace("{keywords}", keywords)
+        else:
+            prompt = prompt.replace("{keywords}", "").strip()
+            # 잔여 구문 정리 (", 포함" → "" 등)
+            prompt = re.sub(r',\s*포함\s*,', ',', prompt)
+            prompt = re.sub(r',\s*featuring\s*,', ',', prompt)
+            prompt = re.sub(r',\s*,', ',', prompt)
+            prompt = re.sub(r'\s{2,}', ' ', prompt).strip()
 
         logger.info(
             f"[AI_IMAGE] 이미지 생성 시작 | "
@@ -280,7 +295,7 @@ class AIImageService:
 
         try:
             filepath.write_bytes(image_bytes)
-            relative_url = f"/static/generated/images/{filename}"
+            relative_url = f"{IMAGE_URL_PREFIX}/{filename}"
             logger.info(
                 f"[AI_IMAGE] 이미지 저장 완료: {relative_url}"
             )

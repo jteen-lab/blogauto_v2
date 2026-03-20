@@ -278,7 +278,9 @@ async def list_main_titles(
                 title=cp.title,
                 url=cp.url,
                 match_score=cp.match_score,
-                published_at=cp.published_at
+                published_at=cp.published_at,
+                image_url=cp.image_url,
+                has_content=bool(cp.content_html),
             )
         items.append(item)
 

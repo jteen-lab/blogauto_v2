@@ -353,6 +353,11 @@ const promptTestMethods = {
                     quality: ig.quality || 'standard',
                     prompt_template: ig.promptTemplate || '',
                     title_overlay: ig.titleOverlay || false,
+                    section_custom: ig.sectionCustom || false,
+                    section_prompt_template: ig.sectionPromptTemplate || '',
+                    section_aspect_ratio: ig.sectionAspectRatio || '1:1',
+                    section_style: ig.sectionStyle || 'minimal',
+                    section_quality: ig.sectionQuality || 'standard',
                 },
             });
             this.promptTest.results.image = data;

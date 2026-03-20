@@ -427,6 +427,83 @@
             {% include "collection/_urls.html" %}
         </div>
     </div>
+
+    <!-- 생성 콘텐츠 미리보기 모달 (iframe srcdoc) -->
+    <div x-show="contentModal.open" x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
+         class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+         @click.self="contentModal.open = false" x-cloak>
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col"
+             @click.stop>
+            <div class="flex items-center justify-between px-6 py-4 border-b">
+                <div class="flex-1 min-w-0">
+                    <h3 class="text-lg font-bold text-gray-800 truncate" x-text="contentModal.title"></h3>
+                    <p class="text-xs text-gray-500" x-text="contentModal.blogName"></p>
+                </div>
+                <button @click="contentModal.open = false"
+                        class="ml-4 text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+            </div>
+            <div class="flex-1 overflow-hidden">
+                <div x-show="contentModal.loading" class="text-center py-8 text-gray-500">
+                    <p class="text-sm">콘텐츠 로딩 중...</p>
+                </div>
+                <iframe x-show="!contentModal.loading"
+                        :srcdoc="contentModal.safeHtml"
+                        class="w-full border-0" style="height: calc(90vh - 140px);"
+                        sandbox=""></iframe>
+            </div>
+            <div class="flex items-center justify-end gap-2 px-6 py-4 border-t bg-gray-50">
+                <span x-show="contentModal.copied" x-transition
+                      class="text-sm text-green-600 mr-2">복사 완료!</span>
+                <button @click="copyContentHtml()"
+                        class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded text-sm">
+                    HTML 복사
+                </button>
+                <button @click="contentModal.open = false"
+                        class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded text-sm">
+                    닫기
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 이미지 미리보기 모달 -->
+    <div x-show="imageModal.open" x-transition
+         class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70"
+         @click.self="imageModal.open = false" x-cloak>
+        <div class="relative max-w-3xl w-full" @click.stop>
+            <button @click="imageModal.open = false"
+                    class="absolute -top-10 right-0 text-white text-2xl hover:text-gray-300">&times;</button>
+            <p class="text-white text-sm mb-2 truncate" x-text="imageModal.title"></p>
+            <img :src="imageModal.url" class="w-full rounded-lg shadow-2xl"
+                 @error="imageModal.open = false">
+        </div>
+    </div>
+
+    <!-- 생성 콘텐츠 삭제 확인 모달 -->
+    <div x-show="deleteModal.open" x-transition
+         class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+         @click.self="deleteModal.open = false" x-cloak>
+        <div class="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full" @click.stop>
+            <h3 class="text-lg font-bold text-gray-800 mb-2">생성 콘텐츠 삭제</h3>
+            <p class="text-sm text-gray-600 mb-4">
+                다음 생성 콘텐츠를 삭제하시겠습니까?<br>
+                <strong x-text="deleteModal.title" class="text-red-600"></strong>
+            </p>
+            <div class="flex justify-end gap-2">
+                <button @click="deleteModal.open = false"
+                        class="px-4 py-2 text-sm bg-gray-200 hover:bg-gray-300 rounded">취소</button>
+                <button @click="executeDeleteContent()"
+                        :disabled="deleteModal.loading"
+                        class="px-4 py-2 text-sm bg-red-500 hover:bg-red-600 text-white rounded disabled:opacity-50">
+                    <span x-show="!deleteModal.loading">삭제</span>
+                    <span x-show="deleteModal.loading">삭제 중...</span>
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -533,6 +610,33 @@ function dataManagementApp() {
         editingTitleValue: '',
         editingFilterId: null,
         editingFilterValue: '',
+
+        // ★ 생성 콘텐츠 미리보기 모달
+        contentModal: {
+            open: false,
+            loading: false,
+            title: '',
+            blogName: '',
+            rawHtml: '',
+            safeHtml: '',
+            copied: false,
+        },
+
+        // ★ 이미지 미리보기 모달
+        imageModal: {
+            open: false,
+            url: '',
+            title: '',
+        },
+
+        // ★ 생성 콘텐츠 삭제 확인 모달
+        deleteModal: {
+            open: false,
+            loading: false,
+            crawledPostId: null,
+            mainTitleId: null,
+            title: '',
+        },
 
         // ★ 모바일 아코디언 확장 상태
         expandedKeywordId: null,
@@ -1281,12 +1385,14 @@ function dataManagementApp() {
 
         // 매칭 상태 텍스트 (독립포스트/매칭/발행대기)
         getMatchingStatusText(title) {
-            if (title.status === 'used') {
-                return '발행대기';
+            // 블로그 선택 시: matched_crawled_post 존재 여부로 판단
+            if (this.selectedBlogId) {
+                if (title.matched_crawled_post) {
+                    return title.matched_crawled_post.published_at ? '발행완료' : '발행대기';
+                }
+                return '독립포스트';
             }
-            if (title.matched_crawled_post) {
-                return '매칭';
-            }
+            // 블로그 미선택: 모든 제목은 독립포스트로 표시
             return '독립포스트';
         },
 
@@ -2188,6 +2294,97 @@ function dataManagementApp() {
                 this.loadStats();
             } catch (e) {
                 showErrorMessage(e.message || '그룹 해제 실패');
+            }
+        },
+
+        // ★ 생성 콘텐츠 미리보기 (iframe srcdoc)
+        _buildSafeHtml(html) {
+            const stripped = html.replace(/<script[\s\S]*?<\/script>/gi, '');
+            return '<!DOCTYPE html><html><head><meta charset=utf-8>'
+                + '<style>body{font-family:-apple-system,sans-serif;padding:24px;line-height:1.8;color:#333;max-width:100%}'
+                + 'img{max-width:100%;height:auto}h1,h2,h3{margin-top:1.5em;margin-bottom:0.5em}'
+                + 'p{margin:0.8em 0}a{color:#2563eb}blockquote{border-left:3px solid #ddd;padding-left:1em;color:#666}</style>'
+                + '</head><body>' + stripped + '</body></html>';
+        },
+
+        async viewGeneratedContent(crawledPostId) {
+            this.contentModal.open = true;
+            this.contentModal.loading = true;
+            this.contentModal.rawHtml = '';
+            this.contentModal.safeHtml = '';
+            this.contentModal.copied = false;
+
+            try {
+                const resp = await fetch(
+                    `${API_BASE}/generation/content/${crawledPostId}`,
+                    { credentials: 'include' }
+                );
+                if (!resp.ok) throw new Error('콘텐츠 조회 실패');
+
+                const data = await resp.json();
+                this.contentModal.title = data.title || '';
+                this.contentModal.blogName = data.blog_name || '';
+                this.contentModal.rawHtml = data.content_html || '';
+                this.contentModal.safeHtml = this._buildSafeHtml(this.contentModal.rawHtml);
+            } catch (e) {
+                console.error('[viewGeneratedContent]', e);
+                this.contentModal.rawHtml = '';
+                this.contentModal.safeHtml = this._buildSafeHtml(
+                    '<p style="color:red;text-align:center;padding:2em;">콘텐츠 로딩 실패</p>'
+                );
+            } finally {
+                this.contentModal.loading = false;
+            }
+        },
+
+        async copyContentHtml() {
+            try {
+                await navigator.clipboard.writeText(this.contentModal.rawHtml);
+                this.contentModal.copied = true;
+                setTimeout(() => { this.contentModal.copied = false; }, 2000);
+            } catch (e) {
+                console.error('[copyContentHtml]', e);
+            }
+        },
+
+        // ★ 이미지 미리보기 모달
+        openImageModal(url, title) {
+            this.imageModal.url = url;
+            this.imageModal.title = title || '';
+            this.imageModal.open = true;
+        },
+
+        // ★ 생성 콘텐츠 삭제
+        confirmDeleteContent(crawledPostId, mainTitleId, title) {
+            this.deleteModal.crawledPostId = crawledPostId;
+            this.deleteModal.mainTitleId = mainTitleId;
+            this.deleteModal.title = title;
+            this.deleteModal.loading = false;
+            this.deleteModal.open = true;
+        },
+
+        async executeDeleteContent() {
+            if (!this.deleteModal.crawledPostId) return;
+            this.deleteModal.loading = true;
+
+            try {
+                const resp = await fetch(
+                    `${API_BASE}/generation/content/${this.deleteModal.crawledPostId}`,
+                    { method: 'DELETE', credentials: 'include' }
+                );
+                if (!resp.ok) {
+                    const err = await resp.json();
+                    throw new Error(err.detail || '삭제 실패');
+                }
+
+                this.deleteModal.open = false;
+                showSuccessMessage('생성 콘텐츠가 삭제되었습니다');
+                this.loadMainTitles();
+            } catch (e) {
+                console.error('[executeDeleteContent]', e);
+                showErrorMessage(e.message || '삭제 실패');
+            } finally {
+                this.deleteModal.loading = false;
             }
         }
     }

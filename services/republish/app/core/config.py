@@ -60,6 +60,10 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
     cors_origins: list = ["http://localhost:3000", "http://localhost:8000"]
 
+    # 파일 저장 경로
+    image_storage_dir: str = "app/static/generated/images"
+    image_url_prefix: str = "/static/generated/images"
+
     # WordPress 관련 (추후 사용)
     wp_api_timeout: int = 30
     wp_max_retries: int = 3

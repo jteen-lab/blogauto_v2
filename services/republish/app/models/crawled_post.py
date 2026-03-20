@@ -11,7 +11,7 @@ Features:
 """
 from datetime import datetime
 from typing import Optional, TYPE_CHECKING
-from sqlalchemy import Integer, String, Float, DateTime, ForeignKey, Index
+from sqlalchemy import Integer, String, Float, Text, DateTime, ForeignKey, Index
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from ..core.database import Base
@@ -93,6 +93,13 @@ class CrawledPost(Base):
         String(1000),
         nullable=True,
         comment="생성된 이미지 URL",
+    )
+
+    # 생성된 콘텐츠
+    content_html: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        comment="생성된 HTML 본문",
     )
 
     # 소스 정보

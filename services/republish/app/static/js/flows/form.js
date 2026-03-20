@@ -458,11 +458,20 @@ function flowFormData() {
             // 프롬프트 모듈들의 블로그 ID 수집
             const newLinkedIds = new Set();
             for (const mod of selectedPromptModules) {
-                const blogIds = mod.settings?.blogs || [];
-                blogIds.forEach(item => {
-                    const id = typeof item === 'number' ? item : item?.id;
-                    if (typeof id === 'number') newLinkedIds.add(id);
-                });
+                const bcm = mod.settings?.blog_category_map;
+                if (bcm && bcm.length > 0) {
+                    // blog_category_map에서 고유 blog_id 추출
+                    bcm.forEach(m => {
+                        if (typeof m.blog_id === 'number') newLinkedIds.add(m.blog_id);
+                    });
+                } else {
+                    // 레거시: settings.blogs 사용
+                    const blogIds = mod.settings?.blogs || [];
+                    blogIds.forEach(item => {
+                        const id = typeof item === 'number' ? item : item?.id;
+                        if (typeof id === 'number') newLinkedIds.add(id);
+                    });
+                }
             }
 
             const prevLinkedIds = new Set(this.promptLinkedBlogIds);

@@ -83,6 +83,13 @@ class GenerationHistory(Base):
         comment="섹션별 이미지 JSON [{heading, image_url, source}]",
     )
 
+    # 생성된 콘텐츠
+    content_html: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        comment="생성된 HTML 본문",
+    )
+
     # 통계
     reference_count: Mapped[int] = mapped_column(
         Integer, default=0, comment="수집된 참조자료 수"

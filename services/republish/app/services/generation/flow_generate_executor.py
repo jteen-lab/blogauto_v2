@@ -69,6 +69,9 @@ class FlowGenerateExecutor:
                 growth_stage = stage_params.stage_name
 
             module_settings = module.settings or {}
+            module_settings = self._filter_categories_for_blog(
+                module_settings, blog_id
+            )
             check_result = await self.inventory_trigger.check_inventory(
                 blog_id, min_inventory=min_inventory,
                 module_settings=module_settings,
@@ -116,6 +119,9 @@ class FlowGenerateExecutor:
 
             # 3. ContentGenerator로 글 생성
             module_settings = module.settings or {}
+            module_settings = self._filter_categories_for_blog(
+                module_settings, blog_id
+            )
             text_replace_enabled = module_settings.get(
                 "substitution", {}
             ).get("text_replace_enabled", True)
@@ -166,6 +172,44 @@ class FlowGenerateExecutor:
                 "message": msg,
                 "error": str(e),
             }
+
+    def _filter_categories_for_blog(
+        self, module_settings: dict, blog_id: int
+    ) -> dict:
+        """
+        blog_category_map에서 해당 블로그의 카테고리만 필터링
+
+        blog_category_map이 존재하면 해당 blog_id에 매핑된 카테고리만
+        추출하여 module_settings["categories"]를 교체합니다.
+        blog_category_map이 없는 레거시 모듈은 기존 categories를 유지합니다.
+
+        Args:
+            module_settings: 모듈 설정 딕셔너리
+            blog_id: 대상 블로그 ID
+
+        Returns:
+            dict: 카테고리가 필터링된 module_settings (원본 변경 없음)
+        """
+        bcm = module_settings.get("blog_category_map")
+        if not bcm:
+            return module_settings  # 레거시 호환: 기존 categories 유지
+
+        # 해당 블로그의 카테고리만 추출
+        blog_cats = [
+            {"topic_id": m["topic_id"], "subtopic_id": m.get("subtopic_id")}
+            for m in bcm if m.get("blog_id") == blog_id
+        ]
+
+        if not blog_cats:
+            return module_settings  # 매핑 없으면 원본 유지
+
+        # 원본 변경 없이 복사 후 categories 교체
+        filtered = {**module_settings, "categories": blog_cats}
+        logger.debug(
+            f"[FLOW_GEN] 블로그별 카테고리 필터 | blog_id={blog_id} | "
+            f"카테고리 {len(blog_cats)}개 적용"
+        )
+        return filtered
 
     async def execute_for_blogs(
         self,

@@ -226,6 +226,64 @@ async def get_blogs_by_categories(
 
 
 @router.get(
+    "/{blog_id}/categories",
+    summary="블로그의 카테고리 목록 조회",
+    description="특정 블로그에 연결된 카테고리 전체를 반환합니다.",
+)
+async def get_blog_categories(
+    blog_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """블로그에 연결된 카테고리 목록 조회 (양방향 연동 지원)"""
+    from sqlalchemy import select
+    from ..models.blog import Blog
+    from ..models.category import BlogCategory, Topic, SubTopic
+
+    # 블로그 소유권 확인
+    blog_q = select(Blog).where(
+        Blog.id == blog_id, Blog.user_id == current_user.id,
+        Blog.is_deleted == False,
+    )
+    blog = (await db.execute(blog_q)).scalar_one_or_none()
+    if not blog:
+        raise HTTPException(404, "블로그를 찾을 수 없습니다")
+
+    # BlogCategory 조회
+    bc_q = select(BlogCategory).where(
+        BlogCategory.blog_id == blog_id, BlogCategory.is_active == True,
+    )
+    bcs = (await db.execute(bc_q)).scalars().all()
+
+    categories = []
+    for bc in bcs:
+        topic_name = ""
+        subtopic_name = ""
+        if bc.topic_id:
+            t = (await db.execute(
+                select(Topic).where(Topic.id == bc.topic_id)
+            )).scalar_one_or_none()
+            topic_name = t.name if t else ""
+        if bc.subtopic_id:
+            s = (await db.execute(
+                select(SubTopic).where(SubTopic.id == bc.subtopic_id)
+            )).scalar_one_or_none()
+            subtopic_name = s.name if s else ""
+        categories.append({
+            "topic_id": bc.topic_id,
+            "subtopic_id": bc.subtopic_id,
+            "topic_name": topic_name,
+            "subtopic_name": subtopic_name,
+        })
+
+    return {
+        "blog_id": blog.id,
+        "blog_name": blog.name,
+        "categories": categories,
+    }
+
+
+@router.get(
     "/{blog_id}",
     response_model=BlogResponse,
     summary="블로그 상세 조회",

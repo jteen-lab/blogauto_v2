@@ -262,7 +262,23 @@
                                         <template x-if="title.matched_crawled_post">
                                             <div class="flex items-center gap-2 pl-2 text-sm text-gray-600">
                                                 <span class="text-gray-400">↳</span>
-                                                <span class="truncate max-w-sm" x-text="title.matched_crawled_post.title"></span>
+                                                <!-- 이미지 이모지 (클릭 시 이미지 모달) -->
+                                                <button x-show="title.matched_crawled_post.image_url"
+                                                        @click="openImageModal(title.matched_crawled_post.image_url, title.matched_crawled_post.title)"
+                                                        class="text-base cursor-pointer hover:scale-125 transition-transform"
+                                                        title="클릭하여 이미지 보기">&#x1f5bc;&#xfe0f;</button>
+                                                <span x-show="!title.matched_crawled_post.image_url"
+                                                      class="text-base text-gray-300" title="텍스트만">&#x1f4dd;</span>
+                                                <!-- 제목 (콘텐츠 있으면 클릭하여 모달로 미리보기) -->
+                                                <template x-if="title.matched_crawled_post.has_content">
+                                                    <button @click="viewGeneratedContent(title.matched_crawled_post.id)"
+                                                            class="truncate max-w-sm text-blue-600 hover:text-blue-800 hover:underline text-left">
+                                                        <span x-text="title.matched_crawled_post.title"></span>
+                                                    </button>
+                                                </template>
+                                                <template x-if="!title.matched_crawled_post.has_content">
+                                                    <span class="truncate max-w-sm" x-text="title.matched_crawled_post.title"></span>
+                                                </template>
                                                 <span class="text-xs font-medium px-1.5 py-0.5 bg-green-100 text-green-700 rounded"
                                                       x-text="(title.matched_crawled_post.match_score || 100).toFixed(2) + '%'"></span>
                                                 <template x-if="title.matched_crawled_post.url">
@@ -272,6 +288,15 @@
                                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
                                                         </svg>
                                                     </a>
+                                                </template>
+                                                <!-- 삭제 버튼 -->
+                                                <template x-if="!title.matched_crawled_post.published_at">
+                                                    <button @click="confirmDeleteContent(title.matched_crawled_post.id, title.id, title.matched_crawled_post.title)"
+                                                            class="text-red-400 hover:text-red-600 ml-1" title="생성 콘텐츠 삭제">
+                                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                                        </svg>
+                                                    </button>
                                                 </template>
                                             </div>
                                         </template>
@@ -296,9 +321,10 @@
                                 <td class="text-center text-sm text-gray-500" x-text="formatDate(title.created_at)"></td>
                                 <td class="text-center whitespace-nowrap">
                                     <span :class="{
-                                        'bg-blue-100 text-blue-800': !title.matched_crawled_post && title.status !== 'used',
-                                        'bg-green-100 text-green-800': title.matched_crawled_post && title.status !== 'used',
-                                        'bg-yellow-100 text-yellow-800': title.status === 'used'
+                                        'bg-blue-100 text-blue-800': getMatchingStatusText(title) === '독립포스트',
+                                        'bg-green-100 text-green-800': getMatchingStatusText(title) === '매칭',
+                                        'bg-yellow-100 text-yellow-800': ['발행대기', '생성됨'].includes(getMatchingStatusText(title)),
+                                        'bg-purple-100 text-purple-800': getMatchingStatusText(title) === '발행완료'
                                     }" class="px-2 py-0.5 rounded text-xs whitespace-nowrap"
                                        x-text="getMatchingStatusText(title)"></span>
                                 </td>
@@ -388,9 +414,10 @@
                                 </div>
                                 <div class="mobile-card-subtitle">
                                     <span :class="{
-                                        'text-blue-600': !title.matched_crawled_post,
-                                        'text-green-600': title.matched_crawled_post,
-                                        'text-yellow-600': title.status === 'used'
+                                        'text-blue-600': getMatchingStatusText(title) === '독립포스트',
+                                        'text-green-600': getMatchingStatusText(title) === '매칭',
+                                        'text-yellow-600': ['발행대기', '생성됨'].includes(getMatchingStatusText(title)),
+                                        'text-purple-600': getMatchingStatusText(title) === '발행완료'
                                     }" x-text="getMatchingStatusText(title)"></span>
                                     <span x-show="title.group_member_count >= 2" class="text-blue-500" x-text="'그룹(' + title.group_member_count + ')'"></span>
                                 </div>
@@ -398,6 +425,12 @@
                                 <template x-if="title.matched_crawled_post">
                                     <div class="mt-1 text-xs text-gray-500 flex items-center gap-1">
                                         <span class="text-gray-400">↳</span>
+                                        <button x-show="title.matched_crawled_post.image_url"
+                                                @click.stop="openImageModal(title.matched_crawled_post.image_url, title.matched_crawled_post.title)"
+                                                class="hover:scale-125 transition-transform"
+                                                title="이미지 보기">&#x1f5bc;&#xfe0f;</button>
+                                        <span x-show="!title.matched_crawled_post.image_url"
+                                              class="text-gray-300">&#x1f4dd;</span>
                                         <span class="truncate" x-text="title.matched_crawled_post.title"></span>
                                         <span class="text-green-600" x-text="(title.matched_crawled_post.match_score || 100).toFixed(0) + '%'"></span>
                                     </div>
@@ -424,6 +457,35 @@
                                 <span class="mobile-card-label">등록일</span>
                                 <span class="mobile-card-value" x-text="formatDate(title.created_at)"></span>
                             </div>
+                            <!-- 생성 콘텐츠 정보 (모바일 확장) -->
+                            <template x-if="title.matched_crawled_post">
+                                <div class="border-t border-gray-100 pt-2 mt-1 space-y-2">
+                                    <div class="mobile-card-row">
+                                        <span class="mobile-card-label">생성글</span>
+                                        <span class="mobile-card-value text-blue-600 truncate" x-text="title.matched_crawled_post.title"></span>
+                                    </div>
+                                    <div class="flex flex-wrap gap-2">
+                                        <template x-if="title.matched_crawled_post.has_content">
+                                            <button @click="viewGeneratedContent(title.matched_crawled_post.id)"
+                                                    class="text-xs bg-blue-500 text-white px-3 py-1.5 rounded hover:bg-blue-600">
+                                                생성글 보기
+                                            </button>
+                                        </template>
+                                        <template x-if="title.matched_crawled_post.image_url">
+                                            <button @click="openImageModal(title.matched_crawled_post.image_url, title.matched_crawled_post.title)"
+                                                    class="text-xs bg-purple-500 text-white px-3 py-1.5 rounded hover:bg-purple-600">
+                                                이미지 보기
+                                            </button>
+                                        </template>
+                                        <template x-if="!title.matched_crawled_post.published_at">
+                                            <button @click="confirmDeleteContent(title.matched_crawled_post.id, title.id, title.matched_crawled_post.title)"
+                                                    class="text-xs bg-red-500 text-white px-3 py-1.5 rounded hover:bg-red-600">
+                                                삭제
+                                            </button>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
                             <div class="mobile-card-actions">
                                 <button @click="openMainTitleEditModal(title)"
                                         class="mobile-card-action-btn primary">

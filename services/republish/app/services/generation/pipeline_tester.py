@@ -15,8 +15,11 @@ from .reference_collector import ReferenceCollector
 from .internal_linker import InternalLinker
 from .substitution_processor import SubstitutionProcessor
 from .image_generator import ImageGenerator
-from .generator import ContentGenerator, DEFAULT_CONTENT_PROMPT
+from .generator import ContentGenerator
 from ..ai.ai_service import AIService
+from .pipeline_tester_helpers import (
+    build_image_result, call_ai_generate, make_error,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +44,7 @@ class PipelineTester:
         """Step 1: 제목 선택 테스트"""
         module = await self.db.get(Module, module_id)
         if not module:
-            return self._error("select_title", "모듈을 찾을 수 없습니다")
+            return make_error("select_title", "모듈을 찾을 수 없습니다")
 
         settings = module.settings or {}
 
@@ -50,7 +53,7 @@ class PipelineTester:
         )
 
         if not candidates:
-            return self._error("select_title", "사용 가능한 제목이 없습니다")
+            return make_error("select_title", "사용 가능한 제목이 없습니다")
 
         selected = random.choice(candidates)
         has_module_cats = bool(settings.get("categories"))
@@ -106,7 +109,7 @@ class PipelineTester:
         """Step 2: 제목 재조합 테스트 (스타일별 다중 결과, blog.title_ai 기준)"""
         original = await self._resolve_title(title_id, title_text)
         if not original:
-            return self._error("recombine_title", "제목을 지정해주세요")
+            return make_error("recombine_title", "제목을 지정해주세요")
 
         module = await self.db.get(Module, module_id)
         settings = module.settings or {} if module else {}
@@ -252,16 +255,16 @@ class PipelineTester:
         module = await self.db.get(Module, module_id)
         blog = await self.db.get(Blog, blog_id)
         if not module:
-            return self._error("generate_content", "모듈을 찾을 수 없습니다")
+            return make_error("generate_content", "모듈을 찾을 수 없습니다")
         if not blog:
-            return self._error("generate_content", "블로그를 찾을 수 없습니다")
+            return make_error("generate_content", "블로그를 찾을 수 없습니다")
         settings = module.settings or {}
         start = time.time()
-        content_result, settings_info = await self._call_ai_generate(
-            title, reference_text or "", settings, blog)
+        content_result, settings_info = await call_ai_generate(
+            self.ai_service, title, reference_text or "", settings, blog)
         elapsed = int(time.time() - start)
         if not content_result:
-            return self._error("generate_content", "AI 글 생성 실패")
+            return make_error("generate_content", "AI 글 생성 실패")
         content_md = content_result["content"]
         return {
             "step": "generate_content", "success": True,
@@ -339,9 +342,9 @@ class PipelineTester:
         module = await self.db.get(Module, module_id)
         blog = await self.db.get(Blog, blog_id)
         if not module:
-            return self._error("generate_image", "모듈을 찾을 수 없습니다")
+            return make_error("generate_image", "모듈을 찾을 수 없습니다")
         if not blog:
-            return self._error("generate_image", "블로그를 찾을 수 없습니다")
+            return make_error("generate_image", "블로그를 찾을 수 없습니다")
 
         settings = module.settings or {}
         db_img_settings = settings.get("image_generation", {})
@@ -367,54 +370,20 @@ class PipelineTester:
         elapsed = int(time.time() - start)
 
         settings_source = "ui" if image_settings else "db"
-        return self._build_image_result(
+        return build_image_result(
             result, elapsed, img_settings, blog_image_mode,
             settings_source,
         )
-
-    def _build_image_result(
-        self, result, elapsed: int, img_settings: dict,
-        blog_image_mode: str, settings_source: str = "db",
-    ) -> dict:
-        """이미지 테스트 결과 딕셔너리 생성"""
-        both_info = {}
-        if blog_image_mode == "both":
-            both_info = {
-                "cover_source": img_settings.get("cover_source", "ai"),
-                "section_source": img_settings.get(
-                    "section_source", "template"
-                ),
-            }
-        return {
-            "step": "generate_image",
-            "success": result.success,
-            "result": {
-                "image_url": result.image_url,
-                "image_mode": result.image_mode,
-                "provider": result.provider,
-                "ai_model": result.ai_model,
-                "generation_time_seconds": elapsed,
-                "blog_image_mode": blog_image_mode,
-                "enabled": img_settings.get("enabled", False),
-                "title_overlay": img_settings.get("title_overlay", False),
-                "section_images": result.section_images,
-                "settings_used": {
-                    "source": settings_source,
-                    "aspect_ratio": img_settings.get("aspect_ratio"),
-                    "style": img_settings.get("style"),
-                    "quality": img_settings.get("quality"),
-                    "prompt_template": img_settings.get("prompt_template"),
-                },
-                **both_info,
-            },
-            **({"error": result.error} if result.error else {}),
-        }
 
     async def test_substitution_html(
         self, blog_id: int, content: str,
         text_replace_enabled: bool = True,
     ) -> dict:
         """Step 7: 치환 처리 + HTML 변환 테스트"""
+        # 블로그 치환 설정 조회 (결과에 포함용)
+        blog = await self.db.get(Blog, blog_id)
+        placeholders = (blog.placeholders or {}) if blog else {}
+
         start = time.time()
         final_html = await self.substitution_processor.process(
             content=content, blog_id=blog_id,
@@ -422,20 +391,31 @@ class PipelineTester:
         )
         elapsed = int(time.time() - start)
 
+        html_tags = placeholders.get("html_tags", {})
+        css_classes = placeholders.get("css_classes", {})
+        text_replace = placeholders.get("text_replace", [])
+        link_styles = placeholders.get("link_styles", {})
+
         return {
             "step": "substitution_html",
             "success": True,
             "result": {
                 "final_html": final_html,
                 "html_length": len(final_html),
+                "input_length": len(content),
                 "generation_time_seconds": elapsed,
                 "text_replace_enabled": text_replace_enabled,
+                "settings_used": {
+                    "html_tags": html_tags,
+                    "html_tags_count": len(html_tags),
+                    "css_classes": css_classes,
+                    "css_classes_count": len(css_classes),
+                    "text_replace_count": len(text_replace),
+                    "link_styles": link_styles,
+                    "blog_url": blog.url if blog else "",
+                },
             },
         }
-
-    # ============================================================
-    # 내부 헬퍼 메서드
-    # ============================================================
 
     async def _resolve_title(
         self, title_id: Optional[int], title_text: Optional[str],
@@ -445,65 +425,3 @@ class PipelineTester:
             title_obj = await self.db.get(MainTitle, title_id)
             return title_obj.title if title_obj else title_text
         return title_text
-
-    async def _call_ai_generate(
-        self, title: str, ref_injection: str, settings: dict, blog: Blog,
-        category_name: str = "", keywords_text: str = "",
-    ) -> tuple:
-        """AI 글 생성 호출 (generator.py 로직 재현)"""
-        cg = settings.get("content_generation", {})
-        writing_ai = (blog.ai_config or {}).get("writing_ai", {})
-        prompt_template = (
-            cg.get("user_prompt_template")
-            or settings.get("generation_prompt") or DEFAULT_CONTENT_PROMPT
-        )
-        full_prompt = prompt_template.replace(
-            "{title}", title
-        ).replace(
-            "{reference_materials}", ref_injection
-        ).replace(
-            "{category}", category_name or ""
-        ).replace(
-            "{keywords}", keywords_text or ""
-        )
-        # AI 제공자: 블로그 ai_config.writing_ai 설정만 사용
-        provider = writing_ai.get("provider")
-        model = writing_ai.get("model")
-        temperature = cg.get("temperature", 0.7)
-        max_tokens = cg.get("max_tokens", 4000)
-        system_prompt = cg.get("system_prompt") or None
-        # 고급 AI 설정
-        top_p = cg.get("top_p")
-        top_k = cg.get("top_k")
-        frequency_penalty = cg.get("frequency_penalty")
-        presence_penalty = cg.get("presence_penalty")
-        settings_info = {
-            "provider_source": "blog.writing_ai",
-            "temperature": temperature, "max_tokens": max_tokens,
-            "has_system_prompt": system_prompt is not None,
-            "prompt_source": self._get_prompt_source(cg, settings),
-            "top_p": top_p, "top_k": top_k,
-            "frequency_penalty": frequency_penalty,
-            "presence_penalty": presence_penalty,
-        }
-        result = await self.ai_service.generate(
-            prompt=full_prompt, provider=provider, model=model,
-            max_tokens=max_tokens, temperature=temperature,
-            system_prompt=system_prompt,
-            top_p=top_p, top_k=top_k,
-            frequency_penalty=frequency_penalty,
-            presence_penalty=presence_penalty,
-        )
-        return result, settings_info
-
-    def _get_prompt_source(self, cg: dict, settings: dict) -> str:
-        """사용된 프롬프트 소스 판별"""
-        if cg.get("user_prompt_template"):
-            return "content_generation.user_prompt_template"
-        if settings.get("generation_prompt"):
-            return "generation_prompt (legacy)"
-        return "DEFAULT_CONTENT_PROMPT"
-
-    def _error(self, step: str, message: str) -> dict:
-        """에러 응답 생성"""
-        return {"step": step, "success": False, "error": message}

@@ -105,6 +105,10 @@ def _apply_html_tag_map(html_str: str, tag_map: Dict[str, str]) -> str:
     """
     HTML 태그 이름을 치환합니다.
 
+    모든 대상 태그를 먼저 수집한 후 일괄 변경하여,
+    순차 치환으로 인한 캐스케이딩 문제를 방지합니다.
+    (예: h1→h2, h2→h3 순차 적용 시 h1이 h3이 되는 버그 방지)
+
     Args:
         html_str: HTML 문자열
         tag_map: 태그 치환 맵 {"old_tag": "new_tag"}
@@ -119,33 +123,28 @@ def _apply_html_tag_map(html_str: str, tag_map: Dict[str, str]) -> str:
     if not tag_map:
         return html_str
 
-    result = html_str
+    try:
+        soup = BeautifulSoup(html_str, "html.parser")
 
-    for old_tag, new_tag in tag_map.items():
-        # 입력값 정제 (XSS 방지)
-        old_tag = _sanitize_tag_name(old_tag)
-        new_tag = _sanitize_tag_name(new_tag)
+        # 1단계: 모든 대상 태그를 먼저 수집 (캐스케이딩 방지)
+        renames: List[tuple] = []
+        for old_tag, new_tag in tag_map.items():
+            old_tag = _sanitize_tag_name(old_tag)
+            new_tag = _sanitize_tag_name(new_tag)
+            if not old_tag or not new_tag:
+                continue
+            for tag in soup.find_all(old_tag):
+                renames.append((tag, new_tag))
 
-        if not old_tag or not new_tag:
-            continue
+        # 2단계: 수집된 태그를 일괄 변경
+        for tag, new_name in renames:
+            tag.name = new_name
 
-        # 여는 태그 치환: <h1> 또는 <h1 class="...">
-        result = re.sub(
-            rf"<{old_tag}(\s|>)",
-            rf"<{new_tag}\1",
-            result,
-            flags=re.IGNORECASE
-        )
+        return str(soup)
 
-        # 닫는 태그 치환: </h1>
-        result = re.sub(
-            rf"</{old_tag}\s*>",
-            rf"</{new_tag}>",
-            result,
-            flags=re.IGNORECASE
-        )
-
-    return result
+    except Exception as e:
+        logger.warning(f"[PLACEHOLDER] HTML 태그 치환 중 오류: {e}")
+        return html_str
 
 
 def _apply_css_class_map(html_str: str, class_map: Dict[str, str]) -> str:

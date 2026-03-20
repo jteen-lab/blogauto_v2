@@ -269,6 +269,7 @@ class ContentGenerator:
             img_result = await self.image_generator.generate(
                 blog=blog, title=working_title,
                 module_settings=settings, final_html=final_html,
+                keywords=keywords_text,
             )
             if img_result.success and img_result.image_url:
                 image_url = img_result.image_url
@@ -305,6 +306,7 @@ class ContentGenerator:
             ai_model_image=ai_model_image,
             image_url=image_url,
             section_images=section_images_json,
+            content_html=final_html,
             reference_count=ref_result.count,
             generation_time_seconds=elapsed,
             content_length=len(final_html),
@@ -312,14 +314,17 @@ class ContentGenerator:
         self.db.add(history)
         await self.db.flush()
 
-        # 8. CrawledPost 저장 (source="generated")
+        # 8. CrawledPost 저장 (source="generated", 원본 제목과 매칭)
         crawled_post = CrawledPost(
             blog_id=blog_id,
             title=working_title,
             source="generated",
             generation_history_id=history.id,
-            match_status="unmatched",
+            matched_main_title_id=source_title_id,
+            match_status="matched",
+            match_score=100.0,
             image_url=image_url,
+            content_html=final_html,
         )
         self.db.add(crawled_post)
         await self.db.flush()
