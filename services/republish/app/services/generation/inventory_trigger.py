@@ -206,6 +206,11 @@ class InventoryTrigger:
         """
         conditions = [MainTitle.status == "available"]
 
+        # 발행완료 제목 제외 (독립포스트만 생성 대상)
+        conditions.append(
+            MainTitle.id.notin_(self._published_title_ids_subquery())
+        )
+
         if matched_only:
             conditions.append(MainTitle.matched_blog_ids.isnot(None))
             conditions.append(MainTitle.matched_blog_ids.contains(blog_id_str))
@@ -224,6 +229,32 @@ class InventoryTrigger:
         )
         result = await self.db.execute(query)
         return list(result.scalars().all())
+
+    @staticmethod
+    def _published_title_ids_subquery():
+        """
+        이미 발행 완료된 생성 CrawledPost와 연결된 MainTitle ID 서브쿼리
+
+        source="generated"인 CrawledPost 중 발행 완료된 것만 조회하여
+        동일 제목으로 중복 생성을 방지합니다.
+
+        Note:
+            source="crawled" 포스트는 제외합니다.
+            크롤링 포스트는 유사도 매칭으로 matched_main_title_id가 설정되고
+            크롤 시점의 published_at을 가지므로, 이를 포함하면
+            해당 MainTitle이 영구적으로 생성 대상에서 제외되는 버그가 발생합니다.
+
+        Returns:
+            발행완료 생성 제목 ID의 서브쿼리
+        """
+        return (
+            select(CrawledPost.matched_main_title_id)
+            .where(
+                CrawledPost.matched_main_title_id.isnot(None),
+                CrawledPost.published_at.isnot(None),
+                CrawledPost.source == "generated",
+            )
+        )
 
     async def _get_inventory_count(self, blog_id: int) -> int:
         """
@@ -264,6 +295,21 @@ class InventoryTrigger:
                 topic_only_ids.add(cat["topic_id"])
 
         return subtopic_ids, topic_only_ids
+
+    @staticmethod
+    def _extract_all_topic_ids(
+        module_settings: Optional[dict],
+    ) -> Set[int]:
+        """
+        카테고리 설정에서 topic_id를 모두 추출 (subtopic 유무 무관)
+
+        subtopic 레벨 필터 실패 시 topic 레벨 폴백용입니다.
+        """
+        topic_ids: Set[int] = set()
+        for cat in (module_settings or {}).get("categories", []):
+            if cat.get("topic_id"):
+                topic_ids.add(cat["topic_id"])
+        return topic_ids
 
     async def _get_blog_category_filter_ids(
         self, blog_id: int
@@ -336,48 +382,58 @@ class InventoryTrigger:
                 MainTitle.topic_id.in_(list(topic_only_ids))
             )
 
-        if has_category:
-            logger.debug(
-                f"[INVENTORY] 카테고리 필터 | blog_id={blog_id} | "
-                f"소스={category_source} | "
-                f"subtopic_ids={subtopic_ids} | topic_only_ids={topic_only_ids}"
-            )
+        logger.info(
+            f"[INVENTORY] 제목 검색 시작 | blog_id={blog_id} | "
+            f"카테고리소스={category_source} | "
+            f"has_category={has_category} | "
+            f"subtopic_ids={subtopic_ids} | topic_only_ids={topic_only_ids}"
+        )
 
-        # 1차: 매칭 + 카테고리 일치 제목
+        # 1차: 매칭 + 카테고리(subtopic) 일치 제목
         title = await self._query_title_with_filters(
             blog_id_str, category_conditions, matched_only=True
         )
         if title:
-            logger.debug(
-                f"[INVENTORY] 제목 선택: 매칭+카테고리 | "
-                f"id={title.id} | '{title.title[:30]}'"
-            )
+            logger.info(f"[INVENTORY] 제목 선택: 1차(매칭+카테고리) | id={title.id}")
             return title
 
-        # 2차: 카테고리 일치 available 제목 (매칭 무관)
+        # 2차: 카테고리(subtopic) 일치 available 제목 (매칭 무관)
         title = await self._query_title_with_filters(
             blog_id_str, category_conditions, matched_only=False
         )
         if title:
-            logger.debug(
-                f"[INVENTORY] 제목 선택: 카테고리 일치 | "
-                f"id={title.id} | '{title.title[:30]}'"
-            )
+            logger.info(f"[INVENTORY] 제목 선택: 2차(카테고리만) | id={title.id}")
             return title
 
-        # 카테고리가 설정된 블로그인데 일치 제목 없음 -> None
+        # 2.5차: subtopic 실패 시 topic 레벨로 폴백
+        if has_category and subtopic_ids:
+            topic_ids_all = self._extract_all_topic_ids(module_settings)
+            if topic_ids_all:
+                topic_cond = [MainTitle.topic_id.in_(list(topic_ids_all))]
+                title = await self._query_title_with_filters(
+                    blog_id_str, topic_cond, matched_only=False
+                )
+                if title:
+                    logger.info(
+                        f"[INVENTORY] 제목 선택: 2.5차(topic폴백) | "
+                        f"id={title.id} | topic_ids={topic_ids_all}")
+                    return title
+
+        # 카테고리 설정 블로그인데 일치 제목 없음
         if has_category:
             logger.warning(
                 f"[INVENTORY] blog_id={blog_id} | "
-                f"카테고리 일치 제목 없음 (subtopic={subtopic_ids}, "
-                f"topic={topic_only_ids})"
-            )
+                f"카테고리 일치 제목 없음 → None | "
+                f"subtopic={subtopic_ids} | topic={topic_only_ids}")
             return None
 
-        # 카테고리 미설정 블로그 -> 전체 available 제목 폴백
-        return await self._query_title_with_filters(
+        # 카테고리 미설정 블로그 → 전체 available 폴백
+        title = await self._query_title_with_filters(
             blog_id_str, [], matched_only=False
         )
+        if not title:
+            logger.warning(f"[INVENTORY] 전체폴백 실패 | blog_id={blog_id}")
+        return title
 
     async def _query_title_with_filters(
         self,
@@ -398,6 +454,11 @@ class InventoryTrigger:
         """
         conditions = [MainTitle.status == "available"]
 
+        # 발행완료 제목 제외 (독립포스트만 생성 대상)
+        conditions.append(
+            MainTitle.id.notin_(self._published_title_ids_subquery())
+        )
+
         if matched_only:
             conditions.append(MainTitle.matched_blog_ids.isnot(None))
             conditions.append(MainTitle.matched_blog_ids.contains(blog_id_str))
@@ -412,4 +473,23 @@ class InventoryTrigger:
         )
         result = await self.db.execute(query)
         candidates = list(result.scalars().all())
+
+        if not candidates:
+            avail_r = await self.db.execute(
+                select(func.count(MainTitle.id)).where(
+                    MainTitle.status == "available"))
+            excl_r = await self.db.execute(
+                select(func.count()).select_from(
+                    self._published_title_ids_subquery().subquery()))
+            logger.info(
+                f"[INVENTORY] 제목 후보 0개 | "
+                f"blog={blog_id_str} | matched_only={matched_only} | "
+                f"category={len(category_conditions)}개 | "
+                f"전체available={avail_r.scalar() or 0} | "
+                f"발행제외={excl_r.scalar() or 0}")
+        else:
+            logger.info(
+                f"[INVENTORY] 제목 후보 {len(candidates)}개 | "
+                f"blog={blog_id_str} | matched_only={matched_only}")
+
         return random.choice(candidates) if candidates else None

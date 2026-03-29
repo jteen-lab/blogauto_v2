@@ -40,6 +40,7 @@ class FlowGenerateExecutor:
         module: Module,
         blog: Blog,
         stage_params: Optional[StageParams] = None,
+        force: bool = False,
     ) -> Dict[str, Any]:
         """
         단일 블로그에 대해 생성 모듈 실행
@@ -48,6 +49,7 @@ class FlowGenerateExecutor:
             module: prompt 타입 모듈
             blog: 대상 블로그
             stage_params: GP에서 결정된 스테이지 파라미터 (None이면 기본 임계값 사용)
+            force: True면 재고 체크 없이 강제 생성 (수동 1회 실행용)
 
         Returns:
             dict: 실행 결과
@@ -58,70 +60,85 @@ class FlowGenerateExecutor:
         logger.info(
             f"[FLOW_GEN] 시작 | module={module.name} | "
             f"blog={blog.name} (id={blog_id})"
+            f"{' | force=True' if force else ''}"
         )
 
         try:
-            # 1. 재고 확인 (GP StageParams 기반)
-            min_inventory = None
-            growth_stage = "unknown"
-            if stage_params:
-                min_inventory = stage_params.generate.min_inventory
-                growth_stage = stage_params.stage_name
-
             module_settings = module.settings or {}
             module_settings = self._filter_categories_for_blog(
                 module_settings, blog_id
             )
-            check_result = await self.inventory_trigger.check_inventory(
-                blog_id, min_inventory=min_inventory,
-                module_settings=module_settings,
-            )
-            logger.debug(
-                f"[FLOW_GEN] 재고 확인 결과 | blog_id={blog_id} | "
-                f"재고={check_result.current_inventory} | "
-                f"기준={check_result.threshold} | "
-                f"단계={check_result.growth_stage} | "
-                f"생성필요={check_result.needs_generation}"
-            )
 
-            if not check_result.needs_generation:
-                msg = (
-                    f"생성 불필요 - 재고: {check_result.current_inventory}/"
-                    f"{check_result.threshold} "
-                    f"(단계: {check_result.growth_stage})"
+            if force:
+                # 수동 실행: 재고 체크 없이 모듈 카테고리 기준으로 제목 선택
+                title = await self.inventory_trigger._find_available_title(
+                    blog_id, module_settings
                 )
-                logger.info(f"[FLOW_GEN] {msg}")
-                return {
-                    "success": True,
-                    "message": msg,
-                    "skipped": True,
-                    "inventory": check_result.current_inventory,
-                    "threshold": check_result.threshold,
-                }
+                if not title:
+                    # 카테고리 정보를 스킵 메시지에 포함
+                    cat_info = self._get_category_info(module_settings)
+                    msg = (
+                        f"모듈 카테고리({cat_info}) 일치 제목 없음 "
+                        f"- 해당 카테고리의 제목 수집이 필요합니다"
+                    )
+                    logger.info(f"[FLOW_GEN] {msg} | blog_id={blog_id}")
+                    return {
+                        "success": True, "message": msg,
+                        "skipped": True,
+                    }
+                title_id = title.id
+                logger.info(
+                    f"[FLOW_GEN] 강제 생성 | title_id={title_id} | "
+                    f"'{title.title[:30]}...'"
+                )
+            else:
+                # 자동 실행: 재고 확인 후 생성 여부 판단
+                min_inventory = None
+                growth_stage = "unknown"
+                if stage_params:
+                    min_inventory = stage_params.generate.min_inventory
+                    growth_stage = stage_params.stage_name
 
-            # 2. 사용 가능한 제목 확인
-            title_id = check_result.available_title_id
-            if not title_id:
-                msg = "사용 가능한 제목이 없습니다"
-                logger.info(f"[FLOW_GEN] {msg}")
-                return {
-                    "success": True,
-                    "message": msg,
-                    "skipped": True,
-                    "inventory": check_result.current_inventory,
-                    "threshold": check_result.threshold,
-                }
+                check_result = await self.inventory_trigger.check_inventory(
+                    blog_id, min_inventory=min_inventory,
+                    module_settings=module_settings,
+                )
+                logger.info(
+                    f"[FLOW_GEN] 재고 확인 결과 | blog_id={blog_id} | "
+                    f"재고={check_result.current_inventory} | "
+                    f"기준={check_result.threshold} | "
+                    f"단계={check_result.growth_stage} | "
+                    f"생성필요={check_result.needs_generation}"
+                )
 
-            logger.info(
-                f"[FLOW_GEN] 생성 시작 | title_id={title_id} | "
-                f"'{check_result.available_title_text[:30]}...'"
-            )
+                if not check_result.needs_generation:
+                    msg = (
+                        f"생성 불필요 - 재고: {check_result.current_inventory}/"
+                        f"{check_result.threshold} "
+                        f"(단계: {check_result.growth_stage})"
+                    )
+                    logger.info(f"[FLOW_GEN] {msg}")
+                    return {
+                        "success": True,
+                        "message": msg,
+                        "skipped": True,
+                        "inventory": check_result.current_inventory,
+                        "threshold": check_result.threshold,
+                    }
+
+                title_id = check_result.available_title_id
+                if not title_id:
+                    msg = "사용 가능한 제목이 없습니다"
+                    logger.info(f"[FLOW_GEN] {msg}")
+                    return {
+                        "success": True,
+                        "message": msg,
+                        "skipped": True,
+                        "inventory": check_result.current_inventory,
+                        "threshold": check_result.threshold,
+                    }
 
             # 3. ContentGenerator로 글 생성
-            module_settings = module.settings or {}
-            module_settings = self._filter_categories_for_blog(
-                module_settings, blog_id
-            )
             text_replace_enabled = module_settings.get(
                 "substitution", {}
             ).get("text_replace_enabled", True)
@@ -210,6 +227,38 @@ class FlowGenerateExecutor:
             f"카테고리 {len(blog_cats)}개 적용"
         )
         return filtered
+
+    @staticmethod
+    def _get_category_info(module_settings: dict) -> str:
+        """
+        모듈 설정에서 카테고리 정보를 사람이 읽을 수 있는 문자열로 변환
+
+        Args:
+            module_settings: 모듈 설정 딕셔너리
+
+        Returns:
+            str: "topic:4/subtopic:16,17" 형태의 카테고리 요약
+        """
+        categories = module_settings.get("categories", [])
+        if not categories:
+            return "카테고리 미설정"
+
+        topic_ids = set()
+        subtopic_ids = set()
+        for cat in categories:
+            if cat.get("subtopic_id"):
+                subtopic_ids.add(cat["subtopic_id"])
+            if cat.get("topic_id"):
+                topic_ids.add(cat["topic_id"])
+
+        parts = []
+        if topic_ids:
+            parts.append(f"topic:{','.join(map(str, sorted(topic_ids)))}")
+        if subtopic_ids:
+            parts.append(
+                f"subtopic:{','.join(map(str, sorted(subtopic_ids)))}"
+            )
+        return "/".join(parts) if parts else "카테고리 미설정"
 
     async def execute_for_blogs(
         self,

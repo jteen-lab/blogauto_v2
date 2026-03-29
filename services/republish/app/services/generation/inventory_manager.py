@@ -108,6 +108,7 @@ class InventoryManager:
         self,
         crawled_post_id: int,
         published_url: Optional[str] = None,
+        platform_post_id: Optional[str] = None,
     ) -> CrawledPost:
         """
         발행 완료 처리 (재고 -1 효과)
@@ -118,6 +119,7 @@ class InventoryManager:
         Args:
             crawled_post_id: 발행 완료된 CrawledPost ID
             published_url: 발행된 URL (선택)
+            platform_post_id: 플랫폼 포스트 ID (선택)
 
         Returns:
             업데이트된 CrawledPost
@@ -131,7 +133,7 @@ class InventoryManager:
                 f"CrawledPost를 찾을 수 없습니다: id={crawled_post_id}"
             )
 
-        post.mark_published(published_url)
+        post.mark_published(published_url, platform_post_id=platform_post_id)
         await self.db.flush()
 
         logger.info(

@@ -392,7 +392,7 @@ def create_mock_warmup_status(
 def create_mock_fes(
     fes_id: int = 1,
     flow_id: int = 1,
-    module_id: int = 1,
+    action_type: str = "publish",
     blog_id: Optional[int] = None,
     last_executed_at: Optional[datetime] = None,
     next_execution_at: Optional[datetime] = None,
@@ -402,7 +402,7 @@ def create_mock_fes(
     fes = MagicMock()
     fes.id = fes_id
     fes.flow_id = flow_id
-    fes.module_id = module_id
+    fes.action_type = action_type
     fes.blog_id = blog_id
     fes.last_executed_at = last_executed_at
     fes.next_execution_at = next_execution_at

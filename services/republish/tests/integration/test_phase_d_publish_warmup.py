@@ -38,9 +38,9 @@ def _wstatus(active=False, elapsed=0, dmax=0, pub=0, can=True, eff=None):
                         daily_max=dmax, today_published=pub,
                         can_publish=can, effective_interval=eff)
 
-def _fes(flow_id=1, module_id=10, blog_id=1, next_at=None, paused=False):
+def _fes(flow_id=1, action_type="publish", blog_id=1, next_at=None, paused=False):
     s = MagicMock(spec=FlowExecutionState)
-    s.flow_id, s.module_id, s.blog_id = flow_id, module_id, blog_id
+    s.flow_id, s.action_type, s.blog_id = flow_id, action_type, blog_id
     s.next_execution_at, s.is_paused = next_at, paused
     s.last_executed_at = None
     s.total_executions = s.successful_executions = s.failed_executions = 0
@@ -238,7 +238,7 @@ class TestFESIntervalCheck:
     def test_jitter_applied_in_range(self):
         """T22: jitter 설정 시 next_execution_at 계산됨"""
         state = FlowExecutionState()
-        state.flow_id, state.module_id, state.blog_id = 1, 10, 1
+        state.flow_id, state.action_type, state.blog_id = 1, "publish", 1
         state.total_executions = state.successful_executions = 0
         state.failed_executions = 0
         state.is_paused = False
