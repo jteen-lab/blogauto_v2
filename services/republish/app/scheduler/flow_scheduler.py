@@ -1,13 +1,14 @@
 """
-플로우 스케줄러 (모듈 방식)
+플로우 스케줄러 (action_type 기반)
 
 Features:
 - IntervalTrigger 기반 분 단위 스케줄링
 - 오토런 등록 시 즉시 실행
 - 일시정지/재개 시 남은 시간 보존
 - schedule_matrix를 활성화 시간대로 해석
-- 개별 Job 등록/관리
-- 모듈 방식 실행 (flows_execute.py와 동일)
+- action_type 기반 Job 등록/관리
+- publish/republish는 GP 직접 실행 (모듈 불필요)
+- collect/data/generate는 모듈 기반 실행
 """
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
@@ -49,7 +50,7 @@ class FlowScheduler:
         self.scheduler = scheduler_instance
         self.flow_engine = FlowEngine()
         self._initialized = False
-        # Job ID 포맷: flow_{flow_id}_module_{module_id}
+        # Job ID 포맷: flow_{flow_id}_{action_type}
         self._job_prefix = "flow_"
 
     async def initialize(self) -> None:
@@ -159,39 +160,40 @@ class FlowScheduler:
                         "flow_id": flow_id
                     }
 
-                # 모든 모듈 등록
+                # action_type 기반 등록
                 registered_count = 0
-                registered_module_ids = set()
+                registered_actions = set()
 
                 for link in flow.module_links:
                     module = link.module
-                    if not module:
+                    if not module or not module.module_type:
                         continue
 
-                    module_type_code = "unknown"
-                    if module.module_type:
-                        module_type_code = module.module_type.code
-
-                    if module.id in registered_module_ids:
-                        logger.info(
-                            f"[FLOW_SCHEDULER] 중복 모듈 ID 스킵 | FlowID={flow_id} | "
-                            f"ModuleID={module.id} | Type={module_type_code}"
-                        )
-                        continue
-
-                    registered_module_ids.add(module.id)
+                    module_type_code = module.module_type.code
 
                     # prompt, growth_profile 모듈은 개별 스케줄링 안 함
                     if module_type_code in ("prompt", "growth_profile"):
                         logger.info(
                             f"[FLOW_SCHEDULER] {module_type_code} 모듈 스킵 | "
-                            f"FlowID={flow_id} | ModuleID={module.id}"
+                            f"FlowID={flow_id}"
                         )
                         continue
 
-                    # 실행 상태 조회 또는 생성
+                    # publish, republish는 GP가 직접 처리하므로 여기서 스킵
+                    if module_type_code in ("publish", "republish"):
+                        continue
+
+                    if module_type_code in registered_actions:
+                        logger.info(
+                            f"[FLOW_SCHEDULER] 중복 액션 스킵 | FlowID={flow_id} | "
+                            f"ActionType={module_type_code}"
+                        )
+                        continue
+                    registered_actions.add(module_type_code)
+
+                    # 실행 상태 조회 또는 생성 (action_type 기반)
                     state = await self._get_or_create_execution_state(
-                        db, flow.id, module.id
+                        db, flow.id, module_type_code
                     )
 
                     # GP에서 모듈 타입별 간격 계산
@@ -201,22 +203,60 @@ class FlowScheduler:
 
                     # 즉시 실행 + 스케줄 등록
                     if immediate_execution:
-                        # 즉시 실행 Job 등록
                         await self._schedule_immediate_execution(
-                            flow, module, state
+                            flow, action_type=module_type_code, state=state
                         )
                     else:
-                        # 다음 실행 시간 계산 및 스케줄 등록
                         await self._schedule_next_execution(
-                            db, flow, module, state, interval_minutes,
+                            db, flow, action_type=module_type_code, state=state,
+                            interval_minutes=interval_minutes,
                             gp_settings=gp_settings
                         )
 
                     registered_count += 1
                     logger.info(
-                        f"[FLOW_SCHEDULER] 모듈 등록 | FlowID={flow_id} | "
-                        f"ModuleID={module.id} | Type={module_type_code}"
+                        f"[FLOW_SCHEDULER] 액션 등록 | FlowID={flow_id} | "
+                        f"ActionType={module_type_code}"
                     )
+
+                # GP에서 publish/republish 활성화 확인 후 등록
+                if gp_settings and gp_settings.get("stages"):
+                    for gp_action in ("publish", "republish"):
+                        if gp_action in registered_actions:
+                            continue
+                        # 아무 stage에서든 활성화되어 있는지 확인
+                        any_enabled = False
+                        for stage in gp_settings["stages"]:
+                            action_cfg = stage.get(gp_action, {})
+                            if action_cfg.get("enabled", False):
+                                any_enabled = True
+                                break
+
+                        if any_enabled:
+                            registered_actions.add(gp_action)
+                            state = await self._get_or_create_execution_state(
+                                db, flow.id, gp_action
+                            )
+                            interval_minutes = self._get_gp_interval(
+                                gp_settings, blogs, gp_action
+                            )
+
+                            if immediate_execution:
+                                await self._schedule_immediate_execution(
+                                    flow, action_type=gp_action, state=state
+                                )
+                            else:
+                                await self._schedule_next_execution(
+                                    db, flow, action_type=gp_action, state=state,
+                                    interval_minutes=interval_minutes,
+                                    gp_settings=gp_settings
+                                )
+
+                            registered_count += 1
+                            logger.info(
+                                f"[FLOW_SCHEDULER] GP 액션 등록 | FlowID={flow_id} | "
+                                f"ActionType={gp_action}"
+                            )
 
                 await db.commit()
 
@@ -280,33 +320,22 @@ class FlowScheduler:
     # ===========================================
 
     async def pause_flow(self, flow_id: int) -> Dict[str, Any]:
-        """플로우 일시정지 - 남은 시간 보존"""
+        """플로우 일시정지 - 남은 시간 보존 (FES 직접 조회)"""
         try:
             logger.info(f"[FLOW_SCHEDULER] Pausing flow | FlowID={flow_id}")
 
             async with db_manager.get_session() as db:
-                # 플로우 조회
-                flow = await self._get_flow_with_modules(db, flow_id)
-                if not flow:
-                    return {
-                        "success": False,
-                        "message": f"플로우를 찾을 수 없습니다: {flow_id}"
-                    }
+                # FES 레코드 직접 조회
+                query = select(FlowExecutionState).where(
+                    FlowExecutionState.flow_id == flow_id
+                )
+                result = await db.execute(query)
+                states = list(result.scalars().all())
 
-                # 각 모듈의 실행 상태에 남은 시간 저장
                 paused_count = 0
-                for link in flow.module_links:
-                    module = link.module
-                    if not module:
-                        continue
-
-                    # 실행 상태 조회
-                    state = await self._get_execution_state(
-                        db, flow.id, module.id
-                    )
-                    if state:
-                        state.pause()
-                        paused_count += 1
+                for state in states:
+                    state.pause()
+                    paused_count += 1
 
                 # Job 제거
                 await self.unregister_flow(flow_id)
@@ -315,7 +344,7 @@ class FlowScheduler:
 
                 logger.info(
                     f"[FLOW_SCHEDULER] Flow paused | FlowID={flow_id} | "
-                    f"PausedModules={paused_count}"
+                    f"PausedActions={paused_count}"
                 )
 
                 return {
@@ -332,12 +361,12 @@ class FlowScheduler:
             }
 
     async def resume_flow(self, flow_id: int) -> Dict[str, Any]:
-        """플로우 재개 - 남은 시간으로 스케줄 복원"""
+        """플로우 재개 - 남은 시간으로 스케줄 복원 (FES 직접 조회)"""
         try:
             logger.info(f"[FLOW_SCHEDULER] Resuming flow | FlowID={flow_id}")
 
             async with db_manager.get_session() as db:
-                # 플로우 조회
+                # 플로우 조회 (스케줄 등록에 필요)
                 flow = await self._get_flow_with_modules(db, flow_id)
                 if not flow:
                     return {
@@ -345,39 +374,40 @@ class FlowScheduler:
                         "message": f"플로우를 찾을 수 없습니다: {flow_id}"
                     }
 
-                # 각 모듈의 실행 상태에서 남은 시간으로 스케줄 복원
-                resumed_count = 0
-                for link in flow.module_links:
-                    module = link.module
-                    if not module:
-                        continue
-
-                    # 실행 상태 조회
-                    state = await self._get_execution_state(
-                        db, flow.id, module.id
+                # 일시정지된 FES 레코드 직접 조회
+                query = select(FlowExecutionState).where(
+                    and_(
+                        FlowExecutionState.flow_id == flow_id,
+                        FlowExecutionState.is_paused == True
                     )
-                    if state and state.is_paused:
-                        # 재개하고 다음 실행 시간 가져오기
-                        next_execution = state.resume()
+                )
+                result = await db.execute(query)
+                states = list(result.scalars().all())
 
-                        if next_execution:
-                            # 남은 시간으로 스케줄 등록
-                            await self._schedule_at_time(
-                                flow, module, state, next_execution
-                            )
-                        else:
-                            # 남은 시간이 없으면 즉시 실행
-                            await self._schedule_immediate_execution(
-                                flow, module, state
-                            )
+                resumed_count = 0
+                for state in states:
+                    # 재개하고 다음 실행 시간 가져오기
+                    next_execution = state.resume()
 
-                        resumed_count += 1
+                    if next_execution:
+                        # 남은 시간으로 스케줄 등록
+                        await self._schedule_at_time(
+                            flow, action_type=state.action_type, state=state,
+                            run_time=next_execution
+                        )
+                    else:
+                        # 남은 시간이 없으면 즉시 실행
+                        await self._schedule_immediate_execution(
+                            flow, action_type=state.action_type, state=state
+                        )
+
+                    resumed_count += 1
 
                 await db.commit()
 
                 logger.info(
                     f"[FLOW_SCHEDULER] Flow resumed | FlowID={flow_id} | "
-                    f"ResumedModules={resumed_count}"
+                    f"ResumedActions={resumed_count}"
                 )
 
                 return {
@@ -420,90 +450,77 @@ class FlowScheduler:
                         "message": f"플로우를 찾을 수 없습니다: {flow_id}"
                     }
 
-                # 해당 액션 타입의 모듈 찾기
+                # 모듈 찾기 (collect/data/generate/prompt만 모듈 필요)
                 target_module = None
-                for link in flow.module_links:
-                    module = link.module
-                    if module and module.module_type:
-                        if module.module_type.code == action_type:
+                if action_type in ("collect", "data", "generate", "prompt"):
+                    for link in flow.module_links:
+                        module = link.module
+                        if module and module.module_type and module.module_type.code == action_type:
                             target_module = module
                             break
+                    if not target_module:
+                        return {
+                            "success": False,
+                            "message": f"액션 타입에 해당하는 모듈이 없습니다: {action_type}"
+                        }
 
-                if not target_module:
-                    return {
-                        "success": False,
-                        "message": f"액션 타입에 해당하는 모듈이 없습니다: {action_type}"
-                    }
+                # 로깅용 모듈 이름
+                module_name = target_module.name if target_module else "GP"
 
                 # 블로그 목록 가져오기
                 blogs = [link.blog for link in flow.blog_links if link.blog]
 
-                # 모듈 방식 실행 (flows_execute.py와 동일)
+                # GP 설정 조회
+                gp_settings = self._find_gp_settings(flow)
+
+                # action_type별 실행
                 if action_type == "collect":
                     result = await self._execute_collect_module(target_module, db, flow)
                     duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
 
-                    # AutorunLog 저장
                     await self._save_autorun_log(
                         db=db,
                         user_id=flow.user_id,
                         flow_id=flow.id,
                         flow_name=flow.name,
-                        module_name=target_module.name,
+                        module_name=module_name,
                         blog_name="-",
                         result=result,
                         duration_ms=duration_ms,
                         action="collect"
                     )
 
+                elif action_type == "publish":
+                    result = await self._execute_publish_action(
+                        flow, blogs, gp_settings, db
+                    )
+
                 elif action_type == "republish":
-                    if not blogs:
-                        result = {"success": False, "message": "블로그가 연결되지 않았습니다"}
-                    else:
-                        success_count = 0
-                        fail_count = 0
-                        for blog in blogs:
-                            blog_start = datetime.now()
-                            try:
-                                blog_result = await self._execute_republish_for_blog(blog)
-                                blog_duration = int((datetime.now() - blog_start).total_seconds() * 1000)
+                    result = await self._execute_republish_action(
+                        flow, blogs, gp_settings, db
+                    )
 
-                                await self._save_autorun_log(
-                                    db=db,
-                                    user_id=flow.user_id,
-                                    flow_id=flow.id,
-                                    flow_name=flow.name,
-                                    module_name=target_module.name,
-                                    blog_name=blog.name,
-                                    result=blog_result,
-                                    duration_ms=blog_duration,
-                                    action="republish"
-                                )
+                elif action_type == "data":
+                    result = await self._execute_data_module(target_module, db)
+                    duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
 
-                                if blog_result.get("success"):
-                                    success_count += 1
-                                else:
-                                    fail_count += 1
+                    await self._save_autorun_log(
+                        db=db,
+                        user_id=flow.user_id,
+                        flow_id=flow.id,
+                        flow_name=flow.name,
+                        module_name=module_name,
+                        blog_name="-",
+                        result=result,
+                        duration_ms=duration_ms,
+                        action="data"
+                    )
 
-                            except Exception as e:
-                                fail_count += 1
-                                blog_duration = int((datetime.now() - blog_start).total_seconds() * 1000)
-                                await self._save_autorun_log(
-                                    db=db,
-                                    user_id=flow.user_id,
-                                    flow_id=flow.id,
-                                    flow_name=flow.name,
-                                    module_name=target_module.name,
-                                    blog_name=blog.name,
-                                    result={"success": False, "message": str(e)},
-                                    duration_ms=blog_duration,
-                                    action="republish"
-                                )
-
-                        result = {
-                            "success": fail_count == 0,
-                            "message": f"성공 {success_count}/{len(blogs)}, 실패 {fail_count}/{len(blogs)}"
-                        }
+                elif action_type in ("generate", "prompt"):
+                    result = await self._execute_generate_module(
+                        flow, target_module, blogs, db,
+                        gp_settings=gp_settings,
+                    )
                 else:
                     result = {"success": False, "message": f"지원하지 않는 액션 타입: {action_type}"}
 
@@ -516,17 +533,15 @@ class FlowScheduler:
                     f"Duration={duration_ms}ms"
                 )
 
-                # 실행 상태 업데이트
+                # 실행 상태 업데이트 (action_type 기반)
                 state = await self._get_or_create_execution_state(
-                    db, flow.id, target_module.id
+                    db, flow.id, action_type
                 )
                 state.record_execution(result.get("success", False))
 
                 # GP 기반 다음 실행 시간 계산
-                gp_settings = self._find_gp_settings(flow)
-                _blogs = [link.blog for link in flow.blog_links if link.blog]
                 interval_minutes = self._get_gp_interval(
-                    gp_settings, _blogs, action_type
+                    gp_settings, blogs, action_type
                 ) if gp_settings else 60
 
                 if gp_settings:
@@ -582,13 +597,15 @@ class FlowScheduler:
         self,
         db: AsyncSession,
         flow_id: int,
-        module_id: int
+        action_type: str,
+        blog_id: int = None,
     ) -> FlowExecutionState:
-        """실행 상태 조회 또는 생성"""
+        """실행 상태 조회 또는 생성 (action_type 기반)"""
         query = select(FlowExecutionState).where(
             and_(
                 FlowExecutionState.flow_id == flow_id,
-                FlowExecutionState.module_id == module_id
+                FlowExecutionState.action_type == action_type,
+                FlowExecutionState.blog_id == blog_id,
             )
         )
         result = await db.execute(query)
@@ -597,7 +614,8 @@ class FlowScheduler:
         if not state:
             state = FlowExecutionState(
                 flow_id=flow_id,
-                module_id=module_id
+                action_type=action_type,
+                blog_id=blog_id,
             )
             db.add(state)
             await db.flush()
@@ -608,13 +626,15 @@ class FlowScheduler:
         self,
         db: AsyncSession,
         flow_id: int,
-        module_id: int
+        action_type: str,
+        blog_id: int = None,
     ) -> Optional[FlowExecutionState]:
-        """실행 상태 조회"""
+        """실행 상태 조회 (action_type 기반)"""
         query = select(FlowExecutionState).where(
             and_(
                 FlowExecutionState.flow_id == flow_id,
-                FlowExecutionState.module_id == module_id
+                FlowExecutionState.action_type == action_type,
+                FlowExecutionState.blog_id == blog_id,
             )
         )
         result = await db.execute(query)
@@ -623,11 +643,11 @@ class FlowScheduler:
     async def _schedule_immediate_execution(
         self,
         flow: Flow,
-        module: Module,
+        action_type: str,
         state: FlowExecutionState
     ) -> None:
-        """즉시 실행 스케줄 등록"""
-        job_id = self._get_job_id(flow.id, module.id)
+        """즉시 실행 스케줄 등록 (action_type 기반)"""
+        job_id = self._get_job_id(flow.id, action_type)
 
         # 즉시 실행 (3초 후) - timezone aware datetime 사용
         run_time = datetime.now(KST) + timedelta(seconds=3)
@@ -635,28 +655,28 @@ class FlowScheduler:
         self.scheduler.add_job(
             self._execute_module_callback,  # AsyncIOExecutor가 async 함수 직접 지원
             DateTrigger(run_date=run_time, timezone=KST),
-            args=[flow.id, module.id],
+            args=[flow.id, action_type],
             id=job_id,
-            name=f"Immediate: Flow {flow.name} - Module {module.name}",
+            name=f"Immediate: Flow {flow.name} - Action {action_type}",
             replace_existing=True
         )
 
         logger.info(
             f"[FLOW_SCHEDULER] Scheduled immediate | FlowID={flow.id} | "
-            f"ModuleID={module.id} | RunTime={run_time.strftime('%Y-%m-%d %H:%M:%S %Z')}"
+            f"ActionType={action_type} | RunTime={run_time.strftime('%Y-%m-%d %H:%M:%S %Z')}"
         )
 
     async def _schedule_next_execution(
         self,
         db: AsyncSession,
         flow: Flow,
-        module: Module,
+        action_type: str,
         state: FlowExecutionState,
         interval_minutes: int,
         gp_settings: dict = None,
     ) -> None:
-        """다음 실행 시간 계산 및 스케줄 등록 (GP 기반)"""
-        # GP 설정이 있으면 GP의 schedule_matrix/jitter 사용
+        """다음 실행 시간 계산 및 스케줄 등록 (GP 기반, action_type 사용)"""
+        # GP 설정에서 schedule_matrix/jitter 사용 (GP 없으면 기본값)
         if gp_settings:
             schedule_matrix = gp_settings.get("schedule_matrix")
             jitter = gp_settings.get("jitter", {})
@@ -664,10 +684,10 @@ class FlowScheduler:
             jitter_min = jitter.get("min_percent", -15)
             jitter_max = jitter.get("max_percent", 25)
         else:
-            schedule_matrix = module.schedule_matrix
-            jitter_enabled = module.jitter_enabled
-            jitter_min = module.jitter_min_percent
-            jitter_max = module.jitter_max_percent
+            schedule_matrix = None
+            jitter_enabled = False
+            jitter_min = -15
+            jitter_max = 25
 
         next_execution = state.calculate_next_execution(
             interval_minutes=interval_minutes,
@@ -678,17 +698,17 @@ class FlowScheduler:
         )
 
         if next_execution:
-            await self._schedule_at_time(flow, module, state, next_execution)
+            await self._schedule_at_time(flow, action_type=action_type, state=state, run_time=next_execution)
 
     async def _schedule_at_time(
         self,
         flow: Flow,
-        module: Module,
+        action_type: str,
         state: FlowExecutionState,
         run_time: datetime
     ) -> None:
-        """특정 시간에 실행 스케줄 등록"""
-        job_id = self._get_job_id(flow.id, module.id)
+        """특정 시간에 실행 스케줄 등록 (action_type 기반)"""
+        job_id = self._get_job_id(flow.id, action_type)
 
         # timezone aware로 변환
         now = datetime.now(KST)
@@ -702,32 +722,33 @@ class FlowScheduler:
         self.scheduler.add_job(
             self._execute_module_callback,  # AsyncIOExecutor가 async 함수 직접 지원
             DateTrigger(run_date=run_time, timezone=KST),
-            args=[flow.id, module.id],
+            args=[flow.id, action_type],
             id=job_id,
-            name=f"Flow {flow.name} - Module {module.name}",
+            name=f"Flow {flow.name} - Action {action_type}",
             replace_existing=True
         )
 
         logger.info(
             f"[FLOW_SCHEDULER] Scheduled | FlowID={flow.id} | "
-            f"ModuleID={module.id} | RunTime={run_time.strftime('%Y-%m-%d %H:%M:%S %Z')}"
+            f"ActionType={action_type} | RunTime={run_time.strftime('%Y-%m-%d %H:%M:%S %Z')}"
         )
 
     async def _execute_module_callback(
         self,
         flow_id: int,
-        module_id: int
+        action_type: str
     ) -> None:
         """
-        모듈 실행 콜백 (모듈 방식 - flows_execute.py와 동일)
+        모듈 실행 콜백 (action_type 기반)
 
-        노드 체인 방식 대신 직접 서비스를 호출하여 실행합니다.
+        action_type에 따라 적절한 서비스를 호출하여 실행합니다.
+        publish/republish는 모듈 없이 GP 직접 실행합니다.
         """
         started_at = datetime.now()
 
         try:
             logger.info(
-                f"[FLOW_SCHEDULER] Executing | FlowID={flow_id} | ModuleID={module_id}"
+                f"[FLOW_SCHEDULER] Executing | FlowID={flow_id} | ActionType={action_type}"
             )
 
             async with db_manager.get_session() as db:
@@ -751,27 +772,32 @@ class FlowScheduler:
                     )
                     return
 
-                # 해당 모듈 찾기
+                # 모듈이 필요한 액션 타입은 모듈 찾기
                 module = None
-                for link in flow.module_links:
-                    if link.module and link.module.id == module_id:
-                        module = link.module
-                        break
+                if action_type in ("collect", "data", "generate", "prompt"):
+                    for link in flow.module_links:
+                        if link.module and link.module.module_type:
+                            if link.module.module_type.code == action_type:
+                                module = link.module
+                                break
 
-                if not module:
-                    logger.warning(
-                        f"[FLOW_SCHEDULER] Module not found | FlowID={flow_id} | "
-                        f"ModuleID={module_id}"
-                    )
-                    return
+                    if not module and action_type == "generate":
+                        # generate는 prompt 모듈로 대체 가능
+                        for link in flow.module_links:
+                            if link.module and link.module.module_type:
+                                if link.module.module_type.code == "prompt":
+                                    module = link.module
+                                    break
 
-                # 실행 상태 조회
-                state = await self._get_execution_state(db, flow_id, module_id)
+                    if not module:
+                        logger.warning(
+                            f"[FLOW_SCHEDULER] Module not found for action_type | "
+                            f"FlowID={flow_id} | ActionType={action_type}"
+                        )
+                        return
 
-                # 모듈 타입에서 액션 타입 결정
-                action_type = "republish"
-                if module.module_type:
-                    action_type = module.module_type.code
+                # 실행 상태 조회 (action_type 기반)
+                state = await self._get_execution_state(db, flow_id, action_type)
 
                 # 블로그 목록 가져오기
                 blogs = [link.blog for link in flow.blog_links if link.blog]
@@ -784,24 +810,24 @@ class FlowScheduler:
                 if state and not state.is_in_active_window(gp_schedule):
                     logger.info(
                         f"[FLOW_SCHEDULER] GP 비활성 시간대, 재스케줄 | "
-                        f"FlowID={flow_id} | ModuleID={module_id}"
+                        f"FlowID={flow_id} | ActionType={action_type}"
                     )
                     interval_minutes = self._get_gp_interval(
                         gp_settings, blogs, action_type
                     ) if gp_settings else 60
                     await self._schedule_next_execution(
-                        db, flow, module, state, interval_minutes,
+                        db, flow, action_type=action_type, state=state,
+                        interval_minutes=interval_minutes,
                         gp_settings=gp_settings
                     )
                     await db.commit()
                     return
 
-                # 모듈 방식 실행 (flows_execute.py와 동일)
+                # action_type별 실행
                 if action_type == "collect":
                     result = await self._execute_collect_module(module, db, flow)
                     duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
 
-                    # AutorunLog 저장
                     await self._save_autorun_log(
                         db=db,
                         user_id=flow.user_id,
@@ -819,131 +845,20 @@ class FlowScheduler:
                         f"Success={result.get('success', False)} | Duration={duration_ms}ms"
                     )
 
+                elif action_type == "publish":
+                    result = await self._execute_publish_action(
+                        flow, blogs, gp_settings, db
+                    )
+
                 elif action_type == "republish":
-                    if not blogs:
-                        logger.warning(
-                            f"[FLOW_SCHEDULER] 재발행 모듈에 블로그 없음 | FlowID={flow_id}"
-                        )
-                        result = {"success": False, "message": "블로그가 연결되지 않았습니다"}
-                    else:
-                        # 포스트 범위로 블로그 필터링
-                        _mod_settings = module.settings or {}
-                        post_range_start = _mod_settings.get("post_range_start") or 1
-                        post_range_end = _mod_settings.get("post_range_end")  # None이면 무제한
+                    result = await self._execute_republish_action(
+                        flow, blogs, gp_settings, db
+                    )
 
-                        filtered_blogs = []
-                        for blog in blogs:
-                            post_count = blog.total_post_count or 0
-
-                            if post_range_end is None:
-                                # 무제한: start 이상이면 통과
-                                if post_count >= post_range_start:
-                                    filtered_blogs.append(blog)
-                                    logger.info(
-                                        f"[FLOW_SCHEDULER] ✅ 범위 내 | {blog.name}: "
-                                        f"{post_count}개 >= {post_range_start}"
-                                    )
-                                else:
-                                    logger.info(
-                                        f"[FLOW_SCHEDULER] ❌ 범위 외 | {blog.name}: "
-                                        f"{post_count}개 < {post_range_start}"
-                                    )
-                            else:
-                                # 범위 지정: start <= post_count <= end
-                                if post_range_start <= post_count <= post_range_end:
-                                    filtered_blogs.append(blog)
-                                    logger.info(
-                                        f"[FLOW_SCHEDULER] ✅ 범위 내 | {blog.name}: "
-                                        f"{post_range_start} <= {post_count} <= {post_range_end}"
-                                    )
-                                else:
-                                    logger.info(
-                                        f"[FLOW_SCHEDULER] ❌ 범위 외 | {blog.name}: "
-                                        f"{post_count}개 not in {post_range_start}~{post_range_end}"
-                                    )
-
-                        logger.info(
-                            f"[FLOW_SCHEDULER] 포스트 범위 필터링 | "
-                            f"전체={len(blogs)} → 대상={len(filtered_blogs)} | "
-                            f"범위={post_range_start}~{post_range_end if post_range_end else '무제한'}"
-                        )
-
-                        if not filtered_blogs:
-                            logger.info(
-                                f"[FLOW_SCHEDULER] 포스트 범위에 해당하는 블로그 없음 | "
-                                f"FlowID={flow_id} | 범위={post_range_start}~{post_range_end}"
-                            )
-                            result = {
-                                "success": True,
-                                "message": f"포스트 범위({post_range_start}~{post_range_end or '무제한'})에 해당하는 블로그 없음"
-                            }
-                        else:
-                            # 필터링된 블로그에 대해 재발행 실행
-                            success_count = 0
-                            fail_count = 0
-                            for blog in filtered_blogs:
-                                blog_start = datetime.now()
-                                try:
-                                    blog_result = await self._execute_republish_for_blog(blog)
-                                    blog_duration = int((datetime.now() - blog_start).total_seconds() * 1000)
-
-                                    # AutorunLog 저장
-                                    await self._save_autorun_log(
-                                        db=db,
-                                        user_id=flow.user_id,
-                                        flow_id=flow.id,
-                                        flow_name=flow.name,
-                                        module_name=module.name,
-                                        blog_name=blog.name,
-                                        result=blog_result,
-                                        duration_ms=blog_duration,
-                                        action="republish"
-                                    )
-
-                                    if blog_result.get("success"):
-                                        success_count += 1
-                                        logger.info(
-                                            f"[FLOW_SCHEDULER] 재발행 성공 | blog={blog.name} | "
-                                            f"post={blog_result.get('post_title', '')[:30]}"
-                                        )
-                                    else:
-                                        fail_count += 1
-                                        logger.warning(
-                                            f"[FLOW_SCHEDULER] 재발행 실패 | blog={blog.name} | "
-                                            f"error={blog_result.get('message', '')}"
-                                        )
-
-                                except Exception as e:
-                                    fail_count += 1
-                                    blog_duration = int((datetime.now() - blog_start).total_seconds() * 1000)
-                                    logger.error(f"[FLOW_SCHEDULER] 블로그 처리 오류 | blog={blog.name} | error={e}")
-                                    await self._save_autorun_log(
-                                        db=db,
-                                        user_id=flow.user_id,
-                                        flow_id=flow.id,
-                                        flow_name=flow.name,
-                                        module_name=module.name,
-                                        blog_name=blog.name,
-                                        result={"success": False, "message": str(e)},
-                                        duration_ms=blog_duration,
-                                        action="republish"
-                                    )
-
-                            result = {
-                                "success": fail_count == 0,
-                                "message": f"성공 {success_count}/{len(filtered_blogs)}, 실패 {fail_count}/{len(filtered_blogs)}"
-                            }
-
-                            logger.info(
-                                f"[FLOW_SCHEDULER] 재발행 완료 | FlowID={flow_id} | "
-                                f"성공={success_count} | 실패={fail_count}"
-                            )
                 elif action_type == "data":
-                    # 데이터 모듈 실행 (제목 이동 등)
                     result = await self._execute_data_module(module, db)
                     duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
 
-                    # AutorunLog 저장
                     await self._save_autorun_log(
                         db=db,
                         user_id=flow.user_id,
@@ -960,8 +875,7 @@ class FlowScheduler:
                         f"[FLOW_SCHEDULER] 데이터 모듈 실행 완료 | FlowID={flow_id} | "
                         f"Success={result.get('success', False)} | Duration={duration_ms}ms"
                     )
-                elif action_type == "generate":
-                    # 생성 모듈: 동일 플로우의 prompt 모듈들을 찾아 실행
+                elif action_type in ("generate", "prompt"):
                     result = await self._execute_generate_module(
                         flow, module, blogs, db,
                         gp_settings=gp_settings,
@@ -985,7 +899,6 @@ class FlowScheduler:
                         f"Success={result.get('success', False)} | Duration={duration_ms}ms"
                     )
                 elif action_type == "growth_profile":
-                    # GP 모듈은 개별 실행하지 않음 (Step 0 컨텍스트 전용)
                     logger.info(
                         f"[FLOW_SCHEDULER] GP 모듈은 개별 실행 안 함 | "
                         f"FlowID={flow_id}"
@@ -1023,21 +936,24 @@ class FlowScheduler:
                         )
 
                     if next_execution:
-                        await self._schedule_at_time(flow, module, state, next_execution)
+                        await self._schedule_at_time(
+                            flow, action_type=action_type, state=state,
+                            run_time=next_execution
+                        )
 
                 await db.commit()
 
                 duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
                 logger.info(
                     f"[FLOW_SCHEDULER] Execution completed | FlowID={flow_id} | "
-                    f"ModuleID={module_id} | Success={result.get('success', False)} | "
+                    f"ActionType={action_type} | Success={result.get('success', False)} | "
                     f"Duration={duration_ms}ms"
                 )
 
         except Exception as e:
             logger.error(
                 f"[FLOW_SCHEDULER] Execution error | FlowID={flow_id} | "
-                f"ModuleID={module_id} | Error={e}"
+                f"ActionType={action_type} | Error={e}"
             )
 
     async def _register_active_flows(self) -> None:
@@ -1091,9 +1007,9 @@ class FlowScheduler:
         except Exception as e:
             logger.error(f"[FLOW_SCHEDULER] Cleanup error | Error={e}")
 
-    def _get_job_id(self, flow_id: int, module_id: int) -> str:
-        """Job ID 생성"""
-        return f"{self._job_prefix}{flow_id}_module_{module_id}"
+    def _get_job_id(self, flow_id: int, action_type: str) -> str:
+        """Job ID 생성 (action_type 기반)"""
+        return f"{self._job_prefix}{flow_id}_{action_type}"
 
     # ===========================================
     # GP(Growth Profile) 기반 스케줄 헬퍼
@@ -1653,6 +1569,186 @@ class FlowScheduler:
                 "duplicates": 0
             }
 
+    async def _execute_publish_action(
+        self,
+        flow: Flow,
+        blogs: List[Blog],
+        gp_settings: Optional[dict],
+        db: AsyncSession,
+    ) -> Dict[str, Any]:
+        """
+        발행 액션 실행 (GP 기반, 모듈 없이 직접 실행)
+
+        Args:
+            flow: 플로우
+            blogs: 연결된 블로그 목록
+            gp_settings: GP 설정
+            db: DB 세션
+
+        Returns:
+            실행 결과
+        """
+        if not blogs:
+            return {"success": False, "message": "블로그가 연결되지 않았습니다"}
+
+        from ..services.generation.warmup_manager import WarmupManager
+        from ..services.generation.publisher import Publisher
+        from ..services.generation.publisher_pipeline import PublisherPipeline
+        from ..services.generation.flow_execution_context import FlowExecutionContext
+        from ..services.generation.growth_profile_resolver import GrowthProfileResolver
+
+        gp_context = None
+        if gp_settings:
+            gp_context = GrowthProfileResolver.build_execution_context(
+                flow.id, gp_settings,
+                {b.id: b.total_post_count or 0 for b in blogs}
+            )
+
+        warmup_mgr = WarmupManager(db)
+        publisher = Publisher(db)
+        pipeline = PublisherPipeline(db)
+
+        # GP 모듈 이름 찾기
+        gp_module_name = "GP 발행"
+        for _link in flow.module_links:
+            _m = _link.module
+            if _m and _m.module_type and _m.module_type.code == "growth_profile":
+                gp_module_name = _m.name
+                break
+
+        success_count = 0
+        fail_count = 0
+        for blog in blogs:
+            blog_start = datetime.now()
+            try:
+                stage_params = gp_context.get_stage_for_blog(blog.id) if gp_context else None
+                if not stage_params or not stage_params.publish.enabled:
+                    continue
+
+                # 워밍업 체크
+                warmup_settings = gp_settings.get("warmup", {}) if gp_settings else {}
+                active_hours = GrowthProfileResolver.count_active_hours(
+                    gp_settings.get("schedule_matrix")) if gp_settings else 16
+                warmup_status = await warmup_mgr.check_warmup(
+                    blog.id, warmup_settings, active_hours)
+
+                if warmup_status.is_active and not warmup_status.can_publish:
+                    continue
+
+                # 발행 (항상 1개)
+                pub_result = await publisher.publish_for_blog(blog, warmup_status)
+
+                if pub_result.get("success") and pub_result.get("crawled_post"):
+                    crawled_post = pub_result["crawled_post"]
+                    pipeline_result = await pipeline.publish_post(crawled_post, blog)
+
+                    if pipeline_result.get("success"):
+                        await publisher.complete_publish(blog, crawled_post, stage_params)
+                        success_count += 1
+                    else:
+                        fail_count += 1
+                elif pub_result.get("skipped"):
+                    pass  # 스킵
+                else:
+                    fail_count += 1
+
+                blog_duration = int((datetime.now() - blog_start).total_seconds() * 1000)
+                await self._save_autorun_log(
+                    db=db, user_id=flow.user_id, flow_id=flow.id,
+                    flow_name=flow.name, module_name=gp_module_name,
+                    blog_name=blog.name, result=pub_result,
+                    duration_ms=blog_duration, action="publish")
+
+            except Exception as e:
+                fail_count += 1
+                blog_duration = int((datetime.now() - blog_start).total_seconds() * 1000)
+                await self._save_autorun_log(
+                    db=db, user_id=flow.user_id, flow_id=flow.id,
+                    flow_name=flow.name, module_name=gp_module_name,
+                    blog_name=blog.name,
+                    result={"success": False, "message": str(e)},
+                    duration_ms=blog_duration, action="publish")
+
+        return {
+            "success": fail_count == 0,
+            "message": f"발행 성공 {success_count}/{len(blogs)}, 실패 {fail_count}/{len(blogs)}"
+        }
+
+    async def _execute_republish_action(
+        self,
+        flow: Flow,
+        blogs: List[Blog],
+        gp_settings: Optional[dict],
+        db: AsyncSession,
+    ) -> Dict[str, Any]:
+        """
+        재발행 액션 실행 (GP 기반, 모듈 없이 직접 실행)
+
+        Args:
+            flow: 플로우
+            blogs: 연결된 블로그 목록
+            gp_settings: GP 설정
+            db: DB 세션
+
+        Returns:
+            실행 결과
+        """
+        if not blogs:
+            return {"success": False, "message": "블로그가 연결되지 않았습니다"}
+
+        gp_context = None
+        if gp_settings:
+            gp_context = GrowthProfileResolver.build_execution_context(
+                flow.id, gp_settings,
+                {b.id: b.total_post_count or 0 for b in blogs}
+            )
+
+        # GP 모듈 이름 찾기
+        gp_module_name = "GP 재발행"
+        for _link in flow.module_links:
+            _m = _link.module
+            if _m and _m.module_type and _m.module_type.code == "growth_profile":
+                gp_module_name = _m.name
+                break
+
+        success_count = 0
+        fail_count = 0
+        for blog in blogs:
+            blog_start = datetime.now()
+            try:
+                stage_params = gp_context.get_stage_for_blog(blog.id) if gp_context else None
+                if not stage_params or not stage_params.republish.enabled:
+                    continue
+
+                blog_result = await self._execute_republish_for_blog(blog)
+                blog_duration = int((datetime.now() - blog_start).total_seconds() * 1000)
+
+                await self._save_autorun_log(
+                    db=db, user_id=flow.user_id, flow_id=flow.id,
+                    flow_name=flow.name, module_name=gp_module_name,
+                    blog_name=blog.name, result=blog_result,
+                    duration_ms=blog_duration, action="republish")
+
+                if blog_result.get("success"):
+                    success_count += 1
+                else:
+                    fail_count += 1
+
+            except Exception as e:
+                fail_count += 1
+                blog_duration = int((datetime.now() - blog_start).total_seconds() * 1000)
+                await self._save_autorun_log(
+                    db=db, user_id=flow.user_id, flow_id=flow.id,
+                    flow_name=flow.name, module_name=gp_module_name,
+                    blog_name=blog.name,
+                    result={"success": False, "message": str(e)},
+                    duration_ms=blog_duration, action="republish")
+
+        return {
+            "success": fail_count == 0,
+            "message": f"재발행 성공 {success_count}/{len(blogs)}, 실패 {fail_count}/{len(blogs)}"
+        }
+
     async def _execute_republish_for_blog(self, blog: Blog) -> Dict[str, Any]:
         """
         블로그에 재발행 수행 (flows_execute.py와 동일)
@@ -1781,7 +1877,7 @@ class FlowScheduler:
                     "scheduled_jobs": len(flow_jobs),
                     "modules": [
                         {
-                            "module_id": state.module_id,
+                            "action_type": state.action_type,
                             "last_executed_at": state.last_executed_at.isoformat() if state.last_executed_at else None,
                             "next_execution_at": state.next_execution_at.isoformat() if state.next_execution_at else None,
                             "is_paused": state.is_paused,

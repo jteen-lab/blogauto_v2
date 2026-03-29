@@ -252,8 +252,6 @@ class ModuleTemplateService:
             mt = module_type_map.get(code)
             if not mt:
                 missing.append(code)
-            elif not mt.is_active:
-                inactive.append(code)
 
         return {
             "valid": len(missing) == 0 and len(inactive) == 0,

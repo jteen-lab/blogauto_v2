@@ -565,8 +565,6 @@ function flowListApp() {
         // 모듈 아이콘 반환
         getModuleIcon(typeCode) {
             const icons = {
-                republish: '🔄',
-                publish: '📤',
                 generate: '✨',
                 prompt: '📝',
                 collect: '🔍',
@@ -578,8 +576,6 @@ function flowListApp() {
         // 모듈 타입 레이블 반환
         getModuleTypeLabel(typeCode) {
             const labels = {
-                republish: '재발행',
-                publish: '발행',
                 generate: '생성',
                 prompt: '프롬프트',
                 growth_profile: '성장 프로파일'
@@ -608,8 +604,6 @@ function flowListApp() {
         // 모듈 타입별 색상 반환 (모듈 관리 페이지와 동일)
         getModuleColor(typeCode) {
             const colors = {
-                republish: 'bg-sky-200',
-                publish: 'bg-rose-200',
                 generate: 'bg-amber-200',
                 prompt: 'bg-green-200',
                 collect: 'bg-purple-200',
@@ -621,8 +615,6 @@ function flowListApp() {
         // 모듈 타입 이름 반환
         getModuleTypeName(typeCode) {
             const names = {
-                republish: '재발행',
-                publish: '발행',
                 generate: '생성',
                 prompt: '프롬프트',
                 collect: '수집',
@@ -757,20 +749,7 @@ function flowListApp() {
             const items = [];
             const typeCode = module.module_type?.code || '';
 
-            if (typeCode === 'republish') {
-                items.push({ label: '범위', value: this.getPostRangeText(module) });
-                items.push({ label: '간격', value: this.getIntervalText(module) });
-                const schedule = this.getScheduleSummary(module);
-                if (schedule !== '설정 없음') {
-                    items.push({ label: '스케줄', value: schedule });
-                }
-            } else if (typeCode === 'publish') {
-                items.push({ label: '간격', value: this.getIntervalText(module) });
-                const schedule = this.getScheduleSummary(module);
-                if (schedule !== '설정 없음') {
-                    items.push({ label: '스케줄', value: schedule });
-                }
-            } else if (typeCode === 'generate') {
+            if (typeCode === 'generate') {
                 if (module.ai_model) {
                     items.push({ label: 'AI', value: module.ai_model });
                 }
@@ -1249,6 +1228,6 @@ function getModuleIcon(typeCode) {
     if (window.flowListApp) {
         return window.flowListApp.getModuleIcon(typeCode);
     }
-    const icons = { republish: '🔄', publish: '📤', generate: '✨', prompt: '📝', collect: '🔍', growth_profile: '📈' };
+    const icons = { generate: '✨', prompt: '📝', collect: '🔍', growth_profile: '📈' };
     return icons[typeCode] || '📦';
 }

@@ -41,6 +41,10 @@ from app.models.flow_execution_state import FlowExecutionState
 router = APIRouter(prefix="/api/v1/flows", tags=["flows-execute"])
 logger = get_logger("flow_execute", "app.log")
 
+# 모듈 개별 실행 상태 (메모리 기반, 서버 재시작 시 초기화)
+# {execution_id: {"status": "running"|"completed"|"failed", "message": str, ...}}
+_module_exec_states: Dict[str, dict] = {}
+
 
 @router.post("/{flow_id}/execute")
 async def execute_flow_once(
@@ -326,294 +330,225 @@ async def _execute_flow_background(
                             action="data"
                         )
 
-            # 7. publish 모듈 실행 (GP 컨텍스트 기반 발행 + 워밍업)
-            if "publish" in modules_by_type:
-                if not blogs:
-                    logger.warning(f"[FLOW_BG] 발행 모듈이 있지만 블로그가 없음: {flow_id}")
-                    for publish_module in modules_by_type["publish"]:
-                        fail_count += 1
+            # 7. GP 기반 발행 (publish 모듈 불필요 - GP가 직접 실행)
+            if gp_context and gp_context.has_growth_profile() and blogs:
+                from app.services.generation.publisher import Publisher
+                from app.services.generation.warmup_manager import WarmupManager
+                from app.services.publishing.publisher_pipeline import PublisherPipeline
+
+                active_hours = _count_active_hours(gp_context.schedule_matrix)
+                warmup_settings = (
+                    gp_context.growth_profile.get("warmup", {})
+                    if gp_context.growth_profile else {}
+                )
+
+                warmup_mgr = WarmupManager(db)
+                publisher = Publisher(db)
+                pipeline = PublisherPipeline(db)
+
+                gp_module_name = "GP 발행"
+                for _link in flow.module_links:
+                    if _link.module and _link.module.module_type:
+                        if _link.module.module_type.code == "growth_profile":
+                            gp_module_name = _link.module.name
+                            break
+
+                for blog in blogs:
+                    stage_params = gp_context.get_stage_for_blog(blog.id)
+
+                    # publish 비활성 → 스킵
+                    if not stage_params or not stage_params.publish.enabled:
                         total_processed += 1
                         await _save_autorun_log(
-                            db=db,
-                            user_id=user_id,
-                            flow_id=flow.id,
-                            flow_name=flow.name,
-                            module_name=publish_module.name,
-                            blog_name="-",
-                            result={"success": False, "message": "플로우에 연결된 블로그가 없습니다"},
-                            duration_ms=0,
-                            action="publish"
+                            db=db, user_id=user_id, flow_id=flow.id,
+                            flow_name=flow.name, module_name=gp_module_name,
+                            blog_name=blog.name,
+                            result={
+                                "success": True, "skipped": True,
+                                "message": f"발행 비활성 (stage: {stage_params.stage_name if stage_params else 'N/A'})",
+                            },
+                            duration_ms=0, action="publish"
                         )
-                else:
-                    from app.services.generation.publisher import Publisher
-                    from app.services.generation.warmup_manager import WarmupManager
+                        continue
 
-                    # schedule_matrix에서 오늘의 활성 시간 수 계산
-                    active_hours = _count_active_hours(gp_context.schedule_matrix)
+                    # FES 간격 체크 (action_type="publish")
+                    fes = await _get_or_create_blog_fes(
+                        db, flow.id, "publish", blog.id,
+                    )
+                    now = datetime.now()
+                    if not _check_fes_interval(fes, now):
+                        logger.info(
+                            f"[FLOW_BG] 발행 간격 미경과 | blog={blog.name} | "
+                            f"next={fes.next_execution_at}"
+                        )
+                        continue
 
-                    # warmup 설정 로드
-                    warmup_settings = (
-                        gp_context.growth_profile.get("warmup", {})
-                        if gp_context.growth_profile else {}
+                    # 워밍업 체크
+                    warmup_status = await warmup_mgr.check_warmup(
+                        blog.id, warmup_settings, active_hours,
                     )
 
-                    warmup_mgr = WarmupManager(db)
-                    publisher = Publisher(db)
+                    # 발행 실행 (항상 1개)
+                    blog_start_time = datetime.now()
+                    try:
+                        result = await publisher.publish_for_blog(
+                            blog, warmup_status,
+                        )
 
-                    for publish_module in modules_by_type["publish"]:
-                        logger.info(f"[FLOW_BG] 발행 모듈 실행: {publish_module.name}")
-
-                        for blog in blogs:
-                            # (1) GP publish.enabled 체크
-                            stage_params = gp_context.get_stage_for_blog(blog.id)
-                            if stage_params and not stage_params.publish.enabled:
-                                logger.info(
-                                    f"[FLOW_BG] 발행 비활성 | blog={blog.name} | "
-                                    f"stage={stage_params.stage_name}"
+                        if not result.get("skipped"):
+                            crawled_post = result.get("crawled_post")
+                            if crawled_post and result.get("success"):
+                                credential = getattr(blog, "google_credential", None)
+                                pub_result = await pipeline.publish_post(
+                                    blog, crawled_post, credential=credential,
                                 )
-                                total_processed += 1
-                                await _save_autorun_log(
-                                    db=db,
-                                    user_id=user_id,
-                                    flow_id=flow.id,
-                                    flow_name=flow.name,
-                                    module_name=publish_module.name,
-                                    blog_name=blog.name,
-                                    result={
-                                        "success": True,
-                                        "skipped": True,
-                                        "message": f"발행 비활성 (stage: {stage_params.stage_name})",
-                                    },
-                                    duration_ms=0,
-                                    action="publish"
-                                )
-                                continue
-
-                            # (2) FES 간격 체크
-                            fes = await _get_or_create_blog_fes(
-                                db, flow.id, publish_module.id, blog.id,
-                            )
-                            now = datetime.now()
-                            if not _check_fes_interval(fes, now):
-                                logger.info(
-                                    f"[FLOW_BG] 발행 간격 미경과 | blog={blog.name} | "
-                                    f"next={fes.next_execution_at}"
-                                )
-                                continue
-
-                            # (3) 워밍업 체크
-                            warmup_status = await warmup_mgr.check_warmup(
-                                blog.id, warmup_settings, active_hours,
-                            )
-
-                            # (4) 발행 실행
-                            blog_start_time = datetime.now()
-                            try:
-                                result = await publisher.publish_for_blog(
-                                    blog, warmup_status,
-                                )
-                                blog_duration_ms = int(
-                                    (datetime.now() - blog_start_time).total_seconds() * 1000
-                                )
-
-                                # 발행 대상이 있으면 플랫폼 API 호출
-                                if result.get("success") and not result.get("skipped"):
-                                    crawled_post = result.get("crawled_post")
-                                    if crawled_post:
-                                        platform_result = await _execute_republish_for_blog(blog)
-                                        if platform_result.get("success"):
-                                            complete_info = await publisher.complete_publish(
-                                                blog.id, crawled_post.id,
-                                                published_url=platform_result.get("url"),
-                                            )
-                                            result["inventory"] = complete_info["inventory"]
-                                            result["needs_generation"] = complete_info["needs_generation"]
-                                        else:
-                                            result = platform_result
-
-                                # (5) FES 업데이트 (skipped가 아닌 경우만)
-                                # 의도적 설계: 재고 0이나 워밍업 한도 초과로 스킵된 경우
-                                # FES를 업데이트하지 않아, 재고 확보 시 즉시 발행 가능
-                                if not result.get("skipped"):
-                                    effective_interval = (
-                                        warmup_status.effective_interval
-                                        if warmup_status.is_active and warmup_status.effective_interval
-                                        else (stage_params.publish.computed_interval if stage_params else None)
+                                if pub_result.success:
+                                    complete_info = await publisher.complete_publish(
+                                        blog.id, crawled_post.id,
+                                        published_url=pub_result.published_url,
                                     )
-                                    _update_fes_after_execution(
-                                        fes,
-                                        success=result.get("success", False),
-                                        interval_minutes=effective_interval or 60,
-                                        gp_context=gp_context,
-                                    )
-
-                                await _save_autorun_log(
-                                    db=db,
-                                    user_id=user_id,
-                                    flow_id=flow.id,
-                                    flow_name=flow.name,
-                                    module_name=publish_module.name,
-                                    blog_name=blog.name,
-                                    result=result,
-                                    duration_ms=blog_duration_ms,
-                                    action="publish"
-                                )
-                                if result.get("success"):
-                                    success_count += 1
+                                    result["inventory"] = complete_info["inventory"]
+                                    result["needs_generation"] = complete_info["needs_generation"]
+                                    result["published_url"] = pub_result.published_url
+                                    result["image_uploaded"] = pub_result.image_uploaded
                                 else:
-                                    fail_count += 1
-                                total_processed += 1
+                                    result = {
+                                        "success": False,
+                                        "message": pub_result.error or "플랫폼 발행 실패",
+                                    }
 
-                            except Exception as e:
-                                fail_count += 1
-                                total_processed += 1
-                                blog_duration_ms = int(
-                                    (datetime.now() - blog_start_time).total_seconds() * 1000
-                                )
-                                logger.error(
-                                    f"[FLOW_BG] 발행 오류 | blog={blog.name} | error={e}"
-                                )
-                                await _save_autorun_log(
-                                    db=db,
-                                    user_id=user_id,
-                                    flow_id=flow.id,
-                                    flow_name=flow.name,
-                                    module_name=publish_module.name,
-                                    blog_name=blog.name,
-                                    result={"success": False, "message": str(e)},
-                                    duration_ms=blog_duration_ms,
-                                    action="publish"
-                                )
+                            # FES 업데이트 (skipped가 아닌 경우만)
+                            effective_interval = (
+                                warmup_status.effective_interval
+                                if warmup_status.is_active and warmup_status.effective_interval
+                                else (stage_params.publish.computed_interval if stage_params else None)
+                            )
+                            _update_fes_after_execution(
+                                fes, success=result.get("success", False),
+                                interval_minutes=effective_interval or 60,
+                                gp_context=gp_context,
+                            )
 
-            # 8. republish 모듈 실행 (GP 컨텍스트 기반 재발행)
-            if "republish" in modules_by_type:
-                if not blogs:
-                    logger.warning(f"[FLOW_BG] 재발행 모듈이 있지만 블로그가 없음: {flow_id}")
-                    for republish_module in modules_by_type["republish"]:
+                        blog_duration_ms = int(
+                            (datetime.now() - blog_start_time).total_seconds() * 1000
+                        )
+                        await _save_autorun_log(
+                            db=db, user_id=user_id, flow_id=flow.id,
+                            flow_name=flow.name, module_name=gp_module_name,
+                            blog_name=blog.name, result=result,
+                            duration_ms=blog_duration_ms, action="publish"
+                        )
+                        if result.get("success") and not result.get("skipped"):
+                            success_count += 1
+                        elif not result.get("success"):
+                            fail_count += 1
+                        total_processed += 1
+
+                    except Exception as e:
                         fail_count += 1
                         total_processed += 1
-                        await _save_autorun_log(
-                            db=db,
-                            user_id=user_id,
-                            flow_id=flow.id,
-                            flow_name=flow.name,
-                            module_name=republish_module.name,
-                            blog_name="-",
-                            result={"success": False, "message": "플로우에 연결된 블로그가 없습니다"},
-                            duration_ms=0,
-                            action="republish"
+                        blog_duration_ms = int(
+                            (datetime.now() - blog_start_time).total_seconds() * 1000
                         )
-                else:
-                    for republish_module in modules_by_type["republish"]:
-                        logger.info(f"[FLOW_BG] 재발행 모듈 실행: {republish_module.name}")
+                        logger.error(f"[FLOW_BG] 발행 오류 | blog={blog.name} | error={e}")
+                        await _save_autorun_log(
+                            db=db, user_id=user_id, flow_id=flow.id,
+                            flow_name=flow.name, module_name=gp_module_name,
+                            blog_name=blog.name,
+                            result={"success": False, "message": str(e)},
+                            duration_ms=blog_duration_ms, action="publish"
+                        )
 
-                        for blog in blogs:
-                            # GP 컨텍스트에서 블로그별 StageParams 조회
-                            stage_params = gp_context.get_stage_for_blog(blog.id)
+            # 8. GP 기반 재발행 (republish 모듈 불필요 - GP가 직접 실행)
+            if gp_context and gp_context.has_growth_profile() and blogs:
+                gp_module_name_re = "GP 재발행"
+                for _link in flow.module_links:
+                    if _link.module and _link.module.module_type:
+                        if _link.module.module_type.code == "growth_profile":
+                            gp_module_name_re = _link.module.name
+                            break
 
-                            # republish.enabled 체크
-                            if stage_params and not stage_params.republish.enabled:
-                                logger.info(
-                                    f"[FLOW_BG] 재발행 비활성 | blog={blog.name} | "
-                                    f"stage={stage_params.stage_name}"
-                                )
-                                total_processed += 1
-                                await _save_autorun_log(
-                                    db=db,
-                                    user_id=user_id,
-                                    flow_id=flow.id,
-                                    flow_name=flow.name,
-                                    module_name=republish_module.name,
-                                    blog_name=blog.name,
-                                    result={
-                                        "success": True,
-                                        "skipped": True,
-                                        "message": f"재발행 비활성 (stage: {stage_params.stage_name})",
-                                    },
-                                    duration_ms=0,
-                                    action="republish"
-                                )
-                                continue
+                for blog in blogs:
+                    stage_params = gp_context.get_stage_for_blog(blog.id)
 
-                            # FES 간격 체크 (Phase D 추가)
-                            fes = await _get_or_create_blog_fes(
-                                db, flow.id, republish_module.id, blog.id,
+                    # republish 비활성 → 스킵
+                    if not stage_params or not stage_params.republish.enabled:
+                        total_processed += 1
+                        await _save_autorun_log(
+                            db=db, user_id=user_id, flow_id=flow.id,
+                            flow_name=flow.name, module_name=gp_module_name_re,
+                            blog_name=blog.name,
+                            result={
+                                "success": True, "skipped": True,
+                                "message": f"재발행 비활성 (stage: {stage_params.stage_name if stage_params else 'N/A'})",
+                            },
+                            duration_ms=0, action="republish"
+                        )
+                        continue
+
+                    # FES 간격 체크 (action_type="republish")
+                    fes = await _get_or_create_blog_fes(
+                        db, flow.id, "republish", blog.id,
+                    )
+                    now = datetime.now()
+                    if not _check_fes_interval(fes, now):
+                        logger.info(
+                            f"[FLOW_BG] 재발행 간격 미경과 | blog={blog.name} | "
+                            f"next={fes.next_execution_at}"
+                        )
+                        continue
+
+                    blog_start_time = datetime.now()
+                    logger.info(
+                        f"[FLOW_BG] 재발행 처리: {blog.name} | "
+                        f"stage={stage_params.stage_name if stage_params else 'unknown'}"
+                    )
+
+                    try:
+                        result = await _execute_republish_for_blog(blog)
+                        blog_duration_ms = int(
+                            (datetime.now() - blog_start_time).total_seconds() * 1000
+                        )
+
+                        if result.get("success"):
+                            _update_fes_after_execution(
+                                fes, success=True,
+                                interval_minutes=(
+                                    stage_params.republish.computed_interval or 60
+                                    if stage_params else 60
+                                ),
+                                gp_context=gp_context,
                             )
-                            now = datetime.now()
-                            if not _check_fes_interval(fes, now):
-                                logger.info(
-                                    f"[FLOW_BG] 재발행 간격 미경과 | blog={blog.name} | "
-                                    f"next={fes.next_execution_at}"
-                                )
-                                continue
 
-                            blog_start_time = datetime.now()
-                            logger.info(
-                                f"[FLOW_BG] 재발행 처리: {blog.name} | "
-                                f"module={republish_module.name} | "
-                                f"stage={stage_params.stage_name if stage_params else 'unknown'}"
-                            )
+                        await _save_autorun_log(
+                            db=db, user_id=user_id, flow_id=flow.id,
+                            flow_name=flow.name, module_name=gp_module_name_re,
+                            blog_name=blog.name, result=result,
+                            duration_ms=blog_duration_ms, action="republish"
+                        )
 
-                            try:
-                                result = await _execute_republish_for_blog(blog)
-                                blog_duration_ms = int(
-                                    (datetime.now() - blog_start_time).total_seconds() * 1000
-                                )
+                        if result.get("success"):
+                            success_count += 1
+                            logger.info(f"[FLOW_BG] 재발행 성공 | blog={blog.name}")
+                        else:
+                            fail_count += 1
+                            logger.warning(f"[FLOW_BG] 재발행 실패 | blog={blog.name}")
+                        total_processed += 1
 
-                                # 실행 성공 후 FES 업데이트 (Phase D 추가)
-                                if result.get("success"):
-                                    _update_fes_after_execution(
-                                        fes,
-                                        success=True,
-                                        interval_minutes=(
-                                            stage_params.republish.computed_interval or 60
-                                            if stage_params else 60
-                                        ),
-                                        gp_context=gp_context,
-                                    )
-
-                                await _save_autorun_log(
-                                    db=db,
-                                    user_id=user_id,
-                                    flow_id=flow.id,
-                                    flow_name=flow.name,
-                                    module_name=republish_module.name,
-                                    blog_name=blog.name,
-                                    result=result,
-                                    duration_ms=blog_duration_ms,
-                                    action="republish"
-                                )
-
-                                if result.get("success"):
-                                    success_count += 1
-                                    logger.info(f"[FLOW_BG] 재발행 성공 | blog={blog.name}")
-                                else:
-                                    fail_count += 1
-                                    logger.warning(f"[FLOW_BG] 재발행 실패 | blog={blog.name}")
-
-                                total_processed += 1
-
-                            except Exception as e:
-                                fail_count += 1
-                                total_processed += 1
-                                blog_duration_ms = int(
-                                    (datetime.now() - blog_start_time).total_seconds() * 1000
-                                )
-                                logger.error(
-                                    f"[FLOW_BG] 재발행 오류 | blog={blog.name} | error={e}"
-                                )
-
-                                await _save_autorun_log(
-                                    db=db,
-                                    user_id=user_id,
-                                    flow_id=flow.id,
-                                    flow_name=flow.name,
-                                    module_name=republish_module.name,
-                                    blog_name=blog.name,
-                                    result={"success": False, "message": str(e)},
-                                    duration_ms=blog_duration_ms,
-                                    action="republish"
-                                )
+                    except Exception as e:
+                        fail_count += 1
+                        total_processed += 1
+                        blog_duration_ms = int(
+                            (datetime.now() - blog_start_time).total_seconds() * 1000
+                        )
+                        logger.error(f"[FLOW_BG] 재발행 오류 | blog={blog.name} | error={e}")
+                        await _save_autorun_log(
+                            db=db, user_id=user_id, flow_id=flow.id,
+                            flow_name=flow.name, module_name=gp_module_name_re,
+                            blog_name=blog.name,
+                            result={"success": False, "message": str(e)},
+                            duration_ms=blog_duration_ms, action="republish"
+                        )
 
             # 9. prompt 모듈 실행 (GP 컨텍스트 기반 생성)
             if "prompt" in modules_by_type:
@@ -1408,16 +1343,16 @@ async def _collect_from_naver_datalab(
 async def _get_or_create_blog_fes(
     db: AsyncSession,
     flow_id: int,
-    module_id: int,
+    action_type: str,
     blog_id: int,
 ) -> FlowExecutionState:
     """
-    (flow_id, module_id, blog_id) 단위의 FES를 조회하거나 생성합니다.
+    (flow_id, action_type, blog_id) 단위의 FES를 조회하거나 생성합니다.
 
     Args:
         db: DB 세션
         flow_id: 플로우 ID
-        module_id: 모듈 ID
+        action_type: 액션 타입 (generate/publish/republish/collect/data)
         blog_id: 블로그 ID
 
     Returns:
@@ -1426,7 +1361,7 @@ async def _get_or_create_blog_fes(
     result = await db.execute(
         select(FlowExecutionState).where(
             FlowExecutionState.flow_id == flow_id,
-            FlowExecutionState.module_id == module_id,
+            FlowExecutionState.action_type == action_type,
             FlowExecutionState.blog_id == blog_id,
         )
     )
@@ -1435,13 +1370,13 @@ async def _get_or_create_blog_fes(
     if state is None:
         state = FlowExecutionState(
             flow_id=flow_id,
-            module_id=module_id,
+            action_type=action_type,
             blog_id=blog_id,
         )
         db.add(state)
         await db.flush()
         logger.debug(
-            f"[FES] 신규 생성 | flow={flow_id} module={module_id} blog={blog_id}"
+            f"[FES] 신규 생성 | flow={flow_id} action={action_type} blog={blog_id}"
         )
 
     return state
@@ -1614,6 +1549,500 @@ async def _save_autorun_log(
     except Exception as e:
         logger.error(f"[FLOW_EXECUTE] AutorunLog 저장 실패 | blog={blog_name} | error={e}")
         # 로그 저장 실패해도 재발행 결과에는 영향 없음
+
+
+@router.post("/{flow_id}/modules/{module_id}/execute")
+async def execute_single_module(
+    flow_id: int,
+    module_id: int,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_user)
+) -> dict:
+    """
+    플로우 내 특정 모듈을 개별 실행합니다.
+
+    - prompt/generate: 백그라운드 실행 (AI 파이프라인이 수분 소요)
+    - collect: 1회 수집 (동기 실행)
+    - data: 1회 이동 (동기 실행)
+    - growth_profile: 실행 불가 (400 반환)
+    """
+    logger.info(f"[MODULE_EXEC] 모듈 개별 실행 | flow_id={flow_id} | module_id={module_id}")
+
+    # 1. 플로우 + 모듈 조회
+    result = await db.execute(
+        select(Flow)
+        .where(Flow.id == flow_id, Flow.user_id == current_user.id)
+        .options(
+            selectinload(Flow.module_links)
+            .selectinload(FlowModule.module)
+            .selectinload(Module.module_type),
+            selectinload(Flow.blog_links)
+            .selectinload(FlowBlog.blog)
+        )
+    )
+    flow = result.scalar_one_or_none()
+    if not flow:
+        raise HTTPException(status_code=404, detail="플로우를 찾을 수 없습니다")
+
+    # 2. 모듈이 플로우에 연결되어 있는지 확인
+    target_module = None
+    for link in flow.module_links:
+        if link.module and link.module.id == module_id:
+            target_module = link.module
+            break
+
+    if not target_module:
+        raise HTTPException(status_code=404, detail="해당 모듈이 플로우에 연결되어 있지 않습니다")
+
+    type_code = target_module.module_type.code if target_module.module_type else "unknown"
+
+    # 3. growth_profile은 개별 실행 불가
+    if type_code == "growth_profile":
+        raise HTTPException(status_code=400, detail="성장 프로파일은 개별 실행할 수 없습니다")
+
+    # 4. prompt/generate는 백그라운드 실행 (AI 호출이 수분 소요)
+    if type_code in ("prompt", "generate"):
+        blogs = [link.blog for link in flow.blog_links if link.blog]
+        if not blogs:
+            raise HTTPException(status_code=400, detail="플로우에 연결된 블로그가 없습니다")
+
+        execution_id = str(uuid.uuid4())
+        _module_exec_states[execution_id] = {
+            "status": "running",
+            "module_name": target_module.name,
+            "blog_count": len(blogs),
+            "message": "생성 진행 중...",
+        }
+
+        task = asyncio.create_task(
+            _execute_generate_module_background(
+                flow_id=flow_id,
+                module_id=module_id,
+                user_id=current_user.id,
+                execution_id=execution_id,
+            )
+        )
+
+        def _handle_exc(t):
+            try:
+                exc = t.exception()
+                if exc:
+                    logger.error(f"[MODULE_EXEC] 백그라운드 생성 예외: {exc}", exc_info=exc)
+                    _module_exec_states[execution_id] = {
+                        "status": "failed",
+                        "message": f"오류: {str(exc)}",
+                    }
+            except asyncio.CancelledError:
+                pass
+
+        task.add_done_callback(_handle_exc)
+
+        return {
+            "status": "started",
+            "module_type": type_code,
+            "module_name": target_module.name,
+            "execution_id": execution_id,
+            "message": f"'{target_module.name}' 생성을 시작했습니다. 완료 시 생성 이력에서 확인하세요.",
+            "blog_count": len(blogs),
+        }
+
+    # 5. collect/data는 동기 실행 (빠름)
+    started_at = datetime.now()
+    results = []
+
+    try:
+        if type_code == "collect":
+            exec_result = await _execute_collect_module(target_module, db)
+            results.append({
+                "blog_name": "-",
+                "status": "success" if exec_result.get("success") else "failed",
+                "detail": exec_result.get("message", "")
+            })
+
+        elif type_code == "data":
+            exec_result = await _execute_data_module(target_module, db)
+            results.append({
+                "blog_name": "-",
+                "status": "success" if exec_result.get("success") else "failed",
+                "detail": exec_result.get("message", "")
+            })
+
+        else:
+            raise HTTPException(status_code=400, detail=f"지원하지 않는 모듈 타입: {type_code}")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[MODULE_EXEC] 모듈 실행 오류 | module={target_module.name} | error={e}")
+        raise HTTPException(status_code=500, detail=f"모듈 실행 중 오류: {str(e)}")
+
+    duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
+
+    return {
+        "status": "completed",
+        "module_type": type_code,
+        "module_name": target_module.name,
+        "results": results,
+        "duration_ms": duration_ms
+    }
+
+
+@router.get("/module-exec/{execution_id}/status")
+async def get_module_exec_status(
+    execution_id: str,
+    _user: User = Depends(get_current_user),
+) -> dict:
+    """
+    모듈 백그라운드 실행 상태 조회
+
+    Args:
+        execution_id: execute_single_module이 반환한 실행 ID
+    """
+    state = _module_exec_states.get(execution_id)
+    if not state:
+        return {"status": "unknown", "message": "실행 정보 없음"}
+    # 완료/실패 상태는 조회 후 정리 (메모리 절약)
+    if state["status"] in ("completed", "failed"):
+        _module_exec_states.pop(execution_id, None)
+    return state
+
+
+async def _execute_generate_module_background(
+    flow_id: int,
+    module_id: int,
+    user_id: int,
+    execution_id: str,
+) -> None:
+    """
+    백그라운드에서 생성 모듈 실행
+
+    자체 DB 세션을 생성하여 AI 파이프라인을 실행합니다.
+    요청 세션과 분리되어 타임아웃 없이 동작합니다.
+    """
+    from app.core.database import db_manager
+
+    started_at = datetime.now()
+    logger.info(
+        f"[MODULE_EXEC_BG] 생성 모듈 백그라운드 시작 | "
+        f"flow_id={flow_id} | module_id={module_id} | exec_id={execution_id}"
+    )
+
+    async with db_manager.get_session() as db:
+        try:
+            # 1. 플로우 + 모듈 + 블로그 로드 (자체 세션)
+            result = await db.execute(
+                select(Flow)
+                .where(Flow.id == flow_id)
+                .options(
+                    selectinload(Flow.module_links)
+                    .selectinload(FlowModule.module)
+                    .selectinload(Module.module_type),
+                    selectinload(Flow.blog_links)
+                    .selectinload(FlowBlog.blog),
+                )
+            )
+            flow = result.scalar_one_or_none()
+            if not flow:
+                logger.error(f"[MODULE_EXEC_BG] 플로우 없음: {flow_id}")
+                return
+
+            target_module = None
+            for link in flow.module_links:
+                if link.module and link.module.id == module_id:
+                    target_module = link.module
+                    break
+
+            if not target_module:
+                logger.error(f"[MODULE_EXEC_BG] 모듈 없음: {module_id}")
+                return
+
+            blogs = [link.blog for link in flow.blog_links if link.blog]
+            if not blogs:
+                logger.warning(f"[MODULE_EXEC_BG] 연결된 블로그 없음")
+                return
+
+            # 2. GP 컨텍스트 구성 (활성 시간 체크 스킵 — 수동 실행)
+            modules_by_type: Dict[str, List[Module]] = {}
+            for link in flow.module_links:
+                if link.module and link.module.module_type:
+                    tc = link.module.module_type.code
+                    if tc not in modules_by_type:
+                        modules_by_type[tc] = []
+                    modules_by_type[tc].append(link.module)
+
+            gp_context = _build_gp_context_for_manual_exec(
+                modules_by_type, blogs, flow
+            )
+
+            # 3. 블로그별 생성 실행
+            from app.services.generation.flow_generate_executor import FlowGenerateExecutor
+            gen_executor = FlowGenerateExecutor(db, user_id)
+
+            success_count = 0
+            skip_count = 0
+            fail_count = 0
+            skip_reasons = []
+
+            for blog in blogs:
+                # 수동 1회 실행: GP generate.enabled 체크 안 함
+                # stage_params는 참고 정보로만 전달
+                stage_params = None
+                if gp_context:
+                    stage_params = gp_context.get_stage_for_blog(blog.id)
+
+                blog_result = await gen_executor.execute_for_blog(
+                    target_module, blog, stage_params=stage_params,
+                    force=True,  # 수동 1회 실행: 재고 체크 없이 강제 생성
+                )
+
+                blog_msg = blog_result.get("message", "")
+                if blog_result.get("success") and not blog_result.get("skipped"):
+                    success_count += 1
+                elif blog_result.get("skipped"):
+                    skip_count += 1
+                    skip_reasons.append(f"{blog.name}: {blog_msg}")
+                else:
+                    fail_count += 1
+                    skip_reasons.append(f"{blog.name}: {blog_msg}")
+
+                logger.info(
+                    f"[MODULE_EXEC_BG] 블로그 결과 | blog={blog.name} | "
+                    f"result={blog_msg[:80]}"
+                )
+
+            elapsed = int((datetime.now() - started_at).total_seconds())
+            msg = (
+                f"성공 {success_count}건"
+                + (f", 스킵 {skip_count}건" if skip_count else "")
+                + (f", 실패 {fail_count}건" if fail_count else "")
+                + f" ({elapsed}초)"
+            )
+            _module_exec_states[execution_id] = {
+                "status": "completed",
+                "message": msg,
+                "success_count": success_count,
+                "skip_count": skip_count,
+                "fail_count": fail_count,
+                "elapsed": elapsed,
+            }
+            reasons_str = "; ".join(skip_reasons) if skip_reasons else ""
+            logger.info(
+                f"[MODULE_EXEC_BG] 생성 모듈 완료 | "
+                f"module={target_module.name} | {elapsed}초 | "
+                f"성공={success_count} 스킵={skip_count} 실패={fail_count}"
+                + (f" | 사유: {reasons_str}" if reasons_str else "")
+            )
+
+        except Exception as e:
+            _module_exec_states[execution_id] = {
+                "status": "failed",
+                "message": f"오류: {str(e)}",
+            }
+            logger.error(
+                f"[MODULE_EXEC_BG] 생성 모듈 오류 | "
+                f"flow_id={flow_id} | module_id={module_id} | error={e}",
+                exc_info=True,
+            )
+
+
+def _build_gp_context_for_manual_exec(
+    modules_by_type: Dict[str, List[Module]],
+    blogs: list,
+    flow: Flow,
+) -> Optional[FlowExecutionContext]:
+    """
+    수동 실행용 GP 컨텍스트 (활성 시간 체크 스킵)
+
+    스케줄러가 아닌 수동 1회 실행이므로 schedule_matrix 활성 시간
+    체크를 하지 않고 GP 스테이지 매핑만 수행합니다.
+    """
+    if "growth_profile" not in modules_by_type:
+        return None
+
+    gp_module = modules_by_type["growth_profile"][0]
+    gp_settings = gp_module.settings or {}
+
+    if not gp_settings.get("stages"):
+        return None
+
+    # 활성 시간 체크 없이 바로 컨텍스트 빌드
+    return _build_context(gp_settings, blogs, flow, gp_module)
+
+
+@router.post("/{flow_id}/blogs/{blog_id}/publish")
+async def publish_single_blog(
+    flow_id: int,
+    blog_id: int,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_user)
+) -> dict:
+    """
+    플로우 내 특정 블로그에 대해 1회 발행을 실행합니다.
+    GP의 stage_params.publish 설정을 사용합니다.
+    """
+    return await _execute_blog_action(
+        flow_id, blog_id, "publish", db, current_user
+    )
+
+
+@router.post("/{flow_id}/blogs/{blog_id}/republish")
+async def republish_single_blog(
+    flow_id: int,
+    blog_id: int,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_user)
+) -> dict:
+    """
+    플로우 내 특정 블로그에 대해 1회 재발행을 실행합니다.
+    GP의 stage_params.republish 설정을 사용합니다.
+    """
+    return await _execute_blog_action(
+        flow_id, blog_id, "republish", db, current_user
+    )
+
+
+async def _execute_blog_action(
+    flow_id: int,
+    blog_id: int,
+    action: str,
+    db: AsyncSession,
+    current_user: User
+) -> dict:
+    """
+    블로그별 발행/재발행 공통 실행 로직
+
+    Args:
+        action: "publish" 또는 "republish"
+    """
+    started_at = datetime.now()
+    logger.info(f"[BLOG_EXEC] {action} | flow_id={flow_id} | blog_id={blog_id}")
+
+    # 1. 플로우 조회
+    result = await db.execute(
+        select(Flow)
+        .where(Flow.id == flow_id, Flow.user_id == current_user.id)
+        .options(
+            selectinload(Flow.module_links)
+            .selectinload(FlowModule.module)
+            .selectinload(Module.module_type),
+            selectinload(Flow.blog_links)
+            .selectinload(FlowBlog.blog)
+            .selectinload(Blog.google_credential)
+        )
+    )
+    flow = result.scalar_one_or_none()
+    if not flow:
+        raise HTTPException(status_code=404, detail="플로우를 찾을 수 없습니다")
+
+    # 2. 블로그가 Flow에 연결되어 있는지 확인
+    target_blog = None
+    for link in flow.blog_links:
+        if link.blog and link.blog.id == blog_id:
+            target_blog = link.blog
+            break
+    if not target_blog:
+        raise HTTPException(status_code=404, detail="해당 블로그가 플로우에 연결되어 있지 않습니다")
+
+    # 3. GP 컨텍스트 구성
+    modules = [link.module for link in flow.module_links if link.module]
+    blogs = [link.blog for link in flow.blog_links if link.blog]
+    modules_by_type: Dict[str, List[Module]] = {}
+    for module in modules:
+        tc = module.module_type.code if module.module_type else "unknown"
+        if tc not in modules_by_type:
+            modules_by_type[tc] = []
+        modules_by_type[tc].append(module)
+
+    if "growth_profile" not in modules_by_type:
+        raise HTTPException(status_code=400, detail="플로우에 성장 프로파일 모듈이 필요합니다")
+
+    gp_context = await _build_growth_profile_context(modules_by_type, blogs, flow)
+    if not gp_context:
+        raise HTTPException(status_code=400, detail="성장 프로파일 컨텍스트를 구성할 수 없습니다")
+
+    # 4. 스테이지 확인
+    stage_params = gp_context.get_stage_for_blog(blog_id)
+    if not stage_params:
+        raise HTTPException(status_code=400, detail="해당 블로그의 성장 단계를 찾을 수 없습니다")
+
+    action_config = getattr(stage_params, action, None)
+    if not action_config or not action_config.enabled:
+        raise HTTPException(
+            status_code=409,
+            detail=f"{action} 기능이 현재 단계({stage_params.stage_name})에서 비활성화되어 있습니다"
+        )
+
+    # 5. 실행
+    try:
+        if action == "publish":
+            from app.services.generation.publisher import Publisher
+            from app.services.generation.warmup_manager import WarmupManager
+            from app.services.publishing.publisher_pipeline import PublisherPipeline
+
+            active_hours = _count_active_hours(gp_context.schedule_matrix)
+            warmup_settings = (
+                gp_context.growth_profile.get("warmup", {})
+                if gp_context.growth_profile else {}
+            )
+
+            warmup_mgr = WarmupManager(db)
+            publisher = Publisher(db)
+            pipeline = PublisherPipeline(db)
+
+            warmup_status = await warmup_mgr.check_warmup(
+                blog_id, warmup_settings, active_hours
+            )
+
+            exec_result = await publisher.publish_for_blog(
+                target_blog, warmup_status
+            )
+
+            if not exec_result.get("skipped"):
+                crawled_post = exec_result.get("crawled_post")
+                if crawled_post and exec_result.get("success"):
+                    credential = getattr(target_blog, "google_credential", None)
+                    pub_result = await pipeline.publish_post(
+                        target_blog, crawled_post, credential=credential
+                    )
+                    if pub_result.success:
+                        complete_info = await publisher.complete_publish(
+                            blog_id, crawled_post.id,
+                            published_url=pub_result.published_url
+                        )
+                        exec_result["published_url"] = pub_result.published_url
+                        exec_result["post_title"] = getattr(crawled_post, "title", "")
+                    else:
+                        exec_result = {
+                            "success": False,
+                            "message": pub_result.error or "플랫폼 발행 실패"
+                        }
+
+        elif action == "republish":
+            exec_result = await _execute_republish_for_blog(target_blog)
+
+        else:
+            raise HTTPException(status_code=400, detail=f"지원하지 않는 액션: {action}")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[BLOG_EXEC] {action} 오류 | blog={target_blog.name} | error={e}")
+        raise HTTPException(status_code=500, detail=f"{action} 실행 중 오류: {str(e)}")
+
+    duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
+
+    return {
+        "status": "completed",
+        "action": action,
+        "blog_name": target_blog.name,
+        "result": {
+            "success": exec_result.get("success", False),
+            "post_title": exec_result.get("post_title", ""),
+            "post_url": exec_result.get("published_url", ""),
+            "detail": exec_result.get("message", "")
+        },
+        "duration_ms": duration_ms
+    }
 
 
 @router.get("/{flow_id}/execute/history")

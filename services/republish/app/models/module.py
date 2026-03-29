@@ -9,7 +9,7 @@ Features:
 """
 from datetime import datetime
 from typing import Optional, Dict, Any
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -33,31 +33,9 @@ class Module(Base):
     name = Column(String(255), nullable=False, comment="모듈 이름")
     description = Column(Text, nullable=True, comment="모듈 설명")
 
-    # 스케줄 설정 (기존 republish_profiles에서 이전)
-    schedule_matrix = Column(JSONB, nullable=True, comment="7x24 스케줄 매트릭스")
-    manual_interval_minutes = Column(Integer, nullable=True, comment="수동 간격(분)")
-
-    # 기존 republish_profile 설정들
-    min_post_count = Column(Integer, default=10, comment="활성화 최소 포스트 수")
-    interval_mode = Column(String(10), default="manual", comment="간격 모드")
-    auto_daily_count = Column(Integer, nullable=True, comment="자동 모드 일일 목표")
-
-    # 불규칙 간격 설정
-    jitter_enabled = Column(Boolean, default=True, comment="불규칙 간격 활성화")
-    jitter_min_percent = Column(Integer, default=-20, comment="최소 변동률(%)")
-    jitter_max_percent = Column(Integer, default=30, comment="최대 변동률(%)")
-
-    # 활성 시간대 설정
-    active_hours_start = Column(String(5), default="09:00", comment="활성 시간 시작")
-    active_hours_end = Column(String(5), default="22:00", comment="활성 시간 종료")
-    blackout_days = Column(JSONB, default=list, comment="제외 요일")
-
-    # 기타 설정
-    cooldown_days = Column(Integer, default=7, comment="동일 포스트 재발행 금지 일수")
-    priority = Column(Integer, default=1, comment="우선순위")
-    platform_overrides = Column(JSONB, default=dict, comment="플랫폼별 오버라이드")
-
     # 타입별 추가 설정 (확장성을 위한 JSONB)
+    # Note: 스케줄/간격/jitter/활성시간대 등 레거시 컬럼은
+    # 029 마이그레이션에서 제거됨. 모든 스케줄 제어는 Growth Profile에서 담당.
     settings = Column(JSONB, default=dict, comment="타입별 추가 설정")
 
     # is_active 필드 없음! 플로우 레벨에서 관리

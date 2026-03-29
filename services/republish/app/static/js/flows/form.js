@@ -111,7 +111,7 @@ function flowFormData() {
         modules: [],
         moduleTypes: [],
         modulesLoading: true,
-        activeModuleTab: 'republish',
+        activeModuleTab: 'prompt_generate',
 
         // 블로그 관련 데이터
         blogs: [],
@@ -127,6 +127,11 @@ function flowFormData() {
         // 프롬프트 모듈 블로그 연동
         promptLinkedBlogIds: [],
 
+        // 모듈 실행 상태
+        executingModuleId: null,
+        // 블로그 실행 상태 (예: "5_publish", "3_republish")
+        executingBlogAction: null,
+
         // GP(Growth Profile) 관련 상태
         flowHasGP: false,
         gpModuleName: '',
@@ -137,10 +142,9 @@ function flowFormData() {
             this.resetForm();
             await Promise.all([this.loadModules(), this.loadBlogs()]);
 
-            // 모듈 선택 변경 감시 → 프롬프트 블로그 자동 동기화
-            this.$watch('formData.selectedModules', () => {
-                this.syncPromptModuleBlogs();
-            });
+            // 참고: 모듈/블로그 선택 변경은 체크박스 @change 이벤트로 처리
+            // Alpine.js $watch는 배열 인플레이스 변경(.push/.splice)을 감지하지 못함
+            // → onModuleSelectionChange(), onBlogSelectionChange()에서 직접 처리
 
             console.log('플로우 폼 초기화 완료');
         },
@@ -156,7 +160,7 @@ function flowFormData() {
             this.isEditMode = false;
             this.saving = false;
             this.message = { text: '', type: 'info' };
-            this.activeModuleTab = 'prompt';
+            this.activeModuleTab = 'prompt_generate';
             this.activeBlogTab = 'wordpress';
             this.promptLinkedBlogIds = [];
             if (this.resetGPState) this.resetGPState();
@@ -209,9 +213,22 @@ function flowFormData() {
         },
 
         getModulesByType(typeCode) {
+            if (typeCode === 'prompt_generate') {
+                return this.modules.filter(module =>
+                    module.module_type && ['prompt', 'generate'].includes(module.module_type.code)
+                );
+            }
             return this.modules.filter(module =>
                 module.module_type && module.module_type.code === typeCode
             );
+        },
+
+        getSelectedCountByTypes(typeCodes) {
+            return this.modules.filter(module =>
+                module.module_type &&
+                typeCodes.includes(module.module_type.code) &&
+                this.formData.selectedModules.includes(module.id)
+            ).length;
         },
 
         getBlogsByPlatform(platform) {
@@ -229,8 +246,6 @@ function flowFormData() {
         getModuleColor(typeCode) {
             // 모듈 관리 페이지와 동일한 색상 적용
             const colors = {
-                republish: 'bg-sky-200',
-                publish: 'bg-rose-200',
                 generate: 'bg-amber-200',
                 prompt: 'bg-green-200',
                 collect: 'bg-purple-200',
@@ -354,10 +369,9 @@ function flowFormData() {
         // 모듈 아이콘 반환
         getModuleIcon(typeCode) {
             const icons = {
-                republish: '🔄',
-                publish: '📤',
                 generate: '✨',
                 prompt: '📝',
+                prompt_generate: '📝✨',
                 collect: '🔍',
                 data: '📊',
                 growth_profile: '📈'
@@ -368,15 +382,178 @@ function flowFormData() {
         // 모듈 타입 이름 반환
         getModuleTypeName(typeCode) {
             const names = {
-                republish: '재발행',
-                publish: '발행',
                 generate: '생성',
                 prompt: '프롬프트',
+                prompt_generate: '프롬프트/생성',
                 collect: '수집',
                 data: '데이터',
                 growth_profile: '성장 프로파일'
             };
             return names[typeCode] || typeCode;
+        },
+
+        // 모듈 카드 정보 반환 (타입별)
+        getModuleCardInfo(module) {
+            const typeCode = module.module_type?.code;
+            const settings = module.settings || {};
+            const info = [];
+
+            if (typeCode === 'prompt') {
+                // 블로그 수
+                const bcm = settings.blog_category_map || [];
+                const blogCount = new Set(bcm.map(m => m.blog_id)).size;
+                if (blogCount > 0) info.push({ label: '블로그', value: `${blogCount}개 연결` });
+                // 카테고리 수
+                const catCount = bcm.length;
+                if (catCount > 0) info.push({ label: '카테고리', value: `${catCount}개` });
+            } else if (typeCode === 'generate') {
+                const cg = settings.content_generation || {};
+                if (cg.provider) info.push({ label: 'AI', value: cg.provider });
+                if (settings.image_generation?.enabled) info.push({ label: '이미지', value: settings.image_generation.provider || 'ON' });
+            } else if (typeCode === 'collect') {
+                info.push({ label: '수집 대상', value: this.getCollectSourcesText(module) });
+                info.push({ label: '수집 타입', value: this.getCollectTypeText(module) });
+            } else if (typeCode === 'data') {
+                if (settings.target_type) info.push({ label: '이동 대상', value: settings.target_type });
+            } else if (typeCode === 'growth_profile') {
+                const stages = settings.stages || [];
+                if (stages.length > 0) info.push({ label: '단계', value: `${stages.length}개` });
+            }
+
+            return info;
+        },
+
+        // 모듈 실행 버튼 라벨
+        getModuleExecLabel(typeCode) {
+            const labels = {
+                prompt: '▶️ 1회 생성',
+                generate: '▶️ 1회 생성',
+                collect: '▶️ 1회 수집',
+                data: '▶️ 1회 이동'
+            };
+            return labels[typeCode] || '▶️ 실행';
+        },
+
+        // 모듈 실행 버튼 색상 클래스
+        getModuleExecBtnClass(typeCode) {
+            const classes = {
+                prompt: 'bg-green-100 text-green-700 hover:bg-green-200',
+                generate: 'bg-green-100 text-green-700 hover:bg-green-200',
+                collect: 'bg-purple-100 text-purple-700 hover:bg-purple-200',
+                data: 'bg-teal-100 text-teal-700 hover:bg-teal-200'
+            };
+            return classes[typeCode] || 'bg-gray-100 text-gray-700 hover:bg-gray-200';
+        },
+
+        // 모듈 개별 실행
+        async executeModule(moduleId, typeCode) {
+            if (this.executingModuleId || !this.formData.id) return;
+
+            this.executingModuleId = moduleId;
+            try {
+                const resp = await fetch(
+                    `/api/v1/flows/${this.formData.id}/modules/${moduleId}/execute`,
+                    { method: 'POST', credentials: 'include' }
+                );
+
+                const result = await resp.json();
+
+                if (!resp.ok) {
+                    this.executingModuleId = null;
+                    this.showError(result.detail || '모듈 실행 실패');
+                    return;
+                }
+
+                // 백그라운드 실행 (prompt/generate) — 폴링으로 완료 대기
+                if (result.status === 'started') {
+                    this.showSuccess('생성을 시작했습니다. 완료까지 잠시 대기합니다...');
+                    await this._pollModuleExecStatus(result.execution_id);
+                    return;
+                }
+
+                // 동기 실행 완료 (collect/data)
+                this.executingModuleId = null;
+                const successCount = result.results.filter(r => r.status === 'success').length;
+                const totalCount = result.results.length;
+                this.showSuccess(`${result.module_name}: ${successCount}/${totalCount}건 완료 (${result.duration_ms}ms)`);
+
+            } catch (error) {
+                this.executingModuleId = null;
+                this.showError('모듈 실행 중 오류가 발생했습니다');
+                console.error('모듈 실행 오류:', error);
+            }
+        },
+
+        // 백그라운드 실행 상태 폴링 (5초 간격, 최대 5분)
+        async _pollModuleExecStatus(executionId) {
+            const maxAttempts = 60;
+            const intervalMs = 5000;
+
+            for (let i = 0; i < maxAttempts; i++) {
+                await new Promise(r => setTimeout(r, intervalMs));
+                try {
+                    const resp = await fetch(
+                        `/api/v1/flows/module-exec/${executionId}/status`,
+                        { credentials: 'include' }
+                    );
+                    if (!resp.ok) continue;
+
+                    const state = await resp.json();
+                    if (state.status === 'completed') {
+                        this.executingModuleId = null;
+                        this.showSuccess(`생성 완료: ${state.message}`);
+                        return;
+                    }
+                    if (state.status === 'failed') {
+                        this.executingModuleId = null;
+                        this.showError(`생성 실패: ${state.message}`);
+                        return;
+                    }
+                    // still running — keep polling
+                } catch (e) {
+                    console.warn('[pollModuleExec] 폴링 오류:', e);
+                }
+            }
+            // 타임아웃
+            this.executingModuleId = null;
+            this.showError('생성 시간이 초과되었습니다. 생성 이력에서 결과를 확인하세요.');
+        },
+
+        // 블로그별 발행/재발행 실행
+        async executeBlogAction(blogId, action) {
+            if (this.executingBlogAction || !this.formData.id) return;
+
+            this.executingBlogAction = blogId + '_' + action;
+            const actionLabel = action === 'publish' ? '발행' : '재발행';
+
+            try {
+                const resp = await fetch(
+                    `/api/v1/flows/${this.formData.id}/blogs/${blogId}/${action}`,
+                    { method: 'POST', credentials: 'include' }
+                );
+
+                const result = await resp.json();
+
+                if (!resp.ok) {
+                    this.showError(result.detail || `${actionLabel} 실패`);
+                    return;
+                }
+
+                if (result.result?.success) {
+                    const detail = result.result.post_title
+                        ? `"${result.result.post_title}" ${actionLabel} 완료`
+                        : `${result.blog_name} ${actionLabel} 완료`;
+                    this.showSuccess(`${detail} (${result.duration_ms}ms)`);
+                } else {
+                    this.showError(result.result?.detail || `${actionLabel} 실패`);
+                }
+
+            } catch (error) {
+                this.showError(`${actionLabel} 중 오류가 발생했습니다`);
+                console.error(`${actionLabel} 실행 오류:`, error);
+            } finally {
+                this.executingBlogAction = null;
+            }
         },
 
         // 수집 모듈 - 수집 대상 텍스트 반환
@@ -496,9 +673,36 @@ function flowFormData() {
 
             this.promptLinkedBlogIds = newLinkedArray;
 
+            // 배열 재할당으로 Alpine 반응성 보장
+            // (.push/.splice 인플레이스 변경은 Alpine이 감지 못할 수 있음)
+            this.formData.selectedBlogs = [...this.formData.selectedBlogs];
+
             // 프롬프트 연동 블로그가 있으면 안내
             if (newLinkedArray.length > 0) {
                 console.log('[syncPromptModuleBlogs] 프롬프트 연동 블로그:', newLinkedArray.length, '개');
+            }
+
+            // 블로그 변경 후 GP stageMap도 갱신
+            if (this.flowHasGP && !this.isEditMode && this.gpSettings) {
+                this._buildLocalGPStageMap(this.gpSettings);
+            }
+        },
+
+        // 모듈 체크박스 변경 시 호출 (@change 이벤트)
+        onModuleSelectionChange() {
+            // 체크박스 value는 문자열 → 숫자로 정규화 (API module.id는 숫자)
+            this.formData.selectedModules = this.formData.selectedModules.map(Number);
+            console.log('[onModuleSelectionChange] selectedModules:', JSON.stringify(this.formData.selectedModules));
+            this.syncPromptModuleBlogs();
+            this.updateGPFromSelection();
+        },
+
+        // 블로그 체크박스 변경 시 호출 (@change 이벤트)
+        onBlogSelectionChange() {
+            // 체크박스 value는 문자열 → 숫자로 정규화 (API blog.id는 숫자)
+            this.formData.selectedBlogs = this.formData.selectedBlogs.map(Number);
+            if (this.flowHasGP && !this.isEditMode && this.gpSettings) {
+                this._buildLocalGPStageMap(this.gpSettings);
             }
         },
 
@@ -554,28 +758,101 @@ function flowFormData() {
             }
         },
 
-        // GP 프리뷰 로드
+        // GP 프리뷰 로드 (편집 모드에서 사용)
         async loadGPPreview(flowId, gpSettings) {
             try {
-                const resp = await fetch('/api/v1/growth-profile/preview', {
+                // flow_id는 Query 파라미터, settings는 Body (embed=False)
+                const url = '/api/v1/growth-profile/preview' + (flowId ? '?flow_id=' + flowId : '');
+                const resp = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
-                    body: JSON.stringify({ settings: gpSettings, flow_id: flowId }),
+                    body: JSON.stringify(gpSettings),
                 });
+                console.log('[loadGPPreview] resp status:', resp.status, 'flowId:', flowId);
                 if (!resp.ok) return;
                 const data = await resp.json();
+                console.log('[loadGPPreview] blogs count:', (data.blogs || []).length, 'data:', JSON.stringify(data).substring(0, 500));
                 const stageMap = {};
                 (data.blogs || []).forEach(b => {
                     stageMap[b.blog_id] = {
                         stageName: b.stage_label || b.stage_name,
                         summary: [b.generate, b.publish, b.republish].filter(Boolean).join(' / '),
+                        publishEnabled: b.publish_enabled || false,
+                        republishEnabled: b.republish_enabled || false,
                     };
                 });
                 this.blogStageMap = stageMap;
+                console.log('[loadGPPreview] blogStageMap:', JSON.stringify(stageMap));
             } catch (error) {
                 console.error('GP 프리뷰 로드 오류:', error);
             }
+        },
+
+        // 선택된 모듈에서 GP 감지 (생성/편집 모드 공통)
+        updateGPFromSelection() {
+            const gpModule = this.modules.find(m =>
+                m.module_type?.code === 'growth_profile' &&
+                this.formData.selectedModules.includes(m.id)
+            );
+
+            console.log('[updateGPFromSelection] gpModule found:', !!gpModule, 'isEditMode:', this.isEditMode);
+
+            if (!gpModule) {
+                this.resetGPState();
+                return;
+            }
+
+            this.flowHasGP = true;
+            this.gpModuleName = gpModule.name || '';
+            this.gpSettings = gpModule.settings || {};
+            console.log('[updateGPFromSelection] gpSettings stages:', this.gpSettings?.stages?.length, 'settings keys:', Object.keys(this.gpSettings));
+
+            if (this.isEditMode && this.formData.id) {
+                // 편집 모드: API로 정확한 블로그별 스테이지 로드
+                this.loadGPPreview(this.formData.id, this.gpSettings);
+            } else {
+                // 생성 모드: GP 설정에서 직접 활성화 상태 추출
+                this._buildLocalGPStageMap(this.gpSettings);
+            }
+        },
+
+        // GP 설정에서 로컬로 blogStageMap 구성 (생성 모드용)
+        _buildLocalGPStageMap(gpSettings) {
+            const stages = gpSettings?.stages || [];
+            console.log('[_buildLocalGPStageMap] gpSettings keys:', Object.keys(gpSettings || {}));
+            console.log('[_buildLocalGPStageMap] stages count:', stages.length);
+            if (stages.length > 0) {
+                console.log('[_buildLocalGPStageMap] stage[0].publish:', JSON.stringify(stages[0]?.publish));
+                console.log('[_buildLocalGPStageMap] stage[0].republish:', JSON.stringify(stages[0]?.republish));
+            }
+            console.log('[_buildLocalGPStageMap] selectedBlogs:', JSON.stringify(this.formData.selectedBlogs));
+            if (stages.length === 0) return;
+
+            // 첫 번째 스테이지의 활성화 상태를 기본값으로 사용
+            const firstStage = stages[0] || {};
+            const publishEnabled = firstStage.publish?.enabled || false;
+            const republishEnabled = firstStage.republish?.enabled || false;
+            const stageName = firstStage.label || firstStage.name || '기본';
+
+            const summaryParts = [];
+            if (firstStage.generate?.enabled) summaryParts.push('생성');
+            if (publishEnabled) summaryParts.push('발행');
+            if (republishEnabled) summaryParts.push('재발행');
+
+            // 선택된 블로그 모두에 동일한 스테이지 적용
+            const stageMap = {};
+            this.formData.selectedBlogs.forEach(blogId => {
+                stageMap[blogId] = {
+                    stageName,
+                    summary: summaryParts.join(' / '),
+                    publishEnabled,
+                    republishEnabled,
+                };
+            });
+            this.blogStageMap = stageMap;
+            console.log('[_buildLocalGPStageMap] FINAL blogStageMap:', JSON.stringify(this.blogStageMap));
+            console.log('[_buildLocalGPStageMap] flowHasGP:', this.flowHasGP);
         },
 
         // GP 상태 리셋

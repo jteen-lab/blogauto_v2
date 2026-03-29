@@ -3,7 +3,7 @@
 
 Features:
 - 모듈의 타입을 정의하는 마스터 테이블
-- 프롬프트, 생성, 발행, 재발행 등의 타입 관리
+- 프롬프트, 생성, 수집, 데이터 등의 타입 관리
 - UI에서 사용할 아이콘 및 정렬 순서 포함
 """
 from datetime import datetime
@@ -54,27 +54,15 @@ class ModuleType(Base):
                 "display_order": 2
             },
             {
-                "code": "publish",
-                "name": "발행",
-                "icon": "📤",
-                "display_order": 3
-            },
-            {
-                "code": "republish",
-                "name": "재발행",
-                "icon": "🔄",
-                "display_order": 4
-            },
-            {
                 "code": "collect",
                 "name": "수집",
                 "icon": "🔍",
-                "display_order": 5
+                "display_order": 3
             },
             {
                 "code": "data",
                 "name": "데이터",
                 "icon": "📊",
-                "display_order": 6
+                "display_order": 4
             }
         ]

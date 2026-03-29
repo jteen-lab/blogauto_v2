@@ -102,6 +102,13 @@ class CrawledPost(Base):
         comment="생성된 HTML 본문",
     )
 
+    # 플랫폼 발행 ID (WordPress post ID, Blogger post ID)
+    platform_post_id: Mapped[Optional[str]] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="플랫폼 발행 후 반환된 포스트 ID",
+    )
+
     # 소스 정보
     source: Mapped[str] = mapped_column(
         String(20),
@@ -182,15 +189,20 @@ class CrawledPost(Base):
         return self.is_generated and not self.is_published
 
     def mark_published(
-        self, published_url: Optional[str] = None
+        self,
+        published_url: Optional[str] = None,
+        platform_post_id: Optional[str] = None,
     ) -> None:
         """
         발행 완료 처리
 
         Args:
             published_url: 발행된 URL (선택)
+            platform_post_id: 플랫폼 포스트 ID (선택)
         """
         self.published_at = datetime.now()
         if published_url:
             self.url = published_url
+        if platform_post_id:
+            self.platform_post_id = platform_post_id
         self.updated_at = datetime.now()

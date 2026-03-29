@@ -243,56 +243,19 @@ class FlowSlotValidator:
             )
 
     async def extract_flow_schedules(self, flow: Flow) -> List[ScheduleInfo]:
-        """플로우의 모듈 스케줄 추출"""
-        schedules = []
+        """플로우의 모듈 스케줄 추출
 
-        # 플로우에 연결된 모듈들 조회
-        modules_query = (
-            select(Module)
-            .join(FlowModule)
-            .where(FlowModule.flow_id == flow.id)
+        Note:
+            레거시 module.schedule_matrix 기반 추출은 제거됨.
+            모든 스케줄은 Growth Profile(GP)의 schedule_matrix를 사용.
+            flow_scheduler.py의 register_flow()를 참조.
+        """
+        # GP 통합 후 module 레벨 스케줄은 더 이상 사용하지 않음
+        logger.debug(
+            f"[EXTRACT_SCHEDULES] flow_id={flow.id} - "
+            "GP 기반 스케줄 사용 (module 레벨 스케줄 제거됨)"
         )
-        modules_result = await self.db.execute(modules_query)
-        modules = modules_result.scalars().all()
-
-        for module in modules:
-            try:
-                if not module.schedule_matrix:
-                    logger.debug(f"[EXTRACT_SCHEDULES] module_id={module.id} - 스케줄 매트릭스가 없음")
-                    continue
-
-                matrix_data = module.schedule_matrix
-                module_interval = module.manual_interval_minutes or 60
-
-                # 스케줄 매트릭스 형식 확인 및 처리
-                if isinstance(matrix_data, list) and len(matrix_data) == 7:
-                    # 2D 배열 형식: [[false, true, ...], [...], ...]
-                    for day, day_schedule in enumerate(matrix_data):
-                        if isinstance(day_schedule, list) and len(day_schedule) == 24:
-                            for hour, is_active in enumerate(day_schedule):
-                                if is_active:
-                                    # 모듈 간격에 따른 분 단위 배치
-                                    minute = await self.calculate_optimal_minute(
-                                        module.id, day, hour, module_interval
-                                    )
-                                    schedule = ScheduleInfo(
-                                        profile_id=module.id,  # 모듈 ID를 profile_id로 사용
-                                        profile_name=module.name,
-                                        day_of_week=day,
-                                        hour=hour,
-                                        minute=minute
-                                    )
-                                    schedules.append(schedule)
-
-                else:
-                    logger.warning(f"[EXTRACT_SCHEDULES] 지원하지 않는 schedule_matrix 형식: module_id={module.id}, type={type(matrix_data)}")
-
-            except (json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
-                logger.warning(f"[EXTRACT_SCHEDULES] 모듈 스케줄 파싱 오류: module_id={module.id}, error={e}")
-                continue
-
-        logger.debug(f"[EXTRACT_SCHEDULES] flow_id={flow.id}, schedule_count={len(schedules)}")
-        return schedules
+        return []
 
     async def calculate_optimal_minute(
         self,

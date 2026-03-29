@@ -1,0 +1,85 @@
+<!--
+플로우 폼 내 블로그 선택용 미니 카드
+x-for="blog in blogs" 루프 내에서 사용
+-->
+<label class="block cursor-pointer"
+       :class="isBlogSelected(blog.id) ? 'ring-2 ring-blue-500 rounded-xl' : ''">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow overflow-hidden"
+         :class="isBlogSelected(blog.id) ? 'border-blue-500' : ''">
+        <!-- 헤더: 플랫폼별 배경색 + 체크박스 + 아이콘 + 이름 -->
+        <div class="px-3 py-2 flex items-center gap-2"
+             :class="blog.platform === 'blogger' ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800'">
+            <input type="checkbox"
+                   :value="blog.id"
+                   x-model="formData.selectedBlogs"
+                   @change="$nextTick(() => onBlogSelectionChange())"
+                   :disabled="isPromptLinkedBlog(blog.id)"
+                   class="w-4 h-4 text-blue-600 bg-white border-gray-300 rounded focus:ring-blue-500 flex-shrink-0"
+                   :class="isPromptLinkedBlog(blog.id) ? 'opacity-60' : ''">
+            <span class="text-sm flex-shrink-0" x-text="blog.platform === 'blogger' ? '📙' : '🌐'"></span>
+            <h4 class="font-semibold text-sm truncate" x-text="blog.name"></h4>
+        </div>
+        <!-- 바디: URL + 프롬프트 연동 배지 + GP 단계 + 발행/재발행 버튼 -->
+        <div class="px-3 py-2 text-xs space-y-1 min-h-[2rem]">
+            <div class="text-gray-500 truncate" x-text="blog.url || '-'"></div>
+            <template x-if="isPromptLinkedBlog(blog.id)">
+                <span class="inline-block px-1.5 py-0.5 rounded bg-green-100 text-green-700 font-medium">프롬프트 연동</span>
+            </template>
+            <template x-if="flowHasGP && blogStageMap[blog.id]">
+                <div class="flex items-center gap-1">
+                    <span class="px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700"
+                          x-text="blogStageMap[blog.id].stageName"></span>
+                    <span class="text-gray-400 truncate" x-text="blogStageMap[blog.id].summary"></span>
+                </div>
+            </template>
+            <!-- 발행/재발행 버튼 (GP 존재 + 블로그 선택 시) - x-show로 반응성 보장 -->
+            <div x-show="flowHasGP && isBlogSelected(blog.id) && (blogStageMap[blog.id]?.publishEnabled || blogStageMap[blog.id]?.republishEnabled)"
+                 class="flex gap-1.5 pt-1">
+                <!-- 발행 버튼: GP에서 publish 활성화 시 -->
+                <button x-show="blogStageMap[blog.id]?.publishEnabled"
+                        type="button"
+                        @click.stop.prevent="isEditMode && executeBlogAction(blog.id, 'publish')"
+                        :disabled="!isEditMode || executingBlogAction !== null"
+                        class="flex-1 px-2 py-1 text-xs font-medium rounded transition-colors"
+                        :class="!isEditMode
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            : (executingBlogAction === blog.id + '_publish'
+                                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                : 'bg-rose-100 text-rose-700 hover:bg-rose-200')">
+                    <span x-show="!isEditMode">저장 후 발행</span>
+                    <span x-show="isEditMode && executingBlogAction !== blog.id + '_publish'">📤 1회 발행</span>
+                    <span x-show="isEditMode && executingBlogAction === blog.id + '_publish'"
+                          class="flex items-center justify-center gap-1">
+                        <svg class="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        실행 중
+                    </span>
+                </button>
+                <!-- 재발행 버튼: GP에서 republish 활성화 시 -->
+                <button x-show="blogStageMap[blog.id]?.republishEnabled"
+                        type="button"
+                        @click.stop.prevent="isEditMode && executeBlogAction(blog.id, 'republish')"
+                        :disabled="!isEditMode || executingBlogAction !== null"
+                        class="flex-1 px-2 py-1 text-xs font-medium rounded transition-colors"
+                        :class="!isEditMode
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            : (executingBlogAction === blog.id + '_republish'
+                                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                : 'bg-sky-100 text-sky-700 hover:bg-sky-200')">
+                    <span x-show="!isEditMode">저장 후 재발행</span>
+                    <span x-show="isEditMode && executingBlogAction !== blog.id + '_republish'">🔄 1회 재발행</span>
+                    <span x-show="isEditMode && executingBlogAction === blog.id + '_republish'"
+                          class="flex items-center justify-center gap-1">
+                        <svg class="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        실행 중
+                    </span>
+                </button>
+            </div>
+        </div>
+    </div>
+</label>

@@ -190,20 +190,6 @@ class ModuleService:
                 module_type_id=module_type.id,
                 name=request.name,
                 description=request.description,
-                schedule_matrix=request.schedule_matrix,
-                manual_interval_minutes=request.manual_interval_minutes,
-                min_post_count=request.min_post_count,
-                interval_mode=request.interval_mode,
-                auto_daily_count=request.auto_daily_count,
-                jitter_enabled=request.jitter_enabled,
-                jitter_min_percent=request.jitter_min_percent,
-                jitter_max_percent=request.jitter_max_percent,
-                active_hours_start=request.active_hours_start,
-                active_hours_end=request.active_hours_end,
-                blackout_days=request.blackout_days,
-                cooldown_days=request.cooldown_days,
-                priority=request.priority,
-                platform_overrides=request.platform_overrides,
                 settings=request.settings
             )
 
@@ -306,21 +292,7 @@ class ModuleService:
                 name=f"{original_module.name} (복사본)",
                 module_type_code=original_module.module_type.code,
                 description=original_module.description,
-                schedule_matrix=original_module.schedule_matrix,
-                manual_interval_minutes=original_module.manual_interval_minutes,
-                min_post_count=original_module.min_post_count,
-                interval_mode=original_module.interval_mode,
-                auto_daily_count=original_module.auto_daily_count,
-                jitter_enabled=original_module.jitter_enabled,
-                jitter_min_percent=original_module.jitter_min_percent,
-                jitter_max_percent=original_module.jitter_max_percent,
-                active_hours_start=original_module.active_hours_start,
-                active_hours_end=original_module.active_hours_end,
-                blackout_days=original_module.blackout_days or [],
-                cooldown_days=original_module.cooldown_days,
-                priority=original_module.priority,
-                platform_overrides=original_module.platform_overrides,
-                settings=original_module.settings
+                settings=original_module.settings or {}
             )
 
             # create_module 메소드를 재사용하여 복사본 생성

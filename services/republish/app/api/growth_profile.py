@@ -125,63 +125,77 @@ async def preview_stages(
     if flow_id is None:
         return {"blogs": []}
 
-    # Flow에 연결된 블로그 조회 (FlowBlog JOIN Blog)
-    stmt = (
-        select(Blog)
-        .join(FlowBlog, FlowBlog.blog_id == Blog.id)
-        .where(FlowBlog.flow_id == flow_id)
-    )
-    result = await db.execute(stmt)
-    blogs = result.scalars().all()
-
-    if not blogs:
-        return {"blogs": []}
-
-    # blog_post_counts 구성
-    blog_post_counts = {
-        blog.id: blog.total_post_count or 0
-        for blog in blogs
-    }
-
-    # GrowthProfileResolver로 실행 컨텍스트 빌드
     try:
-        context = GrowthProfileResolver.build_execution_context(
-            flow_id=flow_id,
-            gp_settings=settings,
-            blog_post_counts=blog_post_counts,
+        # Flow에 연결된 블로그 조회 (FlowBlog JOIN Blog)
+        stmt = (
+            select(Blog)
+            .join(FlowBlog, FlowBlog.blog_id == Blog.id)
+            .where(FlowBlog.flow_id == flow_id)
         )
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        result = await db.execute(stmt)
+        blogs = result.scalars().all()
 
-    # schedule_matrix에서 활성 시간 계산
-    schedule_matrix = settings.get("schedule_matrix")
-    active_hours = GrowthProfileResolver.count_active_hours(schedule_matrix)
+        if not blogs:
+            return {"blogs": []}
 
-    # 블로그별 스테이지 정보 구성
-    preview_list = []
-    for blog in blogs:
-        stage = context.get_stage_for_blog(blog.id)
-        if stage is None:
-            continue
+        # blog_post_counts 구성
+        blog_post_counts = {
+            blog.id: blog.total_post_count or 0
+            for blog in blogs
+        }
 
-        preview_list.append({
-            "blog_id": blog.id,
-            "blog_name": blog.blog_name,
-            "post_count": blog.total_post_count or 0,
-            "stage_name": stage.stage_name,
-            "stage_label": stage.stage_label,
-            "generate": _format_module_info(
-                stage.generate, "생성", active_hours
-            ),
-            "publish": _format_module_info(
-                stage.publish, "발행", active_hours
-            ),
-            "republish": _format_module_info(
-                stage.republish, "재발행", active_hours
-            ),
-        })
+        # GrowthProfileResolver로 실행 컨텍스트 빌드
+        try:
+            context = GrowthProfileResolver.build_execution_context(
+                flow_id=flow_id,
+                gp_settings=settings,
+                blog_post_counts=blog_post_counts,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
 
-    return {"blogs": preview_list}
+        # schedule_matrix에서 활성 시간 계산
+        schedule_matrix = settings.get("schedule_matrix")
+        active_hours = GrowthProfileResolver.count_active_hours(schedule_matrix)
+
+        # 블로그별 스테이지 정보 구성
+        preview_list = []
+        for blog in blogs:
+            stage = context.get_stage_for_blog(blog.id)
+            if stage is None:
+                continue
+
+            preview_list.append({
+                "blog_id": blog.id,
+                "blog_name": blog.name,
+                "post_count": blog.total_post_count or 0,
+                "stage_name": stage.stage_name,
+                "stage_label": stage.stage_label,
+                "generate": _format_module_info(
+                    stage.generate, "생성", active_hours
+                ),
+                "publish": _format_module_info(
+                    stage.publish, "발행", active_hours
+                ),
+                "republish": _format_module_info(
+                    stage.republish, "재발행", active_hours
+                ),
+                "publish_enabled": (
+                    stage.publish.enabled if stage.publish else False
+                ),
+                "republish_enabled": (
+                    stage.republish.enabled if stage.republish else False
+                ),
+            })
+
+        return {"blogs": preview_list}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"[GP_PREVIEW] 오류:\n{traceback.format_exc()}", flush=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/stats")

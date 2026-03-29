@@ -33,6 +33,21 @@
                 </svg>
             </button>
 
+            <!-- 발행 동기화 버튼 -->
+            <button @click="syncPublishedPosts(blog.id)"
+                    :disabled="syncing === blog.id"
+                    class="p-1.5 text-gray-600 hover:text-blue-700 hover:bg-blue-200/50 rounded-lg transition-colors disabled:opacity-50"
+                    title="발행 동기화">
+                <svg x-show="syncing !== blog.id" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                <svg x-show="syncing === blog.id" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+            </button>
+
             <!-- 테스트 버튼 -->
             <button @click="testConnection(blog.id)"
                     :disabled="testing === blog.id"

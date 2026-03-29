@@ -369,6 +369,84 @@ async def test_blog_connection(
     return await blog_service.test_blog_connection(current_user, blog_id)
 
 
+@router.post(
+    "/{blog_id}/sync-published",
+    summary="발행 포스트 동기화",
+    responses=responses,
+)
+async def sync_published_posts(
+    blog_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+):
+    """
+    블로그 플랫폼의 발행 포스트와 DB를 동기화
+
+    블로그에서 삭제된 포스트를 감지하여
+    DB의 CrawledPost + 이미지 파일을 정리하고
+    연결된 MainTitle을 초기화합니다.
+    """
+    from ..services.crawl_service import CrawlService
+    from ..services.post_sync_service import PostSyncService
+
+    logger.info(f"발행 포스트 동기화 요청 | blog_id={blog_id}")
+
+    blog_service = BlogService(db)
+    blog = await blog_service._get_user_blog(current_user, blog_id)
+
+    # 1. 플랫폼에서 현재 발행 포스트 수집
+    crawl_service = CrawlService(db)
+    try:
+        if blog.platform.value == "wordpress":
+            platform_posts = await crawl_service._crawl_wordpress(
+                blog, incremental=False
+            )
+        elif blog.platform.value == "blogger":
+            platform_posts = await crawl_service._crawl_blogger(
+                blog, incremental=False
+            )
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"지원하지 않는 플랫폼: {blog.platform.value}",
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"블로그 포스트 조회 실패: {str(e)}",
+        )
+
+    # 2. URL 목록 추출 (정규화)
+    platform_urls = {
+        post.url.rstrip("/")
+        for post in platform_posts
+        if post.url
+    }
+
+    # 3. 동기화 실행
+    sync_service = PostSyncService(db)
+    result = await sync_service.sync_published_posts(blog, platform_urls)
+
+    if not result.success:
+        raise HTTPException(status_code=500, detail=result.error)
+
+    return {
+        "success": True,
+        "message": (
+            f"동기화 완료: 블로그 포스트 {result.platform_post_count}개, "
+            f"삭제 {result.deleted_posts}개, "
+            f"제목 초기화 {result.reset_titles}개"
+        ),
+        "platform_post_count": result.platform_post_count,
+        "db_published_count": result.db_published_count,
+        "deleted_posts": result.deleted_posts,
+        "deleted_images": result.deleted_images,
+        "reset_titles": result.reset_titles,
+    }
+
+
 @router.get(
     "/stats/summary",
     response_model=BlogStatsResponse,

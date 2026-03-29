@@ -15,9 +15,12 @@ if TYPE_CHECKING:
 
 from ..core.database import get_db_session
 from ..core.logger import get_logger
+from ..core.config import settings
 from ..models.title import MainTitle, TitleGroup
 from ..models.keyword import KeywordCategory
 from ..models.category import Topic, SubTopic, BlogCategory
+from ..models.crawled_post import CrawledPost
+from ..models.generation_history import GenerationHistory
 from ..models.user import User
 from ..routers.auth import get_current_user
 from ..schemas.title import (
@@ -31,6 +34,63 @@ from ..schemas.title import (
 
 router = APIRouter(prefix="/titles", tags=["titles"])
 logger = get_logger("titles", "app.log")
+
+
+async def _cleanup_post_images(
+    post: CrawledPost, db: AsyncSession
+) -> int:
+    """
+    CrawledPost에 연결된 이미지 파일(대표/섹션)을 삭제합니다.
+
+    Args:
+        post: 삭제 대상 CrawledPost
+        db: 비동기 DB 세션
+
+    Returns:
+        삭제된 이미지 파일 수
+    """
+    import json
+    from pathlib import Path
+
+    deleted = 0
+
+    def _remove_file(image_url: str | None) -> int:
+        if not image_url:
+            return 0
+        try:
+            filename = image_url.split("/")[-1]
+            path = Path(settings.image_storage_dir) / filename
+            if path.exists():
+                path.unlink()
+                return 1
+        except Exception as e:
+            logger.warning(f"[TITLES] 이미지 삭제 실패: {e}")
+        return 0
+
+    # 대표 이미지
+    deleted += _remove_file(post.image_url)
+
+    # GenerationHistory 연결 이미지
+    if post.generation_history_id:
+        gh_result = await db.execute(
+            select(GenerationHistory)
+            .where(GenerationHistory.id == post.generation_history_id)
+        )
+        gen_history = gh_result.scalar_one_or_none()
+        if gen_history:
+            deleted += _remove_file(gen_history.image_url)
+            # 섹션 이미지
+            if gen_history.section_images:
+                try:
+                    items = json.loads(gen_history.section_images)
+                    if isinstance(items, list):
+                        for item in items:
+                            url = item.get("image_url") if isinstance(item, dict) else None
+                            deleted += _remove_file(url)
+                except (json.JSONDecodeError, Exception) as e:
+                    logger.warning(f"[TITLES] 섹션 이미지 삭제 실패: {e}")
+
+    return deleted
 
 
 async def _build_blog_category_filter(
@@ -389,32 +449,69 @@ async def delete_main_title(
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_user),
 ):
-    """정식 제목 삭제"""
+    """
+    정식 제목 초기화 (연결된 CrawledPost 전체 삭제 + MainTitle 보존)
+
+    MainTitle 자체는 삭제하지 않고 status를 "available"로 리셋합니다.
+    연결된 모든 CrawledPost(발행완료/발행대기 무관)와 이미지 파일을 정리합니다.
+    """
     title = await db.get(MainTitle, title_id)
     if not title:
         raise HTTPException(status_code=404, detail="제목을 찾을 수 없습니다")
 
-    # 이 제목을 representative_title_id로 참조하는 그룹이 있으면 참조 해제
-    ref_groups_query = select(TitleGroup).where(TitleGroup.representative_title_id == title_id)
+    # 1. 연결된 모든 CrawledPost 조회 (발행 여부 무관)
+    posts_result = await db.execute(
+        select(CrawledPost).where(
+            CrawledPost.matched_main_title_id == title_id,
+        )
+    )
+    linked_posts = list(posts_result.scalars().all())
+
+    # 2. CrawledPost + 이미지 파일 삭제
+    deleted_posts = 0
+    deleted_images = 0
+    for post in linked_posts:
+        deleted_images += await _cleanup_post_images(post, db)
+        await db.delete(post)
+        deleted_posts += 1
+
+    if deleted_posts:
+        await db.flush()
+
+    # 3. MainTitle 완전 초기화 (삭제하지 않음)
+    title.status = "available"
+    title.use_count = 0
+    title.last_used_at = None
+
+    # 4. TitleGroup 참조 정리
+    ref_groups_query = select(TitleGroup).where(
+        TitleGroup.representative_title_id == title_id
+    )
     ref_groups_result = await db.execute(ref_groups_query)
     ref_groups = ref_groups_result.scalars().all()
     for group in ref_groups:
         group.representative_title_id = None
         group.member_count = max(0, (group.member_count or 1) - 1)
-        # 멤버가 없는 그룹은 삭제
         if group.member_count <= 0:
             await db.delete(group)
 
-    # 그룹 멤버인 경우 카운트 업데이트
     if title.group_id:
         group = await db.get(TitleGroup, title.group_id)
         if group:
             group.member_count = max(0, (group.member_count or 1) - 1)
 
-    await db.delete(title)
     await db.commit()
 
-    return {"message": "삭제되었습니다"}
+    logger.info(
+        f"[TITLES] 제목 초기화: id={title_id} | "
+        f"삭제된 포스트={deleted_posts} | 삭제된 이미지={deleted_images}"
+    )
+
+    return {
+        "message": "생성된 콘텐츠가 삭제되고 제목이 초기화되었습니다",
+        "deleted_posts": deleted_posts,
+        "deleted_images": deleted_images,
+    }
 
 
 # ===== 수동 그룹 관리 API =====

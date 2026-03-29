@@ -690,6 +690,7 @@ function blogListApp() {
     return {
         blogs: [],
         testing: null,
+        syncing: null,
         message: '',
         messageType: 'success',
 
@@ -752,6 +753,33 @@ function blogListApp() {
                 settingsEl._x_dataStack[0].setBlog(blog);
             }
             openBottomSheet('blogSettings');
+        },
+
+        async syncPublishedPosts(blogId) {
+            if (!confirm('블로그의 발행 포스트를 동기화합니다.\n블로그에서 삭제된 포스트가 DB에서도 정리됩니다.\n계속하시겠습니까?')) return;
+
+            this.syncing = blogId;
+            try {
+                const response = await fetch(`/api/v1/blogs/${blogId}/sync-published`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    const msg = data.deleted_posts > 0
+                        ? `동기화 완료: ${data.deleted_posts}개 포스트 삭제, ${data.reset_titles}개 제목 초기화`
+                        : `동기화 완료: 삭제할 포스트 없음 (플랫폼 ${data.platform_post_count}개)`;
+                    this.showMessage(msg, 'success');
+                    this.loadBlogs();
+                } else {
+                    this.showMessage(data.detail || '동기화 실패', 'error');
+                }
+            } catch (e) {
+                this.showMessage('동기화 요청 실패', 'error');
+            } finally {
+                this.syncing = null;
+            }
         },
 
         async testConnection(blogId) {

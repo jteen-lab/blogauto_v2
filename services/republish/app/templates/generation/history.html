@@ -52,10 +52,26 @@
             <p>생성된 콘텐츠가 없습니다</p>
         </div>
 
+        <!-- 선택 삭제 바 -->
+        <div x-show="selectedIds.length > 0" x-transition
+             class="flex items-center justify-between px-4 py-2 bg-red-50 border-b border-red-200">
+            <span class="text-sm text-red-700">
+                <strong x-text="selectedIds.length"></strong>건 선택됨
+            </span>
+            <button @click="confirmBatchDelete()"
+                    class="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded text-xs font-medium">
+                선택 삭제
+            </button>
+        </div>
+
         <!-- 테이블 -->
         <table x-show="!loading && items.length > 0" class="w-full text-sm">
             <thead class="bg-gray-50 border-b">
                 <tr>
+                    <th class="text-center px-2 py-3 w-10">
+                        <input type="checkbox" :checked="isAllSelected()" @change="toggleSelectAll()"
+                               class="w-4 h-4 text-red-600 border-gray-300 rounded">
+                    </th>
                     <th class="text-left px-4 py-3 font-medium text-gray-600">제목</th>
                     <th class="text-left px-4 py-3 font-medium text-gray-600 hidden md:table-cell">블로그</th>
                     <th class="text-center px-4 py-3 font-medium text-gray-600 w-16">타입</th>
@@ -66,7 +82,15 @@
             </thead>
             <tbody class="divide-y divide-gray-100">
                 <template x-for="item in items" :key="item.crawled_post_id">
-                    <tr class="hover:bg-gray-50">
+                    <tr class="hover:bg-gray-50"
+                        :class="selectedIds.includes(item.crawled_post_id) ? 'bg-red-50/50' : ''">
+                        <!-- 체크박스 -->
+                        <td class="text-center px-2 py-3">
+                            <input type="checkbox" :value="item.crawled_post_id"
+                                   :checked="selectedIds.includes(item.crawled_post_id)"
+                                   @change="toggleSelect(item.crawled_post_id)"
+                                   class="w-4 h-4 text-red-600 border-gray-300 rounded">
+                        </td>
                         <!-- 제목 -->
                         <td class="px-4 py-3">
                             <div class="font-medium text-gray-800 truncate max-w-xs"
@@ -123,7 +147,6 @@
                                     복사
                                 </button>
                                 <button @click="confirmDelete(item)"
-                                        x-show="!item.is_published"
                                         class="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs">
                                     삭제
                                 </button>
@@ -199,8 +222,10 @@
         <div class="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full" @click.stop>
             <h3 class="text-lg font-bold text-gray-800 mb-2">삭제 확인</h3>
             <p class="text-sm text-gray-600 mb-4">
-                다음 콘텐츠를 삭제하시겠습니까?<br>
+                <span x-show="deleteConfirm.isBatch">선택한 </span>다음 콘텐츠를 삭제하시겠습니까?<br>
                 <strong x-text="deleteConfirm.title" class="text-red-600"></strong>
+                <br x-show="deleteConfirm.isBatch">
+                <span x-show="deleteConfirm.isBatch" class="text-xs text-gray-500">연결된 이미지 파일도 함께 삭제됩니다</span>
             </p>
             <div class="flex justify-end gap-2">
                 <button @click="deleteConfirm.open = false"
@@ -220,5 +245,5 @@
 
 {% block extra_js %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.8/purify.min.js"></script>
-<script src="/static/js/generation-history.js?v=20260319"></script>
+<script src="/static/js/generation-history.js?v=20260325"></script>
 {% endblock %}

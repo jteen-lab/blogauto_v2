@@ -1,0 +1,59 @@
+<!--
+플로우 폼 내 모듈 선택용 미니 카드
+x-for="module in getModulesByType(activeModuleTab)" 루프 내에서 사용
+-->
+<label class="block cursor-pointer"
+       :class="isModuleSelected(module.id) ? 'ring-2 ring-blue-500 rounded-xl' : ''">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow overflow-hidden"
+         :class="isModuleSelected(module.id) ? 'border-blue-500' : ''">
+        <!-- 헤더: 타입별 배경색 + 체크박스 + 아이콘 + 이름 -->
+        <div class="px-3 py-2 flex items-center gap-2"
+             :class="getModuleColor(module.module_type.code)">
+            <input type="checkbox"
+                   :value="module.id"
+                   x-model="formData.selectedModules"
+                   @change="$nextTick(() => onModuleSelectionChange())"
+                   class="w-4 h-4 text-blue-600 bg-white border-gray-300 rounded focus:ring-blue-500 flex-shrink-0">
+            <span class="text-sm flex-shrink-0" x-text="getModuleIcon(module.module_type.code)"></span>
+            <h4 class="font-semibold text-sm truncate flex-1" x-text="module.name"></h4>
+        </div>
+        <!-- 바디: 설명 + 타입별 정보 + 실행 버튼 -->
+        <div class="px-3 py-2 text-xs space-y-1 min-h-[2.5rem]">
+            <div x-show="module.description"
+                 class="text-gray-600 truncate"
+                 x-text="module.description"></div>
+            <template x-for="info in getModuleCardInfo(module)" :key="info.label">
+                <div class="flex items-center gap-1.5">
+                    <span class="text-gray-400 font-medium flex-shrink-0" x-text="info.label + ':'"></span>
+                    <span class="text-gray-600 truncate" x-text="info.value"></span>
+                </div>
+            </template>
+            <!-- 개별 실행 버튼 (GP가 아닌 모듈, 선택 시 항상 표시) -->
+            <template x-if="isModuleSelected(module.id) && module.module_type.code !== 'growth_profile'">
+                <div class="pt-1">
+                    <button type="button"
+                            @click.stop.prevent="isEditMode && executeModule(module.id, module.module_type.code)"
+                            :disabled="!isEditMode || executingModuleId === module.id"
+                            class="w-full px-2 py-1 text-xs font-medium rounded transition-colors"
+                            :class="!isEditMode
+                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                : (executingModuleId === module.id
+                                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                    : getModuleExecBtnClass(module.module_type.code))">
+                        <span x-show="!isEditMode" class="text-gray-400">저장 후 실행 가능</span>
+                        <span x-show="isEditMode && executingModuleId !== module.id"
+                              x-text="getModuleExecLabel(module.module_type.code)"></span>
+                        <span x-show="isEditMode && executingModuleId === module.id"
+                              class="flex items-center justify-center gap-1">
+                            <svg class="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            실행 중...
+                        </span>
+                    </button>
+                </div>
+            </template>
+        </div>
+    </div>
+</label>

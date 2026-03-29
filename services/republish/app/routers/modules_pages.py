@@ -36,9 +36,6 @@ async def modules_page(
         # 모듈별 통계 계산
         stats = {
             'total_modules': len(modules),
-            'active_modules': len([m for m in modules if m.is_active]),
-            'republish_modules': len([m for m in modules if m.type_code == 'republish']),
-            'other_modules': len([m for m in modules if m.type_code != 'republish'])
         }
 
         return templates.TemplateResponse(
@@ -66,7 +63,7 @@ async def modules_page(
 @router.get("/modules/new", response_class=HTMLResponse)
 async def module_create_page(
     request: Request,
-    type_code: str = "republish",
+    type_code: str = "collect",
     current_user: User = Depends(get_current_user)
 ):
     """모듈 생성 페이지 (독립 페이지로 접근시)"""
@@ -133,7 +130,7 @@ async def redirect_profiles_to_modules():
 @router.get("/profiles/new", response_class=RedirectResponse)
 async def redirect_profile_new_to_modules():
     """기존 프로파일 생성을 모듈 생성으로 리다이렉트"""
-    return RedirectResponse(url="/modules/new?type_code=republish", status_code=301)
+    return RedirectResponse(url="/modules/new?type_code=collect", status_code=301)
 
 
 @router.get("/profiles/{profile_id}/edit", response_class=RedirectResponse)

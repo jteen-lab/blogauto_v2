@@ -216,6 +216,9 @@ class FlowService:
                     self.db.add(link)
                 logger.info(f"[CREATE_FLOW] {len(valid_blogs)}개 블로그 연결")
 
+            # flush하여 _sync_prompt_module_blogs가 이미 연결된 블로그를 볼 수 있게 함
+            await self.db.flush()
+
             # 프롬프트 모듈 블로그 자동 연결
             if valid_modules:
                 sync_count = await self._sync_prompt_module_blogs(
@@ -235,10 +238,14 @@ class FlowService:
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"[CREATE_FLOW] 오류: {e}")
+            import traceback
+            tb = traceback.format_exc()
+            logger.error(f"[CREATE_FLOW] 오류: {e}\n{tb}")
+            print(f"[CREATE_FLOW] 오류 상세:\n{tb}", flush=True)
             await self.db.rollback()
             raise HTTPException(
-                status_code=500, detail="플로우를 생성하는 중 오류가 발생했습니다"
+                status_code=500,
+                detail=f"플로우를 생성하는 중 오류가 발생했습니다: {str(e)}",
             )
 
     async def update_flow(
@@ -452,6 +459,10 @@ class FlowService:
                 delete(FlowModule).where(FlowModule.flow_id == flow_id)
             )
             await self.db.execute(delete(FlowBlog).where(FlowBlog.flow_id == flow_id))
+
+            # bulk delete 후 세션의 로드된 관계를 expire 처리
+            # (selectinload로 로드된 module_links/blog_links가 stale 상태이므로)
+            self.db.expire(flow, ['module_links', 'blog_links'])
 
             await self.db.delete(flow)
             await self.db.commit()

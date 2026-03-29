@@ -2,15 +2,22 @@
 플로우 실행 상태 모델
 
 Features:
-- 플로우별/모듈별 실행 상태 추적
+- 플로우별/액션별 실행 상태 추적
 - 마지막 실행 시간 및 다음 실행 예정 시간
 - 일시정지 시 남은 시간 보존
 - 활성화 시간대 내 실행 제어
+
+action_type 값:
+- "generate": 글 생성
+- "publish": 발행
+- "republish": 재발행
+- "collect": 수집
+- "data": 데이터
 """
 from datetime import datetime
 from typing import Optional
 import pytz
-from sqlalchemy import Column, Integer, DateTime, ForeignKey, Boolean, Index
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean, Index
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
@@ -21,12 +28,12 @@ KST = pytz.timezone('Asia/Seoul')
 
 
 class FlowExecutionState(Base):
-    """플로우 실행 상태 - 모듈별 실행 추적"""
+    """플로우 실행 상태 - 액션 타입별 실행 추적"""
     __tablename__ = "flow_execution_states"
     __table_args__ = (
         Index(
-            'ix_fes_flow_module_blog',
-            'flow_id', 'module_id', 'blog_id',
+            'ix_fes_flow_action_blog',
+            'flow_id', 'action_type', 'blog_id',
             unique=True,
         ),
     )
@@ -38,18 +45,18 @@ class FlowExecutionState(Base):
         nullable=False,
         index=True
     )
-    module_id = Column(
-        Integer,
-        ForeignKey("modules.id", ondelete="CASCADE"),
+    action_type = Column(
+        String(30),
         nullable=False,
-        index=True
+        index=True,
+        comment="액션 타입 (generate/publish/republish/collect/data)"
     )
     blog_id = Column(
         Integer,
         ForeignKey("blogs.id", ondelete="CASCADE"),
         nullable=True,
         index=True,
-        comment="블로그별 간격 추적용 (nullable: 기존 레코드 호환)"
+        comment="블로그별 간격 추적용 (nullable: 블로그 무관 액션)"
     )
 
     # 실행 상태 추적
@@ -108,7 +115,6 @@ class FlowExecutionState(Base):
 
     # 관계
     flow = relationship("Flow", backref="execution_states")
-    module = relationship("Module", backref="execution_states")
     blog = relationship("Blog")
 
     def record_execution(self, success: bool) -> None:
@@ -275,6 +281,6 @@ class FlowExecutionState(Base):
     def __repr__(self) -> str:
         return (
             f"<FlowExecutionState(flow_id={self.flow_id}, "
-            f"module_id={self.module_id}, blog_id={self.blog_id}, "
+            f"action_type='{self.action_type}', blog_id={self.blog_id}, "
             f"paused={self.is_paused})>"
         )

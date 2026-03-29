@@ -159,15 +159,7 @@ class AutorunService:
                             "code": link.module.module_type.code if link.module.module_type else "republish",
                             "name": link.module.module_type.name if link.module.module_type else "재발행"
                         },
-                        # 슬라이드 정보에 필요한 필드들
-                        "post_range_start": (link.module.settings or {}).get("post_range_start"),
-                        "post_range_end": (link.module.settings or {}).get("post_range_end"),
-                        "interval_mode": link.module.interval_mode,
-                        "manual_interval_minutes": link.module.manual_interval_minutes,
-                        "auto_daily_count": link.module.auto_daily_count,
-                        "schedule_matrix": link.module.schedule_matrix,
                         "settings": link.module.settings,
-                        # 생성일 (기본 정보가 없는 모듈용)
                         "created_at": link.module.created_at.isoformat() if link.module.created_at else None
                     }
                 module_links.append({
@@ -443,16 +435,8 @@ class AutorunService:
             # collect 모듈만 있는 경우 블로그 없이 실행 가능
             warnings.append("수집 모듈만 있어 블로그 없이 실행됩니다")
 
-        # 모듈 스케줄 확인
-        has_schedules = False
-        if flow.module_links:
-            for flow_module in flow.module_links:
-                if flow_module.module and flow_module.module.schedule_matrix:
-                    has_schedules = True
-                    break
-
-        if not has_schedules:
-            warnings.append("스케줄이 설정된 모듈이 없습니다")
+        # Note: 스케줄은 Growth Profile(GP)에서 관리됨
+        # module.schedule_matrix 레거시 컬럼은 029 마이그레이션에서 제거됨
 
         return {
             "is_valid": len(errors) == 0,

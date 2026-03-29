@@ -20,7 +20,6 @@ from ..models.user import User
 from ..models.crawled_post import CrawledPost
 from ..models.generation_history import GenerationHistory
 from ..models.blog import Blog
-from ..models.title import MainTitle
 from ..routers.auth import get_current_user
 
 logger = logging.getLogger(__name__)
@@ -211,6 +210,50 @@ async def get_content_html(
     }
 
 
+class BatchDeleteRequest(BaseModel):
+    """일괄 삭제 요청 모델"""
+    ids: list[int]
+
+
+async def _delete_single_post(
+    post: CrawledPost, db: AsyncSession
+) -> int:
+    """
+    단일 CrawledPost 삭제 공통 로직.
+
+    이미지 파일 삭제 + CrawledPost DB 레코드 삭제.
+    MainTitle은 변경하지 않는다 (상태 그대로 유지).
+
+    Args:
+        post: 삭제 대상 CrawledPost (blog eager-loaded)
+        db: 비동기 DB 세션
+
+    Returns:
+        삭제된 이미지 파일 수
+    """
+    generation_history_id = post.generation_history_id
+
+    # 대표 이미지 파일 삭제
+    deleted_images = _delete_image_file(post.image_url)
+
+    # GenerationHistory 연결된 이미지 삭제
+    if generation_history_id:
+        gh_result = await db.execute(
+            select(GenerationHistory)
+            .where(GenerationHistory.id == generation_history_id)
+        )
+        gen_history = gh_result.scalar_one_or_none()
+        if gen_history:
+            deleted_images += _delete_image_file(gen_history.image_url)
+            deleted_images += _delete_section_images(gen_history.section_images)
+
+    # CrawledPost 삭제
+    await db.delete(post)
+    await db.flush()
+
+    return deleted_images
+
+
 @router.delete("/{crawled_post_id}")
 async def delete_content(
     crawled_post_id: int,
@@ -220,82 +263,119 @@ async def delete_content(
     """
     생성된 콘텐츠 삭제
 
-    CrawledPost 삭제 + 연결된 이미지 파일 삭제.
-    이미 발행된 콘텐츠는 삭제 불가.
+    CrawledPost 삭제 + 연결된 이미지 파일(대표/섹션) 삭제.
+    발행 여부와 무관하게 삭제 가능.
 
     Args:
         crawled_post_id: CrawledPost ID
     """
     result = await db.execute(
-        select(CrawledPost).where(CrawledPost.id == crawled_post_id)
+        select(CrawledPost)
+        .options(selectinload(CrawledPost.blog))
+        .where(CrawledPost.id == crawled_post_id)
     )
     post = result.scalar_one_or_none()
     if not post:
         raise HTTPException(status_code=404, detail="콘텐츠를 찾을 수 없습니다")
 
-    if post.is_published:
-        raise HTTPException(
-            status_code=400,
-            detail="이미 발행된 콘텐츠는 삭제할 수 없습니다"
-        )
+    if post.blog and post.blog.user_id != user.id:
+        raise HTTPException(status_code=403, detail="권한이 없습니다")
 
-    # 삭제 전 연결 정보 저장
     post_title = post.title
-    linked_main_title_id = post.matched_main_title_id
-
-    # 이미지 파일 삭제
-    deleted_image = False
-    if post.image_url:
-        try:
-            image_filename = post.image_url.split("/")[-1]
-            image_path = Path(settings.image_storage_dir) / image_filename
-            if image_path.exists():
-                image_path.unlink()
-                deleted_image = True
-                logger.info(f"[CONTENT] 이미지 삭제: {image_path}")
-        except Exception as e:
-            logger.warning(f"[CONTENT] 이미지 삭제 실패: {e}")
-
-    # CrawledPost 삭제
-    await db.delete(post)
-    await db.flush()
-
-    # MainTitle 상태 복원: 다른 매칭 CrawledPost가 없으면 "available"로
-    restored_main_title = False
-    if linked_main_title_id:
-        remaining = await db.execute(
-            select(func.count())
-            .select_from(CrawledPost)
-            .where(
-                CrawledPost.matched_main_title_id == linked_main_title_id,
-                CrawledPost.match_status == "matched",
-            )
-        )
-        remaining_count = remaining.scalar() or 0
-
-        if remaining_count == 0:
-            mt_result = await db.execute(
-                select(MainTitle).where(MainTitle.id == linked_main_title_id)
-            )
-            main_title = mt_result.scalar_one_or_none()
-            if main_title and main_title.status == "used":
-                main_title.status = "available"
-                restored_main_title = True
-                logger.info(
-                    f"[CONTENT] MainTitle 상태 복원: "
-                    f"id={linked_main_title_id} used→available"
-                )
-
+    deleted_images = await _delete_single_post(post, db)
     await db.commit()
 
     logger.info(
         f"[CONTENT] 콘텐츠 삭제 완료: id={crawled_post_id}, "
-        f"title={post_title}"
+        f"title={post_title}, images={deleted_images}"
     )
 
     return {
         "success": True,
         "message": f"콘텐츠가 삭제되었습니다: {post_title}",
-        "deleted_image": deleted_image,
-        "restored_main_title": restored_main_title,
+        "deleted_images": deleted_images,
     }
+
+
+@router.post("/batch-delete")
+async def batch_delete_content(
+    body: BatchDeleteRequest,
+    db: AsyncSession = Depends(get_db_session),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """
+    생성된 콘텐츠 일괄 삭제
+
+    여러 CrawledPost를 한 번에 삭제한다.
+    소유권 검증 후 이미지 파일 삭제. MainTitle은 변경하지 않는다.
+
+    Args:
+        body: 삭제할 crawled_post_id 목록
+    """
+    if not body.ids:
+        return {"success": True, "deleted_count": 0, "deleted_images": 0}
+
+    result = await db.execute(
+        select(CrawledPost)
+        .options(selectinload(CrawledPost.blog))
+        .where(CrawledPost.id.in_(body.ids))
+    )
+    posts = result.scalars().all()
+
+    total_images = 0
+    deleted_count = 0
+
+    for post in posts:
+        if post.blog and post.blog.user_id != user.id:
+            logger.warning(f"[CONTENT] 일괄삭제 권한 없음: post_id={post.id}")
+            continue
+
+        total_images += await _delete_single_post(post, db)
+        deleted_count += 1
+
+    await db.commit()
+
+    logger.info(
+        f"[CONTENT] 일괄 삭제 완료: 요청={len(body.ids)}, "
+        f"삭제={deleted_count}, 이미지={total_images}"
+    )
+
+    return {
+        "success": True,
+        "deleted_count": deleted_count,
+        "deleted_images": total_images,
+    }
+
+
+def _delete_image_file(image_url: str | None) -> int:
+    """이미지 URL에서 파일을 삭제하고 삭제 건수를 반환한다."""
+    if not image_url:
+        return 0
+    try:
+        filename = image_url.split("/")[-1]
+        path = Path(settings.image_storage_dir) / filename
+        if path.exists():
+            path.unlink()
+            logger.info(f"[CONTENT] 이미지 삭제: {path}")
+            return 1
+    except Exception as e:
+        logger.warning(f"[CONTENT] 이미지 삭제 실패: {e}")
+    return 0
+
+
+def _delete_section_images(section_images_json: str | None) -> int:
+    """GenerationHistory.section_images JSON에서 이미지 파일들을 삭제한다."""
+    if not section_images_json:
+        return 0
+    import json
+    deleted = 0
+    try:
+        items = json.loads(section_images_json)
+        if not isinstance(items, list):
+            return 0
+        for item in items:
+            url = item.get("image_url") if isinstance(item, dict) else None
+            deleted += _delete_image_file(url)
+    except (json.JSONDecodeError, Exception) as e:
+        logger.warning(f"[CONTENT] 섹션 이미지 삭제 실패: {e}")
+    return deleted

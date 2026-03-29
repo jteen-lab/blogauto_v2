@@ -238,7 +238,7 @@ function moduleFormApp(module = null, moduleType = null) {
 
         // 스케줄 매트릭스 초기화
         initializeSchedule() {
-            if (this.formData.type_code === 'republish' || this.formData.type_code === 'collect' || this.formData.type_code === 'data' || this.formData.type_code === 'generate') {
+            if (this.formData.type_code === 'collect' || this.formData.type_code === 'data' || this.formData.type_code === 'generate') {
                 // 데이터 모듈: module.settings.schedule.schedule_matrix에서 먼저 로드 (우선순위 높음)
                 // ★ this.module.settings를 사용해야 함 (this.formData.settings가 아님)
                 const moduleSettings = this.module?.settings || {};
@@ -249,7 +249,7 @@ function moduleFormApp(module = null, moduleType = null) {
                     this.schedule = JSON.parse(JSON.stringify(this.module.schedule_matrix));
                     console.log('[initializeSchedule] 생성 모듈 schedule_matrix 로드됨');
                 } else if (this.isEdit && this.module?.schedule_matrix) {
-                    // 재발행/수집 모듈: 루트 레벨 schedule_matrix에서 로드
+                    // 수집 모듈: 루트 레벨 schedule_matrix에서 로드
                     this.schedule = JSON.parse(JSON.stringify(this.module.schedule_matrix));
                 } else {
                     // 기본 스케줄 설정
@@ -264,7 +264,7 @@ function moduleFormApp(module = null, moduleType = null) {
                             )
                         );
                     } else {
-                        // 재발행 모듈: 기본 평일 9-21시
+                        // 기본: 평일 9-21시
                         this.schedule = Array(7).fill().map((_, dayIdx) =>
                             Array(24).fill().map((_, hour) =>
                                 dayIdx < 5 && hour >= 9 && hour <= 21
@@ -280,17 +280,13 @@ function moduleFormApp(module = null, moduleType = null) {
 
         // 설정 JSON 초기화
         initializeSettings() {
-            if (this.formData.type_code !== 'republish') {
-                try {
-                    const settings = this.formData.settings || {};
-                    this.settingsJson = JSON.stringify(settings, null, 2);
-                    if (this.settingsJson === '{}' && !this.isEdit) {
-                        this.settingsJson = '';
-                    }
-                } catch (e) {
+            try {
+                const settings = this.formData.settings || {};
+                this.settingsJson = JSON.stringify(settings, null, 2);
+                if (this.settingsJson === '{}' && !this.isEdit) {
                     this.settingsJson = '';
                 }
-            } else {
+            } catch (e) {
                 this.settingsJson = '';
             }
         },
@@ -484,49 +480,6 @@ function moduleFormApp(module = null, moduleType = null) {
                 }
             }
 
-            // 재발행 모듈 검증
-            if (this.formData.type_code === 'republish') {
-                // 재발행 조건 검증
-                if (!this.formData.min_post_count || this.formData.min_post_count < 1) {
-                    this.showError('재발행 가능 최소 포스트 수는 1개 이상이어야 합니다');
-                    return false;
-                }
-
-                if (!this.formData.post_range_start || this.formData.post_range_start < 1) {
-                    this.showError('재발행 적용 구간 시작값은 1 이상이어야 합니다');
-                    return false;
-                }
-
-                if (this.formData.post_range_end && this.formData.post_range_end < this.formData.post_range_start) {
-                    this.showError('재발행 적용 구간 종료값은 시작값보다 커야 합니다');
-                    return false;
-                }
-
-                // 간격 설정 모드 검증
-                if (!this.formData.interval_mode) {
-                    this.showError('간격 설정 모드를 선택해주세요');
-                    return false;
-                }
-
-                if (this.formData.interval_mode === 'auto') {
-                    if (!this.formData.auto_daily_count || this.formData.auto_daily_count < 1) {
-                        this.showError('하루 목표 발행 횟수는 1회 이상이어야 합니다');
-                        return false;
-                    }
-                }
-
-                // 간격 검증
-                if (!this.formData.manual_interval_minutes || this.formData.manual_interval_minutes < 15) {
-                    this.showError('재발행 간격은 최소 15분 이상이어야 합니다');
-                    return false;
-                }
-
-                if (this.activeHoursCount === 0) {
-                    this.showError('최소 1시간 이상의 활성 스케줄을 설정해주세요');
-                    return false;
-                }
-            }
-
             // 수집 모듈 검증
             if (this.formData.type_code === 'collect') {
                 // 필수 API 검증 (네이버 광고 API 필수)
@@ -693,7 +646,7 @@ function moduleFormApp(module = null, moduleType = null) {
             }
 
             // 기타 타입 설정 JSON 검증
-            if (this.formData.type_code !== 'republish' && this.formData.type_code !== 'collect' && this.formData.type_code !== 'data' && this.formData.type_code !== 'generate' && this.formData.type_code !== 'prompt' && this.formData.type_code !== 'growth_profile' && this.settingsJson) {
+            if (this.formData.type_code !== 'collect' && this.formData.type_code !== 'data' && this.formData.type_code !== 'generate' && this.formData.type_code !== 'prompt' && this.formData.type_code !== 'growth_profile' && this.settingsJson) {
                 try {
                     JSON.parse(this.settingsJson);
                 } catch (e) {
@@ -720,19 +673,7 @@ function moduleFormApp(module = null, moduleType = null) {
             console.log('[prepareRequestData] 모듈 타입:', this.formData.type_code);
             console.log('[prepareRequestData] 전송 데이터:', data);
 
-            if (this.formData.type_code === 'republish') {
-                data.schedule_matrix = this.schedule;
-
-                // 재발행 조건 필드들
-                data.min_post_count = this.formData.min_post_count;
-                data.post_range_start = this.formData.post_range_start;
-                data.post_range_end = this.formData.post_range_end || null;
-
-                // 간격 설정 필드들 (항상 둘 다 저장)
-                data.interval_mode = this.formData.interval_mode;
-                data.manual_interval_minutes = this.formData.manual_interval_minutes;
-                data.auto_daily_count = this.formData.auto_daily_count;
-            } else if (this.formData.type_code === 'collect') {
+            if (this.formData.type_code === 'collect') {
                 // 수집 모듈 데이터
                 data.schedule_matrix = this.schedule;
                 data.settings = {

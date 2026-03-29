@@ -123,8 +123,13 @@ async def create_flow(
     service = FlowService(db)
     flow = await service.create_flow(current_user, request)
 
-    flow_with_relations = await service.get_flow(current_user, flow.id)
-    return FlowDetailResponse.model_validate(flow_with_relations)
+    try:
+        flow_with_relations = await service.get_flow(current_user, flow.id)
+        return FlowDetailResponse.model_validate(flow_with_relations)
+    except Exception as e:
+        import traceback
+        print(f"[CREATE_FLOW_ENDPOINT] 응답 생성 오류:\n{traceback.format_exc()}", flush=True)
+        raise
 
 
 @router.post(

@@ -29,12 +29,16 @@ function generationHistory() {
             copied: false,
         },
 
+        // 선택 상태
+        selectedIds: [],
+
         // 삭제 확인 모달
         deleteConfirm: {
             open: false,
             loading: false,
             id: null,
             title: '',
+            isBatch: false,
         },
 
         // 초기화
@@ -138,34 +142,72 @@ function generationHistory() {
         },
 
         /**
-         * 삭제 확인 모달 열기
+         * 개별 체크박스 토글
+         */
+        toggleSelect(id) {
+            const idx = this.selectedIds.indexOf(id);
+            if (idx === -1) {
+                this.selectedIds.push(id);
+            } else {
+                this.selectedIds.splice(idx, 1);
+            }
+        },
+
+        /**
+         * 전체 선택/해제
+         */
+        toggleSelectAll() {
+            if (this.isAllSelected()) {
+                this.selectedIds = [];
+            } else {
+                this.selectedIds = this.items.map(i => i.crawled_post_id);
+            }
+        },
+
+        /**
+         * 전체 선택 여부
+         */
+        isAllSelected() {
+            return this.items.length > 0
+                && this.selectedIds.length === this.items.length;
+        },
+
+        /**
+         * 삭제 확인 모달 열기 (개별)
          */
         confirmDelete(item) {
             this.deleteConfirm.open = true;
             this.deleteConfirm.loading = false;
             this.deleteConfirm.id = item.crawled_post_id;
             this.deleteConfirm.title = item.title;
+            this.deleteConfirm.isBatch = false;
         },
 
         /**
-         * 삭제 실행
+         * 일괄 삭제 확인 모달
+         */
+        confirmBatchDelete() {
+            if (this.selectedIds.length === 0) return;
+            this.deleteConfirm.open = true;
+            this.deleteConfirm.loading = false;
+            this.deleteConfirm.id = null;
+            this.deleteConfirm.title = `${this.selectedIds.length}건의 콘텐츠`;
+            this.deleteConfirm.isBatch = true;
+        },
+
+        /**
+         * 삭제 실행 (개별 / 일괄 분기)
          */
         async executeDelete() {
-            if (!this.deleteConfirm.id) return;
             this.deleteConfirm.loading = true;
-
             try {
-                const resp = await fetch(
-                    `/api/v1/generation/content/${this.deleteConfirm.id}`,
-                    { method: 'DELETE' }
-                );
-                if (!resp.ok) {
-                    const err = await resp.json();
-                    throw new Error(err.detail || '삭제 실패');
+                if (this.deleteConfirm.isBatch) {
+                    await this._executeBatchDelete();
+                } else {
+                    await this._executeSingleDelete();
                 }
-
                 this.deleteConfirm.open = false;
-                this._showToast('콘텐츠가 삭제되었습니다');
+                this.selectedIds = [];
                 await this.loadContent(this.currentPage);
             } catch (e) {
                 console.error('[GenerationHistory] executeDelete:', e);
@@ -173,6 +215,38 @@ function generationHistory() {
             } finally {
                 this.deleteConfirm.loading = false;
             }
+        },
+
+        /**
+         * 개별 삭제 API 호출
+         */
+        async _executeSingleDelete() {
+            const resp = await fetch(
+                `/api/v1/generation/content/${this.deleteConfirm.id}`,
+                { method: 'DELETE' }
+            );
+            if (!resp.ok) {
+                const err = await resp.json();
+                throw new Error(err.detail || '삭제 실패');
+            }
+            this._showToast('콘텐츠가 삭제되었습니다');
+        },
+
+        /**
+         * 일괄 삭제 API 호출
+         */
+        async _executeBatchDelete() {
+            const resp = await fetch('/api/v1/generation/content/batch-delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: this.selectedIds }),
+            });
+            if (!resp.ok) {
+                const err = await resp.json();
+                throw new Error(err.detail || '일괄 삭제 실패');
+            }
+            const data = await resp.json();
+            this._showToast(`${data.deleted_count}건 삭제 완료`);
         },
 
         /**

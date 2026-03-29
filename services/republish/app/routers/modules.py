@@ -115,12 +115,7 @@ async def create_module(
     service = ModuleService(db)
     module = await service.create_module(current_user, request)
 
-    # 응답용 데이터 구성
-    response_data = ModuleDetailResponse.model_validate(module)
-    if hasattr(module, 'calculated_interval_minutes'):
-        response_data.calculated_interval_minutes = module.calculated_interval_minutes
-
-    return response_data
+    return ModuleDetailResponse.model_validate(module)
 
 
 @router.get(
@@ -144,12 +139,7 @@ async def get_module(
             detail="모듈을 찾을 수 없습니다"
         )
 
-    # 응답용 데이터 구성
-    response_data = ModuleDetailResponse.model_validate(module)
-    if hasattr(module, 'calculated_interval_minutes'):
-        response_data.calculated_interval_minutes = module.calculated_interval_minutes
-
-    return response_data
+    return ModuleDetailResponse.model_validate(module)
 
 
 @router.put(
@@ -184,28 +174,7 @@ async def update_module(
             detail="모듈을 찾을 수 없습니다"
         )
 
-    # 응답용 데이터 구성
-    try:
-        response_data = ModuleDetailResponse.model_validate(module)
-
-        # calculated_interval_minutes 속성이 있는지 확인
-        if hasattr(module, 'calculated_interval_minutes'):
-            response_data.calculated_interval_minutes = module.calculated_interval_minutes
-        else:
-            logger.warning(f"Module {module_id} does not have calculated_interval_minutes attribute")
-            response_data.calculated_interval_minutes = None
-
-        return response_data
-
-    except Exception as e:
-        logger.error(f"Error constructing response for module {module_id}: {str(e)}")
-        logger.error(f"Module data: {module}")
-        logger.error(f"Module type: {type(module)}")
-
-        # 기본 응답 반환 (calculated_interval_minutes 없이)
-        response_data = ModuleDetailResponse.model_validate(module)
-        response_data.calculated_interval_minutes = None
-        return response_data
+    return ModuleDetailResponse.model_validate(module)
 
 
 @router.post(
@@ -230,12 +199,7 @@ async def copy_module(
             detail="복사할 모듈을 찾을 수 없습니다"
         )
 
-    # 응답용 데이터 구성
-    response_data = ModuleDetailResponse.model_validate(module)
-    if hasattr(module, 'calculated_interval_minutes'):
-        response_data.calculated_interval_minutes = module.calculated_interval_minutes
-
-    return response_data
+    return ModuleDetailResponse.model_validate(module)
 
 
 @router.delete(

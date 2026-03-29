@@ -329,48 +329,6 @@
             </button>
         </div>
 
-        <!-- 발행 섹션 -->
-        <div x-show="getModulesByType('publish').length > 0" class="module-section" x-data="{ sectionExpanded: false }">
-            <div class="section-header">
-                <span class="text-2xl">📤</span>
-                <h3 class="section-title">발행 모듈</h3>
-                <span class="section-count" x-text="getModulesByType('publish').length"></span>
-            </div>
-            <div class="module-grid">
-                <template x-for="(module, idx) in getModulesByType('publish')" :key="module.id + '-' + sortBy + '-' + sortOrder">
-                    <div x-show="sectionExpanded || idx < 1" x-transition>
-                        {% include "modules/_card.html" %}
-                    </div>
-                </template>
-            </div>
-            <button x-show="getModulesByType('publish').length > 1"
-                    @click="sectionExpanded = !sectionExpanded; if(sectionExpanded) { $nextTick(() => reinitModuleSlides($el.previousElementSibling)) }"
-                    class="card-expand-btn mt-2">
-                <span x-text="sectionExpanded ? '접기 ▲' : `더보기 (${getModulesByType('publish').length - 1}개 더) ▼`"></span>
-            </button>
-        </div>
-
-        <!-- 재발행 섹션 -->
-        <div x-show="getModulesByType('republish').length > 0" class="module-section" x-data="{ sectionExpanded: false }">
-            <div class="section-header">
-                <span class="text-2xl">🔄</span>
-                <h3 class="section-title">재발행 모듈</h3>
-                <span class="section-count" x-text="getModulesByType('republish').length"></span>
-            </div>
-            <div class="module-grid">
-                <template x-for="(module, idx) in getModulesByType('republish')" :key="module.id + '-' + sortBy + '-' + sortOrder">
-                    <div x-show="sectionExpanded || idx < 1" x-transition>
-                        {% include "modules/_card.html" %}
-                    </div>
-                </template>
-            </div>
-            <button x-show="getModulesByType('republish').length > 1"
-                    @click="sectionExpanded = !sectionExpanded; if(sectionExpanded) { $nextTick(() => reinitModuleSlides($el.previousElementSibling)) }"
-                    class="card-expand-btn mt-2">
-                <span x-text="sectionExpanded ? '접기 ▲' : `더보기 (${getModulesByType('republish').length - 1}개 더) ▼`"></span>
-            </button>
-        </div>
-
         <!-- 수집 섹션 -->
         <div x-show="getModulesByType('collect').length > 0" class="module-section" x-data="{ sectionExpanded: false }">
             <div class="section-header">
@@ -448,20 +406,6 @@
                     프롬프트/생성
                 </button>
                 <button type="button"
-                        @click="activeTab = 'publish'"
-                        :class="activeTab === 'publish' ? 'bg-blue-50 text-blue-700 border-blue-500' : 'bg-white text-gray-500 hover:text-gray-700'"
-                        class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap"
-                        x-show="getModulesByType('publish').length > 0">
-                    발행
-                </button>
-                <button type="button"
-                        @click="activeTab = 'republish'"
-                        :class="activeTab === 'republish' ? 'bg-blue-50 text-blue-700 border-blue-500' : 'bg-white text-gray-500 hover:text-gray-700'"
-                        class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap"
-                        x-show="getModulesByType('republish').length > 0">
-                    재발행
-                </button>
-                <button type="button"
                         @click="activeTab = 'collect'"
                         :class="activeTab === 'collect' ? 'bg-blue-50 text-blue-700 border-blue-500' : 'bg-white text-gray-500 hover:text-gray-700'"
                         class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap"
@@ -490,24 +434,6 @@
                      x-effect="if (activeTab === 'prompt') $nextTick(() => reinitMobileTabSlides($el))">
                     <div class="module-grid">
                         <template x-for="module in getModulesByType('prompt')" :key="module.id + '-' + sortBy + '-' + sortOrder">
-                            {% include "modules/_card.html" %}
-                        </template>
-                    </div>
-                </div>
-
-                <div x-show="activeTab === 'publish'"
-                     x-effect="if (activeTab === 'publish') $nextTick(() => reinitMobileTabSlides($el))">
-                    <div class="module-grid">
-                        <template x-for="module in getModulesByType('publish')" :key="module.id + '-' + sortBy + '-' + sortOrder">
-                            {% include "modules/_card.html" %}
-                        </template>
-                    </div>
-                </div>
-
-                <div x-show="activeTab === 'republish'"
-                     x-effect="if (activeTab === 'republish') $nextTick(() => reinitMobileTabSlides($el))">
-                    <div class="module-grid">
-                        <template x-for="module in getModulesByType('republish')" :key="module.id + '-' + sortBy + '-' + sortOrder">
                             {% include "modules/_card.html" %}
                         </template>
                     </div>
@@ -576,20 +502,6 @@
           <span class="text-3xl mb-2 group-hover:scale-110 transition-transform duration-200">📝</span>
           <span class="font-medium text-gray-900 group-hover:text-blue-700">프롬프트/생성</span>
           <span class="text-xs text-gray-500 mt-1">AI 프롬프트 기반 글 생성</span>
-        </button>
-
-        <button onclick="selectOption('moduleTypeSelector', 'publish', '발행')"
-                class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all duration-200 group">
-          <span class="text-3xl mb-2 group-hover:scale-110 transition-transform duration-200">📤</span>
-          <span class="font-medium text-gray-900 group-hover:text-blue-700">발행</span>
-          <span class="text-xs text-gray-500 mt-1">콘텐츠 발행 관리</span>
-        </button>
-
-        <button onclick="selectOption('moduleTypeSelector', 'republish', '재발행')"
-                class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all duration-200 group">
-          <span class="text-3xl mb-2 group-hover:scale-110 transition-transform duration-200">🔄</span>
-          <span class="font-medium text-gray-900 group-hover:text-blue-700">재발행</span>
-          <span class="text-xs text-gray-500 mt-1">기존 글 재발행</span>
         </button>
 
         <button onclick="selectOption('moduleTypeSelector', 'collect', '수집')"

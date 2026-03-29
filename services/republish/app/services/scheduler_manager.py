@@ -227,49 +227,19 @@ class SchedulerManager:
         return result.scalar_one_or_none()
 
     async def _extract_flow_schedules(self, flow: Flow) -> List[Dict[str, Any]]:
-        """플로우의 모듈 스케줄 추출"""
-        schedules = []
+        """플로우의 모듈 스케줄 추출
 
-        if not flow.flow_modules:
-            return schedules
-
-        for flow_module in flow.flow_modules:
-            module = flow_module.module
-            if not module or not module.schedule_matrix:
-                continue
-
-            try:
-                # 스케줄 매트릭스 파싱
-                matrix_data = module.schedule_matrix
-                module_interval = module.manual_interval_minutes or 60
-
-                if isinstance(matrix_data, list) and len(matrix_data) == 7:
-                    # 2D 배열 형식: [[false, true, ...], [...], ...]
-                    for day, day_schedule in enumerate(matrix_data):
-                        if isinstance(day_schedule, list) and len(day_schedule) == 24:
-                            for hour, is_active in enumerate(day_schedule):
-                                if is_active:
-                                    # 모듈 간격에 따른 minute 계산
-                                    minute = await self._calculate_optimal_minute(
-                                        module.id, day, hour, module_interval
-                                    )
-
-                                    schedule = {
-                                        'module_id': module.id,
-                                        'module_name': module.name,
-                                        'day_of_week': day,
-                                        'hour': hour,
-                                        'minute': minute
-                                    }
-                                    schedules.append(schedule)
-
-                else:
-                    logger.warning(f"[EXTRACT_SCHEDULES] 지원하지 않는 매트릭스 형식: module_id={module.id}")
-
-            except Exception as e:
-                logger.warning(f"[EXTRACT_SCHEDULES] 모듈 {module.id} 스케줄 파싱 오류: {e}")
-
-        return schedules
+        Note:
+            레거시 module.schedule_matrix 기반 추출은 제거됨.
+            모든 스케줄은 Growth Profile(GP)의 schedule_matrix를 사용.
+            flow_scheduler.py의 register_flow()를 참조.
+        """
+        # GP 통합 후 module 레벨 스케줄은 더 이상 사용하지 않음
+        logger.debug(
+            f"[EXTRACT_SCHEDULES] flow_id={flow.id} - "
+            "GP 기반 스케줄 사용 (module 레벨 스케줄 제거됨)"
+        )
+        return []
 
     async def _calculate_optimal_minute(
         self,
@@ -315,7 +285,7 @@ class SchedulerManager:
                     return
 
                 # 모듈 타입 확인
-                module_type = target_module.type_code
+                module_type = target_module.module_type.code if target_module.module_type else "unknown"
 
                 # collect 타입: 블로그 없이 독립 실행
                 if module_type == "collect":
@@ -351,16 +321,13 @@ class SchedulerManager:
         logger.info(f"[EXECUTE_MODULE] 모듈 {module.name} 블로그 {blog.name} 실행")
 
         # 모듈 타입별 실행 로직
-        if module.type_code == "prompt":
+        _type = module.module_type.code if module.module_type else "unknown"
+        if _type == "prompt":
             await self._execute_prompt_module(module, blog)
-        elif module.type_code == "generate":
+        elif _type == "generate":
             await self._execute_generate_module(module, blog)
-        elif module.type_code == "publish":
-            await self._execute_publish_module(module, blog)
-        elif module.type_code == "republish":
-            await self._execute_republish_module(module, blog)
         else:
-            logger.warning(f"[EXECUTE_MODULE] 지원하지 않는 모듈 타입: {module.type_code}")
+            logger.warning(f"[EXECUTE_MODULE] 지원하지 않는 모듈 타입: {_type}")
 
     async def _execute_prompt_module(self, module: Module, blog: Blog) -> None:
         """프롬프트 모듈 실행"""
