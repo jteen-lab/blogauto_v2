@@ -449,7 +449,17 @@
                 <div x-show="contentModal.loading" class="text-center py-8 text-gray-500">
                     <p class="text-sm">콘텐츠 로딩 중...</p>
                 </div>
-                <iframe x-show="!contentModal.loading"
+                <!-- 콘텐츠가 없을 때 안내 메시지 -->
+                <div x-show="!contentModal.loading && !contentModal.rawHtml"
+                     class="flex flex-col items-center justify-center py-16 text-gray-400">
+                    <svg class="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    <p class="text-sm font-medium text-gray-500">콘텐츠가 없습니다</p>
+                    <p class="text-xs text-gray-400 mt-1">생성된 HTML 콘텐츠가 존재하지 않습니다</p>
+                </div>
+                <!-- 콘텐츠가 있을 때 iframe 렌더링 -->
+                <iframe x-show="!contentModal.loading && contentModal.rawHtml"
                         :srcdoc="contentModal.safeHtml"
                         class="w-full border-0" style="height: calc(90vh - 140px);"
                         sandbox=""></iframe>

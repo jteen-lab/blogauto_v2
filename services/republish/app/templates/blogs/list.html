@@ -638,6 +638,12 @@
                     AI
                 </button>
                 <button type="button"
+                        @click="activeTab = 'seo'"
+                        :class="activeTab === 'seo' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                        class="flex-1 py-3 px-1 text-center border-b-2 font-medium text-sm transition-colors whitespace-nowrap">
+                    SEO
+                </button>
+                <button type="button"
                         @click="activeTab = 'matching'"
                         :class="activeTab === 'matching' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
                         class="flex-1 py-3 px-1 text-center border-b-2 font-medium text-sm transition-colors whitespace-nowrap">
@@ -672,6 +678,11 @@
         <!-- AI 설정 탭 -->
         <div x-show="activeTab === 'ai'" x-transition x-cloak>
             {% include "blogs/settings/_tab_ai.html" %}
+        </div>
+
+        <!-- SEO 설정 탭 -->
+        <div x-show="activeTab === 'seo'" x-transition x-cloak>
+            {% include "blogs/settings/_tab_seo.html" %}
         </div>
 
         <!-- 유사도 매칭 탭 (Phase 3) -->

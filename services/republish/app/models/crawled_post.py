@@ -11,7 +11,7 @@ Features:
 """
 from datetime import datetime
 from typing import Optional, TYPE_CHECKING
-from sqlalchemy import Integer, String, Float, Text, DateTime, ForeignKey, Index
+from sqlalchemy import Integer, String, Float, Text, DateTime, JSON, ForeignKey, Index
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from ..core.database import Base
@@ -107,6 +107,13 @@ class CrawledPost(Base):
         String(100),
         nullable=True,
         comment="플랫폼 발행 후 반환된 포스트 ID",
+    )
+
+    # SEO 메타데이터
+    seo_meta: Mapped[Optional[dict]] = mapped_column(
+        JSON,
+        nullable=True,
+        comment="SEO 메타: focus_keyphrase, slug, meta_description, generated_by",
     )
 
     # 소스 정보

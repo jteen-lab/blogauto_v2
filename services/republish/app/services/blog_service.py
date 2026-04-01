@@ -496,6 +496,23 @@ class BlogService:
                     "matching_started": False
                 }
 
+            # SEO 플러그인 감지 (WordPress만, 실패해도 무시)
+            if blog.platform == BlogPlatform.WORDPRESS:
+                try:
+                    from .publishing.seo_detector import SEODetector
+                    detector = SEODetector()
+                    seo_result = await detector.detect(blog.url)
+                    seo_config = blog.seo_config or {}
+                    seo_config["detected_plugin"] = seo_result.get("detected_plugin")
+                    seo_config["detected_at"] = seo_result.get("detected_at")
+                    blog.seo_config = seo_config
+                    from sqlalchemy.orm.attributes import flag_modified
+                    flag_modified(blog, 'seo_config')
+                except Exception as e:
+                    logger.warning(
+                        f"SEO 플러그인 감지 실패 (무시) | blog_id={blog.id} | error={e}"
+                    )
+
             # 2. 신규 블로그 여부 확인
             is_new_blog = crawl_result.is_new_blog
 

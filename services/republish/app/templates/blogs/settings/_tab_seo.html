@@ -1,0 +1,288 @@
+<!--
+  BlogAuto V2: 블로그 설정 - SEO 플러그인 설정 탭
+  File: app/templates/blogs/settings/_tab_seo.html
+  Last-Updated: 2026-03-30
+
+  기능:
+  - WordPress SEO 플러그인 자동 감지 (Yoast, Rank Math, AIOSEO, SEOPress)
+  - SEO 자동 입력 토글
+  - Focus Keyphrase / Slug / Meta Description 생성 방식 설정
+
+  API 엔드포인트:
+  - GET  /api/v1/blogs/{blogId}/settings/seo
+  - POST /api/v1/blogs/{blogId}/settings/seo
+  - POST /api/v1/blogs/{blogId}/settings/seo/detect
+-->
+
+<div x-data="seoSettingsApp()"
+     x-init="$nextTick(() => {
+         const parent = $el.closest('#blogSettings');
+         if (parent && parent._x_dataStack && parent._x_dataStack[0] && parent._x_dataStack[0].selectedBlog) {
+             blogId = parent._x_dataStack[0].selectedBlog.id;
+             blogPlatform = parent._x_dataStack[0].selectedBlog.platform;
+         }
+         init();
+     })"
+     x-effect="(() => {
+         if (!blogId) {
+             const parent = $el.closest('#blogSettings');
+             if (parent && parent._x_dataStack && parent._x_dataStack[0] && parent._x_dataStack[0].selectedBlog) {
+                 blogId = parent._x_dataStack[0].selectedBlog.id;
+                 blogPlatform = parent._x_dataStack[0].selectedBlog.platform;
+                 if (blogId && !loaded && !loading) {
+                     loadConfig(blogId);
+                 }
+             }
+         }
+     })()"
+     class="space-y-4">
+
+    <!-- 안내 문구 -->
+    <div class="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-6">
+        <div class="flex items-start gap-3">
+            <div class="flex-shrink-0">
+                <svg class="w-5 h-5 text-purple-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+            </div>
+            <div class="text-sm text-purple-800">
+                <p class="font-medium mb-1">WordPress SEO 플러그인을 자동 감지하여 메타데이터를 설정합니다</p>
+                <p class="text-purple-600">Yoast SEO, Rank Math, All in One SEO, SEOPress를 지원합니다</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- WordPress 전용 안내 (WordPress가 아닌 경우) -->
+    <div x-show="blogPlatform && blogPlatform !== 'wordpress'" class="text-center py-8">
+        <div class="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+            <svg class="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+        </div>
+        <p class="text-gray-600 mb-2">WordPress 전용 기능입니다</p>
+        <p class="text-sm text-gray-400">SEO 플러그인 자동 감지는 WordPress 블로그에서만 사용할 수 있습니다</p>
+    </div>
+
+    <!-- 로딩 상태 -->
+    <div x-show="loading && blogPlatform === 'wordpress'" class="flex items-center justify-center py-12">
+        <div class="inline-flex items-center gap-2 text-gray-500">
+            <svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+            <span>SEO 설정 불러오는 중...</span>
+        </div>
+    </div>
+
+    <!-- 메인 컨텐츠 (WordPress만 표시) -->
+    <div x-show="!loading && blogPlatform === 'wordpress'" class="space-y-6">
+
+        <!-- 1. 감지된 플러그인 표시 -->
+        <div class="bg-white border border-gray-200 rounded-lg p-5">
+            <div class="flex items-start gap-3 mb-4">
+                <div class="flex-shrink-0 w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                    </svg>
+                </div>
+                <div class="flex-1">
+                    <h3 class="text-base font-semibold text-gray-900">SEO 플러그인 감지</h3>
+                    <p class="text-sm text-gray-500 mt-0.5">설치된 SEO 플러그인을 자동으로 감지합니다</p>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between p-4 rounded-lg"
+                 :class="seoConfig.detected_plugin ? 'bg-green-50 border border-green-200' : 'bg-gray-50 border border-gray-200'">
+                <div class="flex items-center gap-3">
+                    <!-- 감지됨 -->
+                    <template x-if="seoConfig.detected_plugin">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-green-500"></span>
+                            <span class="font-medium text-green-800"
+                                  x-text="pluginNames[seoConfig.detected_plugin] || seoConfig.detected_plugin"></span>
+                            <span x-show="seoConfig.detected_at"
+                                  class="text-xs text-green-600"
+                                  x-text="'(' + formatDate(seoConfig.detected_at) + ' 감지)'"></span>
+                        </div>
+                    </template>
+                    <!-- 미감지 -->
+                    <template x-if="!seoConfig.detected_plugin">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-gray-400"></span>
+                            <span class="text-gray-600">SEO 플러그인이 감지되지 않았습니다</span>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- 다시 감지 버튼 -->
+                <button type="button"
+                        @click="detectPlugin()"
+                        :disabled="detecting"
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-purple-700 bg-purple-100 hover:bg-purple-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    <svg x-show="!detecting" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                    <svg x-show="detecting" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                    <span x-text="detecting ? '감지 중...' : '다시 감지'"></span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 2. SEO 자동 입력 토글 -->
+        <div class="bg-white border border-gray-200 rounded-lg p-5">
+            <div class="flex items-center justify-between">
+                <div class="flex items-start gap-3">
+                    <div class="flex-shrink-0 w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-semibold text-gray-900">SEO 자동 입력</h3>
+                        <p class="text-sm text-gray-500 mt-0.5">글 발행 시 SEO 메타데이터를 자동으로 생성하여 입력합니다</p>
+                    </div>
+                </div>
+
+                <!-- 토글 스위치 -->
+                <button type="button"
+                        @click="seoConfig.auto_seo_enabled = !seoConfig.auto_seo_enabled"
+                        :class="seoConfig.auto_seo_enabled ? 'bg-indigo-600' : 'bg-gray-200'"
+                        class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2"
+                        role="switch"
+                        :aria-checked="seoConfig.auto_seo_enabled">
+                    <span :class="seoConfig.auto_seo_enabled ? 'translate-x-5' : 'translate-x-0'"
+                          class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"></span>
+                </button>
+            </div>
+
+            <!-- 플러그인 미감지 경고 -->
+            <div x-show="seoConfig.auto_seo_enabled && !seoConfig.detected_plugin"
+                 class="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <p class="text-sm text-amber-800">
+                    SEO 플러그인이 감지되지 않았습니다. 먼저 위에서 플러그인 감지를 실행해주세요.
+                </p>
+            </div>
+        </div>
+
+        <!-- 3. SEO 세부 설정 안내 (토글 ON 시만 표시) -->
+        <div x-show="seoConfig.auto_seo_enabled" x-transition class="space-y-6">
+
+            <!-- 자동 생성 방식 안내 -->
+            <div class="bg-white border border-gray-200 rounded-lg p-5">
+                <div class="flex items-start gap-3 mb-4">
+                    <div class="flex-shrink-0 w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-semibold text-gray-900">자동 생성 항목</h3>
+                        <p class="text-sm text-gray-500 mt-0.5">활성화 시 아래 항목들이 발행할 때 자동으로 설정됩니다</p>
+                    </div>
+                </div>
+
+                <div class="space-y-3 ml-13">
+                    <div class="flex items-start gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-200">
+                        <svg class="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <div>
+                            <span class="text-sm font-medium text-gray-900">Focus Keyphrase</span>
+                            <p class="text-xs text-gray-500 mt-0.5">글 제목에서 핵심 키워드를 추출합니다</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200">
+                        <svg class="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <div>
+                            <span class="text-sm font-medium text-gray-900">Slug (URL 슬러그)</span>
+                            <p class="text-xs text-gray-500 mt-0.5">글 제목을 영문 슬러그로 변환합니다</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-2 p-3 rounded-lg bg-teal-50 border border-teal-200">
+                        <svg class="w-4 h-4 text-teal-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <div>
+                            <span class="text-sm font-medium text-gray-900">Meta Description</span>
+                            <p class="text-xs text-gray-500 mt-0.5">글 서론에서 메타 설명을 추출합니다</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Meta Description 길이 설정 -->
+            <div class="bg-white border border-gray-200 rounded-lg p-5">
+                <div class="flex items-start gap-3 mb-4">
+                    <div class="flex-shrink-0 w-10 h-10 bg-teal-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-semibold text-gray-900">Meta Description 길이</h3>
+                        <p class="text-sm text-gray-500 mt-0.5">메타 설명의 최대 글자수를 설정합니다</p>
+                    </div>
+                </div>
+
+                <div class="ml-13">
+                    <div class="p-3 bg-gray-50 rounded-lg">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">최대 글자수</label>
+                        <div class="flex items-center gap-3">
+                            <input type="number"
+                                   x-model.number="seoConfig.meta_description_length"
+                                   min="120" max="200" step="10"
+                                   class="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent text-sm">
+                            <span class="text-xs text-gray-500">권장: 140~200자</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 저장 버튼 -->
+        <div class="sticky bottom-0 bg-white py-4 border-t border-gray-200 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+            <button type="button"
+                    @click="saveConfig()"
+                    :disabled="saving"
+                    class="w-full py-3 px-4 text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed">
+                <span x-show="!saving">SEO 설정 저장</span>
+                <span x-show="saving" class="inline-flex items-center gap-2">
+                    <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                    저장 중...
+                </span>
+            </button>
+        </div>
+    </div>
+
+    <!-- 토스트 메시지 -->
+    <div x-show="message"
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0 translate-y-2"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100 translate-y-0"
+         x-transition:leave-end="opacity-0 translate-y-2"
+         :class="messageType === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'"
+         class="fixed bottom-20 left-4 right-4 sm:left-auto sm:right-4 sm:w-80 border rounded-lg p-4 shadow-lg z-50">
+        <div class="flex items-center gap-2">
+            <svg x-show="messageType === 'success'" class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+            </svg>
+            <svg x-show="messageType === 'error'" class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span x-text="message"></span>
+        </div>
+    </div>
+</div>
+
+<script src="/static/js/blogs/seo-tab.js"></script>

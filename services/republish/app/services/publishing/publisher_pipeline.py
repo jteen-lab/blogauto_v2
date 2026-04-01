@@ -6,13 +6,13 @@
 
 설계 문서: publish_module_implementation_plan.md - Phase 4
 """
-import logging
 import re
 from pathlib import Path
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ...core.logger import get_logger
 from ...models.blog import Blog, BlogPlatform
 from ...models.crawled_post import CrawledPost
 from ...models.google_credential import GoogleCredential
@@ -24,7 +24,7 @@ from .wordpress_publisher import WordPressPublisher
 from .blogger_publisher import BloggerPublisher
 from .publish_result import PublishResult, ImageUploadResult
 
-logger = logging.getLogger(__name__)
+logger = get_logger("publisher_pipeline", "app.log")
 
 
 class PublisherPipeline:
@@ -97,10 +97,38 @@ class PublisherPipeline:
             result.image_uploaded = True
             result.image_url = image_result.platform_url
 
+        # Step 2.7: SEO 메타 로드 (WordPress만)
+        seo_meta = None
+        seo_plugin = None
+        if blog.platform == BlogPlatform.WORDPRESS:
+            seo_config = blog.seo_config or {}
+            if (
+                seo_config.get("auto_seo_enabled")
+                and seo_config.get("detected_plugin")
+            ):
+                seo_meta = crawled_post.seo_meta
+                seo_plugin = seo_config["detected_plugin"]
+                logger.info(
+                    "[PIPELINE] SEO 로드 | blog=%s | "
+                    "plugin=%s | seo_meta=%s",
+                    blog.name, seo_plugin,
+                    "있음" if seo_meta else "없음(NULL)",
+                )
+            else:
+                logger.debug(
+                    "[PIPELINE] SEO 비활성 | blog=%s | "
+                    "enabled=%s | plugin=%s",
+                    blog.name,
+                    seo_config.get("auto_seo_enabled"),
+                    seo_config.get("detected_plugin"),
+                )
+
         # Step 3: 플랫폼별 발행
         publish_result = await self._publish_to_platform(
             blog, crawled_post, final_html,
             image_result, credential,
+            seo_meta=seo_meta,
+            seo_plugin=seo_plugin,
         )
 
         if not publish_result.success:
@@ -258,11 +286,15 @@ class PublisherPipeline:
         final_html: str,
         image_result: Optional[ImageUploadResult],
         credential: Optional[GoogleCredential],
+        seo_meta: dict | None = None,
+        seo_plugin: str | None = None,
     ) -> PublishResult:
         """플랫폼별 발행"""
         if blog.platform == BlogPlatform.WORDPRESS:
             return await self.wp_publisher.publish(
                 blog, post, final_html,
+                seo_meta=seo_meta,
+                seo_plugin=seo_plugin,
             )
 
         elif blog.platform == BlogPlatform.BLOGGER:

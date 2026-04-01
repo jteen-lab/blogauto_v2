@@ -6,7 +6,6 @@ Blog.overlay_config 설정을 완전 지원합니다.
 
 설계 문서: generation_pipeline_enhancement_plan.md - Phase C - 5.5
 """
-import logging
 import os
 import re
 import time
@@ -15,8 +14,9 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 from ...core.config import settings
+from ...core.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger("template_image", "app.log")
 
 # 이미지 저장 경로 (config 기반)
 IMAGE_DIR = Path(settings.image_storage_dir)
@@ -236,32 +236,57 @@ class TemplateImageService:
         )
 
     def _load_font(self, config: dict, font_size: int):
-        """폰트 로드 (커스텀 → 시스템 → 기본)"""
+        """폰트 로드 (커스텀→시스템→기본 fallback)"""
         from PIL import ImageFont
 
         raw_path = config.get("font_file")
-        font_path = self._resolve_media_path(raw_path) if raw_path else None
-        logger.debug(
-            f"[TEMPLATE_IMAGE] 폰트 경로: "
-            f"raw={raw_path}, resolved={font_path}"
+        font_path = (
+            self._resolve_media_path(raw_path)
+            if raw_path else None
         )
-
+        logger.info(
+            "[TEMPLATE_IMAGE] 폰트 시도 | "
+            "cfg=%s | resolved=%s | size=%d",
+            raw_path, font_path, font_size,
+        )
+        # 1. 커스텀 폰트
         if font_path and os.path.exists(font_path):
             try:
-                return ImageFont.truetype(font_path, font_size)
-            except Exception:
-                pass
+                return ImageFont.truetype(
+                    font_path, font_size,
+                )
+            except Exception as e:
+                logger.warning(
+                    "[TEMPLATE_IMAGE] 커스텀 폰트 실패"
+                    ": %s | %s", font_path, e,
+                )
+        # 2. 시스템 → 3. 기본
+        return self._fallback_font(font_size)
 
-        for path in [
-            "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        ]:
+    def _fallback_font(self, font_size: int):
+        """시스템 폰트 → PIL 기본 폰트 fallback"""
+        from PIL import ImageFont
+
+        for path in (
+            "/usr/share/fonts/truetype/nanum/"
+            "NanumGothicBold.ttf",
+            "/usr/share/fonts/truetype/dejavu/"
+            "DejaVuSans-Bold.ttf",
+        ):
             if os.path.exists(path):
                 try:
-                    return ImageFont.truetype(path, font_size)
-                except Exception:
-                    continue
-
+                    return ImageFont.truetype(
+                        path, font_size,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "[TEMPLATE_IMAGE] 시스템 폰트"
+                        " 실패: %s | %s", path, e,
+                    )
+        logger.warning(
+            "[TEMPLATE_IMAGE] 모든 폰트 실패 → "
+            "PIL 기본 폰트 (한글 미지원 가능)",
+        )
         return ImageFont.load_default()
 
     def _wrap_text(

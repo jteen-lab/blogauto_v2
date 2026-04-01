@@ -130,6 +130,12 @@
                     연결 오류
                 </span>
             </template>
+
+            <!-- SEO 플러그인 뱃지 -->
+            <span x-show="blog.seo_config?.detected_plugin"
+                  class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                SEO: <span x-text="(blog.seo_config?.detected_plugin || '').toUpperCase()"></span>
+            </span>
         </div>
 
         <!-- 생성일 -->

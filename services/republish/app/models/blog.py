@@ -110,6 +110,14 @@ class Blog(Base):
         comment="유사도 매칭 설정: allow_duplicate_similar_posts, matching_threshold, use_waiting_category, waiting_threshold_min"
     )
 
+    # SEO 설정
+    seo_config = Column(
+        JSON,
+        default=dict,
+        nullable=True,
+        comment="SEO 플러그인 설정: detected_plugin, auto_seo_enabled, focus_keyphrase_method, slug_method, meta_description_method"
+    )
+
     # 포스트 통계 (재발행 모듈 적용 구간 필터링용)
     total_post_count = Column(Integer, nullable=True, comment="누적 포스트 수")
     post_count_updated_at = Column(DateTime(timezone=True), nullable=True, comment="포스트 수 업데이트 시점")
@@ -240,6 +248,8 @@ class Blog(Base):
             "ai_config": self.ai_config or {},
             # 유사도 매칭 설정 (Phase 3)
             "matching_config": self.matching_config or {},
+            # SEO 설정
+            "seo_config": self.seo_config or {},
             # 크롤링/매칭 상태 (Phase M-1)
             "is_new_blog": self.is_new_blog,
             "crawl_status": self.crawl_status,

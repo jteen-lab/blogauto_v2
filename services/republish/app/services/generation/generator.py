@@ -288,6 +288,31 @@ class ContentGenerator:
                 f"[GENERATOR] 이미지 생성 실패 (글 생성은 계속): {e}"
             )
 
+        # 6.7 SEO 메타 생성 (HTML 변환 후, 규칙 기반만 사용)
+        seo_meta = None
+        try:
+            from ..publishing.seo_meta_builder import SEOMetaBuilder
+            seo_builder = SEOMetaBuilder()
+            seo_meta = seo_builder.build(
+                blog=blog, title=working_title,
+                content_html=final_html,
+            )
+            if seo_meta:
+                logger.info(
+                    "[GENERATOR] SEO 메타 | "
+                    "kp='%s' | desc=%d자",
+                    seo_meta.get(
+                        "focus_keyphrase", ""
+                    )[:30],
+                    len(seo_meta.get(
+                        "meta_description", ""
+                    )),
+                )
+        except Exception as e:
+            logger.warning(
+                "[GENERATOR] SEO 메타 실패 (무시): %s", e
+            )
+
         # 7. GenerationHistory 저장
         elapsed = int(time.time() - start_time)
         # section_images JSON 직렬화 (DB 저장용)
@@ -325,6 +350,7 @@ class ContentGenerator:
             match_score=100.0,
             image_url=image_url,
             content_html=final_html,
+            seo_meta=seo_meta,
         )
         self.db.add(crawled_post)
         await self.db.flush()
