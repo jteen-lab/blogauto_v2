@@ -53,6 +53,74 @@ logger = get_logger("blog_settings_router", "blog_settings.log")
 router = APIRouter(prefix="/blogs/{blog_id}/settings", tags=["블로그 설정"])
 
 
+def _mask_api_key(key: str) -> str:
+    """API 키를 마스킹 처리한다.
+
+    Args:
+        key: 원본 API 키 문자열
+
+    Returns:
+        마스킹된 문자열 (예: "abc***xyz"). 6자 이하면 전체 마스킹.
+    """
+    if not key:
+        return ""
+    if len(key) <= 6:
+        return "***"
+    return key[:3] + "***" + key[-3:]
+
+
+def _get_imgbb_api_key(placeholders: dict) -> str:
+    """placeholders에서 imgBB API 키를 추출한다.
+
+    Args:
+        placeholders: Blog.placeholders JSON 딕셔너리
+
+    Returns:
+        imgBB API 키 문자열. 없으면 빈 문자열.
+    """
+    image_hosting = (placeholders or {}).get("image_hosting", {})
+    return (image_hosting or {}).get("imgbb_api_key", "")
+
+
+def _save_imgbb_api_key(blog, raw_key: str, blog_id: int) -> str:
+    """imgBB API 키를 Blog.placeholders에 저장/삭제한다.
+
+    Args:
+        blog: Blog ORM 인스턴스
+        raw_key: 저장할 API 키. 빈 문자열이면 삭제.
+        blog_id: 로깅용 블로그 ID
+
+    Returns:
+        마스킹된 키 문자열. 삭제 시 빈 문자열.
+    """
+    placeholders = dict(blog.placeholders or {})
+
+    if raw_key == "":
+        # 빈 문자열이면 키 삭제
+        image_hosting = placeholders.get("image_hosting", {})
+        if isinstance(image_hosting, dict):
+            image_hosting.pop("imgbb_api_key", None)
+            if not image_hosting:
+                placeholders.pop("image_hosting", None)
+            else:
+                placeholders["image_hosting"] = image_hosting
+        blog.placeholders = placeholders
+        flag_modified(blog, 'placeholders')
+        logger.info(f"imgBB API 키 삭제 | blog_id={blog_id}")
+        return ""
+
+    # 키 저장
+    image_hosting = placeholders.get("image_hosting", {})
+    if not isinstance(image_hosting, dict):
+        image_hosting = {}
+    image_hosting["imgbb_api_key"] = raw_key
+    placeholders["image_hosting"] = image_hosting
+    blog.placeholders = placeholders
+    flag_modified(blog, 'placeholders')
+    logger.info(f"imgBB API 키 저장 | blog_id={blog_id}")
+    return _mask_api_key(raw_key)
+
+
 # =============================================================================
 # 전체 설정 조회
 # =============================================================================
@@ -85,6 +153,10 @@ async def get_blog_settings(
     image_ai = ai_config_data.get("image_ai", {})
     ai_image_model = image_ai.get("model")
 
+    # imgBB API 키 마스킹 처리
+    raw_imgbb_key = _get_imgbb_api_key(blog.placeholders)
+    masked_imgbb_key = _mask_api_key(raw_imgbb_key) if raw_imgbb_key else None
+
     return BlogSettingsResponse(
         blog_id=blog.id,
         image_settings={
@@ -93,7 +165,8 @@ async def get_blog_settings(
             "ai_image_model": ai_image_model,
             "cover_source": cover_source,
             "section_source": section_source,
-            "overlay_config": overlay_config
+            "overlay_config": overlay_config,
+            "imgbb_api_key": masked_imgbb_key
         },
         category_settings=None,
         placeholders=blog.placeholders or {},
@@ -133,6 +206,10 @@ async def get_image_settings(
     image_ai = ai_config.get("image_ai", {})
     ai_image_model = image_ai.get("model")
 
+    # imgBB API 키 마스킹 처리
+    raw_key = _get_imgbb_api_key(blog.placeholders)
+    masked_key = _mask_api_key(raw_key) if raw_key else None
+
     return ImageSettingsResponse(
         blog_id=blog.id,
         image_mode=blog.image_mode,
@@ -140,7 +217,8 @@ async def get_image_settings(
         ai_image_model=ai_image_model,
         cover_source=cover_source,
         section_source=section_source,
-        overlay_config=overlay_config
+        overlay_config=overlay_config,
+        imgbb_api_key=masked_key
     )
 
 
@@ -185,6 +263,15 @@ async def save_image_settings(
     blog.ai_config = ai_config
     flag_modified(blog, 'ai_config')
 
+    # imgBB API 키 저장/삭제 (placeholders.image_hosting.imgbb_api_key)
+    if request.imgbb_api_key is not None:
+        result = _save_imgbb_api_key(blog, request.imgbb_api_key, blog_id)
+        masked_key = result if result else None
+    else:
+        # 요청에 키가 없으면 기존 값 유지 (마스킹해서 반환)
+        raw_key = _get_imgbb_api_key(blog.placeholders)
+        masked_key = _mask_api_key(raw_key) if raw_key else None
+
     await db.commit()
     await db.refresh(blog)
 
@@ -202,7 +289,8 @@ async def save_image_settings(
         ai_image_model=request.ai_image_model,
         cover_source=request.cover_source,
         section_source=request.section_source,
-        overlay_config=request.overlay_config.model_dump()
+        overlay_config=request.overlay_config.model_dump(),
+        imgbb_api_key=masked_key
     )
 
 

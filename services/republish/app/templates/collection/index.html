@@ -459,10 +459,11 @@
                     <p class="text-xs text-gray-400 mt-1">생성된 HTML 콘텐츠가 존재하지 않습니다</p>
                 </div>
                 <!-- 콘텐츠가 있을 때 iframe 렌더링 -->
-                <iframe x-show="!contentModal.loading && contentModal.rawHtml"
-                        :srcdoc="contentModal.safeHtml"
-                        class="w-full border-0" style="height: calc(90vh - 140px);"
-                        sandbox=""></iframe>
+                <template x-if="!contentModal.loading && contentModal.rawHtml">
+                    <iframe :srcdoc="contentModal.safeHtml"
+                            class="w-full border-0" style="height: calc(90vh - 140px);"
+                            sandbox="allow-same-origin"></iframe>
+                </template>
             </div>
             <div class="flex items-center justify-end gap-2 px-6 py-4 border-t bg-gray-50">
                 <span x-show="contentModal.copied" x-transition

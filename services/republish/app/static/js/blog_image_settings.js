@@ -18,6 +18,14 @@ function imageSettingsApp() {
         // 블로그 ID (부모 컴포넌트에서 설정)
         blogId: null,
 
+        // 블로그 플랫폼 (부모 컴포넌트에서 가져옴)
+        blogPlatform: '',
+
+        // imgbb API 키 (Blogger 전용)
+        imgbbApiKey: '',
+        imgbbApiKeyOriginal: '',  // 변경 감지용
+        showImgbbKey: false,
+
         // 이미지 모드: template, ai, both
         imageMode: 'template',
 
@@ -118,6 +126,8 @@ function imageSettingsApp() {
                     console.log('[imageSettingsApp] 이벤트로 blogId 수신:', this.blogId);
                     this.loadSettings();
                 }
+                // 부모 컴포넌트에서 플랫폼 정보 가져오기
+                this._loadBlogPlatform();
             });
 
             // $nextTick으로 DOM 준비 후 부모에서 blogId 가져오기 시도
@@ -135,7 +145,10 @@ function imageSettingsApp() {
                 const parentData = settingsEl._x_dataStack[0];
                 if (parentData.selectedBlog && parentData.selectedBlog.id) {
                     this.blogId = parentData.selectedBlog.id;
-                    console.log('[imageSettingsApp] 부모에서 blogId 가져옴:', this.blogId);
+                    if (parentData.selectedBlog.platform) {
+                        this.blogPlatform = parentData.selectedBlog.platform;
+                    }
+                    console.log('[imageSettingsApp] 부모에서 blogId 가져옴:', this.blogId, '플랫폼:', this.blogPlatform);
                     this.loadSettings();
                     return true;
                 }
@@ -168,6 +181,19 @@ function imageSettingsApp() {
             return this.getBlogIdFromUrl();
         },
 
+        /**
+         * 부모 컴포넌트에서 블로그 플랫폼 정보 가져오기
+         */
+        _loadBlogPlatform() {
+            const settingsEl = document.getElementById('blogSettings');
+            if (settingsEl && settingsEl._x_dataStack && settingsEl._x_dataStack[0]) {
+                const parentData = settingsEl._x_dataStack[0];
+                if (parentData.selectedBlog && parentData.selectedBlog.platform) {
+                    this.blogPlatform = parentData.selectedBlog.platform;
+                }
+            }
+        },
+
         async loadSettings() {
             const blogId = this.getBlogId();
             if (!blogId) { this.loading = false; return; }
@@ -190,6 +216,12 @@ function imageSettingsApp() {
             if (data.ai_image_model) this.aiImageModel = data.ai_image_model;
             if (data.cover_source) this.coverSource = data.cover_source;
             if (data.section_source) this.sectionSource = data.section_source;
+
+            // imgbb API 키 (Blogger 전용, 마스킹된 값일 수 있음)
+            if (data.imgbb_api_key !== undefined) {
+                this.imgbbApiKey = data.imgbb_api_key || '';
+                this.imgbbApiKeyOriginal = this.imgbbApiKey;
+            }
 
             if (data.overlay_config) {
                 const config = data.overlay_config;
@@ -453,6 +485,11 @@ function imageSettingsApp() {
         drawText: imagePreviewMixin.drawText,
 
         async saveSettings() {
+            // 부모에서 최신 blogId 동기화
+            const settingsEl = document.getElementById('blogSettings');
+            if (settingsEl && settingsEl._x_dataStack && settingsEl._x_dataStack[0] && settingsEl._x_dataStack[0].selectedBlog) {
+                this.blogId = settingsEl._x_dataStack[0].selectedBlog.id;
+            }
             const blogId = this.getBlogId();
             if (!blogId) return;
 
@@ -469,6 +506,11 @@ function imageSettingsApp() {
                     section_source: this.sectionSource,
                     overlay_config: this.overlayConfig
                 };
+
+                // imgbb API 키: 변경된 경우만 포함 (마스킹 값 재전송 방지)
+                if (this.blogPlatform === 'blogger' && this.imgbbApiKey !== this.imgbbApiKeyOriginal) {
+                    payload.imgbb_api_key = this.imgbbApiKey;
+                }
 
                 const response = await fetch(`/api/v1/blogs/${blogId}/settings/image`, {
                     method: 'POST',

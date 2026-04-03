@@ -108,6 +108,10 @@ class ImageSettingsRequest(BaseModel):
         default_factory=OverlayConfig,
         description="오버레이 설정"
     )
+    imgbb_api_key: Optional[str] = Field(
+        default=None,
+        description="imgBB API 키 (Blogger 이미지 호스팅용). 빈 문자열이면 키 삭제"
+    )
 
 
 class ImageSettingsResponse(BaseModel):
@@ -132,6 +136,10 @@ class ImageSettingsResponse(BaseModel):
         description="both 모드: 섹션이미지 소스"
     )
     overlay_config: Dict[str, Any] = Field(..., description="오버레이 설정")
+    imgbb_api_key: Optional[str] = Field(
+        default=None,
+        description="마스킹된 imgBB API 키 (예: abc***xyz)"
+    )
 
 
 # =============================================================================

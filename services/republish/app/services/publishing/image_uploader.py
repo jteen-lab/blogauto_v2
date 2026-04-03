@@ -9,7 +9,6 @@
 """
 import base64
 import hashlib
-import logging
 import re
 from io import BytesIO
 from pathlib import Path
@@ -20,9 +19,10 @@ from PIL import Image
 
 from ...models.blog import Blog, BlogPlatform
 from ...core.encryption import decrypt_api_key
+from ...core.logger import get_logger
 from .publish_result import ImageUploadResult
 
-logger = logging.getLogger(__name__)
+logger = get_logger("image_uploader", "app.log")
 
 # 이미지 최적화 설정
 MAX_IMAGE_WIDTH = 1200

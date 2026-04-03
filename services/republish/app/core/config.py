@@ -64,9 +64,13 @@ class Settings(BaseSettings):
     image_storage_dir: str = "app/static/generated/images"
     image_url_prefix: str = "/static/generated/images"
 
-    # WordPress 관련 (추후 사용)
+    # WordPress 관련
     wp_api_timeout: int = 30
     wp_max_retries: int = 3
+
+    # Google OAuth (Blogger API용)
+    google_client_id: Optional[str] = None
+    google_client_secret: Optional[str] = None
 
     @validator("database_url", pre=True)
     def build_database_url(cls, v: Optional[str], values: dict) -> str:

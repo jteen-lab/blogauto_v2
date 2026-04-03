@@ -206,6 +206,11 @@ function categorySettingsApp() {
          * 카테고리 설정 저장
          */
         async saveCategories() {
+            // blogId를 부모에서 항상 최신으로 동기화
+            const parent = this.$el.closest('#blogSettings');
+            if (parent && parent._x_dataStack && parent._x_dataStack[0] && parent._x_dataStack[0].selectedBlog) {
+                this.blogId = parent._x_dataStack[0].selectedBlog.id;
+            }
             if (!this.blogId) {
                 this.showMessage('블로그 정보를 찾을 수 없습니다', 'error');
                 return;
@@ -261,13 +266,12 @@ function categorySettingsApp() {
          init();
      })"
      x-effect="(() => {
-         if (!blogId) {
-             const parent = $el.closest('#blogSettings');
-             if (parent && parent._x_dataStack && parent._x_dataStack[0] && parent._x_dataStack[0].selectedBlog) {
-                 blogId = parent._x_dataStack[0].selectedBlog.id;
-                 if (blogId && categories.length === 0 && !loading) {
-                     loadCategories(blogId);
-                 }
+         const parent = $el.closest('#blogSettings');
+         if (parent && parent._x_dataStack && parent._x_dataStack[0] && parent._x_dataStack[0].selectedBlog) {
+             const newId = parent._x_dataStack[0].selectedBlog.id;
+             if (newId && newId !== blogId) {
+                 blogId = newId;
+                 if (!loading) loadCategories(blogId);
              }
          }
      })()"

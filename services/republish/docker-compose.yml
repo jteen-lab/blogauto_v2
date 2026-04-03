@@ -60,11 +60,14 @@ services:
       - JWT_SECRET=${JWT_SECRET:-dev-jwt-secret-change-in-production}
       - JWT_EXPIRE_MINUTES=${JWT_EXPIRE_MINUTES:-1440}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - GOOGLE_CLIENT_ID=${BLOGGER_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${BLOGGER_CLIENT_SECRET:-}
     volumes:
       - ./logs:/app/logs
       - ./app:/app/app
       - ./media:/app/media
       - ../../shared:/app/shared
+      - ./.env:/app/.env:ro
     ports:
       - "8001:8000"
     restart: unless-stopped

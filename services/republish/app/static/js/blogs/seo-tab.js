@@ -143,12 +143,10 @@ function seoSettingsApp() {
          * SEO 설정 저장
          */
         async saveConfig() {
-            // blogId 재확인
-            if (!this.blogId) {
-                const parent = this.$el.closest('#blogSettings');
-                if (parent && parent._x_dataStack && parent._x_dataStack[0] && parent._x_dataStack[0].selectedBlog) {
-                    this.blogId = parent._x_dataStack[0].selectedBlog.id;
-                }
+            // blogId를 부모에서 항상 최신으로 동기화
+            const parent = this.$el.closest('#blogSettings');
+            if (parent && parent._x_dataStack && parent._x_dataStack[0] && parent._x_dataStack[0].selectedBlog) {
+                this.blogId = parent._x_dataStack[0].selectedBlog.id;
             }
 
             if (!this.blogId) {

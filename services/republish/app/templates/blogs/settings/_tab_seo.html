@@ -24,14 +24,14 @@
          init();
      })"
      x-effect="(() => {
-         if (!blogId) {
-             const parent = $el.closest('#blogSettings');
-             if (parent && parent._x_dataStack && parent._x_dataStack[0] && parent._x_dataStack[0].selectedBlog) {
-                 blogId = parent._x_dataStack[0].selectedBlog.id;
-                 blogPlatform = parent._x_dataStack[0].selectedBlog.platform;
-                 if (blogId && !loaded && !loading) {
-                     loadConfig(blogId);
-                 }
+         const parent = $el.closest('#blogSettings');
+         if (parent && parent._x_dataStack && parent._x_dataStack[0] && parent._x_dataStack[0].selectedBlog) {
+             const newBlog = parent._x_dataStack[0].selectedBlog;
+             if (newBlog.id && newBlog.id !== blogId) {
+                 blogId = newBlog.id;
+                 blogPlatform = newBlog.platform;
+                 loaded = false;
+                 if (!loading) loadConfig(blogId);
              }
          }
      })()"

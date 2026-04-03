@@ -321,7 +321,11 @@ function replaceTabApp() {
          * 저장
          */
         async save() {
-            // blogId 유효성 검사
+            // 부모에서 최신 blogId 동기화
+            const settingsEl = document.getElementById('blogSettings');
+            if (settingsEl && settingsEl._x_dataStack && settingsEl._x_dataStack[0] && settingsEl._x_dataStack[0].selectedBlog) {
+                this.blogId = settingsEl._x_dataStack[0].selectedBlog.id;
+            }
             if (!this.blogId || this.blogId === 'null') {
                 console.error('저장 실패: 유효한 blog_id가 없습니다.');
                 if (typeof showErrorMessage === 'function') {
