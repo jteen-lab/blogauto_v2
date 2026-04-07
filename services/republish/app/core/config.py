@@ -145,5 +145,53 @@ def get_settings() -> Settings:
     return Settings()
 
 
+def validate_env_required() -> list[str]:
+    """
+    .env.required에 정의된 필수 변수가 .env에 설정되어 있는지 검증
+
+    Returns:
+        누락된 변수명 리스트 (비어있으면 모두 설정됨)
+    """
+    from pathlib import Path
+
+    required_file = Path(__file__).parents[2] / ".env.required"
+    env_file = Path(__file__).parents[2] / ".env"
+
+    if not required_file.exists():
+        return []
+
+    # .env.required에서 필수 변수 목록 추출
+    required_vars: list[str] = []
+    for line in required_file.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        var_name = line.split("=", 1)[0].strip()
+        if var_name:
+            required_vars.append(var_name)
+
+    if not required_vars:
+        return []
+
+    # .env에서 설정된 변수 추출
+    env_vars: set[str] = set()
+    if env_file.exists():
+        for line in env_file.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split("=", 1)
+            if len(parts) == 2 and parts[1].strip():
+                env_vars.add(parts[0].strip())
+
+    # 환경변수에서도 확인 (docker-compose 주입 등)
+    missing = []
+    for var in required_vars:
+        if var not in env_vars and not os.environ.get(var):
+            missing.append(var)
+
+    return missing
+
+
 # 전역 설정 객체
 settings = get_settings()

@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
-from .core.config import settings
+from .core.config import settings, validate_env_required
 from .core.database import init_database, close_database, db_manager
 from .core.logger import get_logger
 from .middleware.logging_middleware import LoggingMiddleware
@@ -99,6 +99,14 @@ async def lifespan(app: FastAPI):
     """애플리케이션 생명주기 관리"""
     # 시작 시
     logger.info("BlogAuto V2 애플리케이션 시작")
+
+    # 필수 환경변수 검증
+    missing_vars = validate_env_required()
+    if missing_vars:
+        logger.warning(
+            f"[ENV] 필수 환경변수 누락: {', '.join(missing_vars)} | "
+            f".env 파일을 확인하세요 (.env.required 참조)"
+        )
 
     # 노드 모듈 등록
     from app.modules import register_all_modules
