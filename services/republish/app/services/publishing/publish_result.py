@@ -33,3 +33,4 @@ class PublishResult:
     error: Optional[str] = None
     retry_count: int = 0
     errors: list = field(default_factory=list)
+    warnings: list = field(default_factory=list)

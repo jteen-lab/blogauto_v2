@@ -20,6 +20,9 @@ if TYPE_CHECKING:
     from .blog import Blog
     from .title import MainTitle
 
+# 최대 발행 재시도 횟수
+MAX_PUBLISH_ATTEMPTS: int = 3
+
 
 class CrawledPost(Base):
     """
@@ -139,6 +142,24 @@ class CrawledPost(Base):
         onupdate=func.now()
     )
 
+    # 발행 재시도 추적
+    publish_attempts: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default="0",
+        comment="발행 시도 횟수"
+    )
+    last_publish_error: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        comment="마지막 발행 에러 메시지"
+    )
+    last_publish_attempted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="마지막 발행 시도 시각"
+    )
+
     # 관계
     blog: Mapped["Blog"] = relationship("Blog", back_populates="crawled_posts")
     matched_main_title: Mapped[Optional["MainTitle"]] = relationship(
@@ -191,9 +212,28 @@ class CrawledPost(Base):
         return self.published_at is not None
 
     @property
+    def is_publish_exhausted(self) -> bool:
+        """최대 발행 시도 횟수 초과 여부"""
+        return self.publish_attempts >= MAX_PUBLISH_ATTEMPTS
+
+    @property
     def is_publishable(self) -> bool:
-        """발행 가능 여부 (생성됨 + 미발행)"""
-        return self.is_generated and not self.is_published
+        """발행 가능 여부 (생성됨 + 미발행 + 시도 횟수 미초과)"""
+        return self.is_generated and not self.is_published and not self.is_publish_exhausted
+
+    def record_publish_failure(self, error: str) -> None:
+        """
+        발행 실패 기록
+
+        시도 횟수를 증가시키고, 마지막 에러와 시도 시각을 저장합니다.
+
+        Args:
+            error: 에러 메시지 (500자까지 저장)
+        """
+        self.publish_attempts += 1
+        self.last_publish_error = error[:500] if error else None
+        self.last_publish_attempted_at = datetime.now()
+        self.updated_at = datetime.now()
 
     def mark_published(
         self,

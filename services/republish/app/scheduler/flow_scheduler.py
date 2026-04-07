@@ -149,20 +149,21 @@ class FlowScheduler:
                 gp_settings = self._find_gp_settings(flow)
                 blogs = [link.blog for link in flow.blog_links if link.blog]
 
+                # GP 필수 액션 타입 정의
+                # generate/prompt/publish/republish는 성장 단계별 전략이 필요하므로 GP 필수
+                # collect/data는 단순 수집이므로 GP 없이도 등록 가능
+                GP_REQUIRED_ACTIONS = {"generate", "prompt", "publish", "republish"}
+
                 if not gp_settings:
-                    logger.warning(
+                    logger.info(
                         f"[FLOW_SCHEDULER] GP 모듈 미설정 | FlowID={flow_id} | "
-                        f"스케줄러 등록 불가"
+                        f"GP 불필요 액션만 등록 진행"
                     )
-                    return {
-                        "success": False,
-                        "message": "Growth Profile 모듈이 없어 오토런 등록이 불가합니다",
-                        "flow_id": flow_id
-                    }
 
                 # action_type 기반 등록
                 registered_count = 0
                 registered_actions = set()
+                skipped_actions: list[str] = []
 
                 for link in flow.module_links:
                     module = link.module
@@ -183,6 +184,15 @@ class FlowScheduler:
                     if module_type_code in ("publish", "republish"):
                         continue
 
+                    # GP 필수 액션인데 GP가 없으면 스킵
+                    if module_type_code in GP_REQUIRED_ACTIONS and not gp_settings:
+                        skipped_actions.append(module_type_code)
+                        logger.warning(
+                            f"[FLOW_SCHEDULER] GP 필수 액션 스킵 | FlowID={flow_id} | "
+                            f"ActionType={module_type_code} | GP 모듈 없음"
+                        )
+                        continue
+
                     if module_type_code in registered_actions:
                         logger.info(
                             f"[FLOW_SCHEDULER] 중복 액션 스킵 | FlowID={flow_id} | "
@@ -196,10 +206,21 @@ class FlowScheduler:
                         db, flow.id, module_type_code
                     )
 
-                    # GP에서 모듈 타입별 간격 계산
-                    interval_minutes = self._get_gp_interval(
-                        gp_settings, blogs, module_type_code
-                    )
+                    # 간격 계산: GP 있으면 GP 기반, 없으면 모듈 설정 또는 기본값
+                    if gp_settings:
+                        interval_minutes = self._get_gp_interval(
+                            gp_settings, blogs, module_type_code
+                        )
+                    else:
+                        module_settings = module.settings or {}
+                        interval_minutes = module_settings.get(
+                            "interval_minutes", 60
+                        )
+                        logger.info(
+                            f"[FLOW_SCHEDULER] GP 없음, 폴백 간격 사용 | "
+                            f"FlowID={flow_id} | ActionType={module_type_code} | "
+                            f"Interval={interval_minutes}분"
+                        )
 
                     # 즉시 실행 + 스케줄 등록
                     if immediate_execution:
@@ -260,17 +281,40 @@ class FlowScheduler:
 
                 await db.commit()
 
+                # 등록된 액션이 없는 경우 (모든 액션이 GP 필수인데 GP 없음)
+                if registered_count == 0:
+                    skip_msg = ", ".join(skipped_actions) if skipped_actions else "없음"
+                    logger.warning(
+                        f"[FLOW_SCHEDULER] 등록 가능한 액션 없음 | FlowID={flow_id} | "
+                        f"GP 필수로 스킵된 액션={skip_msg}"
+                    )
+                    return {
+                        "success": False,
+                        "message": (
+                            "등록 가능한 액션이 없습니다. "
+                            f"GP 필수 액션({skip_msg})은 Growth Profile 모듈이 필요합니다"
+                        ),
+                        "flow_id": flow_id
+                    }
+
                 logger.info(
                     f"[FLOW_SCHEDULER] Flow registered | FlowID={flow_id} | "
-                    f"Modules={registered_count} | Immediate={immediate_execution}"
+                    f"Modules={registered_count} | Immediate={immediate_execution} | "
+                    f"Skipped={skipped_actions}"
                 )
+
+                # 결과 메시지에 스킵 정보 포함
+                message = f"플로우가 등록되었습니다 (모듈 {registered_count}개)"
+                if skipped_actions:
+                    message += f" (GP 없어 스킵: {', '.join(skipped_actions)})"
 
                 return {
                     "success": True,
-                    "message": f"플로우가 등록되었습니다 (모듈 {registered_count}개)",
+                    "message": message,
                     "flow_id": flow_id,
                     "module_count": registered_count,
-                    "immediate_execution": immediate_execution
+                    "immediate_execution": immediate_execution,
+                    "skipped_actions": skipped_actions
                 }
 
         except Exception as e:
@@ -799,29 +843,41 @@ class FlowScheduler:
                 # 실행 상태 조회 (action_type 기반)
                 state = await self._get_execution_state(db, flow_id, action_type)
 
+                # 동시 실행 가드
+                if state and not state.acquire_execution_lock():
+                    logger.info(
+                        f"[FLOW_SCHEDULER] 이전 실행 진행 중, 스킵 | "
+                        f"FlowID={flow_id} | ActionType={action_type}"
+                    )
+                    await db.commit()
+                    return
+                # 잠금 상태를 즉시 DB에 반영
+                await db.commit()
+
                 # 블로그 목록 가져오기
                 blogs = [link.blog for link in flow.blog_links if link.blog]
 
                 # GP 설정 로드 (스케줄/간격의 기준)
                 gp_settings = self._find_gp_settings(flow)
 
-                # GP 활성 시간대 체크
-                gp_schedule = gp_settings.get("schedule_matrix") if gp_settings else None
-                if state and not state.is_in_active_window(gp_schedule):
-                    logger.info(
-                        f"[FLOW_SCHEDULER] GP 비활성 시간대, 재스케줄 | "
-                        f"FlowID={flow_id} | ActionType={action_type}"
-                    )
-                    interval_minutes = self._get_gp_interval(
-                        gp_settings, blogs, action_type
-                    ) if gp_settings else 60
-                    await self._schedule_next_execution(
-                        db, flow, action_type=action_type, state=state,
-                        interval_minutes=interval_minutes,
-                        gp_settings=gp_settings
-                    )
-                    await db.commit()
-                    return
+                # GP 활성 시간대 체크 (GP가 있는 경우에만)
+                if gp_settings:
+                    gp_schedule = gp_settings.get("schedule_matrix")
+                    if state and not state.is_in_active_window(gp_schedule):
+                        logger.info(
+                            f"[FLOW_SCHEDULER] GP 비활성 시간대, 재스케줄 | "
+                            f"FlowID={flow_id} | ActionType={action_type}"
+                        )
+                        interval_minutes = self._get_gp_interval(
+                            gp_settings, blogs, action_type
+                        )
+                        await self._schedule_next_execution(
+                            db, flow, action_type=action_type, state=state,
+                            interval_minutes=interval_minutes,
+                            gp_settings=gp_settings
+                        )
+                        await db.commit()
+                        return
 
                 # action_type별 실행
                 if action_type == "collect":
@@ -915,31 +971,12 @@ class FlowScheduler:
                 # 실행 상태 업데이트
                 if state:
                     state.record_execution(result.get("success", False))
+                    state.release_execution_lock()
 
-                    # GP 기반 다음 실행 시간 계산 및 스케줄 등록
-                    interval_minutes = self._get_gp_interval(
-                        gp_settings, blogs, action_type
-                    ) if gp_settings else 60
-
-                    if gp_settings:
-                        _jitter = gp_settings.get("jitter", {})
-                        next_execution = state.calculate_next_execution(
-                            interval_minutes=interval_minutes,
-                            schedule_matrix=gp_settings.get("schedule_matrix"),
-                            jitter_enabled=_jitter.get("enabled", False),
-                            jitter_min_percent=_jitter.get("min_percent", -15),
-                            jitter_max_percent=_jitter.get("max_percent", 25),
-                        )
-                    else:
-                        next_execution = state.calculate_next_execution(
-                            interval_minutes=interval_minutes,
-                        )
-
-                    if next_execution:
-                        await self._schedule_at_time(
-                            flow, action_type=action_type, state=state,
-                            run_time=next_execution
-                        )
+                # 다음 스케줄 등록 (성공/실패 무관)
+                await self._reschedule_next(
+                    db, flow, action_type, state, gp_settings, blogs
+                )
 
                 await db.commit()
 
@@ -954,6 +991,173 @@ class FlowScheduler:
             logger.error(
                 f"[FLOW_SCHEDULER] Execution error | FlowID={flow_id} | "
                 f"ActionType={action_type} | Error={e}"
+            )
+            # 잠금 해제 (별도 세션으로 안전하게 처리)
+            try:
+                await self._release_lock_safely(flow_id, action_type)
+            except Exception as unlock_err:
+                logger.error(
+                    f"[FLOW_SCHEDULER] 잠금 해제 실패 | FlowID={flow_id} | "
+                    f"ActionType={action_type} | Error={unlock_err}"
+                )
+            # 에러 시에도 다음 스케줄을 등록하여 오토런 영구 정지 방지
+            await self._recover_schedule(flow_id, action_type)
+
+    async def _reschedule_next(
+        self,
+        db: AsyncSession,
+        flow: Flow,
+        action_type: str,
+        state: Optional[FlowExecutionState],
+        gp_settings: Optional[dict],
+        blogs: List[Blog],
+        fallback_interval: int = 0,
+    ) -> None:
+        """다음 실행 스케줄 등록 (성공/실패 무관하게 항상 호출)
+
+        기존 try 블록 내 스케줄 등록 로직(920~942행)을 추출한 메서드.
+        fallback_interval이 지정되면 GP 간격 대신 해당 값(분)을 사용합니다.
+
+        Args:
+            db: DB 세션
+            flow: 플로우 객체
+            action_type: 액션 타입
+            state: 실행 상태 (None이면 스케줄 등록 생략)
+            gp_settings: GP 설정 dict
+            blogs: 플로우에 연결된 블로그 목록
+            fallback_interval: 폴백 간격(분). 0이면 GP 기반 계산 사용.
+        """
+        if not state:
+            return
+
+        # 간격 결정: 폴백 > GP > 모듈 settings > 기본값(60분)
+        if fallback_interval > 0:
+            interval_minutes = fallback_interval
+        elif gp_settings:
+            interval_minutes = self._get_gp_interval(
+                gp_settings, blogs, action_type
+            )
+        else:
+            # GP 없는 경우: 모듈 자체 settings에서 interval_minutes 조회
+            interval_minutes = self._get_module_fallback_interval(
+                flow, action_type
+            )
+
+        # GP jitter 설정 적용
+        if gp_settings:
+            _jitter = gp_settings.get("jitter", {})
+            next_execution = state.calculate_next_execution(
+                interval_minutes=interval_minutes,
+                schedule_matrix=gp_settings.get("schedule_matrix"),
+                jitter_enabled=_jitter.get("enabled", False),
+                jitter_min_percent=_jitter.get("min_percent", -15),
+                jitter_max_percent=_jitter.get("max_percent", 25),
+            )
+        else:
+            next_execution = state.calculate_next_execution(
+                interval_minutes=interval_minutes,
+            )
+
+        if next_execution:
+            await self._schedule_at_time(
+                flow, action_type=action_type, state=state,
+                run_time=next_execution
+            )
+
+    async def _release_lock_safely(
+        self,
+        flow_id: int,
+        action_type: str,
+    ) -> None:
+        """별도 세션으로 실행 잠금을 안전하게 해제합니다.
+
+        예외 핸들러에서 기존 세션이 유효하지 않을 수 있으므로
+        새 세션을 열어 잠금을 해제합니다.
+
+        Args:
+            flow_id: 플로우 ID
+            action_type: 액션 타입
+        """
+        async with db_manager.get_session() as db:
+            state = await self._get_execution_state(
+                db, flow_id, action_type
+            )
+            if state and state.is_running:
+                state.release_execution_lock()
+                await db.commit()
+                logger.info(
+                    f"[FLOW_SCHEDULER] 잠금 안전 해제 완료 | "
+                    f"FlowID={flow_id} | ActionType={action_type}"
+                )
+
+    async def _recover_schedule(
+        self,
+        flow_id: int,
+        action_type: str,
+    ) -> None:
+        """에러 발생 시 복구 스케줄링
+
+        실행 콜백에서 예외 발생 시 호출되어, 연속 실패를 기록하고
+        다음 실행 스케줄을 등록합니다.
+        연속 5회 이상 실패 시 해당 액션의 오토런을 일시정지합니다.
+
+        Args:
+            flow_id: 플로우 ID
+            action_type: 액션 타입
+        """
+        max_consecutive_failures = 5
+        fallback_interval_minutes = 15
+
+        try:
+            async with db_manager.get_session() as db:
+                flow = await self._get_flow_with_modules(db, flow_id)
+                if not flow:
+                    logger.warning(
+                        f"[FLOW_SCHEDULER] 복구 스케줄링 - 플로우 없음 | FlowID={flow_id}"
+                    )
+                    return
+
+                state = await self._get_execution_state(db, flow_id, action_type)
+                if not state:
+                    logger.warning(
+                        f"[FLOW_SCHEDULER] 복구 스케줄링 - 실행 상태 없음 | "
+                        f"FlowID={flow_id} | ActionType={action_type}"
+                    )
+                    return
+
+                # 잠금 해제 + 실패 기록
+                state.release_execution_lock()
+                state.record_execution(False)
+
+                # 연속 실패 임계값 초과 시 일시정지
+                if (state.consecutive_failures or 0) >= max_consecutive_failures:
+                    state.is_paused = True
+                    state.paused_at = datetime.now(KST)
+                    logger.warning(
+                        f"[FLOW_SCHEDULER] 연속 실패 {state.consecutive_failures}회 "
+                        f"→ 오토런 일시정지 | FlowID={flow_id} | ActionType={action_type}"
+                    )
+                else:
+                    # 폴백 간격으로 다음 실행 등록
+                    gp_settings = self._find_gp_settings(flow)
+                    blogs = [link.blog for link in flow.blog_links if link.blog]
+                    await self._reschedule_next(
+                        db, flow, action_type, state, gp_settings, blogs,
+                        fallback_interval=fallback_interval_minutes,
+                    )
+                    logger.info(
+                        f"[FLOW_SCHEDULER] 에러 복구 스케줄 등록 | FlowID={flow_id} | "
+                        f"ActionType={action_type} | "
+                        f"ConsecutiveFailures={state.consecutive_failures} | "
+                        f"FallbackInterval={fallback_interval_minutes}분"
+                    )
+
+                await db.commit()
+
+        except Exception as inner_e:
+            logger.error(
+                f"[FLOW_SCHEDULER] 복구 스케줄링 실패 | FlowID={flow_id} | "
+                f"ActionType={action_type} | Error={inner_e}"
             )
 
     async def _register_active_flows(self) -> None:
@@ -1014,6 +1218,46 @@ class FlowScheduler:
     # ===========================================
     # GP(Growth Profile) 기반 스케줄 헬퍼
     # ===========================================
+
+    def _get_module_fallback_interval(
+        self,
+        flow: Flow,
+        action_type: str,
+        default_minutes: int = 60
+    ) -> int:
+        """
+        GP가 없을 때 모듈 자체 settings에서 폴백 간격(분) 조회
+
+        모듈의 settings.interval_minutes 값을 우선 사용하고,
+        없으면 default_minutes를 반환합니다.
+
+        Args:
+            flow: 모듈 링크가 로드된 플로우
+            action_type: 액션 타입 코드
+            default_minutes: 기본 간격(분)
+
+        Returns:
+            실행 간격(분)
+        """
+        for link in flow.module_links:
+            module = link.module
+            if not module or not module.module_type:
+                continue
+            if module.module_type.code == action_type:
+                module_settings = module.settings or {}
+                interval = module_settings.get("interval_minutes")
+                if interval and isinstance(interval, (int, float)) and interval > 0:
+                    logger.debug(
+                        f"[FLOW_SCHEDULER] 모듈 폴백 간격 | "
+                        f"ActionType={action_type} | Interval={int(interval)}분"
+                    )
+                    return int(interval)
+                break
+        logger.debug(
+            f"[FLOW_SCHEDULER] 기본 폴백 간격 사용 | "
+            f"ActionType={action_type} | Interval={default_minutes}분"
+        )
+        return default_minutes
 
     def _find_gp_settings(self, flow: Flow) -> Optional[dict]:
         """

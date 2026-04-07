@@ -199,16 +199,22 @@ def create_mock_crawled_post(
     post.published_at = published_at
     post.created_at = datetime(2026, 1, 1)
     post.updated_at = datetime(2026, 1, 1)
+    post.publish_attempts = 0
+    post.last_publish_error = None
+    post.last_publish_attempted_at = None
 
     # 프로퍼티 Mock
     post.is_generated = (source == "generated")
     post.is_published = (published_at is not None)
+    post.is_publish_exhausted = False
     post.is_publishable = (source == "generated" and published_at is None)
 
-    def _mark_published(published_url=None):
+    def _mark_published(published_url=None, platform_post_id=None):
         post.published_at = datetime.now()
         if published_url:
             post.url = published_url
+        if platform_post_id:
+            post.platform_post_id = platform_post_id
 
     post.mark_published = MagicMock(side_effect=_mark_published)
     return post

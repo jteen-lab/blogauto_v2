@@ -69,10 +69,13 @@ class InventoryManager:
         Returns:
             발행 가능한 CrawledPost 또는 None
         """
+        max_attempts = 3
+
         conditions = [
             CrawledPost.blog_id == blog_id,
             CrawledPost.source == "generated",
             CrawledPost.published_at.is_(None),
+            CrawledPost.publish_attempts < max_attempts,
         ]
 
         if generation_history_id:
@@ -83,7 +86,10 @@ class InventoryManager:
         query = (
             select(CrawledPost)
             .where(*conditions)
-            .order_by(CrawledPost.created_at.asc())
+            .order_by(
+                CrawledPost.publish_attempts.asc(),
+                CrawledPost.created_at.asc(),
+            )
             .limit(1)
         )
 

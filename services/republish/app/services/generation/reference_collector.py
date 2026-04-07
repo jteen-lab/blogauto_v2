@@ -110,7 +110,26 @@ class ReferenceCollector:
                 search_query, settings, user_settings, ref
             )
         except Exception as e:
-            logger.error(f"[REF_COLLECT] 수집 실패: {e}")
+            logger.warning(
+                f"[REF_COLLECT] 첫 수집 실패, "
+                f"단순화 검색어로 재시도: {e}"
+            )
+            try:
+                simple_query = search_query[:20].strip()
+                retry_result = await self._execute_collection(
+                    simple_query, settings, user_settings, ref
+                )
+                if retry_result.count > 0:
+                    logger.info(
+                        f"[REF_COLLECT] 재시도 성공 | "
+                        f"count={retry_result.count}"
+                    )
+                    return retry_result
+            except Exception as retry_e:
+                logger.error(
+                    f"[REF_COLLECT] 재시도도 실패: {retry_e}"
+                )
+
             ref.status = "failed"
             ref.completed_at = datetime.now()
             await self.db.commit()

@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import List, Dict, Optional, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, update
+from sqlalchemy.exc import IntegrityError
 
 from ..models.title import MainTitle, TitleGroup, TempTitle
 from ..core.logger import get_logger
@@ -159,12 +160,24 @@ class TitleTransferService:
             if temp_title:
                 temp_title.status = "duplicate"
 
-        # MainTitle 일괄 추가
+        # MainTitle 개별 추가 (savepoint + IntegrityError 시 중복 스킵)
+        items_added: List[Dict[str, Any]] = []
         for item in main_titles_to_add:
+            savepoint = await self.db.begin_nested()
             self.db.add(item['main_title'])
-
-        # flush하여 ID 생성
-        await self.db.flush()
+            try:
+                await savepoint.commit()
+                items_added.append(item)
+            except IntegrityError:
+                await savepoint.rollback()
+                title_text = item['main_title'].title
+                logger.info(f"[TRANSFER] 중복 제목 스킵 (DB 제약): '{title_text[:30]}'")
+                result["duplicates"] += 1
+                # 삭제 대상에서 제거
+                if item['temp_id'] in temp_ids_to_delete:
+                    temp_ids_to_delete.remove(item['temp_id'])
+                continue
+        main_titles_to_add = items_added
 
         # 그룹화 처리 (새 그룹 생성 포함)
         if auto_group:

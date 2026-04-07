@@ -6,7 +6,7 @@ CrawledPost 레코드로 저장합니다.
 
 Features:
 - WordPress REST API 포스트 크롤링
-- Blogger API 포스트 크롤링
+- Blogger API 포스트 크롤링 (API Key / OAuth 동적 인증)
 - 배치 처리 및 증분 크롤링
 - 에러 핸들링 및 재시도
 """
@@ -21,6 +21,7 @@ from ..models.blog import Blog, BlogPlatform
 from ..models.crawled_post import CrawledPost
 from ..core.security import decrypt_data
 from ..core.logger import get_logger
+from . import blogger_crawl_helper as bch
 
 logger = get_logger("crawl_service", "crawl.log")
 
@@ -193,31 +194,55 @@ class CrawlService:
         """
         Blogger API를 통한 포스트 크롤링
 
-        Blogger API: GET /blogger/v3/blogs/{blogId}/posts
+        Blogger ID 획득 우선순위:
+          1. blog.placeholders["blogger_id"] 캐시
+          2. blog.api_key_encrypted가 숫자이면 직접 ID
+          3. Google API Key로 blogs/byurl 호출
+          4. OAuth Bearer Token으로 blogs/byurl 호출
+
+        인증 방식:
+          - API Key: ?key= 파라미터
+          - OAuth: Authorization: Bearer 헤더
         """
         posts: List[CrawledPostData] = []
 
-        # Blogger API 키 복호화
-        api_key = await self._get_blogger_api_key(blog)
-        if not api_key:
-            logger.error(f"Blogger API 키 없음 | 블로그ID={blog.id}")
-            raise ValueError("Blogger API 키가 설정되지 않았습니다")
+        # 인증 정보 획득
+        api_key = bch.get_blogger_api_key(blog)
+        oauth_token = await bch.get_blogger_oauth_token(blog, self.db)
 
-        # 블로그 ID 추출 (URL에서)
-        blog_id = await self._extract_blogger_id(blog.url, api_key)
+        # 인증 수단이 하나도 없으면 조기 실패
+        if not api_key and not oauth_token:
+            logger.error(f"Blogger 인증 정보 없음 | 블로그ID={blog.id}")
+            raise ValueError(
+                "Blogger 인증 정보가 없습니다. "
+                "API Key 또는 OAuth 토큰을 설정하세요."
+            )
+
+        # Blogger ID 획득 (강건한 다단계 탐색)
+        blog_id, auth_method = await bch.resolve_blogger_id(
+            blog, api_key, oauth_token
+        )
         if not blog_id:
-            raise ValueError("Blogger 블로그 ID를 찾을 수 없습니다")
+            raise ValueError(
+                "Blogger 블로그 ID를 찾을 수 없습니다. "
+                "API Key, OAuth 토큰, 또는 블로그 설정을 확인하세요."
+            )
+
+        # 인증 방식 결정 (ID 획득에 성공한 방식을 우선 사용)
+        auth_params, auth_headers = bch.build_blogger_auth(
+            api_key, oauth_token, auth_method=auth_method
+        )
 
         api_url = f"https://www.googleapis.com/blogger/v3/blogs/{blog_id}/posts"
         page_token = None
 
         async with httpx.AsyncClient(timeout=self.REQUEST_TIMEOUT) as client:
             while len(posts) < self.MAX_TOTAL_POSTS:
-                params = {
-                    "key": api_key,
+                params: Dict[str, Any] = {
                     "maxResults": self.MAX_POSTS_PER_REQUEST,
                     "status": "live",
-                    "fields": "items(id,title,url,published),nextPageToken"
+                    "fields": "items(id,title,url,published),nextPageToken",
+                    **auth_params,
                 }
 
                 if page_token:
@@ -228,7 +253,9 @@ class CrawlService:
                     params["startDate"] = blog.last_crawled_at.isoformat()
 
                 try:
-                    response = await client.get(api_url, params=params)
+                    response = await client.get(
+                        api_url, params=params, headers=auth_headers
+                    )
                     response.raise_for_status()
                     data = response.json()
 
@@ -239,7 +266,9 @@ class CrawlService:
                             posts.append(CrawledPostData(
                                 title=self._clean_title(title),
                                 url=post.get("url"),
-                                published_at=self._parse_datetime(post.get("published"))
+                                published_at=self._parse_datetime(
+                                    post.get("published")
+                                )
                             ))
 
                     # 다음 페이지 토큰
@@ -249,7 +278,9 @@ class CrawlService:
 
                 except httpx.HTTPStatusError as e:
                     if e.response.status_code == 401:
-                        logger.warning(f"Blogger 인증 실패 | 블로그ID={blog.id}")
+                        logger.warning(
+                            f"Blogger 인증 실패 | 블로그ID={blog.id}"
+                        )
                     raise
 
         return posts
@@ -270,32 +301,6 @@ class CrawlService:
                 logger.warning(f"WordPress 인증 정보 복호화 실패 | 블로그ID={blog.id} | 오류={e}")
 
         return headers
-
-    async def _get_blogger_api_key(self, blog: Blog) -> Optional[str]:
-        """Blogger API 키 가져오기"""
-        if blog.api_key_encrypted:
-            try:
-                return decrypt_data(blog.api_key_encrypted)
-            except Exception as e:
-                logger.warning(f"Blogger API 키 복호화 실패 | 블로그ID={blog.id}")
-        return None
-
-    async def _extract_blogger_id(self, blog_url: str, api_key: str) -> Optional[str]:
-        """Blogger URL에서 블로그 ID 추출"""
-        api_url = "https://www.googleapis.com/blogger/v3/blogs/byurl"
-
-        async with httpx.AsyncClient(timeout=self.REQUEST_TIMEOUT) as client:
-            try:
-                response = await client.get(api_url, params={
-                    "url": blog_url,
-                    "key": api_key
-                })
-                response.raise_for_status()
-                data = response.json()
-                return data.get("id")
-            except Exception as e:
-                logger.error(f"Blogger ID 추출 실패 | URL={blog_url} | 오류={e}")
-                return None
 
     async def _save_crawled_posts(
         self,

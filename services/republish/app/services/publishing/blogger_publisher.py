@@ -7,8 +7,6 @@ OAuth 2.0 (GoogleCredential) 인증을 사용합니다.
 설계 문서: publish_module_implementation_plan.md - Phase 3.3.2
 """
 import asyncio
-import os
-from pathlib import Path
 from typing import Optional
 
 import httpx
@@ -19,28 +17,9 @@ from ...models.google_credential import GoogleCredential
 from ...core.encryption import decrypt_api_key
 from ...core.logger import get_logger
 from .publish_result import PublishResult
+from .google_oauth_helper import refresh_access_token
 
 logger = get_logger("blogger_publisher", "app.log")
-
-_CID_KEYS = ("GOOGLE_CLIENT_ID", "BLOGGER_CLIENT_ID")
-_CSE_KEYS = ("GOOGLE_CLIENT_SECRET", "BLOGGER_CLIENT_SECRET")
-
-
-def _read_env_file(cid: str, cse: str) -> tuple:
-    """프로젝트 .env 파일에서 OAuth 설정 읽기"""
-    for p in (Path(__file__).parents[3] / ".env",):
-        if not p.exists():
-            continue
-        for line in p.read_text().splitlines():
-            if "=" not in line or line.lstrip().startswith("#"):
-                continue
-            k, v = line.split("=", 1)
-            k, v = k.strip(), v.strip()
-            if not cid and k in _CID_KEYS:
-                cid = v
-            if not cse and k in _CSE_KEYS:
-                cse = v
-    return cid, cse
 
 BLOGGER_API_BASE = "https://www.googleapis.com/blogger/v3"
 MAX_RETRIES = 3
@@ -120,8 +99,8 @@ class BloggerPublisher:
             "content": final_html,
         }
 
-        # 라벨 설정 (Blog.placeholders에서)
-        labels = self._get_labels(blog)
+        # 라벨 설정 (정적 라벨 + 카테고리 동적 라벨)
+        labels = self._get_labels(blog, post=post)
         if labels:
             payload["labels"] = labels
 
@@ -289,13 +268,94 @@ class BloggerPublisher:
             )
         return None
 
-    def _get_labels(self, blog: Blog) -> list:
-        """Blog.placeholders에서 Blogger 라벨 조회"""
+    def _get_labels(
+        self,
+        blog: Blog,
+        post: Optional[CrawledPost] = None,
+    ) -> list:
+        """Blog.placeholders 정적 라벨 + 카테고리 기반 동적 라벨 병합
+
+        Args:
+            blog: 블로그 객체
+            post: CrawledPost (카테고리 라벨 추출용, 선택)
+
+        Returns:
+            라벨 문자열 리스트 (중복 제거됨)
+        """
+        # 1. 정적 라벨 (Blog.placeholders)
         placeholders = blog.placeholders or {}
-        labels = placeholders.get("blogger_labels", [])
-        if isinstance(labels, list):
+        static_labels = placeholders.get("blogger_labels", [])
+        labels: list = (
+            list(static_labels)
+            if isinstance(static_labels, list)
+            else []
+        )
+
+        # 2. 동적 라벨 (CrawledPost 카테고리)
+        # lazy loading 에러(greenlet) 방지를 위해 try/except 처리
+        if post:
+            try:
+                category_labels = self._extract_category_labels(
+                    post,
+                )
+                for label in category_labels:
+                    if label and label not in labels:
+                        labels.append(label)
+            except Exception as e:
+                logger.debug(
+                    "[BLOGGER_LABELS] 카테고리 라벨 추출 스킵 | %s",
+                    type(e).__name__,
+                )
+
+        if labels:
+            logger.debug(
+                "[BLOGGER_LABELS] blog=%s | labels=%s",
+                blog.name, labels,
+            )
+
+        return labels
+
+    @staticmethod
+    def _extract_category_labels(
+        post: CrawledPost,
+    ) -> list:
+        """CrawledPost의 매칭된 MainTitle에서 카테고리 라벨 추출
+
+        MainTitle.topic_id / subtopic_id -> Topic.name / SubTopic.name
+        이미 로드된 관계 객체에서 안전하게 가져옵니다.
+        관계가 로드되지 않은 경우 빈 리스트를 반환합니다.
+
+        Args:
+            post: CrawledPost 객체
+
+        Returns:
+            카테고리 이름 문자열 리스트
+        """
+        labels: list = []
+
+        # matched_main_title 관계가 로드되어 있을 때만
+        main_title = getattr(post, "matched_main_title", None)
+        if not main_title:
             return labels
-        return []
+
+        # Topic 이름 (이미 로드된 경우)
+        topic = getattr(main_title, "topic", None)
+        if topic and getattr(topic, "name", None):
+            labels.append(topic.name)
+
+        # SubTopic 이름 (이미 로드된 경우)
+        subtopic = getattr(main_title, "subtopic", None)
+        if subtopic and getattr(subtopic, "name", None):
+            labels.append(subtopic.name)
+
+        if labels:
+            logger.debug(
+                "[BLOGGER_LABELS] 카테고리 라벨 추출 | "
+                "main_title_id=%s | labels=%s",
+                main_title.id, labels,
+            )
+
+        return labels
 
     async def _get_access_token(
         self, blog: Blog,
@@ -339,64 +399,17 @@ class BloggerPublisher:
     async def _exchange_refresh_token(
         self, refresh_token: str,
     ) -> Optional[str]:
-        """Refresh Token → Access Token 교환"""
-        cid, cse = self._get_google_oauth_credentials()
-        if not cid or not cse:
-            logger.error(
-                "[BLOGGER_PUBLISH] CLIENT_ID/SECRET "
-                "미설정 → 토큰 갱신 불가"
-            )
-            return None
-        try:
-            async with httpx.AsyncClient(
-                timeout=PUBLISH_TIMEOUT,
-            ) as client:
-                resp = await client.post(
-                    "https://oauth2.googleapis.com/token",
-                    data={
-                        "client_id": cid,
-                        "client_secret": cse,
-                        "refresh_token": refresh_token,
-                        "grant_type": "refresh_token",
-                    },
-                )
-            if resp.status_code == 200:
-                token = resp.json().get("access_token")
-                logger.info(
-                    "[BLOGGER_PUBLISH] Access Token "
-                    "발급 성공 (refresh_token 사용)"
-                )
-                return token
-            logger.error(
-                "[BLOGGER_PUBLISH] 토큰 교환 실패 | "
-                "status=%d | %s",
-                resp.status_code, resp.text[:200],
-            )
-        except Exception as e:
-            logger.error(
-                "[BLOGGER_PUBLISH] 토큰 교환 오류: %s",
-                e,
-            )
-        return None
+        """Refresh Token → Access Token 교환
 
-    @staticmethod
-    def _get_google_oauth_credentials() -> tuple:
-        """Google OAuth Client ID/Secret 조회"""
-        import os
-        from ...core.config import settings
-        cid = (
-            getattr(settings, "google_client_id", "")
-            or os.environ.get("GOOGLE_CLIENT_ID", "")
-            or os.environ.get("BLOGGER_CLIENT_ID", "")
-        )
-        cse = (
-            getattr(settings, "google_client_secret", "")
-            or os.environ.get("GOOGLE_CLIENT_SECRET", "")
-            or os.environ.get("BLOGGER_CLIENT_SECRET", "")
-        )
-        if not cid or not cse:
-            cid, cse = _read_env_file(cid, cse)
-        return cid, cse
+        공통 헬퍼(google_oauth_helper)에 위임합니다.
+
+        Args:
+            refresh_token: Google refresh_token
+
+        Returns:
+            새 access_token 또는 None (실패 시)
+        """
+        return await refresh_access_token(refresh_token)
 
     async def _send_request(
         self,

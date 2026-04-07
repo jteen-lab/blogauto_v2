@@ -110,7 +110,7 @@ class TestMarkAsPublished:
         manager = InventoryManager(mock_db)
         result = await manager.mark_as_published(crawled_post_id=1)
 
-        post.mark_published.assert_called_once_with(None)
+        post.mark_published.assert_called_once_with(None, platform_post_id=None)
         mock_db.flush.assert_called_once()
         assert result is post
 
@@ -128,7 +128,7 @@ class TestMarkAsPublished:
             crawled_post_id=2, published_url=published_url,
         )
 
-        post.mark_published.assert_called_once_with(published_url)
+        post.mark_published.assert_called_once_with(published_url, platform_post_id=None)
 
     @pytest.mark.asyncio
     async def test_raises_when_not_found(self, mock_db):

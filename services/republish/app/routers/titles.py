@@ -9,6 +9,7 @@ from typing import Optional, List, TYPE_CHECKING
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
+from sqlalchemy.exc import IntegrityError
 
 if TYPE_CHECKING:
     from sqlalchemy.sql.elements import ColumnElement
@@ -393,7 +394,19 @@ async def create_main_title(
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_user),
 ):
-    """정식 제목 수동 생성"""
+    """정식 제목 수동 생성
+
+    Args:
+        data: 생성할 제목 데이터
+        db: 데이터베이스 세션
+        current_user: 인증된 사용자
+
+    Returns:
+        생성된 MainTitle 응답
+
+    Raises:
+        HTTPException: 동일 (title, topic_id) 조합이 이미 존재할 때 409 Conflict
+    """
     title = MainTitle(
         title=data.title,
         category_id=data.category_id,
@@ -407,7 +420,15 @@ async def create_main_title(
         keywords=data.keywords,
     )
     db.add(title)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        logger.warning(f"[CREATE_TITLE] 중복 제목: '{data.title[:30]}' (topic_id={data.topic_id})")
+        raise HTTPException(
+            status_code=409,
+            detail=f"동일한 제목이 이미 존재합니다 (topic_id={data.topic_id})"
+        )
     await db.refresh(title)
 
     logger.info(f"[CREATE_TITLE] 제목 생성: {title.id} - {title.title[:30]}")

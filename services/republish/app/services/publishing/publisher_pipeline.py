@@ -134,10 +134,25 @@ class PublisherPipeline:
         if not publish_result.success:
             result.error = publish_result.error
             result.retry_count = publish_result.retry_count
+
+            # 발행 실패 기록
+            try:
+                crawled_post.record_publish_failure(
+                    publish_result.error or "Unknown error"
+                )
+                await self.db.commit()
+            except Exception as e:
+                logger.error(
+                    "[PIPELINE] 발행 실패 기록 오류 | "
+                    "post_id=%d | %s",
+                    crawled_post.id, e,
+                )
+
             logger.error(
                 "[PIPELINE] 발행 실패 | blog=%s | post_id=%d "
-                "| error=%s",
+                "| error=%s | attempts=%d/%d",
                 blog.name, crawled_post.id, result.error,
+                crawled_post.publish_attempts, 3,
             )
             return result
 
@@ -247,6 +262,8 @@ class PublisherPipeline:
                 "이미지 없이 발행 계속 | error=%s",
                 result.error,
             )
+            # 로컬 이미지 경로가 발행에 포함되지 않도록 정리
+            post.image_url = None
 
         return result
 
@@ -349,8 +366,12 @@ class PublisherPipeline:
         for local_url in local_urls:
             image_path = self._resolve_image_path(local_url)
             if not image_path:
+                html = self._strip_local_image_url(
+                    html, local_url
+                )
                 logger.warning(
-                    "[PIPELINE] 인라인 이미지 경로 미존재: %s",
+                    "[PIPELINE] 인라인 이미지 경로 미존재, "
+                    "로컬 URL 제거: %s",
                     local_url,
                 )
                 continue
@@ -360,9 +381,12 @@ class PublisherPipeline:
                     blog, image_path, title=post_title or "image",
                 )
             except Exception as e:
+                html = self._strip_local_image_url(
+                    html, local_url
+                )
                 logger.error(
-                    "[PIPELINE] 인라인 이미지 업로드 예외: "
-                    "%s | %s", local_url, e,
+                    "[PIPELINE] 인라인 이미지 업로드 예외, "
+                    "로컬 URL 제거: %s | %s", local_url, e,
                 )
                 continue
 
@@ -376,12 +400,45 @@ class PublisherPipeline:
                     result.platform_url[:60],
                 )
             else:
+                html = self._strip_local_image_url(
+                    html, local_url
+                )
                 logger.warning(
                     "[PIPELINE] 인라인 이미지 업로드 실패, "
-                    "로컬 URL 유지: %s | error=%s",
+                    "로컬 URL 제거: %s | error=%s",
                     local_url, result.error,
                 )
 
+        return html
+
+    @staticmethod
+    def _strip_local_image_url(
+        html: str, local_url: str,
+    ) -> str:
+        """
+        업로드 실패한 로컬 이미지 URL을 HTML에서 제거
+
+        img 태그의 src를 빈 값으로 대체하고
+        data-upload-failed 속성을 추가합니다.
+        href 등 나머지 참조도 제거합니다.
+
+        Args:
+            html: 대상 HTML 문자열
+            local_url: 제거할 로컬 URL
+
+        Returns:
+            로컬 URL이 제거된 HTML
+        """
+        # img src 속성 대체
+        html = re.sub(
+            rf'(<img[^>]*?)src=["\']'
+            + re.escape(local_url)
+            + r'["\']([^>]*?>)',
+            r'\1src="" data-upload-failed="true"\2',
+            html,
+        )
+        # href 등 나머지 참조 제거
+        html = html.replace(local_url, "")
         return html
 
     @staticmethod

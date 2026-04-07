@@ -22,9 +22,15 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
 from ..core.database import Base
+from ..core.logger import get_logger
+
+logger = get_logger("flow_execution_state", "republish.log")
 
 # Timezone 설정
 KST = pytz.timezone('Asia/Seoul')
+
+# 좀비 실행 판정 기준 (분)
+ZOMBIE_TIMEOUT_MINUTES = 30
 
 
 class FlowExecutionState(Base):
@@ -104,6 +110,23 @@ class FlowExecutionState(Base):
         default=0,
         comment="실패 횟수"
     )
+    consecutive_failures = Column(
+        Integer,
+        default=0,
+        comment="연속 실패 횟수 (성공 시 0으로 리셋)"
+    )
+
+    # 동시 실행 가드
+    is_running = Column(
+        Boolean,
+        default=False,
+        comment="현재 실행 중 여부"
+    )
+    last_execution_started_at = Column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="마지막 실행 시작 시간"
+    )
 
     # 메타
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -117,14 +140,58 @@ class FlowExecutionState(Base):
     flow = relationship("Flow", backref="execution_states")
     blog = relationship("Blog")
 
+    def acquire_execution_lock(self) -> bool:
+        """실행 잠금 획득. 이미 실행 중이면 False 반환.
+
+        좀비 상태(ZOMBIE_TIMEOUT_MINUTES 이상 경과)이면
+        강제 해제 후 잠금을 재획득합니다.
+
+        Returns:
+            True: 잠금 획득 성공 (실행 가능)
+            False: 이미 실행 중 (스킵 필요)
+        """
+        if self.is_running:
+            if self.last_execution_started_at:
+                started = self.last_execution_started_at
+                if started.tzinfo is None:
+                    started = KST.localize(started)
+                elapsed = (
+                    datetime.now(KST) - started
+                ).total_seconds()
+                if elapsed > ZOMBIE_TIMEOUT_MINUTES * 60:
+                    logger.warning(
+                        f"[EXEC_GUARD] 좀비 실행 감지 "
+                        f"({elapsed / 60:.0f}분 경과) → 강제 해제 | "
+                        f"flow_id={self.flow_id} | "
+                        f"action_type={self.action_type}"
+                    )
+                else:
+                    return False  # 정상 실행 중
+            else:
+                return False
+
+        self.is_running = True
+        self.last_execution_started_at = datetime.now(KST)
+        return True
+
+    def release_execution_lock(self) -> None:
+        """실행 잠금 해제"""
+        self.is_running = False
+
     def record_execution(self, success: bool) -> None:
-        """실행 기록 (timezone aware)"""
+        """실행 기록 (timezone aware)
+
+        Args:
+            success: 실행 성공 여부. True이면 consecutive_failures를 0으로 리셋.
+        """
         self.last_executed_at = datetime.now(KST)
         self.total_executions += 1
         if success:
             self.successful_executions += 1
+            self.consecutive_failures = 0
         else:
             self.failed_executions += 1
+            self.consecutive_failures = (self.consecutive_failures or 0) + 1
 
     def pause(self, remaining_seconds: int = None) -> None:
         """일시정지 (timezone aware)"""

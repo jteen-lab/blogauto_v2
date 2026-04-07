@@ -8,7 +8,7 @@
 import uuid
 from datetime import datetime
 from typing import Optional, List, TYPE_CHECKING
-from sqlalchemy import Integer, String, Boolean, DateTime, Text, Float, ForeignKey, Index
+from sqlalchemy import Integer, String, Boolean, DateTime, Text, Float, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from ..core.database import Base
@@ -16,6 +16,7 @@ from ..core.database import Base
 if TYPE_CHECKING:
     from .keyword import KeywordCategory, CollectedKeyword
     from .crawled_post import CrawledPost
+    from .category import Topic, SubTopic
 
 
 class TitleGroup(Base):
@@ -91,10 +92,13 @@ class MainTitle(Base):
 
     # 관계
     category: Mapped[Optional["KeywordCategory"]] = relationship("KeywordCategory")
+    topic: Mapped[Optional["Topic"]] = relationship("Topic", foreign_keys=[topic_id], lazy="select")
+    subtopic: Mapped[Optional["SubTopic"]] = relationship("SubTopic", foreign_keys=[subtopic_id], lazy="select")
     group: Mapped[Optional["TitleGroup"]] = relationship("TitleGroup", back_populates="titles", foreign_keys=[group_id])
     matched_crawled_posts: Mapped[List["CrawledPost"]] = relationship("CrawledPost", back_populates="matched_main_title")
 
     __table_args__ = (
+        UniqueConstraint('title', 'topic_id', name='uq_main_title_topic'),
         Index('ix_main_title_status_category', 'status', 'category_id'),
         Index('ix_main_title_group_rep', 'group_id', 'is_group_representative'),
     )

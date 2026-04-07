@@ -1,26 +1,16 @@
 """
-생성 모듈 메인 서비스
+생성 모듈 메인 서비스 - 전체 생성 파이프라인 오케스트레이션
 
-전체 생성 파이프라인을 오케스트레이션합니다.
-
-워크플로우:
-1. 원본 제목 로드
-2. 제목 재조합 (TitleRecombiner)
-3. 참조자료 수집 (ReferenceCollector)
-4. 글 생성 (AIService)
-5. 내부링크 삽입 (InternalLinker)
-6. 치환 처리 (SubstitutionProcessor)
-6.5. 이미지 생성 (ImageGenerator) - Phase C
-7. 저장 (CrawledPost + GenerationHistory)
-8. 원본 제목 사용 처리 (mark_used)
-
+워크플로우: 제목 로드 → 재조합 → 참조수집 → 글생성 → 내부링크 → 치환 → 이미지 → 저장
 설계 문서: generation_module_workplan.md - Phase 3 - 3.2.1
 """
+import asyncio
+import json
 import logging
 import random
 import time
 from typing import Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -34,21 +24,13 @@ from .title_recombiner import TitleRecombiner
 from .reference_collector import ReferenceCollector
 from .internal_linker import InternalLinker
 from .substitution_processor import SubstitutionProcessor
-from .image_generator import ImageGenerator
+from .image_generator import ImageGenerator, ImageResult
+from .content_generator_helper import (
+    generate_content_with_meta,
+    DEFAULT_CONTENT_PROMPT,
+)
 
 logger = logging.getLogger(__name__)
-
-# 기본 글 생성 프롬프트
-DEFAULT_CONTENT_PROMPT = (
-    "다음 주제로 블로그 글을 작성해주세요.\n\n"
-    "제목: {title}\n\n"
-    "{reference_materials}\n\n"
-    "규칙:\n"
-    "- 마크다운 형식으로 작성\n"
-    "- ## 소제목을 사용하여 섹션 구분\n"
-    "- 자연스러운 한국어 문장\n"
-    "- 1500~3000자 분량"
-)
 
 
 @dataclass
@@ -68,6 +50,7 @@ class GenerationResult:
     image_url: Optional[str] = None
     section_images: Optional[list] = None
     error: Optional[str] = None
+    warnings: list = field(default_factory=list)
 
 
 class ContentGenerator:
@@ -202,6 +185,31 @@ class ContentGenerator:
             f"[GENERATOR] 참조자료 수집 | count={ref_result.count}"
         )
 
+        # 참조자료 검증: 0건일 때 required 여부에 따라 분기
+        pipeline_warnings: list[str] = []
+        if ref_result.count == 0:
+            ref_required = settings.get("reference", {}).get(
+                "required", False
+            )
+            if ref_required:
+                elapsed = int(time.time() - start_time)
+                logger.warning(
+                    f"[GENERATOR] 참조자료 필수인데 0건 → 생성 중단 | "
+                    f"title='{working_title[:30]}'"
+                )
+                return GenerationResult(
+                    success=False,
+                    generation_time_seconds=elapsed,
+                    error="참조자료 수집 실패 (required=True)",
+                    warnings=["참조자료 0건으로 생성 중단"],
+                )
+            else:
+                logger.warning(
+                    f"[GENERATOR] 참조자료 0건, 참조 없이 계속 | "
+                    f"title='{working_title[:30]}'"
+                )
+                pipeline_warnings.append("참조자료 없이 생성됨")
+
         # 카테고리/키워드 정보 (프롬프트 플레이스홀더용)
         category_name = ""
         keywords_text = ""
@@ -220,7 +228,6 @@ class ContentGenerator:
                 if topic:
                     category_name = topic.name
         if source_title.keywords:
-            import json
             try:
                 kw_list = json.loads(source_title.keywords)
                 if isinstance(kw_list, list):
@@ -232,7 +239,8 @@ class ContentGenerator:
 
         # 4. 글 생성
         logger.debug("[GENERATOR] 4단계 시작: AI 글 생성")
-        content_result = await self._generate_content_with_meta(
+        content_result = await generate_content_with_meta(
+            ai_service=self.ai_service,
             title=working_title,
             reference_injection=ref_result.to_prompt_injection(),
             settings=settings,
@@ -261,31 +269,32 @@ class ContentGenerator:
             text_replace_enabled=text_replace_enabled,
         )
 
-        # 6.5 이미지 생성 (실패해도 글 생성은 계속)
+        # 6.5 이미지 생성 (재시도 포함, 실패해도 글 생성 계속)
         image_url = None
         ai_model_image = None
         section_images = None
-        try:
-            img_result = await self.image_generator.generate(
-                blog=blog, title=working_title,
-                module_settings=settings, final_html=final_html,
-                keywords=keywords_text,
+        img_result = await self._generate_image_with_retry(
+            blog=blog, working_title=working_title,
+            settings=settings, final_html=final_html,
+            keywords_text=keywords_text,
+        )
+        if img_result and img_result.success and img_result.image_url:
+            image_url = img_result.image_url
+            ai_model_image = img_result.ai_model
+            section_images = img_result.section_images
+            # both 모드: 섹션 이미지가 삽입된 HTML로 교체
+            if img_result.final_html:
+                final_html = img_result.final_html
+            logger.info(
+                f"[GENERATOR] 이미지 생성 완료 | "
+                f"mode={img_result.image_mode} | "
+                f"sections={len(section_images) if section_images else 0}"
             )
-            if img_result.success and img_result.image_url:
-                image_url = img_result.image_url
-                ai_model_image = img_result.ai_model
-                section_images = img_result.section_images
-                # both 모드: 섹션 이미지가 삽입된 HTML로 교체
-                if img_result.final_html:
-                    final_html = img_result.final_html
-                logger.info(
-                    f"[GENERATOR] 이미지 생성 완료 | "
-                    f"mode={img_result.image_mode} | "
-                    f"sections={len(section_images) if section_images else 0}"
-                )
-        except Exception as e:
+        else:
+            if img_result is None:
+                pipeline_warnings.append("이미지 생성 실패 (재시도 소진)")
             logger.warning(
-                f"[GENERATOR] 이미지 생성 실패 (글 생성은 계속): {e}"
+                "[GENERATOR] 이미지 생성 최종 실패, 이미지 없이 계속"
             )
 
         # 6.7 SEO 메타 생성 (HTML 변환 후, 규칙 기반만 사용)
@@ -316,7 +325,6 @@ class ContentGenerator:
         # 7. GenerationHistory 저장
         elapsed = int(time.time() - start_time)
         # section_images JSON 직렬화 (DB 저장용)
-        import json
         section_images_json = (
             json.dumps(section_images, ensure_ascii=False)
             if section_images else None
@@ -386,92 +394,56 @@ class ContentGenerator:
             ai_model_image=ai_model_image,
             image_url=image_url,
             section_images=section_images,
+            warnings=pipeline_warnings,
         )
 
-    async def _generate_content_with_meta(
+    async def _generate_image_with_retry(
         self,
-        title: str,
-        reference_injection: str,
-        settings: dict,
         blog: Blog,
-        category_name: str = "",
-        keywords_text: str = "",
-    ) -> dict:
-        """
-        AI로 글 생성 (블로그 AI 설정 기준)
-
-        설정 우선순위:
-        - AI 제공자/모델: Blog.ai_config.writing_ai (블로그 설정만 사용)
-        - 프롬프트/세부설정: Module.settings.content_generation → 기본값
+        working_title: str,
+        settings: dict,
+        final_html: str,
+        keywords_text: str,
+        max_retries: int = 2,
+    ) -> Optional[ImageResult]:
+        """이미지 생성 (지수 백오프 재시도, 실패 시 None 반환)
 
         Args:
-            title: 재조합된 제목
-            reference_injection: 참조자료 프롬프트 텍스트
-            settings: 모듈 설정
             blog: 블로그 객체
-            category_name: 카테고리 이름 (프롬프트 {category} 치환용)
-            keywords_text: 키워드 텍스트 (프롬프트 {keywords} 치환용)
+            working_title: 재조합된 제목
+            settings: 모듈 설정
+            final_html: 치환 처리된 HTML
+            keywords_text: 키워드 텍스트
+            max_retries: 최대 재시도 횟수 (기본 2, 백오프 2초/4초)
 
         Returns:
-            dict: {"content": str, "model": str, "provider": str}
+            성공 시 ImageResult, 모든 시도 실패 시 None
         """
-        cg = settings.get("content_generation", {})
-        ai_config = blog.ai_config or {}
-        writing_ai = ai_config.get("writing_ai", {})
+        total = max_retries + 1
+        for attempt in range(total):
+            try:
+                result = await self.image_generator.generate(
+                    blog=blog, title=working_title,
+                    module_settings=settings, final_html=final_html,
+                    keywords=keywords_text,
+                )
+                if result.success:
+                    if attempt > 0:
+                        logger.info(f"[GENERATOR] 이미지 재시도 성공 | attempt={attempt + 1}")
+                    return result
+                logger.warning(
+                    f"[GENERATOR] 이미지 생성 실패 | attempt={attempt + 1}/{total} "
+                    f"| error={getattr(result, 'error', 'unknown')}"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"[GENERATOR] 이미지 생성 예외 | attempt={attempt + 1}/{total} | {e}"
+                )
+            if attempt < max_retries:
+                wait = 2 ** (attempt + 1)  # 2초, 4초
+                logger.debug(f"[GENERATOR] 이미지 재시도 대기 {wait}초")
+                await asyncio.sleep(wait)
 
-        # 프롬프트: 모듈 새 형식 -> 모듈 레거시 키 -> 기본값
-        prompt_template = (
-            cg.get("user_prompt_template")
-            or settings.get("generation_prompt")
-            or DEFAULT_CONTENT_PROMPT
-        )
-        full_prompt = prompt_template.replace(
-            "{title}", title
-        ).replace(
-            "{reference_materials}", reference_injection
-        ).replace(
-            "{category}", category_name
-        ).replace(
-            "{keywords}", keywords_text
-        )
+        return None
 
-        # AI 제공자: 블로그 ai_config.writing_ai 설정만 사용
-        provider = writing_ai.get("provider")
-        model = writing_ai.get("model")
-
-        # 세부 설정: 모듈 설정 -> 기본값
-        temperature = cg.get("temperature", 0.7)
-        max_tokens = cg.get("max_tokens", 4000)
-        system_prompt = cg.get("system_prompt") or None
-        # 고급 AI 설정
-        top_p = cg.get("top_p")
-        top_k = cg.get("top_k")
-        frequency_penalty = cg.get("frequency_penalty")
-        presence_penalty = cg.get("presence_penalty")
-
-        logger.info(
-            f"[GENERATOR] AI 설정 | "
-            f"provider={provider} (source=blog.writing_ai), "
-            f"temp={temperature}, tokens={max_tokens}, "
-            f"sys_prompt={'Y' if system_prompt else 'N'}"
-        )
-
-        # AI 호출
-        result = await self.ai_service.generate(
-            prompt=full_prompt,
-            provider=provider,
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            system_prompt=system_prompt,
-            top_p=top_p,
-            top_k=top_k,
-            frequency_penalty=frequency_penalty,
-            presence_penalty=presence_penalty,
-        )
-
-        if not result:
-            raise RuntimeError("AI 글 생성 실패: 모든 제공자 호출 실패")
-
-        return result
 

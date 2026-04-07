@@ -17,6 +17,7 @@ import httpx
 from ..models.blog import Blog
 from ..models.google_credential import GoogleCredential
 from ..core.logger import get_logger
+from .publishing.google_oauth_helper import refresh_access_token
 
 logger = get_logger("blogger_service", "republish.log")
 
@@ -66,10 +67,26 @@ class BloggerRepublishService:
         method: str,
         url: str,
         headers: Dict[str, str],
-        data: Dict = None
+        data: Dict = None,
+        credential: Optional[GoogleCredential] = None
     ) -> Dict[str, Any]:
-        """API 요청 실행 (재시도 포함)"""
+        """API 요청 실행 (재시도 포함, 401 시 토큰 자동 갱신)
+
+        Args:
+            method: HTTP 메서드
+            url: 요청 URL
+            headers: 요청 헤더
+            data: 요청 바디 (JSON)
+            credential: Google 인증 정보 (401 시 토큰 갱신용)
+
+        Returns:
+            API 응답 JSON
+
+        Raises:
+            BloggerAPIError: API 오류 발생 시
+        """
         last_error = None
+        token_refreshed = False
 
         for attempt in range(self.max_retries + 1):
             try:
@@ -82,6 +99,29 @@ class BloggerRepublishService:
 
                 if response.status_code in [200, 201]:
                     return response.json()
+
+                elif response.status_code == 401 and not token_refreshed and credential:
+                    # 401 Unauthorized: 토큰 갱신 1회 시도
+                    new_token = await self._try_refresh_token(credential)
+                    if new_token:
+                        token_refreshed = True
+                        headers = {
+                            "Authorization": f"Bearer {new_token}",
+                            "Content-Type": "application/json"
+                        }
+                        logger.info(
+                            f"[BLOGGER_API] 토큰 갱신 성공, 요청 재시도 - "
+                            f"{method} {url}"
+                        )
+                        continue
+
+                    # 갱신 실패 시 기존처럼 에러 발생
+                    error_data = response.json() if response.content else {}
+                    raise BloggerAPIError(
+                        message="OAuth 토큰 갱신 실패 (401 Unauthorized)",
+                        status_code=401,
+                        error_data=error_data
+                    )
 
                 elif 400 <= response.status_code < 500:
                     error_data = response.json() if response.content else {}
@@ -122,6 +162,30 @@ class BloggerRepublishService:
 
         raise last_error
 
+    async def _try_refresh_token(
+        self,
+        credential: GoogleCredential
+    ) -> Optional[str]:
+        """credential의 refresh_token으로 access_token 갱신 시도
+
+        Args:
+            credential: Google 인증 정보
+
+        Returns:
+            새 access_token 또는 None (실패 시)
+        """
+        refresh_token = credential.get_refresh_token()
+        if not refresh_token:
+            logger.warning("[BLOGGER_API] refresh_token 없음 → 토큰 갱신 불가")
+            return None
+
+        new_token = await refresh_access_token(refresh_token)
+        if new_token:
+            # credential에 새 토큰 반영 (DB 세션에서 flush 필요)
+            credential.set_tokens(access_token=new_token)
+            logger.info("[BLOGGER_API] credential 토큰 갱신 완료")
+        return new_token
+
     async def get_blog_id(self, blog: Blog, credential: GoogleCredential) -> str:
         """
         블로그 URL로 블로그 ID 조회
@@ -137,7 +201,7 @@ class BloggerRepublishService:
             headers = self._get_auth_headers(credential)
             url = f"{BLOGGER_API_BASE}/blogs/byurl?url={blog.url}"
 
-            result = await self._make_request("GET", url, headers)
+            result = await self._make_request("GET", url, headers, credential=credential)
             blog_id = result.get("id")
 
             logger.info(f"[BLOGGER] Got blog ID | BlogID={blog.id} | BloggerID={blog_id}")
@@ -169,7 +233,7 @@ class BloggerRepublishService:
             # 발행일 기준 오래된 순 정렬
             url = f"{BLOGGER_API_BASE}/blogs/{blogger_id}/posts?maxResults=1&orderBy=published"
 
-            result = await self._make_request("GET", url, headers)
+            result = await self._make_request("GET", url, headers, credential=credential)
             posts = result.get("items", [])
 
             if not posts:
@@ -214,7 +278,7 @@ class BloggerRepublishService:
         url = f"{BLOGGER_API_BASE}/blogs/{blogger_id}/posts/{post_id}/revert"
 
         logger.info(f"[BLOGGER] Reverting to draft | BloggerID={blogger_id} | PostID={post_id}")
-        return await self._make_request("POST", url, headers)
+        return await self._make_request("POST", url, headers, credential=credential)
 
     async def publish_post(
         self,
@@ -237,7 +301,7 @@ class BloggerRepublishService:
         url = f"{BLOGGER_API_BASE}/blogs/{blogger_id}/posts/{post_id}/publish"
 
         logger.info(f"[BLOGGER] Publishing post | BloggerID={blogger_id} | PostID={post_id}")
-        return await self._make_request("POST", url, headers)
+        return await self._make_request("POST", url, headers, credential=credential)
 
     async def republish(self, blog: Blog, credential: GoogleCredential) -> Dict[str, Any]:
         """
@@ -367,7 +431,7 @@ class BloggerRepublishService:
 
             # 블로그 정보 조회 (totalPosts 포함)
             url = f"{BLOGGER_API_BASE}/blogs/{blogger_id}"
-            result = await self._make_request("GET", url, headers)
+            result = await self._make_request("GET", url, headers, credential=credential)
 
             total_posts = result.get("posts", {}).get("totalItems", 0)
             logger.info(f"[BLOGGER] Post count | BlogID={blog.id} | Count={total_posts}")
