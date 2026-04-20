@@ -282,17 +282,19 @@ class ContentGenerator:
             image_url = img_result.image_url
             ai_model_image = img_result.ai_model
             section_images = img_result.section_images
-            # both 모드: 섹션 이미지가 삽입된 HTML로 교체
             if img_result.final_html:
                 final_html = img_result.final_html
             logger.info(
                 f"[GENERATOR] 이미지 생성 완료 | "
                 f"mode={img_result.image_mode} | "
-                f"sections={len(section_images) if section_images else 0}"
+                f"sections="
+                f"{len(section_images) if section_images else 0}"
             )
         else:
             if img_result is None:
-                pipeline_warnings.append("이미지 생성 실패 (재시도 소진)")
+                pipeline_warnings.append(
+                    "이미지 생성 실패 (재시도 소진)"
+                )
             logger.warning(
                 "[GENERATOR] 이미지 생성 최종 실패, 이미지 없이 계속"
             )

@@ -1,33 +1,11 @@
-"""
-Celery 태스크 정의
-
-설계 문서: generation_module_workplan.md
-
-Phase 3 업데이트:
-- recombine_title: TitleRecombiner 서비스 연동 (Phase 2 완료)
-- generate_content: ContentGenerator 전체 파이프라인 연동 (Phase 3 완료)
-- on_generation_complete: 후처리 로직 구현 (Phase 3 완료)
-- generate_image: 이미지 생성 (별도 서비스 연동 필요)
-"""
-import asyncio
+"""Celery 태스크 정의 모듈."""
 import logging
+import os
 
+from app.core.celery_async_bridge import TaskSkipped, run_async
 from app.core.celery_config import celery_app
 
 logger = logging.getLogger(__name__)
-
-
-def _run_async(coro):
-    """비동기 코루틴을 동기 Celery 태스크에서 실행"""
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                return pool.submit(asyncio.run, coro).result()
-        return loop.run_until_complete(coro)
-    except RuntimeError:
-        return asyncio.run(coro)
 
 
 async def _async_recombine_title(
@@ -53,36 +31,70 @@ async def _async_recombine_title(
         }
 
 
-async def _async_generate_content(
+async def _async_generate_via_executor(
     blog_id: int,
-    prompt_module_id: int,
-    source_title_id: int,
+    module_id: int,
+    user_id: int = 1,
+    stage_params_dict: dict = None,
+    force: bool = False,
 ) -> dict:
-    """전체 글 생성 파이프라인 비동기 로직"""
+    """FlowGenerateExecutor를 사용하여 OFF 모드와 동일한 생성 로직 실행.
+
+    Args:
+        blog_id: 블로그 ID
+        module_id: 모듈 ID
+        user_id: 사용자 ID
+        stage_params_dict: StageParams dict 직렬화 (None이면 기본값)
+        force: 재고 체크 없이 강제 생성
+
+    Returns:
+        FlowGenerateExecutor.execute_for_blog()의 반환값
+    """
     from app.core.database import db_manager
-    from app.services.generation.generator import ContentGenerator
+    from app.models.blog import Blog
+    from app.models.module import Module
+    from app.services.generation.flow_generate_executor import FlowGenerateExecutor
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
 
     async with db_manager.get_session() as db:
-        generator = ContentGenerator(db, user_id=1)
-        result = await generator.generate(
-            blog_id=blog_id,
-            prompt_module_id=prompt_module_id,
-            source_title_id=source_title_id,
+        module_result = await db.execute(
+            select(Module)
+            .where(Module.id == module_id)
+            .options(selectinload(Module.module_type))
         )
-        return {
-            "success": result.success,
-            "crawling_post_id": result.crawling_post_id,
-            "generation_history_id": result.generation_history_id,
-            "recombined_title": result.recombined_title,
-            "final_html": result.final_html,
-            "reference_count": result.reference_count,
-            "generation_time_seconds": result.generation_time_seconds,
-            "content_length": result.content_length,
-            "ai_model_title": result.ai_model_title,
-            "ai_model_content": result.ai_model_content,
-            "error": result.error,
-            "status": "completed" if result.success else "failed",
-        }
+        module = module_result.scalar_one_or_none()
+        blog = await db.get(Blog, blog_id)
+
+        if not module or not blog:
+            return {
+                "success": False,
+                "message": f"Module({module_id}) 또는 Blog({blog_id}) 없음",
+            }
+
+        stage_params = None
+        if stage_params_dict:
+            from app.services.generation.flow_execution_context import (
+                ModuleIntervalParams, StageParams,
+            )
+            stage_params = StageParams(
+                stage_name=stage_params_dict["stage_name"],
+                stage_label=stage_params_dict["stage_label"],
+                generate=ModuleIntervalParams(
+                    **stage_params_dict["generate"]
+                ),
+                publish=ModuleIntervalParams(
+                    **stage_params_dict["publish"]
+                ),
+                republish=ModuleIntervalParams(
+                    **stage_params_dict["republish"]
+                ),
+            )
+
+        executor = FlowGenerateExecutor(db, user_id)
+        return await executor.execute_for_blog(
+            module, blog, stage_params=stage_params, force=force
+        )
 
 
 async def _async_on_generation_complete(
@@ -103,14 +115,21 @@ async def _async_on_generation_complete(
                 "message": f"이력 없음: id={generation_history_id}",
             }
 
-        # 원본 제목 사용 처리 (이미 generator에서 처리하지만 안전장치)
-        title = await db.get(MainTitle, source_title_id)
-        if title and title.status != "used":
-            title.mark_used()
-            await db.commit()
-            logger.info(
-                f"[COMPLETE] 제목 사용 처리 완료 | title_id={source_title_id}"
+        # CrawledPost가 실제로 존재할 때만 제목을 used 처리
+        if not history.crawling_post_id:
+            logger.warning(
+                f"[COMPLETE] CrawledPost 없음 → 제목 used 처리 스킵 "
+                f"| title_id={source_title_id}"
             )
+        else:
+            title = await db.get(MainTitle, source_title_id)
+            if title and title.status != "used":
+                title.mark_used()
+                await db.commit()
+                logger.info(
+                    f"[COMPLETE] 제목 사용 처리 완료 "
+                    f"| title_id={source_title_id}"
+                )
 
         return {
             "success": True,
@@ -122,36 +141,22 @@ async def _async_on_generation_complete(
 
 @celery_app.task(
     bind=True,
-    name="app.core.celery_tasks.recombine_title",
+    name="tasks.recombine_title",
     max_retries=2,
     default_retry_delay=10,
 )
 def recombine_title(
-    self,
-    original_title: str,
-    prompt_module_id: int,
-    blog_id: int,
-    generation_request_id: str,
+    self, original_title: str, prompt_module_id: int,
+    blog_id: int, generation_request_id: str,
 ) -> dict:
-    """
-    제목 재조합 태스크
-
-    Args:
-        original_title: 원본 정식 제목
-        prompt_module_id: 프롬프트 모듈 ID
-        blog_id: 블로그 ID
-        generation_request_id: 생성 요청 고유 ID
-
-    Returns:
-        dict: {"recombined_title": str, "ai_model": str, ...}
-    """
+    """제목 재조합 태스크."""
     logger.info(
         f"[TASK:RECOMBINE] 시작 | title='{original_title[:30]}...' "
         f"| request_id={generation_request_id}"
     )
 
     try:
-        result = _run_async(
+        result = run_async(
             _async_recombine_title(
                 original_title, prompt_module_id, blog_id
             )
@@ -167,166 +172,222 @@ def recombine_title(
         logger.error(f"[TASK:RECOMBINE] 실패: {exc}")
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc)
-        return {
-            "recombined_title": original_title,
-            "ai_model": "failed",
-            "ai_provider": "failed",
-            "is_modified": False,
-            "error": str(exc),
-        }
+        raise
 
 
 @celery_app.task(
     bind=True,
-    name="app.core.celery_tasks.generate_content",
+    name="tasks.generate_content",
     max_retries=2,
-    default_retry_delay=30,
+    default_retry_delay=60,
+    soft_time_limit=300,
+    time_limit=360,
+    acks_late=True,
+    reject_on_worker_lost=True,
 )
 def generate_content(
     self,
-    recombined_title: str,
-    prompt_module_id: int,
     blog_id: int,
-    source_title_id: int,
-    generation_request_id: str,
+    module_id: int,
+    title_id: int = 0,
+    flow_id: int = None,
+    user_id: int = 1,
+    stage_params_dict: dict = None,
+    force: bool = False,
 ) -> dict:
-    """
-    글 생성 태스크 (전체 파이프라인)
-
-    ContentGenerator를 사용하여 전체 파이프라인 실행:
-    제목 재조합 → 참조자료 수집 → 글 생성 → 내부링크 → 치환 → 저장
+    """글 생성 태스크. FlowGenerateExecutor를 호출하여 OFF 모드와 동일한 로직 실행.
 
     Args:
-        recombined_title: 재조합된 제목 (로깅용, 실제는 파이프라인에서 재실행)
-        prompt_module_id: 프롬프트 모듈 ID
         blog_id: 블로그 ID
-        source_title_id: 원본 정식 제목 ID
-        generation_request_id: 생성 요청 고유 ID
-
-    Returns:
-        dict: 생성 결과 (success, content, reference_count 등)
+        module_id: 모듈 ID
+        title_id: 제목 ID (미사용, 하위 호환용)
+        flow_id: 플로우 ID (선택)
+        user_id: 사용자 ID
+        stage_params_dict: GP StageParams dict 직렬화
+        force: 재고 체크 없이 강제 생성
     """
+    import redis as redis_lib
+    from app.core.blog_lock import BlogLock
+    from app.core.rate_limiter import AIRateLimiter
+
     logger.info(
-        f"[TASK:CONTENT] 시작 | title='{recombined_title[:30]}...' "
-        f"| request_id={generation_request_id}"
+        f"[TASK:GENERATE] 시작 | blog={blog_id} "
+        f"| module={module_id} | force={force}"
     )
 
+    redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
+    redis_client = redis_lib.from_url(redis_url)
+
+    blog_lock = BlogLock(redis_client)
+    if not blog_lock.acquire(blog_id, "generate"):
+        logger.info(f"[TASK:GENERATE] 블로그 락 대기 | blog={blog_id}")
+        raise self.retry(countdown=30, max_retries=5)
+
     try:
-        result = _run_async(
-            _async_generate_content(
-                blog_id, prompt_module_id, source_title_id
+        rate_limiter = AIRateLimiter(redis_client)
+        can_call, wait_time = rate_limiter.can_call("openai")
+        if not can_call:
+            logger.info(
+                f"[TASK:GENERATE] Rate Limit 대기 | wait={wait_time}s"
+            )
+            blog_lock.release(blog_id, "generate")
+            raise self.retry(countdown=wait_time)
+
+        result = run_async(
+            _async_generate_via_executor(
+                blog_id, module_id, user_id,
+                stage_params_dict, force,
             )
         )
 
-        if result["success"]:
-            logger.info(
-                f"[TASK:CONTENT] 완료 | "
-                f"title='{result.get('recombined_title', '')[:30]}' "
-                f"| refs={result['reference_count']} "
-                f"| length={result['content_length']} "
-                f"| time={result['generation_time_seconds']}s"
-            )
-        else:
+        if result.get("skipped"):
+            msg = result.get("message", "스킵")
             logger.warning(
-                f"[TASK:CONTENT] 실패 | error={result.get('error')}"
+                f"[TASK:GENERATE] 생성 스킵 (실패 처리) | blog={blog_id} "
+                f"| 사유: {msg}"
             )
+            raise TaskSkipped(msg)
 
-        return result
+        if result.get("success"):
+            logger.info(
+                f"[TASK:GENERATE] 완료 | blog={blog_id} "
+                f"| title='{result.get('post_title', '')[:30]}'"
+            )
+            return result
 
+        error_msg = result.get("error") or result.get("message") or "생성 실패"
+        raise RuntimeError(f"생성 실패: {error_msg}")
+
+    except TaskSkipped:
+        raise
     except Exception as exc:
-        logger.error(f"[TASK:CONTENT] 실패: {exc}")
+        logger.error(
+            f"[TASK:GENERATE] 예외 | blog={blog_id} | {exc}"
+        )
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc)
+        raise
+    finally:
+        blog_lock.release(blog_id, "generate")
+
+
+async def _async_generate_image(
+    blog_id: int, title: str, module_settings: dict,
+    generation_history_id: int = None,
+    crawled_post_id: int = None,
+) -> dict:
+    """이미지 생성 비동기 로직. 성공 시 DB(history/post)에 image_url 반영."""
+    from app.core.database import db_manager
+    from app.models.blog import Blog
+    from app.services.generation.image_generator import ImageGenerator
+
+    async with db_manager.get_session() as db:
+        blog = await db.get(Blog, blog_id)
+        if not blog:
+            return {"success": False, "error": f"Blog({blog_id}) 없음"}
+
+        generator = ImageGenerator(db, user_id=1)
+        result = await generator.generate(
+            blog=blog, title=title,
+            module_settings=module_settings or {},
+        )
+
+        # DB 업데이트 (이미지 URL 반영)
+        if result.success and result.image_url:
+            if generation_history_id:
+                from app.models.generation_history import GenerationHistory
+                history = await db.get(
+                    GenerationHistory, generation_history_id,
+                )
+                if history:
+                    history.image_url = result.image_url
+            if crawled_post_id:
+                from app.models.crawled_post import CrawledPost
+                post = await db.get(CrawledPost, crawled_post_id)
+                if post:
+                    post.image_url = result.image_url
+            await db.commit()
+
         return {
-            "success": False,
-            "content": None,
-            "reference_count": 0,
-            "ai_model_content": "failed",
-            "error": str(exc),
-            "status": "failed",
+            "success": result.success,
+            "image_url": result.image_url,
+            "ai_model": result.ai_model,
+            "status": "completed" if result.success else "failed",
+            "error": getattr(result, "error", None),
         }
 
 
 @celery_app.task(
     bind=True,
-    name="app.core.celery_tasks.generate_image",
+    name="tasks.generate_image",
     max_retries=1,
     default_retry_delay=15,
+    soft_time_limit=120,
+    time_limit=150,
+    acks_late=True,
 )
 def generate_image(
-    self,
-    title: str,
-    content_summary: str,
-    blog_id: int,
-    generation_request_id: str,
+    self, blog_id: int, title: str,
+    module_settings: dict = None,
+    generation_history_id: int = None,
+    crawled_post_id: int = None,
 ) -> dict:
-    """
-    이미지 생성 태스크
+    """이미지 생성 태스크 (블로그 락 적용). DB에 image_url 반영."""
+    import redis as redis_lib
+    from app.core.blog_lock import BlogLock
+    logger.info(f"[TASK:IMAGE] 시작 | blog={blog_id} | title='{title[:30]}'")
+    redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
+    redis_client = redis_lib.from_url(redis_url)
+    blog_lock = BlogLock(redis_client)
 
-    이미지 생성 서비스 연동은 별도 구현 필요.
-    현재는 이미지 없이 진행 가능하도록 빈 결과 반환.
+    if not blog_lock.acquire(blog_id, "image", ttl=180):
+        logger.info(f"[TASK:IMAGE] 블로그 락 대기 | blog={blog_id}")
+        raise self.retry(countdown=10, max_retries=3)
 
-    Args:
-        title: 글 제목
-        content_summary: 글 요약 (이미지 생성 프롬프트용)
-        blog_id: 블로그 ID
-        generation_request_id: 생성 요청 고유 ID
-
-    Returns:
-        dict: {"image_urls": list, "ai_model": str}
-    """
-    logger.info(
-        f"[TASK:IMAGE] 시작 | title='{title[:30]}...' "
-        f"| request_id={generation_request_id}"
-    )
-
-    # 이미지 생성은 선택적 기능 - 미구현 시 빈 결과 반환
-    logger.info("[TASK:IMAGE] 이미지 생성 서비스 미연동 - 스킵")
-    return {
-        "image_urls": [],
-        "ai_model": None,
-        "status": "skipped",
-    }
+    try:
+        result = run_async(_async_generate_image(
+            blog_id, title, module_settings or {},
+            generation_history_id, crawled_post_id,
+        ))
+        lvl = "info" if result.get("success") else "warning"
+        getattr(logger, lvl)(
+            f"[TASK:IMAGE] {'완료' if result.get('success') else '실패'} "
+            f"| blog={blog_id} | {result.get('image_url', result.get('error', ''))[:60]}"
+        )
+        return result
+    except Exception as exc:
+        logger.error(f"[TASK:IMAGE] 예외 | blog={blog_id} | {exc}")
+        if self.request.retries < self.max_retries:
+            raise self.retry(exc=exc)
+        handle_dead_letter.delay(
+            task_name="tasks.generate_image",
+            task_args={"blog_id": blog_id, "title": title},
+            exception_info=str(exc),
+        )
+        raise
+    finally:
+        blog_lock.release(blog_id, "image")
 
 
 @celery_app.task(
     bind=True,
-    name="app.core.celery_tasks.on_generation_complete",
+    name="tasks.on_generation_complete",
     max_retries=1,
     default_retry_delay=5,
 )
 def on_generation_complete(
-    self,
-    generation_request_id: str,
-    blog_id: int,
-    source_title_id: int,
-    crawling_post_id: int,
+    self, generation_request_id: str, blog_id: int,
+    source_title_id: int, crawling_post_id: int,
     generation_history_id: int,
 ) -> dict:
-    """
-    생성 완료 후 콜백 태스크
-
-    후처리:
-    - 원본 제목 사용 처리 (안전장치)
-    - 생성 완료 로그 기록
-
-    Args:
-        generation_request_id: 생성 요청 고유 ID
-        blog_id: 블로그 ID
-        source_title_id: 원본 정식 제목 ID
-        crawling_post_id: 저장된 크롤링 포스트 ID
-        generation_history_id: 생성 이력 ID
-
-    Returns:
-        dict: {"success": bool, "message": str}
-    """
+    """생성 완료 후 콜백 태스크 (제목 사용 처리 안전장치)."""
     logger.info(
         f"[TASK:COMPLETE] 시작 | request_id={generation_request_id} "
         f"| history_id={generation_history_id}"
     )
 
     try:
-        result = _run_async(
+        result = run_async(
             _async_on_generation_complete(
                 generation_history_id, blog_id, source_title_id
             )
@@ -338,7 +399,45 @@ def on_generation_complete(
 
     except Exception as exc:
         logger.error(f"[TASK:COMPLETE] 실패: {exc}")
-        return {
-            "success": False,
-            "message": f"후처리 실패: {str(exc)}",
-        }
+        raise
+
+
+async def _async_record_dead_letter(
+    task_name: str, task_args: dict, exception_info: str,
+) -> None:
+    """DLQ 실패 기록을 task_executions에 저장."""
+    from app.core.database import db_manager
+    from app.models.task_execution import TaskExecution
+    async with db_manager.get_session() as db:
+        db.add(TaskExecution(
+            task_id=f"dlq-{task_name}-{id(exception_info)}",
+            task_name=task_name, queue="dead_letter",
+            status="dead_letter", params=task_args,
+            error_message=exception_info[:2000],
+            blog_id=task_args.get("blog_id"),
+        ))
+        await db.commit()
+
+
+@celery_app.task(name="tasks.handle_dead_letter", queue="callback_queue")
+def handle_dead_letter(
+    task_name: str, task_args: dict, exception_info: str,
+) -> dict:
+    """DLQ 핸들러: 최대 재시도 초과 작업을 DB에 기록."""
+    logger.error(f"[DLQ] 최종 실패 | task={task_name} | error={exception_info[:200]}")
+    try:
+        run_async(_async_record_dead_letter(task_name, task_args, exception_info))
+    except Exception as e:
+        logger.error(f"[DLQ] DB 기록 실패: {e}")
+    return {"recorded": True, "task_name": task_name}
+
+
+from app.core.celery_publish_tasks import (  # noqa: F401, E402
+    publish_post,
+    publish_batch,
+    republish_post,
+)
+from app.core.celery_utility_tasks import (  # noqa: F401, E402
+    collect_keywords,
+    transfer_titles,
+)

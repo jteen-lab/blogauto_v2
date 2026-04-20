@@ -218,11 +218,11 @@ class BatchDeleteRequest(BaseModel):
 async def _delete_single_post(
     post: CrawledPost, db: AsyncSession
 ) -> int:
-    """
-    단일 CrawledPost 삭제 공통 로직.
+    """단일 CrawledPost 삭제 공통 로직.
 
     이미지 파일 삭제 + CrawledPost DB 레코드 삭제.
-    MainTitle은 변경하지 않는다 (상태 그대로 유지).
+    생성(source=generated) CrawledPost 삭제 시 연결된 MainTitle을
+    "available"로 리셋하여 재사용 가능하게 합니다.
 
     Args:
         post: 삭제 대상 CrawledPost (blog eager-loaded)
@@ -232,6 +232,8 @@ async def _delete_single_post(
         삭제된 이미지 파일 수
     """
     generation_history_id = post.generation_history_id
+    main_title_id = post.matched_main_title_id
+    post_source = post.source
 
     # 대표 이미지 파일 삭제
     deleted_images = _delete_image_file(post.image_url)
@@ -250,6 +252,27 @@ async def _delete_single_post(
     # CrawledPost 삭제
     await db.delete(post)
     await db.flush()
+
+    # 생성 CrawledPost 삭제 시 연결된 MainTitle을 available로 리셋
+    if main_title_id and post_source == "generated":
+        from ..models.title import MainTitle
+        other_cp = await db.execute(
+            select(func.count(CrawledPost.id)).where(
+                CrawledPost.matched_main_title_id == main_title_id,
+                CrawledPost.source == "generated",
+            )
+        )
+        remaining = other_cp.scalar() or 0
+        if remaining == 0:
+            title = await db.get(MainTitle, main_title_id)
+            if title and title.status == "used":
+                title.status = "available"
+                title.use_count = max(0, (title.use_count or 1) - 1)
+                title.last_used_at = None
+                logger.info(
+                    f"[CONTENT] MainTitle 리셋 | id={main_title_id} "
+                    f"| used → available (CrawledPost 삭제)"
+                )
 
     return deleted_images
 

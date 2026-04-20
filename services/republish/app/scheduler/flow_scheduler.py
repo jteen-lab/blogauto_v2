@@ -519,7 +519,18 @@ class FlowScheduler:
 
                 # action_type별 실행
                 if action_type == "collect":
-                    result = await self._execute_collect_module(target_module, db, flow)
+                    from app.core.config import settings as app_settings
+                    if app_settings.use_celery_utility:
+                        from app.core.task_dispatcher import get_dispatcher, PRIORITY_NORMAL
+                        dispatcher = get_dispatcher()
+                        task_id = dispatcher.dispatch_utility(
+                            "tasks.collect_keywords",
+                            kwargs={"module_id": target_module.id, "flow_id": flow.id},
+                            priority=PRIORITY_NORMAL,
+                        )
+                        result = {"success": True, "message": f"Celery 큐 등록: {task_id}"}
+                    else:
+                        result = await self._execute_collect_module(target_module, db, flow)
                     duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
 
                     await self._save_autorun_log(
@@ -545,7 +556,18 @@ class FlowScheduler:
                     )
 
                 elif action_type == "data":
-                    result = await self._execute_data_module(target_module, db)
+                    from app.core.config import settings as app_settings
+                    if app_settings.use_celery_utility:
+                        from app.core.task_dispatcher import get_dispatcher, PRIORITY_NORMAL
+                        dispatcher = get_dispatcher()
+                        task_id = dispatcher.dispatch_utility(
+                            "tasks.transfer_titles",
+                            kwargs={"module_id": target_module.id, "flow_id": flow.id},
+                            priority=PRIORITY_NORMAL,
+                        )
+                        result = {"success": True, "message": f"Celery 큐 등록: {task_id}"}
+                    else:
+                        result = await self._execute_data_module(target_module, db)
                     duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
 
                     await self._save_autorun_log(
@@ -881,7 +903,18 @@ class FlowScheduler:
 
                 # action_type별 실행
                 if action_type == "collect":
-                    result = await self._execute_collect_module(module, db, flow)
+                    from app.core.config import settings as app_settings
+                    if app_settings.use_celery_utility:
+                        from app.core.task_dispatcher import get_dispatcher, PRIORITY_NORMAL
+                        dispatcher = get_dispatcher()
+                        task_id = dispatcher.dispatch_utility(
+                            "tasks.collect_keywords",
+                            kwargs={"module_id": module.id, "flow_id": flow_id},
+                            priority=PRIORITY_NORMAL,
+                        )
+                        result = {"success": True, "message": f"Celery 큐 등록: {task_id}"}
+                    else:
+                        result = await self._execute_collect_module(module, db, flow)
                     duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
 
                     await self._save_autorun_log(
@@ -912,7 +945,18 @@ class FlowScheduler:
                     )
 
                 elif action_type == "data":
-                    result = await self._execute_data_module(module, db)
+                    from app.core.config import settings as app_settings
+                    if app_settings.use_celery_utility:
+                        from app.core.task_dispatcher import get_dispatcher, PRIORITY_NORMAL
+                        dispatcher = get_dispatcher()
+                        task_id = dispatcher.dispatch_utility(
+                            "tasks.transfer_titles",
+                            kwargs={"module_id": module.id, "flow_id": flow_id},
+                            priority=PRIORITY_NORMAL,
+                        )
+                        result = {"success": True, "message": f"Celery 큐 등록: {task_id}"}
+                    else:
+                        result = await self._execute_data_module(module, db)
                     duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
 
                     await self._save_autorun_log(
@@ -1624,10 +1668,33 @@ class FlowScheduler:
 
                     try:
                         blog_start = datetime.now()
-                        result = await gen_executor.execute_for_blog(
-                            prompt_module, blog,
-                            stage_params=stage_params,
-                        )
+                        # Celery 기능 플래그 체크
+                        from app.core.config import settings as app_settings
+                        if app_settings.use_celery_generation:
+                            from app.core.task_dispatcher import get_dispatcher, PRIORITY_NORMAL
+                            dispatcher = get_dispatcher()
+                            try:
+                                task_id = dispatcher.dispatch_generation(
+                                    blog_id=blog.id,
+                                    module_id=prompt_module.id,
+                                    title_id=0,
+                                    priority=PRIORITY_NORMAL,
+                                    flow_id=flow.id,
+                                )
+                                result = {"success": True, "message": f"Celery 큐 등록: {task_id}"}
+                                logger.info(
+                                    f"[FLOW_SCHEDULER] Celery 디스패치 성공 | blog={blog.name} | task_id={task_id}"
+                                )
+                            except Exception as e:
+                                result = {"success": False, "message": f"Celery 디스패치 실패: {e}"}
+                                logger.warning(
+                                    f"[FLOW_SCHEDULER] Celery 디스패치 실패 | blog={blog.name} | {e}"
+                                )
+                        else:
+                            result = await gen_executor.execute_for_blog(
+                                prompt_module, blog,
+                                stage_params=stage_params,
+                            )
                         blog_duration = int(
                             (datetime.now() - blog_start).total_seconds() * 1000
                         )
@@ -1880,7 +1947,42 @@ class FlowScheduler:
                     continue
 
                 # 발행 (항상 1개)
-                pub_result = await publisher.publish_for_blog(blog, warmup_status)
+                from app.core.config import settings as app_settings
+
+                if app_settings.use_celery_publish:
+                    # Celery 워커에 발행 위임
+                    from app.core.task_dispatcher import (
+                        get_dispatcher, PRIORITY_NORMAL,
+                    )
+                    dispatcher = get_dispatcher()
+                    try:
+                        task_id = dispatcher.dispatch_publish(
+                            blog_id=blog.id,
+                            post_id=0,
+                            priority=PRIORITY_NORMAL,
+                            flow_id=flow.id,
+                        )
+                        pub_result = {
+                            "success": True,
+                            "message": f"Celery 큐 등록: {task_id}",
+                        }
+                        logger.info(
+                            f"[SCHED:PUBLISH] Celery 디스패치 | "
+                            f"blog={blog.name} | task={task_id}"
+                        )
+                    except Exception as e:
+                        pub_result = {
+                            "success": False,
+                            "message": f"Celery 디스패치 실패: {e}",
+                        }
+                        logger.error(
+                            f"[SCHED:PUBLISH] Celery 디스패치 오류 | "
+                            f"blog={blog.name} | {e}"
+                        )
+                else:
+                    pub_result = await publisher.publish_for_blog(
+                        blog, warmup_status,
+                    )
 
                 if pub_result.get("success") and pub_result.get("crawled_post"):
                     crawled_post = pub_result["crawled_post"]
@@ -1964,7 +2066,40 @@ class FlowScheduler:
                 if not stage_params or not stage_params.republish.enabled:
                     continue
 
-                blog_result = await self._execute_republish_for_blog(blog)
+                from app.core.config import settings as app_settings
+
+                if app_settings.use_celery_publish:
+                    # Celery 워커에 재발행 위임
+                    from app.core.task_dispatcher import (
+                        get_dispatcher, PRIORITY_NORMAL,
+                    )
+                    dispatcher = get_dispatcher()
+                    try:
+                        task_id = dispatcher.dispatch_republish(
+                            blog_id=blog.id,
+                            priority=PRIORITY_NORMAL,
+                            flow_id=flow.id,
+                        )
+                        blog_result = {
+                            "success": True,
+                            "message": f"Celery 큐 등록: {task_id}",
+                        }
+                        logger.info(
+                            f"[SCHED:REPUBLISH] Celery 디스패치 | "
+                            f"blog={blog.name} | task={task_id}"
+                        )
+                    except Exception as e:
+                        blog_result = {
+                            "success": False,
+                            "message": f"Celery 디스패치 실패: {e}",
+                        }
+                        logger.error(
+                            f"[SCHED:REPUBLISH] Celery 디스패치 오류 | "
+                            f"blog={blog.name} | {e}"
+                        )
+                else:
+                    blog_result = await self._execute_republish_for_blog(blog)
+
                 blog_duration = int((datetime.now() - blog_start).total_seconds() * 1000)
 
                 await self._save_autorun_log(

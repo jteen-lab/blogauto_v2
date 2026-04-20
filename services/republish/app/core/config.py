@@ -72,6 +72,12 @@ class Settings(BaseSettings):
     google_client_id: Optional[str] = None
     google_client_secret: Optional[str] = None
 
+    # Celery 기능 플래그 (Phase별 전환)
+    use_celery_generation: bool = False   # Phase 2 완료 시 True
+    use_celery_publish: bool = False      # Phase 3 완료 시 True
+    use_celery_image: bool = False        # Phase 4 완료 시 True
+    use_celery_utility: bool = False      # Phase 4 완료 시 True
+
     @validator("database_url", pre=True)
     def build_database_url(cls, v: Optional[str], values: dict) -> str:
         """데이터베이스 URL 생성"""

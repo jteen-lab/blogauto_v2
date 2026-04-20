@@ -31,12 +31,13 @@ def upgrade() -> None:
     conn = op.get_bind()
 
     # 1. 중복 그룹 식별: (title, topic_id) 기준, 유지 id=MIN(id), 삭제 대상 리스트
-    #    topic_id 는 NULL 도 포함해서 그룹핑 (PostgreSQL IS NOT DISTINCT FROM 사용)
+    #    PostgreSQL은 ARRAY_AGG FILTER 내부에 MIN()을 허용하지 않으므로
+    #    전체 id 배열을 받아 파이썬에서 keep_id와 remove_ids를 분리
     duplicates_sql = sa.text(
         """
         SELECT
             MIN(id) AS keep_id,
-            ARRAY_AGG(id) FILTER (WHERE id <> MIN(id)) AS remove_ids,
+            ARRAY_AGG(id ORDER BY id) AS all_ids,
             title,
             topic_id,
             COUNT(*) AS dup_count
@@ -59,7 +60,9 @@ def upgrade() -> None:
 
     for row in duplicates:
         keep_id = row.keep_id
-        remove_ids = list(row.remove_ids or [])
+        all_ids = list(row.all_ids or [])
+        # keep_id를 제외한 나머지가 삭제 대상
+        remove_ids = [i for i in all_ids if i != keep_id]
         if not remove_ids:
             continue
         total_dup_rows += len(remove_ids)

@@ -1,5 +1,6 @@
 # Phase 1-1: BlogAuto V2 Docker Compose (개발/프로덕션 공통)
 # Phase G-1: Redis + Celery 워커 추가
+# Phase 1-C: 4워커 체계 (generation, publish, image, utility)
 version: '3.8'
 
 services:
@@ -79,13 +80,13 @@ services:
     networks:
       - blogauto_network
 
-  # Celery 워커 - 제목 재조합
-  celery_title_worker:
+  # Celery 워커 - 글 생성 (generation_queue)
+  celery_generation_worker:
     build:
       context: .
       dockerfile: docker/Dockerfile
-    container_name: blogauto_celery_title
-    command: celery -A app.core.celery_config worker -Q title_queue --concurrency=2 -l INFO
+    container_name: blogauto_celery_generation
+    command: celery -A app.core.celery_config worker -Q generation_queue --autoscale=8,3 --prefetch-multiplier=1 --max-tasks-per-child=50 -l INFO -n generation@%h
     environment:
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - DATABASE_URL=${DATABASE_URL:-postgresql://blogauto:blogauto123@db:5432/blogauto_v2}
@@ -99,22 +100,27 @@ services:
     volumes:
       - ./app:/app/app
       - ./logs:/app/logs
+      - ./media:/app/media
+      - ../../shared:/app/shared
+      - ./.env:/app/.env:ro
     restart: unless-stopped
     networks:
       - blogauto_network
 
-  # Celery 워커 - 글 생성 (오토스케일)
-  celery_content_worker:
+  # Celery 워커 - 발행/재발행 (publish_queue)
+  celery_publish_worker:
     build:
       context: .
       dockerfile: docker/Dockerfile
-    container_name: blogauto_celery_content
-    command: celery -A app.core.celery_config worker -Q content_queue --autoscale=5,3 -l INFO
+    container_name: blogauto_celery_publish
+    command: celery -A app.core.celery_config worker -Q publish_queue --autoscale=5,2 --prefetch-multiplier=1 --max-tasks-per-child=100 -l INFO -n publish@%h
     environment:
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - DATABASE_URL=${DATABASE_URL:-postgresql://blogauto:blogauto123@db:5432/blogauto_v2}
       - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-dev-encryption-key-32-bytes-long}
+      - GOOGLE_CLIENT_ID=${BLOGGER_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${BLOGGER_CLIENT_SECRET:-}
     depends_on:
       redis:
         condition: service_healthy
@@ -123,17 +129,20 @@ services:
     volumes:
       - ./app:/app/app
       - ./logs:/app/logs
+      - ./media:/app/media
+      - ../../shared:/app/shared
+      - ./.env:/app/.env:ro
     restart: unless-stopped
     networks:
       - blogauto_network
 
-  # Celery 워커 - 이미지 생성
+  # Celery 워커 - 이미지 생성 (image_queue)
   celery_image_worker:
     build:
       context: .
       dockerfile: docker/Dockerfile
     container_name: blogauto_celery_image
-    command: celery -A app.core.celery_config worker -Q image_queue --concurrency=2 -l INFO
+    command: celery -A app.core.celery_config worker -Q image_queue --concurrency=2 --prefetch-multiplier=1 --max-tasks-per-child=50 -l INFO -n image@%h
     environment:
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - DATABASE_URL=${DATABASE_URL:-postgresql://blogauto:blogauto123@db:5432/blogauto_v2}
@@ -147,6 +156,36 @@ services:
     volumes:
       - ./app:/app/app
       - ./logs:/app/logs
+      - ./media:/app/media
+      - ../../shared:/app/shared
+      - ./.env:/app/.env:ro
+    restart: unless-stopped
+    networks:
+      - blogauto_network
+
+  # Celery 워커 - 수집/데이터 처리 (utility_queue)
+  celery_utility_worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: blogauto_celery_utility
+    command: celery -A app.core.celery_config worker -Q utility_queue,callback_queue --concurrency=2 --prefetch-multiplier=2 --max-tasks-per-child=200 -l INFO -n utility@%h
+    environment:
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://blogauto:blogauto123@db:5432/blogauto_v2}
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-dev-encryption-key-32-bytes-long}
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    volumes:
+      - ./app:/app/app
+      - ./logs:/app/logs
+      - ./media:/app/media
+      - ../../shared:/app/shared
+      - ./.env:/app/.env:ro
     restart: unless-stopped
     networks:
       - blogauto_network
@@ -157,13 +196,20 @@ services:
       context: .
       dockerfile: docker/Dockerfile
     container_name: blogauto_celery_flower
-    command: celery -A app.core.celery_config flower --port=5555
+    command: >
+      celery -A app.core.celery_config flower
+      --port=5555
+      --persistent=True
+      --state_save_interval=30000
+      --inspect_timeout=10000
     ports:
       - "5555:5555"
     environment:
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - FLOWER_UNAUTHENTICATED_API=1
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - blogauto_network

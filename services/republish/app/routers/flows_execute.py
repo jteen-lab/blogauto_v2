@@ -189,7 +189,20 @@ async def _execute_flow_background(
                 modules_by_type, blogs, flow
             )
             if gp_context is None:
-                # GP 미설정 또는 비활성 시간 → Flow 실행 중단
+                logger.warning(
+                    f"[FLOW_BG] GP 컨텍스트 실패로 플로우 중단 | flow_id={flow.id} | "
+                    f"GP 미설정, 비활성 시간대, 또는 stages 없음 → 위 로그 확인"
+                )
+                await _save_autorun_log(
+                    db=db, user_id=user_id, flow_id=flow.id,
+                    flow_name=flow.name, module_name="Flow 실행",
+                    blog_name="-",
+                    result={
+                        "success": False,
+                        "message": "GP 컨텍스트 실패 (GP 미설정/비활성 시간대/stages 없음)",
+                    },
+                    duration_ms=0, action="flow_init"
+                )
                 return
 
             # 4. 결과 집계 변수
@@ -391,32 +404,67 @@ async def _execute_flow_background(
                     # 발행 실행 (항상 1개)
                     blog_start_time = datetime.now()
                     try:
-                        result = await publisher.publish_for_blog(
-                            blog, warmup_status,
-                        )
+                        from app.core.config import settings as app_settings
+
+                        if app_settings.use_celery_publish:
+                            # Celery 워커에 발행 위임 (전체 워크플로우는 워커 내부에서 실행)
+                            from app.core.task_dispatcher import (
+                                get_dispatcher, PRIORITY_NORMAL,
+                            )
+                            dispatcher = get_dispatcher()
+                            try:
+                                task_id = dispatcher.dispatch_publish(
+                                    blog_id=blog.id,
+                                    post_id=0,
+                                    priority=PRIORITY_NORMAL,
+                                    flow_id=flow.id,
+                                )
+                                result = {
+                                    "success": True,
+                                    "message": f"Celery 큐 등록: {task_id}",
+                                }
+                                logger.info(
+                                    f"[FLOW_BG] 발행 Celery 디스패치 | "
+                                    f"blog={blog.name} | task={task_id}"
+                                )
+                            except Exception as e:
+                                result = {
+                                    "success": False,
+                                    "message": f"Celery 디스패치 실패: {e}",
+                                }
+                                logger.error(
+                                    f"[FLOW_BG] 발행 Celery 디스패치 오류 | "
+                                    f"blog={blog.name} | {e}"
+                                )
+                        else:
+                            # OFF 모드: 직접 발행 워크플로우 실행
+                            result = await publisher.publish_for_blog(
+                                blog, warmup_status,
+                            )
+
+                            if not result.get("skipped"):
+                                crawled_post = result.get("crawled_post")
+                                if crawled_post and result.get("success"):
+                                    credential = getattr(blog, "google_credential", None)
+                                    pub_result = await pipeline.publish_post(
+                                        blog, crawled_post, credential=credential,
+                                    )
+                                    if pub_result.success:
+                                        complete_info = await publisher.complete_publish(
+                                            blog.id, crawled_post.id,
+                                            published_url=pub_result.published_url,
+                                        )
+                                        result["inventory"] = complete_info["inventory"]
+                                        result["needs_generation"] = complete_info["needs_generation"]
+                                        result["published_url"] = pub_result.published_url
+                                        result["image_uploaded"] = pub_result.image_uploaded
+                                    else:
+                                        result = {
+                                            "success": False,
+                                            "message": pub_result.error or "플랫폼 발행 실패",
+                                        }
 
                         if not result.get("skipped"):
-                            crawled_post = result.get("crawled_post")
-                            if crawled_post and result.get("success"):
-                                credential = getattr(blog, "google_credential", None)
-                                pub_result = await pipeline.publish_post(
-                                    blog, crawled_post, credential=credential,
-                                )
-                                if pub_result.success:
-                                    complete_info = await publisher.complete_publish(
-                                        blog.id, crawled_post.id,
-                                        published_url=pub_result.published_url,
-                                    )
-                                    result["inventory"] = complete_info["inventory"]
-                                    result["needs_generation"] = complete_info["needs_generation"]
-                                    result["published_url"] = pub_result.published_url
-                                    result["image_uploaded"] = pub_result.image_uploaded
-                                else:
-                                    result = {
-                                        "success": False,
-                                        "message": pub_result.error or "플랫폼 발행 실패",
-                                    }
-
                             # FES 업데이트 (skipped가 아닌 경우만)
                             effective_interval = (
                                 warmup_status.effective_interval
@@ -505,7 +553,40 @@ async def _execute_flow_background(
                     )
 
                     try:
-                        result = await _execute_republish_for_blog(blog)
+                        from app.core.config import settings as app_settings
+
+                        if app_settings.use_celery_publish:
+                            # Celery 워커에 재발행 위임
+                            from app.core.task_dispatcher import (
+                                get_dispatcher, PRIORITY_NORMAL,
+                            )
+                            dispatcher = get_dispatcher()
+                            try:
+                                task_id = dispatcher.dispatch_republish(
+                                    blog_id=blog.id,
+                                    priority=PRIORITY_NORMAL,
+                                    flow_id=flow.id,
+                                )
+                                result = {
+                                    "success": True,
+                                    "message": f"Celery 큐 등록: {task_id}",
+                                }
+                                logger.info(
+                                    f"[FLOW_BG] 재발행 Celery 디스패치 | "
+                                    f"blog={blog.name} | task={task_id}"
+                                )
+                            except Exception as e:
+                                result = {
+                                    "success": False,
+                                    "message": f"Celery 디스패치 실패: {e}",
+                                }
+                                logger.error(
+                                    f"[FLOW_BG] 재발행 Celery 디스패치 오류 | "
+                                    f"blog={blog.name} | {e}"
+                                )
+                        else:
+                            result = await _execute_republish_for_blog(blog)
+
                         blog_duration_ms = int(
                             (datetime.now() - blog_start_time).total_seconds() * 1000
                         )
@@ -611,10 +692,38 @@ async def _execute_flow_background(
                             )
 
                             try:
-                                result = await gen_executor.execute_for_blog(
-                                    prompt_module, blog,
-                                    stage_params=stage_params,
-                                )
+                                # Celery 기능 플래그 체크
+                                from app.core.config import settings as app_settings
+                                if app_settings.use_celery_generation:
+                                    from dataclasses import asdict
+                                    from app.core.task_dispatcher import get_dispatcher, PRIORITY_NORMAL
+                                    dispatcher = get_dispatcher()
+                                    try:
+                                        sp_dict = asdict(stage_params) if stage_params else None
+                                        task_id = dispatcher.dispatch_generation(
+                                            blog_id=blog.id,
+                                            module_id=prompt_module.id,
+                                            title_id=0,
+                                            priority=PRIORITY_NORMAL,
+                                            flow_id=flow.id,
+                                            user_id=user_id,
+                                            stage_params_dict=sp_dict,
+                                            force=False,
+                                        )
+                                        result = {"success": True, "message": f"Celery 큐 등록: {task_id}"}
+                                        logger.info(
+                                            f"[FLOW_BG] Celery 디스패치 성공 | blog={blog.name} | task_id={task_id}"
+                                        )
+                                    except Exception as e:
+                                        result = {"success": False, "message": f"Celery 디스패치 실패: {e}"}
+                                        logger.warning(
+                                            f"[FLOW_BG] Celery 디스패치 실패 | blog={blog.name} | {e}"
+                                        )
+                                else:
+                                    result = await gen_executor.execute_for_blog(
+                                        prompt_module, blog,
+                                        stage_params=stage_params,
+                                    )
                                 blog_duration_ms = int(
                                     (datetime.now() - blog_start_time).total_seconds() * 1000
                                 )
@@ -1607,46 +1716,113 @@ async def execute_single_module(
             raise HTTPException(status_code=400, detail="플로우에 연결된 블로그가 없습니다")
 
         execution_id = str(uuid.uuid4())
-        _module_exec_states[execution_id] = {
-            "status": "running",
-            "module_name": target_module.name,
-            "blog_count": len(blogs),
-            "message": "생성 진행 중...",
-        }
 
-        task = asyncio.create_task(
-            _execute_generate_module_background(
-                flow_id=flow_id,
-                module_id=module_id,
-                user_id=current_user.id,
-                execution_id=execution_id,
+        # Celery 기능 플래그 체크
+        from app.core.config import settings as app_settings
+        if app_settings.use_celery_generation:
+            # Celery 큐로 디스패치
+            from app.core.task_dispatcher import get_dispatcher, PRIORITY_CRITICAL
+            dispatcher = get_dispatcher()
+            task_ids: list[str] = []
+            for blog in blogs:
+                try:
+                    task_id = dispatcher.dispatch_generation(
+                        blog_id=blog.id,
+                        module_id=module_id,
+                        title_id=0,
+                        priority=PRIORITY_CRITICAL,
+                        flow_id=flow_id,
+                        user_id=current_user.id,
+                        stage_params_dict=None,
+                        force=True,
+                    )
+                    task_ids.append(task_id)
+                    logger.info(
+                        f"[MODULE_EXEC] Celery 디스패치 성공 | blog={blog.name} | task_id={task_id}"
+                    )
+                except Exception as e:
+                    logger.warning(f"[MODULE_EXEC] Celery 디스패치 실패 | blog={blog.name} | {e}")
+
+            return {
+                "status": "queued",
+                "module_type": type_code,
+                "module_name": target_module.name,
+                "execution_id": execution_id,
+                "message": f"'{target_module.name}' 생성이 Celery 큐에 등록되었습니다 ({len(task_ids)}건)",
+                "blog_count": len(blogs),
+                "task_ids": task_ids,
+            }
+        else:
+            # 기존 asyncio.create_task 방식 유지
+            _module_exec_states[execution_id] = {
+                "status": "running",
+                "module_name": target_module.name,
+                "blog_count": len(blogs),
+                "message": "생성 진행 중...",
+            }
+
+            task = asyncio.create_task(
+                _execute_generate_module_background(
+                    flow_id=flow_id,
+                    module_id=module_id,
+                    user_id=current_user.id,
+                    execution_id=execution_id,
+                )
             )
+
+            def _handle_exc(t):
+                try:
+                    exc = t.exception()
+                    if exc:
+                        logger.error(f"[MODULE_EXEC] 백그라운드 생성 예외: {exc}", exc_info=exc)
+                        _module_exec_states[execution_id] = {
+                            "status": "failed",
+                            "message": f"오류: {str(exc)}",
+                        }
+                except asyncio.CancelledError:
+                    pass
+
+            task.add_done_callback(_handle_exc)
+
+            return {
+                "status": "started",
+                "module_type": type_code,
+                "module_name": target_module.name,
+                "execution_id": execution_id,
+                "message": f"'{target_module.name}' 생성을 시작했습니다. 완료 시 생성 이력에서 확인하세요.",
+                "blog_count": len(blogs),
+            }
+
+    # 5. collect/data 실행 (Celery 기능 플래그에 따라 분기)
+    from app.core.config import settings as app_settings
+
+    if type_code in ("collect", "data") and app_settings.use_celery_utility:
+        # Celery 큐로 디스패치
+        from app.core.task_dispatcher import get_dispatcher, PRIORITY_NORMAL
+        dispatcher = get_dispatcher()
+
+        celery_task_name = (
+            "tasks.collect_keywords" if type_code == "collect"
+            else "tasks.transfer_titles"
         )
-
-        def _handle_exc(t):
-            try:
-                exc = t.exception()
-                if exc:
-                    logger.error(f"[MODULE_EXEC] 백그라운드 생성 예외: {exc}", exc_info=exc)
-                    _module_exec_states[execution_id] = {
-                        "status": "failed",
-                        "message": f"오류: {str(exc)}",
-                    }
-            except asyncio.CancelledError:
-                pass
-
-        task.add_done_callback(_handle_exc)
-
+        task_id = dispatcher.dispatch_utility(
+            celery_task_name,
+            kwargs={"module_id": target_module.id, "flow_id": flow_id},
+            priority=PRIORITY_NORMAL,
+        )
+        logger.info(
+            f"[MODULE_EXEC] Celery 유틸리티 디스패치 | "
+            f"type={type_code} | module={target_module.name} | task_id={task_id}"
+        )
         return {
-            "status": "started",
+            "status": "queued",
             "module_type": type_code,
             "module_name": target_module.name,
-            "execution_id": execution_id,
-            "message": f"'{target_module.name}' 생성을 시작했습니다. 완료 시 생성 이력에서 확인하세요.",
-            "blog_count": len(blogs),
+            "message": f"'{target_module.name}' 작업이 Celery 큐에 등록되었습니다",
+            "task_id": task_id,
         }
 
-    # 5. collect/data는 동기 실행 (빠름)
+    # 기존 동기 실행 방식 유지
     started_at = datetime.now()
     results = []
 
@@ -1975,50 +2151,93 @@ async def _execute_blog_action(
     # 5. 실행
     try:
         if action == "publish":
-            from app.services.generation.publisher import Publisher
-            from app.services.generation.warmup_manager import WarmupManager
-            from app.services.publishing.publisher_pipeline import PublisherPipeline
+            from app.core.config import settings as app_settings
+            if app_settings.use_celery_publish:
+                from app.core.task_dispatcher import (
+                    get_dispatcher, PRIORITY_CRITICAL,
+                )
+                dispatcher = get_dispatcher()
+                task_id = dispatcher.dispatch_publish(
+                    blog_id=blog_id, post_id=0,
+                    priority=PRIORITY_CRITICAL, flow_id=flow_id,
+                )
+                exec_result = {
+                    "success": True,
+                    "message": f"발행 큐에 등록됨 (task_id={task_id})",
+                    "celery_task_id": task_id,
+                }
+            else:
+                from app.services.generation.publisher import Publisher
+                from app.services.generation.warmup_manager import WarmupManager
+                from app.services.publishing.publisher_pipeline import (
+                    PublisherPipeline,
+                )
 
-            active_hours = _count_active_hours(gp_context.schedule_matrix)
-            warmup_settings = (
-                gp_context.growth_profile.get("warmup", {})
-                if gp_context.growth_profile else {}
-            )
+                active_hours = _count_active_hours(gp_context.schedule_matrix)
+                warmup_settings = (
+                    gp_context.growth_profile.get("warmup", {})
+                    if gp_context.growth_profile else {}
+                )
 
-            warmup_mgr = WarmupManager(db)
-            publisher = Publisher(db)
-            pipeline = PublisherPipeline(db)
+                warmup_mgr = WarmupManager(db)
+                publisher = Publisher(db)
+                pipeline = PublisherPipeline(db)
 
-            warmup_status = await warmup_mgr.check_warmup(
-                blog_id, warmup_settings, active_hours
-            )
+                warmup_status = await warmup_mgr.check_warmup(
+                    blog_id, warmup_settings, active_hours
+                )
 
-            exec_result = await publisher.publish_for_blog(
-                target_blog, warmup_status
-            )
+                exec_result = await publisher.publish_for_blog(
+                    target_blog, warmup_status
+                )
 
-            if not exec_result.get("skipped"):
-                crawled_post = exec_result.get("crawled_post")
-                if crawled_post and exec_result.get("success"):
-                    credential = getattr(target_blog, "google_credential", None)
-                    pub_result = await pipeline.publish_post(
-                        target_blog, crawled_post, credential=credential
-                    )
-                    if pub_result.success:
-                        complete_info = await publisher.complete_publish(
-                            blog_id, crawled_post.id,
-                            published_url=pub_result.published_url
+                if not exec_result.get("skipped"):
+                    crawled_post = exec_result.get("crawled_post")
+                    if crawled_post and exec_result.get("success"):
+                        credential = getattr(
+                            target_blog, "google_credential", None,
                         )
-                        exec_result["published_url"] = pub_result.published_url
-                        exec_result["post_title"] = getattr(crawled_post, "title", "")
-                    else:
-                        exec_result = {
-                            "success": False,
-                            "message": pub_result.error or "플랫폼 발행 실패"
-                        }
+                        pub_result = await pipeline.publish_post(
+                            target_blog, crawled_post,
+                            credential=credential,
+                        )
+                        if pub_result.success:
+                            await publisher.complete_publish(
+                                blog_id, crawled_post.id,
+                                published_url=pub_result.published_url,
+                            )
+                            exec_result["published_url"] = (
+                                pub_result.published_url
+                            )
+                            exec_result["post_title"] = getattr(
+                                crawled_post, "title", "",
+                            )
+                        else:
+                            exec_result = {
+                                "success": False,
+                                "message": (
+                                    pub_result.error or "플랫폼 발행 실패"
+                                ),
+                            }
 
         elif action == "republish":
-            exec_result = await _execute_republish_for_blog(target_blog)
+            from app.core.config import settings as app_settings
+            if app_settings.use_celery_publish:
+                from app.core.task_dispatcher import (
+                    get_dispatcher, PRIORITY_CRITICAL,
+                )
+                dispatcher = get_dispatcher()
+                task_id = dispatcher.dispatch_republish(
+                    blog_id=blog_id,
+                    priority=PRIORITY_CRITICAL, flow_id=flow_id,
+                )
+                exec_result = {
+                    "success": True,
+                    "message": f"재발행 큐에 등록됨 (task_id={task_id})",
+                    "celery_task_id": task_id,
+                }
+            else:
+                exec_result = await _execute_republish_for_blog(target_blog)
 
         else:
             raise HTTPException(status_code=400, detail=f"지원하지 않는 액션: {action}")

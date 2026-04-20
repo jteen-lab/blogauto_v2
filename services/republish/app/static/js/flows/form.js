@@ -471,10 +471,23 @@ function flowFormData() {
                     return;
                 }
 
+                // Celery 큐에 등록됨 (기능 플래그 활성화 시)
+                if (result.status === 'queued') {
+                    this.executingModuleId = null;
+                    const taskInfo = result.task_ids
+                        ? `${result.task_ids.length}건`
+                        : (result.task_id ? '1건' : '');
+                    this.showSuccess(
+                        `${result.module_name}: Celery 큐에 등록되었습니다 ${taskInfo} (실행은 백그라운드에서 진행)`
+                    );
+                    return;
+                }
+
                 // 동기 실행 완료 (collect/data)
                 this.executingModuleId = null;
-                const successCount = result.results.filter(r => r.status === 'success').length;
-                const totalCount = result.results.length;
+                const results = result.results || [];
+                const successCount = results.filter(r => r.status === 'success').length;
+                const totalCount = results.length;
                 this.showSuccess(`${result.module_name}: ${successCount}/${totalCount}건 완료 (${result.duration_ms}ms)`);
 
             } catch (error) {

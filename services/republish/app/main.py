@@ -30,6 +30,7 @@ from .routers.modules import router as modules_router
 from .routers.flows import router as flows_router
 from .routers.autorun import router as autorun_router
 from .routers.dashboard import router as dashboard_router
+from .routers.dashboard_celery import router as dashboard_celery_router
 from .routers.settings import router as settings_router, naver_search_router, naver_ads_router, google_trends_router, naver_datalab_router, google_keyword_planner_router
 from .routers.modules_pages import router as modules_page_router
 from .routers.flows_pages import router as flows_page_router
@@ -107,6 +108,15 @@ async def lifespan(app: FastAPI):
             f"[ENV] 필수 환경변수 누락: {', '.join(missing_vars)} | "
             f".env 파일을 확인하세요 (.env.required 참조)"
         )
+
+    # Celery 기능 플래그 상태 로깅
+    logger.info(
+        f"[CELERY] 기능 플래그 상태 | "
+        f"generation={settings.use_celery_generation} | "
+        f"publish={settings.use_celery_publish} | "
+        f"image={settings.use_celery_image} | "
+        f"utility={settings.use_celery_utility}"
+    )
 
     # 노드 모듈 등록
     from app.modules import register_all_modules
@@ -204,6 +214,7 @@ app.include_router(flows_execute_router)  # 먼저 등록 (더 구체적인 경�
 app.include_router(flows_router, prefix=settings.api_v1_prefix)
 app.include_router(autorun_router, prefix=settings.api_v1_prefix)
 app.include_router(dashboard_router, prefix=settings.api_v1_prefix)
+app.include_router(dashboard_celery_router, prefix=settings.api_v1_prefix)
 app.include_router(settings_router, prefix=settings.api_v1_prefix)
 app.include_router(naver_search_router, prefix=settings.api_v1_prefix)
 app.include_router(naver_ads_router, prefix=settings.api_v1_prefix)
