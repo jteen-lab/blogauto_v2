@@ -9,6 +9,7 @@
 - 성능 최적화
 """
 import os
+import sys
 import logging
 from logging.handlers import RotatingFileHandler
 from datetime import datetime
@@ -94,6 +95,14 @@ class BlogAutoLogger:
         if log_file != "error.log":
             error_handler = self._create_file_handler("error.log", logging.ERROR)
             logger.addHandler(error_handler)
+
+        # 콘솔(stdout) 핸들러 (docker-compose logs에서 확인 가능)
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setLevel(logging.INFO)
+        console_handler.setFormatter(logging.Formatter(
+            LoggerConfig.LOG_FORMAT, LoggerConfig.DATE_FORMAT
+        ))
+        logger.addHandler(console_handler)
 
         return logger
 
