@@ -1966,10 +1966,12 @@ async def _execute_generate_module_background(
                 if gp_context:
                     stage_params = gp_context.get_stage_for_blog(blog.id)
 
+                blog_start = datetime.now()
                 blog_result = await gen_executor.execute_for_blog(
                     target_module, blog, stage_params=stage_params,
-                    force=True,  # 수동 1회 실행: 재고 체크 없이 강제 생성
+                    force=True,
                 )
+                blog_duration = int((datetime.now() - blog_start).total_seconds() * 1000)
 
                 blog_msg = blog_result.get("message", "")
                 if blog_result.get("success") and not blog_result.get("skipped"):
@@ -1980,6 +1982,13 @@ async def _execute_generate_module_background(
                 else:
                     fail_count += 1
                     skip_reasons.append(f"{blog.name}: {blog_msg}")
+
+                await _save_autorun_log(
+                    db=db, user_id=user_id, flow_id=flow_id,
+                    flow_name=flow.name, module_name=target_module.name,
+                    blog_name=blog.name, result=blog_result,
+                    duration_ms=blog_duration, action="generate"
+                )
 
                 logger.info(
                     f"[MODULE_EXEC_BG] 블로그 결과 | blog={blog.name} | "
@@ -2249,6 +2258,20 @@ async def _execute_blog_action(
         raise HTTPException(status_code=500, detail=f"{action} 실행 중 오류: {str(e)}")
 
     duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
+
+    gp_module_name = ""
+    for _link in flow.module_links:
+        if _link.module and _link.module.module_type:
+            if _link.module.module_type.code == "growth_profile":
+                gp_module_name = _link.module.name
+                break
+
+    await _save_autorun_log(
+        db=db, user_id=current_user.id, flow_id=flow_id,
+        flow_name=flow.name, module_name=gp_module_name or f"GP {action}",
+        blog_name=target_blog.name, result=exec_result,
+        duration_ms=duration_ms, action=action
+    )
 
     return {
         "status": "completed",
