@@ -1740,8 +1740,22 @@ async def execute_single_module(
                     logger.info(
                         f"[MODULE_EXEC] Celery 디스패치 성공 | blog={blog.name} | task_id={task_id}"
                     )
+                    await _save_autorun_log(
+                        db=db, user_id=current_user.id, flow_id=flow_id,
+                        flow_name=flow.name, module_name=target_module.name,
+                        blog_name=blog.name,
+                        result={"success": True, "message": f"Celery 큐 등록: {task_id}"},
+                        duration_ms=0, action="generate"
+                    )
                 except Exception as e:
                     logger.warning(f"[MODULE_EXEC] Celery 디스패치 실패 | blog={blog.name} | {e}")
+                    await _save_autorun_log(
+                        db=db, user_id=current_user.id, flow_id=flow_id,
+                        flow_name=flow.name, module_name=target_module.name,
+                        blog_name=blog.name,
+                        result={"success": False, "message": f"Celery 디스패치 실패: {e}"},
+                        duration_ms=0, action="generate"
+                    )
 
             return {
                 "status": "queued",
@@ -1814,6 +1828,13 @@ async def execute_single_module(
             f"[MODULE_EXEC] Celery 유틸리티 디스패치 | "
             f"type={type_code} | module={target_module.name} | task_id={task_id}"
         )
+        await _save_autorun_log(
+            db=db, user_id=current_user.id, flow_id=flow_id,
+            flow_name=flow.name, module_name=target_module.name,
+            blog_name="-",
+            result={"success": True, "message": f"Celery 큐 등록: {task_id}"},
+            duration_ms=0, action=type_code
+        )
         return {
             "status": "queued",
             "module_type": type_code,
@@ -1853,6 +1874,13 @@ async def execute_single_module(
         raise HTTPException(status_code=500, detail=f"모듈 실행 중 오류: {str(e)}")
 
     duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
+
+    await _save_autorun_log(
+        db=db, user_id=current_user.id, flow_id=flow_id,
+        flow_name=flow.name, module_name=target_module.name,
+        blog_name="-", result=exec_result,
+        duration_ms=duration_ms, action=type_code
+    )
 
     return {
         "status": "completed",
