@@ -28,7 +28,27 @@ async def _async_publish_via_workflow(
 
     async with db_manager.get_session() as db:
         workflow = PublishWorkflow(db)
-        return await workflow.execute_publish(blog_id, post_id)
+        result = await workflow.execute_publish(blog_id, post_id)
+
+        try:
+            from app.models.autorun_log import AutorunLog
+            from app.models.blog import Blog
+            blog = await db.get(Blog, blog_id)
+            status = "success" if result.get("success") and not result.get("skipped") else "failed"
+            log = AutorunLog.create_execution_log(
+                user_id=1, flow_id=0, action="publish", status=status,
+                flow_name="", module_name="",
+                blog_name=blog.name if blog else str(blog_id),
+                post_title=result.get("post_title", ""),
+                action_time=None, duration_ms=0,
+                message=result.get("message", ""),
+            )
+            db.add(log)
+            await db.commit()
+        except Exception as log_err:
+            logger.warning(f"[PUBLISH] AutorunLog 저장 실패: {log_err}")
+
+        return result
 
 
 async def _async_republish_via_workflow(blog_id: int) -> dict:

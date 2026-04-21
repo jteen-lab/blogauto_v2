@@ -92,9 +92,33 @@ async def _async_generate_via_executor(
             )
 
         executor = FlowGenerateExecutor(db, user_id)
-        return await executor.execute_for_blog(
+        result = await executor.execute_for_blog(
             module, blog, stage_params=stage_params, force=force
         )
+
+        try:
+            from app.models.autorun_log import AutorunLog
+            status = "success" if result.get("success") and not result.get("skipped") else "failed"
+            log_msg = result.get("message", "")
+            log = AutorunLog.create_execution_log(
+                user_id=user_id,
+                flow_id=0,
+                action="generate",
+                status=status,
+                flow_name="",
+                module_name=module.name if module else "",
+                blog_name=blog.name if blog else "",
+                post_title=result.get("post_title", ""),
+                action_time=None,
+                duration_ms=int(result.get("generation_time_seconds", 0) * 1000),
+                message=log_msg,
+            )
+            db.add(log)
+            await db.commit()
+        except Exception as log_err:
+            logger.warning(f"[GENERATE] AutorunLog 저장 실패: {log_err}")
+
+        return result
 
 
 async def _async_on_generation_complete(

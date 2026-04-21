@@ -427,12 +427,16 @@ async def get_action_logs(
     autorun_logs 테이블에서 최신 로그를 조회하여 GlobalSummary에 표시
     """
     try:
-        # autorun_logs 테이블에서 최신 로그 조회
+        from ..models.blog import Blog
+
         result = await db.execute(
             select(AutorunLog)
+            .where(
+                AutorunLog.message.notlike("%Celery 큐 등록%"),
+            )
             .order_by(AutorunLog.created_at.desc())
             .offset(offset)
-            .limit(limit + 1)  # has_more 확인용 +1
+            .limit(limit + 1)
         )
         logs = result.scalars().all()
 
@@ -440,93 +444,67 @@ async def get_action_logs(
         if has_more:
             logs = logs[:limit]
 
-        # GlobalSummary용 로그 포맷 변환
-        # level: action 기반 (success→INFO, failed→ERROR, warning→WARN)
-        # message: 간결한 한 줄 형식
-        def format_log_level(log):
-            if log.status == "success":
-                return "INFO"
-            elif log.status == "failed":
-                return "ERROR"
-            elif log.status == "warning":
-                return "WARN"
-            return "INFO"
+        blog_platforms = {}
 
-        def format_log_message(log):
-            """간결한 로그 메시지 생성"""
-            # log.message가 있으면 상세 메시지로 우선 사용
-            if log.message:
-                # 플로우/모듈명 + 상세 메시지 조합
-                prefix_parts = []
-                if log.flow_name:
-                    prefix_parts.append(log.flow_name)
-                if log.blog_name and log.blog_name != "-":
-                    prefix_parts.append(f"({log.blog_name})")
+        async def get_platform_prefix(blog_name: str) -> str:
+            """블로그 플랫폼 첫글자 약어 반환."""
+            if not blog_name or blog_name == "-":
+                return ""
+            if blog_name not in blog_platforms:
+                r = await db.execute(
+                    select(Blog.platform).where(Blog.name == blog_name).limit(1)
+                )
+                row = r.scalar_one_or_none()
+                if row:
+                    pmap = {"wordpress": "워", "blogger": "구"}
+                    blog_platforms[blog_name] = pmap.get(str(row), "?")
+                else:
+                    blog_platforms[blog_name] = "?"
+            return blog_platforms[blog_name]
 
-                prefix = " ".join(prefix_parts) + " - " if prefix_parts else ""
-                return f"{prefix}{log.message}"
-
-            # message가 없으면 기존 포맷 사용
-            parts = []
-
-            # 액션 타입
-            action_map = {
-                "republish": "재발행",
-                "publish": "발행",
-                "generate": "생성",
-                "data": "데이터",
-                "collect": "수집",
-                "paused": "일시정지",
-                "resumed": "재개",
-                "stopped": "중지",
-                "added": "추가",
-                "removed": "제외"
-            }
-            action_text = action_map.get(log.action, log.action)
-
-            # 상태
-            status_map = {
-                "success": "완료",
-                "failed": "실패",
-                "warning": "경고"
-            }
-            status_text = status_map.get(log.status, log.status)
-
-            # 메시지 조합: "[액션] [대상] - [결과]"
-            if log.flow_name:
-                parts.append(f"{action_text}: {log.flow_name}")
-            elif log.module_name:
-                parts.append(f"{action_text}: {log.module_name}")
-            else:
-                parts.append(action_text)
-
-            if log.blog_name and log.blog_name != "-":
-                parts.append(f"({log.blog_name})")
-
-            if log.post_title:
-                # 제목이 길면 축약
-                title = log.post_title[:30] + "..." if len(log.post_title) > 30 else log.post_title
-                parts.append(f"- {title}")
-
-            parts.append(status_text)
-
-            return " ".join(parts)
-
-        return {
-            "logs": [
-                {
-                    "id": log.id,
-                    "level": format_log_level(log),
-                    "message": format_log_message(log),
-                    "category": log.action,
-                    "resource_type": "autorun",
-                    "resource_id": log.flow_id,
-                    "timestamp": log.created_at.isoformat() if log.created_at else None
-                }
-                for log in logs
-            ],
-            "has_more": has_more
+        action_display = {
+            "generate": "글/이미지 생성",
+            "publish": "발행",
+            "republish": "재발행",
+            "collect": "제목 수집",
+            "data": "데이터 이동",
+            "flow_init": "플로우 초기화",
         }
+
+        formatted = []
+        for log in logs:
+            prefix = await get_platform_prefix(log.blog_name)
+            action_text = action_display.get(log.action, log.action)
+
+            if log.status == "success":
+                level = "SUCCESS"
+                status_text = "성공"
+            elif log.status == "failed":
+                level = "ERROR"
+                reason = log.message or "알 수 없음"
+                if len(reason) > 40:
+                    reason = reason[:40] + "..."
+                status_text = f"실패({reason})"
+            else:
+                level = "WARN"
+                status_text = log.status
+
+            if prefix and log.blog_name and log.blog_name != "-":
+                msg = f"({prefix}){log.blog_name} - {action_text} - {status_text}"
+            else:
+                msg = f"{action_text} - {status_text}"
+
+            formatted.append({
+                "id": log.id,
+                "level": level,
+                "message": msg,
+                "category": log.action,
+                "resource_type": "autorun",
+                "resource_id": log.flow_id,
+                "timestamp": log.created_at.isoformat() if log.created_at else None,
+            })
+
+        return {"logs": formatted, "has_more": has_more}
     except Exception as e:
         logger.error(f"[DASHBOARD] logs 에러: {str(e)}")
         return {

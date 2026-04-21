@@ -1740,13 +1740,6 @@ async def execute_single_module(
                     logger.info(
                         f"[MODULE_EXEC] Celery 디스패치 성공 | blog={blog.name} | task_id={task_id}"
                     )
-                    await _save_autorun_log(
-                        db=db, user_id=current_user.id, flow_id=flow_id,
-                        flow_name=flow.name, module_name=target_module.name,
-                        blog_name=blog.name,
-                        result={"success": True, "message": f"Celery 큐 등록: {task_id}"},
-                        duration_ms=0, action="generate"
-                    )
                 except Exception as e:
                     logger.warning(f"[MODULE_EXEC] Celery 디스패치 실패 | blog={blog.name} | {e}")
                     await _save_autorun_log(
