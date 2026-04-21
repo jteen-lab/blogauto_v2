@@ -23,7 +23,7 @@ class AutorunLog(Base):
     # 기본 필드
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    flow_id = Column(Integer, ForeignKey("flows.id"), nullable=False, index=True)
+    flow_id = Column(Integer, ForeignKey("flows.id"), nullable=True, index=True)
 
     # 액션 정보
     action = Column(

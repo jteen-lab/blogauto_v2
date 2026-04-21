@@ -128,9 +128,10 @@ class TaskDispatcher:
         Raises:
             DuplicateTaskError: 동일 작업이 이미 진행 중일 때
         """
-        dedup_key = f"generate:{blog_id}:{module_id}:{title_id}"
-        if self.dedup.is_duplicate(dedup_key):
-            raise DuplicateTaskError(dedup_key)
+        if not force:
+            dedup_key = f"generate:{blog_id}:{module_id}:{title_id}"
+            if self.dedup.is_duplicate(dedup_key):
+                raise DuplicateTaskError(dedup_key)
 
         task_kwargs = {
             "blog_id": blog_id, "module_id": module_id,

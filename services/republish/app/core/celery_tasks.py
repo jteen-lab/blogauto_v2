@@ -37,6 +37,7 @@ async def _async_generate_via_executor(
     user_id: int = 1,
     stage_params_dict: dict = None,
     force: bool = False,
+    flow_id: int = None,
 ) -> dict:
     """FlowGenerateExecutor를 사용하여 OFF 모드와 동일한 생성 로직 실행.
 
@@ -46,6 +47,7 @@ async def _async_generate_via_executor(
         user_id: 사용자 ID
         stage_params_dict: StageParams dict 직렬화 (None이면 기본값)
         force: 재고 체크 없이 강제 생성
+        flow_id: 플로우 ID (AutorunLog용)
 
     Returns:
         FlowGenerateExecutor.execute_for_blog()의 반환값
@@ -99,10 +101,9 @@ async def _async_generate_via_executor(
         try:
             from app.models.autorun_log import AutorunLog
             status = "success" if result.get("success") and not result.get("skipped") else "failed"
-            log_msg = result.get("message", "")
             log = AutorunLog.create_execution_log(
                 user_id=user_id,
-                flow_id=0,
+                flow_id=flow_id or None,
                 action="generate",
                 status=status,
                 flow_name="",
@@ -111,7 +112,7 @@ async def _async_generate_via_executor(
                 post_title=result.get("post_title", ""),
                 action_time=None,
                 duration_ms=int(result.get("generation_time_seconds", 0) * 1000),
-                message=log_msg,
+                message=result.get("message", ""),
             )
             db.add(log)
             await db.commit()
@@ -260,7 +261,7 @@ def generate_content(
         result = run_async(
             _async_generate_via_executor(
                 blog_id, module_id, user_id,
-                stage_params_dict, force,
+                stage_params_dict, force, flow_id,
             )
         )
 

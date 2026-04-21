@@ -36,7 +36,7 @@ async def _async_publish_via_workflow(
             blog = await db.get(Blog, blog_id)
             status = "success" if result.get("success") and not result.get("skipped") else "failed"
             log = AutorunLog.create_execution_log(
-                user_id=1, flow_id=0, action="publish", status=status,
+                user_id=1, flow_id=None, action="publish", status=status,
                 flow_name="", module_name="",
                 blog_name=blog.name if blog else str(blog_id),
                 post_title=result.get("post_title", ""),
