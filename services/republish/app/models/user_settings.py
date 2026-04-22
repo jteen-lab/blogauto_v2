@@ -57,6 +57,10 @@ class UserSettings(Base):
     naver_search_client_id = Column(String(255), nullable=True)
     naver_search_client_secret = Column(String(255), nullable=True)
 
+    # Google Blogger OAuth 설정
+    blogger_client_id = Column(String(255), nullable=True, comment="Google Blogger OAuth Client ID")
+    blogger_client_secret = Column(String(255), nullable=True, comment="Google Blogger OAuth Client Secret")
+
     # Google Keyword Planner API 설정
     google_ads_developer_token = Column(String(255), nullable=True)
     google_ads_client_id = Column(String(255), nullable=True)
@@ -200,6 +204,29 @@ class UserSettings(Base):
         return f"{self.naver_search_client_secret[:4]}****{self.naver_search_client_secret[-4:]}"
 
     @property
+    def has_blogger_oauth(self) -> bool:
+        """Google Blogger OAuth 설정 여부."""
+        return bool(self.blogger_client_id and self.blogger_client_secret)
+
+    @property
+    def masked_blogger_client_id(self) -> Optional[str]:
+        """마스킹된 Blogger Client ID."""
+        if not self.blogger_client_id:
+            return None
+        if len(self.blogger_client_id) <= 8:
+            return "****"
+        return f"{self.blogger_client_id[:4]}****{self.blogger_client_id[-4:]}"
+
+    @property
+    def masked_blogger_client_secret(self) -> Optional[str]:
+        """마스킹된 Blogger Client Secret."""
+        if not self.blogger_client_secret:
+            return None
+        if len(self.blogger_client_secret) <= 8:
+            return "****"
+        return f"{self.blogger_client_secret[:4]}****{self.blogger_client_secret[-4:]}"
+
+    @property
     def has_google_keyword_planner_api(self) -> bool:
         """Google Keyword Planner API 설정 여부"""
         return bool(
@@ -256,6 +283,9 @@ class UserSettings(Base):
             "gemini_api_key": self.masked_gemini_key,
             "default_ai_model": self.default_ai_model,
             "blogger_hourly_limit": self.blogger_hourly_limit,
+            "blogger_client_id": self.masked_blogger_client_id,
+            "blogger_client_secret": self.masked_blogger_client_secret,
+            "has_blogger_oauth": self.has_blogger_oauth,
             "has_openai_key": self.has_openai_key,
             "has_claude_key": self.has_claude_key,
             "has_gemini_key": self.has_gemini_key,

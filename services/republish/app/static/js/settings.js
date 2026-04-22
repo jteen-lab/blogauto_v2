@@ -106,6 +106,10 @@ function settingsApp() {
         naverDatalabTestResult: '',
         naverDatalabTestSuccess: false,
 
+        // 구글 블로거 OAuth 상태
+        showBloggerClientId: false,
+        showBloggerClientSecret: false,
+
         // 구글 키워드 플래너 상태
         showGoogleAdsDeveloperToken: false,
         showGoogleAdsClientId: false,
@@ -131,6 +135,9 @@ function settingsApp() {
             claude_api_key: '',
             gemini_api_key: '',
             blogger_hourly_limit: 2,
+            blogger_client_id: '',
+            blogger_client_secret: '',
+            has_blogger_oauth: false,
             // 네이버 검색광고 API
             naver_ads_api_key: '',
             naver_ads_secret_key: '',
@@ -185,6 +192,9 @@ function settingsApp() {
                         claude_api_key: data.claude_api_key || '',
                         gemini_api_key: data.gemini_api_key || '',
                         blogger_hourly_limit: data.blogger_hourly_limit || 2,
+                        blogger_client_id: data.blogger_client_id || '',
+                        blogger_client_secret: data.blogger_client_secret || '',
+                        has_blogger_oauth: data.has_blogger_oauth || false,
                         // 네이버 검색광고 API
                         naver_ads_api_key: data.naver_ads_api_key || '',
                         naver_ads_secret_key: data.naver_ads_secret_key || '',
@@ -238,6 +248,14 @@ function settingsApp() {
                 const payload = {
                     blogger_hourly_limit: parseInt(this.form.blogger_hourly_limit)
                 };
+
+                // Blogger OAuth
+                if (!this.isMaskedKey(this.form.blogger_client_id)) {
+                    payload.blogger_client_id = this.form.blogger_client_id;
+                }
+                if (!this.isMaskedKey(this.form.blogger_client_secret)) {
+                    payload.blogger_client_secret = this.form.blogger_client_secret;
+                }
 
                 // API 키 처리 규칙:
                 // - 마스킹된 값(****포함): payload에 포함하지 않음 → 서버에서 기존 값 유지

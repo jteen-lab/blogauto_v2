@@ -47,28 +47,58 @@ def _read_env_file(cid: str, cse: str) -> Tuple[str, str]:
 
 
 def get_google_oauth_credentials() -> Tuple[str, str]:
-    """Google OAuth Client ID/Secret 조회
+    """Google OAuth Client ID/Secret 조회.
 
-    우선순위: settings → 환경변수 → .env 파일
+    우선순위: DB(user_settings) → 환경변수 → .env 파일
 
     Returns:
         (client_id, client_secret) 튜플. 미설정 시 빈 문자열.
     """
-    from ...core.config import settings
+    cid, cse = _get_credentials_from_db()
+    if cid and cse:
+        return cid, cse
 
     cid = (
-        getattr(settings, "google_client_id", "")
-        or os.environ.get("GOOGLE_CLIENT_ID", "")
+        os.environ.get("GOOGLE_CLIENT_ID", "")
         or os.environ.get("BLOGGER_CLIENT_ID", "")
     )
     cse = (
-        getattr(settings, "google_client_secret", "")
-        or os.environ.get("GOOGLE_CLIENT_SECRET", "")
+        os.environ.get("GOOGLE_CLIENT_SECRET", "")
         or os.environ.get("BLOGGER_CLIENT_SECRET", "")
     )
     if not cid or not cse:
         cid, cse = _read_env_file(cid, cse)
     return cid, cse
+
+
+def _get_credentials_from_db() -> Tuple[str, str]:
+    """DB(user_settings)에서 Blogger OAuth 자격증명 조회."""
+    try:
+        import asyncio
+        from ...core.database import db_manager
+        from ...models.user_settings import UserSettings
+        from sqlalchemy import select
+
+        async def _query():
+            async with db_manager.get_session() as db:
+                result = await db.execute(
+                    select(UserSettings).limit(1)
+                )
+                s = result.scalar_one_or_none()
+                if s and s.blogger_client_id and s.blogger_client_secret:
+                    return s.blogger_client_id, s.blogger_client_secret
+            return "", ""
+
+        try:
+            loop = asyncio.get_running_loop()
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                return pool.submit(asyncio.run, _query()).result()
+        except RuntimeError:
+            return asyncio.run(_query())
+    except Exception as e:
+        logger.debug(f"[OAUTH_HELPER] DB 조회 실패 (폴백 사용): {e}")
+        return "", ""
 
 
 async def refresh_access_token(

@@ -67,6 +67,9 @@ class SettingsUpdateRequest(BaseModel):
     gemini_api_key: Optional[str] = Field(None, max_length=255)
     default_ai_model: Optional[str] = Field(None, max_length=50)
     blogger_hourly_limit: Optional[int] = Field(None, ge=1, le=4)
+    # Google Blogger OAuth
+    blogger_client_id: Optional[str] = Field(None, max_length=255)
+    blogger_client_secret: Optional[str] = Field(None, max_length=255)
     # 네이버 검색광고 API
     naver_ads_api_key: Optional[str] = Field(None, max_length=255)
     naver_ads_secret_key: Optional[str] = Field(None, max_length=255)
@@ -294,6 +297,21 @@ async def update_settings(
         if request.naver_datalab_client_secret is not None and request.naver_datalab_client_secret != "":
             settings.naver_datalab_client_secret = request.naver_datalab_client_secret
             logger.info(f"[SETTINGS] 네이버 데이터랩 Client Secret 업데이트: user_id={user_id}")
+
+        # Google Blogger OAuth 업데이트
+        if request.blogger_client_id is not None and request.blogger_client_id != "":
+            if "****" not in request.blogger_client_id:
+                settings.blogger_client_id = request.blogger_client_id
+                logger.info(f"[SETTINGS] Blogger Client ID 업데이트: user_id={user_id}")
+        elif request.blogger_client_id == "":
+            settings.blogger_client_id = None
+
+        if request.blogger_client_secret is not None and request.blogger_client_secret != "":
+            if "****" not in request.blogger_client_secret:
+                settings.blogger_client_secret = request.blogger_client_secret
+                logger.info(f"[SETTINGS] Blogger Client Secret 업데이트: user_id={user_id}")
+        elif request.blogger_client_secret == "":
+            settings.blogger_client_secret = None
 
         # Google Keyword Planner API 키 업데이트
         if request.google_ads_developer_token is not None and request.google_ads_developer_token != "":
