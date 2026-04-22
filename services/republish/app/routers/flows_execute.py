@@ -21,6 +21,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db_session
+from app.services.system_settings_service import SystemSettingsService
+
+
+async def _use_celery(key: str, db: AsyncSession) -> bool:
+    """시스템 설정에서 Celery 플래그 조회."""
+    return await SystemSettingsService.get_bool(key, db, default=False)
 from app.models.flow import Flow
 from app.models.flow_module import FlowModule
 from app.models.flow_blog import FlowBlog
@@ -404,9 +410,9 @@ async def _execute_flow_background(
                     # 발행 실행 (항상 1개)
                     blog_start_time = datetime.now()
                     try:
-                        from app.core.config import settings as app_settings
+                        
 
-                        if app_settings.use_celery_publish:
+                        if await _use_celery("use_celery_publish", db):
                             # Celery 워커에 발행 위임 (전체 워크플로우는 워커 내부에서 실행)
                             from app.core.task_dispatcher import (
                                 get_dispatcher, PRIORITY_NORMAL,
@@ -553,9 +559,9 @@ async def _execute_flow_background(
                     )
 
                     try:
-                        from app.core.config import settings as app_settings
+                        
 
-                        if app_settings.use_celery_publish:
+                        if await _use_celery("use_celery_publish", db):
                             # Celery 워커에 재발행 위임
                             from app.core.task_dispatcher import (
                                 get_dispatcher, PRIORITY_NORMAL,
@@ -693,8 +699,8 @@ async def _execute_flow_background(
 
                             try:
                                 # Celery 기능 플래그 체크
-                                from app.core.config import settings as app_settings
-                                if app_settings.use_celery_generation:
+                                
+                                if await _use_celery("use_celery_generation", db):
                                     from dataclasses import asdict
                                     from app.core.task_dispatcher import get_dispatcher, PRIORITY_NORMAL
                                     dispatcher = get_dispatcher()
@@ -1718,8 +1724,8 @@ async def execute_single_module(
         execution_id = str(uuid.uuid4())
 
         # Celery 기능 플래그 체크
-        from app.core.config import settings as app_settings
-        if app_settings.use_celery_generation:
+        
+        if await _use_celery("use_celery_generation", db):
             # Celery 큐로 디스패치
             from app.core.task_dispatcher import get_dispatcher, PRIORITY_CRITICAL
             dispatcher = get_dispatcher()
@@ -1801,9 +1807,9 @@ async def execute_single_module(
             }
 
     # 5. collect/data 실행 (Celery 기능 플래그에 따라 분기)
-    from app.core.config import settings as app_settings
+    
 
-    if type_code in ("collect", "data") and app_settings.use_celery_utility:
+    if type_code in ("collect", "data") and await _use_celery("use_celery_utility", db):
         # Celery 큐로 디스패치
         from app.core.task_dispatcher import get_dispatcher, PRIORITY_NORMAL
         dispatcher = get_dispatcher()
@@ -2181,8 +2187,8 @@ async def _execute_blog_action(
     # 5. 실행
     try:
         if action == "publish":
-            from app.core.config import settings as app_settings
-            if app_settings.use_celery_publish:
+            
+            if await _use_celery("use_celery_publish", db):
                 from app.core.task_dispatcher import (
                     get_dispatcher, PRIORITY_CRITICAL,
                 )
@@ -2251,8 +2257,8 @@ async def _execute_blog_action(
                             }
 
         elif action == "republish":
-            from app.core.config import settings as app_settings
-            if app_settings.use_celery_publish:
+            
+            if await _use_celery("use_celery_publish", db):
                 from app.core.task_dispatcher import (
                     get_dispatcher, PRIORITY_CRITICAL,
                 )

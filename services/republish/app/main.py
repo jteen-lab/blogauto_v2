@@ -31,7 +31,7 @@ from .routers.flows import router as flows_router
 from .routers.autorun import router as autorun_router
 from .routers.dashboard import router as dashboard_router
 from .routers.dashboard_celery import router as dashboard_celery_router
-from .routers.settings import router as settings_router, naver_search_router, naver_ads_router, google_trends_router, naver_datalab_router, google_keyword_planner_router
+from .routers.settings import router as settings_router, naver_search_router, naver_ads_router, google_trends_router, naver_datalab_router, google_keyword_planner_router, system_settings_router
 from .routers.modules_pages import router as modules_page_router
 from .routers.flows_pages import router as flows_page_router
 from .routers.autorun_pages import router as autorun_page_router
@@ -221,6 +221,7 @@ app.include_router(naver_ads_router, prefix=settings.api_v1_prefix)
 app.include_router(google_trends_router, prefix=settings.api_v1_prefix)
 app.include_router(naver_datalab_router, prefix=settings.api_v1_prefix)
 app.include_router(google_keyword_planner_router, prefix=settings.api_v1_prefix)
+app.include_router(system_settings_router, prefix=settings.api_v1_prefix)
 app.include_router(engine_router, prefix=settings.api_v1_prefix)
 app.include_router(data_keywords_router, prefix=settings.api_v1_prefix)
 app.include_router(data_titles_router, prefix=settings.api_v1_prefix)

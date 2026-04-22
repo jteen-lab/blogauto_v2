@@ -110,6 +110,21 @@ function settingsApp() {
         showBloggerClientId: false,
         showBloggerClientSecret: false,
 
+        // 시스템 설정 상태
+        systemSettings: {},
+        savingSystem: false,
+        systemCeleryItems: [
+            {key: 'use_celery_generation', label: '글 생성 워커', desc: '프롬프트 모듈 글/이미지 생성'},
+            {key: 'use_celery_publish', label: '발행 워커', desc: '워드프레스/블로거 발행/재발행'},
+            {key: 'use_celery_image', label: '이미지 생성 워커', desc: '독립 이미지 생성'},
+            {key: 'use_celery_utility', label: '유틸리티 워커', desc: '제목 수집/데이터 이동'},
+        ],
+        ratelimitProviders: [
+            {name: 'openai', label: 'OpenAI', rpm_key: 'ratelimit_openai_rpm', tpm_key: 'ratelimit_openai_tpm'},
+            {name: 'anthropic', label: 'Anthropic (Claude)', rpm_key: 'ratelimit_anthropic_rpm', tpm_key: 'ratelimit_anthropic_tpm'},
+            {name: 'google', label: 'Google (Gemini)', rpm_key: 'ratelimit_google_rpm', tpm_key: 'ratelimit_google_tpm'},
+        ],
+
         // 구글 키워드 플래너 상태
         showGoogleAdsDeveloperToken: false,
         showGoogleAdsClientId: false,
@@ -168,6 +183,7 @@ function settingsApp() {
             this.$el.addEventListener('settings-modal-open', () => {
                 this.loadSettings();
                 this.loadAiKeys();
+                this.loadSystemSettings();
             });
         },
 
@@ -428,6 +444,53 @@ function settingsApp() {
          */
         checkBloggerWarning() {
             this.showBloggerWarning = parseInt(this.form.blogger_hourly_limit) >= 3;
+        },
+
+        async loadSystemSettings() {
+            try {
+                const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
+                const response = await fetch(`${apiBase}/system-settings`, {
+                    credentials: 'include',
+                    headers: {'Content-Type': 'application/json'}
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    const flat = {};
+                    for (const [key, info] of Object.entries(data)) {
+                        flat[key] = info.value || '';
+                    }
+                    this.systemSettings = flat;
+                }
+            } catch (e) {
+                console.error('[Settings] 시스템 설정 로드 실패:', e);
+            }
+        },
+
+        toggleSystemSetting(key) {
+            this.systemSettings[key] = this.systemSettings[key] === 'true' ? 'false' : 'true';
+        },
+
+        async saveSystemSettings() {
+            this.savingSystem = true;
+            try {
+                const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
+                const response = await fetch(`${apiBase}/system-settings`, {
+                    method: 'PUT',
+                    credentials: 'include',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(this.systemSettings)
+                });
+                const result = await response.json();
+                if (result.success) {
+                    showMessage('시스템 설정이 저장되었습니다');
+                } else {
+                    showErrorMessage(result.message || '저장 실패');
+                }
+            } catch (e) {
+                showErrorMessage('시스템 설정 저장 중 오류 발생');
+            } finally {
+                this.savingSystem = false;
+            }
         },
 
         /**

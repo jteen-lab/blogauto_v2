@@ -1003,3 +1003,36 @@ async def get_api_status(db: AsyncSession = Depends(get_db_session)):
             "naver_news": False,
             "google_news": True
         }
+
+
+# ============================================================
+# 시스템 설정 API (Celery, Rate Limit)
+# ============================================================
+
+system_settings_router = APIRouter(prefix="/system-settings", tags=["시스템 설정"])
+
+
+@system_settings_router.get("")
+async def get_system_settings(
+    db: AsyncSession = Depends(get_db_session),
+    _user: User = Depends(get_current_user),
+):
+    """시스템 설정 ���체 조회."""
+    from ..services.system_settings_service import SystemSettingsService
+    return await SystemSettingsService.get_all(db)
+
+
+@system_settings_router.put("")
+async def update_system_settings(
+    updates: dict,
+    db: AsyncSession = Depends(get_db_session),
+    _user: User = Depends(get_current_user),
+):
+    """시스템 설정 업데이트."""
+    from ..services.system_settings_service import SystemSettingsService
+    try:
+        await SystemSettingsService.set_many(updates, db)
+        return {"success": True, "message": "시스템 설정이 저장되었습니다"}
+    except Exception as e:
+        logger.error(f"[SETTINGS] 시스템 설정 저장 에러: {e}")
+        return {"success": False, "message": str(e)}

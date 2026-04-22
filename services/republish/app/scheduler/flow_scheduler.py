@@ -27,8 +27,14 @@ from ..models.blog import Blog, BlogPlatform
 from ..models.flow_execution_state import FlowExecutionState
 from ..models.autorun_log import AutorunLog
 from ..models.user_settings import UserSettings
+from ..services.system_settings_service import SystemSettingsService
 from ..engine.flow_engine import FlowEngine
 from ..core.database import db_manager
+
+
+async def _use_celery(key: str, db: AsyncSession) -> bool:
+    """시스템 설정에서 Celery 플래그 조회."""
+    return await SystemSettingsService.get_bool(key, db, default=False)
 from ..core.logger import get_logger
 from ..services.generation.growth_profile_resolver import GrowthProfileResolver
 from ..services.generation.flow_execution_context import StageParams
@@ -519,8 +525,8 @@ class FlowScheduler:
 
                 # action_type별 실행
                 if action_type == "collect":
-                    from app.core.config import settings as app_settings
-                    if app_settings.use_celery_utility:
+                    
+                    if await _use_celery("use_celery_utility", db):
                         from app.core.task_dispatcher import get_dispatcher, PRIORITY_NORMAL
                         dispatcher = get_dispatcher()
                         task_id = dispatcher.dispatch_utility(
@@ -556,8 +562,8 @@ class FlowScheduler:
                     )
 
                 elif action_type == "data":
-                    from app.core.config import settings as app_settings
-                    if app_settings.use_celery_utility:
+                    
+                    if await _use_celery("use_celery_utility", db):
                         from app.core.task_dispatcher import get_dispatcher, PRIORITY_NORMAL
                         dispatcher = get_dispatcher()
                         task_id = dispatcher.dispatch_utility(
@@ -903,8 +909,8 @@ class FlowScheduler:
 
                 # action_type별 실행
                 if action_type == "collect":
-                    from app.core.config import settings as app_settings
-                    if app_settings.use_celery_utility:
+                    
+                    if await _use_celery("use_celery_utility", db):
                         from app.core.task_dispatcher import get_dispatcher, PRIORITY_NORMAL
                         dispatcher = get_dispatcher()
                         task_id = dispatcher.dispatch_utility(
@@ -945,8 +951,8 @@ class FlowScheduler:
                     )
 
                 elif action_type == "data":
-                    from app.core.config import settings as app_settings
-                    if app_settings.use_celery_utility:
+                    
+                    if await _use_celery("use_celery_utility", db):
                         from app.core.task_dispatcher import get_dispatcher, PRIORITY_NORMAL
                         dispatcher = get_dispatcher()
                         task_id = dispatcher.dispatch_utility(
@@ -1669,8 +1675,8 @@ class FlowScheduler:
                     try:
                         blog_start = datetime.now()
                         # Celery 기능 플래그 체크
-                        from app.core.config import settings as app_settings
-                        if app_settings.use_celery_generation:
+                        
+                        if await _use_celery("use_celery_generation", db):
                             from app.core.task_dispatcher import get_dispatcher, PRIORITY_NORMAL
                             dispatcher = get_dispatcher()
                             try:
@@ -1947,9 +1953,9 @@ class FlowScheduler:
                     continue
 
                 # 발행 (항상 1개)
-                from app.core.config import settings as app_settings
+                
 
-                if app_settings.use_celery_publish:
+                if await _use_celery("use_celery_publish", db):
                     # Celery 워커에 발행 위임
                     from app.core.task_dispatcher import (
                         get_dispatcher, PRIORITY_NORMAL,
@@ -2066,9 +2072,9 @@ class FlowScheduler:
                 if not stage_params or not stage_params.republish.enabled:
                     continue
 
-                from app.core.config import settings as app_settings
+                
 
-                if app_settings.use_celery_publish:
+                if await _use_celery("use_celery_publish", db):
                     # Celery 워커에 재발행 위임
                     from app.core.task_dispatcher import (
                         get_dispatcher, PRIORITY_NORMAL,

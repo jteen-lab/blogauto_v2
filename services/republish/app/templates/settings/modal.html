@@ -56,6 +56,11 @@
                         class="flex-1 py-3 px-4 text-sm font-medium border-b-2 transition-colors">
                     API 설정
                 </button>
+                <button @click="activeTab = 'system'" type="button"
+                        class="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
+                        :class="activeTab === 'system' ? 'bg-orange-100 text-orange-700' : 'text-gray-500 hover:text-gray-700'">
+                    시스템 설정
+                </button>
             </div>
 
             <!-- 로딩 상태 -->
@@ -810,6 +815,67 @@
                             </p>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- 시스템 설정 탭 -->
+            <div x-show="!loading && activeTab === 'system'" x-cloak class="space-y-6">
+                <div class="space-y-4">
+                    <h4 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                        <svg class="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/>
+                        </svg>
+                        Celery 워커 설정
+                    </h4>
+                    <p class="text-xs text-gray-500 -mt-2">워커를 활성화하면 작업이 별도 프로세스에서 비동기 실행됩니다</p>
+                    <template x-for="item in systemCeleryItems" :key="item.key">
+                        <div class="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg">
+                            <div>
+                                <span class="text-sm font-medium text-gray-700" x-text="item.label"></span>
+                                <p class="text-xs text-gray-400" x-text="item.desc"></p>
+                            </div>
+                            <button @click="toggleSystemSetting(item.key)"
+                                    class="relative w-12 h-6 rounded-full transition-colors"
+                                    :class="systemSettings[item.key] === 'true' ? 'bg-orange-500' : 'bg-gray-300'">
+                                <span class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform"
+                                      :class="systemSettings[item.key] === 'true' ? 'translate-x-6' : ''"></span>
+                            </button>
+                        </div>
+                    </template>
+                </div>
+                <hr class="border-gray-200">
+                <div class="space-y-4">
+                    <h4 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                        <svg class="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                        AI Rate Limit 설정
+                    </h4>
+                    <p class="text-xs text-gray-500 -mt-2">AI 서비스별 분당 최대 요청 수(RPM)와 토큰 수(TPM)</p>
+                    <template x-for="provider in ratelimitProviders" :key="provider.name">
+                        <div class="bg-gray-50 rounded-lg p-3 space-y-2">
+                            <span class="text-sm font-medium text-gray-700" x-text="provider.label"></span>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1">RPM (분당 요청)</label>
+                                    <input type="number" min="1" x-model="systemSettings[provider.rpm_key]"
+                                           class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1">TPM (분당 토큰)</label>
+                                    <input type="number" min="1000" step="1000" x-model="systemSettings[provider.tpm_key]"
+                                           class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+                <div class="flex justify-end">
+                    <button @click="saveSystemSettings()" :disabled="savingSystem"
+                            class="px-6 py-2 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700 disabled:opacity-50 transition-colors">
+                        <span x-show="!savingSystem">시스템 설정 저장</span>
+                        <span x-show="savingSystem">저장 중...</span>
+                    </button>
                 </div>
             </div>
 
