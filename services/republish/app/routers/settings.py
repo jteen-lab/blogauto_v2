@@ -15,7 +15,9 @@ from pydantic import BaseModel, Field
 
 from ..core.database import get_db_session
 from ..core.logger import get_logger
+from ..models.user import User
 from ..models.user_settings import UserSettings
+from ..routers.auth import get_current_user
 from ..services.naver_ads_service import NaverAdsService
 from ..services.naver_search_service import NaverSearchService
 from ..services.google_trends_service import GoogleTrendsService
