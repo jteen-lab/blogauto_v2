@@ -61,8 +61,6 @@ services:
       - JWT_SECRET=${JWT_SECRET:-dev-jwt-secret-change-in-production}
       - JWT_EXPIRE_MINUTES=${JWT_EXPIRE_MINUTES:-1440}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
-      - GOOGLE_CLIENT_ID=${BLOGGER_CLIENT_ID:-}
-      - GOOGLE_CLIENT_SECRET=${BLOGGER_CLIENT_SECRET:-}
     volumes:
       - ./logs:/app/logs
       - ./app:/app/app
@@ -119,8 +117,6 @@ services:
       - DATABASE_URL=${DATABASE_URL:-postgresql://blogauto:blogauto123@db:5432/blogauto_v2}
       - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-dev-encryption-key-32-bytes-long}
-      - GOOGLE_CLIENT_ID=${BLOGGER_CLIENT_ID:-}
-      - GOOGLE_CLIENT_SECRET=${BLOGGER_CLIENT_SECRET:-}
     depends_on:
       redis:
         condition: service_healthy
