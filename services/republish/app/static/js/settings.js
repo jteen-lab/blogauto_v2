@@ -265,33 +265,23 @@ function settingsApp() {
                     blogger_hourly_limit: parseInt(this.form.blogger_hourly_limit)
                 };
 
-                // Blogger OAuth
-                if (!this.isMaskedKey(this.form.blogger_client_id)) {
+                // Blogger OAuth (마스킹/빈 값 제외)
+                if (this.form.blogger_client_id && !this.isMaskedKey(this.form.blogger_client_id)) {
                     payload.blogger_client_id = this.form.blogger_client_id;
                 }
-                if (!this.isMaskedKey(this.form.blogger_client_secret)) {
+                if (this.form.blogger_client_secret && !this.isMaskedKey(this.form.blogger_client_secret)) {
                     payload.blogger_client_secret = this.form.blogger_client_secret;
                 }
 
-                // API 키 처리 규칙:
-                // - 마스킹된 값(****포함): payload에 포함하지 않음 → 서버에서 기존 값 유지
-                // - 빈 문자열(""): payload에 빈 문자열 포함 → 서버에서 키 삭제 (null로 설정)
-                // - 새 값: payload에 새 값 포함 → 서버에서 키 업데이트
-
-                // OpenAI API 키 - 마스킹된 값이 아니면 payload에 포함 (빈 문자열도 포함)
-                if (!this.isMaskedKey(this.form.openai_api_key)) {
+                // API 키 처리: 값이 있고 마스킹이 아닌 경우만 전송 (빈 값은 무시)
+                if (this.form.openai_api_key && !this.isMaskedKey(this.form.openai_api_key)) {
                     payload.openai_api_key = this.form.openai_api_key;
-                    console.log('[SETTINGS] OpenAI 키 payload:', payload.openai_api_key === '' ? '(빈 문자열 - 삭제 요청)' : '(새 값)');
                 }
-                // Claude API 키
-                if (!this.isMaskedKey(this.form.claude_api_key)) {
+                if (this.form.claude_api_key && !this.isMaskedKey(this.form.claude_api_key)) {
                     payload.claude_api_key = this.form.claude_api_key;
-                    console.log('[SETTINGS] Claude 키 payload:', payload.claude_api_key === '' ? '(빈 문자열 - 삭제 요청)' : '(새 값)');
                 }
-                // Gemini API 키
-                if (!this.isMaskedKey(this.form.gemini_api_key)) {
+                if (this.form.gemini_api_key && !this.isMaskedKey(this.form.gemini_api_key)) {
                     payload.gemini_api_key = this.form.gemini_api_key;
-                    console.log('[SETTINGS] Gemini 키 payload:', payload.gemini_api_key === '' ? '(빈 문자열 - 삭제 요청)' : '(새 값)');
                 }
 
                 // 네이버 검색광고 API 키
@@ -369,6 +359,10 @@ function settingsApp() {
                         this.settings.has_gemini_key = result.data.has_gemini_key;
                         this.settings.has_naver_ads_api = result.data.has_naver_ads_api;
                         this.settings.has_naver_datalab_api = result.data.has_naver_datalab_api;
+                        // Blogger OAuth 업데이트
+                        this.form.blogger_client_id = result.data.blogger_client_id || '';
+                        this.form.blogger_client_secret = result.data.blogger_client_secret || '';
+                        this.form.has_blogger_oauth = result.data.has_blogger_oauth || false;
                         // 마스킹된 키 값 업데이트
                         this.form.openai_api_key = result.data.openai_api_key || '';
                         this.form.claude_api_key = result.data.claude_api_key || '';
