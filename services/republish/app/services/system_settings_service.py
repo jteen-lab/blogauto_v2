@@ -15,7 +15,6 @@ logger = logging.getLogger(__name__)
 DEFAULTS: Dict[str, dict] = {
     "use_celery_generation": {"value": "false", "type": "bool", "category": "celery", "desc": "글 생성 워커 사용"},
     "use_celery_publish": {"value": "false", "type": "bool", "category": "celery", "desc": "발행 워커 사용"},
-    "use_celery_image": {"value": "false", "type": "bool", "category": "celery", "desc": "이미지 생성 워커 사용"},
     "use_celery_utility": {"value": "false", "type": "bool", "category": "celery", "desc": "유틸리티 워커 사용"},
     "ratelimit_openai_rpm": {"value": "60", "type": "int", "category": "ratelimit", "desc": "OpenAI 분당 요청 제한"},
     "ratelimit_openai_tpm": {"value": "90000", "type": "int", "category": "ratelimit", "desc": "OpenAI 분당 토큰 제한"},
@@ -28,7 +27,6 @@ DEFAULTS: Dict[str, dict] = {
 _ENV_MAP = {
     "use_celery_generation": "USE_CELERY_GENERATION",
     "use_celery_publish": "USE_CELERY_PUBLISH",
-    "use_celery_image": "USE_CELERY_IMAGE",
     "use_celery_utility": "USE_CELERY_UTILITY",
     "ratelimit_openai_rpm": "RATELIMIT_OPENAI_RPM",
     "ratelimit_openai_tpm": "RATELIMIT_OPENAI_TPM",

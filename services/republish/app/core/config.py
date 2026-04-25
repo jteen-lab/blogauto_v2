@@ -75,7 +75,6 @@ class Settings(BaseSettings):
     # Celery 기능 플래그 (Phase별 전환)
     use_celery_generation: bool = False   # Phase 2 완료 시 True
     use_celery_publish: bool = False      # Phase 3 완료 시 True
-    use_celery_image: bool = False        # Phase 4 완료 시 True
     use_celery_utility: bool = False      # Phase 4 완료 시 True
 
     @validator("database_url", pre=True)

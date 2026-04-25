@@ -116,7 +116,6 @@ function settingsApp() {
         systemCeleryItems: [
             {key: 'use_celery_generation', label: '글 생성 워커', desc: '프롬프트 모듈 글/이미지 생성'},
             {key: 'use_celery_publish', label: '발행 워커', desc: '워드프레스/블로거 발행/재발행'},
-            {key: 'use_celery_image', label: '이미지 생성 워커', desc: '독립 이미지 생성'},
             {key: 'use_celery_utility', label: '유틸리티 워커', desc: '제목 수집/데이터 이동'},
         ],
         ratelimitProviders: [
@@ -340,6 +339,12 @@ function settingsApp() {
                 if (response.ok) {
                     const result = await response.json();
 
+                    // 백엔드 success 필드 확인 (HTTP 200이어도 실패할 수 있음)
+                    if (result.success === false) {
+                        showErrorMessage(result.message || '설정 저장에 실패했습니다');
+                        return;
+                    }
+
                     // 삭제된 키 정보 수집
                     const deletedKeys = [];
                     if (payload.openai_api_key === '') deletedKeys.push('OpenAI');
@@ -387,6 +392,21 @@ function settingsApp() {
                         this.form.google_ads_refresh_token = result.data.google_ads_refresh_token || '';
                         this.form.google_ads_customer_id = result.data.google_ads_customer_id || '';
                         this.form.has_google_keyword_planner_api = result.data.has_google_keyword_planner_api || false;
+                    }
+
+                    // 시스템 설정도 함께 저장
+                    if (Object.keys(this.systemSettings).length > 0) {
+                        const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
+                        const sysResp = await fetch(`${apiBase}/system-settings`, {
+                            method: 'PUT',
+                            credentials: 'include',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify(this.systemSettings)
+                        });
+                        const sysResult = await sysResp.json();
+                        if (!sysResult.success) {
+                            console.error('[Settings] 시스템 설정 저장 실패:', sysResult.message);
+                        }
                     }
 
                     // 모달 닫기
@@ -476,7 +496,9 @@ function settingsApp() {
                 });
                 const result = await response.json();
                 if (result.success) {
-                    showMessage('시스템 설정이 저장되었습니다');
+                    showSuccessMessage('시스템 설정이 저장되었습니다');
+                    // 저장 후 시스템 설정 다시 로드하여 확인
+                    await this.loadSystemSettings();
                 } else {
                     showErrorMessage(result.message || '저장 실패');
                 }

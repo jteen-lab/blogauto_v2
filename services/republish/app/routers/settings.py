@@ -151,6 +151,10 @@ async def get_settings(db: AsyncSession = Depends(get_db_session)):
             "gemini_api_key": settings.masked_gemini_key,
             "default_ai_model": settings.default_ai_model,
             "blogger_hourly_limit": settings.blogger_hourly_limit,
+            # Google Blogger OAuth
+            "blogger_client_id": settings.masked_blogger_client_id,
+            "blogger_client_secret": settings.masked_blogger_client_secret,
+            "has_blogger_oauth": settings.has_blogger_oauth,
             "has_openai_key": settings.has_openai_key,
             "has_claude_key": settings.has_claude_key,
             "has_gemini_key": settings.has_gemini_key,

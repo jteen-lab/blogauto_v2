@@ -114,7 +114,6 @@ async def lifespan(app: FastAPI):
         f"[CELERY] 기능 플래그 상태 | "
         f"generation={settings.use_celery_generation} | "
         f"publish={settings.use_celery_publish} | "
-        f"image={settings.use_celery_image} | "
         f"utility={settings.use_celery_utility}"
     )
 
