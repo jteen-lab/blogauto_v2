@@ -6,7 +6,9 @@ Celery 큐/워커 모니터링 API 라우터
 - task_executions 실행 이력 조회
 - Flower 모니터링 URL 제공
 """
+import asyncio
 import os
+import time
 from typing import Optional
 
 from fastapi import APIRouter, Depends
@@ -29,6 +31,18 @@ MONITORED_QUEUES = [
     "utility_queue",
     "callback_queue",
 ]
+
+# 워커 이름 → 키 매핑
+WORKER_KEY_MAP = {
+    "generation": "generation",
+    "publish": "publish",
+    "utility": "utility",
+}
+
+# 워커 상태 캐시 (inspect 호출 비용 절감)
+_worker_cache: dict = {}
+_worker_cache_time: float = 0.0
+_CACHE_TTL: float = 5.0
 
 
 @router.get("/status", summary="Celery 큐/워커 상태")
@@ -191,3 +205,114 @@ def _serialize_task(t: TaskExecution) -> dict:
             t.completed_at.isoformat() if t.completed_at else None
         ),
     }
+
+
+@router.get("/workers", summary="Celery 워커 실시간 상태")
+async def get_worker_status() -> dict:
+    """
+    Celery inspect()와 Redis LLEN을 조합하여 워커 실시간 상태를 조회합니다.
+
+    Returns:
+        dict: workers(워커별 상태), queues(큐별 대기 수), total_queued, timestamp
+    """
+    from datetime import datetime, timezone
+
+    loop = asyncio.get_event_loop()
+    worker_info = await loop.run_in_executor(None, _inspect_workers_cached)
+    queue_lengths = await loop.run_in_executor(None, _get_queue_lengths)
+
+    total_queued = sum(
+        max(v, 0) for k, v in queue_lengths.items()
+        if v >= 0 and k not in ("callback_queue",)
+    )
+
+    return {
+        "workers": worker_info,
+        "queues": queue_lengths,
+        "total_queued": total_queued,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def _inspect_workers_cached() -> dict:
+    """5초 TTL 캐시가 적용된 워커 상태 조회."""
+    global _worker_cache, _worker_cache_time
+
+    now = time.monotonic()
+    if now - _worker_cache_time < _CACHE_TTL and _worker_cache:
+        return _worker_cache
+
+    result = _inspect_workers()
+    _worker_cache = result
+    _worker_cache_time = now
+    return result
+
+
+def _inspect_workers() -> dict:
+    """
+    Celery inspect()로 워커 상태를 조회합니다.
+
+    동기 함수이므로 run_in_executor로 호출해야 합니다.
+    timeout=3초로 설정하여 워커가 응답하지 않는 경우 빠르게 반환합니다.
+    """
+    result = {
+        key: {
+            "name": None, "status": "offline", "active_tasks": 0,
+            "processed": 0, "concurrency": 0, "uptime": None,
+        }
+        for key in WORKER_KEY_MAP.values()
+    }
+
+    try:
+        from ..core.celery_config import celery_app
+
+        inspector = celery_app.control.inspect(timeout=3.0)
+        ping_response = inspector.ping() or {}
+        active_response = inspector.active() or {}
+        stats_response = inspector.stats() or {}
+
+        for worker_name in ping_response:
+            worker_key = _resolve_worker_key(worker_name)
+            if worker_key is None:
+                continue
+            result[worker_key]["name"] = worker_name
+            result[worker_key]["status"] = "online"
+            result[worker_key]["active_tasks"] = len(
+                active_response.get(worker_name, [])
+            )
+            _fill_worker_stats(result[worker_key], stats_response.get(worker_name, {}))
+
+    except Exception as e:
+        logger.warning(f"[WORKER_STATUS] inspect 실패: {e}")
+
+    return result
+
+
+def _fill_worker_stats(info: dict, stats: dict) -> None:
+    """워커 stats 응답에서 processed/concurrency/uptime을 추출합니다."""
+    total_tasks = stats.get("total", {})
+    if isinstance(total_tasks, dict):
+        info["processed"] = int(sum(
+            v for v in total_tasks.values() if isinstance(v, (int, float))
+        ))
+
+    info["concurrency"] = stats.get("pool", {}).get("max-concurrency", 0)
+
+    clock = stats.get("clock")
+    if clock:
+        hours = int(clock) // 3600
+        days, rem = divmod(hours, 24)
+        info["uptime"] = f"{days}d {rem}h" if days > 0 else f"{rem}h"
+
+
+def _resolve_worker_key(worker_name: str) -> str | None:
+    """
+    워커 이름에서 키를 추출합니다.
+
+    Args:
+        worker_name: Celery 워커 이름 (예: "generation@hostname")
+    """
+    for prefix, key in WORKER_KEY_MAP.items():
+        if worker_name.startswith(prefix):
+            return key
+    return None

@@ -457,7 +457,9 @@ async def get_action_logs(
                 row = r.scalar_one_or_none()
                 if row:
                     pmap = {"wordpress": "워", "blogger": "구"}
-                    blog_platforms[blog_name] = pmap.get(str(row), "?")
+                    # Enum인 경우 .value로 문자열 추출
+                    platform_str = row.value if hasattr(row, 'value') else str(row)
+                    blog_platforms[blog_name] = pmap.get(platform_str, "?")
                 else:
                     blog_platforms[blog_name] = "?"
             return blog_platforms[blog_name]
@@ -479,6 +481,12 @@ async def get_action_logs(
             if log.status == "success":
                 level = "SUCCESS"
                 status_text = "성공"
+            elif log.status == "skipped":
+                level = "INFO"
+                reason = log.message or "건너뜀"
+                if len(reason) > 40:
+                    reason = reason[:40] + "..."
+                status_text = f"건너뜀({reason})"
             elif log.status == "failed":
                 level = "ERROR"
                 reason = log.message or "알 수 없음"
@@ -490,7 +498,8 @@ async def get_action_logs(
                 status_text = log.status
 
             if prefix and log.blog_name and log.blog_name != "-":
-                msg = f"({prefix}){log.blog_name} - {action_text} - {status_text}"
+                # 플랫폼 뱃지용 대괄호 마커: [워] 또는 [구]
+                msg = f"[{prefix}]{log.blog_name} - {action_text} - {status_text}"
             else:
                 msg = f"{action_text} - {status_text}"
 

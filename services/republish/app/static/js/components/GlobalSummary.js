@@ -1,12 +1,4 @@
-/**
- * GlobalSummary - 글로벌 요약탭 컴포넌트
- *
- * Features:
- * - 22개 요약탭 (블로그, 카테고리, 모듈, 플로우, 이번주, 오늘)
- * - 고정 요약탭 선택 기능 (localStorage 저장)
- * - 카운팅 실시간 연결
- * - 대시보드 요약 패널 슬라이드
- */
+/** GlobalSummary - 글로벌 요약탭 + 워커 상태 모니터링 컴포넌트 */
 function globalSummary() {
     return {
         panelOpen: false,
@@ -31,6 +23,24 @@ function globalSummary() {
         pinnedTabKeys: [],
         displayLogCount: 1,  // 고정 요약탭에 표시할 로그 수 (1~3)
         displayLogs: [],     // 고정 요약탭에 표시할 로그 배열
+        // 워커 상태 (Phase 1: Worker Status UI)
+        workerStatus: {
+            workers: {
+                generation: { status: 'unknown', active_tasks: 0 },
+                publish: { status: 'unknown', active_tasks: 0 },
+                utility: { status: 'unknown', active_tasks: 0 },
+            },
+            queues: {},
+            total_queued: 0,
+        },
+        workerPollInterval: null,
+        previousWorkerOnline: { generation: null, publish: null, utility: null },
+        // 시스템 탭 상태 (Phase 2: System Tab)
+        systemWorkers: {},
+        systemQueues: {},
+        recentTasks: [],
+        flowerUrl: '',
+        systemPollInterval: null,
 
         // 22개 전체 탭 정의
         allTabs: [
@@ -85,6 +95,17 @@ function globalSummary() {
             this.startAutoRefresh();
             // 로그 실시간 갱신 (10초마다)
             this.startLogAutoRefresh();
+            // 워커 상태 폴링 시작 (15초마다)
+            this.loadWorkerStatus();
+            this.workerPollInterval = setInterval(() => this.loadWorkerStatus(), 15000);
+
+            // 컴포넌트 소멸 시 정리
+            this.$cleanup(() => {
+                this.stopAutoRefresh();
+                this.stopLogAutoRefresh();
+                this.stopWorkerPoll();
+                this.stopSystemPoll();
+            });
         },
 
         startAutoRefresh() {
@@ -95,12 +116,8 @@ function globalSummary() {
         },
 
         stopAutoRefresh() {
-            if (this.refreshInterval) {
-                clearInterval(this.refreshInterval);
-                this.refreshInterval = null;
-            }
+            if (this.refreshInterval) { clearInterval(this.refreshInterval); this.refreshInterval = null; }
         },
-
         startLogAutoRefresh() {
             // 10초마다 최신 로그 갱신
             this.logRefreshInterval = setInterval(() => {
@@ -109,12 +126,12 @@ function globalSummary() {
         },
 
         stopLogAutoRefresh() {
-            if (this.logRefreshInterval) {
-                clearInterval(this.logRefreshInterval);
-                this.logRefreshInterval = null;
-            }
+            if (this.logRefreshInterval) { clearInterval(this.logRefreshInterval); this.logRefreshInterval = null; }
         },
-
+        // 워커 폴링 정리
+        stopWorkerPoll() {
+            if (this.workerPollInterval) { clearInterval(this.workerPollInterval); this.workerPollInterval = null; }
+        },
         loadPinnedTabs() {
             try {
                 const saved = localStorage.getItem('dashboard_pinned_tabs');
@@ -212,14 +229,16 @@ function globalSummary() {
             return `${days}일 전`;
         },
 
+        // 날짜+시간 표시 (MM/DD HH:MM:SS 형식)
         formatLogTime(timestamp) {
             if (!timestamp) return '';
-            const date = new Date(timestamp);
-            return date.toLocaleTimeString('ko-KR', {
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
-            });
+            const d = new Date(timestamp);
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            const hours = String(d.getHours()).padStart(2, '0');
+            const minutes = String(d.getMinutes()).padStart(2, '0');
+            const seconds = String(d.getSeconds()).padStart(2, '0');
+            return `${month}/${day} ${hours}:${minutes}:${seconds}`;
         },
 
         async loadLatestLog() {
@@ -281,6 +300,25 @@ function globalSummary() {
             }
         },
 
+        // 플랫폼 뱃지 문자 추출 (예: "[워]블로그명..." → "워")
+        getPlatformBadge(message) {
+            if (!message) return null;
+            const match = message.match(/^\[(.)\]/);
+            return match ? match[1] : null;
+        },
+
+        // 플랫폼 뱃지 배경색 클래스 반환
+        getPlatformBadgeClass(badge) {
+            const colorMap = { '워': 'bg-blue-500', '구': 'bg-orange-500' };
+            return colorMap[badge] || 'bg-gray-500';
+        },
+
+        // 플랫폼 뱃지 제거 후 메시지 반환
+        getMessageText(message) {
+            if (!message) return '';
+            return message.replace(/^\[.\]/, '').trim();
+        },
+
         // 메시지 슬라이드 지속 시간 계산 (메시지 길이에 따라 조정)
         getMessageSlideDuration(message) {
             if (!message) return 20;
@@ -289,6 +327,50 @@ function globalSummary() {
             const charTime = 0.3;  // 글자당 0.3초
             const duration = baseTime + (message.length * charTime);
             return Math.min(Math.max(duration, 15), 40);
+        },
+
+        // 워커 상태 조회
+        async loadWorkerStatus() {
+            try {
+                const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
+                const resp = await fetch(`${apiBase}/dashboard/celery/workers`, {
+                    credentials: 'include'
+                });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    // 워커 offline 전환 감지 (Phase 3)
+                    const labels = { generation: '생성', publish: '발행', utility: '유틸리티' };
+                    for (const key of ['generation', 'publish', 'utility']) {
+                        const curr = data.workers?.[key]?.status;
+                        const prev = this.previousWorkerOnline[key];
+                        if (prev === 'online' && curr === 'offline') {
+                            showErrorMessage(`${labels[key]} 워커가 오프라인으로 전환되었습니다`);
+                        }
+                        this.previousWorkerOnline[key] = curr || 'unknown';
+                    }
+                    this.workerStatus = data;
+                }
+            } catch (e) {
+                console.warn('[GlobalSummary] 워커 상태 조회 실패:', e);
+            }
+        },
+
+        // 워커 상태 인디케이터 dot 클래스
+        getWorkerDotClass(key) {
+            const w = this.workerStatus?.workers?.[key];
+            if (!w || w.status === 'unknown') return 'bg-gray-500';
+            if (w.status === 'offline') return 'bg-red-400';
+            if (w.active_tasks > 0) return 'bg-blue-400 animate-pulse';
+            return 'bg-green-400';
+        },
+
+        // 워커 상태 툴팁 텍스트
+        getWorkerTooltip(key) {
+            const labels = { generation: '생성', publish: '발행', utility: '유틸리티' };
+            const w = this.workerStatus?.workers?.[key];
+            if (!w || w.status === 'unknown') return `${labels[key]} 워커: 확인 중`;
+            if (w.status === 'offline') return `${labels[key]} 워커: 오프라인`;
+            return `${labels[key]} 워커: 온라인 (활성 ${w.active_tasks}개)`;
         },
 
         async loadLogs() {
@@ -334,6 +416,58 @@ function globalSummary() {
 
             // 서버에도 저장 시도
             this.saveLogToServer(logEntry);
+        },
+
+        // === 시스템 탭 메서드 (Phase 2) ===
+        async loadSystemData() {
+            try {
+                const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
+                const [workersResp, historyResp, flowerResp] = await Promise.all([
+                    fetch(`${apiBase}/dashboard/celery/workers`, { credentials: 'include' }),
+                    fetch(`${apiBase}/dashboard/celery/history?limit=10`, { credentials: 'include' }),
+                    fetch(`${apiBase}/dashboard/celery/flower-url`, { credentials: 'include' }),
+                ]);
+                if (workersResp.ok) {
+                    const data = await workersResp.json();
+                    this.systemWorkers = data.workers || {};
+                    this.systemQueues = data.queues || {};
+                }
+                if (historyResp.ok) this.recentTasks = await historyResp.json();
+                if (flowerResp.ok) {
+                    const fdata = await flowerResp.json();
+                    this.flowerUrl = fdata.url || '';
+                }
+            } catch (e) {
+                console.warn('[GlobalSummary] 시스템 데이터 로드 실패:', e);
+            }
+        },
+        startSystemPoll() {
+            this.stopSystemPoll();
+            this.systemPollInterval = setInterval(() => this.loadSystemData(), 10000);
+        },
+        stopSystemPoll() {
+            if (this.systemPollInterval) { clearInterval(this.systemPollInterval); this.systemPollInterval = null; }
+        },
+        getWorkerLabel(key) {
+            return { generation: 'Generation', publish: 'Publish', utility: 'Utility' }[key] || key;
+        },
+        getDisplayQueues() {
+            const exclude = ['callback_queue', 'image_queue'];
+            return Object.entries(this.systemQueues).filter(([n]) => !exclude.includes(n)).map(([name, count]) => ({ name, count: Math.max(count, 0) }));
+        },
+        getMaxQueueLength() {
+            const counts = this.getDisplayQueues().map(q => q.count);
+            return Math.max(...counts, 1);
+        },
+        formatTaskTime(timestamp) {
+            if (!timestamp) return '';
+            const d = new Date(timestamp);
+            return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+        },
+        getTaskDuration(task) {
+            if (!task.started_at || !task.completed_at) return '-';
+            const diff = (new Date(task.completed_at) - new Date(task.started_at)) / 1000;
+            return diff < 60 ? `${diff.toFixed(1)}s` : `${Math.floor(diff / 60)}m ${Math.floor(diff % 60)}s`;
         },
 
         async saveLogToServer(logEntry) {

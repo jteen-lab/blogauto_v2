@@ -39,7 +39,25 @@
 
     <!-- 동작로그 바 - 노출 수만큼 줄 표시, 각 줄당 1개 로그 (시간 고정 + 메시지 슬라이드) -->
     <div class="border-t border-gray-200 bg-gray-900">
-        <div class="max-w-7xl mx-auto px-4 py-1">
+        <div class="max-w-7xl mx-auto px-4 py-1 flex items-start gap-2">
+            <!-- 워커 상태 인디케이터 -->
+            <div class="flex items-center gap-2 flex-shrink-0 py-0.5">
+                <template x-for="wk in ['generation', 'publish', 'utility']" :key="wk">
+                    <div class="flex items-center gap-0.5" :title="getWorkerTooltip(wk)">
+                        <span class="text-[10px] font-bold text-gray-400"
+                              x-text="wk === 'generation' ? 'G' : wk === 'publish' ? 'P' : 'U'"></span>
+                        <span class="w-2 h-2 rounded-full" :class="getWorkerDotClass(wk)"></span>
+                    </div>
+                </template>
+                <span x-show="workerStatus && workerStatus.total_queued > 0" x-cloak
+                      class="text-[10px] font-mono ml-0.5"
+                      :class="workerStatus.total_queued > 20 ? 'text-red-400 font-bold' : workerStatus.total_queued > 10 ? 'text-red-400' : 'text-amber-400'">
+                    <span x-show="workerStatus.total_queued > 20">&#9888;</span>Q:<span x-text="workerStatus.total_queued"></span>
+                </span>
+                <div class="w-px h-3 bg-gray-700 ml-1"></div>
+            </div>
+            <!-- 로그 메시지 영역 -->
+            <div class="flex-1 min-w-0">
             <!-- 각 로그를 개별 줄로 표시 -->
             <template x-for="(log, index) in displayLogs" :key="index">
                 <div class="log-row text-xs">
@@ -57,15 +75,27 @@
                     </div>
                     <!-- 메시지 영역: PC는 정적, 모바일은 슬라이드 -->
                     <div class="log-message-container">
-                        <!-- PC: 정적 표시 (truncate) -->
-                        <div class="hidden md:block text-gray-300 truncate" x-text="log.message"></div>
-                        <!-- 모바일: 연속 슬라이드 -->
-                        <div class="md:hidden">
-                            <div class="log-message-track"
-                                 :class="{ 'sliding': log.message && log.message.length > 25 }"
-                                 :style="{ '--log-slide-duration': getMessageSlideDuration(log.message) + 's' }">
-                                <span class="log-message-item text-gray-300" x-text="log.message"></span>
-                                <span class="log-message-item text-gray-300" aria-hidden="true" x-text="log.message"></span>
+                        <!-- PC: 정적 표시 (truncate) + 플랫폼 뱃지 -->
+                        <div class="hidden md:flex items-center gap-1.5 text-gray-300 truncate">
+                            <template x-if="getPlatformBadge(log.message)">
+                                <span class="inline-flex items-center justify-center w-4 h-4 rounded-sm text-[10px] font-bold text-white flex-shrink-0"
+                                      :class="getPlatformBadgeClass(getPlatformBadge(log.message))"
+                                      x-text="getPlatformBadge(log.message)"></span>
+                            </template>
+                            <span class="truncate" x-text="getMessageText(log.message)"></span>
+                        </div>
+                        <!-- 모바일: 연속 슬라이드 + 플랫폼 뱃지 -->
+                        <div class="md:hidden flex items-center gap-1.5">
+                            <template x-if="getPlatformBadge(log.message)">
+                                <span class="inline-flex items-center justify-center w-4 h-4 rounded-sm text-[10px] font-bold text-white flex-shrink-0"
+                                      :class="getPlatformBadgeClass(getPlatformBadge(log.message))"
+                                      x-text="getPlatformBadge(log.message)"></span>
+                            </template>
+                            <div class="log-message-track min-w-0"
+                                 :class="{ 'sliding': getMessageText(log.message) && getMessageText(log.message).length > 25 }"
+                                 :style="{ '--log-slide-duration': getMessageSlideDuration(getMessageText(log.message)) + 's' }">
+                                <span class="log-message-item text-gray-300" x-text="getMessageText(log.message)"></span>
+                                <span class="log-message-item text-gray-300" aria-hidden="true" x-text="getMessageText(log.message)"></span>
                             </div>
                         </div>
                     </div>
@@ -74,6 +104,7 @@
             <!-- 로그 없을 때 -->
             <div x-show="displayLogs.length === 0" class="text-gray-500 text-xs py-1 text-center">
                 동작 로그가 없습니다
+            </div>
             </div>
         </div>
     </div>
@@ -117,26 +148,33 @@
         <div class="border-b border-gray-200 bg-white sticky top-[60px] z-10">
             <div class="max-w-5xl mx-auto px-4">
                 <nav class="flex gap-1">
-                    <button @click="panelTab = 'summary'"
+                    <button @click="panelTab = 'summary'; stopSystemPoll()"
                             class="px-4 py-3 text-sm font-medium border-b-2 transition-colors"
                             :class="panelTab === 'summary'
                                 ? 'border-blue-500 text-blue-600'
                                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
                         요약탭 선택
                     </button>
-                    <button @click="panelTab = 'activities'; loadActivities()"
+                    <button @click="panelTab = 'activities'; loadActivities(); stopSystemPoll()"
                             class="px-4 py-3 text-sm font-medium border-b-2 transition-colors"
                             :class="panelTab === 'activities'
                                 ? 'border-green-500 text-green-600'
                                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
                         최근 활동
                     </button>
-                    <button @click="panelTab = 'logs'; loadLogs()"
+                    <button @click="panelTab = 'logs'; loadLogs(); stopSystemPoll()"
                             class="px-4 py-3 text-sm font-medium border-b-2 transition-colors"
                             :class="panelTab === 'logs'
                                 ? 'border-purple-500 text-purple-600'
                                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
                         동작 로그
+                    </button>
+                    <button @click="panelTab = 'system'; loadSystemData(); startSystemPoll()"
+                            class="px-4 py-3 text-sm font-medium border-b-2 transition-colors"
+                            :class="panelTab === 'system'
+                                ? 'border-rose-500 text-rose-600'
+                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
+                        시스템
                     </button>
                 </nav>
             </div>
@@ -351,7 +389,13 @@
                                       'bg-green-900 text-green-300': log.level === 'SUCCESS'
                                   }"
                                   x-text="log.level"></span>
-                            <span class="text-gray-300 break-all" x-text="log.message"></span>
+                            <!-- 플랫폼 뱃지 + 메시지 -->
+                            <template x-if="getPlatformBadge(log.message)">
+                                <span class="inline-flex items-center justify-center w-4 h-4 rounded-sm text-[10px] font-bold text-white flex-shrink-0"
+                                      :class="getPlatformBadgeClass(getPlatformBadge(log.message))"
+                                      x-text="getPlatformBadge(log.message)"></span>
+                            </template>
+                            <span class="text-gray-300 break-all" x-text="getMessageText(log.message)"></span>
                         </div>
                     </template>
                     <div x-show="logs.length === 0" class="text-gray-500 text-center py-8">
@@ -364,6 +408,67 @@
                             class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors">
                         더 보기
                     </button>
+                </div>
+            </div>
+
+            <!-- 시스템 탭 콘텐츠 (Phase 2) -->
+            <div x-show="panelTab === 'system'" x-cloak>
+                <!-- 워커 카드 -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <template x-for="wk in ['generation', 'publish', 'utility']" :key="wk">
+                        <div class="bg-white rounded-xl border p-4 shadow-sm" :class="systemWorkers[wk]?.status === 'online' ? 'border-green-200' : 'border-red-200 bg-red-50/30'">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-sm font-bold text-gray-800 uppercase" x-text="getWorkerLabel(wk)"></span>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="w-2.5 h-2.5 rounded-full" :class="getWorkerDotClass(wk)"></span>
+                                    <span class="text-xs font-medium" :class="systemWorkers[wk]?.status === 'online' ? 'text-green-600' : 'text-red-500'" x-text="systemWorkers[wk]?.status === 'online' ? 'Online' : 'Offline'"></span>
+                                </div>
+                            </div>
+                            <div class="space-y-2 text-sm">
+                                <div class="flex justify-between"><span class="text-gray-500">활성 작업</span><span class="font-medium text-gray-800" x-text="systemWorkers[wk]?.active_tasks ?? '-'"></span></div>
+                                <div class="flex justify-between"><span class="text-gray-500">처리 완료</span><span class="font-medium text-gray-800" x-text="(systemWorkers[wk]?.processed ?? 0).toLocaleString()"></span></div>
+                                <div class="flex justify-between"><span class="text-gray-500">동시성</span><span class="font-medium text-gray-800" x-text="systemWorkers[wk]?.concurrency ?? '-'"></span></div>
+                                <div class="flex justify-between"><span class="text-gray-500">가동 시간</span><span class="font-medium text-gray-800" x-text="systemWorkers[wk]?.uptime ?? '-'"></span></div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+                <!-- 큐 상태 -->
+                <div class="mb-6">
+                    <h4 class="text-sm font-bold text-gray-700 mb-3">큐 상태</h4>
+                    <div class="space-y-3">
+                        <template x-for="q in getDisplayQueues()" :key="q.name">
+                            <div class="flex items-center gap-3">
+                                <span class="text-xs text-gray-500 w-32 truncate font-mono" x-text="q.name"></span>
+                                <div class="flex-1 bg-gray-200 rounded-full h-2.5">
+                                    <div class="h-2.5 rounded-full transition-all duration-500" :class="q.count > 5 ? 'bg-amber-400' : (q.count > 0 ? 'bg-blue-400' : 'bg-gray-300')" :style="'width: ' + Math.min(100, (q.count / getMaxQueueLength()) * 100) + '%'"></div>
+                                </div>
+                                <span class="text-xs font-mono w-12 text-right" :class="q.count > 0 ? 'text-amber-600 font-bold' : 'text-gray-400'" x-text="q.count + ' 대기'"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+                <!-- 최근 태스크 -->
+                <div class="mb-6">
+                    <h4 class="text-sm font-bold text-gray-700 mb-3">최근 태스크</h4>
+                    <div class="space-y-2">
+                        <template x-for="task in recentTasks" :key="task.id">
+                            <div class="flex items-center gap-3 text-sm bg-gray-50 rounded-lg px-3 py-2">
+                                <span class="text-xs text-gray-400 font-mono w-14 flex-shrink-0" x-text="formatTaskTime(task.completed_at || task.created_at)"></span>
+                                <span class="flex-shrink-0" x-text="task.status === 'success' ? '✅' : (task.status === 'failed' ? '❌' : '🔄')"></span>
+                                <span class="text-gray-700 truncate flex-1" x-text="task.task_name?.replace('tasks.', '')"></span>
+                                <span class="text-xs text-gray-400 flex-shrink-0" x-text="getTaskDuration(task)"></span>
+                            </div>
+                        </template>
+                        <div x-show="recentTasks.length === 0" class="text-gray-400 text-sm text-center py-4">실행된 태스크가 없습니다</div>
+                    </div>
+                </div>
+                <!-- Flower 링크 -->
+                <div class="mt-6 text-center" x-show="flowerUrl">
+                    <a :href="flowerUrl" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 px-4 py-2 bg-pink-50 text-pink-600 rounded-lg hover:bg-pink-100 transition-colors text-sm font-medium">
+                        <span>🌸</span><span>Flower에서 상세 보기</span>
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                    </a>
                 </div>
             </div>
 
