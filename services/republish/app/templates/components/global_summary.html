@@ -4,7 +4,7 @@
     <div class="max-w-7xl mx-auto px-4 py-3">
         <div class="flex items-center gap-2">
             <!-- 요약탭 클릭 영역 -->
-            <div @click="togglePanel()" class="flex-1 cursor-pointer hover:bg-gray-50 rounded-lg transition-colors">
+            <div @click="navigateToDashboard()" class="flex-1 cursor-pointer hover:bg-gray-50 rounded-lg transition-colors">
                 <!-- PC: 가로 1행 정렬 -->
                 <div class="hidden md:flex items-center justify-center gap-4 overflow-x-auto scrollbar-hide py-1">
                     <template x-for="tab in pinnedTabs" :key="tab.key">
@@ -18,6 +18,27 @@
                     <template x-if="pinnedTabs.length === 0">
                         <div class="text-gray-400 text-sm py-2">클릭하여 요약 보기</div>
                     </template>
+                    <!-- 구분선 -->
+                    <div class="hidden md:block w-px h-8 bg-gray-200 mx-1 flex-shrink-0"></div>
+                    <!-- 워커 상태 카드 -->
+                    <template x-for="wk in [{key:'generation',label:'생성'},{key:'publish',label:'발행'},{key:'utility',label:'유틸'}]" :key="wk.key">
+                        <div class="flex items-center gap-1.5 rounded-xl px-3 py-2 whitespace-nowrap shadow-sm flex-shrink-0 transition-colors duration-300"
+                             :class="{
+                                 'bg-blue-100 border border-blue-300': workerStatus?.workers?.[wk.key]?.status === 'online' && workerStatus?.workers?.[wk.key]?.active_tasks > 0,
+                                 'bg-green-50 border border-green-200': workerStatus?.workers?.[wk.key]?.status === 'online' && (workerStatus?.workers?.[wk.key]?.active_tasks || 0) === 0,
+                                 'bg-red-50 border border-red-200': workerStatus?.workers?.[wk.key]?.status === 'offline',
+                                 'bg-gray-100': !workerStatus?.workers?.[wk.key] || workerStatus?.workers?.[wk.key]?.status === 'unknown'
+                             }"
+                             :title="getWorkerTooltip(wk.key)">
+                            <span class="text-xs font-medium"
+                                  :class="workerStatus?.workers?.[wk.key]?.active_tasks > 0 ? 'text-blue-700 font-bold' : 'text-gray-500'"
+                                  x-text="wk.label + ' 워커'"></span>
+                            <span class="w-2 h-2 rounded-full flex-shrink-0" :class="getWorkerDotClass(wk.key)"></span>
+                            <span class="text-sm font-bold text-gray-700"
+                                  x-show="workerStatus?.workers?.[wk.key]?.status === 'online'"
+                                  x-text="workerStatus?.workers?.[wk.key]?.active_tasks ?? 0"></span>
+                        </div>
+                    </template>
                 </div>
                 <!-- 모바일: 2열 그리드 -->
                 <div class="md:hidden grid grid-cols-2 gap-2">
@@ -29,6 +50,27 @@
                                   x-text="stats[tab.key] ?? '-'"></span>
                         </div>
                     </template>
+                    <!-- 모바일 워커 상태 카드 -->
+                    <template x-for="wk in [{key:'generation',label:'생성'},{key:'publish',label:'발행'},{key:'utility',label:'유틸'}]" :key="wk.key">
+                        <div class="flex items-center justify-between gap-2 rounded-lg px-3 py-2 shadow-sm transition-colors duration-300"
+                             :class="{
+                                 'bg-blue-100 border border-blue-300': workerStatus?.workers?.[wk.key]?.status === 'online' && workerStatus?.workers?.[wk.key]?.active_tasks > 0,
+                                 'bg-green-50 border border-green-200': workerStatus?.workers?.[wk.key]?.status === 'online' && (workerStatus?.workers?.[wk.key]?.active_tasks || 0) === 0,
+                                 'bg-red-50 border border-red-200': workerStatus?.workers?.[wk.key]?.status === 'offline',
+                                 'bg-gray-100': !workerStatus?.workers?.[wk.key] || workerStatus?.workers?.[wk.key]?.status === 'unknown'
+                             }"
+                             :title="getWorkerTooltip(wk.key)">
+                            <span class="text-xs font-medium truncate"
+                                  :class="workerStatus?.workers?.[wk.key]?.active_tasks > 0 ? 'text-blue-700 font-bold' : 'text-gray-500'"
+                                  x-text="wk.label + ' 워커'"></span>
+                            <div class="flex items-center gap-1 flex-shrink-0">
+                                <span class="w-2 h-2 rounded-full" :class="getWorkerDotClass(wk.key)"></span>
+                                <span class="text-sm font-bold text-gray-700"
+                                      x-show="workerStatus?.workers?.[wk.key]?.status === 'online'"
+                                      x-text="workerStatus?.workers?.[wk.key]?.active_tasks ?? 0"></span>
+                            </div>
+                        </div>
+                    </template>
                     <template x-if="pinnedTabs.length === 0">
                         <div class="col-span-2 text-center text-gray-400 text-sm py-2">클릭하여 요약 보기</div>
                     </template>
@@ -37,27 +79,11 @@
         </div>
     </div>
 
-    <!-- 동작로그 바 - 노출 수만큼 줄 표시, 각 줄당 1개 로그 (시간 고정 + 메시지 슬라이드) -->
-    <div class="border-t border-gray-200 bg-gray-900">
-        <div class="max-w-7xl mx-auto px-4 py-1 flex items-start gap-2">
-            <!-- 워커 상태 인디케이터 -->
-            <div class="flex items-center gap-2 flex-shrink-0 py-0.5">
-                <template x-for="wk in ['generation', 'publish', 'utility']" :key="wk">
-                    <div class="flex items-center gap-0.5" :title="getWorkerTooltip(wk)">
-                        <span class="text-[10px] font-bold text-gray-400"
-                              x-text="wk === 'generation' ? 'G' : wk === 'publish' ? 'P' : 'U'"></span>
-                        <span class="w-2 h-2 rounded-full" :class="getWorkerDotClass(wk)"></span>
-                    </div>
-                </template>
-                <span x-show="workerStatus && workerStatus.total_queued > 0" x-cloak
-                      class="text-[10px] font-mono ml-0.5"
-                      :class="workerStatus.total_queued > 20 ? 'text-red-400 font-bold' : workerStatus.total_queued > 10 ? 'text-red-400' : 'text-amber-400'">
-                    <span x-show="workerStatus.total_queued > 20">&#9888;</span>Q:<span x-text="workerStatus.total_queued"></span>
-                </span>
-                <div class="w-px h-3 bg-gray-700 ml-1"></div>
-            </div>
-            <!-- 로그 메시지 영역 -->
-            <div class="flex-1 min-w-0">
+    <!-- 동작로그 바 - 클릭 시 통합 로그 패널 토글 -->
+    <div @click="toggleLogPanel()" class="border-t border-gray-200 bg-gray-900 cursor-pointer hover:bg-gray-800 transition-colors">
+        <div class="max-w-7xl mx-auto px-4 py-1">
+            <!-- 로그 메시지 영역 (워커 인디케이터는 요약탭 바로 이동) -->
+            <div class="min-w-0">
             <!-- 각 로그를 개별 줄로 표시 -->
             <template x-for="(log, index) in displayLogs" :key="index">
                 <div class="log-row text-xs">
@@ -109,383 +135,63 @@
         </div>
     </div>
 
-    <!-- 상단 슬라이드 다운 패널 -->
-    <div x-show="panelOpen"
-         x-transition:enter="transition ease-out duration-300"
-         x-transition:enter-start="-translate-y-full"
-         x-transition:enter-end="translate-y-0"
-         x-transition:leave="transition ease-in duration-200"
-         x-transition:leave-start="translate-y-0"
-         x-transition:leave-end="-translate-y-full"
-         x-cloak
-         class="fixed inset-x-0 top-0 z-50 bg-white shadow-2xl"
-         style="height: 100vh; max-height: 100vh;">
-
-        <!-- 패널 헤더 -->
-        <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white sticky top-0 z-10">
-            <h3 class="text-lg font-bold text-gray-900">대시보드</h3>
-            <div class="flex items-center gap-2">
-                <!-- 설정 버튼 (사용자/AI/API 설정) -->
-                <button @click.stop="openSettingsModal()"
-                        class="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
-                        title="설정">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                    </svg>
-                </button>
-                <!-- 닫기 버튼 -->
-                <button @click="closePanel()"
-                        class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                </button>
+    <!-- 통합 동작로그 패널 -->
+    <div x-show="logPanelOpen" x-cloak
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0 -translate-y-2"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100 translate-y-0"
+         x-transition:leave-end="opacity-0 -translate-y-2"
+         @click.stop
+         class="border-t border-gray-700 bg-gray-900 max-h-[50vh] overflow-y-auto">
+        <div class="max-w-7xl mx-auto px-4 py-3">
+            <!-- 필터 바 -->
+            <div class="flex items-center gap-2 mb-3 flex-wrap">
+                <template x-for="f in [{key:'all',label:'전체'},{key:'action',label:'작업'},{key:'activity',label:'활동'},{key:'generation',label:'생성'}]" :key="f.key">
+                    <button @click.stop="logFilter = f.key; loadUnifiedLogs()"
+                            class="px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors"
+                            :class="logFilter === f.key ? 'bg-gray-700 text-white' : 'text-gray-500 hover:text-gray-300'">
+                        <span x-text="f.label"></span>
+                    </button>
+                </template>
+                <div class="flex-1"></div>
+                <input type="text" x-model="logSearch" @click.stop @input.debounce.500ms="loadUnifiedLogs()"
+                       placeholder="검색..."
+                       class="bg-gray-800 text-gray-300 text-[11px] px-2.5 py-1 rounded-md border border-gray-700 w-32 focus:w-48 transition-all focus:outline-none focus:border-gray-500">
+            </div>
+            <!-- 로그 바 표시 수 설정 -->
+            <div class="flex items-center gap-2 mb-3 text-[10px] text-gray-500">
+                <span>로그 바 표시:</span>
+                <template x-for="n in [1, 2, 3]" :key="n">
+                    <button @click.stop="setDisplayLogCount(n)"
+                            class="px-1.5 py-0.5 rounded"
+                            :class="displayLogCount === n ? 'bg-gray-700 text-gray-200' : 'text-gray-500 hover:text-gray-300'"
+                            x-text="n"></button>
+                </template>
+            </div>
+            <!-- 로그 목록 -->
+            <div class="space-y-0.5 font-mono">
+                <template x-for="log in unifiedLogs" :key="log.id">
+                    <div class="flex items-start gap-2 py-1 border-b border-gray-800/50 text-xs">
+                        <span class="text-gray-500 flex-shrink-0 w-[90px]" x-text="formatLogTime(log.timestamp)"></span>
+                        <span class="flex-shrink-0 px-1 py-0.5 rounded text-[10px] font-bold"
+                              :class="getLevelClass(log.level)"
+                              x-text="log.level"></span>
+                        <template x-if="log.platform">
+                            <span class="inline-flex items-center justify-center w-4 h-4 rounded-sm text-[10px] font-bold text-white flex-shrink-0"
+                                  :class="log.platform === '워' ? 'bg-blue-500' : log.platform === '구' ? 'bg-orange-500' : 'bg-gray-500'"
+                                  x-text="log.platform"></span>
+                        </template>
+                        <span class="text-gray-300 break-all" x-text="log.platform ? log.title.replace(/^\[.\]/, '').trim() : log.title"></span>
+                    </div>
+                </template>
+                <div x-show="unifiedLogs.length === 0" class="text-gray-500 text-xs text-center py-4">로그가 없습니다</div>
+            </div>
+            <!-- 더 보기 -->
+            <div x-show="hasMoreUnifiedLogs" class="text-center mt-2">
+                <button @click.stop="loadMoreUnifiedLogs()" class="text-[11px] text-gray-400 hover:text-gray-200 py-1">더 보기</button>
             </div>
         </div>
-
-        <!-- 탭 네비게이션 (Phase 2-1) -->
-        <div class="border-b border-gray-200 bg-white sticky top-[60px] z-10">
-            <div class="max-w-5xl mx-auto px-4">
-                <nav class="flex gap-1">
-                    <button @click="panelTab = 'summary'; stopSystemPoll()"
-                            class="px-4 py-3 text-sm font-medium border-b-2 transition-colors"
-                            :class="panelTab === 'summary'
-                                ? 'border-blue-500 text-blue-600'
-                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
-                        요약탭 선택
-                    </button>
-                    <button @click="panelTab = 'activities'; loadActivities(); stopSystemPoll()"
-                            class="px-4 py-3 text-sm font-medium border-b-2 transition-colors"
-                            :class="panelTab === 'activities'
-                                ? 'border-green-500 text-green-600'
-                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
-                        최근 활동
-                    </button>
-                    <button @click="panelTab = 'logs'; loadLogs(); stopSystemPoll()"
-                            class="px-4 py-3 text-sm font-medium border-b-2 transition-colors"
-                            :class="panelTab === 'logs'
-                                ? 'border-purple-500 text-purple-600'
-                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
-                        동작 로그
-                    </button>
-                    <button @click="panelTab = 'system'; loadSystemData(); startSystemPoll()"
-                            class="px-4 py-3 text-sm font-medium border-b-2 transition-colors"
-                            :class="panelTab === 'system'
-                                ? 'border-rose-500 text-rose-600'
-                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'">
-                        시스템
-                    </button>
-                </nav>
-            </div>
-        </div>
-
-        <!-- 패널 콘텐츠 -->
-        <div class="overflow-y-auto" style="height: calc(100vh - 120px);">
-            <div class="max-w-5xl mx-auto px-4 py-6">
-
-            <!-- 요약탭 선택 콘텐츠 -->
-            <div x-show="panelTab === 'summary'" x-cloak>
-                <!-- 블로그 섹션 -->
-                <div class="mb-6">
-                    <h4 class="text-sm font-bold text-blue-600 mb-3 uppercase tracking-wide">블로그</h4>
-                    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
-                        <template x-for="tab in allTabs.filter(t => t.group === 'blog')" :key="tab.key">
-                            <div @click="togglePinTab(tab.key)"
-                                 class="relative flex items-center gap-2 p-3 rounded-xl transition-all cursor-pointer hover:shadow-lg"
-                                 :class="isTabPinned(tab.key) ? 'bg-blue-100 ring-2 ring-blue-500 shadow-md' : 'bg-blue-50/50 hover:bg-blue-100/70'">
-                                <!-- 체크 표시 -->
-                                <div x-show="isTabPinned(tab.key)" class="absolute top-1 right-1">
-                                    <svg class="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                                    </svg>
-                                </div>
-                                <div class="flex-1 min-w-0">
-                                    <div class="text-xs text-blue-600 truncate" x-text="tab.label"></div>
-                                    <div class="text-xl font-bold text-blue-800" x-text="stats[tab.key] ?? 0"></div>
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-
-                <!-- 카테고리 섹션 -->
-                <div class="mb-6">
-                    <h4 class="text-sm font-bold text-green-600 mb-3 uppercase tracking-wide">카테고리</h4>
-                    <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        <template x-for="tab in allTabs.filter(t => t.group === 'category')" :key="tab.key">
-                            <div @click="togglePinTab(tab.key)"
-                                 class="relative flex items-center gap-2 p-3 rounded-xl transition-all cursor-pointer hover:shadow-lg"
-                                 :class="isTabPinned(tab.key) ? 'bg-green-100 ring-2 ring-green-500 shadow-md' : 'bg-green-50/50 hover:bg-green-100/70'">
-                                <!-- 체크 표시 -->
-                                <div x-show="isTabPinned(tab.key)" class="absolute top-1 right-1">
-                                    <svg class="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                                    </svg>
-                                </div>
-                                <div class="flex-1 min-w-0">
-                                    <div class="text-xs text-green-600 truncate" x-text="tab.label"></div>
-                                    <div class="text-xl font-bold text-green-800" x-text="stats[tab.key] ?? 0"></div>
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-
-                <!-- 모듈 섹션 -->
-                <div class="mb-6">
-                    <h4 class="text-sm font-bold text-purple-600 mb-3 uppercase tracking-wide">모듈</h4>
-                    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
-                        <template x-for="tab in allTabs.filter(t => t.group === 'module')" :key="tab.key">
-                            <div @click="togglePinTab(tab.key)"
-                                 class="relative flex items-center gap-2 p-3 rounded-xl transition-all cursor-pointer hover:shadow-lg"
-                                 :class="isTabPinned(tab.key) ? 'bg-purple-100 ring-2 ring-purple-500 shadow-md' : 'bg-purple-50/50 hover:bg-purple-100/70'">
-                                <!-- 체크 표시 -->
-                                <div x-show="isTabPinned(tab.key)" class="absolute top-1 right-1">
-                                    <svg class="w-4 h-4 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                                    </svg>
-                                </div>
-                                <div class="flex-1 min-w-0">
-                                    <div class="text-xs text-purple-600 truncate" x-text="tab.label"></div>
-                                    <div class="text-xl font-bold text-purple-800" x-text="stats[tab.key] ?? 0"></div>
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-
-                <!-- 플로우 섹션 -->
-                <div class="mb-6">
-                    <h4 class="text-sm font-bold text-cyan-600 mb-3 uppercase tracking-wide">플로우</h4>
-                    <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        <template x-for="tab in allTabs.filter(t => t.group === 'flow')" :key="tab.key">
-                            <div @click="togglePinTab(tab.key)"
-                                 class="relative flex items-center gap-2 p-3 rounded-xl transition-all cursor-pointer hover:shadow-lg"
-                                 :class="isTabPinned(tab.key) ? 'bg-cyan-100 ring-2 ring-cyan-500 shadow-md' : 'bg-cyan-50/50 hover:bg-cyan-100/70'">
-                                <!-- 체크 표시 -->
-                                <div x-show="isTabPinned(tab.key)" class="absolute top-1 right-1">
-                                    <svg class="w-4 h-4 text-cyan-600" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                                    </svg>
-                                </div>
-                                <div class="flex-1 min-w-0">
-                                    <div class="text-xs text-cyan-600 truncate" x-text="tab.label"></div>
-                                    <div class="text-xl font-bold text-cyan-800" x-text="stats[tab.key] ?? 0"></div>
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-
-                <!-- 이번 주 통계 섹션 -->
-                <div class="mb-6">
-                    <h4 class="text-sm font-bold text-orange-600 mb-3 uppercase tracking-wide">이번 주</h4>
-                    <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        <template x-for="tab in allTabs.filter(t => t.group === 'week')" :key="tab.key">
-                            <div @click="togglePinTab(tab.key)"
-                                 class="relative flex items-center gap-2 p-3 rounded-xl transition-all cursor-pointer hover:shadow-lg"
-                                 :class="isTabPinned(tab.key) ? 'bg-orange-100 ring-2 ring-orange-500 shadow-md' : 'bg-orange-50/50 hover:bg-orange-100/70'">
-                                <!-- 체크 표시 -->
-                                <div x-show="isTabPinned(tab.key)" class="absolute top-1 right-1">
-                                    <svg class="w-4 h-4 text-orange-600" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                                    </svg>
-                                </div>
-                                <div class="flex-1 min-w-0">
-                                    <div class="text-xs text-orange-600 truncate" x-text="tab.label"></div>
-                                    <div class="text-xl font-bold text-orange-800" x-text="stats[tab.key] ?? 0"></div>
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-
-                <!-- 오늘 통계 섹션 -->
-                <div class="mb-6">
-                    <h4 class="text-sm font-bold text-red-600 mb-3 uppercase tracking-wide">오늘</h4>
-                    <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        <template x-for="tab in allTabs.filter(t => t.group === 'today')" :key="tab.key">
-                            <div @click="togglePinTab(tab.key)"
-                                 class="relative flex items-center gap-2 p-3 rounded-xl transition-all cursor-pointer hover:shadow-lg"
-                                 :class="isTabPinned(tab.key) ? 'bg-red-100 ring-2 ring-red-500 shadow-md' : 'bg-red-50/50 hover:bg-red-100/70'">
-                                <!-- 체크 표시 -->
-                                <div x-show="isTabPinned(tab.key)" class="absolute top-1 right-1">
-                                    <svg class="w-4 h-4 text-red-600" fill="currentColor" viewBox="0 0 20 20">
-                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                                    </svg>
-                                </div>
-                                <div class="flex-1 min-w-0">
-                                    <div class="text-xs text-red-600 truncate" x-text="tab.label"></div>
-                                    <div class="text-xl font-bold text-red-800" x-text="stats[tab.key] ?? 0"></div>
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-
-            </div>
-
-            <!-- 최근 활동 탭 콘텐츠 (Phase 2-1) -->
-            <div x-show="panelTab === 'activities'" x-cloak>
-                <div class="space-y-3">
-                    <template x-for="(activity, index) in activities" :key="index">
-                        <div class="flex items-center gap-3 text-sm bg-white rounded-xl px-4 py-4 shadow-sm border border-gray-100">
-                            <span class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center"
-                                  :class="{
-                                      'bg-blue-100 text-blue-600': activity.type === 'flow',
-                                      'bg-green-100 text-green-600': activity.type === 'blog',
-                                      'bg-purple-100 text-purple-600': activity.type === 'module',
-                                      'bg-orange-100 text-orange-600': activity.type === 'crawl',
-                                      'bg-cyan-100 text-cyan-600': activity.type === 'match'
-                                  }">
-                                <span x-text="activity.type === 'flow' ? '⚡' : (activity.type === 'blog' ? '📝' : (activity.type === 'crawl' ? '🔍' : (activity.type === 'match' ? '🔗' : '📦')))"></span>
-                            </span>
-                            <div class="flex-1 min-w-0">
-                                <div class="text-gray-800 font-medium" x-text="activity.name"></div>
-                                <div class="text-gray-400 text-xs" x-text="activity.detail || ''"></div>
-                            </div>
-                            <span class="text-gray-400 text-xs flex-shrink-0" x-text="formatTime(activity.timestamp)"></span>
-                        </div>
-                    </template>
-                    <div x-show="activities.length === 0" class="text-gray-400 text-center py-16">
-                        <div class="text-4xl mb-2">📭</div>
-                        최근 활동이 없습니다
-                    </div>
-                </div>
-            </div>
-
-            <!-- 동작 로그 탭 콘텐츠 (Phase 2-1) -->
-            <div x-show="panelTab === 'logs'" x-cloak>
-                <!-- 노출 로그 수 설정 -->
-                <div class="mb-4 p-3 bg-gray-100 rounded-lg">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <span class="text-sm font-medium text-gray-700">고정 요약탭 노출 로그 수</span>
-                            <p class="text-xs text-gray-500 mt-0.5">상단 고정 요약탭에 표시할 로그 개수를 선택하세요</p>
-                        </div>
-                        <div class="flex items-center gap-1">
-                            <template x-for="n in [1, 2, 3]" :key="n">
-                                <button @click="setDisplayLogCount(n)"
-                                        class="w-10 h-10 rounded-lg text-sm font-bold transition-colors"
-                                        :class="displayLogCount === n
-                                            ? 'bg-purple-600 text-white'
-                                            : 'bg-white text-gray-600 hover:bg-gray-200 border border-gray-300'"
-                                        x-text="n"></button>
-                            </template>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="bg-gray-900 rounded-xl p-4 font-mono text-xs overflow-x-auto">
-                    <template x-for="(log, index) in logs" :key="index">
-                        <div class="flex items-start gap-2 py-1 border-b border-gray-800 last:border-0">
-                            <span class="text-gray-500 flex-shrink-0" x-text="formatLogTime(log.timestamp)"></span>
-                            <span class="flex-shrink-0 px-1.5 py-0.5 rounded text-xs font-bold"
-                                  :class="{
-                                      'bg-blue-900 text-blue-300': log.level === 'INFO',
-                                      'bg-yellow-900 text-yellow-300': log.level === 'WARN',
-                                      'bg-red-900 text-red-300': log.level === 'ERROR',
-                                      'bg-green-900 text-green-300': log.level === 'SUCCESS'
-                                  }"
-                                  x-text="log.level"></span>
-                            <!-- 플랫폼 뱃지 + 메시지 -->
-                            <template x-if="getPlatformBadge(log.message)">
-                                <span class="inline-flex items-center justify-center w-4 h-4 rounded-sm text-[10px] font-bold text-white flex-shrink-0"
-                                      :class="getPlatformBadgeClass(getPlatformBadge(log.message))"
-                                      x-text="getPlatformBadge(log.message)"></span>
-                            </template>
-                            <span class="text-gray-300 break-all" x-text="getMessageText(log.message)"></span>
-                        </div>
-                    </template>
-                    <div x-show="logs.length === 0" class="text-gray-500 text-center py-8">
-                        동작 로그가 없습니다
-                    </div>
-                </div>
-                <!-- 로그 더 보기 버튼 -->
-                <div class="mt-4 text-center" x-show="hasMoreLogs">
-                    <button @click="loadMoreLogs()"
-                            class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors">
-                        더 보기
-                    </button>
-                </div>
-            </div>
-
-            <!-- 시스템 탭 콘텐츠 (Phase 2) -->
-            <div x-show="panelTab === 'system'" x-cloak>
-                <!-- 워커 카드 -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <template x-for="wk in ['generation', 'publish', 'utility']" :key="wk">
-                        <div class="bg-white rounded-xl border p-4 shadow-sm" :class="systemWorkers[wk]?.status === 'online' ? 'border-green-200' : 'border-red-200 bg-red-50/30'">
-                            <div class="flex items-center justify-between mb-3">
-                                <span class="text-sm font-bold text-gray-800 uppercase" x-text="getWorkerLabel(wk)"></span>
-                                <div class="flex items-center gap-1.5">
-                                    <span class="w-2.5 h-2.5 rounded-full" :class="getWorkerDotClass(wk)"></span>
-                                    <span class="text-xs font-medium" :class="systemWorkers[wk]?.status === 'online' ? 'text-green-600' : 'text-red-500'" x-text="systemWorkers[wk]?.status === 'online' ? 'Online' : 'Offline'"></span>
-                                </div>
-                            </div>
-                            <div class="space-y-2 text-sm">
-                                <div class="flex justify-between"><span class="text-gray-500">활성 작업</span><span class="font-medium text-gray-800" x-text="systemWorkers[wk]?.active_tasks ?? '-'"></span></div>
-                                <div class="flex justify-between"><span class="text-gray-500">처리 완료</span><span class="font-medium text-gray-800" x-text="(systemWorkers[wk]?.processed ?? 0).toLocaleString()"></span></div>
-                                <div class="flex justify-between"><span class="text-gray-500">동시성</span><span class="font-medium text-gray-800" x-text="systemWorkers[wk]?.concurrency ?? '-'"></span></div>
-                                <div class="flex justify-between"><span class="text-gray-500">가동 시간</span><span class="font-medium text-gray-800" x-text="systemWorkers[wk]?.uptime ?? '-'"></span></div>
-                            </div>
-                        </div>
-                    </template>
-                </div>
-                <!-- 큐 상태 -->
-                <div class="mb-6">
-                    <h4 class="text-sm font-bold text-gray-700 mb-3">큐 상태</h4>
-                    <div class="space-y-3">
-                        <template x-for="q in getDisplayQueues()" :key="q.name">
-                            <div class="flex items-center gap-3">
-                                <span class="text-xs text-gray-500 w-32 truncate font-mono" x-text="q.name"></span>
-                                <div class="flex-1 bg-gray-200 rounded-full h-2.5">
-                                    <div class="h-2.5 rounded-full transition-all duration-500" :class="q.count > 5 ? 'bg-amber-400' : (q.count > 0 ? 'bg-blue-400' : 'bg-gray-300')" :style="'width: ' + Math.min(100, (q.count / getMaxQueueLength()) * 100) + '%'"></div>
-                                </div>
-                                <span class="text-xs font-mono w-12 text-right" :class="q.count > 0 ? 'text-amber-600 font-bold' : 'text-gray-400'" x-text="q.count + ' 대기'"></span>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-                <!-- 최근 태스크 -->
-                <div class="mb-6">
-                    <h4 class="text-sm font-bold text-gray-700 mb-3">최근 태스크</h4>
-                    <div class="space-y-2">
-                        <template x-for="task in recentTasks" :key="task.id">
-                            <div class="flex items-center gap-3 text-sm bg-gray-50 rounded-lg px-3 py-2">
-                                <span class="text-xs text-gray-400 font-mono w-14 flex-shrink-0" x-text="formatTaskTime(task.completed_at || task.created_at)"></span>
-                                <span class="flex-shrink-0" x-text="task.status === 'success' ? '✅' : (task.status === 'failed' ? '❌' : '🔄')"></span>
-                                <span class="text-gray-700 truncate flex-1" x-text="task.task_name?.replace('tasks.', '')"></span>
-                                <span class="text-xs text-gray-400 flex-shrink-0" x-text="getTaskDuration(task)"></span>
-                            </div>
-                        </template>
-                        <div x-show="recentTasks.length === 0" class="text-gray-400 text-sm text-center py-4">실행된 태스크가 없습니다</div>
-                    </div>
-                </div>
-                <!-- Flower 링크 -->
-                <div class="mt-6 text-center" x-show="flowerUrl">
-                    <a :href="flowerUrl" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 px-4 py-2 bg-pink-50 text-pink-600 rounded-lg hover:bg-pink-100 transition-colors text-sm font-medium">
-                        <span>🌸</span><span>Flower에서 상세 보기</span>
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-                    </a>
-                </div>
-            </div>
-
-            </div>
-        </div>
-    </div>
-
-    <!-- 백드롭 (요약 패널용) -->
-    <div x-show="panelOpen"
-         x-transition:enter="transition ease-out duration-300"
-         x-transition:enter-start="opacity-0"
-         x-transition:enter-end="opacity-100"
-         x-transition:leave="transition ease-in duration-200"
-         x-transition:leave-start="opacity-100"
-         x-transition:leave-end="opacity-0"
-         @click="closePanel()"
-         x-cloak
-         class="fixed inset-0 bg-black bg-opacity-50 z-40">
     </div>
 </div>

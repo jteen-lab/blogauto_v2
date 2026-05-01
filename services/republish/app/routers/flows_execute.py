@@ -2293,12 +2293,15 @@ async def _execute_blog_action(
                 gp_module_name = _link.module.name
                 break
 
-    await _save_autorun_log(
-        db=db, user_id=current_user.id, flow_id=flow_id,
-        flow_name=flow.name, module_name=gp_module_name or f"GP {action}",
-        blog_name=target_blog.name, result=exec_result,
-        duration_ms=duration_ms, action=action
-    )
+    # Celery 사용 시: 태스크 완료 후 celery_publish_tasks.py에서 로그 저장 (제목 포함)
+    # Celery 미사용 시: 여기서 직접 로그 저장
+    if not exec_result.get("celery_task_id"):
+        await _save_autorun_log(
+            db=db, user_id=current_user.id, flow_id=flow_id,
+            flow_name=flow.name, module_name=gp_module_name or f"GP {action}",
+            blog_name=target_blog.name, result=exec_result,
+            duration_ms=duration_ms, action=action
+        )
 
     return {
         "status": "completed",

@@ -12,7 +12,7 @@
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.3/cdn.min.js"></script>
 
     <!-- 글로벌 요약탭 컴포넌트 (Alpine.js 초기화 전 함수 정의) -->
-    <script src="/static/js/components/GlobalSummary.js?v=20260423i"></script>
+    <script src="/static/js/components/GlobalSummary.js?v=20260423b"></script>
 
     <!-- 커스텀 CSS -->
     <style>
@@ -165,14 +165,12 @@
 
                     <!-- PC 메뉴 (md 이상) -->
                     <div class="hidden md:flex md:items-center md:space-x-2">
-                        <a href="/dashboard" class="bg-blue-700 px-3 py-2 rounded hover:bg-blue-800 transition-colors text-sm">대시보드</a>
                         <a href="/collection" class="bg-blue-700 px-3 py-2 rounded hover:bg-blue-800 transition-colors text-sm">데이터 관리</a>
                         <a href="/blogs" class="bg-blue-700 px-3 py-2 rounded hover:bg-blue-800 transition-colors text-sm">블로그 관리</a>
                         <a href="/categories" class="bg-blue-700 px-3 py-2 rounded hover:bg-blue-800 transition-colors text-sm">카테고리 관리</a>
                         <a href="/modules" class="bg-blue-700 px-3 py-2 rounded hover:bg-blue-800 transition-colors text-sm">모듈 관리</a>
                         <a href="/flows" class="bg-blue-700 px-3 py-2 rounded hover:bg-blue-800 transition-colors text-sm">플로우 관리</a>
                         <a href="/autorun" class="bg-blue-700 px-3 py-2 rounded hover:bg-blue-800 transition-colors text-sm">오토런</a>
-                        <a href="/generation/history" class="bg-blue-700 px-3 py-2 rounded hover:bg-blue-800 transition-colors text-sm">생성 이력</a>
                         <button onclick="logout()" class="bg-red-600 px-3 py-2 rounded hover:bg-red-700 transition-colors text-sm">로그아웃</button>
                     </div>
 
@@ -200,14 +198,12 @@
                  x-cloak
                  class="md:hidden bg-blue-700 border-t border-blue-500">
                 <div class="px-2 pt-2 pb-3 space-y-1">
-                    <a href="/dashboard" class="block text-white hover:bg-blue-800 px-3 py-2 rounded">대시보드</a>
                     <a href="/collection" class="block text-white hover:bg-blue-800 px-3 py-2 rounded">데이터 관리</a>
                     <a href="/blogs" class="block text-white hover:bg-blue-800 px-3 py-2 rounded">블로그 관리</a>
                     <a href="/categories" class="block text-white hover:bg-blue-800 px-3 py-2 rounded">카테고리 관리</a>
                     <a href="/modules" class="block text-white hover:bg-blue-800 px-3 py-2 rounded">모듈 관리</a>
                     <a href="/flows" class="block text-white hover:bg-blue-800 px-3 py-2 rounded">플로우 관리</a>
                     <a href="/autorun" class="block text-white hover:bg-blue-800 px-3 py-2 rounded">오토런</a>
-                    <a href="/generation/history" class="block text-white hover:bg-blue-800 px-3 py-2 rounded">생성 이력</a>
                 </div>
                 <div class="border-t border-blue-500 px-2 py-3">
                     <button onclick="logout()" class="w-full text-left text-white hover:bg-red-600 px-3 py-2 rounded">로그아웃</button>

@@ -7,15 +7,18 @@ Features:
 - 미들웨어 설정
 - 데이터베이스 초기화
 """
-from fastapi import FastAPI, Request
+import json
+
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from .core.config import settings, validate_env_required
-from .core.database import init_database, close_database, db_manager
+from .core.database import get_db_session, init_database, close_database, db_manager
 from .core.logger import get_logger
 from .middleware.logging_middleware import LoggingMiddleware
 from .scheduler import get_scheduler, republish_job, setup_flow_scheduler, shutdown_flow_scheduler
@@ -53,6 +56,8 @@ from .api.growth_profile import router as growth_profile_router  # Growth Profil
 from .routers.generation_test import router as generation_test_router  # Phase D: 파이프라인 테스트
 from .routers.generation_content import router as generation_content_router  # 생성 콘텐츠 조회/삭제
 from .routers.generation_pages import router as generation_page_router  # 생성 이력 페이지
+from .routers.dashboard_trends import router as dashboard_trends_router  # 대시보드 v2 트렌드 API
+from .routers.dashboard_logs import router as dashboard_logs_router  # 통합 동작로그 API
 
 logger = get_logger("main", "app.log")
 
@@ -236,6 +241,8 @@ app.include_router(reference_collection_router, prefix=settings.api_v1_prefix)  
 app.include_router(growth_profile_router, prefix=settings.api_v1_prefix)  # Growth Profile
 app.include_router(generation_test_router, prefix=settings.api_v1_prefix)  # Phase D: 파이프라인 테스트
 app.include_router(generation_content_router, prefix=settings.api_v1_prefix)  # 생성 콘텐츠 조회/삭제
+app.include_router(dashboard_trends_router, prefix=settings.api_v1_prefix)  # 대시보드 v2 트렌드
+app.include_router(dashboard_logs_router, prefix=settings.api_v1_prefix)  # 통합 동작로그
 
 # 페이지 라우터 등록
 app.include_router(blogs_page_router)
@@ -266,9 +273,34 @@ async def login_page(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
 
 @app.get("/dashboard", response_class=HTMLResponse, include_in_schema=False)
-async def dashboard_page(request: Request):
-    """대시보드 페이지"""
-    return templates.TemplateResponse("dashboard.html", {"request": request})
+async def dashboard_page(
+    request: Request,
+    db: AsyncSession = Depends(get_db_session),
+):
+    """대시보드 페이지 (SSR 초기 데이터 포함)."""
+    initial_data = await _get_dashboard_initial(db)
+    return templates.TemplateResponse(
+        "dashboard/dashboard_v2.html",
+        {"request": request, "initial_data": json.dumps(initial_data, default=str)},
+    )
+
+
+async def _get_dashboard_initial(db: AsyncSession) -> dict:
+    """대시보드 초기 데이터를 수집합니다.
+
+    Args:
+        db: 비동기 DB 세션
+
+    Returns:
+        dict: summary 키를 포함하는 초기 데이터 딕셔너리
+    """
+    try:
+        from .routers.dashboard import get_dashboard_summary
+        summary = await get_dashboard_summary(db)
+        return {"summary": summary}
+    except Exception:
+        logger.warning("[DASHBOARD] SSR 초기 데이터 수집 실패")
+        return {"summary": {}}
 
 @app.get("/health", include_in_schema=False)
 async def health_check():

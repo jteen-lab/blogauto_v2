@@ -1,8 +1,12 @@
 /** GlobalSummary - 글로벌 요약탭 + 워커 상태 모니터링 컴포넌트 */
 function globalSummary() {
     return {
-        panelOpen: false,
-        panelTab: 'summary',  // 'summary' | 'activities' | 'logs'
+        logPanelOpen: false,
+        logFilter: 'all',
+        logSearch: '',
+        unifiedLogs: [],
+        unifiedLogsTotal: 0,
+        hasMoreUnifiedLogs: false,
         refreshInterval: null,
         logRefreshInterval: null,
         stats: {
@@ -14,10 +18,7 @@ function globalSummary() {
             week_generate: 0, week_publish: 0, week_republish: 0,
             today_generate: 0, today_publish: 0, today_republish: 0
         },
-        activities: [],
         logs: [],
-        logOffset: 0,
-        hasMoreLogs: false,
         latestLog: '',
         latestLogTime: '',
         pinnedTabKeys: [],
@@ -35,12 +36,7 @@ function globalSummary() {
         },
         workerPollInterval: null,
         previousWorkerOnline: { generation: null, publish: null, utility: null },
-        // 시스템 탭 상태 (Phase 2: System Tab)
-        systemWorkers: {},
-        systemQueues: {},
-        recentTasks: [],
-        flowerUrl: '',
-        systemPollInterval: null,
+        // (시스템 탭은 대시보드 페이지로 이동됨)
 
         // 22개 전체 탭 정의
         allTabs: [
@@ -99,12 +95,11 @@ function globalSummary() {
             this.loadWorkerStatus();
             this.workerPollInterval = setInterval(() => this.loadWorkerStatus(), 15000);
 
-            // 컴포넌트 소멸 시 정리
-            this.$cleanup(() => {
+            // 페이지 이탈 시 정리
+            window.addEventListener('beforeunload', () => {
                 this.stopAutoRefresh();
                 this.stopLogAutoRefresh();
                 this.stopWorkerPoll();
-                this.stopSystemPoll();
             });
         },
 
@@ -178,37 +173,17 @@ function globalSummary() {
             }
         },
 
-        togglePanel() {
-            this.panelOpen = !this.panelOpen;
-            if (this.panelOpen) {
-                this.loadActivities();
+        // 로그 패널 토글
+        toggleLogPanel() {
+            this.logPanelOpen = !this.logPanelOpen;
+            if (this.logPanelOpen && this.unifiedLogs.length === 0) {
+                this.loadUnifiedLogs();
             }
         },
 
-        openSettingsModal() {
-            // 사용자/AI/API 설정 모달 열기 (settings.js의 전역 함수 호출)
-            if (typeof window.openSettingsModal === 'function') {
-                window.openSettingsModal();
-            }
-        },
-
-        closePanel() {
-            // 닫을 때 고정 탭 저장
-            this.savePinnedTabs();
-            this.panelOpen = false;
-        },
-
-        async loadActivities() {
-            try {
-                const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
-                const res = await fetch(`${apiBase}/dashboard/activities?limit=5`, { credentials: 'include' });
-                if (res.ok) {
-                    const data = await res.json();
-                    this.activities = data.activities || [];
-                }
-            } catch (error) {
-                console.error('활동 로드 실패:', error);
-            }
+        // 대시보드 페이지로 이동 (이미 대시보드면 무시)
+        navigateToDashboard() {
+            if (window.location.pathname !== '/dashboard') { window.location.href = '/dashboard'; }
         },
 
         formatTime(timestamp) {
@@ -373,34 +348,50 @@ function globalSummary() {
             return `${labels[key]} 워커: 온라인 (활성 ${w.active_tasks}개)`;
         },
 
-        async loadLogs() {
+        // 통합 로그 로드
+        async loadUnifiedLogs() {
             try {
-                this.logOffset = 0;
                 const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
-                const res = await fetch(`${apiBase}/dashboard/logs?limit=50&offset=0`, { credentials: 'include' });
-                if (res.ok) {
-                    const data = await res.json();
-                    this.logs = data.logs || [];
-                    this.hasMoreLogs = data.has_more || false;
+                const params = new URLSearchParams({ limit: '30', offset: '0', log_type: this.logFilter, level: 'all' });
+                if (this.logSearch) params.set('search', this.logSearch);
+                const resp = await fetch(`${apiBase}/dashboard/unified-logs?${params}`, { credentials: 'include' });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    this.unifiedLogs = data.logs || [];
+                    this.unifiedLogsTotal = data.total || 0;
+                    this.hasMoreUnifiedLogs = data.has_more || false;
                 }
-            } catch (error) {
-                console.error('[GlobalSummary] 로그 로드 실패:', error);
+            } catch (e) {
+                console.warn('[GlobalSummary] 통합 로그 로드 실패:', e);
             }
         },
 
-        async loadMoreLogs() {
+        // 통합 로그 더 보기
+        async loadMoreUnifiedLogs() {
             try {
-                this.logOffset += 50;
                 const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
-                const res = await fetch(`${apiBase}/dashboard/logs?limit=50&offset=${this.logOffset}`, { credentials: 'include' });
-                if (res.ok) {
-                    const data = await res.json();
-                    this.logs = [...this.logs, ...(data.logs || [])];
-                    this.hasMoreLogs = data.has_more || false;
+                const params = new URLSearchParams({ limit: '30', offset: String(this.unifiedLogs.length), log_type: this.logFilter, level: 'all' });
+                if (this.logSearch) params.set('search', this.logSearch);
+                const resp = await fetch(`${apiBase}/dashboard/unified-logs?${params}`, { credentials: 'include' });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    this.unifiedLogs = [...this.unifiedLogs, ...(data.logs || [])];
+                    this.hasMoreUnifiedLogs = data.has_more || false;
                 }
-            } catch (error) {
-                console.error('[GlobalSummary] 추가 로그 로드 실패:', error);
+            } catch (e) {
+                console.warn('[GlobalSummary] 추가 통합 로그 로드 실패:', e);
             }
+        },
+
+        // 로그 레벨 CSS 클래스
+        getLevelClass(level) {
+            const map = {
+                'INFO': 'bg-blue-900 text-blue-300',
+                'SUCCESS': 'bg-green-900 text-green-300',
+                'WARN': 'bg-yellow-900 text-yellow-300',
+                'ERROR': 'bg-red-900 text-red-300',
+            };
+            return map[level] || 'bg-gray-800 text-gray-400';
         },
 
         // 외부에서 로그 추가 (전역 함수로 사용 가능)
@@ -416,58 +407,6 @@ function globalSummary() {
 
             // 서버에도 저장 시도
             this.saveLogToServer(logEntry);
-        },
-
-        // === 시스템 탭 메서드 (Phase 2) ===
-        async loadSystemData() {
-            try {
-                const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
-                const [workersResp, historyResp, flowerResp] = await Promise.all([
-                    fetch(`${apiBase}/dashboard/celery/workers`, { credentials: 'include' }),
-                    fetch(`${apiBase}/dashboard/celery/history?limit=10`, { credentials: 'include' }),
-                    fetch(`${apiBase}/dashboard/celery/flower-url`, { credentials: 'include' }),
-                ]);
-                if (workersResp.ok) {
-                    const data = await workersResp.json();
-                    this.systemWorkers = data.workers || {};
-                    this.systemQueues = data.queues || {};
-                }
-                if (historyResp.ok) this.recentTasks = await historyResp.json();
-                if (flowerResp.ok) {
-                    const fdata = await flowerResp.json();
-                    this.flowerUrl = fdata.url || '';
-                }
-            } catch (e) {
-                console.warn('[GlobalSummary] 시스템 데이터 로드 실패:', e);
-            }
-        },
-        startSystemPoll() {
-            this.stopSystemPoll();
-            this.systemPollInterval = setInterval(() => this.loadSystemData(), 10000);
-        },
-        stopSystemPoll() {
-            if (this.systemPollInterval) { clearInterval(this.systemPollInterval); this.systemPollInterval = null; }
-        },
-        getWorkerLabel(key) {
-            return { generation: 'Generation', publish: 'Publish', utility: 'Utility' }[key] || key;
-        },
-        getDisplayQueues() {
-            const exclude = ['callback_queue', 'image_queue'];
-            return Object.entries(this.systemQueues).filter(([n]) => !exclude.includes(n)).map(([name, count]) => ({ name, count: Math.max(count, 0) }));
-        },
-        getMaxQueueLength() {
-            const counts = this.getDisplayQueues().map(q => q.count);
-            return Math.max(...counts, 1);
-        },
-        formatTaskTime(timestamp) {
-            if (!timestamp) return '';
-            const d = new Date(timestamp);
-            return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
-        },
-        getTaskDuration(task) {
-            if (!task.started_at || !task.completed_at) return '-';
-            const diff = (new Date(task.completed_at) - new Date(task.started_at)) / 1000;
-            return diff < 60 ? `${diff.toFixed(1)}s` : `${Math.floor(diff / 60)}m ${Math.floor(diff % 60)}s`;
         },
 
         async saveLogToServer(logEntry) {

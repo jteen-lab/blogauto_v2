@@ -447,7 +447,14 @@ async def get_action_logs(
         blog_platforms = {}
 
         async def get_platform_prefix(blog_name: str) -> str:
-            """블로그 플랫폼 첫글자 약어 반환."""
+            """블로그 플랫폼 첫글자 약어 반환.
+
+            Args:
+                blog_name: 블로그 이름
+
+            Returns:
+                str: 플랫폼 약어 ("워", "구", "?" 등)
+            """
             if not blog_name or blog_name == "-":
                 return ""
             if blog_name not in blog_platforms:
@@ -457,8 +464,8 @@ async def get_action_logs(
                 row = r.scalar_one_or_none()
                 if row:
                     pmap = {"wordpress": "워", "blogger": "구"}
-                    # Enum인 경우 .value로 문자열 추출
-                    platform_str = row.value if hasattr(row, 'value') else str(row)
+                    # BlogPlatform(str, Enum) → Enum이든 문자열이든 안전하게 처리
+                    platform_str = str(row.value if hasattr(row, 'value') else row).lower().strip()
                     blog_platforms[blog_name] = pmap.get(platform_str, "?")
                 else:
                     blog_platforms[blog_name] = "?"
@@ -497,11 +504,19 @@ async def get_action_logs(
                 level = "WARN"
                 status_text = log.status
 
+            # 포스트 제목 (30자 초과 시 truncate)
+            title_part = ""
+            if log.post_title and log.post_title.strip():
+                title_text = log.post_title.strip()
+                if len(title_text) > 30:
+                    title_text = title_text[:30] + "..."
+                title_part = f" - {title_text}"
+
             if prefix and log.blog_name and log.blog_name != "-":
                 # 플랫폼 뱃지용 대괄호 마커: [워] 또는 [구]
-                msg = f"[{prefix}]{log.blog_name} - {action_text} - {status_text}"
+                msg = f"[{prefix}]{log.blog_name}{title_part} - {action_text} {status_text}"
             else:
-                msg = f"{action_text} - {status_text}"
+                msg = f"{action_text}{title_part} - {status_text}"
 
             formatted.append({
                 "id": log.id,

@@ -1,0 +1,262 @@
+{% extends "base.html" %}
+{% block title %}대시보드{% endblock %}
+
+{% block extra_css %}
+<!-- 대시보드 V2: Sora 폰트 + ApexCharts CDN -->
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+<style>
+    /* 대시보드 전용 스타일 - Ghost/Vercel 스타일 컴팩트 레이아웃 */
+    .dashboard-page { font-family: 'Sora', sans-serif; }
+    .kpi-card {
+        background: white;
+        border: 0.5px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 16px;
+    }
+    .kpi-value { font-size: 1.75rem; font-weight: 700; color: #111827; }
+    .kpi-label {
+        font-size: 0.75rem; font-weight: 500; color: #6b7280;
+        text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .kpi-delta-up { color: #0F6E56; }
+    .kpi-delta-down { color: #993C1D; }
+    .section-card {
+        background: white;
+        border: 0.5px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 20px;
+    }
+    .section-title {
+        font-size: 0.7rem; font-weight: 600; color: #9ca3af;
+        text-transform: uppercase; letter-spacing: 0.08em;
+        margin-bottom: 12px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-page" x-data="compactDashboard()" x-init="init()">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-4">
+
+        <!-- 헤더: 타이틀 + 설정 버튼 + 최종 갱신 시각 -->
+        <div class="flex items-center justify-between mb-2">
+            <h1 class="text-xl font-bold text-gray-900" style="font-family:'Sora'">Dashboard</h1>
+            <div class="flex items-center gap-3">
+                <button onclick="openSettingsModal()"
+                        class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                        title="설정">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                </button>
+                <span class="text-xs text-gray-400" x-text="lastUpdated"></span>
+            </div>
+        </div>
+
+        <!-- KPI 카드 행 (클릭 시 요약탭 선택 UI 확장) -->
+        <div @click="kpiExpanded = !kpiExpanded" class="cursor-pointer">
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                <template x-for="kpi in kpiList" :key="kpi.key">
+                    <div class="kpi-card">
+                        <div class="kpi-label" x-text="kpi.label"></div>
+                        <div class="flex items-end justify-between mt-1">
+                            <div class="kpi-value" x-text="kpi.value"></div>
+                            <div class="text-xs font-medium"
+                                 :class="kpi.delta >= 0 ? 'kpi-delta-up' : 'kpi-delta-down'"
+                                 x-text="(kpi.delta >= 0 ? '+' : '') + kpi.delta"
+                                 x-show="kpi.delta !== null"></div>
+                        </div>
+                        <!-- 스파크라인 차트 영역 -->
+                        <div class="mt-2 h-[30px]" :id="'spark-' + kpi.key"></div>
+                    </div>
+                </template>
+            </div>
+            <!-- 확장 인디케이터 -->
+            <div class="text-center mt-1">
+                <svg class="w-4 h-4 text-gray-300 mx-auto transition-transform"
+                     :class="kpiExpanded ? 'rotate-180' : ''"
+                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+            </div>
+        </div>
+
+        <!-- 요약탭 선택 (KPI 확장 시 표시) -->
+        <div x-show="kpiExpanded" x-collapse x-cloak class="section-card">
+            <div class="section-title">요약탭 바에 표시할 항목 선택</div>
+            <template x-for="group in ['blog','category','module','flow','week','today']" :key="group">
+                <div class="mb-3">
+                    <div class="text-[11px] font-semibold text-gray-400 uppercase mb-1.5"
+                         x-text="{ blog:'블로그', category:'카테고리', module:'모듈', flow:'플로우', week:'이번 주', today:'오늘' }[group]"></div>
+                    <div class="flex flex-wrap gap-1.5">
+                        <template x-for="tab in allTabs.filter(t => t.group === group)" :key="tab.key">
+                            <button @click.stop="togglePinTab(tab.key)"
+                                    class="px-3 py-1.5 text-xs rounded-lg border transition-all"
+                                    :class="isTabPinned(tab.key)
+                                        ? 'border-[#0F6E56] bg-[#0F6E56]/10 text-[#0F6E56] font-medium'
+                                        : 'border-gray-200 text-gray-500 hover:border-gray-300'">
+                                <span x-text="tab.label"></span>
+                                <span class="ml-1 font-bold" x-text="stats[tab.key] || 0"></span>
+                            </button>
+                        </template>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- 차트 행: 추이 라인(65%) + 시간대 컬럼(35%) -->
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-3">
+            <!-- 생성/발행 추이 라인 차트 -->
+            <div class="lg:col-span-3 section-card">
+                <div class="flex items-center justify-between">
+                    <div class="section-title">생성 / 발행 추이</div>
+                    <!-- 기간 전환 버튼 -->
+                    <div class="flex gap-1">
+                        <template x-for="p in ['7d','30d','90d']" :key="p">
+                            <button @click="switchPeriod(p)"
+                                    class="px-2 py-0.5 text-[10px] font-medium rounded-md transition-colors"
+                                    :class="period === p
+                                        ? 'bg-gray-900 text-white'
+                                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'"
+                                    x-text="p"></button>
+                        </template>
+                    </div>
+                </div>
+                <div id="trend-chart" class="mt-2" style="height:220px"></div>
+
+                <!-- 콘텐츠 상태 세그먼트 바 -->
+                <div class="mt-3">
+                    <div class="section-title">콘텐츠 상태</div>
+                    <div class="flex h-2 rounded-full overflow-hidden gap-0.5">
+                        <div :style="`width:${statusPct.generated}%`" class="bg-[#0F6E56] rounded-sm"></div>
+                        <div :style="`width:${statusPct.published}%`" class="bg-[#0C447C] rounded-sm"></div>
+                        <div :style="`width:${statusPct.failed}%`" class="bg-[#993C1D] rounded-sm"></div>
+                    </div>
+                    <div class="flex justify-between mt-1.5 text-[10px] text-gray-500">
+                        <span>생성 <b class="text-gray-700" x-text="statusPct.generated + '%'"></b>
+                            &middot; <span x-text="statusCount.generated + '건'"></span></span>
+                        <span>발행 <b class="text-gray-700" x-text="statusPct.published + '%'"></b>
+                            &middot; <span x-text="statusCount.published + '건'"></span></span>
+                        <span>실패 <b class="text-gray-700" x-text="statusPct.failed + '%'"></b>
+                            &middot; <span x-text="statusCount.failed + '건'"></span></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 시간대별 생성 분포 컬럼 차트 -->
+            <div class="lg:col-span-2 section-card">
+                <div class="section-title">시간대별 생성 분포</div>
+                <div id="hourly-chart" style="height:280px"></div>
+            </div>
+        </div>
+
+        <!-- 블로그별 생성량 가로 바 -->
+        <div class="section-card">
+            <div class="section-title">블로그별 생성량 (7일)</div>
+            <div id="blog-perf" class="space-y-2">
+                <template x-for="blog in blogStats" :key="blog.blog_id">
+                    <div class="flex items-center gap-2 text-xs">
+                        <span class="w-24 text-right text-gray-500 truncate" x-text="blog.blog_name"></span>
+                        <div class="flex-1 h-1.5 bg-gray-100 rounded">
+                            <div class="h-full bg-[#0C447C] rounded transition-all"
+                                 :style="`width:${blog.pct}%`"></div>
+                        </div>
+                        <span class="w-8 font-medium text-gray-700" x-text="blog.count"></span>
+                    </div>
+                </template>
+                <div x-show="blogStats.length === 0" class="text-xs text-gray-400 text-center py-3">
+                    데이터 없음
+                </div>
+            </div>
+        </div>
+
+        <!-- 하단 행: 콘텐츠 테이블(60%) + 워커/로그(40%) -->
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-3">
+            <!-- 최근 생성 콘텐츠 테이블 -->
+            <div class="lg:col-span-3 section-card">
+                <div class="flex items-center justify-between">
+                    <div class="section-title">최근 생성 콘텐츠</div>
+                    <a href="/generation/history" class="text-[10px] text-[#0C447C] hover:underline">전체보기 &rarr;</a>
+                </div>
+                <div id="content-table"></div>
+            </div>
+
+            <!-- 우측: 워커 상태 + 큐 + 활동 로그 -->
+            <div class="lg:col-span-2 space-y-3">
+                <!-- 워커 상태 -->
+                <div class="section-card">
+                    <div class="flex items-center justify-between">
+                        <div class="section-title">워커 상태</div>
+                        <a :href="flowerUrl" target="_blank" x-show="flowerUrl"
+                           class="text-[10px] text-pink-500 hover:text-pink-600">Flower &rarr;</a>
+                    </div>
+                    <div class="space-y-2">
+                        <template x-for="wk in ['generation', 'publish', 'utility']" :key="wk">
+                            <div class="flex items-center justify-between p-2 rounded-lg"
+                                 :class="workers[wk]?.status === 'online' ? 'bg-green-50' : workers[wk]?.status === 'offline' ? 'bg-red-50' : 'bg-gray-50'">
+                                <div class="flex items-center gap-2">
+                                    <span class="w-2 h-2 rounded-full" :class="getWorkerDotClass(wk)"></span>
+                                    <span class="text-xs font-medium text-gray-700" x-text="getWorkerLabel(wk)"></span>
+                                </div>
+                                <div class="text-xs text-gray-500">
+                                    <span x-text="workers[wk]?.status === 'online' ? (workers[wk]?.active_tasks > 0 ? '작업중(' + workers[wk].active_tasks + ')' : 'Online') : workers[wk]?.status === 'offline' ? 'Offline' : '확인중'"></span>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                    <!-- 큐 상태 바 -->
+                    <div class="mt-3 space-y-1.5">
+                        <div class="section-title">큐 상태</div>
+                        <template x-for="q in getDisplayQueues()" :key="q.name">
+                            <div class="flex items-center gap-2 text-[10px]">
+                                <span class="w-24 text-gray-500 font-mono truncate" x-text="q.name"></span>
+                                <div class="flex-1 bg-gray-100 rounded-full h-1.5">
+                                    <div class="h-1.5 rounded-full transition-all"
+                                         :class="q.count > 5 ? 'bg-amber-400' : q.count > 0 ? 'bg-blue-400' : 'bg-gray-200'"
+                                         :style="'width:' + Math.min(100, q.count * 10) + '%'"></div>
+                                </div>
+                                <span class="w-6 text-right font-mono"
+                                      :class="q.count > 0 ? 'text-amber-600' : 'text-gray-400'"
+                                      x-text="q.count"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- 최근 활동 로그 -->
+                <div class="section-card">
+                    <div class="section-title">최근 활동</div>
+                    <div class="space-y-0.5 font-mono">
+                        <template x-for="(log, idx) in logs.slice(0, 5)" :key="log.id || idx">
+                            <div class="flex items-start gap-1.5 py-1 text-[10px] border-b border-gray-100 last:border-0">
+                                <span class="text-gray-400 flex-shrink-0" x-text="formatTime(log.timestamp)"></span>
+                                <span class="px-1 py-0.5 rounded text-[9px] font-bold flex-shrink-0"
+                                      :class="log.level === 'SUCCESS' ? 'bg-green-100 text-green-700' : log.level === 'ERROR' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'"
+                                      x-text="log.level === 'SUCCESS' ? 'OK' : log.level === 'ERROR' ? 'ERR' : 'INF'"></span>
+                                <span class="text-gray-600 truncate" x-text="log.message"></span>
+                            </div>
+                        </template>
+                        <div x-show="!logs || logs.length === 0"
+                             class="text-gray-400 text-[10px] text-center py-2">로그 없음</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- SSR 초기 데이터: 첫 로딩 시 API 호출 없이 즉시 KPI 표시 -->
+{% if initial_data %}
+<script>window.__DASHBOARD_INITIAL__ = {{ initial_data | safe }};</script>
+{% endif %}
+<!-- 대시보드 V2 JS 모듈 (순서 중요: kpi_spark이 메인 컴포넌트 정의) -->
+<script src="/static/js/dashboard/kpi_spark.js?v=3"></script>
+<script src="/static/js/dashboard/main_charts.js?v=1"></script>
+<script src="/static/js/dashboard/perf_panel.js?v=1"></script>
+<script src="/static/js/dashboard/content_table.js?v=1"></script>
+{% endblock %}

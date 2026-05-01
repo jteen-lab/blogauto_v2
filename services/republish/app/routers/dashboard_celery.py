@@ -42,7 +42,50 @@ WORKER_KEY_MAP = {
 # 워커 상태 캐시 (inspect 호출 비용 절감)
 _worker_cache: dict = {}
 _worker_cache_time: float = 0.0
-_CACHE_TTL: float = 5.0
+_CACHE_TTL: float = 10.0  # 10초 캐시 (첫 로드 성능 개선)
+
+# 모듈 레벨 Redis 클라이언트 (커넥션 재사용)
+_redis_client = None
+
+# 모듈 레벨 Celery 앱 (지연 로딩)
+_celery_app = None
+
+
+def _get_redis_client():
+    """Redis 클라이언트를 지연 생성하고 재사용합니다.
+
+    Returns:
+        redis.Redis: Redis 클라이언트 인스턴스, 실패 시 None
+    """
+    global _redis_client
+    if _redis_client is None:
+        try:
+            import redis as redis_lib
+            redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
+            _redis_client = redis_lib.from_url(
+                redis_url, socket_timeout=2, socket_connect_timeout=2
+            )
+        except Exception as e:
+            logger.warning(f"[CELERY_MONITOR] Redis 클라이언트 생성 실패: {e}")
+            return None
+    return _redis_client
+
+
+def _get_celery_app():
+    """Celery 앱을 지연 로딩하고 캐시합니다.
+
+    Returns:
+        Celery: Celery 앱 인스턴스, 실패 시 None
+    """
+    global _celery_app
+    if _celery_app is None:
+        try:
+            from ..core.celery_config import celery_app
+            _celery_app = celery_app
+        except Exception as e:
+            logger.warning(f"[CELERY_MONITOR] Celery 앱 로딩 실패: {e}")
+            return None
+    return _celery_app
 
 
 @router.get("/status", summary="Celery 큐/워커 상태")
@@ -131,27 +174,42 @@ async def get_flower_url() -> dict:
 def _get_queue_lengths() -> dict:
     """Redis에서 각 큐의 대기 작업 수를 조회합니다.
 
+    모듈 레벨 Redis 클라이언트를 재사용하여 커넥션 오버헤드를 제거합니다.
+
     Returns:
         dict: 큐 이름 -> 대기 작업 수 (-1이면 조회 실패)
     """
-    try:
-        import redis as redis_lib
-
-        redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
-        redis_client = redis_lib.from_url(redis_url)
-
-        queue_lengths = {}
-        for q in MONITORED_QUEUES:
-            try:
-                queue_lengths[q] = redis_client.llen(q)
-            except Exception:
-                queue_lengths[q] = -1
-
-        redis_client.close()
-        return queue_lengths
-    except Exception as e:
-        logger.warning(f"[CELERY_MONITOR] Redis 연결 실패: {e}")
+    client = _get_redis_client()
+    if client is None:
         return {q: -1 for q in MONITORED_QUEUES}
+
+    try:
+        # 파이프라인으로 한 번에 조회 (네트워크 라운드트립 절감)
+        pipe = client.pipeline(transaction=False)
+        for q in MONITORED_QUEUES:
+            pipe.llen(q)
+        results = pipe.execute()
+
+        return {
+            q: results[i] if isinstance(results[i], int) else -1
+            for i, q in enumerate(MONITORED_QUEUES)
+        }
+    except Exception as e:
+        logger.warning(f"[CELERY_MONITOR] Redis 큐 조회 실패: {e}")
+        # 커넥션 오류 시 클라이언트 리셋
+        _reset_redis_client()
+        return {q: -1 for q in MONITORED_QUEUES}
+
+
+def _reset_redis_client() -> None:
+    """Redis 클라이언트를 리셋합니다 (커넥션 오류 복구용)."""
+    global _redis_client
+    try:
+        if _redis_client is not None:
+            _redis_client.close()
+    except Exception:
+        pass
+    _redis_client = None
 
 
 async def _get_status_counts(db: AsyncSession) -> dict:
@@ -218,8 +276,12 @@ async def get_worker_status() -> dict:
     from datetime import datetime, timezone
 
     loop = asyncio.get_event_loop()
-    worker_info = await loop.run_in_executor(None, _inspect_workers_cached)
-    queue_lengths = await loop.run_in_executor(None, _get_queue_lengths)
+    # 워커 inspect와 큐 길이를 병렬로 조회
+    worker_future = loop.run_in_executor(None, _inspect_workers_cached)
+    queue_future = loop.run_in_executor(None, _get_queue_lengths)
+    worker_info, queue_lengths = await asyncio.gather(
+        worker_future, queue_future
+    )
 
     total_queued = sum(
         max(v, 0) for k, v in queue_lengths.items()
@@ -235,7 +297,11 @@ async def get_worker_status() -> dict:
 
 
 def _inspect_workers_cached() -> dict:
-    """5초 TTL 캐시가 적용된 워커 상태 조회."""
+    """10초 TTL 캐시가 적용된 워커 상태 조회.
+
+    Returns:
+        dict: 워커별 상태 딕셔너리
+    """
     global _worker_cache, _worker_cache_time
 
     now = time.monotonic()
@@ -252,8 +318,12 @@ def _inspect_workers() -> dict:
     """
     Celery inspect()로 워커 상태를 조회합니다.
 
+    지연 로딩된 Celery 앱을 사용하고, timeout=1.0초로 설정하여
+    최악의 경우에도 3.0초 이내에 반환됩니다.
     동기 함수이므로 run_in_executor로 호출해야 합니다.
-    timeout=3초로 설정하여 워커가 응답하지 않는 경우 빠르게 반환합니다.
+
+    Returns:
+        dict: 워커 키별 상태 정보
     """
     result = {
         key: {
@@ -263,10 +333,13 @@ def _inspect_workers() -> dict:
         for key in WORKER_KEY_MAP.values()
     }
 
-    try:
-        from ..core.celery_config import celery_app
+    app = _get_celery_app()
+    if app is None:
+        return result
 
-        inspector = celery_app.control.inspect(timeout=3.0)
+    try:
+        # timeout 1.0초로 줄여 최악 3.0초 (3 호출 * 1.0초)
+        inspector = app.control.inspect(timeout=1.0)
         ping_response = inspector.ping() or {}
         active_response = inspector.active() or {}
         stats_response = inspector.stats() or {}
@@ -280,7 +353,9 @@ def _inspect_workers() -> dict:
             result[worker_key]["active_tasks"] = len(
                 active_response.get(worker_name, [])
             )
-            _fill_worker_stats(result[worker_key], stats_response.get(worker_name, {}))
+            _fill_worker_stats(
+                result[worker_key], stats_response.get(worker_name, {})
+            )
 
     except Exception as e:
         logger.warning(f"[WORKER_STATUS] inspect 실패: {e}")
@@ -289,7 +364,12 @@ def _inspect_workers() -> dict:
 
 
 def _fill_worker_stats(info: dict, stats: dict) -> None:
-    """워커 stats 응답에서 processed/concurrency/uptime을 추출합니다."""
+    """워커 stats 응답에서 processed/concurrency/uptime을 추출합니다.
+
+    Args:
+        info: 워커 상태 딕셔너리 (in-place 수정)
+        stats: Celery stats 응답
+    """
     total_tasks = stats.get("total", {})
     if isinstance(total_tasks, dict):
         info["processed"] = int(sum(
@@ -311,6 +391,9 @@ def _resolve_worker_key(worker_name: str) -> str | None:
 
     Args:
         worker_name: Celery 워커 이름 (예: "generation@hostname")
+
+    Returns:
+        str | None: 매핑된 워커 키, 매칭 실패 시 None
     """
     for prefix, key in WORKER_KEY_MAP.items():
         if worker_name.startswith(prefix):

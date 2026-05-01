@@ -299,14 +299,44 @@ class AutorunService:
         # 상태 변경
         flow.status = FlowStatus.ACTIVE
 
-        # 즉시 실행 처리 (옵션)
+        # 모든 실행 상태의 is_paused 초기화 (연속 실패로 paused된 상태 복구)
+        from ..models.flow_execution_state import FlowExecutionState
+        fes_query = select(FlowExecutionState).where(
+            and_(
+                FlowExecutionState.flow_id == flow.id,
+                FlowExecutionState.is_paused == True
+            )
+        )
+        fes_result = await self.db.execute(fes_query)
+        paused_states = list(fes_result.scalars().all())
+        for state in paused_states:
+            state.is_paused = False
+            state.paused_at = None
+            state.consecutive_failures = 0
+            logger.info(
+                f"[FLOW_ACTION] 실행 상태 일시정지 해제 | "
+                f"FlowID={flow.id} | ActionType={state.action_type}"
+            )
+
+        # 스케줄러에 재등록 (즉시 실행 옵션 반영)
+        from ..scheduler.flow_scheduler import get_flow_scheduler
+        scheduler = get_flow_scheduler()
         next_execution = None
-        if request.immediate:
-            # 즉시 실행 로직 (스케줄러에서 처리)
-            next_execution = datetime.now()
-        else:
-            # 다음 스케줄 시간 계산 (스케줄러에서 처리)
-            next_execution = datetime.now() + timedelta(minutes=5)  # 임시
+        if scheduler and flow.is_in_autorun:
+            await scheduler.register_flow(
+                flow.id, immediate_execution=bool(request.immediate)
+            )
+            schedule_info = await scheduler.get_flow_schedule_info(flow.id)
+            if schedule_info.get("modules"):
+                for module_info in schedule_info["modules"]:
+                    if module_info.get("next_execution_at"):
+                        next_execution = datetime.fromisoformat(
+                            module_info["next_execution_at"]
+                        )
+                        break
+
+        if not next_execution:
+            next_execution = datetime.now() + timedelta(minutes=5)
 
         return FlowActionResult(
             success=True,

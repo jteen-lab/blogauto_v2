@@ -212,6 +212,16 @@ class FlowScheduler:
                         db, flow.id, module_type_code
                     )
 
+                    # 등록 시 일시정지 상태 초기화 (연속 실패로 paused된 상태 복구)
+                    if state.is_paused:
+                        state.is_paused = False
+                        state.paused_at = None
+                        state.consecutive_failures = 0
+                        logger.info(
+                            f"[FLOW_SCHEDULER] 실행 상태 일시정지 해제 | "
+                            f"FlowID={flow_id} | ActionType={module_type_code}"
+                        )
+
                     # 간격 계산: GP 있으면 GP 기반, 없으면 모듈 설정 또는 기본값
                     if gp_settings:
                         interval_minutes = self._get_gp_interval(
@@ -248,7 +258,7 @@ class FlowScheduler:
 
                 # GP에서 publish/republish 활성화 확인 후 등록
                 if gp_settings and gp_settings.get("stages"):
-                    for gp_action in ("publish", "republish"):
+                    for gp_action in ("generate", "publish", "republish"):
                         if gp_action in registered_actions:
                             continue
                         # 아무 stage에서든 활성화되어 있는지 확인
@@ -264,6 +274,17 @@ class FlowScheduler:
                             state = await self._get_or_create_execution_state(
                                 db, flow.id, gp_action
                             )
+
+                            # 등록 시 일시정지 상태 초기화
+                            if state.is_paused:
+                                state.is_paused = False
+                                state.paused_at = None
+                                state.consecutive_failures = 0
+                                logger.info(
+                                    f"[FLOW_SCHEDULER] GP 실행 상태 일시정지 해제 | "
+                                    f"FlowID={flow_id} | ActionType={gp_action}"
+                                )
+
                             interval_minutes = self._get_gp_interval(
                                 gp_settings, blogs, gp_action
                             )
@@ -871,6 +892,14 @@ class FlowScheduler:
                 # 실행 상태 조회 (action_type 기반)
                 state = await self._get_execution_state(db, flow_id, action_type)
 
+                # 일시정지된 실행 상태 체크 (연속 실패 등으로 paused)
+                if state and state.is_paused:
+                    logger.info(
+                        f"[FLOW_SCHEDULER] 실행 상태 일시정지 중, 스킵 | "
+                        f"FlowID={flow_id} | ActionType={action_type}"
+                    )
+                    return
+
                 # 동시 실행 가드
                 if state and not state.acquire_execution_lock():
                     logger.info(
@@ -988,17 +1017,9 @@ class FlowScheduler:
                     )
                     duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
 
-                    await self._save_autorun_log(
-                        db=db,
-                        user_id=flow.user_id,
-                        flow_id=flow.id,
-                        flow_name=flow.name,
-                        module_name=module.name,
-                        blog_name="-",
-                        result=result,
-                        duration_ms=duration_ms,
-                        action="generate"
-                    )
+                    # 블로그별 AutorunLog는 _execute_generate_module 내부에서 저장됨
+                    # Celery 사용 시 celery_tasks.py에서도 상세 로그 저장
+                    # 여기서 요약 로그를 추가 저장하면 중복이 발생하므로 생략
 
                     logger.info(
                         f"[FLOW_SCHEDULER] 생성 모듈 실행 완료 | FlowID={flow_id} | "
@@ -1992,10 +2013,23 @@ class FlowScheduler:
 
                 if pub_result.get("success") and pub_result.get("crawled_post"):
                     crawled_post = pub_result["crawled_post"]
-                    pipeline_result = await pipeline.publish_post(crawled_post, blog)
+                    # 인자 순서: (blog, crawled_post, credential)
+                    credential = None
+                    if blog.google_credential_id:
+                        from ..models.google_credential import GoogleCredential
+                        credential = await db.get(
+                            GoogleCredential, blog.google_credential_id,
+                        )
+                    pipeline_result = await pipeline.publish_post(
+                        blog, crawled_post, credential=credential,
+                    )
 
-                    if pipeline_result.get("success"):
-                        await publisher.complete_publish(blog, crawled_post, stage_params)
+                    if pipeline_result.success:
+                        # complete_publish 시그니처: (blog_id, crawled_post_id, published_url)
+                        await publisher.complete_publish(
+                            blog.id, crawled_post.id,
+                            published_url=pipeline_result.published_url,
+                        )
                         success_count += 1
                     else:
                         fail_count += 1
@@ -2005,11 +2039,13 @@ class FlowScheduler:
                     fail_count += 1
 
                 blog_duration = int((datetime.now() - blog_start).total_seconds() * 1000)
-                await self._save_autorun_log(
-                    db=db, user_id=flow.user_id, flow_id=flow.id,
-                    flow_name=flow.name, module_name=gp_module_name,
-                    blog_name=blog.name, result=pub_result,
-                    duration_ms=blog_duration, action="publish")
+                # Celery 사용 시 태스크 완료 후 celery_publish_tasks에서 로그 저장
+                if not pub_result.get("message", "").startswith("Celery 큐 등록"):
+                    await self._save_autorun_log(
+                        db=db, user_id=flow.user_id, flow_id=flow.id,
+                        flow_name=flow.name, module_name=gp_module_name,
+                        blog_name=blog.name, result=pub_result,
+                        duration_ms=blog_duration, action="publish")
 
             except Exception as e:
                 fail_count += 1
@@ -2108,11 +2144,13 @@ class FlowScheduler:
 
                 blog_duration = int((datetime.now() - blog_start).total_seconds() * 1000)
 
-                await self._save_autorun_log(
-                    db=db, user_id=flow.user_id, flow_id=flow.id,
-                    flow_name=flow.name, module_name=gp_module_name,
-                    blog_name=blog.name, result=blog_result,
-                    duration_ms=blog_duration, action="republish")
+                # Celery 사용 시 태스크 완료 후 celery_publish_tasks에서 로그 저장
+                if not blog_result.get("message", "").startswith("Celery 큐 등록"):
+                    await self._save_autorun_log(
+                        db=db, user_id=flow.user_id, flow_id=flow.id,
+                        flow_name=flow.name, module_name=gp_module_name,
+                        blog_name=blog.name, result=blog_result,
+                        duration_ms=blog_duration, action="republish")
 
                 if blog_result.get("success"):
                     success_count += 1
