@@ -841,7 +841,11 @@ async def reclassify_uncategorized_keywords(
     from ..services.category_matcher_service import CategoryMatcherService
 
     try:
-        # 1. 미분류 키워드 조회
+        # 1. 카테고리 매처 초기화 (expire_all 호출 포함이므로 다른 쿼리보다 먼저 실행)
+        matcher = CategoryMatcherService(db, user_id=current_user.id)
+        await matcher._load_keywords(force_reload=True)
+
+        # 2. 미분류 키워드 조회 (expire_all 이후에 조회해야 객체가 유효함)
         result = await db.execute(
             select(SeedKeyword).where(SeedKeyword.topic_id == None)
         )
@@ -854,10 +858,6 @@ async def reclassify_uncategorized_keywords(
                 "matched": 0,
                 "message": "미분류 키워드가 없습니다"
             }
-
-        # 2. 카테고리 매처 초기화 (현재 사용자의 키워드만 로드)
-        matcher = CategoryMatcherService(db, user_id=current_user.id)
-        await matcher._load_keywords(force_reload=True)  # 항상 최신 키워드 로드
 
         # 3. 각 키워드에 대해 매칭 시도
         matched_count = 0

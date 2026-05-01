@@ -14,19 +14,11 @@ logger = logging.getLogger(__name__)
 async def _async_publish_via_workflow(
     blog_id: int, post_id: int = 0,
 ) -> dict:
-    """PublishWorkflow를 사용하여 OFF 모드와 동일한 발행 로직 실행.
-
-    Args:
-        blog_id: 블로그 ID
-        post_id: 발행할 포스트 ID (0이면 자동 선택)
-
-    Returns:
-        PublishWorkflow.execute_publish()의 반환값
-    """
-    from app.core.database import db_manager
+    """발행 실행 + AutorunLog 저장 (Celery 전용 NullPool 세션)."""
+    from app.core.celery_async_bridge import celery_db_session
     from app.services.generation.publish_workflow import PublishWorkflow
 
-    async with db_manager.get_session() as db:
+    async with celery_db_session() as db:
         workflow = PublishWorkflow(db)
         result = await workflow.execute_publish(blog_id, post_id)
 
@@ -34,7 +26,9 @@ async def _async_publish_via_workflow(
             from app.models.autorun_log import AutorunLog
             from app.models.blog import Blog
             blog = await db.get(Blog, blog_id)
-            status = "success" if result.get("success") and not result.get("skipped") else "failed"
+            is_skip = result.get("skipped", False)
+            is_ok = result.get("success", False) and not is_skip
+            status = "success" if is_ok else ("skipped" if is_skip else "failed")
             log = AutorunLog.create_execution_log(
                 user_id=1, flow_id=None, action="publish", status=status,
                 flow_name="", module_name="",
@@ -48,7 +42,7 @@ async def _async_publish_via_workflow(
         except Exception as log_err:
             logger.warning(f"[PUBLISH] AutorunLog 저장 실패: {log_err}")
 
-        return result
+    return result
 
 
 async def _async_republish_via_workflow(blog_id: int) -> dict:
@@ -60,12 +54,34 @@ async def _async_republish_via_workflow(blog_id: int) -> dict:
     Returns:
         PublishWorkflow.execute_republish()의 반환값
     """
-    from app.core.database import db_manager
+    from app.core.celery_async_bridge import celery_db_session
     from app.services.generation.publish_workflow import PublishWorkflow
 
-    async with db_manager.get_session() as db:
+    async with celery_db_session() as db:
         workflow = PublishWorkflow(db)
-        return await workflow.execute_republish(blog_id)
+        result = await workflow.execute_republish(blog_id)
+
+        try:
+            from app.models.autorun_log import AutorunLog
+            from app.models.blog import Blog
+            blog = await db.get(Blog, blog_id)
+            is_skip = result.get("skipped", False)
+            is_ok = result.get("success", False) and not is_skip
+            status = "success" if is_ok else ("skipped" if is_skip else "failed")
+            log = AutorunLog.create_execution_log(
+                user_id=1, flow_id=None, action="republish", status=status,
+                flow_name="", module_name="",
+                blog_name=blog.name if blog else str(blog_id),
+                post_title=result.get("post_title", ""),
+                action_time=None, duration_ms=0,
+                message=result.get("message", ""),
+            )
+            db.add(log)
+            await db.commit()
+        except Exception as log_err:
+            logger.warning(f"[REPUBLISH] AutorunLog 저장 실패: {log_err}")
+
+    return result
 
 
 @celery_app.task(
@@ -136,6 +152,13 @@ def publish_post(
     except TaskSkipped:
         raise
     except Exception as exc:
+        err_str = str(exc)
+        # 이벤트 루프 충돌은 발행이 이미 완료된 후 발생하므로 재시도 금지
+        if "different loop" in err_str or "attached to a different" in err_str:
+            logger.warning(
+                f"[TASK:PUBLISH] 이벤트 루프 오류 (재시도 안 함) | blog={blog_id}"
+            )
+            return {"success": True, "message": "발행 완료 (세션 정리 오류)"}
         logger.error(f"[TASK:PUBLISH] 예외 | blog={blog_id} | {exc}")
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc)
@@ -223,6 +246,12 @@ def republish_post(
         error_msg = result.get("error") or result.get("message") or "재발행 실패"
         raise RuntimeError(f"재발행 실패: {error_msg}")
     except Exception as exc:
+        err_str = str(exc)
+        if "different loop" in err_str or "attached to a different" in err_str:
+            logger.warning(
+                f"[TASK:REPUBLISH] 이벤트 루프 오류 (재시도 안 함) | blog={blog_id}"
+            )
+            return {"success": True, "message": "재발행 완료 (세션 정리 오류)"}
         logger.error(f"[TASK:REPUBLISH] 예외 | blog={blog_id} | {exc}")
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc)

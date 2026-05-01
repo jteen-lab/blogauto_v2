@@ -467,14 +467,15 @@ async def update_main_title(
 @router.delete("/{title_id}")
 async def delete_main_title(
     title_id: int,
+    permanent: bool = Query(False, description="True면 DB에서 완전 삭제"),
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_user),
 ):
     """
-    정식 제목 초기화 (연결된 CrawledPost 전체 삭제 + MainTitle 보존)
+    정식 제목 삭제/초기화
 
-    MainTitle 자체는 삭제하지 않고 status를 "available"로 리셋합니다.
-    연결된 모든 CrawledPost(발행완료/발행대기 무관)와 이미지 파일을 정리합니다.
+    permanent=False (기본): 연결된 CrawledPost 삭제 + MainTitle status를 available로 리셋
+    permanent=True: 연결된 CrawledPost 삭제 + MainTitle도 DB에서 완전 삭제
     """
     title = await db.get(MainTitle, title_id)
     if not title:
@@ -499,12 +500,7 @@ async def delete_main_title(
     if deleted_posts:
         await db.flush()
 
-    # 3. MainTitle 완전 초기화 (삭제하지 않음)
-    title.status = "available"
-    title.use_count = 0
-    title.last_used_at = None
-
-    # 4. TitleGroup 참조 정리
+    # 3. TitleGroup 참조 정리
     ref_groups_query = select(TitleGroup).where(
         TitleGroup.representative_title_id == title_id
     )
@@ -521,15 +517,25 @@ async def delete_main_title(
         if group:
             group.member_count = max(0, (group.member_count or 1) - 1)
 
+    # 4. MainTitle 처리
+    if permanent:
+        await db.delete(title)
+        action = "삭제"
+    else:
+        title.status = "available"
+        title.use_count = 0
+        title.last_used_at = None
+        action = "초기화"
+
     await db.commit()
 
     logger.info(
-        f"[TITLES] 제목 초기화: id={title_id} | "
+        f"[TITLES] 제목 {action}: id={title_id} | "
         f"삭제된 포스트={deleted_posts} | 삭제된 이미지={deleted_images}"
     )
 
     return {
-        "message": "생성된 콘텐츠가 삭제되고 제목이 초기화되었습니다",
+        "message": f"제목이 {action}되었습니다",
         "deleted_posts": deleted_posts,
         "deleted_images": deleted_images,
     }

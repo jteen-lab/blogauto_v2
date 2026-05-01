@@ -1,34 +1,58 @@
 """Celery 비동기 브릿지 및 공통 예외 클래스.
 
-모든 Celery 태스크 파일에서 공통으로 사용하는 async-to-sync 브릿지와
-태스크 상태 구분을 위한 예외 클래스를 제공합니다.
+Celery prefork 워커에서 async 코루틴을 안전하게 실행합니다.
+NullPool을 사용하여 이벤트 루프 간 커넥션 충돌을 방지합니다.
 """
 import asyncio
 import logging
+from contextlib import asynccontextmanager
 
 logger = logging.getLogger(__name__)
 
 
 class TaskSkipped(Exception):
-    """의도적 스킵을 나타내는 예외.
-
-    제목 없음, 발행 대상 없음 등 정상적인 스킵 상황에서 발생합니다.
-    Celery는 이를 FAILURE로 기록하지만, 로그와 에러 메시지로
-    실제 에러와 구분할 수 있습니다.
-    """
+    """의도적 스킵을 나타내는 예외."""
     pass
 
 
 def run_async(coro):
-    """비동기 코루틴을 동기 Celery 태스크에서 실행.
+    """비동기 코루틴을 동기 Celery 태스크에서 실행."""
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
 
-    항상 새 이벤트 루프를 생성하여 Celery prefork 워커에서
-    안전하게 동작합니다.
 
-    Args:
-        coro: 실행할 비동기 코루틴
+@asynccontextmanager
+async def celery_db_session():
+    """Celery 전용 DB 세션 (NullPool로 이벤트 루프 충돌 방지).
 
-    Returns:
-        코루틴의 반환값
+    매 호출 시 새 엔진을 생성하고 사용 후 즉시 폐기합니다.
+    NullPool은 커넥션 풀을 유지하지 않으므로 이벤트 루프 바인딩 문제가 없습니다.
     """
-    return asyncio.run(coro)
+    from sqlalchemy.ext.asyncio import (
+        create_async_engine, AsyncSession,
+    )
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import NullPool
+    from app.core.config import settings
+
+    engine = create_async_engine(
+        settings.database_url,
+        poolclass=NullPool,
+    )
+    session_factory = sessionmaker(
+        engine, class_=AsyncSession,
+        expire_on_commit=False,
+    )
+
+    session = session_factory()
+    try:
+        yield session
+    except Exception:
+        await session.rollback()
+        raise
+    finally:
+        await session.close()
+        await engine.dispose()

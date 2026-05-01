@@ -132,7 +132,7 @@ function moduleListApp() {
 
         // 모듈 목록 로드
         async loadModules() {
-            const response = await fetch('/api/v1/modules', {
+            const response = await fetch('/api/v1/modules?size=100', {
                 credentials: 'include'
             });
 
@@ -141,7 +141,7 @@ function moduleListApp() {
             }
 
             const data = await response.json();
-            this.modules = data.modules || [];
+            this.modules = (data.modules || []).filter(m => m && m.module_type);
 
             // 캐시 초기화
             this.intervalTextCache = {};
@@ -157,7 +157,8 @@ function moduleListApp() {
         // prompt 요청 시 generate 타입도 함께 반환 (통합 섹션)
         getModulesByType(typeCode) {
             const filtered = this.modules.filter(module => {
-                const code = module.module_type.code;
+                const code = module.module_type?.code;
+                if (!code) return false;
                 if (typeCode === 'prompt') return code === 'prompt' || code === 'generate';
                 return code === typeCode;
             });

@@ -30,7 +30,7 @@ async def modules_page(
 
         # 모듈 타입 목록과 모듈 목록을 병렬로 가져오기
         module_types = await service.get_module_types()
-        modules_response = await service.get_modules(current_user)
+        modules_response = await service.get_modules(current_user, size=100)
         modules = modules_response.modules
 
         # 모듈별 통계 계산

@@ -1266,7 +1266,7 @@ function dataManagementApp() {
             if (!confirm(`선택된 ${this.selectedMainTitles.length}개 제목을 삭제하시겠습니까?`)) return;
             try {
                 for (const id of this.selectedMainTitles) {
-                    await fetch(`${API_BASE}/titles/${id}`, { method: 'DELETE', credentials: 'include' });
+                    await fetch(`${API_BASE}/titles/${id}?permanent=true`, { method: 'DELETE', credentials: 'include' });
                 }
                 showSuccessMessage(`${this.selectedMainTitles.length}개 제목이 삭제되었습니다`);
                 this.selectedMainTitles = [];
