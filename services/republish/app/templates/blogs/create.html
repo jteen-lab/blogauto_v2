@@ -28,7 +28,7 @@
                             <label for="name" class="block text-sm font-medium text-gray-700">블로그 이름 *</label>
                             <input type="text" name="name" id="name" required
                                    x-model="form.name"
-                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary"
+                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-accent focus:border-accent"
                                    placeholder="내 블로그">
                         </div>
 
@@ -36,7 +36,7 @@
                             <label for="url" class="block text-sm font-medium text-gray-700">블로그 URL *</label>
                             <input type="url" name="url" id="url" required
                                    x-model="form.url"
-                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary"
+                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-accent focus:border-accent"
                                    placeholder="https://myblog.example.com">
                         </div>
 
@@ -45,7 +45,7 @@
                             <select name="platform" id="platform" required
                                     x-model="form.platform"
                                     @change="platformChanged()"
-                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary">
+                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-accent focus:border-accent">
                                 <option value="">플랫폼을 선택하세요</option>
                                 <option value="wordpress">WordPress</option>
                                 <option value="blogger">Blogger</option>
@@ -79,7 +79,7 @@
                             <label for="api_key" class="block text-sm font-medium text-gray-700">API 키 (사용자명) *</label>
                             <input type="text" name="api_key" id="api_key"
                                    x-model="form.api_key"
-                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary"
+                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-accent focus:border-accent"
                                    placeholder="WordPress 사용자명">
                         </div>
 
@@ -87,7 +87,7 @@
                             <label for="api_secret" class="block text-sm font-medium text-gray-700">API 시크릿 (Application Password) *</label>
                             <input type="password" name="api_secret" id="api_secret"
                                    x-model="form.api_secret"
-                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary"
+                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-accent focus:border-accent"
                                    placeholder="WordPress Application Password">
                         </div>
                     </div>
@@ -117,7 +117,7 @@
                             <label for="blogger_api_key" class="block text-sm font-medium text-gray-700">API 키 *</label>
                             <input type="text" name="blogger_api_key" id="blogger_api_key"
                                    x-model="form.api_key"
-                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary"
+                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-accent focus:border-accent"
                                    placeholder="Google API 키">
                         </div>
 
@@ -125,7 +125,7 @@
                             <label for="oauth_token" class="block text-sm font-medium text-gray-700">OAuth 토큰 *</label>
                             <textarea name="oauth_token" id="oauth_token" rows="3"
                                       x-model="form.oauth_token"
-                                      class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary"
+                                      class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-accent focus:border-accent"
                                       placeholder="OAuth 2.0 Access Token"></textarea>
                         </div>
                     </div>
@@ -159,7 +159,7 @@
                         <div class="flex items-center">
                             <input type="checkbox" name="auto_publish" id="auto_publish"
                                    x-model="form.auto_publish"
-                                   class="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded">
+                                   class="h-4 w-4 text-accent focus:ring-accent border-gray-300 rounded">
                             <label for="auto_publish" class="ml-2 block text-sm text-gray-700">
                                 자동 발행 활성화 (API 연동)
                             </label>
@@ -171,7 +171,7 @@
                                 <input type="number" name="republish_interval_hours" id="republish_interval_hours"
                                        x-model="form.republish_interval_hours"
                                        min="1" max="168"
-                                       class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary">
+                                       class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-accent focus:border-accent">
                             </div>
 
                             <div>
@@ -179,7 +179,7 @@
                                 <input type="number" name="daily_limit" id="daily_limit"
                                        x-model="form.daily_limit"
                                        min="1" max="100"
-                                       class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary">
+                                       class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-accent focus:border-accent">
                             </div>
                         </div>
                     </div>
@@ -193,7 +193,7 @@
                         <label for="editor_type" class="block text-sm font-medium text-gray-700">에디터 타입</label>
                         <select name="editor_type" id="editor_type"
                                 x-model="form.editor_type"
-                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary">
+                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-accent focus:border-accent">
                             <option value="classic">클래식 에디터</option>
                             <option value="gutenberg">구텐베르그 (블록 에디터)</option>
                             <option value="markdown">마크다운</option>
@@ -205,12 +205,12 @@
                 <div class="pt-6 border-t border-gray-200">
                     <div class="flex justify-end space-x-3">
                         <a href="/blogs"
-                           class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                           class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent">
                             취소
                         </a>
                         <button type="submit"
                                 :disabled="loading"
-                                class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white btn-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50">
+                                class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white btn-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50">
                             <span x-show="!loading">블로그 등록</span>
                             <span x-show="loading">등록 중...</span>
                         </button>

@@ -94,7 +94,7 @@
                             <button @click.stop="togglePinTab(tab.key)"
                                     class="px-3 py-1.5 text-xs rounded-lg border transition-all"
                                     :class="isTabPinned(tab.key)
-                                        ? 'border-primary bg-primary-lt text-primary font-medium'
+                                        ? 'border-accent bg-accent-lt text-accent font-medium'
                                         : 'border-gray-200 text-gray-500 hover:border-gray-300'"
                                 <span x-text="tab.label"></span>
                                 <span class="ml-1 font-bold" x-text="stats[tab.key] || 0"></span>

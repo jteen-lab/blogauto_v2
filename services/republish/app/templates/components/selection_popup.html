@@ -50,7 +50,7 @@ SelectionPopup 컴포넌트
         <div class="grid grid-cols-2 gap-3">
           {% for option in popup_options %}
           <button onclick="selectOption('{{ popup_id }}', '{{ option.action }}', '{{ option.text }}')"
-                  class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-primary hover:bg-primary-lt transition-all duration-200 group">
+                  class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-accent hover:bg-accent-lt transition-all duration-200 group">
             <span class="text-3xl mb-2 group-hover:scale-110 transition-transform duration-200">{{ option.icon or "📋" }}</span>
             <span class="font-medium text-gray-900 group-hover:opacity-80">{{ option.text }}</span>
             {% if option.description %}
@@ -63,12 +63,12 @@ SelectionPopup 컴포넌트
         <!-- 기본 옵션들 -->
         <div class="grid grid-cols-2 gap-3">
           <button onclick="selectOption('{{ popup_id }}', 'option1', '옵션 1')"
-                  class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-primary hover:bg-primary-lt transition-all duration-200 group">
+                  class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-accent hover:bg-accent-lt transition-all duration-200 group">
             <span class="text-3xl mb-2 group-hover:scale-110 transition-transform duration-200">📋</span>
             <span class="font-medium text-gray-900 group-hover:opacity-80">옵션 1</span>
           </button>
           <button onclick="selectOption('{{ popup_id }}', 'option2', '옵션 2')"
-                  class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-primary hover:bg-primary-lt transition-all duration-200 group">
+                  class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-accent hover:bg-accent-lt transition-all duration-200 group">
             <span class="text-3xl mb-2 group-hover:scale-110 transition-transform duration-200">📝</span>
             <span class="font-medium text-gray-900 group-hover:opacity-80">옵션 2</span>
           </button>

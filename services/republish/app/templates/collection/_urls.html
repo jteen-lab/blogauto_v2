@@ -51,7 +51,7 @@
                        x-model="urlSearch"
                        @keyup.enter="urlPage = 1; loadUrls()"
                        placeholder="도메인/키워드 검색..."
-                       class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary">
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-accent focus:border-primary">
                 <button x-show="urlSearch.length > 0"
                         @click="resetUrlSearch()"
                         class="search-clear-btn"
@@ -63,7 +63,7 @@
             </div>
             <select x-model="urlStatus"
                     @change="urlPage = 1; loadUrls()"
-                    class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary">
+                    class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-accent">
                 <option value="">전체 상태</option>
                 <option value="pending">미처리</option>
                 <option value="processed">처리완료</option>
@@ -71,7 +71,7 @@
             </select>
             <select x-model="urlPlatform"
                     @change="urlPage = 1; loadUrls()"
-                    class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary">
+                    class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-accent">
                 <option value="">전체 플랫폼</option>
                 <option value="naver_blog">네이버 블로그</option>
                 <option value="tistory">티스토리</option>
@@ -93,7 +93,7 @@
         <div class="grid grid-cols-2 md:flex md:flex-wrap gap-2">
             <!-- URL 추가 -->
             <button @click="$dispatch('open-url-add-modal')"
-                    class="inline-flex items-center justify-center px-3 py-2 border-2 border-primary rounded-lg text-sm font-medium text-primary bg-white hover:bg-primary-lt transition-colors">
+                    class="inline-flex items-center justify-center px-3 py-2 border-2 border-accent rounded-lg text-sm font-medium text-accent bg-white hover:bg-accent-lt transition-colors">
                 <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                 </svg>
@@ -215,7 +215,7 @@
                         <td>
                             <div class="max-w-xs truncate">
                                 <a :href="url.url" target="_blank"
-                                   class="text-primary hover:underline"
+                                   class="text-accent hover:underline"
                                    x-text="url.domain"></a>
                             </div>
                         </td>
@@ -362,7 +362,7 @@
                 <div class="mobile-card-details" x-show="expandedUrlId === url.id" x-transition>
                     <div class="mobile-card-detail-row">
                         <span class="mobile-card-detail-label">도메인</span>
-                        <a :href="url.url" target="_blank" class="mobile-card-detail-value text-primary hover:underline truncate" x-text="url.domain"></a>
+                        <a :href="url.url" target="_blank" class="mobile-card-detail-value text-accent hover:underline truncate" x-text="url.domain"></a>
                     </div>
                     <div class="mobile-card-detail-row">
                         <span class="mobile-card-detail-label">플랫폼</span>
@@ -470,7 +470,7 @@ https://example.tistory.com
 https://blog.naver.com/example
 https://example.wordpress.com
 example.com (자동으로 https:// 추가됨)"
-                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary resize-none font-mono"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-accent resize-none font-mono"
                     ></textarea>
                     <div class="flex justify-between mt-1">
                         <p class="text-xs text-gray-500">줄바꿈으로 구분하여 여러 개 입력 가능</p>

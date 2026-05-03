@@ -12,7 +12,7 @@
             <p class="text-sm text-gray-500 mt-1">자동 생성된 콘텐츠를 확인하고 관리합니다</p>
         </div>
         <div class="flex items-center gap-4 text-sm text-gray-600">
-            <span>전체 <strong class="text-primary">{{ stats.total }}</strong></span>
+            <span>전체 <strong class="text-accent">{{ stats.total }}</strong></span>
             <span>콘텐츠 <strong class="text-green-600">{{ stats.with_content }}</strong></span>
             <span>이미지 <strong class="text-purple-600">{{ stats.with_image }}</strong></span>
             <span>발행 <strong class="text-orange-600">{{ stats.published }}</strong></span>
@@ -127,7 +127,7 @@
                                 발행
                             </span>
                             <span x-show="!item.is_published"
-                                  class="inline-block px-2 py-0.5 bg-primary-lt text-primary rounded-full text-xs">
+                                  class="inline-block px-2 py-0.5 bg-accent-lt text-accent rounded-full text-xs">
                                 생성
                             </span>
                         </td>

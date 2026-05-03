@@ -9,7 +9,7 @@
                     x-model="keywordSearch"
                     @keyup.enter="keywordPage = 1; loadKeywords()"
                     placeholder="키워드 검색..."
-                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-accent focus:border-primary"
                 >
                 <button
                     x-show="keywordSearch.length > 0"
@@ -106,7 +106,7 @@
             <!-- 키워드 추가 -->
             <button
                 @click="$dispatch('open-keyword-modal')"
-                class="inline-flex items-center justify-center px-3 py-2 border-2 border-primary rounded-lg text-sm font-medium text-primary bg-white hover:bg-primary-lt transition-colors">
+                class="inline-flex items-center justify-center px-3 py-2 border-2 border-accent rounded-lg text-sm font-medium text-accent bg-white hover:bg-accent-lt transition-colors">
                 <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                 </svg>
@@ -190,7 +190,7 @@
                                     @keyup.escape="cancelEditKeyword()"
                                     @blur="saveEditKeyword(kw.id)"
                                     x-ref="keywordEditInput"
-                                    class="w-full px-2 py-1 border border-primary rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                                    class="w-full px-2 py-1 border border-primary rounded text-sm focus:outline-none focus:ring-2 focus:ring-accent">
                             </template>
                         </td>
                         <td class="w-72">
@@ -397,7 +397,7 @@
                         x-model="keywordInput"
                         rows="8"
                         placeholder="키워드를 입력하세요. 한 줄에 하나씩 입력하면 여러 개를 한 번에 등록할 수 있습니다."
-                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary resize-none font-mono"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-accent resize-none font-mono"
                     ></textarea>
                     <div class="flex justify-between mt-1">
                         <p class="text-xs text-gray-500">줄바꿈으로 구분하여 여러 개 입력 가능</p>
@@ -476,7 +476,7 @@
                 </button>
             </div>
             <div class="px-6 py-4 space-y-4">
-                <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-primary transition-colors">
+                <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-accent transition-colors">
                     <input
                         type="file"
                         accept=".xlsx,.xls,.csv"

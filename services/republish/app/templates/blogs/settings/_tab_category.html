@@ -328,7 +328,7 @@ function categorySettingsApp() {
             <div class="flex gap-2">
                 <button type="button"
                         @click="selectAll()"
-                        class="px-3 py-1.5 text-xs font-medium text-primary bg-primary-lt hover:opacity-80 rounded-lg transition-colors">
+                        class="px-3 py-1.5 text-xs font-medium text-accent bg-accent-lt hover:opacity-80 rounded-lg transition-colors">
                     전체 선택
                 </button>
                 <button type="button"
@@ -404,7 +404,7 @@ function categorySettingsApp() {
                                        :checked="isAllSelectedInCategory(category.id)"
                                        :indeterminate="isSomeSelectedInCategory(category.id)"
                                        @change="toggleCategoryAll(category.id)"
-                                       class="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary">
+                                       class="w-4 h-4 text-accent border-gray-300 rounded focus:ring-accent">
                                 <span class="text-sm font-medium text-gray-600">전체 선택하기</span>
                             </label>
                         </div>
@@ -416,7 +416,7 @@ function categorySettingsApp() {
                                     <input type="checkbox"
                                            :checked="selectedIds.includes(subcat.id)"
                                            @change="toggleSubcategory(subcat.id)"
-                                           class="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary">
+                                           class="w-4 h-4 text-accent border-gray-300 rounded focus:ring-accent">
                                     <span class="text-sm text-gray-700" x-text="subcat.name"></span>
                                 </label>
                             </template>

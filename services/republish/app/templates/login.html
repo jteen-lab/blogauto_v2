@@ -18,14 +18,14 @@
             <div class="flex mb-6 border-b border-gray-200">
                 <button
                     @click="activeTab = 'login'"
-                    :class="activeTab === 'login' ? 'border-primary text-primary' : 'border-transparent text-gray-500'"
+                    :class="activeTab === 'login' ? 'border-accent text-accent' : 'border-transparent text-gray-500'"
                     class="flex-1 py-2 px-4 text-center border-b-2 font-medium text-sm transition-colors"
                 >
                     로그인
                 </button>
                 <button
                     @click="activeTab = 'register'"
-                    :class="activeTab === 'register' ? 'border-primary text-primary' : 'border-transparent text-gray-500'"
+                    :class="activeTab === 'register' ? 'border-accent text-accent' : 'border-transparent text-gray-500'"
                     class="flex-1 py-2 px-4 text-center border-b-2 font-medium text-sm transition-colors"
                 >
                     회원가입
@@ -48,7 +48,7 @@
                         required
                         autocomplete="email"
                         placeholder="your-email@example.com"
-                        class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent"
                     />
                 </div>
 
@@ -63,14 +63,14 @@
                         required
                         autocomplete="current-password"
                         placeholder="비밀번호를 입력하세요"
-                        class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent"
                     />
                 </div>
 
                 <button
                     type="submit"
                     :disabled="isLoading"
-                    class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white btn-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white btn-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                     <span x-show="!isLoading">로그인</span>
                     <span x-show="isLoading" class="flex items-center">
@@ -93,7 +93,7 @@
                         required
                         autocomplete="email"
                         placeholder="your-email@example.com"
-                        class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent"
                     />
                 </div>
 
@@ -107,7 +107,7 @@
                         type="text"
                         autocomplete="name"
                         placeholder="홍길동"
-                        class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent"
                     />
                 </div>
 
@@ -122,7 +122,7 @@
                         required
                         autocomplete="new-password"
                         placeholder="8자 이상, 대소문자+숫자 포함"
-                        class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent"
                     />
                     <div class="mt-1 text-xs text-gray-500">
                         비밀번호는 8자 이상이며 대문자, 소문자, 숫자를 포함해야 합니다.

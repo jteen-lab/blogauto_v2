@@ -3,9 +3,9 @@
 x-for="module in getModulesByType(activeModuleTab)" 루프 내에서 사용
 -->
 <label class="block cursor-pointer"
-       :class="isModuleSelected(module.id) ? 'ring-2 ring-primary rounded-xl' : ''">
+       :class="isModuleSelected(module.id) ? 'ring-2 ring-accent rounded-xl' : ''">
     <div class="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow overflow-hidden"
-         :class="isModuleSelected(module.id) ? 'border-primary' : ''">
+         :class="isModuleSelected(module.id) ? 'border-accent' : ''">
         <!-- 헤더: 타입별 배경색 + 체크박스 + 아이콘 + 이름 -->
         <div class="px-3 py-2 flex items-center gap-2"
              :class="getModuleColor(module.module_type.code)">
@@ -13,7 +13,7 @@ x-for="module in getModulesByType(activeModuleTab)" 루프 내에서 사용
                    :value="module.id"
                    x-model="formData.selectedModules"
                    @change="$nextTick(() => onModuleSelectionChange())"
-                   class="w-4 h-4 text-primary bg-white border-gray-300 rounded focus:ring-primary flex-shrink-0">
+                   class="w-4 h-4 text-accent bg-white border-gray-300 rounded focus:ring-accent flex-shrink-0">
             <span class="text-sm flex-shrink-0" x-text="getModuleIcon(module.module_type.code)"></span>
             <h4 class="font-semibold text-sm truncate flex-1" x-text="module.name"></h4>
         </div>

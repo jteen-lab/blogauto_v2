@@ -15,14 +15,14 @@
             <input type="radio"
                    x-model="formData.interval_mode"
                    value="manual"
-                   class="text-primary focus:ring-primary h-4 w-4">
+                   class="text-accent focus:ring-accent h-4 w-4">
             <span class="ml-2 text-sm text-gray-700">시간으로 설정</span>
         </label>
         <label class="flex items-center cursor-pointer">
             <input type="radio"
                    x-model="formData.interval_mode"
                    value="auto"
-                   class="text-primary focus:ring-primary h-4 w-4">
+                   class="text-accent focus:ring-accent h-4 w-4">
             <span class="ml-2 text-sm text-gray-700">횟수로 설정</span>
         </label>
     </div>
@@ -35,7 +35,7 @@
                    x-model.number="formData.manual_interval_minutes"
                    min="15"
                    max="1440"
-                   class="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                   class="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent"
                    @input="calculateFromInterval()">
             <span class="text-gray-500 text-sm">분</span>
             <span class="text-gray-400">/</span>
@@ -53,7 +53,7 @@
                    x-model.number="formData.auto_daily_count"
                    min="1"
                    max="100"
-                   class="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                   class="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent"
                    @input="calculateFromDailyCount()">
             <span class="text-gray-500 text-sm">회</span>
             <span class="text-gray-400">/</span>
@@ -81,7 +81,7 @@
         <div class="flex flex-wrap gap-2 mb-4">
             <button type="button"
                     @click="selectAllHours()"
-                    class="px-3 py-1 text-xs bg-primary-lt text-primary rounded-full hover:opacity-80">
+                    class="px-3 py-1 text-xs bg-accent-lt text-accent rounded-full hover:opacity-80">
                 전체 선택
             </button>
             <button type="button"
@@ -160,7 +160,7 @@
     <div>
         <label class="block text-sm font-medium text-gray-700 mb-2">생성 프롬프트</label>
         <textarea x-model="formData.generation_prompt"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent"
                   rows="5"
                   placeholder="블로그 글을 작성해주세요.&#10;- 전문적이고 정보성 있는 내용&#10;- SEO 최적화된 구조&#10;- 자연스러운 문체"></textarea>
         <p class="mt-1 text-xs text-gray-500">참조자료가 있으면 자동으로 프롬프트 앞에 삽입됩니다</p>

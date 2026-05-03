@@ -96,7 +96,7 @@
                 <p class="text-xs text-gray-500 mt-0.5">특정 문자열을 다른 문자열로 치환합니다</p>
             </div>
             <button @click="addTextRow()"
-                    class="px-3 py-1.5 text-xs font-medium text-primary bg-primary-lt border border-primary rounded hover:opacity-80">
+                    class="px-3 py-1.5 text-xs font-medium text-accent bg-accent-lt border border-accent rounded hover:opacity-80">
                 + 행 추가
             </button>
         </div>
@@ -118,7 +118,7 @@
                             <td class="px-3 py-2">
                                 <input type="text" x-model="row.find"
                                        placeholder="예: ●"
-                                       class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-primary focus:border-primary">
+                                       class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-accent focus:border-accent">
                             </td>
                             <td class="px-1 py-2 text-center text-gray-400">
                                 <svg class="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -128,7 +128,7 @@
                             <td class="px-3 py-2">
                                 <input type="text" x-model="row.replace"
                                        placeholder="예: check"
-                                       class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-primary focus:border-primary">
+                                       class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-accent focus:border-accent">
                             </td>
                             <td class="px-3 py-2 text-center">
                                 <button @click="removeTextRow(index)"
@@ -167,7 +167,7 @@
                 <p class="text-xs text-gray-500 mt-0.5">HTML 태그를 다른 태그로 변환합니다</p>
             </div>
             <button @click="addHtmlRow()"
-                    class="px-3 py-1.5 text-xs font-medium text-primary bg-primary-lt border border-primary rounded hover:opacity-80">
+                    class="px-3 py-1.5 text-xs font-medium text-accent bg-accent-lt border border-accent rounded hover:opacity-80">
                 + 행 추가
             </button>
         </div>
@@ -189,7 +189,7 @@
                             <td class="px-3 py-2">
                                 <input type="text" x-model="row.from"
                                        placeholder="예: h1"
-                                       class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-primary focus:border-primary">
+                                       class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-accent focus:border-accent">
                             </td>
                             <td class="px-1 py-2 text-center text-gray-400">
                                 <svg class="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -199,7 +199,7 @@
                             <td class="px-3 py-2">
                                 <input type="text" x-model="row.to"
                                        placeholder="예: h2"
-                                       class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-primary focus:border-primary">
+                                       class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-accent focus:border-accent">
                             </td>
                             <td class="px-3 py-2 text-center">
                                 <button @click="removeHtmlRow(index)"
@@ -254,7 +254,7 @@
                     기본 태그 추가
                 </button>
                 <button @click="addCssRow()"
-                        class="px-3 py-1.5 text-xs font-medium text-primary bg-primary-lt border border-primary rounded hover:opacity-80">
+                        class="px-3 py-1.5 text-xs font-medium text-accent bg-accent-lt border border-accent rounded hover:opacity-80">
                     + 행 추가
                 </button>
             </div>
@@ -277,7 +277,7 @@
                             <td class="px-3 py-2">
                                 <input type="text" x-model="row.tag"
                                        placeholder="예: h1"
-                                       class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-primary focus:border-primary">
+                                       class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-accent focus:border-accent">
                             </td>
                             <td class="px-1 py-2 text-center text-gray-400">
                                 <svg class="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -287,7 +287,7 @@
                             <td class="px-3 py-2">
                                 <input type="text" x-model="row.className"
                                        placeholder="예: title-main text-2xl font-bold"
-                                       class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-primary focus:border-primary">
+                                       class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-accent focus:border-accent">
                             </td>
                             <td class="px-3 py-2 text-center">
                                 <button @click="removeCssRow(index)"
@@ -342,7 +342,7 @@
                     <input type="text"
                            x-model="linkStyles.default_class"
                            placeholder="예: text-blue-600 hover:underline"
-                           class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary">
+                           class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-accent focus:border-accent">
                     <div class="mt-2 text-xs text-gray-400">
                         예시: <code class="bg-gray-200 px-1 rounded">link-default</code>, <code class="bg-gray-200 px-1 rounded">text-primary</code>
                     </div>
@@ -360,7 +360,7 @@
                     <input type="text"
                            x-model="linkStyles.button_class"
                            placeholder="예: button-link btn-primary"
-                           class="w-full px-3 py-2 text-sm border border-primary rounded-md focus:ring-1 focus:ring-primary focus:border-primary bg-white">
+                           class="w-full px-3 py-2 text-sm border border-primary rounded-md focus:ring-1 focus:ring-accent focus:border-accent bg-white">
                     <div class="mt-2 text-xs text-primary">
                         예시: <code class="bg-primary-lt px-1 rounded">button-link</code>, <code class="bg-primary-lt px-1 rounded">cta-button</code>
                     </div>
