@@ -1860,14 +1860,18 @@ class FlowScheduler:
                         
                         if await _use_celery("use_celery_generation", db):
                             from app.core.task_dispatcher import get_dispatcher, PRIORITY_NORMAL
+                            from dataclasses import asdict
                             dispatcher = get_dispatcher()
                             try:
+                                # GP StageParams를 dict로 직렬화하여 Celery 워커에 전달
+                                sp_dict = asdict(stage_params) if stage_params else None
                                 task_id = dispatcher.dispatch_generation(
                                     blog_id=blog.id,
                                     module_id=prompt_module.id,
                                     title_id=0,
                                     priority=PRIORITY_NORMAL,
                                     flow_id=flow.id,
+                                    stage_params_dict=sp_dict,
                                 )
                                 result = {"success": True, "message": f"Celery 큐 등록: {task_id}"}
                                 logger.info(
