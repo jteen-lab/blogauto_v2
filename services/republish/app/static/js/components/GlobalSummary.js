@@ -114,9 +114,10 @@ function globalSummary() {
             if (this.refreshInterval) { clearInterval(this.refreshInterval); this.refreshInterval = null; }
         },
         startLogAutoRefresh() {
-            // 10초마다 최신 로그 갱신
+            // 10초마다 로그 바 + 확장 패널 갱신
             this.logRefreshInterval = setInterval(() => {
                 this.loadDisplayLogs();
+                if (this.logPanelOpen) this.loadUnifiedLogs();
             }, 10000);
         },
 

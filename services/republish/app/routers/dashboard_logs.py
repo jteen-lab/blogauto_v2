@@ -63,8 +63,8 @@ async def get_unified_logs(
         query = select(AutorunLog).order_by(AutorunLog.created_at.desc())
         count_query = select(func.count(AutorunLog.id))
 
-        # activity 필터가 아닌 경우에만 Celery 큐 등록 메시지 제외
-        if log_type != "activity":
+        # 작업/생성 탭에서만 Celery 큐 등록 메시지 제외 (전체/활동 탭에서는 포함)
+        if log_type in ("action", "generation"):
             celery_filter = AutorunLog.message.notlike("%Celery 큐 등록%")
             query = query.where(celery_filter)
             count_query = count_query.where(celery_filter)
