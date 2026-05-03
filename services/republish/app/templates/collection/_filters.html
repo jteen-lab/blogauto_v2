@@ -9,7 +9,7 @@
                     x-model="filterSearch"
                     @keyup.enter="filterPage = 1; loadFilters()"
                     placeholder="필터 검색..."
-                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary"
                 >
                 <button
                     x-show="filterSearch.length > 0"
@@ -24,7 +24,7 @@
             <select
                 x-model="filterType"
                 @change="filterPage = 1; loadFilters()"
-                class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary">
                 <option value="">전체 타입</option>
                 <option value="keyword">키워드</option>
                 <option value="domain">도메인</option>
@@ -78,7 +78,7 @@
             <!-- 필터 추가 버튼 -->
             <button
                 @click="$dispatch('open-filter-modal')"
-                class="inline-flex items-center justify-center px-3 py-2 border-2 border-blue-600 rounded-lg text-sm font-medium text-blue-600 bg-white hover:bg-blue-50 transition-colors">
+                class="inline-flex items-center justify-center px-3 py-2 border-2 border-primary rounded-lg text-sm font-medium text-primary bg-white hover:bg-primary-lt transition-colors">
                 <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                 </svg>
@@ -147,7 +147,7 @@
                 </template>
                 <!-- 데이터 목록 -->
                 <template x-for="filter in filters" :key="filter.id">
-                    <tr :class="{'bg-blue-50': filter.is_system}">
+                    <tr :class="{'bg-primary-lt': filter.is_system}">
                         <td class="w-12">
                             <input type="checkbox" class="rounded border-gray-300"
                                 :value="filter.id"
@@ -185,7 +185,7 @@
                                     @keyup.escape="cancelEditFilter()"
                                     @blur="saveEditFilter(filter.id)"
                                     x-ref="filterEditInput"
-                                    class="w-full px-2 py-1 border border-blue-500 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    class="w-full px-2 py-1 border border-primary rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary">
                             </template>
                         </td>
                         <td class="w-40 text-center text-sm" x-text="filter.match_count || 0"></td>
@@ -237,7 +237,7 @@
         <!-- 카드 목록 -->
         <template x-for="filter in filters" :key="filter.id">
             <div class="mobile-card"
-                 :class="{'selected': selectedFilters.includes(filter.id), 'expanded': expandedFilterId === filter.id, 'bg-blue-50': filter.is_system}">
+                 :class="{'selected': selectedFilters.includes(filter.id), 'expanded': expandedFilterId === filter.id, 'bg-primary-lt': filter.is_system}">
                 <!-- 카드 헤더 (접힌 상태) -->
                 <div class="mobile-card-header" @click="expandedFilterId = expandedFilterId === filter.id ? null : filter.id">
                     <div class="mobile-card-checkbox" @click.stop>
@@ -288,7 +288,7 @@
                     </div>
                     <div class="mobile-card-detail-row" x-show="filter.is_system">
                         <span class="mobile-card-detail-label">종류</span>
-                        <span class="mobile-card-detail-value text-blue-600">시스템 필터</span>
+                        <span class="mobile-card-detail-value text-primary">시스템 필터</span>
                     </div>
                     <div class="mobile-card-actions" x-show="!filter.is_system">
                         <button @click="deleteFilter(filter.id)"
@@ -364,7 +364,7 @@
                         <label class="block text-sm font-medium text-gray-700 mb-1">필터 타입</label>
                         <select
                             x-model="filter_type"
-                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary">
                             <option value="keyword">키워드 차단</option>
                             <option value="domain">도메인 차단</option>
                         </select>
@@ -373,7 +373,7 @@
                         <label class="block text-sm font-medium text-gray-700 mb-1">적용 대상</label>
                         <select
                             x-model="target_type"
-                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary">
                             <option value="both">모두</option>
                             <option value="keyword">키워드만</option>
                             <option value="title">제목만</option>
@@ -386,7 +386,7 @@
                         x-model="filter_values"
                         rows="6"
                         :placeholder="filter_type === 'keyword' ? '차단할 키워드를 입력하세요. 한 줄에 하나씩 입력하면 여러 개를 한 번에 등록할 수 있습니다.' : '차단할 도메인을 입력하세요. 한 줄에 하나씩 입력하면 여러 개를 한 번에 등록할 수 있습니다.'"
-                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 resize-none font-mono"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary resize-none font-mono"
                     ></textarea>
                     <div class="flex justify-between mt-1">
                         <p class="text-xs text-gray-500">줄바꿈으로 구분하여 여러 개 입력 가능</p>
@@ -438,7 +438,7 @@
                         .finally(() => submitting = false);
                     "
                     :disabled="submitting || !filter_values.trim()"
-                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm transition-colors disabled:opacity-50">
+                    class="px-4 py-2 btn-primary text-white rounded-lg text-sm transition-colors disabled:opacity-50">
                     <span x-show="!submitting">추가</span>
                     <span x-show="submitting" class="flex items-center gap-1">
                         <span class="spinner"></span> 처리 중...

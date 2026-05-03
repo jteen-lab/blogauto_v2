@@ -19,7 +19,7 @@
                    x-model="formData.name"
                    required
                    maxlength="100"
-                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                    placeholder="플로우를 구분할 수 있는 이름을 입력하세요">
             <p class="mt-1 text-xs text-gray-500">
                 플로우를 구분할 수 있는 이름을 입력하세요
@@ -36,7 +36,7 @@
                       x-model="formData.description"
                       rows="3"
                       maxlength="500"
-                      class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                      class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
                       placeholder="플로우에 대한 설명을 입력하세요 (선택사항)"></textarea>
             <div class="mt-1 flex justify-between items-center">
                 <p class="text-xs text-gray-500">
@@ -66,12 +66,12 @@
                 <div class="flex border-b border-gray-200 overflow-x-auto">
                     <button type="button"
                             @click="activeModuleTab = 'prompt_generate'"
-                            :class="activeModuleTab === 'prompt_generate' ? 'bg-blue-50 text-blue-700 border-blue-500' : 'bg-white text-gray-500 hover:text-gray-700'"
+                            :class="activeModuleTab === 'prompt_generate' ? 'tab-active' : 'bg-white text-gray-500 hover:text-gray-700'"
                             class="flex-1 px-3 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap min-w-0">
                         📝✨ 프롬프트/생성
                         <span x-show="getSelectedCountByTypes(['prompt','generate']) > 0"
                               x-text="getSelectedCountByTypes(['prompt','generate'])"
-                              class="ml-1 px-1.5 py-0.5 text-xs bg-blue-500 text-white rounded-full"></span>
+                              class="ml-1 px-1.5 py-0.5 text-xs bg-primary text-white rounded-full"></span>
                     </button>
                     <button type="button"
                             @click="activeModuleTab = 'collect'"
@@ -80,7 +80,7 @@
                         수집
                         <span x-show="getSelectedCountByTypes(['collect']) > 0"
                               x-text="getSelectedCountByTypes(['collect'])"
-                              class="ml-1 px-1.5 py-0.5 text-xs bg-blue-500 text-white rounded-full"></span>
+                              class="ml-1 px-1.5 py-0.5 text-xs bg-primary text-white rounded-full"></span>
                     </button>
                     <button type="button"
                             @click="activeModuleTab = 'data'"
@@ -89,7 +89,7 @@
                         데이터
                         <span x-show="getSelectedCountByTypes(['data']) > 0"
                               x-text="getSelectedCountByTypes(['data'])"
-                              class="ml-1 px-1.5 py-0.5 text-xs bg-blue-500 text-white rounded-full"></span>
+                              class="ml-1 px-1.5 py-0.5 text-xs bg-primary text-white rounded-full"></span>
                     </button>
                     <button type="button"
                             @click="activeModuleTab = 'growth_profile'"
@@ -98,7 +98,7 @@
                         성장 프로파일
                         <span x-show="getSelectedCountByTypes(['growth_profile']) > 0"
                               x-text="getSelectedCountByTypes(['growth_profile'])"
-                              class="ml-1 px-1.5 py-0.5 text-xs bg-blue-500 text-white rounded-full"></span>
+                              class="ml-1 px-1.5 py-0.5 text-xs bg-primary text-white rounded-full"></span>
                     </button>
                 </div>
 
@@ -126,7 +126,7 @@
                 </div>
             </div>
 
-            <div x-show="formData.selectedModules.length > 0" class="mt-2 text-xs text-blue-600">
+            <div x-show="formData.selectedModules.length > 0" class="mt-2 text-xs text-primary">
                 <span x-text="formData.selectedModules.length"></span>개 모듈이 선택되었습니다
             </div>
         </div>
@@ -173,7 +173,7 @@
                 </div>
             </div>
 
-            <div x-show="formData.selectedBlogs.length > 0" class="mt-2 text-xs text-blue-600">
+            <div x-show="formData.selectedBlogs.length > 0" class="mt-2 text-xs text-primary">
                 <span x-text="formData.selectedBlogs.length"></span>개 블로그가 선택되었습니다
             </div>
         </div>
@@ -191,7 +191,7 @@
             <button type="submit"
                     :disabled="!isFormValid()"
                     class="flex-1 py-3 px-4 text-white rounded-lg font-medium transition-colors"
-                    :class="isFormValid() ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-400 cursor-not-allowed'">
+                    :class="isFormValid() ? 'btn-primary' : 'bg-gray-400 cursor-not-allowed'">
                 <span x-show="!saving">
                     <span x-text="isEditMode ? '수정' : '생성'"></span>
                 </span>
@@ -229,7 +229,7 @@
          :class="{
              'border-green-400 bg-green-50': message.type === 'success',
              'border-red-400 bg-red-50': message.type === 'error',
-             'border-blue-400 bg-blue-50': message.type === 'info'
+             'border-primary bg-primary-lt': message.type === 'info'
          }">
 
         <div class="flex items-start">
@@ -247,7 +247,7 @@
                     </svg>
                 </div>
                 <div x-show="message.type === 'info'"
-                     class="w-5 h-5 text-blue-400">
+                     class="w-5 h-5 text-primary">
                     <svg fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
                     </svg>
@@ -259,7 +259,7 @@
                    :class="{
                        'text-green-800': message.type === 'success',
                        'text-red-800': message.type === 'error',
-                       'text-blue-800': message.type === 'info'
+                       'text-primary': message.type === 'info'
                    }"
                    x-text="message.text"></p>
             </div>

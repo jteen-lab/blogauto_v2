@@ -3,9 +3,9 @@
 x-for="blog in blogs" 루프 내에서 사용
 -->
 <label class="block cursor-pointer"
-       :class="isBlogSelected(blog.id) ? 'ring-2 ring-blue-500 rounded-xl' : ''">
+       :class="isBlogSelected(blog.id) ? 'ring-2 ring-primary rounded-xl' : ''">
     <div class="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow overflow-hidden"
-         :class="isBlogSelected(blog.id) ? 'border-blue-500' : ''">
+         :class="isBlogSelected(blog.id) ? 'border-primary' : ''">
         <!-- 헤더: 플랫폼별 배경색 + 체크박스 + 아이콘 + 이름 -->
         <div class="px-3 py-2 flex items-center gap-2"
              :class="blog.platform === 'blogger' ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800'">
@@ -14,7 +14,7 @@ x-for="blog in blogs" 루프 내에서 사용
                    x-model="formData.selectedBlogs"
                    @change="$nextTick(() => onBlogSelectionChange())"
                    :disabled="isPromptLinkedBlog(blog.id)"
-                   class="w-4 h-4 text-blue-600 bg-white border-gray-300 rounded focus:ring-blue-500 flex-shrink-0"
+                   class="w-4 h-4 text-primary bg-white border-gray-300 rounded focus:ring-primary flex-shrink-0"
                    :class="isPromptLinkedBlog(blog.id) ? 'opacity-60' : ''">
             <span class="text-sm flex-shrink-0" x-text="blog.platform === 'blogger' ? '📙' : '🌐'"></span>
             <h4 class="font-semibold text-sm truncate" x-text="blog.name"></h4>

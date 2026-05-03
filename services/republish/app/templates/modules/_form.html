@@ -12,7 +12,7 @@ Alpine.js 데이터 바인딩 사용
             </label>
             <input type="text"
                    x-model="formData.name"
-                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                    placeholder="예: 재발행 모듈 A"
                    required>
             <p class="mt-1 text-xs text-gray-500">모듈을 구분할 수 있는 이름을 입력하세요</p>
@@ -48,7 +48,7 @@ Alpine.js 데이터 바인딩 사용
                         <input type="checkbox"
                                :checked="formData.source_naver_datalab"
                                disabled
-                               class="text-blue-600 focus:ring-blue-500 h-4 w-4 rounded pointer-events-none">
+                               class="text-primary focus:ring-primary h-4 w-4 rounded pointer-events-none">
                         <div class="ml-3">
                             <span class="text-sm font-medium text-gray-700">네이버 데이터랩</span>
                             <span x-show="!apiStatus.naver_datalab" class="block text-xs text-red-500">API 미등록</span>
@@ -64,7 +64,7 @@ Alpine.js 데이터 바인딩 사용
                         <input type="checkbox"
                                :checked="formData.source_naver_ads"
                                disabled
-                               class="text-blue-600 focus:ring-blue-500 h-4 w-4 rounded pointer-events-none">
+                               class="text-primary focus:ring-primary h-4 w-4 rounded pointer-events-none">
                         <div class="ml-3">
                             <span class="text-sm font-medium text-gray-700">네이버 검색광고</span>
                             <span x-show="!apiStatus.naver_ads" class="block text-xs text-red-500">API 미등록</span>
@@ -77,7 +77,7 @@ Alpine.js 데이터 바인딩 사용
                         <input type="checkbox"
                                :checked="formData.source_google_trends"
                                disabled
-                               class="text-blue-600 focus:ring-blue-500 h-4 w-4 rounded pointer-events-none">
+                               class="text-primary focus:ring-primary h-4 w-4 rounded pointer-events-none">
                         <div class="ml-3">
                             <span class="text-sm font-medium text-gray-700">구글 트렌드</span>
                             <span class="block text-xs text-green-600">API 키 불필요</span>
@@ -93,7 +93,7 @@ Alpine.js 데이터 바인딩 사용
                         <input type="checkbox"
                                :checked="formData.source_google_planner"
                                disabled
-                               class="text-blue-600 focus:ring-blue-500 h-4 w-4 rounded pointer-events-none">
+                               class="text-primary focus:ring-primary h-4 w-4 rounded pointer-events-none">
                         <div class="ml-3">
                             <span class="text-sm font-medium text-gray-700">구글 키워드 플래너</span>
                             <span x-show="!apiStatus.google_planner" class="block text-xs text-red-500">API 미등록</span>
@@ -109,11 +109,11 @@ Alpine.js 데이터 바인딩 사용
                         <input type="checkbox"
                                :checked="formData.source_naver_news"
                                disabled
-                               class="text-blue-600 focus:ring-blue-500 h-4 w-4 rounded pointer-events-none">
+                               class="text-primary focus:ring-primary h-4 w-4 rounded pointer-events-none">
                         <div class="ml-3">
                             <span class="text-sm font-medium text-gray-700">네이버 뉴스</span>
                             <span x-show="!apiStatus.naver_news" class="block text-xs text-red-500">API 미등록</span>
-                            <span x-show="apiStatus.naver_news" class="block text-xs text-blue-600">제목 수집</span>
+                            <span x-show="apiStatus.naver_news" class="block text-xs text-primary">제목 수집</span>
                         </div>
                     </div>
 
@@ -123,7 +123,7 @@ Alpine.js 데이터 바인딩 사용
                         <input type="checkbox"
                                :checked="formData.source_google_news"
                                disabled
-                               class="text-blue-600 focus:ring-blue-500 h-4 w-4 rounded pointer-events-none">
+                               class="text-primary focus:ring-primary h-4 w-4 rounded pointer-events-none">
                         <div class="ml-3">
                             <span class="text-sm font-medium text-gray-700">구글 뉴스</span>
                             <span class="block text-xs text-green-600">API 키 불필요 · 제목 수집</span>
@@ -135,7 +135,7 @@ Alpine.js 데이터 바인딩 사용
                     <svg class="w-4 h-4 inline-block mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
-                    API 등록은 <button type="button" onclick="openSettingsModal()" class="text-blue-600 hover:underline">설정</button>에서 할 수 있습니다.
+                    API 등록은 <button type="button" onclick="openSettingsModal()" class="text-primary hover:underline">설정</button>에서 할 수 있습니다.
                 </p>
             </div>
 
@@ -151,14 +151,14 @@ Alpine.js 데이터 바인딩 사용
                         <input type="radio"
                                x-model="formData.collect_schedule_mode"
                                value="fixed_time"
-                               class="text-blue-600 focus:ring-blue-500 h-4 w-4">
+                               class="text-primary focus:ring-primary h-4 w-4">
                         <span class="ml-2 text-sm text-gray-700">고정 시간</span>
                     </label>
                     <label class="flex items-center cursor-pointer">
                         <input type="radio"
                                x-model="formData.collect_schedule_mode"
                                value="interval"
-                               class="text-blue-600 focus:ring-blue-500 h-4 w-4">
+                               class="text-primary focus:ring-primary h-4 w-4">
                         <span class="ml-2 text-sm text-gray-700">일정 간격</span>
                     </label>
                 </div>
@@ -168,20 +168,20 @@ Alpine.js 데이터 바인딩 사용
                     <div class="flex items-center gap-2 mb-3">
                         <input type="time"
                                x-model="newFixedTime"
-                               class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                               class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                         <button type="button"
                                 @click="addFixedTime()"
-                                class="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                                class="px-3 py-2 bg-primary text-white rounded-lg hover:opacity-90 text-sm">
                             추가
                         </button>
                     </div>
                     <div class="flex flex-wrap gap-2">
                         <template x-for="time in formData.collect_fixed_times" :key="time">
-                            <span class="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+                            <span class="inline-flex items-center px-3 py-1 bg-primary-lt text-primary rounded-full text-sm">
                                 <span x-text="time"></span>
                                 <button type="button"
                                         @click="removeFixedTime(time)"
-                                        class="ml-2 text-blue-600 hover:text-blue-800">
+                                        class="ml-2 text-primary hover:opacity-80">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                                     </svg>
@@ -200,7 +200,7 @@ Alpine.js 데이터 바인딩 사용
                                x-model.number="formData.collect_interval_hours"
                                min="1"
                                max="24"
-                               class="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                               class="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                         <span class="text-gray-500 text-sm">시간마다</span>
                     </div>
                     <p class="mt-2 text-xs text-gray-500">활성 시간대 내에서 설정된 간격마다 수집이 실행됩니다</p>
@@ -218,21 +218,21 @@ Alpine.js 데이터 바인딩 사용
                         <input type="radio"
                                x-model="formData.collect_type"
                                value="both"
-                               class="text-blue-600 focus:ring-blue-500 h-4 w-4">
+                               class="text-primary focus:ring-primary h-4 w-4">
                         <span class="ml-2 text-sm text-gray-700">키워드 + 제목</span>
                     </label>
                     <label class="flex items-center cursor-pointer">
                         <input type="radio"
                                x-model="formData.collect_type"
                                value="keyword"
-                               class="text-blue-600 focus:ring-blue-500 h-4 w-4">
+                               class="text-primary focus:ring-primary h-4 w-4">
                         <span class="ml-2 text-sm text-gray-700">키워드만</span>
                     </label>
                     <label class="flex items-center cursor-pointer">
                         <input type="radio"
                                x-model="formData.collect_type"
                                value="title"
-                               class="text-blue-600 focus:ring-blue-500 h-4 w-4">
+                               class="text-primary focus:ring-primary h-4 w-4">
                         <span class="ml-2 text-sm text-gray-700">제목만</span>
                     </label>
                 </div>
@@ -248,13 +248,13 @@ Alpine.js 데이터 바인딩 사용
                     <label class="flex items-center cursor-pointer">
                         <input type="checkbox"
                                x-model="formData.enable_related_search"
-                               class="text-blue-600 focus:ring-blue-500 h-4 w-4 rounded">
+                               class="text-primary focus:ring-primary h-4 w-4 rounded">
                         <span class="ml-3 text-sm text-gray-700">연관 검색어 수집</span>
                     </label>
                     <label class="flex items-center cursor-pointer">
                         <input type="checkbox"
                                x-model="formData.enable_title_extraction"
-                               class="text-blue-600 focus:ring-blue-500 h-4 w-4 rounded">
+                               class="text-primary focus:ring-primary h-4 w-4 rounded">
                         <span class="ml-3 text-sm text-gray-700">제목 자동 추출</span>
                     </label>
                 </div>
@@ -271,7 +271,7 @@ Alpine.js 데이터 바인딩 사용
                     <label class="flex items-center cursor-pointer">
                         <input type="checkbox"
                                x-model="formData.enable_keyword_extraction"
-                               class="text-blue-600 focus:ring-blue-500 h-4 w-4 rounded">
+                               class="text-primary focus:ring-primary h-4 w-4 rounded">
                         <span class="ml-3 text-sm text-gray-700">제목에서 키워드 자동 추출</span>
                     </label>
 
@@ -281,7 +281,7 @@ Alpine.js 데이터 바인딩 사용
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-2">추출 방법</label>
                             <select x-model="formData.keyword_extraction_method"
-                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                                 <option value="all">통합 (모든 방법)</option>
                                 <option value="konlpy">형태소 분석 (명사 추출)</option>
                                 <option value="tfidf">TF-IDF 핵심 키워드</option>
@@ -303,7 +303,7 @@ Alpine.js 데이터 바인딩 사용
                                        x-model.number="formData.keyword_extraction_title_limit"
                                        min="10"
                                        max="500"
-                                       class="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                       class="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                                 <span class="text-gray-500 text-sm">개의 제목에서</span>
                             </div>
                         </div>
@@ -316,13 +316,13 @@ Alpine.js 데이터 바인딩 사용
                                        x-model.number="formData.keyword_extraction_limit"
                                        min="10"
                                        max="200"
-                                       class="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                       class="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                                 <span class="text-gray-500 text-sm">개 키워드 추출</span>
                             </div>
                         </div>
 
-                        <div class="p-3 bg-blue-50 rounded-lg">
-                            <p class="text-xs text-blue-700">
+                        <div class="p-3 bg-primary-lt rounded-lg">
+                            <p class="text-xs text-primary">
                                 📝 임시 제목에서 키워드를 자동으로 추출하여 키워드 탭에 저장합니다.<br>
                                 불용어 필터링이 자동 적용되며, 추출된 키워드는 source_type="extracted"로 구분됩니다.
                             </p>
@@ -343,7 +343,7 @@ Alpine.js 데이터 바인딩 사용
                          @click="formData.enable_normal_collect = !formData.enable_normal_collect">
                         <input type="checkbox"
                                :checked="formData.enable_normal_collect"
-                               class="text-blue-600 focus:ring-blue-500 h-4 w-4 rounded pointer-events-none">
+                               class="text-primary focus:ring-primary h-4 w-4 rounded pointer-events-none">
                         <span class="ml-3 text-sm font-medium text-gray-700">📋 일반 수집</span>
                         <span class="ml-2 text-xs text-gray-500">(API 검색 결과 기반)</span>
                     </div>
@@ -358,7 +358,7 @@ Alpine.js 데이터 바인딩 사용
                                            x-model.number="formData.keyword_collect_limit"
                                            min="10"
                                            max="1000"
-                                           class="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                           class="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                                     <span class="text-gray-500 text-sm">개</span>
                                 </div>
                             </div>
@@ -371,7 +371,7 @@ Alpine.js 데이터 바인딩 사용
                                            x-model.number="formData.title_collect_limit"
                                            min="10"
                                            max="1000"
-                                           class="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                           class="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                                     <span class="text-gray-500 text-sm">개</span>
                                 </div>
                             </div>
@@ -410,7 +410,7 @@ Alpine.js 데이터 바인딩 사용
                             <div class="flex flex-wrap gap-2">
                                 <span class="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">네이버 블로그</span>
                                 <span class="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full">티스토리</span>
-                                <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">워드프레스</span>
+                                <span class="px-2 py-1 bg-primary-lt text-primary text-xs rounded-full">워드프레스</span>
                                 <span class="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full">구글 블로거</span>
                             </div>
                         </div>
@@ -444,8 +444,8 @@ Alpine.js 데이터 바인딩 사용
                 </div>
 
                 <!-- 안내 메시지 -->
-                <div class="p-3 bg-blue-50 rounded-lg" x-show="!formData.enable_normal_collect && !formData.enable_bulk_collect">
-                    <p class="text-xs text-blue-700">
+                <div class="p-3 bg-primary-lt rounded-lg" x-show="!formData.enable_normal_collect && !formData.enable_bulk_collect">
+                    <p class="text-xs text-primary">
                         ℹ️ 최소 하나의 수집 유형을 선택해주세요.
                     </p>
                 </div>
@@ -459,7 +459,7 @@ Alpine.js 데이터 바인딩 사용
                     <div class="flex flex-wrap gap-2 mb-4">
                         <button type="button"
                                 @click="selectAllHours()"
-                                class="px-3 py-1 text-xs bg-blue-100 text-blue-800 rounded-full hover:bg-blue-200">
+                                class="px-3 py-1 text-xs bg-primary-lt text-primary rounded-full hover:opacity-80">
                             전체 선택
                         </button>
                         <button type="button"
@@ -509,12 +509,12 @@ Alpine.js 데이터 바인딩 사용
                     </div>
 
                     <!-- 활성 시간 요약 -->
-                    <div class="mt-4 p-3 bg-blue-50 rounded-lg">
+                    <div class="mt-4 p-3 bg-primary-lt rounded-lg">
                         <div class="flex items-center justify-between text-sm">
-                            <span class="text-blue-800 font-medium">
+                            <span class="text-primary font-medium">
                                 활성 시간: <span x-text="activeHoursCount"></span>시간/주
                             </span>
-                            <span class="text-blue-600" x-show="todayActiveHours > 0">
+                            <span class="text-primary" x-show="todayActiveHours > 0">
                                 오늘: <span x-text="todayActiveHours"></span>시간
                             </span>
                         </div>
@@ -550,13 +550,13 @@ Alpine.js 데이터 바인딩 사용
 
                     <!-- 옵션 2: 데이터 이동 스케줄 -->
                     <div class="p-4 rounded-lg border-2 cursor-pointer transition-all"
-                         :class="formData.execution_mode === 'schedule' ? 'bg-blue-50 border-blue-400' : 'bg-white border-gray-200 hover:border-gray-300'"
+                         :class="formData.execution_mode === 'schedule' ? 'bg-primary-lt border-primary' : 'bg-white border-gray-200 hover:border-gray-300'"
                          @click="formData.execution_mode = 'schedule'">
                         <label class="flex items-center cursor-pointer">
                             <input type="radio"
                                    x-model="formData.execution_mode"
                                    value="schedule"
-                                   class="w-4 h-4 text-blue-600 focus:ring-blue-500">
+                                   class="w-4 h-4 text-primary focus:ring-primary">
                             <span class="ml-2 text-sm font-medium text-gray-700">⏰ 데이터 이동 스케줄</span>
                         </label>
                         <p class="mt-1 ml-6 text-xs text-gray-500">설정된 스케줄에 따라 독립적으로 제목 이동을 수행합니다</p>
@@ -602,7 +602,7 @@ Alpine.js 데이터 바인딩 사용
             </div>
 
             <!-- 데이터 이동 스케줄 설정 (스케줄 모드 선택 시만 표시) -->
-            <div x-show="formData.execution_mode === 'schedule'" x-transition class="space-y-4 mb-6 pl-4 border-l-2 border-blue-200">
+            <div x-show="formData.execution_mode === 'schedule'" x-transition class="space-y-4 mb-6 pl-4 border-l-2 border-primary">
                 <h4 class="text-sm font-semibold text-gray-800 flex items-center gap-2">
                     ⏰ 데이터 이동 스케줄 설정
                 </h4>
@@ -613,14 +613,14 @@ Alpine.js 데이터 바인딩 사용
                         <input type="radio"
                                x-model="formData.data_schedule_mode"
                                value="fixed_time"
-                               class="text-blue-600 focus:ring-blue-500 h-4 w-4">
+                               class="text-primary focus:ring-primary h-4 w-4">
                         <span class="ml-2 text-sm text-gray-700">고정 시간</span>
                     </label>
                     <label class="flex items-center cursor-pointer">
                         <input type="radio"
                                x-model="formData.data_schedule_mode"
                                value="interval"
-                               class="text-blue-600 focus:ring-blue-500 h-4 w-4">
+                               class="text-primary focus:ring-primary h-4 w-4">
                         <span class="ml-2 text-sm text-gray-700">일정 간격</span>
                     </label>
                 </div>
@@ -630,20 +630,20 @@ Alpine.js 데이터 바인딩 사용
                     <div class="flex items-center gap-2 mb-3">
                         <input type="time"
                                x-model="newDataFixedTime"
-                               class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                               class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                         <button type="button"
                                 @click="addDataFixedTime()"
-                                class="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                                class="px-3 py-2 bg-primary text-white rounded-lg hover:opacity-90 text-sm">
                             추가
                         </button>
                     </div>
                     <div class="flex flex-wrap gap-2">
                         <template x-for="time in formData.data_fixed_times" :key="time">
-                            <span class="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+                            <span class="inline-flex items-center px-3 py-1 bg-primary-lt text-primary rounded-full text-sm">
                                 <span x-text="time"></span>
                                 <button type="button"
                                         @click="removeDataFixedTime(time)"
-                                        class="ml-2 text-blue-600 hover:text-blue-800">
+                                        class="ml-2 text-primary hover:opacity-80">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                                     </svg>
@@ -662,15 +662,15 @@ Alpine.js 데이터 바인딩 사용
                                x-model.number="formData.data_interval_hours"
                                min="1"
                                max="24"
-                               class="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                               class="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
                         <span class="text-gray-500 text-sm">시간마다</span>
                     </div>
                     <p class="mt-2 text-xs text-gray-500">설정된 간격마다 데이터 이동이 실행됩니다</p>
                 </div>
 
                 <!-- 안내 메시지 -->
-                <div class="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                    <p class="text-xs text-blue-800">
+                <div class="p-3 bg-primary-lt rounded-lg border border-primary">
+                    <p class="text-xs text-primary">
                         ℹ️ 스케줄 모드는 플로우에 수집 모듈이 없어도 독립적으로 동작합니다.
                     </p>
                 </div>
@@ -683,7 +683,7 @@ Alpine.js 데이터 바인딩 사용
                         <div class="flex flex-wrap gap-2 mb-4">
                             <button type="button"
                                     @click="selectAllHours()"
-                                    class="px-3 py-1 text-xs bg-blue-100 text-blue-800 rounded-full hover:bg-blue-200">
+                                    class="px-3 py-1 text-xs bg-primary-lt text-primary rounded-full hover:opacity-80">
                                 전체 선택
                             </button>
                             <button type="button"
@@ -733,12 +733,12 @@ Alpine.js 데이터 바인딩 사용
                         </div>
 
                         <!-- 활성 시간 요약 -->
-                        <div class="mt-4 p-3 bg-blue-50 rounded-lg">
+                        <div class="mt-4 p-3 bg-primary-lt rounded-lg">
                             <div class="flex items-center justify-between text-sm">
-                                <span class="text-blue-800 font-medium">
+                                <span class="text-primary font-medium">
                                     활성 시간: <span x-text="activeHoursCount"></span>시간/주
                                 </span>
-                                <span class="text-blue-600" x-show="todayActiveHours > 0">
+                                <span class="text-primary" x-show="todayActiveHours > 0">
                                     오늘: <span x-text="todayActiveHours"></span>시간
                                 </span>
                             </div>
@@ -892,7 +892,7 @@ Alpine.js 데이터 바인딩 사용
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-2">설정 정보 (JSON)</label>
                 <textarea x-model="settingsJson"
-                          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+                          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent font-mono text-sm"
                           rows="6"
                           placeholder='{"key": "value"}'>
                 </textarea>
@@ -904,7 +904,7 @@ Alpine.js 데이터 바인딩 사용
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-2">설명 (선택)</label>
             <textarea x-model="formData.description"
-                      class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                       rows="3"
                       placeholder="모듈에 대한 설명을 입력하세요...">
             </textarea>
@@ -921,7 +921,7 @@ Alpine.js 데이터 바인딩 사용
         <button type="button"
                 @click="submitForm()"
                 :disabled="loading"
-                class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                class="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed">
             <span x-show="!loading" x-text="isEdit ? '수정' : '생성'"></span>
             <span x-show="loading" class="flex items-center justify-center">
                 <svg class="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">

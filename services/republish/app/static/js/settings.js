@@ -124,6 +124,19 @@ function settingsApp() {
             {name: 'google', label: 'Google (Gemini)', rpm_key: 'ratelimit_google_rpm', tpm_key: 'ratelimit_google_tpm'},
         ],
 
+        // 테마 설정 상태
+        currentTheme: 'default',
+        customPrimary: '#0F6E56',
+        customAccent: '#0C447C',
+        themePresets: [
+            { name: 'default', label: '기본', primary: '#0F6E56', accent: '#0C447C' },
+            { name: 'blue', label: '블루', primary: '#1d4ed8', accent: '#6366f1' },
+            { name: 'purple', label: '퍼플', primary: '#7c3aed', accent: '#ec4899' },
+            { name: 'dark', label: '다크', primary: '#1f2937', accent: '#3b82f6' },
+            { name: 'orange', label: '오렌지', primary: '#ea580c', accent: '#d97706' },
+            { name: 'teal', label: '틸', primary: '#0d9488', accent: '#06b6d4' },
+        ],
+
         // 구글 키워드 플래너 상태
         showGoogleAdsDeveloperToken: false,
         showGoogleAdsClientId: false,
@@ -178,6 +191,9 @@ function settingsApp() {
          * 초기화
          */
         init() {
+            // 테마 설정 로드 (모달 열기 전에도 적용)
+            this.loadThemeSettings();
+
             // 모달 열림 이벤트 리스닝
             this.$el.addEventListener('settings-modal-open', () => {
                 this.loadSettings();
@@ -714,6 +730,78 @@ function settingsApp() {
             } finally {
                 this.testingNaverDatalab = false;
             }
+        },
+
+        /**
+         * 테마 설정 로드 (localStorage에서 복원)
+         */
+        loadThemeSettings() {
+            try {
+                const saved = JSON.parse(localStorage.getItem('blogauto_theme'));
+                if (saved) {
+                    this.currentTheme = saved.name || 'custom';
+                    this.customPrimary = saved.primary || '#0F6E56';
+                    this.customAccent = saved.accent || '#0C447C';
+                }
+            } catch(e) {
+                // localStorage 접근 실패 시 기본값 유지
+            }
+        },
+
+        /**
+         * 테마 프리셋 선택
+         */
+        selectThemePreset(preset) {
+            this.currentTheme = preset.name;
+            this.customPrimary = preset.primary;
+            this.customAccent = preset.accent;
+            this._applyTheme(preset.primary, preset.accent, preset.name);
+        },
+
+        /**
+         * 커스텀 테마 적용
+         */
+        applyCustomTheme() {
+            this.currentTheme = 'custom';
+            this._applyTheme(this.customPrimary, this.customAccent, 'custom');
+        },
+
+        /**
+         * 테마 CSS 변수 설정 및 localStorage 저장
+         */
+        _applyTheme(primary, accent, name) {
+            const root = document.documentElement.style;
+            root.setProperty('--color-primary', primary);
+            root.setProperty('--color-primary-light', primary + '15');
+            root.setProperty('--color-primary-dark', this._darken(primary));
+            root.setProperty('--color-accent', accent);
+            root.setProperty('--color-accent-light', accent + '15');
+            root.setProperty('--color-accent-dark', this._darken(accent));
+            // RGB 변환 (rgba() 사용 시 필요)
+            const pRgb = this._hexToRgb(primary);
+            if (pRgb) root.setProperty('--color-primary-rgb', `${pRgb.r}, ${pRgb.g}, ${pRgb.b}`);
+            const aRgb = this._hexToRgb(accent);
+            if (aRgb) root.setProperty('--color-accent-rgb', `${aRgb.r}, ${aRgb.g}, ${aRgb.b}`);
+            // localStorage에 저장
+            localStorage.setItem('blogauto_theme', JSON.stringify({ name, primary, accent }));
+        },
+
+        /**
+         * HEX 컬러를 20% 어둡게 변환
+         */
+        _darken(hex) {
+            const r = parseInt(hex.slice(1,3), 16);
+            const g = parseInt(hex.slice(3,5), 16);
+            const b = parseInt(hex.slice(5,7), 16);
+            return '#' + [r,g,b].map(c => Math.max(0, Math.round(c * 0.8)).toString(16).padStart(2,'0')).join('');
+        },
+
+        /**
+         * HEX 컬러를 RGB 객체로 변환
+         */
+        _hexToRgb(hex) {
+            const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return m ? { r: parseInt(m[1],16), g: parseInt(m[2],16), b: parseInt(m[3],16) } : null;
         },
 
         /**

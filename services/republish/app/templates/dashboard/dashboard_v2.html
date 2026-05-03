@@ -2,12 +2,10 @@
 {% block title %}대시보드{% endblock %}
 
 {% block extra_css %}
-<!-- 대시보드 V2: Sora 폰트 + ApexCharts CDN -->
-<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<!-- 대시보드 V2: ApexCharts CDN (Sora 폰트는 base.html에서 전역 로드) -->
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 <style>
     /* 대시보드 전용 스타일 - Ghost/Vercel 스타일 컴팩트 레이아웃 */
-    .dashboard-page { font-family: 'Sora', sans-serif; }
     .kpi-card {
         background: white;
         border: 0.5px solid #e5e7eb;
@@ -19,7 +17,8 @@
         font-size: 0.75rem; font-weight: 500; color: #6b7280;
         text-transform: uppercase; letter-spacing: 0.05em;
     }
-    .kpi-delta-up { color: #0F6E56; }
+    /* CSS 변수 기반 테마 색상 */
+    .kpi-delta-up { color: var(--color-primary); }
     .kpi-delta-down { color: #993C1D; }
     .section-card {
         background: white;
@@ -41,7 +40,7 @@
 
         <!-- 헤더: 타이틀 + 설정 버튼 + 최종 갱신 시각 -->
         <div class="flex items-center justify-between mb-2">
-            <h1 class="text-xl font-bold text-gray-900" style="font-family:'Sora'">Dashboard</h1>
+            <h1 class="text-xl font-bold text-gray-900">Dashboard</h1>
             <div class="flex items-center gap-3">
                 <button onclick="openSettingsModal()"
                         class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
@@ -95,8 +94,8 @@
                             <button @click.stop="togglePinTab(tab.key)"
                                     class="px-3 py-1.5 text-xs rounded-lg border transition-all"
                                     :class="isTabPinned(tab.key)
-                                        ? 'border-[#0F6E56] bg-[#0F6E56]/10 text-[#0F6E56] font-medium'
-                                        : 'border-gray-200 text-gray-500 hover:border-gray-300'">
+                                        ? 'border-primary bg-primary-lt text-primary font-medium'
+                                        : 'border-gray-200 text-gray-500 hover:border-gray-300'"
                                 <span x-text="tab.label"></span>
                                 <span class="ml-1 font-bold" x-text="stats[tab.key] || 0"></span>
                             </button>
@@ -130,8 +129,8 @@
                 <div class="mt-3">
                     <div class="section-title">콘텐츠 상태</div>
                     <div class="flex h-2 rounded-full overflow-hidden gap-0.5">
-                        <div :style="`width:${statusPct.generated}%`" class="bg-[#0F6E56] rounded-sm"></div>
-                        <div :style="`width:${statusPct.published}%`" class="bg-[#0C447C] rounded-sm"></div>
+                        <div :style="`width:${statusPct.generated}%; background-color: var(--color-primary)`" class="rounded-sm"></div>
+                        <div :style="`width:${statusPct.published}%; background-color: var(--color-accent)`" class="rounded-sm"></div>
                         <div :style="`width:${statusPct.failed}%`" class="bg-[#993C1D] rounded-sm"></div>
                     </div>
                     <div class="flex justify-between mt-1.5 text-[10px] text-gray-500">
@@ -165,7 +164,7 @@
                             <span class="truncate" x-text="blog.blog_name"></span>
                         </span>
                         <div class="flex-1 h-1.5 bg-gray-100 rounded">
-                            <div class="h-full bg-[#0C447C] rounded transition-all"
+                            <div class="h-full rounded transition-all" style="background-color: var(--color-accent)"
                                  :style="`width:${blog.pct}%`"></div>
                         </div>
                         <span class="w-8 font-medium text-gray-700" x-text="blog.count"></span>
@@ -183,7 +182,7 @@
             <div class="lg:col-span-3 section-card">
                 <div class="flex items-center justify-between">
                     <div class="section-title">최근 생성 콘텐츠</div>
-                    <a href="/generation/history" class="text-[10px] text-[#0C447C] hover:underline">전체보기 &rarr;</a>
+                    <a href="/generation/history" class="text-[10px] text-accent hover:underline">전체보기 &rarr;</a>
                 </div>
                 <div class="space-y-0">
                     <template x-for="item in contents" :key="item.crawled_post_id">

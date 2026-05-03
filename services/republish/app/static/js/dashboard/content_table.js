@@ -5,16 +5,16 @@ const _origDash_ct = compactDashboard;
 compactDashboard = function () {
     const app = _origDash_ct();
 
-    /** 콘텐츠 상태별 뱃지 객체 반환 { text, class } */
+    /** 콘텐츠 상태별 뱃지 객체 반환 { text, cls, style } - CSS 변수 기반 테마 색상 */
     app.getStatusBadge = function (status) {
         var badges = {
-            published: { text: '발행', cls: 'bg-[#0C447C] text-white' },
-            ready:     { text: '생성', cls: 'bg-[#0F6E56] text-white' },
-            draft:     { text: '생성', cls: 'bg-[#0F6E56] text-white' },
-            failed:    { text: '실패', cls: 'bg-[#993C1D] text-white' },
-            publishing:{ text: '발행중', cls: 'bg-blue-400 text-white' },
+            published: { text: '발행', cls: 'text-white', style: 'background-color: var(--color-accent)' },
+            ready:     { text: '생성', cls: 'text-white', style: 'background-color: var(--color-primary)' },
+            draft:     { text: '생성', cls: 'text-white', style: 'background-color: var(--color-primary)' },
+            failed:    { text: '실패', cls: 'bg-[#993C1D] text-white', style: '' },
+            publishing:{ text: '발행중', cls: 'bg-blue-400 text-white', style: '' },
         };
-        return badges[status] || { text: status || '대기', cls: 'bg-gray-200 text-gray-600' };
+        return badges[status] || { text: status || '대기', cls: 'bg-gray-200 text-gray-600', style: '' };
     };
 
     /** 타임스탬프를 MM.DD 형식으로 변환 */

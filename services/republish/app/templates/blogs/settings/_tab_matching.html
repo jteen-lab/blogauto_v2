@@ -1,14 +1,14 @@
 <!-- 유사도 매칭 설정 탭 (Phase 3) -->
 <div class="space-y-6">
     <!-- 설명 배너 -->
-    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+    <div class="bg-primary-lt border border-primary rounded-lg p-4">
         <div class="flex items-start gap-3">
-            <svg class="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-5 h-5 text-primary mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
             <div>
-                <h4 class="text-sm font-medium text-blue-800">유사도 매칭이란?</h4>
-                <p class="text-xs text-blue-600 mt-1">
+                <h4 class="text-sm font-medium text-primary">유사도 매칭이란?</h4>
+                <p class="text-xs text-primary mt-1">
                     크롤링된 블로그 포스트와 메인 제목(정식 제목) 간의 유사도를 계산하여 자동으로 매칭합니다.
                     매칭된 포스트는 재발행 시 해당 제목의 콘텐츠로 사용됩니다.
                 </p>
@@ -52,7 +52,7 @@
                 </div>
                 <button type="button"
                         @click="matchingSettings.allow_duplicate_similar_posts = !matchingSettings.allow_duplicate_similar_posts; saveMatchingSettings()"
-                        :class="matchingSettings.allow_duplicate_similar_posts ? 'bg-blue-600' : 'bg-gray-300'"
+                        :class="matchingSettings.allow_duplicate_similar_posts ? 'bg-primary' : 'bg-gray-300'"
                         class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out">
                     <span :class="matchingSettings.allow_duplicate_similar_posts ? 'translate-x-5' : 'translate-x-0'"
                           class="inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out mt-0.5 ml-0.5"></span>
@@ -64,7 +64,7 @@
         <div class="mb-6">
             <div class="flex items-center justify-between mb-2">
                 <label class="text-sm font-medium text-gray-700">매칭 임계값</label>
-                <span class="text-sm font-semibold text-blue-600" x-text="matchingSettings.matching_threshold + '%'"></span>
+                <span class="text-sm font-semibold text-primary" x-text="matchingSettings.matching_threshold + '%'"></span>
             </div>
             <input type="range"
                    x-model="matchingSettings.matching_threshold"
@@ -92,7 +92,7 @@
             <button type="button"
                     @click="runMatching()"
                     :disabled="matchingInProgress"
-                    class="flex-1 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                    class="flex-1 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white btn-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                 <svg x-show="!matchingInProgress" class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                 </svg>
@@ -105,7 +105,7 @@
             <button type="button"
                     @click="refreshCrawl()"
                     :disabled="crawlInProgress"
-                    class="flex-1 inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                    class="flex-1 inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                 <svg x-show="!crawlInProgress" class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                 </svg>

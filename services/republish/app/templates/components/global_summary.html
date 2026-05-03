@@ -24,7 +24,7 @@
                     <template x-for="wk in [{key:'generation',label:'생성'},{key:'publish',label:'발행'},{key:'utility',label:'유틸'}]" :key="wk.key">
                         <div class="flex items-center gap-1.5 rounded-xl px-3 py-2 whitespace-nowrap shadow-sm flex-shrink-0 transition-colors duration-300"
                              :class="{
-                                 'bg-blue-100 border border-blue-300': workerStatus?.workers?.[wk.key]?.status === 'online' && workerStatus?.workers?.[wk.key]?.active_tasks > 0,
+                                 'bg-primary-lt border border-primary': workerStatus?.workers?.[wk.key]?.status === 'online' && workerStatus?.workers?.[wk.key]?.active_tasks > 0,
                                  'bg-green-50 border border-green-200': workerStatus?.workers?.[wk.key]?.status === 'online' && (workerStatus?.workers?.[wk.key]?.active_tasks || 0) === 0,
                                  'bg-red-50 border border-red-200': workerStatus?.workers?.[wk.key]?.status === 'offline',
                                  'bg-gray-100': !workerStatus?.workers?.[wk.key] || workerStatus?.workers?.[wk.key]?.status === 'unknown'
@@ -62,7 +62,7 @@
                     <template x-for="wk in [{key:'generation',label:'생성'},{key:'publish',label:'발행'},{key:'utility',label:'유틸'}]" :key="wk.key">
                         <div class="flex items-center justify-between gap-2 rounded-lg px-3 py-2 shadow-sm transition-colors duration-300"
                              :class="{
-                                 'bg-blue-100 border border-blue-300': workerStatus?.workers?.[wk.key]?.status === 'online' && workerStatus?.workers?.[wk.key]?.active_tasks > 0,
+                                 'bg-primary-lt border border-primary': workerStatus?.workers?.[wk.key]?.status === 'online' && workerStatus?.workers?.[wk.key]?.active_tasks > 0,
                                  'bg-green-50 border border-green-200': workerStatus?.workers?.[wk.key]?.status === 'online' && (workerStatus?.workers?.[wk.key]?.active_tasks || 0) === 0,
                                  'bg-red-50 border border-red-200': workerStatus?.workers?.[wk.key]?.status === 'offline',
                                  'bg-gray-100': !workerStatus?.workers?.[wk.key] || workerStatus?.workers?.[wk.key]?.status === 'unknown'

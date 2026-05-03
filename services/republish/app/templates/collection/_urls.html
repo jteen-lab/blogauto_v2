@@ -1,7 +1,7 @@
 <!-- URL 수집 탭 -->
 <div>
     <!-- 통계 카드 -->
-    <div class="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200">
+    <div class="p-4 bg-gradient-to-r from-primary-lt to-primary-lt border-b border-gray-200">
         <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div class="bg-white p-3 rounded-lg shadow-sm border">
                 <div class="text-xs text-gray-500">전체 URL</div>
@@ -9,7 +9,7 @@
             </div>
             <div class="bg-white p-3 rounded-lg shadow-sm border">
                 <div class="text-xs text-gray-500">미처리 (대기)</div>
-                <div class="text-xl font-bold text-blue-600" x-text="stats.urls?.pending || 0"></div>
+                <div class="text-xl font-bold text-primary" x-text="stats.urls?.pending || 0"></div>
             </div>
             <div class="bg-white p-3 rounded-lg shadow-sm border">
                 <div class="text-xs text-gray-500">처리 완료</div>
@@ -51,7 +51,7 @@
                        x-model="urlSearch"
                        @keyup.enter="urlPage = 1; loadUrls()"
                        placeholder="도메인/키워드 검색..."
-                       class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary">
                 <button x-show="urlSearch.length > 0"
                         @click="resetUrlSearch()"
                         class="search-clear-btn"
@@ -63,7 +63,7 @@
             </div>
             <select x-model="urlStatus"
                     @change="urlPage = 1; loadUrls()"
-                    class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                    class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary">
                 <option value="">전체 상태</option>
                 <option value="pending">미처리</option>
                 <option value="processed">처리완료</option>
@@ -71,7 +71,7 @@
             </select>
             <select x-model="urlPlatform"
                     @change="urlPage = 1; loadUrls()"
-                    class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                    class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary">
                 <option value="">전체 플랫폼</option>
                 <option value="naver_blog">네이버 블로그</option>
                 <option value="tistory">티스토리</option>
@@ -93,7 +93,7 @@
         <div class="grid grid-cols-2 md:flex md:flex-wrap gap-2">
             <!-- URL 추가 -->
             <button @click="$dispatch('open-url-add-modal')"
-                    class="inline-flex items-center justify-center px-3 py-2 border-2 border-blue-600 rounded-lg text-sm font-medium text-blue-600 bg-white hover:bg-blue-50 transition-colors">
+                    class="inline-flex items-center justify-center px-3 py-2 border-2 border-primary rounded-lg text-sm font-medium text-primary bg-white hover:bg-primary-lt transition-colors">
                 <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                 </svg>
@@ -215,7 +215,7 @@
                         <td>
                             <div class="max-w-xs truncate">
                                 <a :href="url.url" target="_blank"
-                                   class="text-blue-600 hover:underline"
+                                   class="text-primary hover:underline"
                                    x-text="url.domain"></a>
                             </div>
                         </td>
@@ -362,7 +362,7 @@
                 <div class="mobile-card-details" x-show="expandedUrlId === url.id" x-transition>
                     <div class="mobile-card-detail-row">
                         <span class="mobile-card-detail-label">도메인</span>
-                        <a :href="url.url" target="_blank" class="mobile-card-detail-value text-blue-600 hover:underline truncate" x-text="url.domain"></a>
+                        <a :href="url.url" target="_blank" class="mobile-card-detail-value text-primary hover:underline truncate" x-text="url.domain"></a>
                     </div>
                     <div class="mobile-card-detail-row">
                         <span class="mobile-card-detail-label">플랫폼</span>
@@ -470,7 +470,7 @@ https://example.tistory.com
 https://blog.naver.com/example
 https://example.wordpress.com
 example.com (자동으로 https:// 추가됨)"
-                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 resize-none font-mono"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary resize-none font-mono"
                     ></textarea>
                     <div class="flex justify-between mt-1">
                         <p class="text-xs text-gray-500">줄바꿈으로 구분하여 여러 개 입력 가능</p>
@@ -478,9 +478,9 @@ example.com (자동으로 https:// 추가됨)"
                     </div>
                 </div>
                 <!-- 안내 -->
-                <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                    <p class="text-xs text-blue-700 font-medium mb-1">📋 플랫폼 자동 감지</p>
-                    <ul class="text-xs text-blue-600 space-y-0.5">
+                <div class="bg-primary-lt border border-primary rounded-lg p-3">
+                    <p class="text-xs text-primary font-medium mb-1">📋 플랫폼 자동 감지</p>
+                    <ul class="text-xs text-primary space-y-0.5">
                         <li>• <strong>tistory.com</strong> → 티스토리</li>
                         <li>• <strong>blog.naver.com</strong> → 네이버 블로그</li>
                         <li>• <strong>wordpress.com</strong> 또는 도메인에 wp 포함 → 워드프레스</li>
@@ -530,7 +530,7 @@ example.com (자동으로 https:// 추가됨)"
                         .finally(() => submitting = false);
                     "
                     :disabled="submitting || !urlInput.trim()"
-                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm transition-colors disabled:opacity-50">
+                    class="px-4 py-2 btn-primary text-white rounded-lg text-sm transition-colors disabled:opacity-50">
                     <span x-show="!submitting">추가</span>
                     <span x-show="submitting" class="flex items-center gap-1">
                         <span class="spinner"></span> 처리 중...

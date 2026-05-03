@@ -1,5 +1,10 @@
 /** main_charts.js - 시계열 트렌드 + 시간대별 차트 렌더링 */
 
+// CSS 변수에서 테마 색상 읽기 (폴백값 포함)
+const _rootStyle = getComputedStyle(document.documentElement);
+const primaryColor = _rootStyle.getPropertyValue('--color-primary').trim() || '#0F6E56';
+const accentColor = _rootStyle.getPropertyValue('--color-accent').trim() || '#0C447C';
+
 // compactDashboard 확장: ApexCharts 기반 트렌드/시간대 차트
 const _origDash_charts = compactDashboard;
 compactDashboard = function () {
@@ -23,7 +28,7 @@ compactDashboard = function () {
                 type: 'area',
                 height: 220,
                 toolbar: { show: false },
-                fontFamily: 'Sora, sans-serif',
+                fontFamily: 'inherit',
             },
             series: [
                 { name: '생성', data: this.trends.generated || [] },
@@ -40,7 +45,7 @@ compactDashboard = function () {
             yaxis: {
                 labels: { style: { fontSize: '10px', colors: '#9ca3af' } },
             },
-            colors: ['#0F6E56', '#0C447C', '#6366f1'],
+            colors: [primaryColor, accentColor, '#6366f1'],
             stroke: { width: 2, curve: 'smooth' },
             fill: {
                 type: 'gradient',
@@ -77,7 +82,7 @@ compactDashboard = function () {
                 type: 'bar',
                 height: 280,
                 toolbar: { show: false },
-                fontFamily: 'Sora, sans-serif',
+                fontFamily: 'inherit',
             },
             series: [{ name: '생성', data: this.hourly.counts || [] }],
             xaxis: {
@@ -91,7 +96,7 @@ compactDashboard = function () {
             yaxis: {
                 labels: { style: { fontSize: '10px', colors: '#9ca3af' } },
             },
-            colors: ['#0C447C'],
+            colors: [accentColor],
             plotOptions: {
                 bar: { borderRadius: 3, columnWidth: '60%' },
             },

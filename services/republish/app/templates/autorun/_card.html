@@ -12,7 +12,7 @@
             <input type="checkbox"
                    :checked="isSelected(flow.id)"
                    @change="toggleSelect(flow.id)"
-                   class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0">
+                   class="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary flex-shrink-0">
 
             <span x-text="flow.status === 'active' ? '🟢' : '🟡'" class="text-sm flex-shrink-0"></span>
             <h4 class="font-semibold truncate" x-text="flow.name"></h4>

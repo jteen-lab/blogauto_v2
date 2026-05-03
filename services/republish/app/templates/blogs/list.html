@@ -106,7 +106,7 @@
         <!-- PC 버튼 (md 이상에서만 표시) -->
         <div class="hidden md:block">
             <button @click="openCreateSheet()"
-                    class="inline-flex items-center px-4 py-2 border-2 border-blue-600 rounded-md text-sm font-bold text-blue-600 hover:bg-blue-50 focus:outline-none transition-colors">
+                    class="inline-flex items-center px-4 py-2 border-2 border-primary rounded-md text-sm font-bold text-primary hover:bg-primary-lt focus:outline-none transition-colors">
                 <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                     <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
                 </svg>
@@ -117,7 +117,7 @@
 
     <!-- 모바일 플로팅 버튼 (md 미만에서만 표시) -->
     <button @click="openCreateSheet()"
-            class="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-white border-2 border-blue-600 text-blue-600 hover:bg-blue-50 rounded-2xl shadow-lg flex items-center justify-center text-2xl font-bold z-40 transition-colors">
+            class="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-white border-2 border-primary text-primary hover:bg-primary-lt rounded-2xl shadow-lg flex items-center justify-center text-2xl font-bold z-40 transition-colors">
         +
     </button>
 
@@ -131,7 +131,7 @@
         <h3 class="text-lg font-medium text-gray-900 mb-2">등록된 블로그가 없습니다</h3>
         <p class="text-sm text-gray-500 mb-6">새 블로그를 등록하여 자동 발행을 시작하세요</p>
         <button @click="openCreateSheet()"
-                class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
+                class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white btn-primary">
             <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                 <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
             </svg>
@@ -144,7 +144,7 @@
         <!-- WordPress 섹션 -->
         <div class="blog-section" x-show="getBlogsByPlatform('wordpress').length > 0">
             <div class="section-header">
-                <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                <div class="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
                     <span class="text-white font-medium text-xs">WP</span>
                 </div>
                 <h3 class="section-title">WordPress</h3>
@@ -180,14 +180,14 @@
             <div class="flex border-b border-gray-200">
                 <button type="button"
                         @click="activeTab = 'wordpress'"
-                        :class="activeTab === 'wordpress' ? 'bg-blue-50 text-blue-700 border-blue-500' : 'bg-white text-gray-500 hover:text-gray-700'"
+                        :class="activeTab === 'wordpress' ? 'tab-active' : 'bg-white text-gray-500 hover:text-gray-700'"
                         class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap">
                     WordPress
                     <span class="ml-1 text-xs" x-text="'(' + getBlogsByPlatform('wordpress').length + ')'"></span>
                 </button>
                 <button type="button"
                         @click="activeTab = 'blogger'"
-                        :class="activeTab === 'blogger' ? 'bg-blue-50 text-blue-700 border-blue-500' : 'bg-white text-gray-500 hover:text-gray-700'"
+                        :class="activeTab === 'blogger' ? 'tab-active' : 'bg-white text-gray-500 hover:text-gray-700'"
                         class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap">
                     Google Blogger
                     <span class="ml-1 text-xs" x-text="'(' + getBlogsByPlatform('blogger').length + ')'"></span>
@@ -269,7 +269,7 @@
                             @click="form.platform = 'wordpress'"
                             :class="form.platform === 'wordpress' ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-500' : 'border-gray-200 hover:border-blue-300'"
                             class="flex flex-col items-center p-4 border-2 rounded-xl transition-all duration-200">
-                        <div class="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center mb-2">
+                        <div class="w-12 h-12 bg-primary rounded-full flex items-center justify-center mb-2">
                             <span class="text-white font-bold text-lg">WP</span>
                         </div>
                         <span class="font-medium text-gray-900">WordPress</span>
@@ -295,7 +295,7 @@
                     <input type="text" required
                            x-model="form.name"
                            autocomplete="off"
-                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary"
                            placeholder="내 블로그">
                 </div>
 
@@ -304,28 +304,28 @@
                     <input type="url" required
                            x-model="form.url"
                            autocomplete="off"
-                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary"
                            placeholder="https://myblog.example.com">
                 </div>
 
                 <!-- WordPress 필드 -->
                 <template x-if="form.platform === 'wordpress'">
                     <div class="space-y-4 border-t pt-4">
-                        <div class="bg-blue-50 border border-blue-200 rounded-md p-3">
-                            <p class="text-sm text-blue-700">WordPress Application Password가 필요합니다</p>
+                        <div class="bg-primary-lt border border-primary rounded-md p-3">
+                            <p class="text-sm text-primary">WordPress Application Password가 필요합니다</p>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">사용자명 *</label>
                             <input type="text" x-model="form.api_key"
                                    autocomplete="new-password"
-                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary"
                                    placeholder="WordPress 사용자명">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Application Password *</label>
                             <input type="password" x-model="form.api_secret"
                                    autocomplete="new-password"
-                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary"
                                    placeholder="xxxx xxxx xxxx xxxx">
                         </div>
                     </div>
@@ -341,14 +341,14 @@
                             <label class="block text-sm font-medium text-gray-700">API 키 *</label>
                             <input type="text" x-model="form.api_key"
                                    autocomplete="new-password"
-                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary"
                                    placeholder="Google API 키">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">OAuth 토큰 *</label>
                             <textarea x-model="form.oauth_token" rows="2"
                                       autocomplete="new-password"
-                                      class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                      class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary"
                                       placeholder="OAuth 2.0 Access Token"></textarea>
                         </div>
                     </div>
@@ -364,7 +364,7 @@
                         </button>
                         <button type="submit"
                                 :disabled="loading"
-                                class="flex-1 py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50">
+                                class="flex-1 py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white btn-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50">
                             <span x-show="!loading">등록</span>
                             <span x-show="loading">등록 중...</span>
                         </button>
@@ -419,7 +419,7 @@
                 <div class="grid grid-cols-2 gap-3">
                     <div :class="form.platform === 'wordpress' ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-500' : 'border-gray-200 opacity-50'"
                          class="flex flex-col items-center p-4 border-2 rounded-xl">
-                        <div class="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center mb-2">
+                        <div class="w-12 h-12 bg-primary rounded-full flex items-center justify-center mb-2">
                             <span class="text-white font-bold text-lg">WP</span>
                         </div>
                         <span class="font-medium text-gray-900">WordPress</span>
@@ -441,7 +441,7 @@
                     <label class="block text-sm font-medium text-gray-700">블로그 이름 *</label>
                     <input type="text" required
                            x-model="form.name"
-                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary"
                            placeholder="내 블로그">
                 </div>
 
@@ -449,21 +449,21 @@
                     <label class="block text-sm font-medium text-gray-700">블로그 URL *</label>
                     <input type="url" required
                            x-model="form.url"
-                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary"
                            placeholder="https://myblog.example.com">
                 </div>
 
                 <!-- WordPress 필드 -->
                 <template x-if="form.platform === 'wordpress'">
                     <div class="space-y-4 border-t pt-4">
-                        <div class="bg-blue-50 border border-blue-200 rounded-md p-3">
-                            <p class="text-sm text-blue-700">변경이 필요한 경우에만 입력하세요</p>
+                        <div class="bg-primary-lt border border-primary rounded-md p-3">
+                            <p class="text-sm text-primary">변경이 필요한 경우에만 입력하세요</p>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">사용자명</label>
                             <div class="relative">
                                 <input :type="showApiKey ? 'text' : 'password'" x-model="form.api_key"
-                                       class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 pr-10"
+                                       class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary pr-10"
                                        :placeholder="hasExistingApiKey ? '••••••••' : '변경 시에만 입력'">
                                 <button type="button" @click="showApiKey = !showApiKey"
                                         class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600">
@@ -481,7 +481,7 @@
                             <label class="block text-sm font-medium text-gray-700">Application Password</label>
                             <div class="relative">
                                 <input :type="showApiSecret ? 'text' : 'password'" x-model="form.api_secret"
-                                       class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 pr-10"
+                                       class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary pr-10"
                                        :placeholder="hasExistingApiSecret ? '••••••••' : '변경 시에만 입력'">
                                 <button type="button" @click="showApiSecret = !showApiSecret"
                                         class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600">
@@ -508,7 +508,7 @@
                             <label class="block text-sm font-medium text-gray-700">API 키</label>
                             <div class="relative">
                                 <input :type="showApiKey ? 'text' : 'password'" x-model="form.api_key"
-                                       class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 pr-10"
+                                       class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary pr-10"
                                        :placeholder="hasExistingApiKey ? '••••••••' : '변경 시에만 입력'">
                                 <button type="button" @click="showApiKey = !showApiKey"
                                         class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600">
@@ -527,7 +527,7 @@
                             <div class="relative">
                                 <textarea x-model="form.oauth_token" rows="2"
                                           :style="!showOauthToken && form.oauth_token ? '-webkit-text-security: disc; text-security: disc;' : ''"
-                                          class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 pr-10"
+                                          class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary pr-10"
                                           :placeholder="hasExistingOauthToken ? '기존 값이 있습니다' : '변경 시에만 입력'"></textarea>
                                 <button type="button" @click="showOauthToken = !showOauthToken"
                                         class="absolute top-3 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600">
@@ -554,7 +554,7 @@
                         </button>
                         <button type="submit"
                                 :disabled="loading"
-                                class="flex-1 py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50">
+                                class="flex-1 py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white btn-primary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50">
                             <span x-show="!loading">수정</span>
                             <span x-show="loading">수정 중...</span>
                         </button>
@@ -610,43 +610,43 @@
             <div class="flex overflow-x-auto">
                 <button type="button"
                         @click="activeTab = 'image'"
-                        :class="activeTab === 'image' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                        :class="activeTab === 'image' ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
                         class="flex-1 py-3 px-1 text-center border-b-2 font-medium text-sm transition-colors whitespace-nowrap">
                     이미지
                 </button>
                 <button type="button"
                         @click="activeTab = 'category'"
-                        :class="activeTab === 'category' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                        :class="activeTab === 'category' ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
                         class="flex-1 py-3 px-1 text-center border-b-2 font-medium text-sm transition-colors whitespace-nowrap">
                     카테고리
                 </button>
                 <button type="button"
                         @click="activeTab = 'replace'"
-                        :class="activeTab === 'replace' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                        :class="activeTab === 'replace' ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
                         class="flex-1 py-3 px-1 text-center border-b-2 font-medium text-sm transition-colors whitespace-nowrap">
                     치환자
                 </button>
                 <button type="button"
                         @click="activeTab = 'style'"
-                        :class="activeTab === 'style' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                        :class="activeTab === 'style' ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
                         class="flex-1 py-3 px-1 text-center border-b-2 font-medium text-sm transition-colors whitespace-nowrap">
                     스타일
                 </button>
                 <button type="button"
                         @click="activeTab = 'ai'"
-                        :class="activeTab === 'ai' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                        :class="activeTab === 'ai' ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
                         class="flex-1 py-3 px-1 text-center border-b-2 font-medium text-sm transition-colors whitespace-nowrap">
                     AI
                 </button>
                 <button type="button"
                         @click="activeTab = 'seo'"
-                        :class="activeTab === 'seo' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                        :class="activeTab === 'seo' ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
                         class="flex-1 py-3 px-1 text-center border-b-2 font-medium text-sm transition-colors whitespace-nowrap">
                     SEO
                 </button>
                 <button type="button"
                         @click="activeTab = 'matching'"
-                        :class="activeTab === 'matching' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                        :class="activeTab === 'matching' ? 'border-primary text-primary' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
                         class="flex-1 py-3 px-1 text-center border-b-2 font-medium text-sm transition-colors whitespace-nowrap">
                     매칭
                 </button>

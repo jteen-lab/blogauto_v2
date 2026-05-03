@@ -163,7 +163,9 @@ function compactDashboard() {
                 const el = document.getElementById(`spark-${kpi.key}`);
                 if (!el) return;
                 if (this._sparkCharts[kpi.key]) this._sparkCharts[kpi.key].destroy();
-                const color = kpi.key === 'success_rate' ? '#993C1D' : '#0F6E56';
+                // CSS 변수 기반 테마 색상 (success_rate는 경고색 유지)
+                const _cs = getComputedStyle(document.documentElement);
+                const color = kpi.key === 'success_rate' ? '#993C1D' : (_cs.getPropertyValue('--color-primary').trim() || '#0F6E56');
                 this._sparkCharts[kpi.key] = new ApexCharts(el, {
                     chart: { type: 'line', sparkline: { enabled: true }, height: 30 },
                     series: [{ data: kpi.spark }],

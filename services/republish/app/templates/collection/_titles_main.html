@@ -18,7 +18,7 @@
         <div class="mt-3 flex flex-wrap gap-3 text-xs">
             <div class="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg">
                 <span class="text-gray-600">독립포스트 선택:</span>
-                <span class="font-bold" :class="selectedMainTitles.length === 1 ? 'text-blue-600' : 'text-gray-400'"
+                <span class="font-bold" :class="selectedMainTitles.length === 1 ? 'text-primary' : 'text-gray-400'"
                       x-text="selectedMainTitles.length + '개'"></span>
             </div>
             <div class="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg">
@@ -33,14 +33,14 @@
     </div>
 
     <!-- Phase 2-2: 블로그 선택 및 매칭 현황 -->
-    <div class="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100">
+    <div class="p-4 bg-gradient-to-r from-primary-lt to-primary-lt border-b border-primary">
         <div class="flex flex-col md:flex-row md:items-center gap-4">
             <!-- 블로그 선택 -->
             <div class="flex items-center gap-2 flex-1">
                 <label class="text-sm font-medium text-gray-700 flex-shrink-0">블로그:</label>
                 <select x-model="selectedBlogId"
                         @change="loadMatchingPairs()"
-                        class="flex-1 md:max-w-xs px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                        class="flex-1 md:max-w-xs px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary">
                     <option value="">블로그 선택 (전체 보기)</option>
                     <template x-for="blog in availableBlogs" :key="blog.id">
                         <option :value="blog.id" x-text="blog.name + ' (' + blog.platform + ')'"></option>
@@ -63,9 +63,9 @@
                 </div>
                 <div class="w-px h-4 bg-gray-300"></div>
                 <div class="flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                    <span class="w-2 h-2 rounded-full bg-primary"></span>
                     <span class="text-xs text-gray-500">독립:</span>
-                    <span class="font-bold text-blue-600" x-text="matchingSummary?.unmatched || 0"></span>
+                    <span class="font-bold text-primary" x-text="matchingSummary?.unmatched || 0"></span>
                 </div>
             </div>
         </div>
@@ -84,7 +84,7 @@
             </button>
             <button @click="matchingFilter = 'unmatched'; mainTitlePage = 1; loadMainTitles()"
                     class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
-                    :class="matchingFilter === 'unmatched' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'">
+                    :class="matchingFilter === 'unmatched' ? 'btn-primary' : 'bg-white text-gray-600 hover:bg-gray-100'">
                 독립포스트
             </button>
         </div>
@@ -99,7 +99,7 @@
                     x-model="mainTitleSearch"
                     @keyup.enter="mainTitlePage = 1; matchingFilter === 'all' ? loadMainTitlesWithCrawled() : loadMainTitles()"
                     placeholder="제목 검색..."
-                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary"
                 >
                 <button
                     x-show="mainTitleSearch.length > 0"
@@ -114,7 +114,7 @@
             <select
                 x-model="mainTitleViewMode"
                 @change="mainTitlePage = 1; matchingFilter === 'all' ? loadMainTitlesWithCrawled() : loadMainTitles()"
-                class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary">
                 <option value="all">전체 보기</option>
                 <option value="group">그룹별 보기</option>
             </select>
@@ -147,7 +147,7 @@
             <button
                 x-show="selectedMainTitles.length >= 2"
                 @click="manualGroupTitles()"
-                class="inline-flex items-center justify-center px-3 py-2 border-2 border-blue-500 rounded-lg text-sm font-medium text-blue-700 bg-white hover:bg-blue-50 transition-colors">
+                class="inline-flex items-center justify-center px-3 py-2 border-2 border-primary rounded-lg text-sm font-medium text-primary bg-white hover:bg-primary-lt transition-colors">
                 <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14v6m-3-3h6M6 10h2a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v2a2 2 0 002 2zm10 0h2a2 2 0 002-2V6a2 2 0 00-2-2h-2a2 2 0 00-2 2v2a2 2 0 002 2zM6 20h2a2 2 0 002-2v-2a2 2 0 00-2-2H6a2 2 0 00-2 2v2a2 2 0 002 2z"/>
                 </svg>
@@ -248,7 +248,7 @@
                         </template>
                         <!-- 메인 타이틀 (한 행에 표시) -->
                         <template x-for="title in mainTitles" :key="title.id">
-                            <tr :class="{'bg-blue-50': selectedMainTitles.includes(title.id)}">
+                            <tr :class="{'bg-primary-lt': selectedMainTitles.includes(title.id)}">
                                 <td class="w-12">
                                     <input type="checkbox" class="rounded border-gray-300"
                                         :value="title.id"
@@ -260,7 +260,7 @@
                                             <!-- 활성 그룹 (2개 이상 멤버): 폴더 아이콘 클릭 가능 -->
                                             <template x-if="title.group_member_count >= 2">
                                                 <button @click="openGroupDetailModal(title.group_id)"
-                                                        class="flex items-center gap-1 text-blue-600 hover:text-blue-800 cursor-pointer"
+                                                        class="flex items-center gap-1 text-primary hover:opacity-80 cursor-pointer"
                                                         :title="'그룹 보기 (' + title.group_member_count + '개)'">
                                                     <span class="text-lg">📁</span>
                                                     <span class="text-xs text-gray-500" x-text="'(' + title.group_member_count + ')'"></span>
@@ -282,7 +282,7 @@
                                                 <!-- 제목 (콘텐츠 있으면 클릭하여 모달로 미리보기) -->
                                                 <template x-if="title.matched_crawled_post.has_content">
                                                     <button @click="viewGeneratedContent(title.matched_crawled_post.id)"
-                                                            class="truncate max-w-sm text-blue-600 hover:text-blue-800 hover:underline text-left">
+                                                            class="truncate max-w-sm text-primary hover:opacity-80 hover:underline text-left">
                                                         <span x-text="title.matched_crawled_post.title"></span>
                                                     </button>
                                                 </template>
@@ -293,7 +293,7 @@
                                                       x-text="(title.matched_crawled_post.match_score || 100).toFixed(2) + '%'"></span>
                                                 <template x-if="title.matched_crawled_post.url">
                                                     <a :href="title.matched_crawled_post.url" target="_blank"
-                                                       class="text-blue-500 hover:text-blue-700">
+                                                       class="text-primary hover:opacity-80">
                                                         <svg class="w-3.5 h-3.5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
                                                         </svg>
@@ -322,7 +322,7 @@
                                         </span>
                                     </template>
                                     <template x-if="!title.category_path && title.category_name">
-                                        <span class="text-sm text-blue-600" x-text="title.category_name"></span>
+                                        <span class="text-sm text-primary" x-text="title.category_name"></span>
                                     </template>
                                     <template x-if="!title.category_path && !title.category_name">
                                         <span class="text-gray-400 text-xs">미분류</span>
@@ -331,7 +331,7 @@
                                 <td class="text-center text-sm text-gray-500" x-text="formatDate(title.created_at)"></td>
                                 <td class="text-center whitespace-nowrap">
                                     <span :class="{
-                                        'bg-blue-100 text-blue-800': getMatchingStatusText(title) === '독립포스트',
+                                        'bg-primary-lt text-primary': getMatchingStatusText(title) === '독립포스트',
                                         'bg-green-100 text-green-800': getMatchingStatusText(title) === '매칭',
                                         'bg-yellow-100 text-yellow-800': ['발행대기', '생성됨'].includes(getMatchingStatusText(title)),
                                         'bg-purple-100 text-purple-800': getMatchingStatusText(title) === '발행완료'
@@ -341,7 +341,7 @@
                                 <td class="text-center">
                                     <button
                                         @click="openMainTitleEditModal(title)"
-                                        class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                        class="text-primary hover:opacity-80 text-sm font-medium">
                                         수정
                                     </button>
                                 </td>
@@ -365,7 +365,7 @@
                                 </td>
                                 <td class="text-center">
                                     <a x-show="post.url" :href="post.url" target="_blank"
-                                       class="text-blue-600 hover:text-blue-800 text-sm">
+                                       class="text-primary hover:opacity-80 text-sm">
                                         <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
                                         </svg>
@@ -415,7 +415,7 @@
                                     <!-- 활성 그룹: 폴더 아이콘 -->
                                     <template x-if="title.group_member_count >= 2">
                                         <button @click.stop="openGroupDetailModal(title.group_id)"
-                                                class="text-blue-600 hover:text-blue-800"
+                                                class="text-primary hover:opacity-80"
                                                 :title="'그룹 보기 (' + title.group_member_count + '개)'">
                                             <span class="text-lg">📁</span>
                                         </button>
@@ -424,12 +424,12 @@
                                 </div>
                                 <div class="mobile-card-subtitle">
                                     <span :class="{
-                                        'text-blue-600': getMatchingStatusText(title) === '독립포스트',
+                                        'text-primary': getMatchingStatusText(title) === '독립포스트',
                                         'text-green-600': getMatchingStatusText(title) === '매칭',
                                         'text-yellow-600': ['발행대기', '생성됨'].includes(getMatchingStatusText(title)),
                                         'text-purple-600': getMatchingStatusText(title) === '발행완료'
                                     }" x-text="getMatchingStatusText(title)"></span>
-                                    <span x-show="title.group_member_count >= 2" class="text-blue-500" x-text="'그룹(' + title.group_member_count + ')'"></span>
+                                    <span x-show="title.group_member_count >= 2" class="text-primary" x-text="'그룹(' + title.group_member_count + ')'"></span>
                                 </div>
                                 <!-- 매칭된 크롤링 포스트 표시 (모바일) -->
                                 <template x-if="title.matched_crawled_post">
@@ -472,12 +472,12 @@
                                 <div class="border-t border-gray-100 pt-2 mt-1 space-y-2">
                                     <div class="mobile-card-row">
                                         <span class="mobile-card-label">생성글</span>
-                                        <span class="mobile-card-value text-blue-600 truncate" x-text="title.matched_crawled_post.title"></span>
+                                        <span class="mobile-card-value text-primary truncate" x-text="title.matched_crawled_post.title"></span>
                                     </div>
                                     <div class="flex flex-wrap gap-2">
                                         <template x-if="title.matched_crawled_post.has_content">
                                             <button @click="viewGeneratedContent(title.matched_crawled_post.id)"
-                                                    class="text-xs bg-blue-500 text-white px-3 py-1.5 rounded hover:bg-blue-600">
+                                                    class="text-xs bg-primary text-white px-3 py-1.5 rounded hover:opacity-90">
                                                 생성글 보기
                                             </button>
                                         </template>
@@ -555,7 +555,7 @@
                         <div class="flex items-center gap-3">
                             <span x-text="expandedGroupIds.includes(group.id) ? '▼' : '▶'" class="text-gray-400 text-sm"></span>
                             <span class="font-medium" x-text="group.representative_title || group.name"></span>
-                            <span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs"
+                            <span class="bg-primary-lt text-primary px-2 py-0.5 rounded text-xs"
                                   x-text="(group.member_count || 0) + '개'"></span>
                         </div>
                         <div class="flex items-center gap-4 text-sm text-gray-500">
@@ -591,7 +591,7 @@
                                             <td class="w-32 p-3 text-center">
                                                 <button x-show="!title.is_group_representative"
                                                         @click="setAsRepresentative(group.id, title.id)"
-                                                        class="text-xs text-blue-500 hover:underline">
+                                                        class="text-xs text-primary hover:underline">
                                                     대표로 설정
                                                 </button>
                                                 <span x-show="title.is_group_representative" class="text-xs text-amber-700 font-medium">대표 제목</span>
@@ -720,7 +720,7 @@
                             .finally(() => submitting = false);
                         "
                         :disabled="submitting"
-                        class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm disabled:opacity-50">
+                        class="px-4 py-2 btn-primary text-white rounded-lg text-sm disabled:opacity-50">
                         <span x-show="!submitting">저장</span>
                         <span x-show="submitting">저장 중...</span>
                     </button>
@@ -861,7 +861,7 @@
                                 <td class="px-4 py-3 text-center">
                                     <span :class="{
                                         'bg-green-100 text-green-800': title.status === 'available',
-                                        'bg-blue-100 text-blue-800': title.status === 'matched',
+                                        'bg-primary-lt text-primary': title.status === 'matched',
                                         'bg-gray-100 text-gray-800': title.status === 'used',
                                         'bg-yellow-100 text-yellow-800': title.status === 'archived'
                                     }" class="px-2 py-0.5 rounded text-xs" x-text="getMainTitleStatusText(title.status)"></span>
@@ -870,7 +870,7 @@
                                     <div class="flex items-center justify-center gap-2">
                                         <button x-show="!title.is_group_representative"
                                                 @click="setRepresentativeAndRefresh(group.id, title.id)"
-                                                class="text-xs text-blue-500 hover:underline">
+                                                class="text-xs text-primary hover:underline">
                                             대표로
                                         </button>
                                         <button x-show="!title.is_group_representative"
@@ -906,7 +906,7 @@
                                               class="text-xs text-amber-600 font-medium px-1.5 py-0.5 bg-amber-100 rounded flex-shrink-0">대표</span>
                                         <span :class="{
                                             'bg-green-100 text-green-800': title.status === 'available',
-                                            'bg-blue-100 text-blue-800': title.status === 'matched',
+                                            'bg-primary-lt text-primary': title.status === 'matched',
                                             'bg-gray-100 text-gray-800': title.status === 'used',
                                             'bg-yellow-100 text-yellow-800': title.status === 'archived'
                                         }" class="px-2 py-0.5 rounded text-xs" x-text="getMainTitleStatusText(title.status)"></span>
@@ -938,7 +938,7 @@
                                     </div>
                                     <div class="flex gap-2" x-show="!title.is_group_representative">
                                         <button @click.stop="setRepresentativeAndRefresh(group.id, title.id)"
-                                                class="px-3 py-1.5 text-xs text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors">
+                                                class="px-3 py-1.5 text-xs text-white bg-primary hover:opacity-90 rounded-lg transition-colors">
                                             대표로
                                         </button>
                                         <button @click.stop="removeFromGroupAndRefresh(group.id, title.id)"

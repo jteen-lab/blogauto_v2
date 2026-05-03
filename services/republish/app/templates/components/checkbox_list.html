@@ -38,7 +38,7 @@ CheckboxList 컴포넌트 - 다중 선택 체크박스 목록
     {% if show_search %}
     <div class="relative">
       <input type="text"
-             class="search-input w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+             class="search-input w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
              placeholder="검색...">
       <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
         <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -51,7 +51,7 @@ CheckboxList 컴포넌트 - 다중 선택 체크박스 목록
     {% if show_select_all %}
     <div class="flex items-center justify-between">
       <label class="flex items-center gap-2 cursor-pointer">
-        <input type="checkbox" class="select-all-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
+        <input type="checkbox" class="select-all-checkbox w-4 h-4 text-primary bg-gray-100 border-gray-300 rounded focus:ring-primary">
         <span class="text-sm font-medium text-gray-700">전체 선택</span>
       </label>
       <button type="button" class="clear-selection-btn text-sm text-gray-500 hover:text-gray-700">
@@ -73,7 +73,7 @@ CheckboxList 컴포넌트 - 다중 선택 체크박스 목록
         <input type="checkbox"
                name="{{ field_name }}"
                value="{{ item.id }}"
-               class="item-checkbox w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 mr-3"
+               class="item-checkbox w-4 h-4 text-primary bg-gray-100 border-gray-300 rounded focus:ring-primary mr-3"
                {% if item.checked %}checked{% endif %}>
 
         <div class="flex-1 min-w-0">
@@ -83,7 +83,7 @@ CheckboxList 컴포넌트 - 다중 선택 체크박스 목록
             {% endif %}
             <span class="font-medium text-gray-900 truncate">{{ item.name }}</span>
             {% if item.badge %}
-            <span class="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">{{ item.badge }}</span>
+            <span class="px-2 py-1 text-xs bg-primary-lt text-primary rounded-full">{{ item.badge }}</span>
             {% endif %}
           </div>
 

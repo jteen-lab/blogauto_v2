@@ -42,17 +42,17 @@
             <!-- 탭 네비게이션 -->
             <div class="flex border-b border-gray-200 mb-6">
                 <button @click="activeTab = 'account'"
-                        :class="activeTab === 'account' ? 'border-blue-500 text-blue-600 bg-blue-50' : 'border-transparent text-gray-500 hover:text-gray-700'"
+                        :class="activeTab === 'account' ? 'tab-active' : 'border-transparent text-gray-500 hover:text-gray-700'"
                         class="flex-1 py-3 px-4 text-sm font-medium border-b-2 transition-colors">
                     계정
                 </button>
                 <button @click="activeTab = 'ai'"
-                        :class="activeTab === 'ai' ? 'border-blue-500 text-blue-600 bg-blue-50' : 'border-transparent text-gray-500 hover:text-gray-700'"
+                        :class="activeTab === 'ai' ? 'tab-active' : 'border-transparent text-gray-500 hover:text-gray-700'"
                         class="flex-1 py-3 px-4 text-sm font-medium border-b-2 transition-colors">
                     AI 서비스
                 </button>
                 <button @click="activeTab = 'api'"
-                        :class="activeTab === 'api' ? 'border-blue-500 text-blue-600 bg-blue-50' : 'border-transparent text-gray-500 hover:text-gray-700'"
+                        :class="activeTab === 'api' ? 'tab-active' : 'border-transparent text-gray-500 hover:text-gray-700'"
                         class="flex-1 py-3 px-4 text-sm font-medium border-b-2 transition-colors">
                     API 설정
                 </button>
@@ -60,6 +60,11 @@
                         class="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
                         :class="activeTab === 'system' ? 'bg-orange-100 text-orange-700' : 'text-gray-500 hover:text-gray-700'">
                     시스템 설정
+                </button>
+                <button @click="activeTab = 'theme'" type="button"
+                        class="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
+                        :class="activeTab === 'theme' ? 'bg-emerald-100 text-emerald-700' : 'text-gray-500 hover:text-gray-700'">
+                    테마
                 </button>
             </div>
 
@@ -97,8 +102,8 @@
             <div x-show="!loading && activeTab === 'ai'" x-cloak>
                 <div class="space-y-6">
                     <!-- 안내 문구 -->
-                    <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <p class="text-sm text-blue-700">
+                    <div class="p-3 bg-primary-lt border border-primary rounded-lg">
+                        <p class="text-sm text-primary">
                             <strong>다계정 지원:</strong> 각 AI 서비스에 여러 API 키를 등록할 수 있습니다.
                             사용량 제한에 도달하면 자동으로 다음 우선순위 키로 전환됩니다.
                         </p>
@@ -123,7 +128,7 @@
                                     <span x-show="getKeysByProvider('openai').length > 0" class="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full" x-text="getKeysByProvider('openai').length + '개 등록됨'"></span>
                                 </div>
                                 <button @click="openAddKeyModal('openai')"
-                                        class="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+                                        class="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-primary bg-primary-lt rounded-lg hover:opacity-80 transition-colors">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                                     </svg>
@@ -149,7 +154,7 @@
                                             </div>
                                         </div>
                                         <div class="flex items-center gap-2">
-                                            <button @click="editKey(key)" class="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors">
+                                            <button @click="editKey(key)" class="p-1.5 text-gray-400 hover:text-primary hover:bg-primary-lt rounded transition-colors">
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                                                 </svg>
@@ -164,7 +169,7 @@
                                 </template>
                             </div>
                             <p class="mt-2 text-xs text-gray-500">
-                                <a href="https://platform.openai.com/api-keys" target="_blank" class="text-blue-600 hover:underline">OpenAI 플랫폼</a>에서 API 키를 발급받을 수 있습니다
+                                <a href="https://platform.openai.com/api-keys" target="_blank" class="text-primary hover:underline">OpenAI 플랫폼</a>에서 API 키를 발급받을 수 있습니다
                             </p>
                         </div>
 
@@ -179,7 +184,7 @@
                                     <span x-show="getKeysByProvider('anthropic').length > 0" class="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full" x-text="getKeysByProvider('anthropic').length + '개 등록됨'"></span>
                                 </div>
                                 <button @click="openAddKeyModal('anthropic')"
-                                        class="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+                                        class="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-primary bg-primary-lt rounded-lg hover:opacity-80 transition-colors">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                                     </svg>
@@ -205,7 +210,7 @@
                                             </div>
                                         </div>
                                         <div class="flex items-center gap-2">
-                                            <button @click="editKey(key)" class="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors">
+                                            <button @click="editKey(key)" class="p-1.5 text-gray-400 hover:text-primary hover:bg-primary-lt rounded transition-colors">
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                                                 </svg>
@@ -220,7 +225,7 @@
                                 </template>
                             </div>
                             <p class="mt-2 text-xs text-gray-500">
-                                <a href="https://console.anthropic.com/settings/keys" target="_blank" class="text-blue-600 hover:underline">Anthropic 콘솔</a>에서 API 키를 발급받을 수 있습니다
+                                <a href="https://console.anthropic.com/settings/keys" target="_blank" class="text-primary hover:underline">Anthropic 콘솔</a>에서 API 키를 발급받을 수 있습니다
                             </p>
                         </div>
 
@@ -228,14 +233,14 @@
                         <div class="p-4 border border-gray-200 rounded-lg">
                             <div class="flex items-center justify-between mb-4">
                                 <div class="flex items-center gap-2">
-                                    <svg class="w-5 h-5 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
+                                    <svg class="w-5 h-5 text-primary" viewBox="0 0 24 24" fill="currentColor">
                                         <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 0 0-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .37z"/>
                                     </svg>
                                     <span class="font-medium text-gray-900">Google (Gemini)</span>
                                     <span x-show="getKeysByProvider('google').length > 0" class="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full" x-text="getKeysByProvider('google').length + '개 등록됨'"></span>
                                 </div>
                                 <button @click="openAddKeyModal('google')"
-                                        class="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+                                        class="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-primary bg-primary-lt rounded-lg hover:opacity-80 transition-colors">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                                     </svg>
@@ -261,7 +266,7 @@
                                             </div>
                                         </div>
                                         <div class="flex items-center gap-2">
-                                            <button @click="editKey(key)" class="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors">
+                                            <button @click="editKey(key)" class="p-1.5 text-gray-400 hover:text-primary hover:bg-primary-lt rounded transition-colors">
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                                                 </svg>
@@ -276,7 +281,7 @@
                                 </template>
                             </div>
                             <p class="mt-2 text-xs text-gray-500">
-                                <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-600 hover:underline">Google AI Studio</a>에서 API 키를 발급받을 수 있습니다
+                                <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-primary hover:underline">Google AI Studio</a>에서 API 키를 발급받을 수 있습니다
                             </p>
                         </div>
                     </div>
@@ -294,7 +299,7 @@
                                     <label class="block text-sm font-medium text-gray-700 mb-1">라벨 (구분용)</label>
                                     <input type="text" x-model="keyForm.label" required
                                            placeholder="예: 개인 계정, 회사 계정"
-                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary">
                                 </div>
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">API 키</label>
@@ -303,7 +308,7 @@
                                                x-model="keyForm.api_key"
                                                :required="!editingKey"
                                                :placeholder="editingKey ? '변경하지 않으려면 비워두세요' : 'API 키 입력'"
-                                               class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                               class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary">
                                         <button @click="showKeyFormKey = !showKeyFormKey" type="button"
                                                 class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                                             <svg x-show="!showKeyFormKey" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -319,7 +324,7 @@
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">우선순위</label>
                                     <select x-model="keyForm.priority"
-                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary">
                                         <option value="0">1순위 (가장 먼저 사용)</option>
                                         <option value="1">2순위</option>
                                         <option value="2">3순위</option>
@@ -335,7 +340,7 @@
                                     취소
                                 </button>
                                 <button type="submit" :disabled="savingKey"
-                                        class="flex-1 py-2 px-4 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                                        class="flex-1 py-2 px-4 text-sm font-medium text-white bg-primary rounded-lg hover:opacity-90 disabled:opacity-50">
                                     <span x-show="!savingKey" x-text="editingKey ? '수정' : '추가'"></span>
                                     <span x-show="savingKey" class="flex items-center justify-center gap-2">
                                         <div class="loading w-4 h-4"></div>
@@ -368,7 +373,7 @@
                                 <input :type="showBloggerClientId ? 'text' : 'password'"
                                        x-model="form.blogger_client_id"
                                        placeholder="OAuth Client ID를 입력하세요"
-                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary">
                                 <button @click="showBloggerClientId = !showBloggerClientId" type="button"
                                         class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                                     <svg x-show="!showBloggerClientId" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
@@ -383,7 +388,7 @@
                                 <input :type="showBloggerClientSecret ? 'text' : 'password'"
                                        x-model="form.blogger_client_secret"
                                        placeholder="OAuth Client Secret을 입력하세요"
-                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary">
                                 <button @click="showBloggerClientSecret = !showBloggerClientSecret" type="button"
                                         class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                                     <svg x-show="!showBloggerClientSecret" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
@@ -396,7 +401,7 @@
                             <label class="block text-sm font-medium text-gray-700 mb-1">시간당 발행 제한</label>
                             <select x-model="form.blogger_hourly_limit"
                                     @change="checkBloggerWarning()"
-                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary">
                                 <option value="1">1회</option>
                                 <option value="2">2회 (권장)</option>
                                 <option value="3">3회</option>
@@ -441,7 +446,7 @@
                                 <input :type="showNaverApiKey ? 'text' : 'password'"
                                        x-model="form.naver_ads_api_key"
                                        placeholder="API 키를 입력하세요"
-                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary">
                                 <button @click="showNaverApiKey = !showNaverApiKey" type="button"
                                         class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                                     <svg x-show="!showNaverApiKey" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -461,7 +466,7 @@
                                 <input :type="showNaverSecretKey ? 'text' : 'password'"
                                        x-model="form.naver_ads_secret_key"
                                        placeholder="Secret 키를 입력하세요"
-                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary">
                                 <button @click="showNaverSecretKey = !showNaverSecretKey" type="button"
                                         class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                                     <svg x-show="!showNaverSecretKey" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -480,7 +485,7 @@
                             <input type="text"
                                    x-model="form.naver_ads_customer_id"
                                    placeholder="고객 ID를 입력하세요"
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary">
                         </div>
 
                         <!-- 연결 테스트 버튼 -->
@@ -498,7 +503,7 @@
                         </div>
 
                         <p class="text-xs text-gray-500">
-                            네이버 검색광고 API는 <a href="https://searchad.naver.com" target="_blank" class="text-blue-600 hover:underline">네이버 검색광고 센터</a>에서 발급받을 수 있습니다.
+                            네이버 검색광고 API는 <a href="https://searchad.naver.com" target="_blank" class="text-primary hover:underline">네이버 검색광고 센터</a>에서 발급받을 수 있습니다.
                         </p>
                     </div>
 
@@ -513,7 +518,7 @@
                             네이버 검색 API
                             <span x-show="form.has_naver_search_api" class="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full">연동됨</span>
                         </h4>
-                        <p class="text-xs text-gray-500 -mt-2">블로그 검색 및 <strong class="text-blue-600">뉴스 제목 수집</strong>에 사용됩니다</p>
+                        <p class="text-xs text-gray-500 -mt-2">블로그 검색 및 <strong class="text-primary">뉴스 제목 수집</strong>에 사용됩니다</p>
 
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Client ID</label>
@@ -521,7 +526,7 @@
                                 <input :type="showNaverSearchClientId ? 'text' : 'password'"
                                        x-model="form.naver_search_client_id"
                                        placeholder="Client ID를 입력하세요"
-                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary">
                                 <button @click="showNaverSearchClientId = !showNaverSearchClientId" type="button"
                                         class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                                     <svg x-show="!showNaverSearchClientId" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -541,7 +546,7 @@
                                 <input :type="showNaverSearchClientSecret ? 'text' : 'password'"
                                        x-model="form.naver_search_client_secret"
                                        placeholder="Client Secret을 입력하세요"
-                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary">
                                 <button @click="showNaverSearchClientSecret = !showNaverSearchClientSecret" type="button"
                                         class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                                     <svg x-show="!showNaverSearchClientSecret" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -570,7 +575,7 @@
                         </div>
 
                         <p class="text-xs text-gray-500">
-                            네이버 검색 API는 <a href="https://developers.naver.com/apps/#/register" target="_blank" class="text-blue-600 hover:underline">네이버 개발자센터</a>에서 발급받을 수 있습니다.
+                            네이버 검색 API는 <a href="https://developers.naver.com/apps/#/register" target="_blank" class="text-primary hover:underline">네이버 개발자센터</a>에서 발급받을 수 있습니다.
                             (검색 > 블로그 검색 API 사용 신청)
                         </p>
                     </div>
@@ -580,7 +585,7 @@
                     <!-- 구글 트렌드 설정 -->
                     <div class="space-y-4">
                         <h4 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                            <svg class="w-4 h-4 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
+                            <svg class="w-4 h-4 text-primary" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M23.954 4.569c-.885.389-1.83.654-2.825.775 1.014-.611 1.794-1.574 2.163-2.723-.951.555-2.005.959-3.127 1.184-.896-.959-2.173-1.559-3.591-1.559-2.717 0-4.92 2.203-4.92 4.917 0 .39.045.765.127 1.124C7.691 8.094 4.066 6.13 1.64 3.161c-.427.722-.666 1.561-.666 2.475 0 1.71.87 3.213 2.188 4.096-.807-.026-1.566-.248-2.228-.616v.061c0 2.385 1.693 4.374 3.946 4.827-.413.111-.849.171-1.296.171-.314 0-.615-.03-.916-.086.631 1.953 2.445 3.377 4.604 3.417-1.68 1.319-3.809 2.105-6.102 2.105-.39 0-.779-.023-1.17-.067 2.189 1.394 4.768 2.209 7.557 2.209 9.054 0 13.999-7.496 13.999-13.986 0-.209 0-.42-.015-.63.961-.689 1.8-1.56 2.46-2.548l-.047-.02z"/>
                             </svg>
                             구글 트렌드
@@ -607,7 +612,7 @@
                             <p class="text-xs font-medium text-gray-600 mb-2">실시간 인기 검색어 (샘플)</p>
                             <div class="flex flex-wrap gap-2">
                                 <template x-for="item in googleTrendsSample" :key="item.keyword">
-                                    <span class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full" x-text="item.keyword"></span>
+                                    <span class="text-xs px-2 py-1 bg-primary-lt text-primary rounded-full" x-text="item.keyword"></span>
                                 </template>
                             </div>
                         </div>
@@ -636,7 +641,7 @@
                                 <input :type="showNaverDatalabClientId ? 'text' : 'password'"
                                        x-model="form.naver_datalab_client_id"
                                        placeholder="Client ID를 입력하세요"
-                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary">
                                 <button @click="showNaverDatalabClientId = !showNaverDatalabClientId" type="button"
                                         class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                                     <svg x-show="!showNaverDatalabClientId" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -656,7 +661,7 @@
                                 <input :type="showNaverDatalabClientSecret ? 'text' : 'password'"
                                        x-model="form.naver_datalab_client_secret"
                                        placeholder="Client Secret을 입력하세요"
-                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary">
                                 <button @click="showNaverDatalabClientSecret = !showNaverDatalabClientSecret" type="button"
                                         class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                                     <svg x-show="!showNaverDatalabClientSecret" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -685,7 +690,7 @@
                         </div>
 
                         <p class="text-xs text-gray-500">
-                            네이버 데이터랩 API는 <a href="https://developers.naver.com/apps" target="_blank" class="text-blue-600 hover:underline">네이버 개발자센터</a>에서 발급받을 수 있습니다.
+                            네이버 데이터랩 API는 <a href="https://developers.naver.com/apps" target="_blank" class="text-primary hover:underline">네이버 개발자센터</a>에서 발급받을 수 있습니다.
                             (데이터랩 > 검색어트렌드 API 사용 신청)
                         </p>
                     </div>
@@ -695,7 +700,7 @@
                     <!-- Google Keyword Planner API 설정 -->
                     <div class="space-y-4">
                         <h4 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                            <svg class="w-4 h-4 text-blue-600" viewBox="0 0 24 24" fill="currentColor">
+                            <svg class="w-4 h-4 text-primary" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                                 <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
                                 <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
@@ -712,7 +717,7 @@
                                 <input :type="showGoogleAdsDeveloperToken ? 'text' : 'password'"
                                        x-model="form.google_ads_developer_token"
                                        placeholder="Developer Token을 입력하세요"
-                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary">
                                 <button @click="showGoogleAdsDeveloperToken = !showGoogleAdsDeveloperToken" type="button"
                                         class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                                     <svg x-show="!showGoogleAdsDeveloperToken" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -732,7 +737,7 @@
                                 <input :type="showGoogleAdsClientId ? 'text' : 'password'"
                                        x-model="form.google_ads_client_id"
                                        placeholder="OAuth Client ID를 입력하세요"
-                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary">
                                 <button @click="showGoogleAdsClientId = !showGoogleAdsClientId" type="button"
                                         class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                                     <svg x-show="!showGoogleAdsClientId" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -752,7 +757,7 @@
                                 <input :type="showGoogleAdsClientSecret ? 'text' : 'password'"
                                        x-model="form.google_ads_client_secret"
                                        placeholder="OAuth Client Secret을 입력하세요"
-                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary">
                                 <button @click="showGoogleAdsClientSecret = !showGoogleAdsClientSecret" type="button"
                                         class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                                     <svg x-show="!showGoogleAdsClientSecret" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -772,7 +777,7 @@
                                 <input :type="showGoogleAdsRefreshToken ? 'text' : 'password'"
                                        x-model="form.google_ads_refresh_token"
                                        placeholder="Refresh Token을 입력하세요"
-                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary">
                                 <button @click="showGoogleAdsRefreshToken = !showGoogleAdsRefreshToken" type="button"
                                         class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                                     <svg x-show="!showGoogleAdsRefreshToken" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -791,7 +796,7 @@
                             <input type="text"
                                    x-model="form.google_ads_customer_id"
                                    placeholder="123-456-7890 형식으로 입력"
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary">
                         </div>
 
                         <!-- 연결 테스트 버튼 -->
@@ -811,7 +816,7 @@
                         <div class="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                             <p class="text-xs text-yellow-700">
                                 <strong>참고:</strong> Google Keyword Planner API는 활성 Google Ads 계정이 필요합니다.
-                                <a href="https://developers.google.com/google-ads/api/docs/get-started/introduction" target="_blank" class="text-blue-600 hover:underline">Google Ads API 시작하기</a>에서 자세한 설정 방법을 확인하세요.
+                                <a href="https://developers.google.com/google-ads/api/docs/get-started/introduction" target="_blank" class="text-primary hover:underline">Google Ads API 시작하기</a>에서 자세한 설정 방법을 확인하세요.
                             </p>
                         </div>
                     </div>
@@ -879,6 +884,63 @@
                 </div>
             </div>
 
+            <!-- 테마 설정 탭 -->
+            <div x-show="!loading && activeTab === 'theme'" x-cloak>
+                <div class="space-y-6">
+                    <div>
+                        <h4 class="text-sm font-semibold text-gray-900 mb-3">테마 프리셋</h4>
+                        <div class="grid grid-cols-3 gap-3">
+                            <template x-for="preset in themePresets" :key="preset.name">
+                                <button @click="selectThemePreset(preset)"
+                                        class="p-3 rounded-lg border-2 transition-all text-center"
+                                        :class="currentTheme === preset.name ? 'border-gray-900 shadow-md' : 'border-gray-200 hover:border-gray-300'">
+                                    <div class="flex justify-center gap-1 mb-2">
+                                        <div class="w-6 h-6 rounded-full" :style="`background-color:${preset.primary}`"></div>
+                                        <div class="w-6 h-6 rounded-full" :style="`background-color:${preset.accent}`"></div>
+                                    </div>
+                                    <div class="text-xs font-medium text-gray-700" x-text="preset.label"></div>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h4 class="text-sm font-semibold text-gray-900 mb-3">커스텀 컬러</h4>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">메인 컬러</label>
+                                <div class="flex items-center gap-2">
+                                    <input type="color" x-model="customPrimary" @input="applyCustomTheme()" class="w-8 h-8 rounded cursor-pointer border-0">
+                                    <input type="text" x-model="customPrimary" @input="applyCustomTheme()" class="flex-1 text-sm px-2 py-1 border border-gray-300 rounded">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">포인트 컬러</label>
+                                <div class="flex items-center gap-2">
+                                    <input type="color" x-model="customAccent" @input="applyCustomTheme()" class="w-8 h-8 rounded cursor-pointer border-0">
+                                    <input type="text" x-model="customAccent" @input="applyCustomTheme()" class="flex-1 text-sm px-2 py-1 border border-gray-300 rounded">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h4 class="text-sm font-semibold text-gray-900 mb-2">미리보기</h4>
+                        <div class="p-4 rounded-lg border border-gray-200">
+                            <div class="flex items-center gap-2 mb-2">
+                                <div class="h-8 rounded px-3 flex items-center text-white text-xs font-medium" :style="`background-color:${customPrimary}`">네비게이션 바</div>
+                                <div class="h-8 rounded px-3 flex items-center text-white text-xs font-medium" :style="`background-color:${customAccent}`">포인트 버튼</div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="h-6 rounded px-2 flex items-center text-xs font-medium" :style="`background-color:${customPrimary}15; color:${customPrimary}; border: 1px solid ${customPrimary}30`">활성 탭</div>
+                                <div class="h-6 rounded px-2 flex items-center text-xs font-medium" :style="`background-color:${customAccent}15; color:${customAccent}`">배지</div>
+                                <span class="text-xs" :style="`color:${customPrimary}`">링크 텍스트</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- 푸터 버튼 -->
             <div class="flex items-center gap-3 mt-8 pt-6 border-t border-gray-200">
                 <button onclick="closeSettingsModal()"
@@ -887,7 +949,7 @@
                 </button>
                 <button @click="saveSettings()"
                         :disabled="saving"
-                        class="flex-1 py-3 px-4 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                        class="flex-1 py-3 px-4 text-sm font-medium text-white bg-primary rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                     <span x-show="!saving">저장</span>
                     <span x-show="saving" class="flex items-center justify-center gap-2">
                         <div class="loading w-4 h-4"></div>

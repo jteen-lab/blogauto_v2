@@ -84,7 +84,7 @@ Alpine.js: formData + gpModule (growth-profile-form.js의 createGrowthProfileSta
         <template x-for="preset in gpModule.presets" :key="preset.key">
             <div class="border-2 rounded-lg p-4 cursor-pointer transition-all"
                  :class="gpModule.selectedPreset === preset.key
-                     ? 'border-blue-500 bg-blue-50'
+                     ? 'border-primary bg-primary-lt'
                      : 'border-gray-200 hover:border-gray-300'"
                  @click="gpModule.loadPreset(preset.key)">
                 <div class="font-medium text-gray-900" x-text="preset.name"></div>
@@ -108,7 +108,7 @@ Alpine.js: formData + gpModule (growth-profile-form.js의 createGrowthProfileSta
     <div class="bg-gray-50 rounded-lg p-4">
         <div class="flex flex-wrap gap-2 mb-4">
             <button type="button" @click="gpModule.selectAllHours()"
-                    class="px-3 py-1 text-xs bg-blue-100 text-blue-800 rounded-full hover:bg-blue-200">
+                    class="px-3 py-1 text-xs bg-primary-lt text-primary rounded-full hover:opacity-80">
                 전체 선택
             </button>
             <button type="button" @click="gpModule.clearAllHours()"
@@ -147,7 +147,7 @@ Alpine.js: formData + gpModule (growth-profile-form.js의 createGrowthProfileSta
                                     <button type="button"
                                             class="w-full h-7 border-none cursor-pointer transition-colors duration-150"
                                             :class="gpModule.schedule_matrix && gpModule.schedule_matrix[dayIdx][hour-1]
-                                                ? 'bg-blue-500 hover:bg-blue-600'
+                                                ? 'bg-primary hover:opacity-90'
                                                 : 'bg-gray-100 hover:bg-gray-200'"
                                             @click="gpModule.toggleHour(dayIdx, hour-1)"></button>
                                 </td>
@@ -158,12 +158,12 @@ Alpine.js: formData + gpModule (growth-profile-form.js의 createGrowthProfileSta
             </table>
         </div>
         <!-- 활성 시간 요약 -->
-        <div class="mt-4 p-3 bg-blue-50 rounded-lg">
+        <div class="mt-4 p-3 bg-primary-lt rounded-lg">
             <div class="flex items-center justify-between text-sm">
-                <span class="text-blue-800 font-medium">
+                <span class="text-primary font-medium">
                     활성 시간: <span x-text="gpModule.activeHoursCount"></span>시간/주
                 </span>
-                <span class="text-blue-600" x-show="gpModule.todayActiveHours > 0">
+                <span class="text-primary" x-show="gpModule.todayActiveHours > 0">
                     오늘: <span x-text="gpModule.todayActiveHours"></span>시간
                 </span>
             </div>
@@ -177,7 +177,7 @@ Alpine.js: formData + gpModule (growth-profile-form.js의 createGrowthProfileSta
     <div class="p-4 bg-gray-50 rounded-lg space-y-3">
         <label class="flex items-center cursor-pointer">
             <input type="checkbox" x-model="gpModule.jitter.enabled"
-                   class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500">
+                   class="w-4 h-4 text-primary rounded focus:ring-primary">
             <span class="ml-2 text-sm font-medium text-gray-700">지터 활성화</span>
             <span class="ml-2 text-xs text-gray-500">(간격에 랜덤 변동을 추가하여 자연스러운 패턴 생성)</span>
         </label>
@@ -186,18 +186,18 @@ Alpine.js: formData + gpModule (growth-profile-form.js의 createGrowthProfileSta
                 <label class="block text-xs text-gray-500 mb-1">최소 변동 (%)</label>
                 <input type="number" x-model.number="gpModule.jitter.min_percent"
                        min="-50" max="0"
-                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm">
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary text-sm">
                 <p class="mt-0.5 text-xs text-gray-400">-50 ~ 0</p>
             </div>
             <div>
                 <label class="block text-xs text-gray-500 mb-1">최대 변동 (%)</label>
                 <input type="number" x-model.number="gpModule.jitter.max_percent"
                        min="0" max="100"
-                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm">
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary text-sm">
                 <p class="mt-0.5 text-xs text-gray-400">0 ~ 100</p>
             </div>
         </div>
-        <p x-show="gpModule.jitter.enabled" class="text-xs text-blue-600 ml-6">
+        <p x-show="gpModule.jitter.enabled" class="text-xs text-primary ml-6">
             예: 간격 60분 + 지터(-20%~+30%) = 48~78분 랜덤 간격
         </p>
     </div>
@@ -208,7 +208,7 @@ Alpine.js: formData + gpModule (growth-profile-form.js의 createGrowthProfileSta
     <div class="flex items-center justify-between">
         <h3 class="text-base font-semibold text-gray-900 flex items-center gap-2">📈 성장 구간 설정</h3>
         <button type="button" @click="gpModule.addStage()"
-                class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                class="px-3 py-1.5 text-xs bg-primary text-white rounded-lg hover:opacity-90">
             + 구간 추가
         </button>
     </div>
@@ -230,9 +230,9 @@ Alpine.js: formData + gpModule (growth-profile-form.js의 createGrowthProfileSta
             <!-- 구간 헤더 -->
             <div class="flex items-center justify-between p-3 bg-gray-50 border-b border-gray-200">
                 <div class="flex items-center gap-3 flex-1">
-                    <span class="text-sm font-bold text-blue-600" x-text="'#' + (stageIdx + 1)"></span>
+                    <span class="text-sm font-bold text-primary" x-text="'#' + (stageIdx + 1)"></span>
                     <input type="text" x-model="stage.label"
-                           class="flex-1 max-w-xs px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                           class="flex-1 max-w-xs px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-primary"
                            placeholder="구간 이름 (예: 초기 성장)">
                 </div>
                 <button type="button" @click="gpModule.removeStage(stageIdx)"
@@ -249,7 +249,7 @@ Alpine.js: formData + gpModule (growth-profile-form.js의 createGrowthProfileSta
                 <div class="flex items-center gap-3">
                     <label class="text-xs text-gray-500 w-20 shrink-0">내부 이름</label>
                     <input type="text" x-model="stage.name"
-                           class="flex-1 px-2 py-1 border border-gray-300 rounded text-sm font-mono focus:ring-2 focus:ring-blue-500"
+                           class="flex-1 px-2 py-1 border border-gray-300 rounded text-sm font-mono focus:ring-2 focus:ring-primary"
                            placeholder="stage_1 (영문)">
                 </div>
 
@@ -258,12 +258,12 @@ Alpine.js: formData + gpModule (growth-profile-form.js의 createGrowthProfileSta
                     <label class="text-xs text-gray-500 w-20 shrink-0">적용 구간</label>
                     <span class="text-xs text-gray-600">발행글</span>
                     <input type="number" x-model.number="stage.post_count_min" min="0"
-                           class="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500">
+                           class="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-primary">
                     <span class="text-gray-400">~</span>
                     <template x-if="stageIdx < gpModule.stages.length - 1">
                         <input type="number" x-model.number="stage.post_count_max" min="1"
                                @change="gpModule.onMaxChanged(stageIdx)"
-                               class="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500">
+                               class="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-primary">
                     </template>
                     <template x-if="stageIdx === gpModule.stages.length - 1">
                         <span class="text-xs text-gray-500 italic px-2 py-1">무제한</span>
@@ -275,17 +275,17 @@ Alpine.js: formData + gpModule (growth-profile-form.js의 createGrowthProfileSta
                 <div class="flex items-start gap-3">
                     <label class="text-xs text-gray-500 w-20 shrink-0 pt-1">설명</label>
                     <input type="text" x-model="stage.description"
-                           class="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                           class="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-primary"
                            placeholder="이 구간의 설명 (선택)">
                 </div>
 
                 <!-- ===== generate 모듈 설정 ===== -->
-                <div class="border border-blue-200 rounded-lg overflow-hidden">
-                    <div class="flex items-center p-2.5 bg-blue-50 border-b border-blue-200 cursor-pointer"
+                <div class="border border-primary rounded-lg overflow-hidden">
+                    <div class="flex items-center p-2.5 bg-primary-lt border-b border-primary cursor-pointer"
                          @click="stage.generate.enabled = !stage.generate.enabled">
                         <input type="checkbox" :checked="stage.generate.enabled"
-                               class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 pointer-events-none">
-                        <span class="ml-2 text-sm font-medium text-blue-800">생성 (Generate)</span>
+                               class="w-4 h-4 text-primary rounded focus:ring-primary pointer-events-none">
+                        <span class="ml-2 text-sm font-medium text-primary">생성 (Generate)</span>
                     </div>
                     <div x-show="stage.generate.enabled" x-transition class="p-3 space-y-2">
                         <!-- 최소 재고 (generate 전용) -->
@@ -302,14 +302,14 @@ Alpine.js: formData + gpModule (growth-profile-form.js의 createGrowthProfileSta
                                 <input type="radio" :name="'interval_' + stageIdx + '_generate'"
                                        :checked="stage.generate.interval_mode === 'manual'"
                                        @change="stage.generate.interval_mode = 'manual'"
-                                       class="text-blue-600 h-3 w-3">
+                                       class="text-primary h-3 w-3">
                                 <span class="ml-1.5 text-xs text-gray-600">시간으로 설정</span>
                             </label>
                             <label class="flex items-center cursor-pointer">
                                 <input type="radio" :name="'interval_' + stageIdx + '_generate'"
                                        :checked="stage.generate.interval_mode === 'auto'"
                                        @change="stage.generate.interval_mode = 'auto'"
-                                       class="text-blue-600 h-3 w-3">
+                                       class="text-primary h-3 w-3">
                                 <span class="ml-1.5 text-xs text-gray-600">횟수로 설정</span>
                             </label>
                         </div>
@@ -319,7 +319,7 @@ Alpine.js: formData + gpModule (growth-profile-form.js의 createGrowthProfileSta
                                    min="15" max="1440"
                                    class="w-20 px-2 py-1 border border-gray-300 rounded text-sm">
                             <span class="text-xs text-gray-500">분 간격</span>
-                            <span class="text-xs text-blue-600">
+                            <span class="text-xs text-primary">
                                 (하루 약 <span x-text="gpModule.calcDailyFromMinutes(stage.generate.interval_minutes)"></span>회)
                             </span>
                         </div>
@@ -330,7 +330,7 @@ Alpine.js: formData + gpModule (growth-profile-form.js의 createGrowthProfileSta
                                    min="1" max="100"
                                    class="w-16 px-2 py-1 border border-gray-300 rounded text-sm">
                             <span class="text-xs text-gray-500">회</span>
-                            <span class="text-xs text-blue-600">
+                            <span class="text-xs text-primary">
                                 (약 <span x-text="gpModule.calcMinutesFromDaily(stage.generate.daily_count)"></span>분 간격)
                             </span>
                         </div>
@@ -338,12 +338,12 @@ Alpine.js: formData + gpModule (growth-profile-form.js의 createGrowthProfileSta
                 </div>
 
                 <!-- ===== publish 모듈 설정 ===== -->
-                <div class="border border-blue-200 rounded-lg overflow-hidden">
-                    <div class="flex items-center p-2.5 bg-blue-50 border-b border-blue-200 cursor-pointer"
+                <div class="border border-primary rounded-lg overflow-hidden">
+                    <div class="flex items-center p-2.5 bg-primary-lt border-b border-primary cursor-pointer"
                          @click="stage.publish.enabled = !stage.publish.enabled">
                         <input type="checkbox" :checked="stage.publish.enabled"
-                               class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 pointer-events-none">
-                        <span class="ml-2 text-sm font-medium text-blue-800">발행 (Publish)</span>
+                               class="w-4 h-4 text-primary rounded focus:ring-primary pointer-events-none">
+                        <span class="ml-2 text-sm font-medium text-primary">발행 (Publish)</span>
                     </div>
                     <div x-show="stage.publish.enabled" x-transition class="p-3 space-y-2">
                         <!-- 간격 모드 라디오 -->
@@ -352,14 +352,14 @@ Alpine.js: formData + gpModule (growth-profile-form.js의 createGrowthProfileSta
                                 <input type="radio" :name="'interval_' + stageIdx + '_publish'"
                                        :checked="stage.publish.interval_mode === 'manual'"
                                        @change="stage.publish.interval_mode = 'manual'"
-                                       class="text-blue-600 h-3 w-3">
+                                       class="text-primary h-3 w-3">
                                 <span class="ml-1.5 text-xs text-gray-600">시간으로 설정</span>
                             </label>
                             <label class="flex items-center cursor-pointer">
                                 <input type="radio" :name="'interval_' + stageIdx + '_publish'"
                                        :checked="stage.publish.interval_mode === 'auto'"
                                        @change="stage.publish.interval_mode = 'auto'"
-                                       class="text-blue-600 h-3 w-3">
+                                       class="text-primary h-3 w-3">
                                 <span class="ml-1.5 text-xs text-gray-600">횟수로 설정</span>
                             </label>
                         </div>
@@ -369,7 +369,7 @@ Alpine.js: formData + gpModule (growth-profile-form.js의 createGrowthProfileSta
                                    min="15" max="1440"
                                    class="w-20 px-2 py-1 border border-gray-300 rounded text-sm">
                             <span class="text-xs text-gray-500">분 간격</span>
-                            <span class="text-xs text-blue-600">
+                            <span class="text-xs text-primary">
                                 (하루 약 <span x-text="gpModule.calcDailyFromMinutes(stage.publish.interval_minutes)"></span>회)
                             </span>
                         </div>
@@ -380,7 +380,7 @@ Alpine.js: formData + gpModule (growth-profile-form.js의 createGrowthProfileSta
                                    min="1" max="100"
                                    class="w-16 px-2 py-1 border border-gray-300 rounded text-sm">
                             <span class="text-xs text-gray-500">회</span>
-                            <span class="text-xs text-blue-600">
+                            <span class="text-xs text-primary">
                                 (약 <span x-text="gpModule.calcMinutesFromDaily(stage.publish.daily_count)"></span>분 간격)
                             </span>
                         </div>

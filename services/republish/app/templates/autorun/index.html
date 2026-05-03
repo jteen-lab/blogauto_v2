@@ -97,7 +97,7 @@
         <!-- 헤더 버튼 (PC) -->
         <div class="hidden md:flex items-center gap-2">
             <button @click="openAddSheet()"
-                    class="inline-flex items-center px-4 py-2 border-2 border-blue-600 rounded-md text-sm font-bold text-blue-600 hover:bg-blue-50 focus:outline-none transition-colors">
+                    class="inline-flex items-center px-4 py-2 btn-outline-primary rounded-md text-sm font-bold focus:outline-none transition-colors">
                 <svg class="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                 </svg>
@@ -108,7 +108,7 @@
 
     <!-- 모바일 플로팅 버튼 (md 미만에서만 표시) -->
     <button @click="openAddSheet()"
-            class="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-white border-2 border-blue-600 text-blue-600 hover:bg-blue-50 rounded-2xl shadow-lg flex items-center justify-center text-2xl font-bold z-40 transition-colors">
+            class="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-white border-2 border-primary text-primary hover:bg-primary-lt rounded-2xl shadow-lg flex items-center justify-center text-2xl font-bold z-40 transition-colors">
         +
     </button>
 
@@ -132,7 +132,7 @@
         <!-- 일괄 액션 버튼 -->
         <div class="flex items-center gap-2">
             <button @click="selectAll()"
-                    class="text-xs sm:text-sm text-blue-600 hover:text-blue-800 px-1"
+                    class="text-xs sm:text-sm text-primary hover:opacity-80 px-1"
                     :class="autorunFlows.length === 0 ? 'opacity-50 cursor-not-allowed' : ''"
                     :disabled="autorunFlows.length === 0">
                 <span x-text="isAllSelected ? '해제' : '전체'"></span>
@@ -222,7 +222,7 @@
                 <input type="text"
                        id="searchAvailable"
                        placeholder="플로우 검색..."
-                       class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                       class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary">
                 <svg class="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                 </svg>
@@ -243,7 +243,7 @@
                 </button>
                 <button id="addSelectedFlows"
                         onclick="addSelectedFlows()"
-                        class="flex-1 py-3 px-4 text-white bg-blue-600 rounded-lg hover:bg-blue-700 font-medium"
+                        class="flex-1 py-3 px-4 btn-primary rounded-lg font-medium"
                         disabled>
                     <span id="addButtonText">추가 (0)</span>
                 </button>

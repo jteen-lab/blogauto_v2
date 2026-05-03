@@ -35,16 +35,16 @@
      })()"
      class="space-y-4">
     <!-- 안내 문구 -->
-    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+    <div class="bg-primary-lt border border-primary rounded-lg p-4 mb-6">
         <div class="flex items-start gap-3">
             <div class="flex-shrink-0">
-                <svg class="w-5 h-5 text-blue-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-5 h-5 text-primary mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>
             </div>
-            <div class="text-sm text-blue-800">
+            <div class="text-sm text-primary">
                 <p class="font-medium mb-1">블로그 오토 전역 설정에서 등록한 AI API 키를 선택합니다</p>
-                <p class="text-blue-600">용도별로 다른 AI 서비스를 사용할 수 있습니다</p>
+                <p class="text-primary">용도별로 다른 AI 서비스를 사용할 수 있습니다</p>
             </div>
         </div>
     </div>
@@ -69,7 +69,7 @@
         </div>
         <p class="text-gray-600 mb-2">등록된 AI API 키가 없습니다</p>
         <p class="text-sm text-gray-400 mb-4">전역 설정에서 먼저 AI API 키를 등록해주세요</p>
-        <a href="/settings/ai-keys" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
+        <a href="/settings/ai-keys" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary bg-primary-lt hover:opacity-80 rounded-lg transition-colors">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
@@ -344,7 +344,7 @@
                 <button type="button"
                         @click="saveConfig()"
                         :disabled="saving"
-                        class="flex-1 py-3 px-4 text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed">
+                        class="flex-1 py-3 px-4 text-white btn-primary rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed">
                     <span x-show="!saving">저장</span>
                     <span x-show="saving" class="inline-flex items-center gap-2">
                         <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">

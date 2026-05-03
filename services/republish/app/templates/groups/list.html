@@ -9,7 +9,7 @@
             <h1 class="text-2xl font-bold text-gray-900">그룹 관리</h1>
             <p class="text-gray-600 mt-1">프로파일을 그룹으로 묶어 블로그에 일괄 적용합니다</p>
         </div>
-        <a href="/groups/new" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2">
+        <a href="/groups/new" class="btn-primary px-4 py-2 rounded-lg flex items-center gap-2">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
             </svg>
@@ -52,7 +52,7 @@
                 <a href="/groups/{{ group.id }}/edit" class="flex-1 text-center px-3 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 text-sm">
                     수정
                 </a>
-                <button onclick="copyGroup({{ group.id }}, '{{ group.name }}')" class="flex-1 text-center px-3 py-2 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 text-sm">
+                <button onclick="copyGroup({{ group.id }}, '{{ group.name }}')" class="flex-1 text-center px-3 py-2 bg-primary-lt text-primary rounded hover:opacity-80 text-sm">
                     복사
                 </button>
                 <button onclick="deleteGroup({{ group.id }})" class="px-3 py-2 bg-red-100 text-red-700 rounded hover:bg-red-200 text-sm">
@@ -71,7 +71,7 @@
         </svg>
         <h3 class="text-lg font-medium text-gray-900 mb-2">그룹이 없습니다</h3>
         <p class="text-gray-500 mb-4">프로파일을 그룹으로 묶어 블로그에 일괄 적용해보세요</p>
-        <a href="/groups/new" class="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+        <a href="/groups/new" class="inline-flex items-center gap-2 btn-primary px-4 py-2 rounded-lg">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
             </svg>

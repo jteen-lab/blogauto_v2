@@ -9,7 +9,7 @@
                     x-model="titleSearch"
                     @keyup.enter="titlePage = 1; loadTitles()"
                     placeholder="제목 검색..."
-                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary"
                 >
                 <button
                     x-show="titleSearch.length > 0"
@@ -24,7 +24,7 @@
             <select
                 x-model="titleStatus"
                 @change="titlePage = 1; loadTitles()"
-                class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary">
                 <option value="">전체 상태</option>
                 <option value="new">신규</option>
                 <option value="categorized">분류됨</option>
@@ -34,7 +34,7 @@
             <select
                 x-model="titleTopicId"
                 @change="titlePage = 1; loadTitles()"
-                class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 max-w-[140px] md:max-w-none">
+                class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary max-w-[140px] md:max-w-none">
                 <option value="">전체 카테고리</option>
                 <template x-for="topic in topics" :key="topic.id">
                     <option :value="topic.id" x-text="topic.name"></option>
@@ -124,7 +124,7 @@
             <!-- 제목 추가 -->
             <button
                 @click="$dispatch('open-title-modal')"
-                class="inline-flex items-center justify-center px-3 py-2 border-2 border-blue-600 rounded-lg text-sm font-medium text-blue-600 bg-white hover:bg-blue-50 transition-colors">
+                class="inline-flex items-center justify-center px-3 py-2 border-2 border-primary rounded-lg text-sm font-medium text-primary bg-white hover:bg-primary-lt transition-colors">
                 <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                 </svg>
@@ -208,7 +208,7 @@
                                     @keyup.escape="cancelEditTitle()"
                                     @blur="saveEditTitle(title.id)"
                                     x-ref="titleEditInput"
-                                    class="w-full px-2 py-1 border border-blue-500 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    class="w-full px-2 py-1 border border-primary rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary">
                             </template>
                         </td>
                         <td class="w-72">
@@ -223,7 +223,7 @@
                             </template>
                             <!-- KeywordCategory 폴백 -->
                             <template x-if="!title.category_path && title.category_name">
-                                <span class="text-sm text-blue-600" x-text="title.category_name"></span>
+                                <span class="text-sm text-primary" x-text="title.category_name"></span>
                             </template>
                             <!-- 미분류 -->
                             <template x-if="!title.category_path && !title.category_name">
@@ -325,7 +325,7 @@
                                 <span class="text-emerald-600" x-text="title.category_path"></span>
                             </template>
                             <template x-if="!title.category_path && title.category_name">
-                                <span class="text-blue-600" x-text="title.category_name"></span>
+                                <span class="text-primary" x-text="title.category_name"></span>
                             </template>
                             <template x-if="!title.category_path && !title.category_name">
                                 <span class="text-gray-400">미분류</span>
@@ -408,7 +408,7 @@
                         x-model="titleInput"
                         rows="8"
                         placeholder="제목을 입력하세요. 한 줄에 하나씩 입력하면 여러 개를 한 번에 등록할 수 있습니다."
-                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 resize-none font-mono"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary resize-none font-mono"
                     ></textarea>
                     <div class="flex justify-between mt-1">
                         <p class="text-xs text-gray-500">줄바꿈으로 구분하여 여러 개 입력 가능</p>
@@ -455,7 +455,7 @@
                         .finally(() => submitting = false);
                     "
                     :disabled="submitting || !titleInput.trim()"
-                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm transition-colors disabled:opacity-50">
+                    class="px-4 py-2 btn-primary text-white rounded-lg text-sm transition-colors disabled:opacity-50">
                     <span x-show="!submitting">추가</span>
                     <span x-show="submitting" class="flex items-center gap-1">
                         <span class="spinner"></span> 처리 중...
@@ -487,7 +487,7 @@
                 </button>
             </div>
             <div class="px-6 py-4 space-y-4">
-                <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors">
+                <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-primary transition-colors">
                     <input
                         type="file"
                         accept=".xlsx,.xls,.csv"
@@ -500,12 +500,12 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
                         </svg>
                         <p class="text-sm text-gray-600" x-show="!file">클릭하여 파일 선택</p>
-                        <p class="text-sm text-blue-600 font-medium" x-show="file" x-text="file?.name"></p>
+                        <p class="text-sm text-primary font-medium" x-show="file" x-text="file?.name"></p>
                     </label>
                 </div>
-                <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                    <p class="text-xs text-blue-700 font-medium mb-1">📋 파일 형식 안내</p>
-                    <ul class="text-xs text-blue-600 space-y-0.5">
+                <div class="bg-primary-lt border border-primary rounded-lg p-3">
+                    <p class="text-xs text-primary font-medium mb-1">📋 파일 형식 안내</p>
+                    <ul class="text-xs text-primary space-y-0.5">
                         <li>• 지원 형식: .xlsx, .xls, .csv</li>
                         <li>• 첫 번째 열(A열)에 제목 입력</li>
                         <li>• 첫 번째 행은 헤더로 인식 (건너뜀)</li>
@@ -550,7 +550,7 @@
                         .finally(() => uploading = false);
                     "
                     :disabled="uploading || !file"
-                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm transition-colors disabled:opacity-50">
+                    class="px-4 py-2 btn-primary text-white rounded-lg text-sm transition-colors disabled:opacity-50">
                     <span x-show="!uploading">업로드</span>
                     <span x-show="uploading" class="flex items-center gap-1">
                         <span class="spinner"></span> 업로드 중...

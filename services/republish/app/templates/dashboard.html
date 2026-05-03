@@ -39,7 +39,7 @@
                         <span
                             :class="{
                                 'bg-gray-100 text-gray-800': user?.tier === 'free',
-                                'bg-blue-100 text-blue-800': user?.tier === 'pro',
+                                'bg-primary-lt text-primary': user?.tier === 'pro',
                                 'bg-purple-100 text-purple-800': user?.tier === 'enterprise'
                             }"
                             class="inline-flex px-2 py-1 text-sm font-medium rounded-md"
@@ -129,11 +129,11 @@
                 </div>
             </div>
             <!-- 재발행 서비스 -->
-            <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500">
+            <div class="bg-white rounded-lg shadow-md p-6 border-l-4 border-primary">
                 <div class="flex items-center">
                     <div class="flex-shrink-0">
-                        <div class="w-8 h-8 bg-blue-100 rounded-md flex items-center justify-center">
-                            <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div class="w-8 h-8 bg-primary-lt rounded-md flex items-center justify-center">
+                            <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                             </svg>
                         </div>
@@ -144,7 +144,7 @@
                     </div>
                 </div>
                 <div class="mt-4">
-                    <button class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md text-sm transition-colors">
+                    <button class="w-full btn-primary text-white py-2 px-4 rounded-md text-sm transition-colors">
                         서비스 이용하기
                     </button>
                 </div>
@@ -398,7 +398,7 @@
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div class="text-center">
-                    <div class="text-2xl font-bold text-blue-600">Phase 3</div>
+                    <div class="text-2xl font-bold text-primary">Phase 3</div>
                     <div class="text-sm text-gray-600">현재 단계</div>
                     <div class="text-xs text-gray-500 mt-1">카테고리 관리 완료</div>
                 </div>
@@ -437,7 +437,7 @@
                             x-model="passwordForm.current_password"
                             type="password"
                             required
-                            class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
                         />
                     </div>
 
@@ -447,7 +447,7 @@
                             x-model="passwordForm.new_password"
                             type="password"
                             required
-                            class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
                         />
                     </div>
 
@@ -455,7 +455,7 @@
                         <button
                             type="submit"
                             :disabled="isChangingPassword"
-                            class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md text-sm transition-colors disabled:opacity-50"
+                            class="btn-primary text-white py-2 px-4 rounded-md text-sm transition-colors disabled:opacity-50"
                         >
                             <span x-show="!isChangingPassword">변경</span>
                             <span x-show="isChangingPassword">변경 중...</span>
@@ -480,7 +480,7 @@
             <p class="text-lg mb-4">로그인이 필요합니다</p>
             <button
                 @click="window.location.href = '/login'"
-                class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md transition-colors"
+                class="btn-primary text-white py-2 px-4 rounded-md transition-colors"
             >
                 로그인 페이지로 이동
             </button>
