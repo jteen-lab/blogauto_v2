@@ -22,6 +22,7 @@ async def _async_publish_via_workflow(
         workflow = PublishWorkflow(db)
         result = await workflow.execute_publish(blog_id, post_id)
 
+        # AutorunLog 저장 + FlowExecutionState 업데이트
         try:
             from app.models.autorun_log import AutorunLog
             from app.models.blog import Blog
@@ -41,6 +42,9 @@ async def _async_publish_via_workflow(
             await db.commit()
         except Exception as log_err:
             logger.warning(f"[PUBLISH] AutorunLog 저장 실패: {log_err}")
+
+        # 스케줄 상태 업데이트 (완료 시점 기록 + 다음 스케줄)
+        await _update_execution_state(db, blog_id, "publish", is_ok)
 
     return result
 
@@ -81,7 +85,50 @@ async def _async_republish_via_workflow(blog_id: int) -> dict:
         except Exception as log_err:
             logger.warning(f"[REPUBLISH] AutorunLog 저장 실패: {log_err}")
 
+        # 스케줄 상태 업데이트 (완료 시점 기록 + 다음 스케줄)
+        await _update_execution_state(db, blog_id, "republish", is_ok)
+
     return result
+
+
+async def _update_execution_state(
+    db, blog_id: int, action_type: str, success: bool
+) -> None:
+    """Celery 태스크 완료 시 성공 여부만 업데이트 (record_execution은 스케줄러에서 처리).
+
+    스케줄러의 _execute_module_callback()이 디스패치 시점에 record_execution()과
+    다음 스케줄 등록을 이미 처리하므로, Celery 완료 핸들러에서는 성공 시
+    last_success_at만 갱신합니다. 이중 record_execution 호출을 방지합니다.
+    """
+    try:
+        from sqlalchemy import select, and_
+        from app.models.flow import FlowBlog
+        from app.models.flow_execution_state import FlowExecutionState
+
+        fb_result = await db.execute(
+            select(FlowBlog.flow_id).where(FlowBlog.blog_id == blog_id)
+        )
+        for (flow_id,) in fb_result.fetchall():
+            state_result = await db.execute(
+                select(FlowExecutionState).where(and_(
+                    FlowExecutionState.flow_id == flow_id,
+                    FlowExecutionState.action_type == action_type,
+                ))
+            )
+            state = state_result.scalar_one_or_none()
+            if state and success:
+                from datetime import datetime
+                import pytz
+                state.last_success_at = datetime.now(
+                    pytz.timezone('Asia/Seoul')
+                )
+                await db.commit()
+                logger.info(
+                    f"[CELERY:{action_type.upper()}] last_success_at 갱신 | "
+                    f"flow_id={flow_id}"
+                )
+    except Exception as e:
+        logger.warning(f"[CELERY:{action_type.upper()}] 상태 업데이트 실패: {e}")
 
 
 @celery_app.task(

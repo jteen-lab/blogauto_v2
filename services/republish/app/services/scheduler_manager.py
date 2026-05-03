@@ -218,8 +218,8 @@ class SchedulerManager:
         query = (
             select(Flow)
             .options(
-                selectinload(Flow.flow_modules).selectinload(FlowModule.module),
-                selectinload(Flow.flow_blogs).selectinload(FlowBlog.blog)
+                selectinload(Flow.module_links).selectinload(FlowModule.module),
+                selectinload(Flow.blog_links).selectinload(FlowBlog.blog)
             )
             .where(Flow.id == flow_id)
         )
@@ -275,7 +275,7 @@ class SchedulerManager:
 
                 # 해당 모듈이 플로우에 포함되어 있는지 확인
                 target_module = None
-                for flow_module in flow.flow_modules:
+                for flow_module in flow.module_links:
                     if flow_module.module_id == module_id:
                         target_module = flow_module.module
                         break
@@ -300,8 +300,8 @@ class SchedulerManager:
                         logger.error(f"[EXECUTE_FLOW] 수집 모듈 실행 실패: {e}")
                 else:
                     # 기타 타입: 블로그 기반 실행
-                    if flow.flow_blogs:
-                        for flow_blog in flow.flow_blogs:
+                    if flow.blog_links:
+                        for flow_blog in flow.blog_links:
                             blog = flow_blog.blog
                             try:
                                 await self._execute_module_for_blog(target_module, blog)

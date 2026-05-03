@@ -412,7 +412,11 @@ class AutorunService:
         )
 
     async def _stop_flow(self, flow: Flow, request: FlowActionRequest) -> FlowActionResult:
-        """플로우 중지"""
+        """플로우 중지 - 스케줄 상태 초기화 포함
+
+        중지 시 FlowExecutionState를 초기화하여
+        재시작 시 새로운 스케줄로 시작하도록 합니다.
+        """
         if flow.status == FlowStatus.INACTIVE:
             return FlowActionResult(
                 success=False,
@@ -421,14 +425,70 @@ class AutorunService:
                 error_code="ALREADY_INACTIVE"
             )
 
+        # 스케줄러에서 해제
+        from ..scheduler.flow_scheduler import get_flow_scheduler
+        scheduler = get_flow_scheduler()
+        if scheduler:
+            await scheduler.unregister_flow(flow.id)
+
+        # FlowExecutionState 초기화 (재시작 시 새로운 스케줄로 시작)
+        await self._reset_execution_states(flow.id)
+
         # 상태 변경
         flow.status = FlowStatus.INACTIVE
+
+        logger.info(
+            f"[FLOW_ACTION] 플로우 중지 및 스케줄 상태 초기화 | FlowID={flow.id}"
+        )
 
         return FlowActionResult(
             success=True,
             message="플로우가 중지되었습니다",
             current_status=flow.status
         )
+
+    async def _reset_execution_states(self, flow_id: int) -> int:
+        """플로우의 모든 FlowExecutionState 초기화
+
+        중지/오토런 제외 시 호출하여 재시작 시
+        새로운 스케줄로 시작하도록 합니다.
+        레코드는 삭제하지 않고 값만 초기화합니다.
+
+        Args:
+            flow_id: 플로우 ID
+
+        Returns:
+            초기화된 상태 레코드 수
+        """
+        from ..models.flow_execution_state import FlowExecutionState
+
+        states_result = await self.db.execute(
+            select(FlowExecutionState).where(
+                FlowExecutionState.flow_id == flow_id
+            )
+        )
+        reset_count = 0
+        for state in states_result.scalars().all():
+            state.last_executed_at = None
+            state.last_success_at = None
+            state.next_execution_at = None
+            state.successful_executions = 0
+            state.failed_executions = 0
+            state.total_executions = 0
+            state.consecutive_failures = 0
+            state.is_paused = False
+            state.paused_at = None
+            state.remaining_seconds = None
+            state.is_running = False
+            reset_count += 1
+
+        if reset_count > 0:
+            logger.info(
+                f"[FLOW_ACTION] FlowExecutionState 초기화 완료 | "
+                f"FlowID={flow_id} | ResetCount={reset_count}"
+            )
+
+        return reset_count
 
     async def _validate_flow_for_execution(self, flow: Flow) -> Dict[str, Any]:
         """플로우 실행 가능성 검증"""
@@ -718,11 +778,14 @@ class AutorunService:
             if scheduler:
                 await scheduler.unregister_flow(flow_id)
 
+            # FlowExecutionState 초기화 (재추가 시 새로운 스케줄로 시작)
+            await self._reset_execution_states(flow_id)
+
             # 오토런에서 제외
             flow.remove_from_autorun()
             await self.db.commit()
 
-            logger.info(f"[REMOVE_FLOW_FROM_AUTORUN] 플로우 {flow_id} 오토런에서 제외됨")
+            logger.info(f"[REMOVE_FLOW_FROM_AUTORUN] 플로우 {flow_id} 오토런에서 제외 및 스케줄 상태 초기화")
 
             return {
                 "success": True,

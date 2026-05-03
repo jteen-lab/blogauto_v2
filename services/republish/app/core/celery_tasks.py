@@ -119,6 +119,40 @@ async def _async_generate_via_executor(
         except Exception as log_err:
             logger.warning(f"[GENERATE] AutorunLog 저장 실패: {log_err}")
 
+        # 스케줄 상태 업데이트: 성공 시 last_success_at만 갱신
+        # record_execution은 스케줄러의 _execute_module_callback()에서 디스패치 시점에 처리
+        try:
+            from sqlalchemy import select, and_
+            from app.models.flow import FlowBlog
+            from app.models.flow_execution_state import FlowExecutionState
+
+            is_ok = result.get("success") and not result.get("skipped")
+            if is_ok:
+                fb_result = await db.execute(
+                    select(FlowBlog.flow_id).where(FlowBlog.blog_id == blog_id)
+                )
+                for (fid,) in fb_result.fetchall():
+                    st_result = await db.execute(
+                        select(FlowExecutionState).where(and_(
+                            FlowExecutionState.flow_id == fid,
+                            FlowExecutionState.action_type == "generate",
+                        ))
+                    )
+                    st = st_result.scalar_one_or_none()
+                    if st:
+                        from datetime import datetime
+                        import pytz
+                        st.last_success_at = datetime.now(
+                            pytz.timezone('Asia/Seoul')
+                        )
+                        await db.commit()
+                        logger.info(
+                            f"[CELERY:GENERATE] last_success_at 갱신 | "
+                            f"flow_id={fid}"
+                        )
+        except Exception as se:
+            logger.warning(f"[CELERY:GENERATE] 상태 업데이트 실패: {se}")
+
         return result
 
 

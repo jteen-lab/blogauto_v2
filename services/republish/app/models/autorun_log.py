@@ -37,7 +37,7 @@ class AutorunLog(Base):
     status = Column(
         String(20),
         nullable=False,
-        comment="결과: success/failed/warning",
+        comment="결과: success/failed/warning/hold/skipped",
         index=True
     )
 
@@ -106,7 +106,9 @@ class AutorunLog(Base):
         status_map = {
             "success": "성공",
             "failed": "실패",
-            "warning": "경고"
+            "warning": "경고",
+            "hold": "보류",
+            "skipped": "스킵",
         }
         return status_map.get(self.status, self.status)
 

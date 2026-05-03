@@ -24,7 +24,7 @@ from ..models.flow_module import FlowModule
 from ..models.flow_blog import FlowBlog
 from ..models.module import Module
 from ..models.blog import Blog, BlogPlatform
-from ..models.flow_execution_state import FlowExecutionState
+from ..models.flow_execution_state import FlowExecutionState, MIN_EXECUTION_GAP
 from ..models.autorun_log import AutorunLog
 from ..models.user_settings import UserSettings
 from ..services.system_settings_service import SystemSettingsService
@@ -808,9 +808,9 @@ class FlowScheduler:
         if run_time.tzinfo is None:
             run_time = KST.localize(run_time)
 
-        # 이미 지난 시간이면 즉시 실행
+        # 이미 지난 시간이면 최소 간격 후 실행 (무한 루프 방지)
         if run_time <= now:
-            run_time = now + timedelta(seconds=3)
+            run_time = now + timedelta(seconds=MIN_EXECUTION_GAP)
 
         self.scheduler.add_job(
             self._execute_module_callback,  # AsyncIOExecutor가 async 함수 직접 지원
@@ -825,6 +825,81 @@ class FlowScheduler:
             f"[FLOW_SCHEDULER] Scheduled | FlowID={flow.id} | "
             f"ActionType={action_type} | RunTime={run_time.strftime('%Y-%m-%d %H:%M:%S %Z')}"
         )
+
+    async def _check_daily_limit(
+        self,
+        db: AsyncSession,
+        blog_id: int,
+        action_type: str,
+        daily_count: int,
+    ) -> tuple:
+        """일일 실행 한도 체크.
+
+        Args:
+            db: DB 세션
+            blog_id: 블로그 ID
+            action_type: 액션 타입 (generate/publish/republish)
+            daily_count: 일일 최대 횟수
+
+        Returns:
+            (exceeded: bool, today_count: int)
+        """
+        if not daily_count or daily_count <= 0:
+            return False, 0
+
+        from sqlalchemy import func as sa_func
+
+        today_start = datetime.now(KST).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+
+        count_query = select(sa_func.count(AutorunLog.id)).where(
+            and_(
+                AutorunLog.action == action_type,
+                AutorunLog.status == "success",
+                AutorunLog.created_at >= today_start,
+            )
+        )
+        # blog_id가 있으면 해당 블로그만 필터
+        if blog_id:
+            count_query = count_query.where(AutorunLog.blog_name != "-")
+
+        result = await db.execute(count_query)
+        today_count = result.scalar() or 0
+
+        return today_count >= daily_count, today_count
+
+    def _get_next_day_active_start(
+        self, gp_settings: dict
+    ) -> Optional[datetime]:
+        """다음 날 첫 활성 시간 반환.
+
+        Args:
+            gp_settings: GP 설정 dict
+
+        Returns:
+            다음 날 첫 활성 시간 (datetime) 또는 None
+        """
+        if not gp_settings:
+            return None
+        matrix = gp_settings.get("schedule_matrix")
+        if not matrix:
+            return None
+
+        tomorrow = datetime.now(KST) + timedelta(days=1)
+        tomorrow_start = tomorrow.replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+
+        dow = tomorrow_start.weekday()
+        if dow < len(matrix):
+            day_schedule = matrix[dow]
+            for hour in range(24):
+                if hour < len(day_schedule) and day_schedule[hour]:
+                    return tomorrow_start.replace(hour=hour)
+
+        # 폴백: 다음 날 08:00
+        return tomorrow_start.replace(hour=8)
 
     async def _execute_module_callback(
         self,
@@ -894,11 +969,23 @@ class FlowScheduler:
 
                 # 일시정지된 실행 상태 체크 (연속 실패 등으로 paused)
                 if state and state.is_paused:
-                    logger.info(
-                        f"[FLOW_SCHEDULER] 실행 상태 일시정지 중, 스킵 | "
-                        f"FlowID={flow_id} | ActionType={action_type}"
-                    )
-                    return
+                    # 플로우 자체가 active인데 state만 paused면 불일치 → 자동 해제
+                    if flow.status == "active" and flow.is_in_autorun:
+                        state.is_paused = False
+                        state.paused_at = None
+                        state.consecutive_failures = 0
+                        await db.commit()
+                        logger.info(
+                            f"[FLOW_SCHEDULER] 불일치 해소: state paused → active | "
+                            f"FlowID={flow_id} | ActionType={action_type}"
+                        )
+                    else:
+                        logger.info(
+                            f"[FLOW_SCHEDULER] 실행 상태 일시정지 중, 스킵 | "
+                            f"FlowID={flow_id} | ActionType={action_type} | "
+                            f"FlowStatus={flow.status} | IsInAutorun={flow.is_in_autorun}"
+                        )
+                        return
 
                 # 동시 실행 가드
                 if state and not state.acquire_execution_lock():
@@ -1039,15 +1126,60 @@ class FlowScheduler:
                     result = {"success": False, "message": f"지원하지 않는 액션 타입: {action_type}"}
                     logger.warning(f"[FLOW_SCHEDULER] Unknown action type | {action_type}")
 
-                # 실행 상태 업데이트
+                # === 공통 후처리 (Celery/직접 실행 무관하게 동일 패턴) ===
                 if state:
-                    state.record_execution(result.get("success", False))
-                    state.release_execution_lock()
-
-                # 다음 스케줄 등록 (성공/실패 무관)
-                await self._reschedule_next(
-                    db, flow, action_type, state, gp_settings, blogs
-                )
+                    if result.get("skip_interval"):
+                        # 간격 미소비 (최초 재고 대기 등): MIN_CHECK_INTERVAL 후 재체크
+                        from ..models.flow_execution_state import MIN_CHECK_INTERVAL
+                        state.release_execution_lock()
+                        recheck_time = datetime.now(KST) + timedelta(seconds=MIN_CHECK_INTERVAL)
+                        await self._schedule_at_time(
+                            flow, action_type=action_type,
+                            state=state, run_time=recheck_time
+                        )
+                        logger.info(
+                            f"[FLOW_SCHEDULER] 재고 대기 (간격 미소비) | "
+                            f"FlowID={flow_id} | ActionType={action_type} | "
+                            f"Recheck={recheck_time.strftime('%H:%M:%S')}"
+                        )
+                    elif (
+                        "일일" in result.get("message", "")
+                        and "한도" in result.get("message", "")
+                    ):
+                        # 일일 한도: 다음 날 첫 활성 시간으로 스케줄
+                        state.record_execution(True)
+                        state.release_execution_lock()
+                        next_day_active = self._get_next_day_active_start(
+                            gp_settings
+                        )
+                        if next_day_active:
+                            await self._schedule_at_time(
+                                flow, action_type=action_type,
+                                state=state, run_time=next_day_active,
+                            )
+                        logger.info(
+                            f"[FLOW_SCHEDULER] 일일 한도 → 다음 날 스케줄 | "
+                            f"FlowID={flow_id} | ActionType={action_type} | "
+                            f"NextDay={next_day_active}"
+                        )
+                    elif result.get("hold"):
+                        # 보류: 간격 소비하고 다음 정규 스케줄로 진행
+                        state.record_execution(True)
+                        state.release_execution_lock()
+                        await self._reschedule_next(
+                            db, flow, action_type, state, gp_settings, blogs
+                        )
+                        logger.info(
+                            f"[FLOW_SCHEDULER] 보류 (간격 소비) | "
+                            f"FlowID={flow_id} | ActionType={action_type}"
+                        )
+                    else:
+                        # 정상 실행 (성공/실패/Celery 위임 모두): 간격 소비 + 다음 스케줄
+                        state.record_execution(result.get("success", False))
+                        state.release_execution_lock()
+                        await self._reschedule_next(
+                            db, flow, action_type, state, gp_settings, blogs
+                        )
 
                 await db.commit()
 
@@ -1196,7 +1328,7 @@ class FlowScheduler:
                     )
                     return
 
-                # 잠금 해제 + 실패 기록
+                # 잠금 해제 + 실행 기록 (last_executed_at 갱신으로 스케줄 진행 보장)
                 state.release_execution_lock()
                 state.record_execution(False)
 
@@ -1673,6 +1805,35 @@ class FlowScheduler:
                             stage_dict, active_hours
                         )
 
+            # 일일 횟수 제한 체크 (Phase 3)
+            if gp_settings:
+                stages = gp_settings.get("stages", [])
+                for stage in stages:
+                    gen_config = stage.get("generate", {})
+                    if gen_config.get("daily_count"):
+                        for blog in blogs:
+                            exceeded, today_count = await self._check_daily_limit(
+                                db, blog.id, "generate",
+                                gen_config["daily_count"],
+                            )
+                            if exceeded:
+                                logger.info(
+                                    f"[SCHED:GENERATE] 일일 한도 도달 | "
+                                    f"blog={blog.name} | "
+                                    f"today={today_count}/"
+                                    f"{gen_config['daily_count']}"
+                                )
+                                return {
+                                    "success": True,
+                                    "skipped": True,
+                                    "message": (
+                                        f"일일 생성 한도 도달 "
+                                        f"({today_count}/"
+                                        f"{gen_config['daily_count']})"
+                                    ),
+                                }
+                        break  # 첫 매칭 stage만 체크
+
             gen_executor = FlowGenerateExecutor(db, flow.user_id)
 
             total_success = 0
@@ -1931,7 +2092,7 @@ class FlowScheduler:
 
         from ..services.generation.warmup_manager import WarmupManager
         from ..services.generation.publisher import Publisher
-        from ..services.generation.publisher_pipeline import PublisherPipeline
+        from ..services.publishing.publisher_pipeline import PublisherPipeline
         from ..services.generation.flow_execution_context import FlowExecutionContext
         from ..services.generation.growth_profile_resolver import GrowthProfileResolver
 
@@ -1954,14 +2115,92 @@ class FlowScheduler:
                 gp_module_name = _m.name
                 break
 
+        from ..services.generation.inventory_manager import InventoryManager
+        from ..models.flow_execution_state import MIN_CHECK_INTERVAL
+
+        inv_mgr = InventoryManager(db)
+
+        # 일일 횟수 제한 체크 (Phase 3)
+        if gp_context:
+            for blog in blogs:
+                stage_params = gp_context.get_stage_for_blog(blog.id)
+                if (
+                    stage_params
+                    and stage_params.publish
+                    and stage_params.publish.daily_count
+                ):
+                    exceeded, today_count = await self._check_daily_limit(
+                        db, blog.id, "publish",
+                        stage_params.publish.daily_count,
+                    )
+                    if exceeded:
+                        logger.info(
+                            f"[SCHED:PUBLISH] 일일 한도 도달 | "
+                            f"blog={blog.name} | "
+                            f"today={today_count}/"
+                            f"{stage_params.publish.daily_count}"
+                        )
+                        return {
+                            "success": True,
+                            "skipped": True,
+                            "message": (
+                                f"일일 발행 한도 도달 "
+                                f"({today_count}/"
+                                f"{stage_params.publish.daily_count})"
+                            ),
+                        }
+
         success_count = 0
         fail_count = 0
+        hold_count = 0
+        skip_count = 0
         for blog in blogs:
             blog_start = datetime.now()
             try:
                 stage_params = gp_context.get_stage_for_blog(blog.id) if gp_context else None
                 if not stage_params or not stage_params.publish.enabled:
                     continue
+
+                # 재고 ON/OFF 체크 (발행 가능 글 존재 여부)
+                inventory_post = await inv_mgr.get_post_for_publish(blog.id)
+                has_inventory = inventory_post is not None
+
+                if not has_inventory:
+                    # 최초 실행 판별: successful_executions == 0
+                    state = await self._get_execution_state(db, flow.id, "publish")
+                    is_first = state and state.successful_executions == 0
+
+                    if is_first:
+                        # 최초 실행 + 재고 OFF: 간격 미소비, 재체크 대기
+                        pub_result = {
+                            "success": True,
+                            "skipped": True,
+                            "skip_interval": True,
+                            "message": "재고 대기 (최초 실행, 발행 가능 글 없음)"
+                        }
+                        skip_count += 1
+                    else:
+                        # 후속 실행 + 재고 OFF: 보류, 간격 소비
+                        pub_result = {
+                            "success": True,
+                            "hold": True,
+                            "message": "보류 (발행 가능 글 없음)"
+                        }
+                        hold_count += 1
+
+                    # AutorunLog 저장
+                    blog_duration = int((datetime.now() - blog_start).total_seconds() * 1000)
+                    await self._save_autorun_log(
+                        db=db, user_id=flow.user_id, flow_id=flow.id,
+                        flow_name=flow.name, module_name=gp_module_name,
+                        blog_name=blog.name, result=pub_result,
+                        duration_ms=blog_duration, action="publish")
+
+                    logger.info(
+                        f"[SCHED:PUBLISH] 재고 OFF | blog={blog.name} | "
+                        f"first={is_first} | status={'skip' if is_first else 'hold'}"
+                    )
+                    continue  # 다음 블로그로
 
                 # 워밍업 체크
                 warmup_settings = gp_settings.get("warmup", {}) if gp_settings else {}
@@ -2057,10 +2296,27 @@ class FlowScheduler:
                     result={"success": False, "message": str(e)},
                     duration_ms=blog_duration, action="publish")
 
-        return {
+        # 모든 블로그가 hold/skip인 경우 결과에 플래그 전파
+        all_hold = hold_count > 0 and success_count == 0 and fail_count == 0 and skip_count == 0
+        all_skip = skip_count > 0 and success_count == 0 and fail_count == 0 and hold_count == 0
+
+        result = {
             "success": fail_count == 0,
-            "message": f"발행 성공 {success_count}/{len(blogs)}, 실패 {fail_count}/{len(blogs)}"
+            "message": (
+                f"발행 성공 {success_count}/{len(blogs)}, "
+                f"실패 {fail_count}/{len(blogs)}"
+                + (f", 보류 {hold_count}" if hold_count else "")
+                + (f", 재고대기 {skip_count}" if skip_count else "")
+            ),
         }
+
+        if all_hold:
+            result["hold"] = True
+        elif all_skip:
+            result["skip_interval"] = True
+            result["skipped"] = True
+
+        return result
 
     async def _execute_republish_action(
         self,
@@ -2210,8 +2466,14 @@ class FlowScheduler:
     ) -> None:
         """AutorunLog DB 저장 (flows_execute.py와 동일)"""
         try:
-            is_success = result.get("success", False)
-            status = "success" if is_success else "failed"
+            # 상태 결정: hold > skipped > success/failed
+            if result.get("hold"):
+                status = "hold"
+            elif result.get("skipped"):
+                status = "skipped"
+            else:
+                is_success = result.get("success", False)
+                status = "success" if is_success else "failed"
             post_title = result.get("post_title", "")
 
             # action_time 포맷팅

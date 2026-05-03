@@ -32,6 +32,11 @@ KST = pytz.timezone('Asia/Seoul')
 # 좀비 실행 판정 기준 (분)
 ZOMBIE_TIMEOUT_MINUTES = 30
 
+# 스케줄 안전 상수
+MIN_EXECUTION_GAP = 60          # 최소 실행 간격 (초)
+MIN_CHECK_INTERVAL = 600        # 재고 부족 시 재체크 간격 (초, 10분)
+MAX_SCHEDULE_SEARCH_DAYS = 14   # 활성 시간대 탐색 최대 일수
+
 
 class FlowExecutionState(Base):
     """플로우 실행 상태 - 액션 타입별 실행 추적"""
@@ -70,6 +75,11 @@ class FlowExecutionState(Base):
         DateTime(timezone=True),
         nullable=True,
         comment="마지막 실행 시간"
+    )
+    last_success_at = Column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="마지막 성공 시점"
     )
     next_execution_at = Column(
         DateTime(timezone=True),
@@ -179,14 +189,16 @@ class FlowExecutionState(Base):
         self.is_running = False
 
     def record_execution(self, success: bool) -> None:
-        """실행 기록 (timezone aware)
+        """실행 기록. 성공/실패 모두 last_executed_at 갱신 (스케줄 진행 보장).
 
-        Args:
-            success: 실행 성공 여부. True이면 consecutive_failures를 0으로 리셋.
+        실패 시에도 last_executed_at을 갱신하여 스케줄이 항상 전진합니다.
+        마지막 성공 시점은 last_success_at으로 별도 추적합니다.
         """
-        self.last_executed_at = datetime.now(KST)
+        now = datetime.now(KST)
         self.total_executions += 1
+        self.last_executed_at = now  # 항상 갱신 (무한 루프 방지)
         if success:
+            self.last_success_at = now
             self.successful_executions += 1
             self.consecutive_failures = 0
         else:
@@ -232,44 +244,104 @@ class FlowExecutionState(Base):
         jitter_min_percent: int = -20,
         jitter_max_percent: int = 30
     ) -> Optional[datetime]:
-        """다음 실행 시간 계산 (timezone aware)"""
+        """다음 실행 시간 계산 (활성 시간대 기준 간격 소비 방식)."""
         from datetime import timedelta
         import random
 
-        # timezone aware datetime 사용
         now = datetime.now(KST)
 
-        # base_time 설정 (timezone aware로 변환)
         if self.last_executed_at:
             if self.last_executed_at.tzinfo is None:
                 base_time = KST.localize(self.last_executed_at)
             else:
-                base_time = self.last_executed_at
+                base_time = self.last_executed_at.astimezone(KST)
         else:
             base_time = now
 
-        # 기본 간격 적용
         interval_seconds = interval_minutes * 60
-
-        # Jitter 적용 (선택적)
         if jitter_enabled:
             min_factor = 1 + (jitter_min_percent / 100)
             max_factor = 1 + (jitter_max_percent / 100)
-            jitter_factor = random.uniform(min_factor, max_factor)
-            interval_seconds = int(interval_seconds * jitter_factor)
+            interval_seconds = int(interval_seconds * random.uniform(min_factor, max_factor))
 
-        next_time = base_time + timedelta(seconds=interval_seconds)
-
-        # 이미 지난 시간이면 현재 시간 기준으로 재계산
-        if next_time <= now:
-            next_time = now + timedelta(seconds=interval_seconds)
-
-        # schedule_matrix 기반 활성화 시간대 체크
         if schedule_matrix:
-            next_time = self._adjust_to_active_window(next_time, schedule_matrix)
+            next_time = self._calc_active_time_schedule(
+                base_time, interval_seconds, schedule_matrix, now
+            )
+        else:
+            next_time = base_time + timedelta(seconds=interval_seconds)
+            if next_time <= now:
+                next_time = now + timedelta(seconds=MIN_EXECUTION_GAP)
 
         self.next_execution_at = next_time
         return next_time
+
+    def _calc_active_time_schedule(
+        self,
+        base_time: datetime,
+        interval_seconds: int,
+        schedule_matrix: list,
+        now: datetime,
+    ) -> datetime:
+        """활성 시간대만 카운트하여 다음 실행 시간 계산.
+
+        base_time부터 활성 시간만 누적하여 interval_seconds를 소비합니다.
+        결과가 과거이면 MIN_EXECUTION_GAP(60초) 후로 설정하여
+        무한 루프를 방지합니다.
+        """
+        from datetime import timedelta
+
+        remaining = interval_seconds
+        cursor = base_time
+
+        for _ in range(MAX_SCHEDULE_SEARCH_DAYS * 24):
+            dow = cursor.weekday()
+            hour = cursor.hour
+
+            if not self._is_hour_active(schedule_matrix, dow, hour):
+                cursor = self._next_active_hour(cursor, schedule_matrix)
+                if cursor is None:
+                    return now + timedelta(seconds=MIN_EXECUTION_GAP)
+                continue
+
+            end_of_hour = cursor.replace(minute=0, second=0) + timedelta(hours=1)
+            seconds_in_hour = (end_of_hour - cursor).total_seconds()
+
+            if remaining <= seconds_in_hour:
+                result = cursor + timedelta(seconds=remaining)
+                if result <= now:
+                    # 밀린 스케줄: 즉시 실행 허용 (최소 60초 간격)
+                    return now + timedelta(seconds=MIN_EXECUTION_GAP)
+                return result
+
+            remaining -= seconds_in_hour
+            cursor = end_of_hour
+
+        return now + timedelta(seconds=MIN_EXECUTION_GAP)
+
+    @staticmethod
+    def _is_hour_active(matrix: list, dow: int, hour: int) -> bool:
+        """schedule_matrix에서 특정 요일/시간이 활성인지 확인."""
+        if not matrix or len(matrix) != 7:
+            return True
+        day = matrix[dow]
+        if not day or len(day) != 24:
+            return True
+        return bool(day[hour])
+
+    @staticmethod
+    def _next_active_hour(from_time: datetime, matrix: list) -> 'Optional[datetime]':
+        """from_time 이후 가장 가까운 활성 시간의 시작을 반환."""
+        from datetime import timedelta
+
+        cursor = from_time.replace(minute=0, second=0) + timedelta(hours=1)
+        for _ in range(24 * 7):
+            dow = cursor.weekday()
+            hour = cursor.hour
+            if FlowExecutionState._is_hour_active(matrix, dow, hour):
+                return cursor
+            cursor += timedelta(hours=1)
+        return None
 
     def _adjust_to_active_window(
         self,
