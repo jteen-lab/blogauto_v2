@@ -137,6 +137,7 @@ blogauto_v2/services/republish/     # 작업 디렉토리
 | `docs/claude/AGENTS.md` | 멀티 에이전트 시스템, 통신 프로토콜, 워크플로우 |
 | `docs/claude/DEVELOPMENT.md` | 개발 프로세스, 기술 스택, 코드 표준, 배포 |
 | `docs/claude/PROJECT_STRUCTURE.md` | 프로젝트 디렉토리 구조 상세 |
+| `docs/claude/REGRESSION_PREVENTION.md` | **회귀 방지 규칙**, 수정 시 영향 범위 분석, 테스트 필수 항목 |
 | `docs/plans/` | 작업 계획서 |
 | `docs/flowcharts/` | Mermaid 순서도 |
 
