@@ -131,12 +131,15 @@ def _apply_filters(
             AutorunLog.action.in_(["generate", "publish", "republish", "collect"])
         )
     elif log_type == "activity":
-        query = query.where(
-            AutorunLog.action.notin_(["generate", "publish", "republish", "collect"])
+        # 활동: 시스템 이벤트 + 큐/워커 등록 (Celery 큐 등록 메시지 포함)
+        from sqlalchemy import or_
+        activity_filter = or_(
+            AutorunLog.action.notin_(["generate", "publish", "republish", "collect"]),
+            AutorunLog.message.ilike("%Celery 큐 등록%"),
+            AutorunLog.message.ilike("%큐에 등록%"),
         )
-        count_query = count_query.where(
-            AutorunLog.action.notin_(["generate", "publish", "republish", "collect"])
-        )
+        query = query.where(activity_filter)
+        count_query = count_query.where(activity_filter)
     elif log_type == "generation":
         query = query.where(AutorunLog.action == "generate")
         count_query = count_query.where(AutorunLog.action == "generate")
