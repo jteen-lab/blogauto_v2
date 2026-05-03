@@ -56,14 +56,14 @@
                         class="flex-1 py-3 px-4 text-sm font-medium border-b-2 transition-colors">
                     API 설정
                 </button>
-                <button @click="activeTab = 'system'" type="button"
-                        class="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
-                        :class="activeTab === 'system' ? 'bg-orange-100 text-orange-700' : 'text-gray-500 hover:text-gray-700'">
+                <button @click="activeTab = 'system'"
+                        :class="activeTab === 'system' ? 'tab-active' : 'border-transparent text-gray-500 hover:text-gray-700'"
+                        class="flex-1 py-3 px-4 text-sm font-medium border-b-2 transition-colors">
                     시스템 설정
                 </button>
-                <button @click="activeTab = 'theme'" type="button"
-                        class="px-4 py-2 text-sm font-medium rounded-lg transition-colors"
-                        :class="activeTab === 'theme' ? 'bg-emerald-100 text-emerald-700' : 'text-gray-500 hover:text-gray-700'">
+                <button @click="activeTab = 'theme'"
+                        :class="activeTab === 'theme' ? 'tab-active' : 'border-transparent text-gray-500 hover:text-gray-700'"
+                        class="flex-1 py-3 px-4 text-sm font-medium border-b-2 transition-colors">
                     테마
                 </button>
             </div>

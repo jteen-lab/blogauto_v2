@@ -101,7 +101,7 @@
             <!-- 각 로그를 개별 줄로 표시 -->
             <template x-for="(log, index) in displayLogs" :key="index">
                 <div class="log-row text-xs pl-1"
-                     :class="[getLogRowBorderClass(log.action_type), getLogRowBgClass(log.level)]">
+                     :class="[getLogRowBorderClass(log.action_type), getLogRowBgClass(log.level, log.action_type)]">
                     <!-- 고정 영역: 시간 + 레벨 + 액션 배지 -->
                     <div class="log-fixed-area">
                         <span class="text-gray-500 font-mono text-[11px]" x-text="formatLogTime(log.timestamp)"></span>
@@ -193,7 +193,7 @@
             <div class="space-y-0.5 font-mono">
                 <template x-for="log in unifiedLogs" :key="log.id">
                     <div class="flex items-start gap-2 py-1 border-b border-gray-800/50 text-xs pl-1"
-                         :class="[getLogRowBorderClass(log.action_type), getLogRowBgClass(log.level)]">
+                         :class="[getLogRowBorderClass(log.action_type), getLogRowBgClass(log.level, log.action_type)]">
                         <span class="text-gray-500 flex-shrink-0 w-[90px]" x-text="formatLogTime(log.timestamp)"></span>
                         <span class="flex-shrink-0 px-1 py-0.5 rounded text-[10px] font-bold"
                               :class="getLevelClass(log.level)"

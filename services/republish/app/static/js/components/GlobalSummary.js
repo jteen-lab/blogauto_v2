@@ -428,8 +428,10 @@ function globalSummary() {
             };
             return map[actionType] || 'border-l-[3px] border-gray-600';
         },
-        getLogRowBgClass(level) {
-            return level === 'ERROR' ? 'bg-red-950/20' : '';
+        getLogRowBgClass(level, actionType) {
+            if (level === 'ERROR') return 'bg-red-950/20';
+            if (actionType === 'system') return 'bg-amber-950/10';
+            return '';
         },
 
         // 외부에서 로그 추가 (전역 함수로 사용 가능)
