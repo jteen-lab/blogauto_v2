@@ -167,7 +167,7 @@
             <!-- 필터 바 -->
             <div class="flex items-center gap-2 mb-3 flex-wrap">
                 <template x-for="f in [{key:'all',label:'전체',dot:''},{key:'action',label:'작업',dot:'bg-blue-400'},{key:'activity',label:'활동',dot:'bg-amber-400'},{key:'generation',label:'생성',dot:'bg-emerald-400'}]" :key="f.key">
-                    <button @click.stop="logFilter = f.key; loadUnifiedLogs(); loadDisplayLogs()"
+                    <button @click.stop="logFilter = f.key; localStorage.setItem('dashboard_log_filter', f.key); loadUnifiedLogs(); loadDisplayLogs()"
                             class="px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors flex items-center gap-1"
                             :class="logFilter === f.key ? 'bg-gray-700 text-white' : 'text-gray-500 hover:text-gray-300'">
                         <span x-show="f.dot" class="w-1.5 h-1.5 rounded-full flex-shrink-0" :class="f.dot"></span>

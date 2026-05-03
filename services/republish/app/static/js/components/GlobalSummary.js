@@ -2,7 +2,7 @@
 function globalSummary() {
     return {
         logPanelOpen: false,
-        logFilter: 'all',
+        logFilter: localStorage.getItem('dashboard_log_filter') || 'all',
         logSearch: '',
         unifiedLogs: [],
         unifiedLogsTotal: 0,
