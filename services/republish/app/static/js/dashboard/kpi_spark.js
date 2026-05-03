@@ -81,13 +81,13 @@ function compactDashboard() {
             try {
                 const [summary, trends, blogStats, hourly, workers, logs, contents, flower] =
                     await Promise.all([
-                        this._get(`${A}/dashboard/summary`),
+                        this._get(`${A}/dashboard/stats`),
                         this._get(`${A}/dashboard/trends?days=${this._periodDays()}`),
                         this._get(`${A}/dashboard/blog_stats`),
                         this._get(`${A}/dashboard/hourly`),
                         this._get(`${A}/dashboard/celery/workers`),
                         this._get(`${A}/dashboard/logs?limit=8`),
-                        this._get(`${A}/generation/content?limit=4`),
+                        this._get(`${A}/generation/content/list?page_size=4`),
                         this._get(`${A}/dashboard/celery/flower-url`),
                     ]);
                 this.trends = trends || { dates: [], generated: [], published: [], republished: [] };
@@ -98,7 +98,7 @@ function compactDashboard() {
                 this.flowerUrl = (flower && flower.url) || '';
                 this.stats = summary || {};
                 this.logs = Array.isArray(logs) ? logs : [];
-                this.contents = Array.isArray(contents) ? contents : (contents && contents.items) || [];
+                this.contents = (contents && contents.items) || [];
                 this.lastUpdated = new Date().toLocaleTimeString('ko-KR');
                 this._updateKPI(summary, this.trends, workers);
                 this._updateStatus(summary);

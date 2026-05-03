@@ -39,6 +39,12 @@
                                   x-text="workerStatus?.workers?.[wk.key]?.active_tasks ?? 0"></span>
                         </div>
                     </template>
+                    <!-- 대기 큐 표시 (PC) -->
+                    <div class="flex items-center gap-1.5 rounded-xl px-3 py-2 whitespace-nowrap shadow-sm flex-shrink-0"
+                         :class="workerStatus && workerStatus.total_queued > 0 ? 'bg-amber-50 border border-amber-200' : 'bg-gray-50 border border-gray-200'">
+                        <span class="text-xs font-medium" :class="workerStatus && workerStatus.total_queued > 0 ? 'text-amber-600' : 'text-gray-400'">대기 큐</span>
+                        <span class="text-sm font-bold" :class="workerStatus && workerStatus.total_queued > 0 ? 'text-amber-700' : 'text-gray-400'" x-text="(workerStatus && workerStatus.total_queued) || 0"></span>
+                    </div>
                 </div>
                 <!-- 모바일: 2열 그리드 -->
                 <div class="md:hidden grid grid-cols-2 gap-2">
@@ -50,6 +56,8 @@
                                   x-text="stats[tab.key] ?? '-'"></span>
                         </div>
                     </template>
+                    <!-- 모바일 구분선 -->
+                    <div class="col-span-2 border-t border-gray-200"></div>
                     <!-- 모바일 워커 상태 카드 -->
                     <template x-for="wk in [{key:'generation',label:'생성'},{key:'publish',label:'발행'},{key:'utility',label:'유틸'}]" :key="wk.key">
                         <div class="flex items-center justify-between gap-2 rounded-lg px-3 py-2 shadow-sm transition-colors duration-300"
@@ -71,6 +79,12 @@
                             </div>
                         </div>
                     </template>
+                    <!-- 대기 큐 표시 (모바일) -->
+                    <div class="col-span-2 flex items-center justify-between gap-2 rounded-lg px-3 py-2 shadow-sm"
+                         :class="workerStatus && workerStatus.total_queued > 0 ? 'bg-amber-50 border border-amber-200' : 'bg-gray-50 border border-gray-200'">
+                        <span class="text-xs font-medium" :class="workerStatus && workerStatus.total_queued > 0 ? 'text-amber-600' : 'text-gray-400'">대기 큐</span>
+                        <span class="text-sm font-bold" :class="workerStatus && workerStatus.total_queued > 0 ? 'text-amber-700' : 'text-gray-400'" x-text="(workerStatus && workerStatus.total_queued) || 0"></span>
+                    </div>
                     <template x-if="pinnedTabs.length === 0">
                         <div class="col-span-2 text-center text-gray-400 text-sm py-2">클릭하여 요약 보기</div>
                     </template>
@@ -86,8 +100,9 @@
             <div class="min-w-0">
             <!-- 각 로그를 개별 줄로 표시 -->
             <template x-for="(log, index) in displayLogs" :key="index">
-                <div class="log-row text-xs">
-                    <!-- 고정 영역: 시간 + 레벨 -->
+                <div class="log-row text-xs pl-1"
+                     :class="[getLogRowBorderClass(log.action_type), getLogRowBgClass(log.level)]">
+                    <!-- 고정 영역: 시간 + 레벨 + 액션 배지 -->
                     <div class="log-fixed-area">
                         <span class="text-gray-500 font-mono text-[11px]" x-text="formatLogTime(log.timestamp)"></span>
                         <span class="log-level-badge"
@@ -98,6 +113,9 @@
                                   'log-level-error': log.level === 'ERROR'
                               }"
                               x-text="log.level"></span>
+                        <span class="px-1.5 py-0.5 rounded text-[10px] font-medium"
+                              :class="getActionBadgeClass(log.action_type)"
+                              x-text="getActionLabel(log.action_type)"></span>
                     </div>
                     <!-- 메시지 영역: PC는 정적, 모바일은 슬라이드 -->
                     <div class="log-message-container">
@@ -148,10 +166,11 @@
         <div class="max-w-7xl mx-auto px-4 py-3">
             <!-- 필터 바 -->
             <div class="flex items-center gap-2 mb-3 flex-wrap">
-                <template x-for="f in [{key:'all',label:'전체'},{key:'action',label:'작업'},{key:'activity',label:'활동'},{key:'generation',label:'생성'}]" :key="f.key">
-                    <button @click.stop="logFilter = f.key; loadUnifiedLogs()"
-                            class="px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors"
+                <template x-for="f in [{key:'all',label:'전체',dot:''},{key:'action',label:'작업',dot:'bg-blue-400'},{key:'activity',label:'활동',dot:'bg-amber-400'},{key:'generation',label:'생성',dot:'bg-emerald-400'}]" :key="f.key">
+                    <button @click.stop="logFilter = f.key; loadUnifiedLogs(); loadDisplayLogs()"
+                            class="px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors flex items-center gap-1"
                             :class="logFilter === f.key ? 'bg-gray-700 text-white' : 'text-gray-500 hover:text-gray-300'">
+                        <span x-show="f.dot" class="w-1.5 h-1.5 rounded-full flex-shrink-0" :class="f.dot"></span>
                         <span x-text="f.label"></span>
                     </button>
                 </template>
@@ -173,11 +192,15 @@
             <!-- 로그 목록 -->
             <div class="space-y-0.5 font-mono">
                 <template x-for="log in unifiedLogs" :key="log.id">
-                    <div class="flex items-start gap-2 py-1 border-b border-gray-800/50 text-xs">
+                    <div class="flex items-start gap-2 py-1 border-b border-gray-800/50 text-xs pl-1"
+                         :class="[getLogRowBorderClass(log.action_type), getLogRowBgClass(log.level)]">
                         <span class="text-gray-500 flex-shrink-0 w-[90px]" x-text="formatLogTime(log.timestamp)"></span>
                         <span class="flex-shrink-0 px-1 py-0.5 rounded text-[10px] font-bold"
                               :class="getLevelClass(log.level)"
                               x-text="log.level"></span>
+                        <span class="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium"
+                              :class="getActionBadgeClass(log.action_type)"
+                              x-text="getActionLabel(log.action_type)"></span>
                         <template x-if="log.platform">
                             <span class="inline-flex items-center justify-center w-4 h-4 rounded-sm text-[10px] font-bold text-white flex-shrink-0"
                                   :class="log.platform === '워' ? 'bg-blue-500' : log.platform === '구' ? 'bg-orange-500' : 'bg-gray-500'"

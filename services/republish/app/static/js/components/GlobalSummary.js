@@ -255,14 +255,22 @@ function globalSummary() {
             this.loadDisplayLogs();
         },
 
-        // 표시할 로그 로드 (노출 수만큼)
+        // 표시할 로그 로드 (노출 수만큼, 현재 필터 적용)
         async loadDisplayLogs() {
             try {
                 const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
-                const res = await fetch(`${apiBase}/dashboard/logs?limit=${this.displayLogCount}`, { credentials: 'include' });
+                const params = new URLSearchParams({ limit: String(this.displayLogCount) });
+                if (this.logFilter && this.logFilter !== 'all') {
+                    params.set('log_type', this.logFilter);
+                }
+                const res = await fetch(`${apiBase}/dashboard/unified-logs?${params}`, { credentials: 'include' });
                 if (res.ok) {
                     const data = await res.json();
-                    this.displayLogs = data.logs || [];
+                    // unified-logs는 title 필드, 로그 바는 message 필드 사용 - 정규화
+                    this.displayLogs = (data.logs || []).map(log => ({
+                        ...log,
+                        message: log.message || log.title || '',
+                    }));
                     // 호환성을 위해 latestLog도 업데이트
                     if (this.displayLogs.length > 0) {
                         const log = this.displayLogs[0];
@@ -392,6 +400,35 @@ function globalSummary() {
                 'ERROR': 'bg-red-900 text-red-300',
             };
             return map[level] || 'bg-gray-800 text-gray-400';
+        },
+
+        // 액션 타입별 배지 클래스
+        getActionBadgeClass(actionType) {
+            const map = {
+                generate: 'bg-emerald-800/60 text-emerald-300',
+                publish: 'bg-blue-800/60 text-blue-300',
+                republish: 'bg-violet-800/60 text-violet-300',
+                collect: 'bg-cyan-800/60 text-cyan-300',
+                data: 'bg-amber-800/60 text-amber-300',
+            };
+            return map[actionType] || 'bg-gray-700/60 text-gray-400';
+        },
+        getActionLabel(actionType) {
+            const map = { generate: '생성', publish: '발행', republish: '재발행', collect: '수집', data: '데이터' };
+            return map[actionType] || '시스템';
+        },
+        getLogRowBorderClass(actionType) {
+            const map = {
+                generate: 'border-l-[3px] border-emerald-400',
+                publish: 'border-l-[3px] border-blue-400',
+                republish: 'border-l-[3px] border-violet-400',
+                collect: 'border-l-[3px] border-cyan-400',
+                data: 'border-l-[3px] border-amber-400',
+            };
+            return map[actionType] || 'border-l-[3px] border-gray-600';
+        },
+        getLogRowBgClass(level) {
+            return level === 'ERROR' ? 'bg-red-950/20' : '';
         },
 
         // 외부에서 로그 추가 (전역 함수로 사용 가능)

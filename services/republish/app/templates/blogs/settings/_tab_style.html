@@ -78,14 +78,30 @@
                 <div class="px-3 py-2 bg-gray-50 border-b">
                     <h4 class="text-sm font-medium text-gray-700">선택자 목록</h4>
                 </div>
+                <!-- 테이블 설정 버튼 -->
+                <div class="px-2 py-2 border-b border-gray-100">
+                    <button @click="enterTableMode()"
+                            class="w-full px-3 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+                            :class="tableMode ? 'bg-blue-100 text-blue-700 border border-blue-300' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18M3 6h18M3 18h18"/>
+                        </svg>
+                        테이블 설정
+                    </button>
+                </div>
                 <div class="divide-y divide-gray-100 max-h-[500px] overflow-y-auto">
                     <template x-for="selector in selectors" :key="selector">
-                        <button @click="activeSelector = selector; loadCurrentSelectorStyles()"
-                                :class="activeSelector === selector
+                        <button @click="tableMode = false; activeSelector = selector; loadCurrentSelectorStyles()"
+                                :class="(!tableMode && activeSelector === selector)
                                     ? 'bg-blue-50 border-l-4 border-l-blue-500 text-blue-700'
                                     : 'hover:bg-gray-50 border-l-4 border-l-transparent'"
                                 class="w-full px-3 py-2.5 text-left text-sm transition-colors flex items-center justify-between">
-                            <code class="font-mono" x-text="selectorLabels[selector] || selector"></code>
+                            <span class="flex items-center">
+                                <code class="font-mono" x-text="selectorLabels[selector] || selector"></code>
+                                <template x-if="['table','th','td'].includes(selector)">
+                                    <span class="text-[9px] px-1 py-0.5 rounded bg-violet-100 text-violet-600 ml-1">통합</span>
+                                </template>
+                            </span>
                             <span x-show="hasStyles(selector)" class="w-2 h-2 bg-green-500 rounded-full"></span>
                         </button>
                     </template>
@@ -95,7 +111,21 @@
 
         <!-- 중앙: 스타일 편집 패널 (5컬럼) -->
         <div class="col-span-12 lg:col-span-5">
-            <div class="border rounded-lg overflow-hidden">
+
+            <!-- 테이블 전용 편집기 -->
+            <div x-show="tableMode" x-cloak class="border rounded-lg overflow-hidden">
+                <div class="px-3 py-2 bg-gray-50 border-b flex items-center justify-between">
+                    <h4 class="text-sm font-medium text-gray-700">
+                        스타일 편집: <span class="text-blue-600">테이블 설정</span>
+                    </h4>
+                </div>
+                <div class="p-4">
+                    {% include "blogs/settings/_tab_style_table.html" %}
+                </div>
+            </div>
+
+            <!-- 기존 범용 편집기 -->
+            <div x-show="!tableMode" class="border rounded-lg overflow-hidden">
                 <div class="px-3 py-2 bg-gray-50 border-b flex items-center justify-between">
                     <h4 class="text-sm font-medium text-gray-700">
                         스타일 편집: <code class="text-blue-600" x-text="activeSelector"></code>

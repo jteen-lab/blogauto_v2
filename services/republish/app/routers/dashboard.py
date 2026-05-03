@@ -518,10 +518,18 @@ async def get_action_logs(
             else:
                 msg = f"{action_text}{title_part} - {status_text}"
 
+            # 액션 타입 매핑
+            action_type_map = {
+                "generate": "generate", "publish": "publish",
+                "republish": "republish", "collect": "collect", "data": "data",
+            }
+            action_type = action_type_map.get(log.action, "system")
+
             formatted.append({
                 "id": log.id,
                 "level": level,
                 "message": msg,
+                "action_type": action_type,
                 "category": log.action,
                 "resource_type": "autorun",
                 "resource_id": log.flow_id,

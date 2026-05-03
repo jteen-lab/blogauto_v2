@@ -6,17 +6,46 @@
  * 의존성:
  * - style-tab-presets.js (프리셋 정의)
  * - style-tab-css-utils.js (CSS 유틸리티)
+ * - style-tab-table.js (테이블 전용 편집 믹스인)
  */
 
 /**
  * 스타일 탭 메인 컴포넌트
  */
 function styleTabApp() {
-    return {
+    const base = {
         // 상태
         loading: false,
         saving: false,
         showCssPanel: false,
+
+        // 테이블 전용 편집 모드
+        tableMode: false,
+
+        // 테이블 설정 (테이블 전용 UI 상태)
+        tableConfig: {
+            borderPreset: 'all',
+            borderColor: '#e5e7eb',
+            borderWidth: 1,
+            borderStyle: 'solid',
+            thBgColor: '#f3f4f6',
+            thTextColor: '#1f2937',
+            thFontWeight: '600',
+            thPadding: 10,
+            tdBgColor: '',
+            tdTextColor: '#374151',
+            tdPadding: 8,
+            zebraEnabled: false,
+            zebraEvenColor: '#f9fafb',
+            zebraOddColor: '#ffffff',
+            tableWidth: '100%',
+            tableWidthCustom: '',
+            borderCollapse: 'collapse',
+            borderSpacing: '0',
+        },
+
+        // 테이블 프리셋 참조 (Alpine x-for에서 접근 가능하도록)
+        tablePresets: {},
 
         // 선택자 목록 (프리셋 파일에서 가져오거나 기본값)
         selectors: typeof STYLE_SELECTORS !== 'undefined' ? STYLE_SELECTORS : [
@@ -73,6 +102,9 @@ function styleTabApp() {
          * 초기화
          */
         init() {
+            // 테이블 프리셋 로드 (전역 변수 → 컴포넌트 데이터)
+            if (typeof TABLE_PRESETS !== 'undefined') this.tablePresets = TABLE_PRESETS;
+
             // 전역 이벤트 리스너 등록 - blogSettingsApp에서 setBlog 호출 시
             window.addEventListener('blog-settings-loaded', (e) => {
                 if (e.detail && e.detail.blogId) {
@@ -443,6 +475,12 @@ function styleTabApp() {
             }
         }
     };
+
+    // 테이블 전용 편집 믹스인 합성
+    const tableMixin = typeof styleTabTableMixin === 'function' ? styleTabTableMixin() : {};
+    Object.assign(base, tableMixin);
+
+    return base;
 }
 
 // 선택자 변경 감시는 x-effect 또는 @change 이벤트로 처리

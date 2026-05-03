@@ -82,12 +82,13 @@ async def get_blog_stats(
             select(
                 GenerationHistory.blog_id,
                 Blog.name.label("blog_name"),
+                Blog.platform.label("platform"),
                 func.count().label("total"),
                 func.count(GenerationHistory.content_html).label("success"),
             )
             .join(Blog, Blog.id == GenerationHistory.blog_id)
             .where(GenerationHistory.created_at >= since)
-            .group_by(GenerationHistory.blog_id, Blog.name)
+            .group_by(GenerationHistory.blog_id, Blog.name, Blog.platform)
             .order_by(func.count().desc())
             .limit(6)
         )
@@ -95,6 +96,10 @@ async def get_blog_stats(
         return [
             {
                 "blog_name": r.blog_name, "blog_id": r.blog_id,
+                "platform": (
+                    r.platform.value if hasattr(r.platform, 'value')
+                    else str(r.platform)
+                ),
                 "count": r.total,
                 "success_rate": round(r.success / r.total * 100, 1) if r.total else 0.0,
             }

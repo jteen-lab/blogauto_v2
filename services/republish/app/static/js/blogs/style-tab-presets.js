@@ -100,6 +100,173 @@ const SELECTOR_LABELS = {
 };
 
 /**
+ * 테이블 스타일 프리셋 정의 (5종)
+ */
+const TABLE_PRESETS = {
+    simple: {
+        label: '심플',
+        table: {
+            'width': '100%',
+            'border-collapse': 'collapse',
+            'border-style': 'solid',
+            'border-width': '1',
+            'border-color': '#e5e7eb'
+        },
+        th: {
+            'background-color': '#f3f4f6',
+            'color': '#1f2937',
+            'font-weight': '600',
+            'padding-top': '10',
+            'padding-right': '12',
+            'padding-bottom': '10',
+            'padding-left': '12',
+            'border-style': 'solid',
+            'border-width': '1',
+            'border-color': '#e5e7eb'
+        },
+        td: {
+            'color': '#374151',
+            'padding-top': '8',
+            'padding-right': '12',
+            'padding-bottom': '8',
+            'padding-left': '12',
+            'border-style': 'solid',
+            'border-width': '1',
+            'border-color': '#e5e7eb'
+        },
+        zebra: null
+    },
+    modern: {
+        label: '모던',
+        table: {
+            'width': '100%',
+            'border-collapse': 'separate',
+            'border-radius': '8'
+        },
+        th: {
+            'background-color': '#3b82f6',
+            'color': '#ffffff',
+            'font-weight': '600',
+            'padding-top': '12',
+            'padding-right': '16',
+            'padding-bottom': '12',
+            'padding-left': '16'
+        },
+        td: {
+            'color': '#374151',
+            'padding-top': '10',
+            'padding-right': '16',
+            'padding-bottom': '10',
+            'padding-left': '16'
+        },
+        zebra: null
+    },
+    classic: {
+        label: '클래식',
+        table: {
+            'width': '100%',
+            'border-collapse': 'collapse',
+            'border-style': 'solid',
+            'border-width': '2',
+            'border-color': '#374151'
+        },
+        th: {
+            'background-color': '#e5e7eb',
+            'color': '#111827',
+            'font-weight': 'bold',
+            'padding-top': '10',
+            'padding-right': '14',
+            'padding-bottom': '10',
+            'padding-left': '14',
+            'border-style': 'solid',
+            'border-width': '2',
+            'border-color': '#374151'
+        },
+        td: {
+            'color': '#1f2937',
+            'padding-top': '8',
+            'padding-right': '14',
+            'padding-bottom': '8',
+            'padding-left': '14',
+            'border-style': 'solid',
+            'border-width': '1',
+            'border-color': '#9ca3af'
+        },
+        zebra: null
+    },
+    minimal: {
+        label: '미니멀',
+        table: {
+            'width': '100%',
+            'border-collapse': 'collapse'
+        },
+        th: {
+            'color': '#6b7280',
+            'font-weight': '500',
+            'padding-top': '8',
+            'padding-right': '12',
+            'padding-bottom': '8',
+            'padding-left': '12',
+            'border-bottom-style': 'solid',
+            'border-bottom-width': '2',
+            'border-bottom-color': '#e5e7eb'
+        },
+        td: {
+            'color': '#374151',
+            'padding-top': '8',
+            'padding-right': '12',
+            'padding-bottom': '8',
+            'padding-left': '12',
+            'border-bottom-style': 'solid',
+            'border-bottom-width': '1',
+            'border-bottom-color': '#f3f4f6'
+        },
+        zebra: null
+    },
+    dark: {
+        label: '다크',
+        table: {
+            'width': '100%',
+            'border-collapse': 'collapse',
+            'border-style': 'solid',
+            'border-width': '1',
+            'border-color': '#374151'
+        },
+        th: {
+            'background-color': '#1f2937',
+            'color': '#ffffff',
+            'font-weight': '600',
+            'padding-top': '12',
+            'padding-right': '14',
+            'padding-bottom': '12',
+            'padding-left': '14',
+            'border-style': 'solid',
+            'border-width': '1',
+            'border-color': '#374151'
+        },
+        td: {
+            'color': '#e5e7eb',
+            'padding-top': '10',
+            'padding-right': '14',
+            'padding-bottom': '10',
+            'padding-left': '14',
+            'border-style': 'solid',
+            'border-width': '1',
+            'border-color': '#374151'
+        },
+        zebra: {
+            even: '#111827',
+            odd: '#1f2937'
+        }
+    }
+};
+
+/**
+ * 숨겨진 선택자 (좌측 목록에 표시하지 않지만 CSS 생성에 포함)
+ */
+const HIDDEN_SELECTORS = ['tr:nth-child(even)', 'tr:nth-child(odd)'];
+
+/**
  * 샘플 HTML 콘텐츠
  */
 const SAMPLE_CONTENT = `
@@ -119,9 +286,6 @@ const SAMPLE_CONTENT = `
         <li>순서 있는 목록 1</li>
         <li>순서 있는 목록 2</li>
     </ol>
-    <table>
-        <thead><tr><th>헤더 1</th><th>헤더 2</th></tr></thead>
-        <tbody><tr><td>데이터 1</td><td>데이터 2</td></tr></tbody>
-    </table>
+    <table><thead><tr><th>항목</th><th>값</th><th>비고</th></tr></thead><tbody><tr><td>데이터 A1</td><td>100</td><td>정상</td></tr><tr><td>데이터 A2</td><td>200</td><td>주의</td></tr><tr><td>데이터 A3</td><td>150</td><td>정상</td></tr><tr><td>데이터 A4</td><td>300</td><td>확인</td></tr></tbody></table>
     <blockquote>인용문 텍스트입니다.</blockquote>
 `;

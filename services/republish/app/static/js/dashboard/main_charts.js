@@ -28,7 +28,7 @@ compactDashboard = function () {
             series: [
                 { name: '생성', data: this.trends.generated || [] },
                 { name: '발행', data: this.trends.published || [] },
-                { name: '리퍼블리시', data: this.trends.republished || [] },
+                { name: '재발행', data: this.trends.republished || [] },
             ],
             xaxis: {
                 categories: this.trends.dates || [],

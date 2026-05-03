@@ -53,6 +53,7 @@ class ContentListItem(BaseModel):
     title: str
     blog_id: int
     blog_name: Optional[str] = None
+    platform: Optional[str] = None
     has_content: bool
     has_image: bool
     image_url: Optional[str] = None
@@ -116,14 +117,20 @@ async def list_generated_content(
     result = await db.execute(query)
     posts = result.scalars().all()
 
-    # 블로그 이름 조회
+    # 블로그 이름 + 플랫폼 조회
     blog_ids = list({p.blog_id for p in posts})
     blog_names = {}
+    blog_platforms = {}
     if blog_ids:
         blog_result = await db.execute(
-            select(Blog.id, Blog.name).where(Blog.id.in_(blog_ids))
+            select(Blog.id, Blog.name, Blog.platform).where(Blog.id.in_(blog_ids))
         )
-        blog_names = {row.id: row.name for row in blog_result.fetchall()}
+        for row in blog_result.fetchall():
+            blog_names[row.id] = row.name
+            blog_platforms[row.id] = (
+                row.platform.value if hasattr(row.platform, 'value')
+                else str(row.platform)
+            )
 
     items = []
     for post in posts:
@@ -132,6 +139,7 @@ async def list_generated_content(
             title=post.title,
             blog_id=post.blog_id,
             blog_name=blog_names.get(post.blog_id),
+            platform=blog_platforms.get(post.blog_id, "blogger"),
             has_content=bool(post.content_html),
             has_image=bool(post.image_url),
             image_url=post.image_url,

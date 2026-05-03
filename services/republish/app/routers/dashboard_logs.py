@@ -59,18 +59,15 @@ async def get_unified_logs(
         logs 목록, total 건수, has_more 여부.
     """
     try:
-        # 기본 쿼리: Celery 큐 등록 메시지 제외
-        base_filter = AutorunLog.message.notlike("%Celery 큐 등록%")
+        # 기본 쿼리 (activity 필터 시 Celery 큐 등록 메시지 포함)
+        query = select(AutorunLog).order_by(AutorunLog.created_at.desc())
+        count_query = select(func.count(AutorunLog.id))
 
-        query = (
-            select(AutorunLog)
-            .where(base_filter)
-            .order_by(AutorunLog.created_at.desc())
-        )
-        count_query = (
-            select(func.count(AutorunLog.id))
-            .where(base_filter)
-        )
+        # activity 필터가 아닌 경우에만 Celery 큐 등록 메시지 제외
+        if log_type != "activity":
+            celery_filter = AutorunLog.message.notlike("%Celery 큐 등록%")
+            query = query.where(celery_filter)
+            count_query = count_query.where(celery_filter)
 
         # 필터 조건 적용
         query, count_query = _apply_filters(
@@ -123,12 +120,22 @@ def _apply_filters(
         count_query = count_query.where(AutorunLog.status == "warning")
 
     # 카테고리 필터 (log_type → AutorunLog.action 매핑)
+    # - action(작업): 모듈 실행 관련 (generate, publish, republish, collect)
+    # - activity(활동): 시스템 이벤트 (플로우 상태 변경, 블로그 변경 등 작업 외 모든 이벤트)
+    # - generation(생성): 생성 전용 (generate만)
     if log_type == "action":
         query = query.where(
             AutorunLog.action.in_(["generate", "publish", "republish", "collect"])
         )
         count_query = count_query.where(
             AutorunLog.action.in_(["generate", "publish", "republish", "collect"])
+        )
+    elif log_type == "activity":
+        query = query.where(
+            AutorunLog.action.notin_(["generate", "publish", "republish", "collect"])
+        )
+        count_query = count_query.where(
+            AutorunLog.action.notin_(["generate", "publish", "republish", "collect"])
         )
     elif log_type == "generation":
         query = query.where(AutorunLog.action == "generate")
@@ -243,6 +250,7 @@ async def _serialize_autorun_log(
     return {
         "id": f"action_{log.id}",
         "type": "action",
+        "action_type": _get_action_type(log.action),
         "timestamp": log.created_at.isoformat() if log.created_at else None,
         "level": level,
         "title": title,
@@ -254,3 +262,18 @@ async def _serialize_autorun_log(
             "resource_id": log.flow_id,
         },
     }
+
+
+def _get_action_type(action: str) -> str:
+    """AutorunLog.action을 UI 액션 타입으로 변환합니다."""
+    if action in ("generate",):
+        return "generate"
+    if action in ("publish",):
+        return "publish"
+    if action in ("republish",):
+        return "republish"
+    if action in ("collect",):
+        return "collect"
+    if action in ("data",):
+        return "data"
+    return "system"

@@ -110,6 +110,25 @@ function generateCssFromConfig(selectors, styleConfig, placeholderConfig) {
         }
     }
 
+    // 숨겨진 선택자 CSS 생성 (Zebra Striping 등)
+    const hiddenSelectors = typeof HIDDEN_SELECTORS !== 'undefined' ? HIDDEN_SELECTORS : [];
+    for (const selector of hiddenSelectors) {
+        const config = styleConfig[selector];
+        if (!config || Object.keys(config).length === 0) continue;
+        const properties = [];
+        for (const [prop, value] of Object.entries(config)) {
+            if (!value) continue;
+            const unit = needsPixelUnit(prop) ? 'px' : '';
+            properties.push(`    ${prop}: ${value}${unit};`);
+        }
+        if (properties.length > 0) {
+            lines.push(`${selector} {`);
+            lines.push(...properties);
+            lines.push('}');
+            lines.push('');
+        }
+    }
+
     return lines.join('\n');
 }
 
@@ -172,7 +191,6 @@ function generatePreviewHtml(css, content) {
                 * { margin: 0; padding: 0; box-sizing: border-box; }
                 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 16px; }
                 table { border-collapse: collapse; width: 100%; }
-                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
                 ${css}
             </style>
         </head>

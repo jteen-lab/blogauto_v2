@@ -158,7 +158,12 @@
             <div id="blog-perf" class="space-y-2">
                 <template x-for="blog in blogStats" :key="blog.blog_id">
                     <div class="flex items-center gap-2 text-xs">
-                        <span class="w-24 text-right text-gray-500 truncate" x-text="blog.blog_name"></span>
+                        <span class="w-28 text-right text-gray-500 truncate flex items-center gap-1 justify-end">
+                            <span class="inline-flex items-center justify-center w-3.5 h-3.5 rounded-sm text-[8px] font-bold text-white flex-shrink-0"
+                                  :class="blog.platform === 'wordpress' ? 'bg-blue-500' : 'bg-orange-500'"
+                                  x-text="blog.platform === 'wordpress' ? '워' : '구'"></span>
+                            <span class="truncate" x-text="blog.blog_name"></span>
+                        </span>
                         <div class="flex-1 h-1.5 bg-gray-100 rounded">
                             <div class="h-full bg-[#0C447C] rounded transition-all"
                                  :style="`width:${blog.pct}%`"></div>
@@ -180,7 +185,21 @@
                     <div class="section-title">최근 생성 콘텐츠</div>
                     <a href="/generation/history" class="text-[10px] text-[#0C447C] hover:underline">전체보기 &rarr;</a>
                 </div>
-                <div id="content-table"></div>
+                <div class="space-y-0">
+                    <template x-for="item in contents" :key="item.crawled_post_id">
+                        <div class="flex items-center gap-2 py-2 border-b border-gray-100 last:border-0 text-xs">
+                            <span class="text-gray-400 flex-shrink-0 w-12" x-text="formatDate(item.created_at)"></span>
+                            <span class="truncate flex-1 text-gray-700" x-text="truncateTitle(item.title, 35)"></span>
+                            <span class="inline-flex items-center gap-1 flex-shrink-0">
+                                <span class="inline-flex items-center justify-center w-4 h-4 rounded-sm text-[10px] font-bold text-white"
+                                      :class="item.platform === 'wordpress' ? 'bg-blue-500' : 'bg-orange-500'"
+                                      x-text="item.platform === 'wordpress' ? '워' : '구'"></span>
+                                <span class="text-gray-400 text-[10px]" x-text="item.blog_name || ''"></span>
+                            </span>
+                        </div>
+                    </template>
+                    <div x-show="!contents || contents.length === 0" class="text-gray-400 text-xs text-center py-4">생성된 콘텐츠가 없습니다</div>
+                </div>
             </div>
 
             <!-- 우측: 워커 상태 + 큐 + 활동 로그 -->

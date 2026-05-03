@@ -76,6 +76,17 @@
                 <span class="hidden sm:inline">카테고리 재분류</span>
                 <span class="sm:hidden">재분류</span>
             </button>
+            <!-- 단어 치환 버튼 -->
+            <button
+                x-show="stats.temp?.total > 0"
+                @click="openBulkReplace('temp')"
+                class="inline-flex items-center justify-center px-3 py-2 border-2 border-indigo-500 rounded-lg text-sm font-medium text-indigo-700 bg-white hover:bg-indigo-50 transition-colors">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+                </svg>
+                <span class="hidden sm:inline">단어 치환</span>
+                <span class="sm:hidden">치환</span>
+            </button>
             <!-- 전체 삭제 버튼 -->
             <button
                 x-show="stats.temp?.total > 0"

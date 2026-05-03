@@ -14,9 +14,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, update
 from sqlalchemy.orm import load_only
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
 import io
+import re
 
 from ..core.database import get_db_session
 from ..core.logger import get_logger
@@ -781,5 +782,99 @@ async def reclassify_uncategorized_titles(
 
     except Exception as e:
         logger.error(f"[RECLASSIFY_TITLE] 에러: {str(e)}", exc_info=True)
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================
+# 제목 일괄 단어 치환
+# ============================================================
+
+class BulkReplaceRequest(BaseModel):
+    """제목 일괄 치환 요청"""
+    target: str = Field(..., pattern="^(temp|main)$")
+    find_text: str = Field(..., min_length=1, max_length=200)
+    replace_text: str = Field("", max_length=200)
+    case_sensitive: bool = False
+    mode: str = Field(..., pattern="^(preview|apply)$")
+    title_ids: Optional[List[int]] = None
+
+
+@router.post("/bulk-replace")
+async def bulk_replace_titles(
+    request: BulkReplaceRequest,
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_user),
+):
+    """제목 일괄 단어 치환 (미리보기/적용)."""
+    try:
+        model = TempTitle if request.target == "temp" else MainTitle
+        title_field = TempTitle.title if request.target == "temp" else MainTitle.title
+
+        pattern = re.escape(request.find_text)
+        flags = 0 if request.case_sensitive else re.IGNORECASE
+
+        query = select(model).where(title_field.ilike(f"%{request.find_text}%"))
+        if request.title_ids:
+            query = query.where(model.id.in_(request.title_ids))
+
+        result = await db.execute(query)
+        titles = result.scalars().all()
+
+        previews = []
+        duplicates = 0
+        empty_count = 0
+        existing_titles = set()
+
+        if request.mode == "apply":
+            all_result = await db.execute(select(title_field))
+            existing_titles = {r[0] for r in all_result.fetchall()}
+
+        for t in titles:
+            new_text = re.sub(pattern, request.replace_text, t.title, flags=flags)
+            new_text = new_text.strip()
+            new_text = re.sub(r'\s+', ' ', new_text)
+
+            if len(new_text) < 2:
+                empty_count += 1
+                continue
+            if new_text == t.title:
+                continue
+            if new_text in existing_titles:
+                duplicates += 1
+                continue
+
+            previews.append({"id": t.id, "original": t.title, "replaced": new_text})
+            existing_titles.add(new_text)
+
+        if request.mode == "preview":
+            return {
+                "mode": "preview",
+                "total_affected": len(previews),
+                "previews": previews[:50],
+                "duplicates_warning": duplicates,
+                "empty_warning": empty_count,
+            }
+
+        updated = 0
+        for p in previews:
+            obj = await db.get(model, p["id"])
+            if obj:
+                obj.title = p["replaced"]
+                updated += 1
+
+        await db.commit()
+        logger.info(f"[BULK_REPLACE] {request.target} 치환 완료: {updated}건")
+
+        return {
+            "mode": "apply",
+            "updated": updated,
+            "skipped_duplicates": duplicates,
+            "skipped_empty": empty_count,
+            "message": f"{updated}개 제목이 변경되었습니다",
+        }
+
+    except Exception as e:
+        logger.error(f"[BULK_REPLACE] 에러: {e}", exc_info=True)
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
