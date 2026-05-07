@@ -432,6 +432,7 @@ async def get_action_logs(
         result = await db.execute(
             select(AutorunLog)
             .where(
+                AutorunLog.action != "queue_register",
                 AutorunLog.message.notlike("%Celery 큐 등록%"),
             )
             .order_by(AutorunLog.created_at.desc())

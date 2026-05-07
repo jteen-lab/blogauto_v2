@@ -283,6 +283,8 @@ async def get_worker_status() -> dict:
         worker_future, queue_future
     )
 
+    # 큐와 워커는 분리: 큐는 Redis pending 작업 수만 표시.
+    # 워커가 작업을 가져가면 큐 카운트는 자동으로 감소 (active_tasks로 이동).
     total_queued = sum(
         max(v, 0) for k, v in queue_lengths.items()
         if v >= 0 and k not in ("callback_queue",)

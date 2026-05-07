@@ -94,7 +94,7 @@
     </div>
 
     <!-- 동작로그 바 - 클릭 시 통합 로그 패널 토글 -->
-    <div @click="toggleLogPanel()" class="border-t border-gray-200 bg-gray-900 cursor-pointer hover:bg-gray-800 transition-colors">
+    <div @click="toggleLogPanel()" class="border-t border-gray-200 bg-primary-dk cursor-pointer hover:opacity-90 transition-colors">
         <div class="max-w-7xl mx-auto px-4 py-1">
             <!-- 로그 메시지 영역 (워커 인디케이터는 요약탭 바로 이동) -->
             <div class="min-w-0">
@@ -104,7 +104,7 @@
                      :class="[getLogRowBorderClass(log.action_type), getLogRowBgClass(log.level, log.action_type)]">
                     <!-- 고정 영역: 시간 + 레벨 + 액션 배지 -->
                     <div class="log-fixed-area">
-                        <span class="text-gray-500 font-mono text-[11px]" x-text="formatLogTime(log.timestamp)"></span>
+                        <span class="text-gray-300 font-mono text-[11px]" x-text="formatLogTime(log.timestamp)"></span>
                         <span class="log-level-badge"
                               :class="{
                                   'log-level-info': log.level === 'INFO',

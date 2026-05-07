@@ -91,9 +91,9 @@ function globalSummary() {
             this.startAutoRefresh();
             // 로그 실시간 갱신 (10초마다)
             this.startLogAutoRefresh();
-            // 워커 상태 폴링 시작 (15초마다)
+            // 워커 상태 폴링 시작 (3초마다 - 큐는 워커가 빠르게 가져가므로 짧은 주기 필요)
             this.loadWorkerStatus();
-            this.workerPollInterval = setInterval(() => this.loadWorkerStatus(), 15000);
+            this.workerPollInterval = setInterval(() => this.loadWorkerStatus(), 3000);
 
             // 페이지 이탈 시 정리
             window.addEventListener('beforeunload', () => {
@@ -411,26 +411,25 @@ function globalSummary() {
                 republish: 'bg-violet-800/60 text-violet-300',
                 collect: 'bg-cyan-800/60 text-cyan-300',
                 data: 'bg-amber-800/60 text-amber-300',
+                queue_register: 'bg-indigo-800/60 text-indigo-300',
             };
             return map[actionType] || 'bg-gray-700/60 text-gray-400';
         },
         getActionLabel(actionType) {
-            const map = { generate: '생성', publish: '발행', republish: '재발행', collect: '수집', data: '데이터' };
+            const map = { generate: '생성', publish: '발행', republish: '재발행', collect: '수집', data: '데이터', queue_register: '워커 등록' };
             return map[actionType] || '시스템';
         },
         getLogRowBorderClass(actionType) {
-            const map = {
-                generate: 'border-l-[3px] border-emerald-400',
-                publish: 'border-l-[3px] border-blue-400',
-                republish: 'border-l-[3px] border-violet-400',
-                collect: 'border-l-[3px] border-cyan-400',
-                data: 'border-l-[3px] border-amber-400',
-            };
-            return map[actionType] || 'border-l-[3px] border-gray-600';
+            // 작업 로그(generate/publish/republish/collect/data)는 별도 강조 없음.
+            // 활동 로그(queue_register/system)는 행 전체 배경 하이라이트로 표시.
+            return '';
         },
         getLogRowBgClass(level, actionType) {
-            if (level === 'ERROR') return 'bg-red-950/20';
-            if (actionType === 'system') return 'bg-amber-950/10';
+            if (level === 'ERROR') return 'bg-red-900/40';
+            if (level === 'WARN') return 'bg-amber-900/20';
+            // 활동 로그 전체 하이라이트
+            if (actionType === 'queue_register') return 'bg-indigo-900/40';
+            if (actionType === 'system') return 'bg-slate-700/40';
             return '';
         },
 
