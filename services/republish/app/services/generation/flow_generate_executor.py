@@ -74,14 +74,44 @@ class FlowGenerateExecutor:
                 module_settings, blog_id
             )
 
-            # 디스패치 시점에 결정된 title_id가 있으면 그것을 강제 사용
+            # 디스패치 시점에 결정된 title_id가 있으면 그것을 강제 사용.
+            # 재고 정책은 블로그별이므로 글로벌 status='used'는 차단하지 않고
+            # archived(의도적 보관)와 이 블로그가 이미 만든 제목만 차단한다.
             if force_title_id:
                 from app.models.title import MainTitle
+                from ...models.crawled_post import CrawledPost
+                from sqlalchemy import select as _select
                 title = await self.db.get(MainTitle, force_title_id)
-                if not title or title.status != "available":
+                if not title:
                     msg = (
-                        f"디스패치 지정 제목(id={force_title_id})이 더 이상 "
-                        f"사용 불가 - 다른 작업이 선점했거나 상태 변경됨"
+                        f"디스패치 지정 제목(id={force_title_id})이 "
+                        f"존재하지 않음"
+                    )
+                    logger.warning(f"[FLOW_GEN] {msg}")
+                    return {
+                        "success": True, "message": msg, "skipped": True,
+                    }
+                if title.status == "archived":
+                    msg = (
+                        f"디스패치 지정 제목(id={force_title_id})이 "
+                        f"archived 상태로 사용 불가"
+                    )
+                    logger.warning(f"[FLOW_GEN] {msg}")
+                    return {
+                        "success": True, "message": msg, "skipped": True,
+                    }
+                # 이 블로그가 이미 만든 제목이면 중복 생성 방지
+                dup_check = await self.db.execute(
+                    _select(CrawledPost.id).where(
+                        CrawledPost.blog_id == blog_id,
+                        CrawledPost.source == "generated",
+                        CrawledPost.matched_main_title_id == force_title_id,
+                    ).limit(1)
+                )
+                if dup_check.scalar_one_or_none():
+                    msg = (
+                        f"디스패치 지정 제목(id={force_title_id})은 "
+                        f"이 블로그가 이미 사용함 - 중복 생성 방지"
                     )
                     logger.warning(f"[FLOW_GEN] {msg}")
                     return {
@@ -90,7 +120,7 @@ class FlowGenerateExecutor:
                 title_id = title.id
                 logger.info(
                     f"[FLOW_GEN] 디스패치 지정 제목 사용 | title_id={title_id} | "
-                    f"'{title.title[:30]}...'"
+                    f"status={title.status} | '{title.title[:30]}...'"
                 )
             elif force:
                 # 수동 실행: 재고 체크 없이 모듈 카테고리 기준으로 제목 선택
