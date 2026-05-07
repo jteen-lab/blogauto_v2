@@ -57,10 +57,14 @@ class InventoryManager:
         generation_history_id: Optional[int] = None,
     ) -> Optional[CrawledPost]:
         """
-        발행할 포스트 1개 가져오기 (FIFO)
+        발행할 포스트 1개 가져오기 (FIFO + BlogCategory 필터)
 
-        source='generated'이고 아직 발행되지 않은
+        source='generated'이고 아직 발행되지 않은 글 중,
+        매칭된 MainTitle이 블로그의 활성 BlogCategory에 속한
         가장 오래된 글을 반환합니다.
+
+        BlogCategory가 미설정이거나 매칭 정보가 없는 글은 카테고리
+        검증 없이 그대로 후보로 사용합니다 (기존 데이터 호환).
 
         Args:
             blog_id: 블로그 ID
@@ -69,6 +73,10 @@ class InventoryManager:
         Returns:
             발행 가능한 CrawledPost 또는 None
         """
+        from sqlalchemy import or_
+        from ...models.title import MainTitle
+        from ...models.category import BlogCategory
+
         conditions = [
             CrawledPost.blog_id == blog_id,
             CrawledPost.source == "generated",
@@ -78,6 +86,44 @@ class InventoryManager:
         if generation_history_id:
             conditions.append(
                 CrawledPost.generation_history_id == generation_history_id
+            )
+
+        # BlogCategory 필터 빌드 (titles.py와 동일 패턴)
+        bc_result = await self.db.execute(
+            select(BlogCategory).where(
+                BlogCategory.blog_id == blog_id,
+                BlogCategory.is_active.is_(True),
+            )
+        )
+        blog_categories = bc_result.scalars().all()
+
+        cat_subq = None
+        if blog_categories:
+            subtopic_ids = {
+                bc.subtopic_id for bc in blog_categories if bc.subtopic_id
+            }
+            topic_only_ids = {
+                bc.topic_id for bc in blog_categories
+                if bc.topic_id and not bc.subtopic_id
+            }
+            cat_conds = []
+            if subtopic_ids:
+                cat_conds.append(MainTitle.subtopic_id.in_(list(subtopic_ids)))
+            if topic_only_ids:
+                cat_conds.append(MainTitle.topic_id.in_(list(topic_only_ids)))
+            if cat_conds:
+                # 카테고리 통과 MainTitle ID 서브쿼리
+                cat_subq = select(MainTitle.id).where(or_(*cat_conds))
+
+        # 카테고리 필터를 적용한 메인 쿼리
+        # - 매칭된 MainTitle이 BlogCategory에 속하거나
+        # - 매칭 정보가 없는 글(matched_main_title_id IS NULL)도 허용
+        if cat_subq is not None:
+            conditions.append(
+                or_(
+                    CrawledPost.matched_main_title_id.is_(None),
+                    CrawledPost.matched_main_title_id.in_(cat_subq),
+                )
             )
 
         query = (
@@ -94,12 +140,13 @@ class InventoryManager:
             logger.info(
                 f"[INVENTORY_MGR] 발행 대상 조회 | "
                 f"blog_id={blog_id} | post_id={post.id} | "
-                f"title='{post.title[:30]}'"
+                f"title='{post.title[:30]}' | "
+                f"category_filtered={cat_subq is not None}"
             )
         else:
             logger.info(
                 f"[INVENTORY_MGR] 발행 대상 없음 | "
-                f"blog_id={blog_id}"
+                f"blog_id={blog_id} | category_filtered={cat_subq is not None}"
             )
 
         return post

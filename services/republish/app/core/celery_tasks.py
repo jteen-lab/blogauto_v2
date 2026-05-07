@@ -38,6 +38,7 @@ async def _async_generate_via_executor(
     stage_params_dict: dict = None,
     force: bool = False,
     flow_id: int = None,
+    force_title_id: int = 0,
 ) -> dict:
     """FlowGenerateExecutor를 사용하여 OFF 모드와 동일한 생성 로직 실행.
 
@@ -48,6 +49,7 @@ async def _async_generate_via_executor(
         stage_params_dict: StageParams dict 직렬화 (None이면 기본값)
         force: 재고 체크 없이 강제 생성
         flow_id: 플로우 ID (AutorunLog용)
+        force_title_id: 디스패치 시 결정된 MainTitle.id (0이면 자동 선택)
 
     Returns:
         FlowGenerateExecutor.execute_for_blog()의 반환값
@@ -95,12 +97,18 @@ async def _async_generate_via_executor(
 
         executor = FlowGenerateExecutor(db, user_id)
         result = await executor.execute_for_blog(
-            module, blog, stage_params=stage_params, force=force
+            module, blog, stage_params=stage_params, force=force,
+            force_title_id=force_title_id,
         )
 
         try:
             from app.models.autorun_log import AutorunLog
-            status = "success" if result.get("success") and not result.get("skipped") else "failed"
+            if result.get("skipped"):
+                status = "skipped"
+            elif result.get("success"):
+                status = "success"
+            else:
+                status = "failed"
             log = AutorunLog.create_execution_log(
                 user_id=user_id,
                 flow_id=flow_id or None,
@@ -259,7 +267,8 @@ def generate_content(
     Args:
         blog_id: 블로그 ID
         module_id: 모듈 ID
-        title_id: 제목 ID (미사용, 하위 호환용)
+        title_id: 디스패치 시 결정된 MainTitle.id (0이면 워커가 자동 선택,
+                  명시 시 워커가 강제 사용 — 큐/워커 결정성 보장)
         flow_id: 플로우 ID (선택)
         user_id: 사용자 ID
         stage_params_dict: GP StageParams dict 직렬화
@@ -296,6 +305,7 @@ def generate_content(
             _async_generate_via_executor(
                 blog_id, module_id, user_id,
                 stage_params_dict, force, flow_id,
+                force_title_id=title_id,
             )
         )
 

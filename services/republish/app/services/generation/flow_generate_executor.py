@@ -41,6 +41,7 @@ class FlowGenerateExecutor:
         blog: Blog,
         stage_params: Optional[StageParams] = None,
         force: bool = False,
+        force_title_id: int = 0,
     ) -> Dict[str, Any]:
         """
         단일 블로그에 대해 생성 모듈 실행
@@ -50,6 +51,9 @@ class FlowGenerateExecutor:
             blog: 대상 블로그
             stage_params: GP에서 결정된 스테이지 파라미터 (None이면 기본 임계값 사용)
             force: True면 재고 체크 없이 강제 생성 (수동 1회 실행용)
+            force_title_id: 디스패치 시 결정된 MainTitle.id. 0이 아니면
+                            random 선택을 우회하고 이 ID를 강제 사용한다.
+                            큐 등록 → 워커 흐름의 결정성을 보장한다.
 
         Returns:
             dict: 실행 결과
@@ -61,6 +65,7 @@ class FlowGenerateExecutor:
             f"[FLOW_GEN] 시작 | module={module.name} | "
             f"blog={blog.name} (id={blog_id})"
             f"{' | force=True' if force else ''}"
+            f"{f' | force_title_id={force_title_id}' if force_title_id else ''}"
         )
 
         try:
@@ -69,7 +74,25 @@ class FlowGenerateExecutor:
                 module_settings, blog_id
             )
 
-            if force:
+            # 디스패치 시점에 결정된 title_id가 있으면 그것을 강제 사용
+            if force_title_id:
+                from app.models.title import MainTitle
+                title = await self.db.get(MainTitle, force_title_id)
+                if not title or title.status != "available":
+                    msg = (
+                        f"디스패치 지정 제목(id={force_title_id})이 더 이상 "
+                        f"사용 불가 - 다른 작업이 선점했거나 상태 변경됨"
+                    )
+                    logger.warning(f"[FLOW_GEN] {msg}")
+                    return {
+                        "success": True, "message": msg, "skipped": True,
+                    }
+                title_id = title.id
+                logger.info(
+                    f"[FLOW_GEN] 디스패치 지정 제목 사용 | title_id={title_id} | "
+                    f"'{title.title[:30]}...'"
+                )
+            elif force:
                 # 수동 실행: 재고 체크 없이 모듈 카테고리 기준으로 제목 선택
                 title = await self.inventory_trigger._find_available_title(
                     blog_id, module_settings
