@@ -192,23 +192,24 @@ class InventoryTrigger:
         exclude_ids: Optional[List[int]] = None,
     ) -> List[MainTitle]:
         """
-        필터 조건 조합으로 제목 목록 조회
+        필터 조건 조합으로 제목 목록 조회 (블로그별 재고 정책)
 
         Args:
             blog_id_str: 블로그 ID 문자열
             category_conditions: 카테고리 OR 조건 리스트
-            matched_only: True면 매칭 제목만, False면 전체 available
+            matched_only: True면 매칭 제목만, False면 카테고리 일치 제목 전체
             limit: 최대 조회 수
             exclude_ids: 제외할 제목 ID 목록
 
         Returns:
             MainTitle 목록
         """
-        conditions = [MainTitle.status == "available"]
-
-        # 발행완료 제목 제외 (독립포스트만 생성 대상)
+        # archived 제외, 이 블로그가 이미 만든 제목 제외 (블로그별)
+        conditions = [MainTitle.status != "archived"]
         conditions.append(
-            MainTitle.id.notin_(self._published_title_ids_subquery())
+            MainTitle.id.notin_(
+                self._published_title_ids_subquery(blog_id_str)
+            )
         )
 
         if matched_only:
@@ -231,30 +232,42 @@ class InventoryTrigger:
         return list(result.scalars().all())
 
     @staticmethod
-    def _published_title_ids_subquery():
+    def _published_title_ids_subquery(blog_id_str: Optional[str] = None):
         """
-        이미 발행 완료된 생성 CrawledPost와 연결된 MainTitle ID 서브쿼리
+        이미 사용된 생성 CrawledPost와 연결된 MainTitle ID 서브쿼리.
 
-        source="generated"인 CrawledPost 중 발행 완료된 것만 조회하여
-        동일 제목으로 중복 생성을 방지합니다.
+        source="generated"인 CrawledPost와 연결된 MainTitle을 제외하여
+        동일 제목으로 중복 글이 생성되지 않도록 한다.
+
+        Args:
+            blog_id_str: 명시하면 **이 블로그가 생성한 글의 MainTitle만** 제외.
+                         재고 정책은 블로그별이므로 다른 블로그가 사용했다고
+                         이 블로그의 생성 후보에서 빼지 않는다.
+                         None이면 전 블로그 통합 (하위 호환).
 
         Note:
-            source="crawled" 포스트는 제외합니다.
-            크롤링 포스트는 유사도 매칭으로 matched_main_title_id가 설정되고
-            크롤 시점의 published_at을 가지므로, 이를 포함하면
-            해당 MainTitle이 영구적으로 생성 대상에서 제외되는 버그가 발생합니다.
+            기존에는 published_at IS NOT NULL 조건이 있어 발행 완료된 것만
+            제외했지만, 미발행이라도 이미 글이 만들어진 제목은 같은 블로그에서
+            재생성할 필요가 없으므로 published_at 조건은 제거한다.
+            source="crawled"는 그대로 제외(유사도 매칭 결과에 의한 가짜 매칭 방지).
 
         Returns:
-            발행완료 생성 제목 ID의 서브쿼리
+            제외 대상 MainTitle ID의 서브쿼리.
         """
-        return (
+        query = (
             select(CrawledPost.matched_main_title_id)
             .where(
                 CrawledPost.matched_main_title_id.isnot(None),
-                CrawledPost.published_at.isnot(None),
                 CrawledPost.source == "generated",
             )
         )
+        if blog_id_str is not None:
+            try:
+                blog_id_int = int(blog_id_str)
+                query = query.where(CrawledPost.blog_id == blog_id_int)
+            except (TypeError, ValueError):
+                pass
+        return query
 
     async def _get_inventory_count(self, blog_id: int) -> int:
         """
@@ -444,19 +457,27 @@ class InventoryTrigger:
         """
         필터 조건 조합으로 후보 제목 조회 후 랜덤 1개 선택
 
+        재고 정책은 블로그별로 산정한다:
+        - 이 블로그가 이미 글을 만든 제목은 제외 (중복 방지)
+        - 다른 블로그가 사용한 제목(글로벌 status='used')은 후보에 포함
+        - status='archived'는 의도적으로 보관된 것이므로 제외
+
         Args:
             blog_id_str: 블로그 ID 문자열
             category_conditions: 카테고리 OR 조건 리스트
-            matched_only: True면 매칭 제목만, False면 전체 available
+            matched_only: True면 매칭 제목만, False면 카테고리 일치 제목 전체
 
         Returns:
             MainTitle 또는 None (랜덤 선택)
         """
-        conditions = [MainTitle.status == "available"]
+        # archived만 제외 (used도 다른 블로그 사용 흔적이므로 후보로 허용)
+        conditions = [MainTitle.status != "archived"]
 
-        # 발행완료 제목 제외 (독립포스트만 생성 대상)
+        # 이 블로그가 이미 글을 만든 제목은 제외 (블로그별 중복 방지)
         conditions.append(
-            MainTitle.id.notin_(self._published_title_ids_subquery())
+            MainTitle.id.notin_(
+                self._published_title_ids_subquery(blog_id_str)
+            )
         )
 
         if matched_only:
@@ -477,16 +498,16 @@ class InventoryTrigger:
         if not candidates:
             avail_r = await self.db.execute(
                 select(func.count(MainTitle.id)).where(
-                    MainTitle.status == "available"))
+                    MainTitle.status != "archived"))
             excl_r = await self.db.execute(
                 select(func.count()).select_from(
-                    self._published_title_ids_subquery().subquery()))
+                    self._published_title_ids_subquery(blog_id_str).subquery()))
             logger.info(
                 f"[INVENTORY] 제목 후보 0개 | "
                 f"blog={blog_id_str} | matched_only={matched_only} | "
                 f"category={len(category_conditions)}개 | "
-                f"전체available={avail_r.scalar() or 0} | "
-                f"발행제외={excl_r.scalar() or 0}")
+                f"비archived전체={avail_r.scalar() or 0} | "
+                f"이블로그사용제외={excl_r.scalar() or 0}")
         else:
             logger.info(
                 f"[INVENTORY] 제목 후보 {len(candidates)}개 | "
