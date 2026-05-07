@@ -8,7 +8,7 @@ Features:
 from typing import Optional, List, TYPE_CHECKING
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import select, func, and_, or_, case
 from sqlalchemy.exc import IntegrityError
 
 if TYPE_CHECKING:
@@ -256,10 +256,35 @@ async def list_main_titles(
         "use_count": MainTitle.use_count,
     }
     sort_column = sort_columns.get(sort_field, MainTitle.created_at)
-    if sort_dir == "asc":
-        query = query.order_by(sort_column.asc())
+
+    # 블로그 선택 시: 발행대기 우선 → 매칭됨 → 미매칭 순으로 정렬.
+    # 사용자가 매칭한 글(특히 발행대기)이 1페이지 상단에 보이도록 한다.
+    if blog_id:
+        pending_subq = select(CrawledPost.matched_main_title_id).where(
+            CrawledPost.blog_id == blog_id,
+            CrawledPost.match_status == "matched",
+            CrawledPost.matched_main_title_id.isnot(None),
+            CrawledPost.published_at.is_(None),
+        ).distinct().scalar_subquery()
+        matched_subq = select(CrawledPost.matched_main_title_id).where(
+            CrawledPost.blog_id == blog_id,
+            CrawledPost.match_status == "matched",
+            CrawledPost.matched_main_title_id.isnot(None),
+        ).distinct().scalar_subquery()
+        match_priority = case(
+            (MainTitle.id.in_(pending_subq), 0),  # 발행대기 최우선
+            (MainTitle.id.in_(matched_subq), 1),  # 발행완료/매칭
+            else_=2,                              # 미매칭(독립포스트)
+        )
+        if sort_dir == "asc":
+            query = query.order_by(match_priority, sort_column.asc())
+        else:
+            query = query.order_by(match_priority, sort_column.desc())
     else:
-        query = query.order_by(sort_column.desc())
+        if sort_dir == "asc":
+            query = query.order_by(sort_column.asc())
+        else:
+            query = query.order_by(sort_column.desc())
 
     # 페이지네이션
     query = query.offset((page - 1) * size).limit(size)
