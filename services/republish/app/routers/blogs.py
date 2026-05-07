@@ -475,46 +475,119 @@ async def get_blog_matching_summary(
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
     """
-    블로그-제목 매칭 요약 조회
+    블로그-제목 매칭 요약 조회 (BlogCategory 필터 적용).
+
+    blog_id의 활성 BlogCategory에 속한 MainTitle만 카운트 대상.
+    카테고리 미설정 블로그는 전체 MainTitle을 대상으로 폴백한다.
 
     Returns:
-        - total: 전체 메인 타이틀 수
-        - matched: 이 블로그 포스트와 매칭된 타이틀 수
-        - unmatched: 이 블로그와 매칭되지 않은 타이틀 수 (독립 포스트)
-        - crawled_count: 크롤링된 포스트 총 수
-        - matched_posts: 매칭된 포스트 수
-        - unmatched_posts: 미매칭 포스트 수
+        - total: 카테고리 필터된 전체 정식제목 수
+        - matched: 그 중 이 블로그 CrawledPost와 매칭된 수
+        - published: 그 중 발행 완료된 수
+        - pending: 그 중 발행 대기 수
+        - unmatched: 카테고리 제목 중 이 블로그에 매칭되지 않은 수 (독립 포스트)
+        - unmatched_published: 이 블로그에 발행됐으나 정식제목에 매칭 안 된 글 수
+        - crawled_count/matched_posts/unmatched_posts: CrawledPost 통계
     """
-    from sqlalchemy import select, func, distinct
+    from sqlalchemy import select, func, distinct, or_
     from ..models.title import MainTitle
     from ..models.crawled_post import CrawledPost
+    from ..models.category import BlogCategory
 
     # 블로그 존재 확인
     blog_service = BlogService(db)
     await blog_service.get_blog_by_id(current_user, blog_id)
 
-    # 전체 메인 타이틀 수
-    total_titles_query = select(func.count(MainTitle.id))
-    total_titles = (await db.execute(total_titles_query)).scalar() or 0
+    # 1) BlogCategory 기반 MainTitle 필터 빌드 (titles.py와 동일 패턴)
+    bc_result = await db.execute(
+        select(BlogCategory).where(
+            BlogCategory.blog_id == blog_id,
+            BlogCategory.is_active.is_(True),
+        )
+    )
+    blog_categories = bc_result.scalars().all()
 
-    # 이 블로그에서 매칭된 메인 타이틀 ID들
-    matched_title_ids_query = select(distinct(CrawledPost.matched_main_title_id)).where(
+    subtopic_ids: set[int] = set()
+    topic_only_ids: set[int] = set()
+    for bc in blog_categories:
+        if bc.subtopic_id:
+            subtopic_ids.add(bc.subtopic_id)
+        elif bc.topic_id:
+            topic_only_ids.add(bc.topic_id)
+
+    cat_conditions = []
+    if subtopic_ids:
+        cat_conditions.append(
+            MainTitle.subtopic_id.in_(list(subtopic_ids))
+        )
+    if topic_only_ids:
+        cat_conditions.append(
+            MainTitle.topic_id.in_(list(topic_only_ids))
+        )
+    cat_filter = or_(*cat_conditions) if cat_conditions else None
+
+    # 2) 카테고리 필터된 전체 MainTitle 수
+    total_query = select(func.count(MainTitle.id))
+    if cat_filter is not None:
+        total_query = total_query.where(cat_filter)
+    total_titles = (await db.execute(total_query)).scalar() or 0
+
+    # 3) CrawledPost 기준으로 이 블로그가 매칭한 MainTitle ID 집합
+    matched_posts_query = select(
+        distinct(CrawledPost.matched_main_title_id).label("mt_id"),
+        func.max(CrawledPost.published_at).label("latest_published"),
+    ).where(
         CrawledPost.blog_id == blog_id,
         CrawledPost.match_status == "matched",
-        CrawledPost.matched_main_title_id.isnot(None)
+        CrawledPost.matched_main_title_id.isnot(None),
+    ).group_by(CrawledPost.matched_main_title_id)
+    matched_result = await db.execute(matched_posts_query)
+    matched_rows = matched_result.all()
+    matched_ids_all = [r.mt_id for r in matched_rows]
+
+    # 4) 매칭 ID 중 카테고리 필터를 통과한 것만 유효 매칭으로 인정
+    valid_matched_ids: set[int] = set()
+    if matched_ids_all:
+        if cat_filter is not None:
+            mt_in_cat_query = select(MainTitle.id).where(
+                MainTitle.id.in_(matched_ids_all),
+                cat_filter,
+            )
+            valid_matched_ids = {
+                row[0] for row in
+                (await db.execute(mt_in_cat_query)).all()
+            }
+        else:
+            valid_matched_ids = set(matched_ids_all)
+
+    matched_count = len(valid_matched_ids)
+    published_count = sum(
+        1 for r in matched_rows
+        if r.mt_id in valid_matched_ids and r.latest_published is not None
     )
-    matched_result = await db.execute(matched_title_ids_query)
-    matched_title_ids = [r[0] for r in matched_result.all() if r[0]]
-    matched_count = len(matched_title_ids)
+    pending_count = matched_count - published_count
 
-    # 미매칭 타이틀 수 (전체 - 매칭됨)
-    unmatched_count = total_titles - matched_count
+    # 5) 카테고리 제목 중 이 블로그에 매칭 안 된 수 (독립 포스트)
+    unmatched_count = max(total_titles - matched_count, 0)
 
-    # 크롤링 포스트 통계
+    # 6) 블로그에 발행됐으나 정식제목에 매칭 안 된 글 수
+    unmatched_published_query = select(func.count(CrawledPost.id)).where(
+        CrawledPost.blog_id == blog_id,
+        CrawledPost.match_status == "unmatched",
+    )
+    unmatched_published = (
+        await db.execute(unmatched_published_query)
+    ).scalar() or 0
+
+    # 7) 크롤링 포스트 통계 (전체 카운트, 카테고리 무관)
     crawled_stats_query = select(
-        func.count(CrawledPost.id).label('total'),
-        func.count(CrawledPost.id).filter(CrawledPost.match_status == "matched").label('matched'),
-        func.count(CrawledPost.id).filter(CrawledPost.match_status == "unmatched").label('unmatched'),
+        func.count(CrawledPost.id).label("total"),
+        func.count(CrawledPost.id).filter(
+            CrawledPost.match_status == "matched"
+        ).label("matched"),
+        func.count(CrawledPost.id).filter(
+            CrawledPost.match_status == "unmatched"
+        ).label("unmatched"),
     ).where(CrawledPost.blog_id == blog_id)
     crawled_stats = (await db.execute(crawled_stats_query)).first()
 
@@ -526,7 +599,11 @@ async def get_blog_matching_summary(
     return {
         "total": total_titles,
         "matched": matched_count,
+        "published": published_count,
+        "pending": pending_count,
         "unmatched": unmatched_count,
+        "unmatched_published": unmatched_published,
+        "category_filter_applied": cat_filter is not None,
         "crawled_count": crawled_stats.total if crawled_stats else 0,
         "matched_posts": crawled_stats.matched if crawled_stats else 0,
         "unmatched_posts": crawled_stats.unmatched if crawled_stats else 0,
