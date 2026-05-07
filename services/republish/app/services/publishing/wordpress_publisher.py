@@ -242,7 +242,9 @@ class WordPressPublisher:
         post_id = str(data.get("id", ""))
         result.platform_post_id = post_id
 
-        # SEO custom_fields 업데이트 (XML-RPC)
+        # SEO custom_fields 업데이트
+        # XML-RPC 우선 시도 → 실패 시 REST API meta 업데이트로 fallback
+        # (lifein4.com 등 보안 플러그인이 XML-RPC 차단한 사이트 호환)
         if seo_meta and seo_plugin and post_id:
             if seo_plugin == "aioseo":
                 await self._post_aioseo_meta(
@@ -250,11 +252,18 @@ class WordPressPublisher:
                     app_password, post_id, seo_meta,
                 )
             else:
-                await self._update_seo_via_xmlrpc(
+                xmlrpc_ok = await self._update_seo_via_xmlrpc(
                     blog.url, username,
                     app_password, post_id,
                     seo_meta, seo_plugin,
                 )
+                if not xmlrpc_ok:
+                    # XML-RPC 차단 사이트용 REST API fallback
+                    await self._update_seo_via_rest(
+                        blog.url, username,
+                        app_password, post_id,
+                        seo_meta, seo_plugin,
+                    )
 
         # 2단계: draft → publish 전환
         pub_ok = await self._publish_draft(
@@ -324,8 +333,12 @@ class WordPressPublisher:
         self, blog_url: str, username: str,
         app_password: str, post_id: str,
         seo_meta: dict, seo_plugin: str,
-    ) -> None:
-        """XML-RPC wp.editPost로 SEO 설정 (slug + custom_fields)"""
+    ) -> bool:
+        """XML-RPC wp.editPost로 SEO 설정 (slug + custom_fields).
+
+        Returns:
+            True: 등록 성공, False: 실패(보안 플러그인 차단 등)
+        """
         plugin_meta = SEOMetaBuilder.build_plugin_meta(
             seo_plugin, seo_meta,
         )
@@ -335,7 +348,7 @@ class WordPressPublisher:
         ]
         slug = seo_meta.get("slug", "")
         if not custom_fields and not slug:
-            return
+            return True  # 등록할 게 없으면 성공으로 간주
         xmlrpc_url = (
             f"{blog_url.rstrip('/')}/xmlrpc.php"
         )
@@ -358,12 +371,89 @@ class WordPressPublisher:
                 "plugin=%s | post_id=%s | keys=%s",
                 msg, seo_plugin, post_id, keys,
             )
+            return ok
         except Exception as e:
             logger.warning(
                 "[WP_PUBLISH] XML-RPC SEO 오류 | "
                 "plugin=%s | post_id=%s | %s",
                 seo_plugin, post_id, e,
             )
+            return False
+
+    async def _update_seo_via_rest(
+        self, blog_url: str, username: str,
+        app_password: str, post_id: str,
+        seo_meta: dict, seo_plugin: str,
+    ) -> bool:
+        """REST API로 SEO meta 업데이트 (XML-RPC 차단 사이트용 fallback).
+
+        WordPress REST API는 register_post_meta(show_in_rest=true)된
+        meta 키만 받는다. Yoast/RankMath/SEOPress 메타는 보통 등록되어 있다.
+        보안 플러그인이 XML-RPC를 차단해도 REST API는 통과되는 경우가 많다.
+
+        Returns:
+            True: 응답에 메타가 실제 저장됨, False: 실패 또는 무시됨
+        """
+        plugin_meta = SEOMetaBuilder.build_plugin_meta(
+            seo_plugin, seo_meta,
+        ) or {}
+        slug = seo_meta.get("slug", "")
+        if not plugin_meta and not slug:
+            return True
+
+        url = f"{blog_url.rstrip('/')}/wp-json/wp/v2/posts/{post_id}"
+        auth = base64.b64encode(
+            f"{username}:{app_password}".encode()
+        ).decode()
+        body: dict = {}
+        if plugin_meta:
+            body["meta"] = plugin_meta
+        if slug:
+            body["slug"] = slug
+
+        try:
+            async with httpx.AsyncClient(
+                timeout=PUBLISH_TIMEOUT,
+            ) as client:
+                resp = await client.post(
+                    url, json=body,
+                    headers={
+                        "Authorization": f"Basic {auth}",
+                        "Content-Type": "application/json",
+                    },
+                )
+            if resp.status_code not in (200, 201):
+                logger.warning(
+                    "[WP_PUBLISH] REST SEO 실패 | "
+                    "plugin=%s | post_id=%s | status=%d",
+                    seo_plugin, post_id, resp.status_code,
+                )
+                return False
+            # 응답에서 meta가 실제 저장되었는지 검증
+            data = resp.json() if resp.content else {}
+            saved_meta = data.get("meta") or {}
+            registered = sum(
+                1 for k, v in plugin_meta.items()
+                if saved_meta.get(k) == v
+            )
+            ok = registered == len(plugin_meta) if plugin_meta else True
+            level = "info" if ok else "warning"
+            getattr(logger, level)(
+                "[WP_PUBLISH] REST SEO %s | "
+                "plugin=%s | post_id=%s | "
+                "registered=%d/%d",
+                "성공" if ok else "부분실패",
+                seo_plugin, post_id,
+                registered, len(plugin_meta),
+            )
+            return ok
+        except Exception as e:
+            logger.warning(
+                "[WP_PUBLISH] REST SEO 오류 | "
+                "plugin=%s | post_id=%s | %s",
+                seo_plugin, post_id, e,
+            )
+            return False
 
     async def _send_xmlrpc(
         self, url: str, xml_body: str,
