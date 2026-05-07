@@ -31,6 +31,7 @@ _ACTION_DISPLAY = {
     "collect": "제목 수집",
     "data": "데이터 이동",
     "flow_init": "플로우 초기화",
+    "queue_register": "워커 등록",
 }
 
 
@@ -63,9 +64,13 @@ async def get_unified_logs(
         query = select(AutorunLog).order_by(AutorunLog.created_at.desc())
         count_query = select(func.count(AutorunLog.id))
 
-        # 작업/생성 탭에서만 Celery 큐 등록 메시지 제외 (전체/활동 탭에서는 포함)
+        # 작업/생성 탭에서만 워커 등록 로그 제외 (전체/활동 탭에서는 포함)
         if log_type in ("action", "generation"):
-            celery_filter = AutorunLog.message.notlike("%Celery 큐 등록%")
+            from sqlalchemy import and_
+            celery_filter = and_(
+                AutorunLog.action != "queue_register",
+                AutorunLog.message.notlike("%Celery 큐 등록%"),
+            )
             query = query.where(celery_filter)
             count_query = count_query.where(celery_filter)
 
@@ -131,12 +136,11 @@ def _apply_filters(
             AutorunLog.action.in_(["generate", "publish", "republish", "collect"])
         )
     elif log_type == "activity":
-        # 활동: 시스템 이벤트 + 큐/워커 등록 (Celery 큐 등록 메시지 포함)
+        # 활동: 시스템 이벤트 + 워커 등록 로그
         from sqlalchemy import or_
         activity_filter = or_(
             AutorunLog.action.notin_(["generate", "publish", "republish", "collect"]),
-            AutorunLog.message.ilike("%Celery 큐 등록%"),
-            AutorunLog.message.ilike("%큐에 등록%"),
+            AutorunLog.action == "queue_register",
         )
         query = query.where(activity_filter)
         count_query = count_query.where(activity_filter)
@@ -231,6 +235,11 @@ async def _serialize_autorun_log(
         level = "WARN"
         status_text = log.status or ""
 
+    # 큐 등록 로그는 작업 시작 단계이므로 INFO 레벨로 표시.
+    # SUCCESS는 워커가 작업을 완료한 시점에만 별도 로그로 남도록 분리한다.
+    if log.action == "queue_register" and log.status == "success":
+        level = "INFO"
+
     # 포스트 제목 (30자 초과 시 truncate)
     title_part = ""
     if log.post_title and log.post_title.strip():
@@ -239,8 +248,18 @@ async def _serialize_autorun_log(
             title_text = title_text[:30] + "..."
         title_part = f" - {title_text}"
 
-    # 메시지 포맷 (/logs 엔드포인트와 동일)
-    if prefix and log.blog_name and log.blog_name != "-":
+    # 메시지 포맷
+    # queue_register는 백엔드(_save_autorun_log)에서 이미 완성된 메시지를 message에 저장.
+    # "[블로그명] - [글제목] - [워커종류] 등록 완료/실패" 그대로 사용.
+    if log.action == "queue_register":
+        raw = (log.message or "").strip()
+        if not raw:
+            raw = f"{log.blog_name or ''} - {action_text} {status_text}"
+        if prefix and log.blog_name and log.blog_name != "-":
+            title = f"[{prefix}]{raw}"
+        else:
+            title = raw
+    elif prefix and log.blog_name and log.blog_name != "-":
         title = f"[{prefix}]{log.blog_name}{title_part} - {action_text} {status_text}"
     else:
         title = f"{action_text}{title_part} - {status_text}"
@@ -279,4 +298,6 @@ def _get_action_type(action: str) -> str:
         return "collect"
     if action in ("data",):
         return "data"
+    if action in ("queue_register",):
+        return "queue_register"
     return "system"

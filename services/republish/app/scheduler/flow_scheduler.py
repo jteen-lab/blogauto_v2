@@ -1861,27 +1861,75 @@ class FlowScheduler:
                         if await _use_celery("use_celery_generation", db):
                             from app.core.task_dispatcher import get_dispatcher, PRIORITY_NORMAL
                             from dataclasses import asdict
+                            from app.services.generation.title_peek import (
+                                peek_next_generate_title,
+                            )
                             dispatcher = get_dispatcher()
-                            try:
-                                # GP StageParams를 dict로 직렬화하여 Celery 워커에 전달
-                                sp_dict = asdict(stage_params) if stage_params else None
-                                task_id = dispatcher.dispatch_generation(
-                                    blog_id=blog.id,
-                                    module_id=prompt_module.id,
-                                    title_id=0,
-                                    priority=PRIORITY_NORMAL,
-                                    flow_id=flow.id,
-                                    stage_params_dict=sp_dict,
+                            module_settings = (
+                                prompt_module.settings if prompt_module.settings else {}
+                            )
+                            # 디스패치 시점에 제목 결정 (워커도 동일 ID 사용)
+                            pre_title, pre_title_id = await peek_next_generate_title(
+                                db, blog.id, module_settings,
+                            )
+                            if not pre_title_id:
+                                # 큐 등록 skip — 활동 탭 표시용 queue_register 로그 저장
+                                skip_msg = (
+                                    f"{blog.name} - 생성 큐 등록 생략 "
+                                    f"(사용 가능 제목 없음)"
                                 )
-                                result = {"success": True, "message": f"Celery 큐 등록: {task_id}"}
+                                await self._save_autorun_log(
+                                    db=db, user_id=flow.user_id, flow_id=flow.id,
+                                    flow_name=flow.name,
+                                    module_name=prompt_module.name,
+                                    blog_name=blog.name,
+                                    result={
+                                        "success": True, "skipped": True,
+                                        "message": skip_msg,
+                                    },
+                                    duration_ms=0, action="queue_register",
+                                )
+                                # 메인 흐름의 generate 로그(라인 1934)는 단순 skipped로 처리
+                                result = {
+                                    "success": True, "skipped": True,
+                                    "message": "사용 가능 제목 없음",
+                                    "post_title": "",
+                                }
                                 logger.info(
-                                    f"[FLOW_SCHEDULER] Celery 디스패치 성공 | blog={blog.name} | task_id={task_id}"
+                                    f"[FLOW_SCHEDULER] 사용 가능 제목 없음, 큐 등록 skip | "
+                                    f"blog={blog.name}"
                                 )
-                            except Exception as e:
-                                result = {"success": False, "message": f"Celery 디스패치 실패: {e}"}
-                                logger.warning(
-                                    f"[FLOW_SCHEDULER] Celery 디스패치 실패 | blog={blog.name} | {e}"
-                                )
+                            else:
+                                try:
+                                    # GP StageParams를 dict로 직렬화하여 Celery 워커에 전달
+                                    sp_dict = asdict(stage_params) if stage_params else None
+                                    task_id = dispatcher.dispatch_generation(
+                                        blog_id=blog.id,
+                                        module_id=prompt_module.id,
+                                        title_id=pre_title_id,
+                                        priority=PRIORITY_NORMAL,
+                                        flow_id=flow.id,
+                                        stage_params_dict=sp_dict,
+                                    )
+                                    result = {
+                                        "success": True,
+                                        "message": f"Celery 큐 등록: {task_id}",
+                                        "post_title": pre_title,
+                                    }
+                                    logger.info(
+                                        f"[FLOW_SCHEDULER] Celery 디스패치 성공 | "
+                                        f"blog={blog.name} | title_id={pre_title_id} | "
+                                        f"task_id={task_id}"
+                                    )
+                                except Exception as e:
+                                    result = {
+                                        "success": False,
+                                        "message": f"Celery 디스패치 실패: {e}",
+                                        "post_title": pre_title,
+                                    }
+                                    logger.warning(
+                                        f"[FLOW_SCHEDULER] Celery 디스패치 실패 | blog={blog.name} | {e}"
+                                    )
                         else:
                             result = await gen_executor.execute_for_blog(
                                 prompt_module, blog,
@@ -2224,31 +2272,67 @@ class FlowScheduler:
                     from app.core.task_dispatcher import (
                         get_dispatcher, PRIORITY_NORMAL,
                     )
+                    from app.services.generation.title_peek import (
+                        peek_next_publish_post,
+                    )
                     dispatcher = get_dispatcher()
-                    try:
-                        task_id = dispatcher.dispatch_publish(
-                            blog_id=blog.id,
-                            post_id=0,
-                            priority=PRIORITY_NORMAL,
-                            flow_id=flow.id,
+                    # 디스패치 시점에 발행 대상 결정 (워커도 동일 ID 사용)
+                    pre_title, pre_post_id = await peek_next_publish_post(
+                        db, blog.id,
+                    )
+                    if not pre_post_id:
+                        # 큐 등록 skip — 활동 탭 표시용 queue_register 로그 저장
+                        skip_msg = (
+                            f"{blog.name} - 발행 큐 등록 생략 "
+                            f"(발행할 글 없음)"
+                        )
+                        await self._save_autorun_log(
+                            db=db, user_id=flow.user_id, flow_id=flow.id,
+                            flow_name=flow.name, module_name=gp_module_name,
+                            blog_name=blog.name,
+                            result={
+                                "success": True, "skipped": True,
+                                "message": skip_msg,
+                            },
+                            duration_ms=0, action="queue_register",
                         )
                         pub_result = {
-                            "success": True,
-                            "message": f"Celery 큐 등록: {task_id}",
+                            "success": True, "skipped": True,
+                            "message": "발행할 글 없음",
+                            "post_title": "",
                         }
                         logger.info(
-                            f"[SCHED:PUBLISH] Celery 디스패치 | "
-                            f"blog={blog.name} | task={task_id}"
+                            f"[SCHED:PUBLISH] 발행 대상 없음, 큐 등록 skip | "
+                            f"blog={blog.name}"
                         )
-                    except Exception as e:
-                        pub_result = {
-                            "success": False,
-                            "message": f"Celery 디스패치 실패: {e}",
-                        }
-                        logger.error(
-                            f"[SCHED:PUBLISH] Celery 디스패치 오류 | "
-                            f"blog={blog.name} | {e}"
-                        )
+                    else:
+                        try:
+                            task_id = dispatcher.dispatch_publish(
+                                blog_id=blog.id,
+                                post_id=pre_post_id,
+                                priority=PRIORITY_NORMAL,
+                                flow_id=flow.id,
+                            )
+                            pub_result = {
+                                "success": True,
+                                "message": f"Celery 큐 등록: {task_id}",
+                                "post_title": pre_title,
+                            }
+                            logger.info(
+                                f"[SCHED:PUBLISH] Celery 디스패치 | "
+                                f"blog={blog.name} | post_id={pre_post_id} | "
+                                f"task={task_id}"
+                            )
+                        except Exception as e:
+                            pub_result = {
+                                "success": False,
+                                "message": f"Celery 디스패치 실패: {e}",
+                                "post_title": pre_title,
+                            }
+                            logger.error(
+                                f"[SCHED:PUBLISH] Celery 디스패치 오류 | "
+                                f"blog={blog.name} | {e}"
+                            )
                 else:
                     pub_result = await publisher.publish_for_blog(
                         blog, warmup_status,
@@ -2282,13 +2366,13 @@ class FlowScheduler:
                     fail_count += 1
 
                 blog_duration = int((datetime.now() - blog_start).total_seconds() * 1000)
-                # Celery 사용 시 태스크 완료 후 celery_publish_tasks에서 로그 저장
-                if not pub_result.get("message", "").startswith("Celery 큐 등록"):
-                    await self._save_autorun_log(
-                        db=db, user_id=flow.user_id, flow_id=flow.id,
-                        flow_name=flow.name, module_name=gp_module_name,
-                        blog_name=blog.name, result=pub_result,
-                        duration_ms=blog_duration, action="publish")
+                # 큐 등록 로그도 별도로 저장(action=queue_register, INFO 레벨).
+                # 작업 완료 시점(SUCCESS/ERROR) 로그는 celery_publish_tasks에서 별도 저장됨.
+                await self._save_autorun_log(
+                    db=db, user_id=flow.user_id, flow_id=flow.id,
+                    flow_name=flow.name, module_name=gp_module_name,
+                    blog_name=blog.name, result=pub_result,
+                    duration_ms=blog_duration, action="publish")
 
             except Exception as e:
                 fail_count += 1
@@ -2404,13 +2488,13 @@ class FlowScheduler:
 
                 blog_duration = int((datetime.now() - blog_start).total_seconds() * 1000)
 
-                # Celery 사용 시 태스크 완료 후 celery_publish_tasks에서 로그 저장
-                if not blog_result.get("message", "").startswith("Celery 큐 등록"):
-                    await self._save_autorun_log(
-                        db=db, user_id=flow.user_id, flow_id=flow.id,
-                        flow_name=flow.name, module_name=gp_module_name,
-                        blog_name=blog.name, result=blog_result,
-                        duration_ms=blog_duration, action="republish")
+                # 큐 등록 로그도 별도로 저장(action=queue_register, INFO 레벨).
+                # 작업 완료 시점(SUCCESS/ERROR) 로그는 celery_publish_tasks에서 별도 저장됨.
+                await self._save_autorun_log(
+                    db=db, user_id=flow.user_id, flow_id=flow.id,
+                    flow_name=flow.name, module_name=gp_module_name,
+                    blog_name=blog.name, result=blog_result,
+                    duration_ms=blog_duration, action="republish")
 
                 if blog_result.get("success"):
                     success_count += 1
@@ -2470,6 +2554,32 @@ class FlowScheduler:
     ) -> None:
         """AutorunLog DB 저장 (flows_execute.py와 동일)"""
         try:
+            # Celery 큐 등록 메시지는 action을 "queue_register"로 변경
+            log_message = result.get("message", "")
+            is_queue_dispatch = "Celery 큐 등록" in log_message
+            is_dispatch_failed = "Celery 디스패치 실패" in log_message
+            if is_queue_dispatch or is_dispatch_failed:
+                worker_kind_map = {
+                    "generate": "생성",
+                    "publish": "발행",
+                    "republish": "재발행",
+                    "collect": "수집",
+                    "data": "데이터",
+                }
+                worker_kind = worker_kind_map.get(action, "유틸")
+                title_part = ""
+                pre_title = result.get("post_title") or ""
+                if pre_title.strip():
+                    title_text = pre_title.strip()
+                    if len(title_text) > 30:
+                        title_text = title_text[:30] + "..."
+                    title_part = f" - {title_text}"
+                suffix = "등록 완료" if is_queue_dispatch else "등록 실패"
+                action = "queue_register"
+                log_message = (
+                    f"{blog_name}{title_part} - {worker_kind} {suffix}"
+                )
+
             # 상태 결정: hold > skipped > success/failed
             if result.get("hold"):
                 status = "hold"
@@ -2495,9 +2605,6 @@ class FlowScheduler:
             else:
                 action_time = datetime.now().strftime("%Y/%m/%d/%H:%M:%S")
 
-            # 메시지: 성공/실패 모두 result["message"] 사용
-            log_message = result.get("message", "")
-
             # AutorunLog 생성
             log = AutorunLog.create_execution_log(
                 user_id=user_id,
@@ -2514,8 +2621,7 @@ class FlowScheduler:
             )
 
             db.add(log)
-            # commit은 호출자에서 처리
-            logger.info(f"[FLOW_SCHEDULER] AutorunLog 저장 | blog={blog_name} | status={status}")
+            logger.info(f"[FLOW_SCHEDULER] AutorunLog 저장 | blog={blog_name} | action={action} | status={status}")
 
         except Exception as e:
             logger.error(f"[FLOW_SCHEDULER] AutorunLog 저장 실패 | blog={blog_name} | error={e}")
