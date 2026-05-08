@@ -91,6 +91,8 @@ function globalSummary() {
             await this.loadStats();
             // 최신 로그 로드 (노출 수만큼)
             await this.loadDisplayLogs();
+            // 동작 로그 검색용 블로그 목록 미리 로드 (드롭다운 즉시 사용 가능)
+            this.loadLogBlogList();
             // 실시간 갱신 시작 (30초마다)
             this.startAutoRefresh();
             // 로그 실시간 갱신 (10초마다)

@@ -1513,7 +1513,8 @@ function dataManagementApp() {
                         });
                     }
                     // 카테고리/상태 정렬은 미매칭 포스트에 해당 없음 (모두 '미매칭')
-                    this.unmatchedCrawledPosts = posts;
+                    // 페이지네이션 통합: 미매칭을 메인 타이틀과 한 흐름으로 페이지에 분배
+                    this._applyUnifiedPagination(posts);
                 } else {
                     this.unmatchedCrawledPosts = [];
                 }
@@ -1523,6 +1524,66 @@ function dataManagementApp() {
             } finally {
                 this.mainTitleLoading = false;
             }
+        },
+
+        // 메인 타이틀 + 미매칭 통합 페이지네이션
+        // 백엔드는 메인 타이틀만 size=20 페이지네이션. 미매칭은 클라이언트에서 슬라이싱.
+        // - 메인 타이틀이 가득 찬 페이지(20건): 미매칭 표시 안 함
+        // - 메인 타이틀 마지막 페이지(< 20건): 빈 자리에 미매칭으로 채움
+        // - 메인 타이틀 끝난 후 페이지: 미매칭만 페이지당 20건씩 표시
+        // - 매칭/독립 단독 필터일 때는 통합 적용 안 함 (matching_filter='all'만 통합)
+        _applyUnifiedPagination(allUnmatched) {
+            const PAGE_SIZE = 20;
+            const mainTotal = this.mainTitleTotal || 0;
+            const unmatchedTotal = allUnmatched.length;
+            const currentPage = this.mainTitlePage || 1;
+            const currentMainCount = (this.mainTitles || []).length;
+
+            // matching_filter가 'all'이 아니면 통합 적용 안 함
+            if (this.matchingFilter !== 'all') {
+                this.unmatchedCrawledPosts = allUnmatched;
+                return;
+            }
+
+            const mainPageCount = Math.ceil(mainTotal / PAGE_SIZE);
+            // 메인 타이틀 마지막 페이지에서 미매칭으로 채울 자리 개수
+            const lastPageRemain = mainTotal === 0
+                ? 0
+                : (mainTotal % PAGE_SIZE === 0 ? 0 : PAGE_SIZE - (mainTotal % PAGE_SIZE));
+
+            let startIdx = 0;
+            let endIdx = 0;
+
+            if (mainTotal === 0) {
+                // 메인 타이틀 0건 → 페이지 1부터 미매칭만
+                startIdx = (currentPage - 1) * PAGE_SIZE;
+                endIdx = startIdx + PAGE_SIZE;
+            } else if (currentPage < mainPageCount) {
+                // 메인 타이틀 가득 찬 페이지 → 미매칭 표시 안 함
+                startIdx = 0;
+                endIdx = 0;
+            } else if (currentPage === mainPageCount) {
+                // 메인 타이틀 마지막 페이지 → 빈 자리만큼 채움
+                const fillCount = PAGE_SIZE - currentMainCount;
+                startIdx = 0;
+                endIdx = Math.max(0, fillCount);
+            } else {
+                // currentPage > mainPageCount → 미매칭만
+                const offsetAfterFill = lastPageRemain;  // 메인 마지막 페이지에서 이미 사용한 미매칭 수
+                startIdx = offsetAfterFill + (currentPage - mainPageCount - 1) * PAGE_SIZE;
+                endIdx = startIdx + PAGE_SIZE;
+            }
+
+            this.unmatchedCrawledPosts = allUnmatched.slice(startIdx, endIdx);
+
+            // 통합 hasNext 재계산: 미매칭 끝까지 보여줘야 함
+            const remainAfterFill = Math.max(0, unmatchedTotal - lastPageRemain);
+            const extraPages = Math.ceil(remainAfterFill / PAGE_SIZE);
+            const totalDisplayPages = Math.max(mainPageCount + extraPages, 1);
+            this.mainTitleHasNext = currentPage < totalDisplayPages;
+
+            // 사용자 안내용 통합 total: 페이지네이션 표시에 활용 가능
+            this.mainTitleUnifiedTotal = mainTotal + unmatchedTotal;
         },
 
         // URL 전체 선택/해제
@@ -1638,9 +1699,9 @@ function dataManagementApp() {
             }
         },
 
-        // 제목 승격
+        // 제목 이동 (임시 -> 정식)
         async promoteTitle(id) {
-            if (!confirm('이 제목을 정식 제목으로 승격하시겠습니까?')) return;
+            if (!confirm('이 제목을 정식 제목으로 이동하시겠습니까?')) return;
             try {
                 const res = await fetch(`${API_BASE}/data/titles/temp/promote`, {
                     method: 'POST',
@@ -1648,13 +1709,40 @@ function dataManagementApp() {
                     credentials: 'include',
                     body: JSON.stringify({ title_ids: [id] })
                 });
-                if (!res.ok) throw new Error('승격 실패');
-                showSuccessMessage('정식 제목으로 승격되었습니다');
+                if (!res.ok) throw new Error('이동 실패');
+                showSuccessMessage('정식 제목으로 이동되었습니다');
                 this.loadTitles();
-                this.loadMainTitles();  // 정식제목 탭 새로고침 추가
+                this.loadMainTitles();
                 this.loadStats();
             } catch (e) {
-                showErrorMessage('승격 실패');
+                showErrorMessage('이동 실패');
+            }
+        },
+
+        // 선택된 임시제목 일괄 이동 (정식제목으로)
+        async moveSelectedTitles() {
+            if (this.selectedTitles.length === 0) return;
+            if (!confirm(`선택된 ${this.selectedTitles.length}개 제목을 정식제목으로 이동하시겠습니까?`)) return;
+            try {
+                const res = await fetch(`${API_BASE}/data/titles/temp/promote`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ title_ids: this.selectedTitles })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showSuccessMessage(`${data.promoted || this.selectedTitles.length}개 제목이 이동되었습니다`);
+                    this.selectedTitles = [];
+                    this.titleSelectAll = false;
+                    this.loadTitles();
+                    this.loadMainTitles();
+                    this.loadStats();
+                } else {
+                    showErrorMessage(data.message || '이동 실패');
+                }
+            } catch (e) {
+                showErrorMessage('이동 중 오류 발생');
             }
         },
 
@@ -1932,6 +2020,25 @@ function dataManagementApp() {
                 this.loadStats();
             } catch (e) {
                 showErrorMessage('전체 삭제 실패');
+            }
+        },
+
+        // 기존 데이터에 필터 적용 삭제
+        async applyFiltersToExisting() {
+            if (!confirm('활성 필터를 기존 임시제목·시드키워드에 적용하여\n매칭되는 항목을 삭제합니다.\n\n이 작업은 되돌릴 수 없습니다. 진행하시겠습니까?')) return;
+            try {
+                const res = await fetch(`${API_BASE}/data/filters/apply-to-existing`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                if (!res.ok) throw new Error('적용 실패');
+                const data = await res.json();
+                showSuccessMessage(data.message);
+                this.loadTitles();
+                this.loadKeywords();
+                this.loadStats();
+            } catch (e) {
+                showErrorMessage('필터 적용 삭제 실패');
             }
         },
 
@@ -2258,6 +2365,34 @@ function dataManagementApp() {
                 }
             } catch (e) {
                 showErrorMessage('임시제목 재분류 중 오류가 발생했습니다');
+            }
+        },
+
+        // 정식제목 카테고리 재분류
+        async reclassifyMainTitles() {
+            if (!confirm('모든 정식제목의 카테고리를 재분류하시겠습니까?\n(이미 분류된 제목도 최신 카테고리로 갱신됩니다)')) return;
+
+            try {
+                // 최신 카테고리(topics) 목록 로드
+                await this.loadTopics();
+
+                const res = await fetch(`${API_BASE}/data/titles/temp/reclassify?force_all=true&target=main`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                if (!res.ok) throw new Error('재분류 실패');
+                const data = await res.json();
+
+                if (data.success) {
+                    showSuccessMessage(data.message);
+                    this.loadMainTitles();
+                    this.loadStats();
+                    await this.loadTopics();
+                } else {
+                    showErrorMessage(data.message || '재분류 실패');
+                }
+            } catch (e) {
+                showErrorMessage('정식제목 재분류 중 오류가 발생했습니다');
             }
         },
 

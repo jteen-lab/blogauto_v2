@@ -185,32 +185,35 @@
                 <!-- 블로그 드롭다운 -->
                 <label class="text-gray-500">블로그:</label>
                 <select x-model="logBlogFilter" @change.stop="loadUnifiedLogs()" @click.stop
-                        class="bg-gray-800 text-gray-300 px-2 py-1 rounded-md border border-gray-700 focus:outline-none focus:border-gray-500">
-                    <option value="">전체</option>
+                        class="bg-gray-800 text-gray-100 px-2 py-1 rounded-md border border-gray-600 focus:outline-none focus:border-gray-400 cursor-pointer"
+                        style="color-scheme: dark;">
+                    <option value="" class="bg-gray-800 text-gray-100">전체</option>
                     <template x-for="b in logBlogList" :key="b">
-                        <option :value="b" x-text="b"></option>
+                        <option :value="b" x-text="b" class="bg-gray-800 text-gray-100"></option>
                     </template>
                 </select>
+                <span x-show="logBlogList.length === 0" class="text-gray-600 text-[10px]">(목록 로드 중)</span>
 
                 <!-- 액션 라디오 (발행/재발행/생성 등) -->
                 <span class="text-gray-500 ml-2">액션:</span>
                 <template x-for="a in [
-                    {key:'',label:'전체',cls:'bg-gray-700'},
-                    {key:'publish',label:'발행',cls:'bg-blue-700'},
-                    {key:'republish',label:'재발행',cls:'bg-violet-700'},
-                    {key:'generate',label:'생성',cls:'bg-emerald-700'},
-                    {key:'queue_publish',label:'발행 큐',cls:'bg-blue-900'},
-                    {key:'queue_republish',label:'재발행 큐',cls:'bg-violet-900'},
-                    {key:'queue_generate',label:'생성 큐',cls:'bg-emerald-900'},
+                    {key:'',label:'전체',cls:'bg-gray-600 text-white'},
+                    {key:'publish',label:'발행',cls:'bg-blue-700 text-white'},
+                    {key:'republish',label:'재발행',cls:'bg-violet-700 text-white'},
+                    {key:'generate',label:'생성',cls:'bg-emerald-700 text-white'},
+                    {key:'queue_publish',label:'발행 큐',cls:'bg-blue-900 text-white'},
+                    {key:'queue_republish',label:'재발행 큐',cls:'bg-violet-900 text-white'},
+                    {key:'queue_generate',label:'생성 큐',cls:'bg-emerald-900 text-white'},
                 ]" :key="a.key">
                     <button @click.stop="logActionFilter = a.key; loadUnifiedLogs()"
-                            class="px-2 py-0.5 rounded text-[10px] font-medium transition-colors"
-                            :class="logActionFilter === a.key ? (a.cls + ' text-white') : 'text-gray-400 hover:text-gray-200 border border-gray-700'"
+                            class="px-2 py-0.5 rounded text-[10px] font-medium transition-colors border"
+                            :class="logActionFilter === a.key ? a.cls + ' border-transparent' : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border-gray-600'"
                             x-text="a.label"></button>
                 </template>
 
                 <!-- 초기화 버튼 -->
-                <button @click.stop="resetLogFilters()" class="ml-2 text-gray-500 hover:text-gray-300 underline">
+                <button @click.stop="resetLogFilters()"
+                        class="ml-2 px-2 py-0.5 rounded text-[10px] bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border border-gray-600">
                     초기화
                 </button>
 
@@ -220,8 +223,8 @@
                 <label class="text-gray-500">표시:</label>
                 <template x-for="n in [30, 50, 100, 200]" :key="n">
                     <button @click.stop="setLogPageSize(n)"
-                            class="px-1.5 py-0.5 rounded text-[10px]"
-                            :class="logPageSize === n ? 'bg-gray-700 text-gray-200' : 'text-gray-500 hover:text-gray-300'"
+                            class="px-1.5 py-0.5 rounded text-[10px] border"
+                            :class="logPageSize === n ? 'bg-gray-600 text-white border-transparent' : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-white border-gray-600'"
                             x-text="n"></button>
                 </template>
             </div>
