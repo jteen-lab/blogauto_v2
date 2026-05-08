@@ -1463,135 +1463,52 @@ function dataManagementApp() {
 
         // 전체 보기 + 미매칭 크롤링 포스트 함께 로드
         async loadMainTitlesWithCrawled() {
-            // 메인 타이틀 + 미매칭 크롤링을 한 list로 합쳐 사용자 정렬 기준으로
-            // 통합 정렬한 후 페이지 슬라이싱. 각 row는 _kind 플래그로 구분.
+            // 백엔드 통합 페이지네이션 API 호출 (대용량 데이터 안전).
+            // /titles/unified가 메인 + 미매칭을 합쳐 정렬 후 페이지당 20건만 응답.
             this.mainTitleLoading = true;
             this.selectedMainTitles = [];
             this.selectedUnmatchedCrawled = [];
 
             try {
+                if (!this.selectedBlogId) {
+                    // 블로그 미선택이면 일반 정식제목 로드
+                    await this.loadMainTitles();
+                    return;
+                }
+
                 const params = new URLSearchParams({
-                    page: 1,
-                    size: 1000,
-                    sort_field: this.mainTitleSortField,
-                    sort_dir: this.mainTitleSortDir,
-                    hide_group_members: 'true'
+                    blog_id: String(this.selectedBlogId),
+                    page: String(this.mainTitlePage || 1),
+                    size: '20',
+                    sort_field: this.mainTitleSortField || 'created_at',
+                    sort_dir: this.mainTitleSortDir || 'desc',
+                    matching_filter: this.matchingFilter || 'all',
                 });
-
                 if (this.mainTitleSearch) params.append('search', this.mainTitleSearch);
-                if (this.selectedBlogId) {
-                    params.append('blog_id', this.selectedBlogId);
+
+                const resp = await fetch(
+                    `${API_BASE}/titles/unified?${params}`,
+                    { credentials: 'include' },
+                );
+                if (!resp.ok) {
+                    showErrorMessage('통합 목록 로드 실패');
+                    return;
                 }
+                const data = await resp.json();
+                const items = data.items || [];
 
-                const requests = [
-                    fetch(`${API_BASE}/titles?${params}`, { credentials: 'include' })
-                ];
-
-                if (this.selectedBlogId) {
-                    let crawledUrl = `${API_BASE}/blogs/${this.selectedBlogId}/crawled-posts?match_status=unmatched`;
-                    if (this.mainTitleSearch) {
-                        crawledUrl += `&search=${encodeURIComponent(this.mainTitleSearch)}`;
-                    }
-                    requests.push(fetch(crawledUrl, { credentials: 'include' }));
-                }
-
-                const responses = await Promise.all(requests);
-
-                let allMain = [];
-                let mainTotal = 0;
-                if (responses[0].ok) {
-                    const data = await responses[0].json();
-                    allMain = (data.items || []).map(t => ({ ...t, _kind: 'main' }));
-                    mainTotal = data.total || allMain.length;
-                }
-
-                let allUnmatched = [];
-                if (responses[1] && responses[1].ok) {
-                    const data = await responses[1].json();
-                    const posts = data.items || data || [];
-                    allUnmatched = posts.map(p => ({ ...p, _kind: 'unmatched' }));
-                }
-
-                // 통합 정렬 + 페이지네이션 적용
-                this._applyUnifiedSortedPagination(allMain, allUnmatched, mainTotal);
+                this.unifiedTableRows = items;
+                this.mainTitles = items.filter(r => r._kind === 'main');
+                this.unmatchedCrawledPosts = items.filter(r => r._kind === 'unmatched');
+                this.mainTitleTotal = data.main_total || 0;
+                this.mainTitleUnifiedTotal = data.total || 0;
+                this.mainTitleHasNext = !!data.has_next;
             } catch (e) {
                 console.error('데이터 로드 실패:', e);
                 showErrorMessage('데이터 로드 실패');
             } finally {
                 this.mainTitleLoading = false;
             }
-        },
-
-        // 통합 정렬 + 페이지네이션
-        // 메인 타이틀 + 미매칭 크롤링을 한 list로 합치고 사용자 선택 정렬 기준으로
-        // 함께 정렬한 후 페이지당 20건씩 슬라이싱. 각 row의 _kind 플래그로 표시 분기.
-        _applyUnifiedSortedPagination(allMain, allUnmatched, mainTotal) {
-            const PAGE_SIZE = 20;
-            const currentPage = this.mainTitlePage || 1;
-
-            // matching_filter !== 'all'이면 메인 타이틀만 표시 (단독 필터)
-            if (this.matchingFilter !== 'all') {
-                const start = (currentPage - 1) * PAGE_SIZE;
-                const sliced = allMain.slice(start, start + PAGE_SIZE);
-                this.mainTitles = sliced;
-                this.unmatchedCrawledPosts = [];
-                this.unifiedTableRows = sliced;
-                this.mainTitleTotal = mainTotal;
-                this.mainTitleHasNext = (start + PAGE_SIZE) < mainTotal;
-                this.mainTitleUnifiedTotal = mainTotal;
-                return;
-            }
-
-            // 통합 list 만들기
-            const unified = [...allMain, ...allUnmatched];
-
-            // 사용자 선택 정렬 기준으로 통합 정렬
-            // 미매칭 row는 created_at 대신 crawled_at, status는 '미매칭'(zz_)으로 매핑
-            const dir = this.mainTitleSortDir === 'asc' ? 1 : -1;
-            const field = this.mainTitleSortField || 'created_at';
-
-            unified.sort((a, b) => {
-                let aVal, bVal;
-                if (field === 'title') {
-                    aVal = (a.title || '').toLowerCase();
-                    bVal = (b.title || '').toLowerCase();
-                    return aVal.localeCompare(bVal, 'ko') * dir;
-                } else if (field === 'created_at' || field === 'updated_at') {
-                    const aDate = a._kind === 'main'
-                        ? (a[field] || a.created_at)
-                        : (a.crawled_at || a.created_at);
-                    const bDate = b._kind === 'main'
-                        ? (b[field] || b.created_at)
-                        : (b.crawled_at || b.created_at);
-                    return (new Date(aDate || 0) - new Date(bDate || 0)) * dir;
-                } else if (field === 'status') {
-                    // 메인 status는 그대로, 미매칭은 'zz_unmatched'로 끝에 정렬
-                    aVal = a._kind === 'main' ? (a.status || '') : 'zz_unmatched';
-                    bVal = b._kind === 'main' ? (b.status || '') : 'zz_unmatched';
-                    return aVal.localeCompare(bVal) * dir;
-                } else if (field === 'use_count') {
-                    aVal = a._kind === 'main' ? (a.use_count || 0) : 0;
-                    bVal = b._kind === 'main' ? (b.use_count || 0) : 0;
-                    return (aVal - bVal) * dir;
-                }
-                return 0;
-            });
-
-            // 페이지 슬라이싱
-            const start = (currentPage - 1) * PAGE_SIZE;
-            const pageRows = unified.slice(start, start + PAGE_SIZE);
-
-            // 통합 표시용 변수 (HTML이 이걸 순회)
-            this.unifiedTableRows = pageRows;
-
-            // 호환 변수 (다른 곳에서 사용할 수도 있음)
-            this.mainTitles = pageRows.filter(r => r._kind === 'main');
-            this.unmatchedCrawledPosts = pageRows.filter(r => r._kind === 'unmatched');
-
-            // 통계
-            this.mainTitleTotal = mainTotal;
-            this.mainTitleUnifiedTotal = unified.length;
-            this.mainTitleHasNext = (start + PAGE_SIZE) < unified.length;
         },
 
         // URL 전체 선택/해제

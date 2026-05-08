@@ -154,7 +154,7 @@ async def _build_blog_category_filter(
 @router.get("", response_model=MainTitleListResponse)
 async def list_main_titles(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=10000),
+    size: int = Query(20, ge=1, le=200),
     search: Optional[str] = Query(None, description="제목 검색"),
     category_id: Optional[int] = Query(None, description="카테고리 필터"),
     status: Optional[str] = Query(None, description="상태 필터"),
@@ -373,6 +373,258 @@ async def list_main_titles(
     return MainTitleListResponse(
         items=items, total=total, page=page, size=size, has_next=(page * size) < total
     )
+
+
+@router.get("/unified")
+async def list_titles_unified(
+    blog_id: int = Query(..., description="블로그 ID (필수)"),
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=200),
+    search: Optional[str] = Query(None, description="제목 검색"),
+    sort_field: Optional[str] = Query("created_at"),
+    sort_dir: Optional[str] = Query("desc"),
+    matching_filter: Optional[str] = Query("all", description="all|matched|unmatched"),
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_user),
+):
+    """블로그 정식제목 + 미매칭 크롤링 통합 페이지네이션.
+
+    백엔드에서 두 테이블을 합쳐 정렬한 후 페이지 단위로 응답한다.
+    대용량(수만~수십만 건) 데이터에서도 안정적으로 동작하도록
+    SQL OFFSET/LIMIT 기반 페이지네이션을 사용.
+
+    matching_filter:
+        - all: 메인 타이틀(BlogCategory 필터) + 미매칭 크롤링 통합
+        - matched: 메인 타이틀 중 이 블로그가 매칭한 것만
+        - unmatched: 메인 타이틀 중 매칭 안 된 것만 (미매칭 크롤링 제외)
+
+    Returns:
+        items: [{_kind: 'main'|'unmatched', ...}], total, main_total,
+               unmatched_total, page, size, has_next
+    """
+    from ..models.crawled_post import CrawledPost as _CP
+    from ..models.blog import Blog as _Blog
+
+    blog = await db.get(_Blog, blog_id)
+    if not blog:
+        raise HTTPException(status_code=404, detail="블로그를 찾을 수 없습니다")
+
+    # 1) 메인 타이틀 쿼리 빌드 (BlogCategory 필터 + hide_group_members + 매칭 필터)
+    main_query = select(MainTitle)
+    if search:
+        main_query = main_query.where(MainTitle.title.ilike(f"%{search}%"))
+    cat_filter = await _build_blog_category_filter(blog_id, db)
+    if cat_filter is not None:
+        main_query = main_query.where(cat_filter)
+    main_query = main_query.where(
+        or_(
+            MainTitle.is_group_representative.is_(True),
+            MainTitle.group_id.is_(None),
+            ~MainTitle.group_id.in_(
+                select(TitleGroup.id).where(TitleGroup.member_count >= 2)
+            ),
+        )
+    )
+    matched_subq = (
+        select(_CP.matched_main_title_id)
+        .where(
+            _CP.blog_id == blog_id,
+            _CP.match_status == "matched",
+            _CP.matched_main_title_id.isnot(None),
+        )
+        .distinct()
+        .scalar_subquery()
+    )
+    if matching_filter == "matched":
+        main_query = main_query.where(MainTitle.id.in_(matched_subq))
+    elif matching_filter == "unmatched":
+        main_query = main_query.where(~MainTitle.id.in_(matched_subq))
+
+    main_count = (
+        await db.execute(
+            select(func.count()).select_from(main_query.subquery())
+        )
+    ).scalar() or 0
+
+    # 2) 미매칭 크롤링 쿼리 빌드 (matching_filter='all'에서만 사용)
+    unmatched_count = 0
+    include_unmatched = matching_filter == "all"
+    if include_unmatched:
+        unmatched_query = select(_CP).where(
+            _CP.blog_id == blog_id,
+            _CP.match_status == "unmatched",
+        )
+        if search:
+            unmatched_query = unmatched_query.where(
+                _CP.title.ilike(f"%{search}%")
+            )
+        unmatched_count = (
+            await db.execute(
+                select(func.count()).select_from(unmatched_query.subquery())
+            )
+        ).scalar() or 0
+
+    grand_total = main_count + (unmatched_count if include_unmatched else 0)
+    if grand_total == 0:
+        return {
+            "items": [], "total": 0, "main_total": 0, "unmatched_total": 0,
+            "page": page, "size": size, "has_next": False,
+        }
+
+    # 3) 통합 정렬을 위한 sort 키 매핑
+    main_sort_col_map = {
+        "title": MainTitle.title,
+        "created_at": MainTitle.created_at,
+        "updated_at": MainTitle.updated_at,
+        "status": MainTitle.status,
+        "use_count": MainTitle.use_count,
+    }
+    unmatched_sort_col_map = {
+        "title": _CP.title,
+        "created_at": _CP.crawled_at,
+        "updated_at": _CP.crawled_at,
+        "status": _CP.match_status,
+        "use_count": _CP.id,  # fallback
+    }
+    main_sort = main_sort_col_map.get(sort_field, MainTitle.created_at)
+    main_query = main_query.order_by(
+        main_sort.asc() if sort_dir == "asc" else main_sort.desc()
+    )
+    if include_unmatched:
+        unm_sort = unmatched_sort_col_map.get(sort_field, _CP.crawled_at)
+        unmatched_query = unmatched_query.order_by(
+            unm_sort.asc() if sort_dir == "asc" else unm_sort.desc()
+        )
+
+    # 4) 통합 페이지네이션 (정확한 통합 정렬을 위해
+    #    각 쿼리에서 page*size까지 가져와 Python 측에서 합치고 슬라이싱)
+    fetch_limit = page * size
+    main_rows = (
+        (await db.execute(main_query.limit(fetch_limit))).scalars().all()
+    )
+    unmatched_rows = []
+    if include_unmatched:
+        unmatched_rows = (
+            (await db.execute(unmatched_query.limit(fetch_limit))).scalars().all()
+        )
+
+    # 5) 메인 타이틀 부가 정보 일괄 조회 (Topic/SubTopic/Group/matched_crawled_post)
+    topic_ids = list({t.topic_id for t in main_rows if t.topic_id})
+    subtopic_ids = list({t.subtopic_id for t in main_rows if t.subtopic_id})
+    group_ids = list({t.group_id for t in main_rows if t.group_id})
+    topics_map = {}
+    if topic_ids:
+        r = await db.execute(select(Topic).where(Topic.id.in_(topic_ids)))
+        topics_map = {t.id: t for t in r.scalars().all()}
+    subtopics_map = {}
+    if subtopic_ids:
+        r = await db.execute(select(SubTopic).where(SubTopic.id.in_(subtopic_ids)))
+        subtopics_map = {s.id: s for s in r.scalars().all()}
+    groups_map = {}
+    if group_ids:
+        r = await db.execute(select(TitleGroup).where(TitleGroup.id.in_(group_ids)))
+        groups_map = {g.id: g for g in r.scalars().all()}
+
+    crawled_map = {}
+    main_ids = [t.id for t in main_rows]
+    if main_ids:
+        r = await db.execute(
+            select(_CP).where(
+                _CP.blog_id == blog_id,
+                _CP.matched_main_title_id.in_(main_ids),
+                _CP.match_status == "matched",
+            )
+        )
+        for cp in r.scalars().all():
+            if cp.matched_main_title_id:
+                crawled_map[cp.matched_main_title_id] = cp
+
+    # 6) 메인 행 → dict 변환
+    def main_to_dict(t):
+        d = {
+            "_kind": "main",
+            "id": t.id,
+            "title": t.title,
+            "status": t.status,
+            "topic_id": t.topic_id,
+            "subtopic_id": t.subtopic_id,
+            "group_id": t.group_id,
+            "is_group_representative": t.is_group_representative,
+            "use_count": t.use_count,
+            "created_at": t.created_at.isoformat() if t.created_at else None,
+            "updated_at": t.updated_at.isoformat() if t.updated_at else None,
+        }
+        if t.topic_id and t.topic_id in topics_map:
+            d["topic_name"] = topics_map[t.topic_id].name
+            d["category_name"] = topics_map[t.topic_id].name
+        if t.subtopic_id and t.subtopic_id in subtopics_map:
+            d["subtopic_name"] = subtopics_map[t.subtopic_id].name
+        if d.get("topic_name") and d.get("subtopic_name"):
+            d["category_path"] = f"{d['topic_name']} - {d['subtopic_name']}"
+        elif d.get("topic_name"):
+            d["category_path"] = d["topic_name"]
+        if t.group_id and t.group_id in groups_map:
+            g = groups_map[t.group_id]
+            d["group_name"] = g.name
+            d["group_member_count"] = g.member_count
+        if t.id in crawled_map:
+            cp = crawled_map[t.id]
+            d["matched_crawled_post"] = {
+                "id": cp.id,
+                "title": cp.title,
+                "url": cp.url,
+                "match_score": cp.match_score,
+                "published_at": (
+                    cp.published_at.isoformat() if cp.published_at else None
+                ),
+                "image_url": cp.image_url,
+                "has_content": bool(cp.content_html),
+            }
+        return d
+
+    def unmatched_to_dict(cp):
+        return {
+            "_kind": "unmatched",
+            "id": cp.id,
+            "title": cp.title,
+            "url": cp.url,
+            "crawled_at": cp.crawled_at.isoformat() if cp.crawled_at else None,
+            "match_status": cp.match_status,
+        }
+
+    # 7) Python 측 통합 정렬 (메인 정렬 컬럼과 미매칭 매핑 컬럼이 다르므로
+    #    통합 키를 명시적으로 추출해 사용한다)
+    def sort_key(row):
+        if sort_field == "title":
+            return (row.get("title") or "").lower()
+        if sort_field in ("created_at", "updated_at"):
+            return row.get(sort_field) or row.get("created_at") or row.get("crawled_at") or ""
+        if sort_field == "status":
+            return row.get("status") if row.get("_kind") == "main" else "zz_unmatched"
+        if sort_field == "use_count":
+            return row.get("use_count") or 0
+        return row.get("created_at") or row.get("crawled_at") or ""
+
+    combined = [main_to_dict(t) for t in main_rows]
+    if include_unmatched:
+        combined.extend(unmatched_to_dict(cp) for cp in unmatched_rows)
+
+    combined.sort(key=sort_key, reverse=(sort_dir != "asc"))
+
+    # 8) 페이지 슬라이싱
+    start = (page - 1) * size
+    page_items = combined[start:start + size]
+    has_next = (start + size) < grand_total
+
+    return {
+        "items": page_items,
+        "total": grand_total,
+        "main_total": main_count,
+        "unmatched_total": unmatched_count,
+        "page": page,
+        "size": size,
+        "has_next": has_next,
+    }
 
 
 @router.get("/{title_id}", response_model=MainTitleWithGroup)
