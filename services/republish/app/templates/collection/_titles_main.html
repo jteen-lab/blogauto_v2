@@ -669,21 +669,21 @@
     <!-- 페이지네이션 -->
     <div class="pagination">
         <div class="text-sm text-gray-600">
-            총 <span class="font-semibold" x-text="mainTitleTotal"></span>개
+            총 <span class="font-semibold" x-text="(selectedBlogId && matchingFilter === 'all') ? (mainTitleUnifiedTotal || mainTitleTotal) : mainTitleTotal"></span>개
             <span x-show="stats.main?.grouped > 0" class="ml-2">
                 (그룹: <span x-text="titleGroupTotal"></span>개)
             </span>
         </div>
         <div class="flex items-center gap-2">
             <button
-                @click="if(mainTitlePage > 1) { mainTitlePage--; loadMainTitles(); }"
+                @click="if(mainTitlePage > 1) { mainTitlePage--; (selectedBlogId && matchingFilter === 'all') ? loadMainTitlesWithCrawled() : loadMainTitles(); }"
                 :disabled="mainTitlePage <= 1"
                 class="px-3 py-1.5 border rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50">
                 이전
             </button>
             <span class="text-sm text-gray-600 px-2" x-text="`${mainTitlePage} 페이지`"></span>
             <button
-                @click="if(mainTitleHasNext) { mainTitlePage++; loadMainTitles(); }"
+                @click="if(mainTitleHasNext) { mainTitlePage++; (selectedBlogId && matchingFilter === 'all') ? loadMainTitlesWithCrawled() : loadMainTitles(); }"
                 :disabled="!mainTitleHasNext"
                 class="px-3 py-1.5 border rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50">
                 다음

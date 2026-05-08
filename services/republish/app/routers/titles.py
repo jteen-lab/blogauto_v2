@@ -154,7 +154,7 @@ async def _build_blog_category_filter(
 @router.get("", response_model=MainTitleListResponse)
 async def list_main_titles(
     page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
+    size: int = Query(20, ge=1, le=10000),
     search: Optional[str] = Query(None, description="제목 검색"),
     category_id: Optional[int] = Query(None, description="카테고리 필터"),
     status: Optional[str] = Query(None, description="상태 필터"),
