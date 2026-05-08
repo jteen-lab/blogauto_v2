@@ -1117,6 +1117,12 @@ function dataManagementApp() {
                     const data = await crawledRes.json();
                     this.unmatchedCrawledPosts = data.items || data || [];
                 }
+
+                // 통합 row: 독립 메인 타이틀 + 미매칭 크롤링을 정렬 순서로 표시
+                const mains = (this.mainTitles || []).map(t => ({ ...t, _kind: 'main' }));
+                const unmatched = (this.unmatchedCrawledPosts || []).map(p => ({ ...p, _kind: 'unmatched' }));
+                this.unifiedTableRows = [...mains, ...unmatched];
+                this.mainTitleUnifiedTotal = mains.length + unmatched.length;
             } catch (e) {
                 console.error('수동 매칭 뷰 로드 실패:', e);
             } finally {
@@ -1231,15 +1237,21 @@ function dataManagementApp() {
                     this.titleGroups = data.items || [];
                     this.titleGroupTotal = data.total || 0;
                     this.mainTitles = [];
+                    this.unifiedTableRows = [];
                 } else {
                     // 전체 보기 - 그룹 멤버 숨김 (대표 + 미그룹만 표시)
                     params.append('hide_group_members', 'true');
                     const res = await fetch(`${API_BASE}/titles?${params}`, { credentials: 'include' });
                     const data = await res.json();
-                    this.mainTitles = data.items || [];
+                    const items = data.items || [];
+                    this.mainTitles = items;
                     this.mainTitleTotal = data.total || 0;
                     this.mainTitleHasNext = data.has_next || false;
                     this.titleGroups = [];
+                    // 통합 테이블 row에도 반영 (블로그 미선택/단독 필터 시)
+                    this.unifiedTableRows = items.map(t => ({ ...t, _kind: 'main' }));
+                    this.unmatchedCrawledPosts = [];
+                    this.mainTitleUnifiedTotal = data.total || 0;
                 }
             } catch (e) {
                 console.error('정식 제목 로드 실패:', e);
