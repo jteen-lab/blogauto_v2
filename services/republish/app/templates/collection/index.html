@@ -653,6 +653,8 @@ function dataManagementApp() {
         blogMatchingConfig: null,  // 블로그 매칭 설정
         unmatchedCrawledPosts: [],  // 미매칭 크롤링 포스트 목록
         selectedUnmatchedCrawled: [],  // 선택된 미매칭 크롤링 포스트 ID
+        unifiedTableRows: [],  // 메인+미매칭 통합 정렬 + 페이지 슬라이싱 결과 (각 row에 _kind 플래그)
+        mainTitleUnifiedTotal: 0,  // 메인 + 미매칭 합계 (통합 페이지네이션용)
 
         // ★ 인라인 편집 상태 변수
         editingKeywordId: null,
@@ -1449,18 +1451,16 @@ function dataManagementApp() {
 
         // 전체 보기 + 미매칭 크롤링 포스트 함께 로드
         async loadMainTitlesWithCrawled() {
-            // 메인 타이틀과 미매칭 크롤링 포스트 동시 로드.
-            // 통합 페이지네이션: 각 페이지에 메인:미매칭 비율을 보존하여 함께 표시.
+            // 메인 타이틀 + 미매칭 크롤링을 한 list로 합쳐 사용자 정렬 기준으로
+            // 통합 정렬한 후 페이지 슬라이싱. 각 row는 _kind 플래그로 구분.
             this.mainTitleLoading = true;
             this.selectedMainTitles = [];
             this.selectedUnmatchedCrawled = [];
 
             try {
-                // 통합 페이지네이션을 위해 메인 타이틀과 미매칭을 한 번에 모두 가져온 후
-                // 클라이언트에서 비율 기반으로 슬라이싱한다.
                 const params = new URLSearchParams({
                     page: 1,
-                    size: 1000,  // 충분히 큰 값 - 한 번에 모두 받아 클라이언트 페이지네이션
+                    size: 1000,
                     sort_field: this.mainTitleSortField,
                     sort_dir: this.mainTitleSortDir,
                     hide_group_members: 'true'
@@ -1475,15 +1475,12 @@ function dataManagementApp() {
                     fetch(`${API_BASE}/titles?${params}`, { credentials: 'include' })
                 ];
 
-                // 블로그 선택 시 미매칭 크롤링 포스트도 로드
                 if (this.selectedBlogId) {
                     let crawledUrl = `${API_BASE}/blogs/${this.selectedBlogId}/crawled-posts?match_status=unmatched`;
                     if (this.mainTitleSearch) {
                         crawledUrl += `&search=${encodeURIComponent(this.mainTitleSearch)}`;
                     }
-                    requests.push(
-                        fetch(crawledUrl, { credentials: 'include' })
-                    );
+                    requests.push(fetch(crawledUrl, { credentials: 'include' }));
                 }
 
                 const responses = await Promise.all(requests);
@@ -1492,35 +1489,19 @@ function dataManagementApp() {
                 let mainTotal = 0;
                 if (responses[0].ok) {
                     const data = await responses[0].json();
-                    allMain = data.items || [];
+                    allMain = (data.items || []).map(t => ({ ...t, _kind: 'main' }));
                     mainTotal = data.total || allMain.length;
                 }
 
                 let allUnmatched = [];
                 if (responses[1] && responses[1].ok) {
                     const data = await responses[1].json();
-                    let posts = data.items || data || [];
-                    // 미매칭 크롤링 포스트도 현재 정렬 기준에 따라 클라이언트에서 정렬
-                    if (this.mainTitleSortField === 'title') {
-                        posts.sort((a, b) => {
-                            const aVal = (a.title || '').toLowerCase();
-                            const bVal = (b.title || '').toLowerCase();
-                            return this.mainTitleSortDir === 'asc'
-                                ? aVal.localeCompare(bVal, 'ko')
-                                : bVal.localeCompare(aVal, 'ko');
-                        });
-                    } else if (this.mainTitleSortField === 'created_at') {
-                        posts.sort((a, b) => {
-                            const aVal = new Date(a.crawled_at || 0);
-                            const bVal = new Date(b.crawled_at || 0);
-                            return this.mainTitleSortDir === 'asc' ? aVal - bVal : bVal - aVal;
-                        });
-                    }
-                    allUnmatched = posts;
+                    const posts = data.items || data || [];
+                    allUnmatched = posts.map(p => ({ ...p, _kind: 'unmatched' }));
                 }
 
-                // 비율 기반 통합 페이지네이션 적용
-                this._applyRatioPagination(allMain, allUnmatched, mainTotal);
+                // 통합 정렬 + 페이지네이션 적용
+                this._applyUnifiedSortedPagination(allMain, allUnmatched, mainTotal);
             } catch (e) {
                 console.error('데이터 로드 실패:', e);
                 showErrorMessage('데이터 로드 실패');
@@ -1529,90 +1510,76 @@ function dataManagementApp() {
             }
         },
 
-        // 비율 기반 통합 페이지네이션
-        // 각 페이지에 mainTotal:unmatchedTotal 비율로 메인+미매칭이 함께 보이도록 분배.
-        // - 페이지 size = 20, 그 안에서 메인 N건 + 미매칭 (20-N)건
-        // - 한쪽이 더 적으면 마지막 페이지에 잔여만 표시
-        // - matching_filter='all'일 때만 적용 (matched/unmatched 단독 필터는 그대로)
-        _applyRatioPagination(allMain, allUnmatched, mainTotal) {
+        // 통합 정렬 + 페이지네이션
+        // 메인 타이틀 + 미매칭 크롤링을 한 list로 합치고 사용자 선택 정렬 기준으로
+        // 함께 정렬한 후 페이지당 20건씩 슬라이싱. 각 row의 _kind 플래그로 표시 분기.
+        _applyUnifiedSortedPagination(allMain, allUnmatched, mainTotal) {
             const PAGE_SIZE = 20;
-            const unmatchedTotal = allUnmatched.length;
             const currentPage = this.mainTitlePage || 1;
 
-            // 단독 필터 또는 미매칭 데이터 없는 케이스: 기존 방식 (메인 타이틀만 슬라이싱)
-            if (this.matchingFilter !== 'all' || unmatchedTotal === 0) {
+            // matching_filter !== 'all'이면 메인 타이틀만 표시 (단독 필터)
+            if (this.matchingFilter !== 'all') {
                 const start = (currentPage - 1) * PAGE_SIZE;
-                this.mainTitles = allMain.slice(start, start + PAGE_SIZE);
+                const sliced = allMain.slice(start, start + PAGE_SIZE);
+                this.mainTitles = sliced;
+                this.unmatchedCrawledPosts = [];
+                this.unifiedTableRows = sliced;
                 this.mainTitleTotal = mainTotal;
                 this.mainTitleHasNext = (start + PAGE_SIZE) < mainTotal;
-                this.unmatchedCrawledPosts = allUnmatched;
                 this.mainTitleUnifiedTotal = mainTotal;
                 return;
             }
 
-            // 메인 타이틀 0건: 미매칭만 페이지네이션
-            if (mainTotal === 0) {
-                this.mainTitles = [];
-                this.mainTitleTotal = 0;
-                const start = (currentPage - 1) * PAGE_SIZE;
-                this.unmatchedCrawledPosts = allUnmatched.slice(start, start + PAGE_SIZE);
-                this.mainTitleHasNext = (start + PAGE_SIZE) < unmatchedTotal;
-                this.mainTitleUnifiedTotal = unmatchedTotal;
-                return;
-            }
+            // 통합 list 만들기
+            const unified = [...allMain, ...allUnmatched];
 
-            // 비율 계산: 전체 비율을 페이지당 PAGE_SIZE에 분배
-            const grandTotal = mainTotal + unmatchedTotal;
-            const mainRatio = mainTotal / grandTotal;
-            // 최소 1건씩은 보장 (양쪽 모두 데이터가 있을 때)
-            let mainPerPage = Math.max(1, Math.round(PAGE_SIZE * mainRatio));
-            // 메인이 미매칭보다 훨씬 많을 때 미매칭이 0이 되지 않도록 보정
-            if (mainPerPage >= PAGE_SIZE && unmatchedTotal > 0) {
-                mainPerPage = PAGE_SIZE - 1;
-            }
-            const unmatchedPerPage = PAGE_SIZE - mainPerPage;
+            // 사용자 선택 정렬 기준으로 통합 정렬
+            // 미매칭 row는 created_at 대신 crawled_at, status는 '미매칭'(zz_)으로 매핑
+            const dir = this.mainTitleSortDir === 'asc' ? 1 : -1;
+            const field = this.mainTitleSortField || 'created_at';
 
-            // 페이지별 슬라이싱
-            const mainStart = (currentPage - 1) * mainPerPage;
-            const unmatchedStart = (currentPage - 1) * unmatchedPerPage;
+            unified.sort((a, b) => {
+                let aVal, bVal;
+                if (field === 'title') {
+                    aVal = (a.title || '').toLowerCase();
+                    bVal = (b.title || '').toLowerCase();
+                    return aVal.localeCompare(bVal, 'ko') * dir;
+                } else if (field === 'created_at' || field === 'updated_at') {
+                    const aDate = a._kind === 'main'
+                        ? (a[field] || a.created_at)
+                        : (a.crawled_at || a.created_at);
+                    const bDate = b._kind === 'main'
+                        ? (b[field] || b.created_at)
+                        : (b.crawled_at || b.created_at);
+                    return (new Date(aDate || 0) - new Date(bDate || 0)) * dir;
+                } else if (field === 'status') {
+                    // 메인 status는 그대로, 미매칭은 'zz_unmatched'로 끝에 정렬
+                    aVal = a._kind === 'main' ? (a.status || '') : 'zz_unmatched';
+                    bVal = b._kind === 'main' ? (b.status || '') : 'zz_unmatched';
+                    return aVal.localeCompare(bVal) * dir;
+                } else if (field === 'use_count') {
+                    aVal = a._kind === 'main' ? (a.use_count || 0) : 0;
+                    bVal = b._kind === 'main' ? (b.use_count || 0) : 0;
+                    return (aVal - bVal) * dir;
+                }
+                return 0;
+            });
 
-            // 메인 슬라이싱 + 미매칭으로 부족분 채우기 (한쪽이 끝나면 다른 쪽으로 보충)
-            let mainSlice = allMain.slice(mainStart, mainStart + mainPerPage);
-            let unmatchedSlice = allUnmatched.slice(
-                unmatchedStart, unmatchedStart + unmatchedPerPage
-            );
+            // 페이지 슬라이싱
+            const start = (currentPage - 1) * PAGE_SIZE;
+            const pageRows = unified.slice(start, start + PAGE_SIZE);
 
-            // 메인이 부족하면 미매칭으로 추가 채움
-            const mainShortage = mainPerPage - mainSlice.length;
-            if (mainShortage > 0 && unmatchedTotal > unmatchedStart + unmatchedPerPage) {
-                const extra = allUnmatched.slice(
-                    unmatchedStart + unmatchedPerPage,
-                    unmatchedStart + unmatchedPerPage + mainShortage,
-                );
-                unmatchedSlice = unmatchedSlice.concat(extra);
-            }
+            // 통합 표시용 변수 (HTML이 이걸 순회)
+            this.unifiedTableRows = pageRows;
 
-            // 미매칭이 부족하면 메인으로 추가 채움
-            const unmatchedShortage = unmatchedPerPage - unmatchedSlice.length;
-            if (unmatchedShortage > 0 && mainTotal > mainStart + mainPerPage) {
-                const extra = allMain.slice(
-                    mainStart + mainPerPage,
-                    mainStart + mainPerPage + unmatchedShortage,
-                );
-                mainSlice = mainSlice.concat(extra);
-            }
+            // 호환 변수 (다른 곳에서 사용할 수도 있음)
+            this.mainTitles = pageRows.filter(r => r._kind === 'main');
+            this.unmatchedCrawledPosts = pageRows.filter(r => r._kind === 'unmatched');
 
-            this.mainTitles = mainSlice;
+            // 통계
             this.mainTitleTotal = mainTotal;
-            this.unmatchedCrawledPosts = unmatchedSlice;
-
-            // 통합 페이지 수 계산
-            const mainPages = mainPerPage > 0 ? Math.ceil(mainTotal / mainPerPage) : 0;
-            const unmatchedPages = unmatchedPerPage > 0
-                ? Math.ceil(unmatchedTotal / unmatchedPerPage) : 0;
-            const totalPages = Math.max(mainPages, unmatchedPages, 1);
-            this.mainTitleHasNext = currentPage < totalPages;
-            this.mainTitleUnifiedTotal = grandTotal;
+            this.mainTitleUnifiedTotal = unified.length;
+            this.mainTitleHasNext = (start + PAGE_SIZE) < unified.length;
         },
 
         // URL 전체 선택/해제
