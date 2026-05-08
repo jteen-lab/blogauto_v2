@@ -4,6 +4,10 @@ function globalSummary() {
         logPanelOpen: false,
         logFilter: localStorage.getItem('dashboard_log_filter') || 'all',
         logSearch: '',
+        logBlogFilter: '',         // 블로그 드롭다운 선택값 (빈 문자열=전체)
+        logActionFilter: '',       // 액션 라디오 선택값 (publish/republish/generate/queue_publish 등, 빈 문자열=전체)
+        logBlogList: [],           // 검색 드롭다운용 블로그 목록
+        logPageSize: parseInt(localStorage.getItem('dashboard_log_page_size') || '50', 10),
         unifiedLogs: [],
         unifiedLogsTotal: 0,
         hasMoreUnifiedLogs: false,
@@ -177,9 +181,38 @@ function globalSummary() {
         // 로그 패널 토글
         toggleLogPanel() {
             this.logPanelOpen = !this.logPanelOpen;
-            if (this.logPanelOpen && this.unifiedLogs.length === 0) {
-                this.loadUnifiedLogs();
+            if (this.logPanelOpen) {
+                if (this.unifiedLogs.length === 0) {
+                    this.loadUnifiedLogs();
+                }
+                if (this.logBlogList.length === 0) {
+                    this.loadLogBlogList();
+                }
             }
+        },
+
+        // 동작 로그 검색용 블로그 목록 로드
+        async loadLogBlogList() {
+            try {
+                const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
+                const resp = await fetch(`${apiBase}/dashboard/unified-logs/blog-list`, {
+                    credentials: 'include'
+                });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    this.logBlogList = data.blogs || [];
+                }
+            } catch (e) {
+                console.warn('[GlobalSummary] 블로그 목록 로드 실패:', e);
+            }
+        },
+
+        // 검색 조건 초기화
+        resetLogFilters() {
+            this.logSearch = '';
+            this.logBlogFilter = '';
+            this.logActionFilter = '';
+            this.loadUnifiedLogs();
         },
 
         // 대시보드 페이지로 이동 (이미 대시보드면 무시)
@@ -357,12 +390,25 @@ function globalSummary() {
             return `${labels[key]} 워커: 온라인 (활성 ${w.active_tasks}개)`;
         },
 
-        // 통합 로그 로드
+        // 검색용 쿼리 파라미터 빌드 (loadUnifiedLogs/loadMore에서 공용 사용)
+        _buildLogQueryParams(offset) {
+            const params = new URLSearchParams({
+                limit: String(this.logPageSize),
+                offset: String(offset),
+                log_type: this.logFilter,
+                level: 'all',
+            });
+            if (this.logSearch) params.set('search', this.logSearch);
+            if (this.logBlogFilter) params.set('blog_name', this.logBlogFilter);
+            if (this.logActionFilter) params.set('action_type', this.logActionFilter);
+            return params;
+        },
+
+        // 통합 로그 로드 (검색/필터 변경 시 처음부터 다시 로드)
         async loadUnifiedLogs() {
             try {
                 const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
-                const params = new URLSearchParams({ limit: '30', offset: '0', log_type: this.logFilter, level: 'all' });
-                if (this.logSearch) params.set('search', this.logSearch);
+                const params = this._buildLogQueryParams(0);
                 const resp = await fetch(`${apiBase}/dashboard/unified-logs?${params}`, { credentials: 'include' });
                 if (resp.ok) {
                     const data = await resp.json();
@@ -375,12 +421,11 @@ function globalSummary() {
             }
         },
 
-        // 통합 로그 더 보기
+        // 통합 로그 더 보기 (현재까지 로드된 다음부터 추가 조회)
         async loadMoreUnifiedLogs() {
             try {
                 const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
-                const params = new URLSearchParams({ limit: '30', offset: String(this.unifiedLogs.length), log_type: this.logFilter, level: 'all' });
-                if (this.logSearch) params.set('search', this.logSearch);
+                const params = this._buildLogQueryParams(this.unifiedLogs.length);
                 const resp = await fetch(`${apiBase}/dashboard/unified-logs?${params}`, { credentials: 'include' });
                 if (resp.ok) {
                     const data = await resp.json();
@@ -390,6 +435,13 @@ function globalSummary() {
             } catch (e) {
                 console.warn('[GlobalSummary] 추가 통합 로그 로드 실패:', e);
             }
+        },
+
+        // 페이지 사이즈 변경
+        setLogPageSize(size) {
+            this.logPageSize = size;
+            localStorage.setItem('dashboard_log_page_size', String(size));
+            this.loadUnifiedLogs();
         },
 
         // 로그 레벨 CSS 클래스

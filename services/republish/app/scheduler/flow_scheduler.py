@@ -833,11 +833,15 @@ class FlowScheduler:
         action_type: str,
         daily_count: int,
     ) -> tuple:
-        """일일 실행 한도 체크.
+        """일일 실행 한도 체크 (블로그별 카운트).
+
+        AutorunLog에는 blog_id 컬럼이 없으므로 blog_name으로 매칭한다.
+        blog_id가 0/None이면 블로그 무관 액션(collect/data 등)이므로
+        blog_name == "-"인 로그만 카운트한다.
 
         Args:
             db: DB 세션
-            blog_id: 블로그 ID
+            blog_id: 블로그 ID (0이면 블로그 무관 액션)
             action_type: 액션 타입 (generate/publish/republish)
             daily_count: 일일 최대 횟수
 
@@ -860,9 +864,24 @@ class FlowScheduler:
                 AutorunLog.created_at >= today_start,
             )
         )
-        # blog_id가 있으면 해당 블로그만 필터
+
+        # 블로그별로 카운트: blog_id로 Blog.name을 조회하여 blog_name 매칭
         if blog_id:
-            count_query = count_query.where(AutorunLog.blog_name != "-")
+            blog_obj = await db.get(Blog, blog_id)
+            if blog_obj and blog_obj.name:
+                count_query = count_query.where(
+                    AutorunLog.blog_name == blog_obj.name
+                )
+            else:
+                # 블로그를 찾을 수 없으면 안전하게 한도 초과로 처리
+                logger.warning(
+                    f"[DAILY_LIMIT] blog_id={blog_id} 블로그 조회 실패 - "
+                    f"한도 체크 보수적 처리"
+                )
+                return True, 0
+        else:
+            # 블로그 무관 액션 (collect/data)
+            count_query = count_query.where(AutorunLog.blog_name == "-")
 
         result = await db.execute(count_query)
         today_count = result.scalar() or 0

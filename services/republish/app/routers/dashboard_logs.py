@@ -37,11 +37,13 @@ _ACTION_DISPLAY = {
 
 @router.get("/unified-logs")
 async def get_unified_logs(
-    limit: int = Query(default=30, ge=1, le=100),
+    limit: int = Query(default=30, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     log_type: str = Query(default="all"),
     level: str = Query(default="all"),
     search: str = Query(default=""),
+    blog_name: str = Query(default=""),
+    action_type: str = Query(default=""),
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
     """통합 동작로그 조회.
@@ -49,11 +51,15 @@ async def get_unified_logs(
     AutorunLog 테이블에서 조회하여 로그 바(/logs)와 동일한 데이터를 표시합니다.
 
     Args:
-        limit: 조회 건수 (1~100).
+        limit: 조회 건수 (1~200).
         offset: 시작 위치.
-        log_type: "all"|"action"|"activity"|"generation".
+        log_type: "all"|"action"|"activity"|"generation" (탭 분류).
         level: "all"|"INFO"|"SUCCESS"|"WARN"|"ERROR".
         search: 메시지 검색어.
+        blog_name: 특정 블로그명으로 필터 (빈 값이면 전체).
+        action_type: 단일 액션 필터 "publish"|"republish"|"generate"|"collect"|
+                     "queue_register"|"queue_publish"|"queue_republish"|"queue_generate".
+                     queue_* 는 queue_register 중 발행/재발행/생성 종류 분리용.
         db: DB 세션.
 
     Returns:
@@ -74,10 +80,23 @@ async def get_unified_logs(
             query = query.where(celery_filter)
             count_query = count_query.where(celery_filter)
 
-        # 필터 조건 적용
+        # 필터 조건 적용 (탭/레벨/검색어)
         query, count_query = _apply_filters(
             query, count_query, log_type, level, search
         )
+
+        # 블로그 필터 (빈 문자열이면 적용 안 함)
+        if blog_name and blog_name.strip():
+            query = query.where(AutorunLog.blog_name == blog_name.strip())
+            count_query = count_query.where(
+                AutorunLog.blog_name == blog_name.strip()
+            )
+
+        # 액션 타입 필터: 발행/재발행/생성 세분화 + queue_* 분리 검색
+        if action_type:
+            query, count_query = _apply_action_type_filter(
+                query, count_query, action_type,
+            )
 
         # 총 건수 조회
         total_result = await db.execute(count_query)
@@ -104,6 +123,69 @@ async def get_unified_logs(
     except Exception as e:
         logger.error(f"[UNIFIED_LOGS] 조회 실패: {e}")
         return {"logs": [], "total": 0, "has_more": False}
+
+
+@router.get("/unified-logs/blog-list")
+async def get_log_blog_list(
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """동작 로그 검색용 블로그 목록.
+
+    AutorunLog에 등장한 distinct blog_name을 반환한다.
+    드롭다운 위젯에서 사용한다.
+
+    Returns:
+        {"blogs": ["수작남", "라이프인포", ...]}
+    """
+    try:
+        result = await db.execute(
+            select(AutorunLog.blog_name)
+            .where(
+                AutorunLog.blog_name.isnot(None),
+                AutorunLog.blog_name != "",
+                AutorunLog.blog_name != "-",
+            )
+            .distinct()
+            .order_by(AutorunLog.blog_name.asc())
+        )
+        blogs = [row[0] for row in result.all() if row[0]]
+        return {"blogs": blogs}
+    except Exception as e:
+        logger.warning(f"[UNIFIED_LOGS] 블로그 목록 실패: {e}")
+        return {"blogs": []}
+
+
+def _apply_action_type_filter(
+    query, count_query, action_type: str,
+) -> tuple:
+    """단일 액션 타입 또는 queue_register 세분화 필터.
+
+    action_type 값:
+      - publish/republish/generate/collect: 단일 action 필터
+      - queue_publish/queue_republish/queue_generate: queue_register 중 메시지 패턴 분리
+    """
+    queue_kind_map = {
+        "queue_publish": "%발행 등록%",
+        "queue_republish": "%재발행 등록%",
+        "queue_generate": "%생성 등록%",
+    }
+    if action_type in queue_kind_map:
+        pattern = queue_kind_map[action_type]
+        query = query.where(
+            AutorunLog.action == "queue_register",
+            AutorunLog.message.like(pattern),
+        )
+        count_query = count_query.where(
+            AutorunLog.action == "queue_register",
+            AutorunLog.message.like(pattern),
+        )
+    elif action_type in (
+        "publish", "republish", "generate", "collect",
+        "data", "queue_register",
+    ):
+        query = query.where(AutorunLog.action == action_type)
+        count_query = count_query.where(AutorunLog.action == action_type)
+    return query, count_query
 
 
 def _apply_filters(

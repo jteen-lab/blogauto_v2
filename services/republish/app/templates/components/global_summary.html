@@ -164,8 +164,8 @@
          @click.stop
          class="border-t border-gray-700 bg-gray-900 max-h-[50vh] overflow-y-auto">
         <div class="max-w-7xl mx-auto px-4 py-3">
-            <!-- 필터 바 -->
-            <div class="flex items-center gap-2 mb-3 flex-wrap">
+            <!-- 탭 필터 바 -->
+            <div class="flex items-center gap-2 mb-2 flex-wrap">
                 <template x-for="f in [{key:'all',label:'전체',dot:''},{key:'action',label:'작업',dot:'bg-blue-400'},{key:'activity',label:'활동',dot:'bg-amber-400'},{key:'generation',label:'생성',dot:'bg-emerald-400'}]" :key="f.key">
                     <button @click.stop="logFilter = f.key; localStorage.setItem('dashboard_log_filter', f.key); loadUnifiedLogs(); loadDisplayLogs()"
                             class="px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors flex items-center gap-1"
@@ -179,6 +179,52 @@
                        placeholder="검색..."
                        class="bg-gray-800 text-gray-300 text-[11px] px-2.5 py-1 rounded-md border border-gray-700 w-32 focus:w-48 transition-all focus:outline-none focus:border-gray-500">
             </div>
+
+            <!-- 검색 위젯: 블로그 + 액션 + 페이지 사이즈 -->
+            <div class="flex items-center gap-2 mb-3 flex-wrap text-[11px]">
+                <!-- 블로그 드롭다운 -->
+                <label class="text-gray-500">블로그:</label>
+                <select x-model="logBlogFilter" @change.stop="loadUnifiedLogs()" @click.stop
+                        class="bg-gray-800 text-gray-300 px-2 py-1 rounded-md border border-gray-700 focus:outline-none focus:border-gray-500">
+                    <option value="">전체</option>
+                    <template x-for="b in logBlogList" :key="b">
+                        <option :value="b" x-text="b"></option>
+                    </template>
+                </select>
+
+                <!-- 액션 라디오 (발행/재발행/생성 등) -->
+                <span class="text-gray-500 ml-2">액션:</span>
+                <template x-for="a in [
+                    {key:'',label:'전체',cls:'bg-gray-700'},
+                    {key:'publish',label:'발행',cls:'bg-blue-700'},
+                    {key:'republish',label:'재발행',cls:'bg-violet-700'},
+                    {key:'generate',label:'생성',cls:'bg-emerald-700'},
+                    {key:'queue_publish',label:'발행 큐',cls:'bg-blue-900'},
+                    {key:'queue_republish',label:'재발행 큐',cls:'bg-violet-900'},
+                    {key:'queue_generate',label:'생성 큐',cls:'bg-emerald-900'},
+                ]" :key="a.key">
+                    <button @click.stop="logActionFilter = a.key; loadUnifiedLogs()"
+                            class="px-2 py-0.5 rounded text-[10px] font-medium transition-colors"
+                            :class="logActionFilter === a.key ? (a.cls + ' text-white') : 'text-gray-400 hover:text-gray-200 border border-gray-700'"
+                            x-text="a.label"></button>
+                </template>
+
+                <!-- 초기화 버튼 -->
+                <button @click.stop="resetLogFilters()" class="ml-2 text-gray-500 hover:text-gray-300 underline">
+                    초기화
+                </button>
+
+                <div class="flex-1"></div>
+
+                <!-- 페이지 사이즈 선택 -->
+                <label class="text-gray-500">표시:</label>
+                <template x-for="n in [30, 50, 100, 200]" :key="n">
+                    <button @click.stop="setLogPageSize(n)"
+                            class="px-1.5 py-0.5 rounded text-[10px]"
+                            :class="logPageSize === n ? 'bg-gray-700 text-gray-200' : 'text-gray-500 hover:text-gray-300'"
+                            x-text="n"></button>
+                </template>
+            </div>
             <!-- 로그 바 표시 수 설정 -->
             <div class="flex items-center gap-2 mb-3 text-[10px] text-gray-500">
                 <span>로그 바 표시:</span>
@@ -188,6 +234,7 @@
                             :class="displayLogCount === n ? 'bg-gray-700 text-gray-200' : 'text-gray-500 hover:text-gray-300'"
                             x-text="n"></button>
                 </template>
+                <span class="ml-3 text-gray-600">총 <span x-text="unifiedLogsTotal" class="text-gray-400 font-mono"></span>건</span>
             </div>
             <!-- 로그 목록 -->
             <div class="space-y-0.5 font-mono">
