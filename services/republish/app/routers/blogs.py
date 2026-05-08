@@ -526,8 +526,18 @@ async def get_blog_matching_summary(
         )
     cat_filter = or_(*cat_conditions) if cat_conditions else None
 
-    # 2) 카테고리 필터된 전체 MainTitle 수
-    total_query = select(func.count(MainTitle.id))
+    # 2) 카테고리 필터 + hide_group_members(대표 또는 미그룹 또는 비활성 그룹) 통과
+    #    정식제목 탭의 실제 표시 row와 일치시키기 위해 동일 필터 적용.
+    from ..models.title import TitleGroup
+    hide_group_filter = or_(
+        MainTitle.is_group_representative.is_(True),
+        MainTitle.group_id.is_(None),
+        ~MainTitle.group_id.in_(
+            select(TitleGroup.id).where(TitleGroup.member_count >= 2)
+        ),
+    )
+
+    total_query = select(func.count(MainTitle.id)).where(hide_group_filter)
     if cat_filter is not None:
         total_query = total_query.where(cat_filter)
     total_titles = (await db.execute(total_query)).scalar() or 0
@@ -545,20 +555,19 @@ async def get_blog_matching_summary(
     matched_rows = matched_result.all()
     matched_ids_all = [r.mt_id for r in matched_rows]
 
-    # 4) 매칭 ID 중 카테고리 필터를 통과한 것만 유효 매칭으로 인정
+    # 4) 매칭 ID 중 카테고리 + hide_group 필터를 통과한 것만 유효 매칭으로 인정
     valid_matched_ids: set[int] = set()
     if matched_ids_all:
+        mt_filter_query = select(MainTitle.id).where(
+            MainTitle.id.in_(matched_ids_all),
+            hide_group_filter,
+        )
         if cat_filter is not None:
-            mt_in_cat_query = select(MainTitle.id).where(
-                MainTitle.id.in_(matched_ids_all),
-                cat_filter,
-            )
-            valid_matched_ids = {
-                row[0] for row in
-                (await db.execute(mt_in_cat_query)).all()
-            }
-        else:
-            valid_matched_ids = set(matched_ids_all)
+            mt_filter_query = mt_filter_query.where(cat_filter)
+        valid_matched_ids = {
+            row[0] for row in
+            (await db.execute(mt_filter_query)).all()
+        }
 
     matched_count = len(valid_matched_ids)
     published_count = sum(
@@ -603,6 +612,9 @@ async def get_blog_matching_summary(
         "pending": pending_count,
         "unmatched": unmatched_count,
         "unmatched_published": unmatched_published,
+        # 정식제목 탭에 실제 표시되는 모든 row의 합 (메인 + 미매칭 크롤포스트).
+        # 발행완료 + 발행대기 + 독립 + 미매칭과 동일하므로 사용자 직관과 일치한다.
+        "unified_total": total_titles + unmatched_published,
         "category_filter_applied": cat_filter is not None,
         "crawled_count": crawled_stats.total if crawled_stats else 0,
         "matched_posts": crawled_stats.matched if crawled_stats else 0,

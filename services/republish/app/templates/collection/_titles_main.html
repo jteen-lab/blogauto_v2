@@ -51,9 +51,11 @@
             <!-- 매칭 현황 (블로그 선택 시 표시) -->
             <div x-show="selectedBlogId && matchingSummary" x-cloak
                  class="flex items-center gap-3 bg-white rounded-lg px-4 py-2 shadow-sm">
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2"
+                     :title="'정식제목 ' + (matchingSummary?.total || 0) + ' + 미매칭 ' + (matchingSummary?.unmatched_published || 0) + ' (테이블에 표시되는 모든 row 합계)'">
                     <span class="text-xs text-gray-500">전체:</span>
-                    <span class="font-bold text-gray-800" x-text="matchingSummary?.total || 0"></span>
+                    <span class="font-bold text-gray-800"
+                          x-text="matchingSummary?.unified_total ?? matchingSummary?.total ?? 0"></span>
                 </div>
                 <div class="w-px h-4 bg-gray-300"></div>
                 <div class="flex items-center gap-2">
@@ -669,7 +671,8 @@
     <!-- 페이지네이션 -->
     <div class="pagination">
         <div class="text-sm text-gray-600">
-            총 <span class="font-semibold" x-text="(selectedBlogId && matchingFilter === 'all') ? (mainTitleUnifiedTotal || mainTitleTotal) : mainTitleTotal"></span>개
+            총 <span class="font-semibold"
+                    x-text="(selectedBlogId && matchingFilter === 'all') ? (matchingSummary?.unified_total ?? mainTitleUnifiedTotal ?? mainTitleTotal) : mainTitleTotal"></span>개
             <span x-show="stats.main?.grouped > 0" class="ml-2">
                 (그룹: <span x-text="titleGroupTotal"></span>개)
             </span>
