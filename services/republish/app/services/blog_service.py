@@ -134,13 +134,20 @@ class BlogService:
         """
         사용자 블로그 목록 조회
 
+        crawled_count/matched_count는 blogs 테이블의 캐시 컬럼이지만
+        generator가 글 생성 시 갱신하지 않아 stale 가능.
+        목록 응답 시점에 실시간 SQL COUNT로 보강한다.
+
         Args:
             user: 사용자 객체
             include_deleted: 삭제된 블로그 포함 여부
 
         Returns:
-            블로그 목록
+            블로그 목록 (crawled_count/matched_count 실시간 반영)
         """
+        from ..models.crawled_post import CrawledPost
+        from sqlalchemy import func as _func
+
         query = select(Blog).where(Blog.user_id == user.id)
 
         if not include_deleted:
@@ -151,9 +158,37 @@ class BlogService:
         result = await self.db.execute(query)
         blogs = result.scalars().all()
 
+        # 실시간 카운트 일괄 조회 (N+1 방지)
+        blog_ids = [b.id for b in blogs]
+        counts: dict[int, dict] = {}
+        if blog_ids:
+            count_q = (
+                select(
+                    CrawledPost.blog_id,
+                    _func.count(CrawledPost.id).label("total"),
+                    _func.count(CrawledPost.id).filter(
+                        CrawledPost.match_status == "matched"
+                    ).label("matched"),
+                )
+                .where(CrawledPost.blog_id.in_(blog_ids))
+                .group_by(CrawledPost.blog_id)
+            )
+            for row in (await self.db.execute(count_q)).all():
+                counts[row.blog_id] = {
+                    "total": row.total or 0,
+                    "matched": row.matched or 0,
+                }
+
         logger.info(f"블로그 목록 조회 | 사용자={user.id} | 개수={len(blogs)}")
 
-        return [BlogListResponse(**blog.to_dict()) for blog in blogs]
+        items = []
+        for blog in blogs:
+            d = blog.to_dict()
+            c = counts.get(blog.id) or {"total": 0, "matched": 0}
+            d["crawled_count"] = c["total"]
+            d["matched_count"] = c["matched"]
+            items.append(BlogListResponse(**d))
+        return items
 
     async def get_user_blogs_with_credentials(self, user: User) -> List[dict]:
         """
