@@ -30,11 +30,28 @@ services:
   redis:
     image: redis:7-alpine
     container_name: blogauto_redis
-    ports:
-      - "6379:6379"
+    # 외부 포트 노출 제거 - 도커 내부 네트워크로만 접근 (cryptojacking 방지).
+    # 호스트에서 직접 redis-cli 사용은 `docker exec blogauto_redis redis-cli` 사용.
+    expose:
+      - "6379"
     volumes:
       - redis_data:/data
-    command: redis-server --appendonly yes
+    # 보안 강화:
+    #   --protected-mode yes : 외부 미인증 접근 차단
+    #   --bind 0.0.0.0 : 도커 내부 네트워크 모든 IP에서 접근 (expose만 허용)
+    #   --rename-command CONFIG "" : CONFIG 명령 비활성화 (외부 dir/SLAVEOF 변조 방지)
+    #   --rename-command SLAVEOF "" : SLAVEOF 명령 비활성화
+    #   --rename-command REPLICAOF "" : REPLICAOF 명령 비활성화
+    #   --rename-command MODULE "" : MODULE 명령 비활성화 (RCE 방지)
+    command: >
+      redis-server --appendonly yes
+      --protected-mode yes
+      --rename-command CONFIG ""
+      --rename-command SLAVEOF ""
+      --rename-command REPLICAOF ""
+      --rename-command MODULE ""
+      --rename-command FLUSHALL ""
+      --rename-command FLUSHDB ""
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
