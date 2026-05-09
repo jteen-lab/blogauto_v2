@@ -37,16 +37,17 @@ services:
     volumes:
       - redis_data:/data
     # 보안 강화 (cryptojacking 공격 핵심 명령만 비활성화):
-    #   --protected-mode yes : 외부 미인증 접근 차단
     #   --rename-command CONFIG "" : dir/dbfilename 변조 방지 (RDB 경로 변조 차단)
     #   --rename-command SLAVEOF "" : 악성 master 강제 동기화 차단
     #   --rename-command REPLICAOF "" : SLAVEOF 신규 alias도 차단
     #   --rename-command MODULE "" : Redis Module 로드를 통한 RCE 차단
-    # FLUSHALL/FLUSHDB는 비활성화하지 않음 — AOF 재생 시 과거 명령 인식 실패로
-    # Redis가 시작 불가 상태가 됨. 외부 노출(expose 6379) 차단으로 충분히 보호.
+    #
+    # protected-mode no: 도커 네트워크 내부의 다른 IP(앱/워커)에서 접근 가능하게.
+    # 외부 노출은 expose 6379 (호스트 외부 미공개)로 이미 차단되어 안전.
+    # FLUSHALL/FLUSHDB는 비활성화 안 함 - AOF 재생 호환성 유지.
     command: >
       redis-server --appendonly yes
-      --protected-mode yes
+      --protected-mode no
       --rename-command CONFIG ""
       --rename-command SLAVEOF ""
       --rename-command REPLICAOF ""
