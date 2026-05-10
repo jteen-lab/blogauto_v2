@@ -204,12 +204,18 @@ class BlogService:
         """
         사용자 블로그 목록 조회 (복호화된 인증정보 포함)
 
+        crawled_count/matched_count는 published_at IS NOT NULL 기준으로
+        실시간 SQL COUNT 보강 (blog_service.get_user_blogs와 동일 의미).
+
         Args:
             user: 사용자 객체
 
         Returns:
-            블로그 목록 (인증정보 포함)
+            블로그 목록 (인증정보 포함, 실시간 카운트 반영)
         """
+        from ..models.crawled_post import CrawledPost
+        from sqlalchemy import func as _func
+
         query = select(Blog).where(
             Blog.user_id == user.id,
             Blog.is_deleted == False
@@ -218,9 +224,40 @@ class BlogService:
         result = await self.db.execute(query)
         blogs = result.scalars().all()
 
+        # 실시간 발행 카운트 일괄 조회 (N+1 방지, 의미는 get_user_blogs와 동일)
+        blog_ids = [b.id for b in blogs]
+        counts: dict[int, dict] = {}
+        if blog_ids:
+            count_q = (
+                select(
+                    CrawledPost.blog_id,
+                    _func.count(CrawledPost.id).filter(
+                        CrawledPost.published_at.isnot(None)
+                    ).label("published_total"),
+                    _func.count(CrawledPost.id).filter(
+                        CrawledPost.published_at.isnot(None),
+                        CrawledPost.match_status == "matched",
+                    ).label("matched_published"),
+                )
+                .where(CrawledPost.blog_id.in_(blog_ids))
+                .group_by(CrawledPost.blog_id)
+            )
+            for row in (await self.db.execute(count_q)).all():
+                counts[row.blog_id] = {
+                    "published_total": row.published_total or 0,
+                    "matched_published": row.matched_published or 0,
+                }
+
         logger.info(f"블로그 목록 조회 (인증정보 포함) | 사용자={user.id} | 개수={len(blogs)}")
 
-        return [blog.to_dict_with_credentials(decrypt_data) for blog in blogs]
+        items = []
+        for blog in blogs:
+            d = blog.to_dict_with_credentials(decrypt_data)
+            c = counts.get(blog.id) or {"published_total": 0, "matched_published": 0}
+            d["crawled_count"] = c["published_total"]
+            d["matched_count"] = c["matched_published"]
+            items.append(d)
+        return items
 
     async def get_blog_by_id(self, user: User, blog_id: int) -> BlogResponse:
         """
