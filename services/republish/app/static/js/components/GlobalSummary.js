@@ -410,25 +410,45 @@ function globalSummary() {
             return this.getWorkerState(key) === 'saturated';
         },
 
-        // 워커 카드 인라인 스타일 (CSS 변수로 그라데이션 진행률 전달)
+        // 워커 카드 인라인 스타일
+        // 작업 진행 중(busy/saturated)이면 CSS 키프레임으로 0%→100% 순차 채움.
+        // 작업 없을 때(idle/offline/unknown)는 단색 배경.
+        // 채움 색상/배경 색상은 CSS 변수로 전달, 애니메이션은 .worker-card-busy 클래스가 담당.
         getWorkerCardStyle(key) {
             const state = this.getWorkerState(key);
-            const progress = this.getWorkerProgress(key);
-            // 상태별 채움 색상 / 배경 색상
+            // 상태별 색상 팔레트
             const palette = {
-                idle:      { fill: 'transparent', bg: '#f0fdf4' },  // green-50
-                busy:      { fill: 'rgba(59,130,246,0.35)', bg: 'rgba(59,130,246,0.08)' },   // blue
-                saturated: { fill: 'rgba(245,158,11,0.45)', bg: 'rgba(245,158,11,0.12)' },   // amber
-                offline:   { fill: 'transparent', bg: '#fef2f2' },  // red-50
-                unknown:   { fill: 'transparent', bg: '#f3f4f6' },  // gray-100
+                idle:      { fill: 'rgba(34,197,94,0)',    bg: '#f0fdf4' },  // green
+                busy:      { fill: 'rgba(59,130,246,0.45)', bg: 'rgba(59,130,246,0.10)' },   // blue
+                saturated: { fill: 'rgba(245,158,11,0.55)', bg: 'rgba(245,158,11,0.12)' },   // amber
+                offline:   { fill: 'transparent',           bg: '#fef2f2' },  // red-50
+                unknown:   { fill: 'transparent',           bg: '#f3f4f6' },  // gray-100
             };
             const c = palette[state] || palette.unknown;
-            // saturated일 때는 100%로 가득 채움
-            const pct = state === 'saturated' ? 100 : progress;
+            // 작업 진행 중이면 키프레임 애니메이션이 background-size를 0→100%로 채움
+            // 그 외 상태는 단색 배경
+            if (state === 'busy' || state === 'saturated') {
+                return {
+                    backgroundColor: c.bg,
+                    backgroundImage: `linear-gradient(to right, ${c.fill}, ${c.fill})`,
+                    backgroundRepeat: 'no-repeat',
+                    // background-size는 CSS @keyframes worker-progress-fill가 0%→100%로 변경
+                    '--worker-fill-color': c.fill,
+                };
+            }
             return {
-                background: `linear-gradient(to right, ${c.fill} ${pct}%, ${c.bg} ${pct}%)`,
-                transition: 'background 0.4s ease-out',
+                backgroundColor: c.bg,
+                backgroundImage: 'none',
+                transition: 'background-color 0.4s ease-out',
             };
+        },
+
+        // busy/saturated일 때 추가할 CSS 클래스 (CSS animation 트리거)
+        getWorkerCardAnimClass(key) {
+            const state = this.getWorkerState(key);
+            if (state === 'saturated') return 'worker-card-busy worker-card-fast';
+            if (state === 'busy') return 'worker-card-busy';
+            return '';
         },
 
         // 워커 카드 외곽 border 클래스 (상태별)
