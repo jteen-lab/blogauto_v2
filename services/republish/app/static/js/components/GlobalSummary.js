@@ -40,6 +40,17 @@ function globalSummary() {
         },
         workerPollInterval: null,
         previousWorkerOnline: { generation: null, publish: null, utility: null },
+        // 워커별 진행률 추적: 시작 시각 + 완료 시각 (시간 기반 진행률 산정)
+        workerProgressTracker: {},
+        // 워커별 평균 작업 시간(ms) - 진행률 추정 기준
+        workerAvgDurationMs: {
+            generation: 60000,  // 글 생성 평균 60초 (AI 호출 + 이미지)
+            publish: 15000,     // 발행 15초
+            utility: 8000,      // 수집/이동 8초
+        },
+        // Alpine 반응성 트리거용 카운터 (매초 증가하여 진행률 재계산 유도)
+        progressTick: 0,
+        progressTickerInterval: null,
         // (시스템 탭은 대시보드 페이지로 이동됨)
 
         // 22개 전체 탭 정의
@@ -101,11 +112,20 @@ function globalSummary() {
             this.loadWorkerStatus();
             this.workerPollInterval = setInterval(() => this.loadWorkerStatus(), 3000);
 
+            // 진행률 시간 갱신 타이머 (1초마다 - getWorkerProgress의 시간 기반 진행 자동 반영)
+            this.progressTickerInterval = setInterval(() => {
+                this.progressTick++;
+            }, 1000);
+
             // 페이지 이탈 시 정리
             window.addEventListener('beforeunload', () => {
                 this.stopAutoRefresh();
                 this.stopLogAutoRefresh();
                 this.stopWorkerPoll();
+                if (this.progressTickerInterval) {
+                    clearInterval(this.progressTickerInterval);
+                    this.progressTickerInterval = null;
+                }
             });
         },
 
@@ -385,13 +405,46 @@ function globalSummary() {
             return 'bg-green-400';
         },
 
-        // 워커 점유율 (0~100) — 진행률 바 채움 비율
+        // 워커 진행률 (0~100) — 시간 기반.
+        // active>0 시점에 시작 시각 기록, 평균 작업 시간을 기준으로 점진 증가.
+        // 100% 도달 후 작업이 끝나면(active=0) 짧게 100% 유지 후 0%로 리셋.
+        // 한 사이클당 한 번만 0→100% 차오르고 반복하지 않음.
         getWorkerProgress(key) {
             const w = this.workerStatus?.workers?.[key];
             if (!w || w.status !== 'online') return 0;
+
+            // Alpine 반응성 트리거 (매초 progressTick 증가 → 이 함수 재호출)
+            void this.progressTick;
+
             const active = Math.max(0, w.active_tasks || 0);
-            const max = Math.max(1, w.concurrency || 1);
-            return Math.min(100, Math.round((active / max) * 100));
+            const tracker = this.workerProgressTracker;
+            const duration = this.workerAvgDurationMs[key] || 30000;
+            const now = Date.now();
+
+            if (active > 0) {
+                // 작업 진행 중 → 시작 시각 기록 (없으면)
+                if (!tracker[key] || tracker[key].completedAt) {
+                    tracker[key] = { startedAt: now, completedAt: null };
+                }
+                const elapsed = now - tracker[key].startedAt;
+                // 작업 완료 전까지 최대 95%까지만 (실제 완료 시 100% 도달)
+                return Math.min(95, Math.max(1, Math.round((elapsed / duration) * 100)));
+            }
+
+            // active=0 (작업 없음/완료)
+            if (tracker[key] && !tracker[key].completedAt) {
+                // 직전까지 작업 중 → 완료 시점 기록 후 100% 표시
+                tracker[key].completedAt = now;
+                return 100;
+            }
+            if (tracker[key] && tracker[key].completedAt) {
+                // 완료 후 1.2초간 100% 유지 → 그 후 0%로 리셋
+                if (now - tracker[key].completedAt < 1200) {
+                    return 100;
+                }
+                delete tracker[key];
+            }
+            return 0;
         },
 
         // 워커 상태 분류: offline / idle / busy / saturated / unknown
@@ -410,30 +463,28 @@ function globalSummary() {
             return this.getWorkerState(key) === 'saturated';
         },
 
-        // 워커 카드 인라인 스타일
-        // 작업 진행 중(busy/saturated)이면 CSS 키프레임으로 0%→100% 순차 채움.
-        // 작업 없을 때(idle/offline/unknown)는 단색 배경.
-        // 채움 색상/배경 색상은 CSS 변수로 전달, 애니메이션은 .worker-card-busy 클래스가 담당.
+        // 워커 카드 인라인 스타일 - 시간 기반 진행률을 background-size로 표시.
+        // active>0이면 progress(0~95%)에 비례해 좌→우로 점진 채움,
+        // 완료 직후 100%로 잠시 유지 후 0%로 리셋(별도 무한 반복 없음).
         getWorkerCardStyle(key) {
             const state = this.getWorkerState(key);
-            // 상태별 색상 팔레트
+            const progress = this.getWorkerProgress(key);
             const palette = {
-                idle:      { fill: 'rgba(34,197,94,0)',    bg: '#f0fdf4' },  // green
-                busy:      { fill: 'rgba(59,130,246,0.45)', bg: 'rgba(59,130,246,0.10)' },   // blue
-                saturated: { fill: 'rgba(245,158,11,0.55)', bg: 'rgba(245,158,11,0.12)' },   // amber
-                offline:   { fill: 'transparent',           bg: '#fef2f2' },  // red-50
-                unknown:   { fill: 'transparent',           bg: '#f3f4f6' },  // gray-100
+                idle:      { fill: 'rgba(34,197,94,0)',    bg: '#f0fdf4' },
+                busy:      { fill: 'rgba(59,130,246,0.45)', bg: 'rgba(59,130,246,0.10)' },
+                saturated: { fill: 'rgba(245,158,11,0.55)', bg: 'rgba(245,158,11,0.12)' },
+                offline:   { fill: 'transparent',           bg: '#fef2f2' },
+                unknown:   { fill: 'transparent',           bg: '#f3f4f6' },
             };
             const c = palette[state] || palette.unknown;
-            // 작업 진행 중이면 키프레임 애니메이션이 background-size를 0→100%로 채움
-            // 그 외 상태는 단색 배경
+
             if (state === 'busy' || state === 'saturated') {
                 return {
                     backgroundColor: c.bg,
                     backgroundImage: `linear-gradient(to right, ${c.fill}, ${c.fill})`,
                     backgroundRepeat: 'no-repeat',
-                    // background-size는 CSS @keyframes worker-progress-fill가 0%→100%로 변경
-                    '--worker-fill-color': c.fill,
+                    backgroundSize: `${progress}% 100%`,
+                    transition: 'background-size 0.8s linear',
                 };
             }
             return {
@@ -441,14 +492,6 @@ function globalSummary() {
                 backgroundImage: 'none',
                 transition: 'background-color 0.4s ease-out',
             };
-        },
-
-        // busy/saturated일 때 추가할 CSS 클래스 (CSS animation 트리거)
-        getWorkerCardAnimClass(key) {
-            const state = this.getWorkerState(key);
-            if (state === 'saturated') return 'worker-card-busy worker-card-fast';
-            if (state === 'busy') return 'worker-card-busy';
-            return '';
         },
 
         // 워커 카드 외곽 border 클래스 (상태별)

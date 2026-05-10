@@ -1,25 +1,9 @@
 <!-- 글로벌 요약탭 컴포넌트 -->
 <style>
-  /* 워커 카드 진행률 채움 애니메이션 (0% → 100% 순차 채움 후 리셋, 무한 반복).
-     active_tasks > 0인 워커에만 .worker-card-busy 클래스가 부여되어 시각화한다.
-     단순 점유율 % 표시가 아니라 "지금 작업이 진행 중"이라는 시각적 피드백을 제공.
+  /* 워커 카드의 텍스트가 채움 영역 위에 자연스럽게 보이도록.
+     진행률 채움은 inline style의 background-size로 점진 증가 (0→100% 한 번).
+     CSS 키프레임 무한 반복은 제거 - 사용자 의도(작업 시작 시 0%, 완료 시 100%)에 맞춤.
    */
-  @keyframes worker-progress-fill {
-    0%   { background-size: 0% 100%; }
-    98%  { background-size: 100% 100%; }
-    100% { background-size: 100% 100%; }
-  }
-
-  .worker-card.worker-card-busy {
-    animation: worker-progress-fill 12s linear infinite;
-  }
-
-  /* saturated 상태: 더 빠른 사이클로 긴급함 표현 */
-  .worker-card.worker-card-busy.worker-card-fast {
-    animation-duration: 6s;
-  }
-
-  /* 텍스트가 채움 위에 자연스럽게 보이도록 */
   .worker-card > span,
   .worker-card > div {
     z-index: 1;
@@ -46,11 +30,10 @@
                     </template>
                     <!-- 구분선 -->
                     <div class="hidden md:block w-px h-8 bg-gray-200 mx-1 flex-shrink-0"></div>
-                    <!-- 워커 상태 카드 (진행률 채움 애니메이션) -->
-                    <!-- 이미지 워커는 생성 워커에 통합 동작하므로 카드 미표시 -->
+                    <!-- 워커 상태 카드 (시간 기반 진행률 0→100% 채움) -->
                     <template x-for="wk in [{key:'generation',label:'생성'},{key:'publish',label:'발행'},{key:'utility',label:'유틸'}]" :key="wk.key">
                         <div class="worker-card flex items-center gap-1.5 rounded-xl px-3 py-2 whitespace-nowrap shadow-sm flex-shrink-0"
-                             :class="getWorkerCardBorder(wk.key) + ' ' + getWorkerCardAnimClass(wk.key)"
+                             :class="getWorkerCardBorder(wk.key)"
                              :style="getWorkerCardStyle(wk.key)"
                              :title="getWorkerTooltip(wk.key)"
                              role="progressbar"
@@ -65,10 +48,10 @@
                             <span class="text-sm font-bold text-gray-800 relative"
                                   x-show="workerStatus?.workers?.[wk.key]?.status === 'online'"
                                   x-text="workerStatus?.workers?.[wk.key]?.active_tasks ?? 0"></span>
-                            <!-- 점유율 (active/concurrency) (active>0일 때만 표시) -->
+                            <!-- 진행률 % (active>0 또는 완료 직후 100% 유지 시 표시) -->
                             <span class="text-[10px] font-medium text-gray-600 ml-0.5 relative"
-                                  x-show="workerStatus?.workers?.[wk.key]?.status === 'online' && (workerStatus?.workers?.[wk.key]?.active_tasks || 0) > 0"
-                                  x-text="(workerStatus?.workers?.[wk.key]?.active_tasks ?? 0) + '/' + (workerStatus?.workers?.[wk.key]?.concurrency ?? '?')"></span>
+                                  x-show="workerStatus?.workers?.[wk.key]?.status === 'online' && getWorkerProgress(wk.key) > 0"
+                                  x-text="getWorkerProgress(wk.key) + '%'"></span>
                         </div>
                     </template>
                     <!-- 대기 큐 표시 (PC) -->
@@ -90,11 +73,10 @@
                     </template>
                     <!-- 모바일 구분선 -->
                     <div class="col-span-2 border-t border-gray-200"></div>
-                    <!-- 모바일 워커 상태 카드 (진행률 채움 애니메이션) -->
-                    <!-- 이미지 워커는 생성 워커에 통합 동작하므로 카드 미표시 -->
+                    <!-- 모바일 워커 상태 카드 (시간 기반 진행률 0→100% 채움) -->
                     <template x-for="wk in [{key:'generation',label:'생성'},{key:'publish',label:'발행'},{key:'utility',label:'유틸'}]" :key="wk.key">
                         <div class="worker-card flex items-center justify-between gap-2 rounded-lg px-3 py-2 shadow-sm"
-                             :class="getWorkerCardBorder(wk.key) + ' ' + getWorkerCardAnimClass(wk.key)"
+                             :class="getWorkerCardBorder(wk.key)"
                              :style="getWorkerCardStyle(wk.key)"
                              :title="getWorkerTooltip(wk.key)"
                              role="progressbar"
@@ -110,10 +92,10 @@
                                 <span class="text-sm font-bold text-gray-800"
                                       x-show="workerStatus?.workers?.[wk.key]?.status === 'online'"
                                       x-text="workerStatus?.workers?.[wk.key]?.active_tasks ?? 0"></span>
-                                <!-- 점유율 (active/concurrency) -->
+                                <!-- 진행률 % -->
                                 <span class="text-[10px] text-gray-600"
-                                      x-show="workerStatus?.workers?.[wk.key]?.status === 'online' && (workerStatus?.workers?.[wk.key]?.active_tasks || 0) > 0"
-                                      x-text="(workerStatus?.workers?.[wk.key]?.active_tasks ?? 0) + '/' + (workerStatus?.workers?.[wk.key]?.concurrency ?? '?')"></span>
+                                      x-show="workerStatus?.workers?.[wk.key]?.status === 'online' && getWorkerProgress(wk.key) > 0"
+                                      x-text="getWorkerProgress(wk.key) + '%'"></span>
                             </div>
                         </div>
                     </template>
