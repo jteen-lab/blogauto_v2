@@ -134,16 +134,22 @@ class BlogService:
         """
         사용자 블로그 목록 조회
 
-        crawled_count/matched_count는 blogs 테이블의 캐시 컬럼이지만
-        generator가 글 생성 시 갱신하지 않아 stale 가능.
-        목록 응답 시점에 실시간 SQL COUNT로 보강한다.
+        카드 카운트 의미 (사용자 의도와 정식제목 탭과의 일관성):
+          - crawled_count: 블로그에 실제 발행된 모든 글 수
+            = CrawledPost(blog_id).published_at IS NOT NULL
+            = 정식제목 탭 [발행완료] + [미매칭] 합과 일치
+          - matched_count: 그 중 정식제목과 매칭된 발행글 수
+            = match_status='matched' AND published_at IS NOT NULL
+
+        blogs.crawled_count/matched_count 캐시 컬럼은 generator/matcher가
+        시점에 따라 갱신하지 않아 stale → 응답 시점에 실시간 SQL COUNT로 보강.
 
         Args:
             user: 사용자 객체
             include_deleted: 삭제된 블로그 포함 여부
 
         Returns:
-            블로그 목록 (crawled_count/matched_count 실시간 반영)
+            블로그 목록 (crawled/matched 실시간 발행 기준)
         """
         from ..models.crawled_post import CrawledPost
         from sqlalchemy import func as _func
@@ -159,24 +165,28 @@ class BlogService:
         blogs = result.scalars().all()
 
         # 실시간 카운트 일괄 조회 (N+1 방지)
+        # published_at IS NOT NULL을 "블로그 실제 발행" 기준으로 사용
         blog_ids = [b.id for b in blogs]
         counts: dict[int, dict] = {}
         if blog_ids:
             count_q = (
                 select(
                     CrawledPost.blog_id,
-                    _func.count(CrawledPost.id).label("total"),
                     _func.count(CrawledPost.id).filter(
-                        CrawledPost.match_status == "matched"
-                    ).label("matched"),
+                        CrawledPost.published_at.isnot(None)
+                    ).label("published_total"),
+                    _func.count(CrawledPost.id).filter(
+                        CrawledPost.published_at.isnot(None),
+                        CrawledPost.match_status == "matched",
+                    ).label("matched_published"),
                 )
                 .where(CrawledPost.blog_id.in_(blog_ids))
                 .group_by(CrawledPost.blog_id)
             )
             for row in (await self.db.execute(count_q)).all():
                 counts[row.blog_id] = {
-                    "total": row.total or 0,
-                    "matched": row.matched or 0,
+                    "published_total": row.published_total or 0,
+                    "matched_published": row.matched_published or 0,
                 }
 
         logger.info(f"블로그 목록 조회 | 사용자={user.id} | 개수={len(blogs)}")
@@ -184,9 +194,9 @@ class BlogService:
         items = []
         for blog in blogs:
             d = blog.to_dict()
-            c = counts.get(blog.id) or {"total": 0, "matched": 0}
-            d["crawled_count"] = c["total"]
-            d["matched_count"] = c["matched"]
+            c = counts.get(blog.id) or {"published_total": 0, "matched_published": 0}
+            d["crawled_count"] = c["published_total"]
+            d["matched_count"] = c["matched_published"]
             items.append(BlogListResponse(**d))
         return items
 

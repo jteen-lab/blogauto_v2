@@ -588,14 +588,20 @@ async def get_blog_matching_summary(
         await db.execute(unmatched_published_query)
     ).scalar() or 0
 
-    # 7) 크롤링 포스트 통계 (전체 카운트, 카테고리 무관)
+    # 7) 크롤링 포스트 통계 (블로그 실제 발행 수 = published_at NOT NULL)
+    #    blog 카드의 crawled_count와 의미를 통일:
+    #    "블로그에 실제 발행된 모든 글 수"
     crawled_stats_query = select(
-        func.count(CrawledPost.id).label("total"),
         func.count(CrawledPost.id).filter(
-            CrawledPost.match_status == "matched"
+            CrawledPost.published_at.isnot(None)
+        ).label("total"),
+        func.count(CrawledPost.id).filter(
+            CrawledPost.published_at.isnot(None),
+            CrawledPost.match_status == "matched",
         ).label("matched"),
         func.count(CrawledPost.id).filter(
-            CrawledPost.match_status == "unmatched"
+            CrawledPost.published_at.isnot(None),
+            CrawledPost.match_status == "unmatched",
         ).label("unmatched"),
     ).where(CrawledPost.blog_id == blog_id)
     crawled_stats = (await db.execute(crawled_stats_query)).first()
