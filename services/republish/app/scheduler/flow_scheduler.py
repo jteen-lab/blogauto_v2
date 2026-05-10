@@ -1880,22 +1880,38 @@ class FlowScheduler:
                         if await _use_celery("use_celery_generation", db):
                             from app.core.task_dispatcher import get_dispatcher, PRIORITY_NORMAL
                             from dataclasses import asdict
-                            from app.services.generation.title_peek import (
-                                peek_next_generate_title,
-                            )
                             dispatcher = get_dispatcher()
                             module_settings = (
                                 prompt_module.settings if prompt_module.settings else {}
                             )
-                            # 디스패치 시점에 제목 결정 (워커도 동일 ID 사용)
-                            pre_title, pre_title_id = await peek_next_generate_title(
-                                db, blog.id, module_settings,
+
+                            # GP 재고 정책 검증 (min_inventory 미준수 방지).
+                            # check_inventory 한 번으로 재고 체크 + 제목 결정 통합:
+                            #   - inventory_count >= threshold면 needs_generation=False
+                            #   - 사용 가능 제목 없어도 needs_generation=False
+                            min_inv = (
+                                stage_params.generate.min_inventory
+                                if stage_params
+                                and stage_params.generate.min_inventory is not None
+                                else None
                             )
-                            if not pre_title_id:
-                                # 큐 등록 skip — 활동 탭 표시용 queue_register 로그 저장
+                            inv_check = await gen_executor.inventory_trigger.check_inventory(
+                                blog.id,
+                                min_inventory=min_inv,
+                                module_settings=module_settings,
+                            )
+
+                            if not inv_check.needs_generation:
+                                # 재고 충분 또는 사용 가능 제목 없음 → 큐 등록 skip
+                                if inv_check.current_inventory >= inv_check.threshold:
+                                    skip_reason = (
+                                        f"재고 충분 ({inv_check.current_inventory}/"
+                                        f"{inv_check.threshold})"
+                                    )
+                                else:
+                                    skip_reason = "사용 가능 제목 없음"
                                 skip_msg = (
-                                    f"{blog.name} - 생성 큐 등록 생략 "
-                                    f"(사용 가능 제목 없음)"
+                                    f"{blog.name} - 생성 큐 등록 생략 ({skip_reason})"
                                 )
                                 await self._save_autorun_log(
                                     db=db, user_id=flow.user_id, flow_id=flow.id,
@@ -1908,16 +1924,26 @@ class FlowScheduler:
                                     },
                                     duration_ms=0, action="queue_register",
                                 )
-                                # 메인 흐름의 generate 로그(라인 1934)는 단순 skipped로 처리
                                 result = {
                                     "success": True, "skipped": True,
-                                    "message": "사용 가능 제목 없음",
+                                    "message": skip_reason,
                                     "post_title": "",
                                 }
                                 logger.info(
-                                    f"[FLOW_SCHEDULER] 사용 가능 제목 없음, 큐 등록 skip | "
-                                    f"blog={blog.name}"
+                                    f"[FLOW_SCHEDULER] 큐 등록 skip ({skip_reason}) | "
+                                    f"blog={blog.name} | "
+                                    f"재고={inv_check.current_inventory}/"
+                                    f"{inv_check.threshold}"
                                 )
+                                pre_title_id = 0  # dispatch 분기 통과용
+                                pre_title = ""
+                            else:
+                                # 재고 부족 + 사용 가능 제목 있음 → 큐 등록 진행
+                                pre_title_id = inv_check.available_title_id or 0
+                                pre_title = inv_check.available_title_text or ""
+
+                            if not pre_title_id:
+                                pass  # 위 분기에서 이미 처리됨
                             else:
                                 try:
                                     # GP StageParams를 dict로 직렬화하여 Celery 워커에 전달
@@ -2471,7 +2497,22 @@ class FlowScheduler:
                 if not stage_params or not stage_params.republish.enabled:
                     continue
 
-                
+                # 재발행 일일 한도 체크 (발행과 동일 기준).
+                # daily_count 설정 시 해당 블로그의 오늘 재발행 성공 수와 비교.
+                if stage_params.republish and stage_params.republish.daily_count:
+                    exceeded, today_count = await self._check_daily_limit(
+                        db, blog.id, "republish",
+                        stage_params.republish.daily_count,
+                    )
+                    if exceeded:
+                        logger.info(
+                            f"[SCHED:REPUBLISH] 일일 한도 도달 | "
+                            f"blog={blog.name} | "
+                            f"today={today_count}/"
+                            f"{stage_params.republish.daily_count}"
+                        )
+                        # 한도 도달 시 다음 날 재스케줄을 위한 message 사용
+                        continue
 
                 if await _use_celery("use_celery_publish", db):
                     # Celery 워커에 재발행 위임
