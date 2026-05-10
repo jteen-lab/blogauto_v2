@@ -37,6 +37,7 @@ WORKER_KEY_MAP = {
     "generation": "generation",
     "publish": "publish",
     "utility": "utility",
+    "image": "image",
 }
 
 # 워커 상태 캐시 (inspect 호출 비용 절감)

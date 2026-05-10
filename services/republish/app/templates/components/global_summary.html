@@ -20,23 +20,28 @@
                     </template>
                     <!-- 구분선 -->
                     <div class="hidden md:block w-px h-8 bg-gray-200 mx-1 flex-shrink-0"></div>
-                    <!-- 워커 상태 카드 -->
-                    <template x-for="wk in [{key:'generation',label:'생성'},{key:'publish',label:'발행'},{key:'utility',label:'유틸'}]" :key="wk.key">
-                        <div class="flex items-center gap-1.5 rounded-xl px-3 py-2 whitespace-nowrap shadow-sm flex-shrink-0 transition-colors duration-300"
-                             :class="{
-                                 'bg-primary-lt border border-primary': workerStatus?.workers?.[wk.key]?.status === 'online' && workerStatus?.workers?.[wk.key]?.active_tasks > 0,
-                                 'bg-green-50 border border-green-200': workerStatus?.workers?.[wk.key]?.status === 'online' && (workerStatus?.workers?.[wk.key]?.active_tasks || 0) === 0,
-                                 'bg-red-50 border border-red-200': workerStatus?.workers?.[wk.key]?.status === 'offline',
-                                 'bg-gray-100': !workerStatus?.workers?.[wk.key] || workerStatus?.workers?.[wk.key]?.status === 'unknown'
-                             }"
-                             :title="getWorkerTooltip(wk.key)">
+                    <!-- 워커 상태 카드 (진행률 그라데이션) -->
+                    <template x-for="wk in [{key:'generation',label:'생성'},{key:'publish',label:'발행'},{key:'utility',label:'유틸'},{key:'image',label:'이미지'}]" :key="wk.key">
+                        <div class="flex items-center gap-1.5 rounded-xl px-3 py-2 whitespace-nowrap shadow-sm flex-shrink-0"
+                             :class="getWorkerCardBorder(wk.key)"
+                             :style="getWorkerCardStyle(wk.key)"
+                             :title="getWorkerTooltip(wk.key)"
+                             role="progressbar"
+                             :aria-valuenow="getWorkerProgress(wk.key)"
+                             aria-valuemin="0"
+                             aria-valuemax="100"
+                             :aria-label="wk.label + ' 워커 진행률 ' + getWorkerProgress(wk.key) + '%'">
                             <span class="text-xs font-medium"
-                                  :class="workerStatus?.workers?.[wk.key]?.active_tasks > 0 ? 'text-blue-700 font-bold' : 'text-gray-500'"
+                                  :class="workerStatus?.workers?.[wk.key]?.active_tasks > 0 ? 'text-blue-800 font-bold' : 'text-gray-600'"
                                   x-text="wk.label + ' 워커'"></span>
                             <span class="w-2 h-2 rounded-full flex-shrink-0" :class="getWorkerDotClass(wk.key)"></span>
-                            <span class="text-sm font-bold text-gray-700"
+                            <span class="text-sm font-bold text-gray-800"
                                   x-show="workerStatus?.workers?.[wk.key]?.status === 'online'"
                                   x-text="workerStatus?.workers?.[wk.key]?.active_tasks ?? 0"></span>
+                            <!-- 진행률 % (active>0일 때만 표시) -->
+                            <span class="text-[10px] font-medium text-gray-600 ml-0.5"
+                                  x-show="workerStatus?.workers?.[wk.key]?.status === 'online' && (workerStatus?.workers?.[wk.key]?.active_tasks || 0) > 0"
+                                  x-text="getWorkerProgress(wk.key) + '%'"></span>
                         </div>
                     </template>
                     <!-- 대기 큐 표시 (PC) -->
@@ -58,24 +63,29 @@
                     </template>
                     <!-- 모바일 구분선 -->
                     <div class="col-span-2 border-t border-gray-200"></div>
-                    <!-- 모바일 워커 상태 카드 -->
-                    <template x-for="wk in [{key:'generation',label:'생성'},{key:'publish',label:'발행'},{key:'utility',label:'유틸'}]" :key="wk.key">
-                        <div class="flex items-center justify-between gap-2 rounded-lg px-3 py-2 shadow-sm transition-colors duration-300"
-                             :class="{
-                                 'bg-primary-lt border border-primary': workerStatus?.workers?.[wk.key]?.status === 'online' && workerStatus?.workers?.[wk.key]?.active_tasks > 0,
-                                 'bg-green-50 border border-green-200': workerStatus?.workers?.[wk.key]?.status === 'online' && (workerStatus?.workers?.[wk.key]?.active_tasks || 0) === 0,
-                                 'bg-red-50 border border-red-200': workerStatus?.workers?.[wk.key]?.status === 'offline',
-                                 'bg-gray-100': !workerStatus?.workers?.[wk.key] || workerStatus?.workers?.[wk.key]?.status === 'unknown'
-                             }"
-                             :title="getWorkerTooltip(wk.key)">
+                    <!-- 모바일 워커 상태 카드 (진행률 그라데이션) -->
+                    <template x-for="wk in [{key:'generation',label:'생성'},{key:'publish',label:'발행'},{key:'utility',label:'유틸'},{key:'image',label:'이미지'}]" :key="wk.key">
+                        <div class="flex items-center justify-between gap-2 rounded-lg px-3 py-2 shadow-sm"
+                             :class="getWorkerCardBorder(wk.key)"
+                             :style="getWorkerCardStyle(wk.key)"
+                             :title="getWorkerTooltip(wk.key)"
+                             role="progressbar"
+                             :aria-valuenow="getWorkerProgress(wk.key)"
+                             aria-valuemin="0"
+                             aria-valuemax="100"
+                             :aria-label="wk.label + ' 워커 진행률 ' + getWorkerProgress(wk.key) + '%'">
                             <span class="text-xs font-medium truncate"
-                                  :class="workerStatus?.workers?.[wk.key]?.active_tasks > 0 ? 'text-blue-700 font-bold' : 'text-gray-500'"
+                                  :class="workerStatus?.workers?.[wk.key]?.active_tasks > 0 ? 'text-blue-800 font-bold' : 'text-gray-600'"
                                   x-text="wk.label + ' 워커'"></span>
                             <div class="flex items-center gap-1 flex-shrink-0">
                                 <span class="w-2 h-2 rounded-full" :class="getWorkerDotClass(wk.key)"></span>
-                                <span class="text-sm font-bold text-gray-700"
+                                <span class="text-sm font-bold text-gray-800"
                                       x-show="workerStatus?.workers?.[wk.key]?.status === 'online'"
                                       x-text="workerStatus?.workers?.[wk.key]?.active_tasks ?? 0"></span>
+                                <!-- 진행률 % (모바일은 폭 좁아 축약 표시) -->
+                                <span class="text-[10px] text-gray-600"
+                                      x-show="workerStatus?.workers?.[wk.key]?.status === 'online' && (workerStatus?.workers?.[wk.key]?.active_tasks || 0) > 0"
+                                      x-text="getWorkerProgress(wk.key) + '%'"></span>
                             </div>
                         </div>
                     </template>

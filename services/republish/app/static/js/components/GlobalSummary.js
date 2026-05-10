@@ -379,17 +379,95 @@ function globalSummary() {
             const w = this.workerStatus?.workers?.[key];
             if (!w || w.status === 'unknown') return 'bg-gray-500';
             if (w.status === 'offline') return 'bg-red-400';
+            // saturated: active > concurrency → amber 강조
+            if (this._isWorkerSaturated(key)) return 'bg-amber-500 animate-pulse';
             if (w.active_tasks > 0) return 'bg-blue-400 animate-pulse';
             return 'bg-green-400';
         },
 
-        // 워커 상태 툴팁 텍스트
-        getWorkerTooltip(key) {
-            const labels = { generation: '생성', publish: '발행', utility: '유틸리티' };
+        // 워커 점유율 (0~100) — 진행률 바 채움 비율
+        getWorkerProgress(key) {
             const w = this.workerStatus?.workers?.[key];
-            if (!w || w.status === 'unknown') return `${labels[key]} 워커: 확인 중`;
-            if (w.status === 'offline') return `${labels[key]} 워커: 오프라인`;
-            return `${labels[key]} 워커: 온라인 (활성 ${w.active_tasks}개)`;
+            if (!w || w.status !== 'online') return 0;
+            const active = Math.max(0, w.active_tasks || 0);
+            const max = Math.max(1, w.concurrency || 1);
+            return Math.min(100, Math.round((active / max) * 100));
+        },
+
+        // 워커 상태 분류: offline / idle / busy / saturated / unknown
+        getWorkerState(key) {
+            const w = this.workerStatus?.workers?.[key];
+            if (!w || w.status === 'unknown') return 'unknown';
+            if (w.status === 'offline') return 'offline';
+            const active = w.active_tasks || 0;
+            const max = w.concurrency || 1;
+            if (active === 0) return 'idle';
+            if (active > max) return 'saturated';
+            return 'busy';
+        },
+
+        _isWorkerSaturated(key) {
+            return this.getWorkerState(key) === 'saturated';
+        },
+
+        // 워커 카드 인라인 스타일 (CSS 변수로 그라데이션 진행률 전달)
+        getWorkerCardStyle(key) {
+            const state = this.getWorkerState(key);
+            const progress = this.getWorkerProgress(key);
+            // 상태별 채움 색상 / 배경 색상
+            const palette = {
+                idle:      { fill: 'transparent', bg: '#f0fdf4' },  // green-50
+                busy:      { fill: 'rgba(59,130,246,0.35)', bg: 'rgba(59,130,246,0.08)' },   // blue
+                saturated: { fill: 'rgba(245,158,11,0.45)', bg: 'rgba(245,158,11,0.12)' },   // amber
+                offline:   { fill: 'transparent', bg: '#fef2f2' },  // red-50
+                unknown:   { fill: 'transparent', bg: '#f3f4f6' },  // gray-100
+            };
+            const c = palette[state] || palette.unknown;
+            // saturated일 때는 100%로 가득 채움
+            const pct = state === 'saturated' ? 100 : progress;
+            return {
+                background: `linear-gradient(to right, ${c.fill} ${pct}%, ${c.bg} ${pct}%)`,
+                transition: 'background 0.4s ease-out',
+            };
+        },
+
+        // 워커 카드 외곽 border 클래스 (상태별)
+        getWorkerCardBorder(key) {
+            const state = this.getWorkerState(key);
+            const map = {
+                idle:      'border border-green-200',
+                busy:      'border border-blue-300',
+                saturated: 'border border-amber-300',
+                offline:   'border border-red-200',
+                unknown:   'border border-gray-200',
+            };
+            return map[state] || map.unknown;
+        },
+
+        // 워커 상태 툴팁 텍스트 (확장: processed/concurrency/uptime)
+        getWorkerTooltip(key) {
+            const labels = {
+                generation: '생성', publish: '발행',
+                utility: '유틸리티', image: '이미지',
+            };
+            const label = labels[key] || key;
+            const w = this.workerStatus?.workers?.[key];
+            if (!w || w.status === 'unknown') return `${label} 워커: 확인 중`;
+            if (w.status === 'offline') return `${label} 워커: 오프라인`;
+            const progress = this.getWorkerProgress(key);
+            const state = this.getWorkerState(key);
+            const stateLabel = (
+                state === 'saturated' ? '과부하' :
+                state === 'busy' ? '실행 중' :
+                state === 'idle' ? '대기' : ''
+            );
+            return (
+                `${label} 워커: 온라인 (${stateLabel})\n` +
+                `점유율: ${w.active_tasks || 0}/${w.concurrency || '?'}` +
+                ` (${progress}%)\n` +
+                `처리량: ${w.processed ?? 0}건` +
+                (w.uptime ? `\n가동시간: ${w.uptime}` : '')
+            );
         },
 
         // 검색용 쿼리 파라미터 빌드 (loadUnifiedLogs/loadMore에서 공용 사용)
