@@ -112,10 +112,10 @@ function globalSummary() {
             this.loadWorkerStatus();
             this.workerPollInterval = setInterval(() => this.loadWorkerStatus(), 3000);
 
-            // 진행률 시간 갱신 타이머 (1초마다 - getWorkerProgress의 시간 기반 진행 자동 반영)
+            // 진행률 시간 갱신 타이머 (250ms - 가속 채움 단계도 부드럽게 표시)
             this.progressTickerInterval = setInterval(() => {
                 this.progressTick++;
-            }, 1000);
+            }, 250);
 
             // 페이지 이탈 시 정리
             window.addEventListener('beforeunload', () => {
@@ -405,15 +405,18 @@ function globalSummary() {
             return 'bg-green-400';
         },
 
-        // 워커 진행률 (0~100) — 시간 기반.
-        // active>0 시점에 시작 시각 기록, 평균 작업 시간을 기준으로 점진 증가.
-        // 100% 도달 후 작업이 끝나면(active=0) 짧게 100% 유지 후 0%로 리셋.
-        // 한 사이클당 한 번만 0→100% 차오르고 반복하지 않음.
+        // 워커 진행률 (0~100) — 시간 기반 + 작업 완료 시 가속 채움.
+        //   1) active>0: 시작 시각부터 시간 비례 증가 (1~95% cap)
+        //   2) active=0 첫 감지: 마지막 progress 기록(즉시 100% 점프 안 함)
+        //   3) 가속 단계: lastProgress → 100%까지 600ms 동안 부드럽게 채움
+        //   4) 100% 유지: 추가 1500ms 동안 머무름 (사용자가 완료를 명확히 인지)
+        //   5) 그 후 0%로 리셋
+        // 동작로그의 "완료" 출력 시점과 시각적 100% 도달이 매끄럽게 동기화됨.
         getWorkerProgress(key) {
             const w = this.workerStatus?.workers?.[key];
             if (!w || w.status !== 'online') return 0;
 
-            // Alpine 반응성 트리거 (매초 progressTick 증가 → 이 함수 재호출)
+            // Alpine 반응성 트리거 (250ms마다 progressTick 증가)
             void this.progressTick;
 
             const active = Math.max(0, w.active_tasks || 0);
@@ -421,27 +424,41 @@ function globalSummary() {
             const duration = this.workerAvgDurationMs[key] || 30000;
             const now = Date.now();
 
+            const ACCEL_MS = 600;     // 가속 채움 시간 (lastProgress → 100%)
+            const HOLD_MS = 1500;     // 100% 유지 시간
+
             if (active > 0) {
-                // 작업 진행 중 → 시작 시각 기록 (없으면)
+                // 작업 진행 중 → 시작 시각 기록 (없거나 직전 완료 후 새 작업)
                 if (!tracker[key] || tracker[key].completedAt) {
                     tracker[key] = { startedAt: now, completedAt: null };
                 }
                 const elapsed = now - tracker[key].startedAt;
-                // 작업 완료 전까지 최대 95%까지만 (실제 완료 시 100% 도달)
                 return Math.min(95, Math.max(1, Math.round((elapsed / duration) * 100)));
             }
 
-            // active=0 (작업 없음/완료)
+            // active=0 (작업 없음 또는 막 완료)
             if (tracker[key] && !tracker[key].completedAt) {
-                // 직전까지 작업 중 → 완료 시점 기록 후 100% 표시
+                // 직전까지 작업 중 → 완료 시점 기록 + 마지막 진행률 보존
+                const elapsed = now - tracker[key].startedAt;
+                const lastP = Math.min(95, Math.max(1, Math.round((elapsed / duration) * 100)));
                 tracker[key].completedAt = now;
-                return 100;
+                tracker[key].lastProgress = lastP;
+                return lastP;  // 첫 호출은 그대로 (다음 호출부터 가속)
             }
             if (tracker[key] && tracker[key].completedAt) {
-                // 완료 후 1.2초간 100% 유지 → 그 후 0%로 리셋
-                if (now - tracker[key].completedAt < 1200) {
+                const sinceCompleted = now - tracker[key].completedAt;
+                const startP = tracker[key].lastProgress || 0;
+
+                if (sinceCompleted < ACCEL_MS) {
+                    // 가속 채움: lastProgress → 100% (600ms 동안)
+                    const ratio = sinceCompleted / ACCEL_MS;
+                    return Math.min(100, Math.round(startP + (100 - startP) * ratio));
+                }
+                if (sinceCompleted < ACCEL_MS + HOLD_MS) {
+                    // 100% 유지 (사용자가 완료를 명확히 인지)
                     return 100;
                 }
+                // 리셋
                 delete tracker[key];
             }
             return 0;
@@ -484,7 +501,8 @@ function globalSummary() {
                     backgroundImage: `linear-gradient(to right, ${c.fill}, ${c.fill})`,
                     backgroundRepeat: 'no-repeat',
                     backgroundSize: `${progress}% 100%`,
-                    transition: 'background-size 0.8s linear',
+                    // 250ms tick과 맞춰 부드러운 채움 (가속 단계 600ms와도 자연 동기화)
+                    transition: 'background-size 0.3s linear',
                 };
             }
             return {
