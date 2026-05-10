@@ -542,42 +542,51 @@ async def get_blog_matching_summary(
         total_query = total_query.where(cat_filter)
     total_titles = (await db.execute(total_query)).scalar() or 0
 
-    # 3) CrawledPost 기준으로 이 블로그가 매칭한 MainTitle ID 집합
-    matched_posts_query = select(
-        distinct(CrawledPost.matched_main_title_id).label("mt_id"),
-        func.max(CrawledPost.published_at).label("latest_published"),
-    ).where(
+    # 3) 발행완료/발행대기는 CrawledPost 단위로 카운트.
+    #    블로그 카드의 matched_count(블로그 실제 발행 매칭)와 의미를 통일하기 위해
+    #    BlogCategory/hide_group 필터를 적용하지 않고, 매칭된 모든 CrawledPost 기준.
+    #    사용자 가설(블로그 실제 발행 = 발행완료 + 미매칭)과 일치한다.
+    cp_published_q = select(func.count(CrawledPost.id)).where(
         CrawledPost.blog_id == blog_id,
         CrawledPost.match_status == "matched",
-        CrawledPost.matched_main_title_id.isnot(None),
-    ).group_by(CrawledPost.matched_main_title_id)
-    matched_result = await db.execute(matched_posts_query)
-    matched_rows = matched_result.all()
-    matched_ids_all = [r.mt_id for r in matched_rows]
+        CrawledPost.published_at.isnot(None),
+    )
+    published_count = (await db.execute(cp_published_q)).scalar() or 0
 
-    # 4) 매칭 ID 중 카테고리 + hide_group 필터를 통과한 것만 유효 매칭으로 인정
-    valid_matched_ids: set[int] = set()
-    if matched_ids_all:
-        mt_filter_query = select(MainTitle.id).where(
-            MainTitle.id.in_(matched_ids_all),
-            hide_group_filter,
+    cp_pending_q = select(func.count(CrawledPost.id)).where(
+        CrawledPost.blog_id == blog_id,
+        CrawledPost.match_status == "matched",
+        CrawledPost.published_at.is_(None),
+    )
+    pending_count = (await db.execute(cp_pending_q)).scalar() or 0
+
+    matched_count = published_count + pending_count
+
+    # 4) 독립 포스트는 메인 단위로 카운트(정식제목 탭에 표시되는 row).
+    #    BlogCategory + hide_group 통과 메인 중 이 블로그에 매칭되지 않은 메인의 수.
+    matched_main_ids_q = (
+        select(distinct(CrawledPost.matched_main_title_id))
+        .where(
+            CrawledPost.blog_id == blog_id,
+            CrawledPost.match_status == "matched",
+            CrawledPost.matched_main_title_id.isnot(None),
+        )
+    )
+    matched_main_ids = {
+        row[0] for row in (await db.execute(matched_main_ids_q)).all()
+        if row[0] is not None
+    }
+    if matched_main_ids:
+        valid_filter = MainTitle.id.in_(matched_main_ids)
+        valid_q = select(func.count(MainTitle.id)).where(
+            valid_filter, hide_group_filter,
         )
         if cat_filter is not None:
-            mt_filter_query = mt_filter_query.where(cat_filter)
-        valid_matched_ids = {
-            row[0] for row in
-            (await db.execute(mt_filter_query)).all()
-        }
-
-    matched_count = len(valid_matched_ids)
-    published_count = sum(
-        1 for r in matched_rows
-        if r.mt_id in valid_matched_ids and r.latest_published is not None
-    )
-    pending_count = matched_count - published_count
-
-    # 5) 카테고리 제목 중 이 블로그에 매칭 안 된 수 (독립 포스트)
-    unmatched_count = max(total_titles - matched_count, 0)
+            valid_q = valid_q.where(cat_filter)
+        valid_matched_main = (await db.execute(valid_q)).scalar() or 0
+    else:
+        valid_matched_main = 0
+    unmatched_count = max(total_titles - valid_matched_main, 0)
 
     # 6) 블로그에 발행됐으나 정식제목에 매칭 안 된 글 수
     unmatched_published_query = select(func.count(CrawledPost.id)).where(
