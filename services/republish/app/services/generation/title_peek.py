@@ -63,3 +63,51 @@ async def peek_next_publish_title(db: AsyncSession, blog_id: int) -> str:
     """하위 호환 wrapper. 신규 코드는 peek_next_publish_post 사용 권장."""
     title, _ = await peek_next_publish_post(db, blog_id)
     return title
+
+
+async def peek_next_republish_title(
+    db: AsyncSession, blog_id: int,
+) -> str:
+    """다음 재발행 대상 글의 제목을 결정한다 (큐 등록 로그용).
+
+    WordPress/Blogger 플랫폼의 가장 오래된 글 제목을 가져온다.
+    실패 시 빈 문자열을 반환해 호출자가 정상적으로 dispatch를 진행하도록 한다.
+    Celery 워커는 자체적으로 재조회하므로 결정성 보장용이 아닌 표시용이다.
+
+    Returns:
+        post_title 문자열. 조회 실패/대상 없음 시 "".
+    """
+    try:
+        from app.models.blog import Blog, BlogPlatform
+        blog = await db.get(Blog, blog_id)
+        if not blog:
+            return ""
+        if blog.platform == BlogPlatform.WORDPRESS:
+            from app.services.wordpress_service import (
+                WordPressRepublishService,
+            )
+            service = WordPressRepublishService()
+            post = await service.get_oldest_post(blog)
+            return (post or {}).get("title", "") or ""
+        if blog.platform == BlogPlatform.BLOGGER:
+            if not blog.google_credential_id:
+                return ""
+            from app.models.google_credential import GoogleCredential
+            cred = await db.get(GoogleCredential, blog.google_credential_id)
+            if not cred:
+                return ""
+            from app.services.blogger_service import (
+                BloggerRepublishService,
+            )
+            service = BloggerRepublishService()
+            blogger_id = await service.get_blog_id(blog, cred)
+            if not blogger_id:
+                return ""
+            post = await service.get_oldest_post(blog, cred, blogger_id)
+            return (post or {}).get("title", "") or ""
+        return ""
+    except Exception as exc:
+        logger.debug(
+            f"[PEEK_TITLE] republish peek 실패 | blog={blog_id} | {exc}"
+        )
+        return ""

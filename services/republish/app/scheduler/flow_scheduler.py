@@ -2519,7 +2519,12 @@ class FlowScheduler:
                     from app.core.task_dispatcher import (
                         get_dispatcher, PRIORITY_NORMAL,
                     )
+                    from app.services.generation.title_peek import (
+                        peek_next_republish_title,
+                    )
                     dispatcher = get_dispatcher()
+                    # 큐 등록 로그용 제목 미리 조회 (실패해도 dispatch는 진행)
+                    pre_title = await peek_next_republish_title(db, blog.id)
                     try:
                         task_id = dispatcher.dispatch_republish(
                             blog_id=blog.id,
@@ -2529,6 +2534,7 @@ class FlowScheduler:
                         blog_result = {
                             "success": True,
                             "message": f"Celery 큐 등록: {task_id}",
+                            "post_title": pre_title,
                         }
                         logger.info(
                             f"[SCHED:REPUBLISH] Celery 디스패치 | "
@@ -2538,6 +2544,7 @@ class FlowScheduler:
                         blog_result = {
                             "success": False,
                             "message": f"Celery 디스패치 실패: {e}",
+                            "post_title": pre_title,
                         }
                         logger.error(
                             f"[SCHED:REPUBLISH] Celery 디스패치 오류 | "
