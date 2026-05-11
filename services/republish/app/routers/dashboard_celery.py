@@ -332,6 +332,9 @@ def _inspect_workers() -> dict:
         key: {
             "name": None, "status": "offline", "active_tasks": 0,
             "processed": 0, "concurrency": 0, "uptime": None,
+            # task별 추적 (대량 작업 환경 + 진행률 정확도 향상용)
+            # 각 항목: {"id": str, "name": str, "time_start": float, "args": list}
+            "active_task_list": [],
         }
         for key in WORKER_KEY_MAP.values()
     }
@@ -353,9 +356,19 @@ def _inspect_workers() -> dict:
                 continue
             result[worker_key]["name"] = worker_name
             result[worker_key]["status"] = "online"
-            result[worker_key]["active_tasks"] = len(
-                active_response.get(worker_name, [])
-            )
+            tasks_for_worker = active_response.get(worker_name, [])
+            result[worker_key]["active_tasks"] = len(tasks_for_worker)
+            # 개별 task 정보: id / name / time_start / args 만 추출(직렬화 가능 데이터)
+            result[worker_key]["active_task_list"] = [
+                {
+                    "id": t.get("id"),
+                    "name": t.get("name"),
+                    "time_start": t.get("time_start"),
+                    "args": _safe_args_list(t.get("args")),
+                }
+                for t in tasks_for_worker
+                if isinstance(t, dict) and t.get("id")
+            ]
             _fill_worker_stats(
                 result[worker_key], stats_response.get(worker_name, {})
             )
@@ -364,6 +377,15 @@ def _inspect_workers() -> dict:
         logger.warning(f"[WORKER_STATUS] inspect 실패: {e}")
 
     return result
+
+
+def _safe_args_list(args) -> list:
+    """Celery active() 응답의 args는 list 또는 str(repr)일 수 있어 list로 정규화."""
+    if isinstance(args, list):
+        return [str(a)[:50] for a in args[:5]]  # 최대 5개, 각 50자
+    if isinstance(args, str):
+        return [args[:200]]
+    return []
 
 
 def _fill_worker_stats(info: dict, stats: dict) -> None:

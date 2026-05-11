@@ -40,17 +40,29 @@ function globalSummary() {
         },
         workerPollInterval: null,
         previousWorkerOnline: { generation: null, publish: null, utility: null },
-        // 워커별 진행률 추적: 시작 시각 + 완료 시각 (시간 기반 진행률 산정)
-        workerProgressTracker: {},
+        // 워커별 task 단위 추적 (대량 작업 환경 + 충돌 방지).
+        // 구조: workerTaskTracker[workerKey][taskId] = {
+        //   startedAt: number,           // 작업 시작 시각 (백엔드 time_start * 1000 또는 클라이언트 now)
+        //   completedAt: number | null,  // 작업 완료 감지 시각 (null이면 진행 중)
+        //   lastProgress: number,        // 완료 감지 시점의 진행률 (가속 시작점)
+        //   taskName: string,            // tasks.generate_content 등
+        // }
+        workerTaskTracker: {},
         // 워커별 평균 작업 시간(ms) - 진행률 추정 기준
         workerAvgDurationMs: {
             generation: 60000,  // 글 생성 평균 60초 (AI 호출 + 이미지)
             publish: 15000,     // 발행 15초
             utility: 8000,      // 수집/이동 8초
+            image: 30000,       // 이미지 생성 30초 (현재 UI는 generation에 통합)
         },
-        // Alpine 반응성 트리거용 카운터 (매초 증가하여 진행률 재계산 유도)
+        // Alpine 반응성 트리거용 카운터
         progressTick: 0,
         progressTickerInterval: null,
+        // Phase 5: 로그 매칭 큐 - 가속 중인 task와 새 SUCCESS/ERROR 로그를 동기화
+        // 구조: [{ log, addedAt, lockedToKey }]
+        // 가속 중인 task가 있을 때 SUCCESS/ERROR 로그를 잠시 보류했다가
+        // task가 100%에 도달하면 displayLogs로 release. 5초 안전망.
+        pendingLogQueue: [],
         // (시스템 탭은 대시보드 페이지로 이동됨)
 
         // 22개 전체 탭 정의
@@ -112,9 +124,11 @@ function globalSummary() {
             this.loadWorkerStatus();
             this.workerPollInterval = setInterval(() => this.loadWorkerStatus(), 3000);
 
-            // 진행률 시간 갱신 타이머 (250ms - 가속 채움 단계도 부드럽게 표시)
+            // 진행률 시간 갱신 타이머 (250ms - 가속 채움 단계도 부드럽게 표시).
+            // Phase 5: 같은 주기로 pendingLogQueue 처리 → 100% 도달 시 로그 release.
             this.progressTickerInterval = setInterval(() => {
                 this.progressTick++;
+                this._processLogQueue();
             }, 250);
 
             // 페이지 이탈 시 정리
@@ -311,7 +325,8 @@ function globalSummary() {
             this.loadDisplayLogs();
         },
 
-        // 표시할 로그 로드 (노출 수만큼, 현재 필터 적용)
+        // 표시할 로그 로드 (노출 수만큼, 현재 필터 적용).
+        // Phase 5: 가속 중인 task와 일치하는 SUCCESS/ERROR 로그는 pendingLogQueue로 보류.
         async loadDisplayLogs() {
             try {
                 const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
@@ -322,12 +337,38 @@ function globalSummary() {
                 const res = await fetch(`${apiBase}/dashboard/unified-logs?${params}`, { credentials: 'include' });
                 if (res.ok) {
                     const data = await res.json();
-                    // unified-logs는 title 필드, 로그 바는 message 필드 사용 - 정규화
-                    this.displayLogs = (data.logs || []).map(log => ({
+                    const fetched = (data.logs || []).map(log => ({
                         ...log,
                         message: log.message || log.title || '',
                     }));
-                    // 호환성을 위해 latestLog도 업데이트
+
+                    // Phase 5: 큐 중인 로그는 finalLogs에서 제외, 표시 중인 로그는 유지.
+                    const queuedIds = new Set(this.pendingLogQueue.map(q => q.log && q.log.id));
+                    const displayedIds = new Set((this.displayLogs || []).map(l => l && l.id));
+                    const finalLogs = [];
+
+                    for (const log of fetched) {
+                        if (log.id != null && queuedIds.has(log.id)) {
+                            continue;  // 이미 큐 → release 대기
+                        }
+                        if (log.id != null && displayedIds.has(log.id)) {
+                            finalLogs.push(log);  // 이미 표시 중 → 유지
+                            continue;
+                        }
+                        // 신규 로그 → 가속 중 task와 매칭 시도
+                        const matchKey = this._matchLogToActiveAccel(log);
+                        if (matchKey) {
+                            this.pendingLogQueue.push({
+                                log,
+                                addedAt: Date.now(),
+                                lockedToKey: matchKey,
+                            });
+                        } else {
+                            finalLogs.push(log);
+                        }
+                    }
+                    this.displayLogs = finalLogs;
+
                     if (this.displayLogs.length > 0) {
                         const log = this.displayLogs[0];
                         this.latestLog = `[${log.level}] ${log.message}`;
@@ -336,6 +377,79 @@ function globalSummary() {
                 }
             } catch (error) {
                 console.error('[GlobalSummary] 로그 로드 실패:', error);
+            }
+        },
+
+        // Phase 5: 로그를 가속/HOLD 중인 워커에 매칭.
+        // action_type → worker key 매핑 후 해당 워커에 가속 중인 task가 있는지 확인.
+        // 매칭되면 그 워커 key 반환, 아니면 null.
+        // INFO/WARN/시스템 로그는 매칭하지 않음 (즉시 표시).
+        _matchLogToActiveAccel(log) {
+            if (!log || (log.level !== 'SUCCESS' && log.level !== 'ERROR')) return null;
+            const actionToKey = {
+                generate: 'generation',
+                publish: 'publish',
+                republish: 'publish',
+                collect: 'utility',
+                data: 'utility',
+            };
+            const key = actionToKey[log.action_type];
+            if (!key) return null;
+            const tracker = this.workerTaskTracker[key] || {};
+            const now = Date.now();
+            // 가속(_getAccelMs) + 최대 HOLD(800ms) 윈도 내에 완료된 task가 있는지
+            for (const t of Object.values(tracker)) {
+                if (!t.completedAt) continue;
+                const accelMs = this._getAccelMs(t.lastProgress);
+                if (now - t.completedAt < accelMs + 800) {
+                    return key;
+                }
+            }
+            return null;
+        },
+
+        // Phase 5: pendingLogQueue 처리 (250ms 주기로 progressTickerInterval에서 호출).
+        // Release 조건:
+        //   1) 매칭된 워커의 progress가 100% 도달 → 즉시 release (가속 완료)
+        //   2) 매칭된 워커의 tracker에 완료 task 없음 → 비정상 케이스 release
+        //   3) 5초 안전망: 추가 후 5초 경과 → 강제 release
+        _processLogQueue() {
+            if (!this.pendingLogQueue || this.pendingLogQueue.length === 0) return;
+            const now = Date.now();
+            const released = [];
+            const remaining = [];
+            const SAFETY_MS = 5000;
+
+            for (const entry of this.pendingLogQueue) {
+                const waitTime = now - entry.addedAt;
+                if (waitTime >= SAFETY_MS) {
+                    released.push(entry.log);
+                    continue;
+                }
+                const progress = this.getWorkerProgress(entry.lockedToKey);
+                if (progress >= 100) {
+                    released.push(entry.log);
+                    continue;
+                }
+                const tracker = this.workerTaskTracker[entry.lockedToKey] || {};
+                const stillHasCompleted = Object.values(tracker).some(t => t.completedAt);
+                if (!stillHasCompleted) {
+                    released.push(entry.log);
+                    continue;
+                }
+                remaining.push(entry);
+            }
+
+            this.pendingLogQueue = remaining;
+            if (released.length === 0) return;
+
+            // displayLogs 앞에 추가 + displayLogCount로 제한
+            const merged = [...released, ...(this.displayLogs || [])];
+            this.displayLogs = merged.slice(0, this.displayLogCount);
+            const top = this.displayLogs[0];
+            if (top) {
+                this.latestLog = `[${top.level}] ${top.message || top.title || ''}`;
+                this.latestLogTime = this.formatLogTime(top.timestamp);
             }
         },
 
@@ -368,7 +482,7 @@ function globalSummary() {
             return Math.min(Math.max(duration, 15), 40);
         },
 
-        // 워커 상태 조회
+        // 워커 상태 조회 + task 등장/사라짐 감지
         async loadWorkerStatus() {
             try {
                 const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
@@ -377,7 +491,7 @@ function globalSummary() {
                 });
                 if (resp.ok) {
                     const data = await resp.json();
-                    // 워커 offline 전환 감지 (Phase 3)
+                    // 워커 offline 전환 감지
                     const labels = { generation: '생성', publish: '발행', utility: '유틸리티' };
                     for (const key of ['generation', 'publish', 'utility']) {
                         const curr = data.workers?.[key]?.status;
@@ -388,9 +502,55 @@ function globalSummary() {
                         this.previousWorkerOnline[key] = curr || 'unknown';
                     }
                     this.workerStatus = data;
+                    // task 등장/사라짐 감지 → tracker 갱신
+                    this._syncTaskTracker();
                 }
             } catch (e) {
                 console.warn('[GlobalSummary] 워커 상태 조회 실패:', e);
+            }
+        },
+
+        // task_id 기반 등장/사라짐 감지 + tracker 갱신
+        _syncTaskTracker() {
+            const now = Date.now();
+            const workers = this.workerStatus?.workers || {};
+            // UI 워커 키만 처리 (image는 generation에 통합되어 별도 카드 없음)
+            for (const key of ['generation', 'publish', 'utility']) {
+                const w = workers[key];
+                if (!w) continue;
+                const taskList = Array.isArray(w.active_task_list) ? w.active_task_list : [];
+                const tracker = this.workerTaskTracker[key] || {};
+                const currentIds = new Set(taskList.map(t => t.id).filter(Boolean));
+
+                // 새 task 등장 → startedAt 등록 (백엔드 time_start 우선, 없으면 now)
+                for (const t of taskList) {
+                    if (!t.id) continue;
+                    if (!tracker[t.id]) {
+                        const startedAt = (typeof t.time_start === 'number' && t.time_start > 0)
+                            ? t.time_start * 1000  // Celery time_start는 unix epoch seconds
+                            : now;
+                        tracker[t.id] = {
+                            startedAt,
+                            completedAt: null,
+                            lastProgress: 0,
+                            taskName: t.name || '',
+                        };
+                    }
+                }
+                // 사라진 task → completedAt 등록 (이미 완료된 것은 그대로)
+                for (const taskId of Object.keys(tracker)) {
+                    if (!currentIds.has(taskId) && !tracker[taskId].completedAt) {
+                        // 작업 완료 시점 도달 → lastProgress 보존
+                        const elapsed = now - tracker[taskId].startedAt;
+                        const duration = this.workerAvgDurationMs[key] || 30000;
+                        // 진행률 계산은 Phase 3에서 비선형 곡선으로 변경 예정
+                        // 지금은 임시로 선형 계산 (다음 Phase에서 _calcProgressFromRatio 사용)
+                        const ratio = elapsed / duration;
+                        tracker[taskId].lastProgress = Math.min(99, Math.max(1, Math.round(ratio * 95)));
+                        tracker[taskId].completedAt = now;
+                    }
+                }
+                this.workerTaskTracker[key] = tracker;
             }
         },
 
@@ -405,63 +565,97 @@ function globalSummary() {
             return 'bg-green-400';
         },
 
-        // 워커 진행률 (0~100) — 시간 기반 + 작업 완료 시 가속 채움.
-        //   1) active>0: 시작 시각부터 시간 비례 증가 (1~95% cap)
-        //   2) active=0 첫 감지: 마지막 progress 기록(즉시 100% 점프 안 함)
-        //   3) 가속 단계: lastProgress → 100%까지 600ms 동안 부드럽게 채움
-        //   4) 100% 유지: 추가 1500ms 동안 머무름 (사용자가 완료를 명확히 인지)
-        //   5) 그 후 0%로 리셋
-        // 동작로그의 "완료" 출력 시점과 시각적 100% 도달이 매끄럽게 동기화됨.
+        // 구간별 비선형 진행률 곡선:
+        //   ratio 0.0~0.8 → 0~80%  (선형 빠른 진행 - 평균 80% 시점에 80% 도달)
+        //   ratio 0.8~1.0 → 80~95% (선형 중간 - 평균 시점에 95%)
+        //   ratio 1.0~1.5 → 95~99% (선형 매우 느림 - 평균 +50%까지 99%)
+        //   ratio 1.5+    → 99%    (soft cap, 완료 대기)
+        _calcProgressFromRatio(ratio) {
+            if (ratio < 0) return 0;
+            if (ratio < 0.8) return Math.round((ratio / 0.8) * 80);
+            if (ratio < 1.0) return Math.round(80 + (ratio - 0.8) * 75);
+            if (ratio < 1.5) return Math.round(95 + (ratio - 1.0) * 8);
+            return 99;
+        },
+
+        // 현재 진행률에 따른 동적 가속 채움 시간 (ms).
+        // 큰 점프(낮은 progress)는 길게, 작은 점프(높은 progress)는 짧게.
+        _getAccelMs(lastProgress) {
+            if (lastProgress >= 99) return 300;   // soft cap → 1% 채움만
+            if (lastProgress >= 80) return 400;
+            if (lastProgress >= 50) return 800;
+            return 1500;
+        },
+
+        // 워커 진행률 (0~100) — UI에 표시할 메인 task 1개 기준.
+        // 우선순위 1: 가속 채움 중인 task (가장 최근 완료) → 100% 점프 표시
+        // 우선순위 2: 활성 task 중 가장 오래된 것 → 시간 기반 진행률
+        // 우선순위 3: 0% (모든 task 종료)
+        //
+        // Phase 4 핵심: 100% 유지 시간 동적 조정 + 자연 전환.
+        // - 다음 활성 task 대기 중: HOLD 300ms (빠르게 다음 task로 전환)
+        // - 단독 완료: HOLD 800ms (잠시 머무른 후 0%로)
+        // - 0% 리셋 폐기: 완료 task 제거 후 활성 task의 현재 진행률로 자연 전환
+        //   (활성 task 있으면 0%가 아닌 그 task의 진행률 반환)
         getWorkerProgress(key) {
             const w = this.workerStatus?.workers?.[key];
             if (!w || w.status !== 'online') return 0;
-
-            // Alpine 반응성 트리거 (250ms마다 progressTick 증가)
+            // Alpine 반응성 트리거 (250ms tick으로 UI 갱신)
             void this.progressTick;
-
-            const active = Math.max(0, w.active_tasks || 0);
-            const tracker = this.workerProgressTracker;
-            const duration = this.workerAvgDurationMs[key] || 30000;
+            const tracker = this.workerTaskTracker[key] || {};
             const now = Date.now();
+            const duration = this.workerAvgDurationMs[key] || 30000;
 
-            const ACCEL_MS = 600;     // 가속 채움 시간 (lastProgress → 100%)
-            const HOLD_MS = 1500;     // 100% 유지 시간
+            // 활성 task 목록 - 자연 전환 우선순위 판정에 먼저 사용
+            const activeTasks = Object.entries(tracker)
+                .filter(([_, t]) => !t.completedAt)
+                .sort((a, b) => a[1].startedAt - b[1].startedAt);
+            const hasActiveTasks = activeTasks.length > 0;
 
-            if (active > 0) {
-                // 작업 진행 중 → 시작 시각 기록 (없거나 직전 완료 후 새 작업)
-                if (!tracker[key] || tracker[key].completedAt) {
-                    tracker[key] = { startedAt: now, completedAt: null };
-                }
-                const elapsed = now - tracker[key].startedAt;
-                return Math.min(95, Math.max(1, Math.round((elapsed / duration) * 100)));
-            }
+            // 우선순위 1: 가속 채움 중인 task (가장 최근 완료 1개만)
+            const completedTasks = Object.entries(tracker)
+                .filter(([_, t]) => t.completedAt)
+                .sort((a, b) => b[1].completedAt - a[1].completedAt);
 
-            // active=0 (작업 없음 또는 막 완료)
-            if (tracker[key] && !tracker[key].completedAt) {
-                // 직전까지 작업 중 → 완료 시점 기록 + 마지막 진행률 보존
-                const elapsed = now - tracker[key].startedAt;
-                const lastP = Math.min(95, Math.max(1, Math.round((elapsed / duration) * 100)));
-                tracker[key].completedAt = now;
-                tracker[key].lastProgress = lastP;
-                return lastP;  // 첫 호출은 그대로 (다음 호출부터 가속)
-            }
-            if (tracker[key] && tracker[key].completedAt) {
-                const sinceCompleted = now - tracker[key].completedAt;
-                const startP = tracker[key].lastProgress || 0;
+            if (completedTasks.length > 0) {
+                const [completedId, t] = completedTasks[0];
+                const sinceCompleted = now - t.completedAt;
+                const accelMs = this._getAccelMs(t.lastProgress);
+                // 동적 HOLD: 다음 활성 task 대기 시 짧게(300ms), 단독 완료 시 길게(800ms)
+                const holdMs = hasActiveTasks ? 300 : 800;
+                const startP = t.lastProgress || 0;
 
-                if (sinceCompleted < ACCEL_MS) {
-                    // 가속 채움: lastProgress → 100% (600ms 동안)
-                    const ratio = sinceCompleted / ACCEL_MS;
+                if (sinceCompleted < accelMs) {
+                    // 가속 채움 단계 (lastProgress → 100% 부드러운 점프)
+                    const ratio = sinceCompleted / accelMs;
                     return Math.min(100, Math.round(startP + (100 - startP) * ratio));
                 }
-                if (sinceCompleted < ACCEL_MS + HOLD_MS) {
-                    // 100% 유지 (사용자가 완료를 명확히 인지)
+                if (sinceCompleted < accelMs + holdMs) {
+                    // 100% 유지 (다음 task 대기 시 빠르게 자연 전환)
                     return 100;
                 }
-                // 리셋
-                delete tracker[key];
+                // 가속 + 유지 종료 → tracker에서 제거.
+                // 활성 task 있으면 다음 줄에서 그 task의 진행률 반환 (0% 리셋 폐기).
+                delete tracker[completedId];
+                this.workerTaskTracker[key] = tracker;
             }
-            return 0;
+
+            // 우선순위 2: 활성 task 중 가장 오래된 것의 시간 기반 진행률
+            if (!hasActiveTasks) return 0;
+            const [, t] = activeTasks[0];
+            const elapsed = now - t.startedAt;
+            const ratio = elapsed / duration;
+            return this._calcProgressFromRatio(ratio);
+        },
+
+        // soft cap(99%) 도달 상태 여부 — "마무리 중..." UI 표시용
+        isWorkerSoftCapped(key) {
+            const progress = this.getWorkerProgress(key);
+            if (progress !== 99) return false;
+            // 가속 채움 중인 task가 있으면 일반 가속 진행이므로 soft cap 아님
+            const tracker = this.workerTaskTracker[key] || {};
+            const hasCompleted = Object.values(tracker).some(t => t.completedAt);
+            return !hasCompleted;
         },
 
         // 워커 상태 분류: offline / idle / busy / saturated / unknown

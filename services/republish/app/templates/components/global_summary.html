@@ -48,10 +48,12 @@
                             <span class="text-sm font-bold text-gray-800 relative"
                                   x-show="workerStatus?.workers?.[wk.key]?.status === 'online'"
                                   x-text="workerStatus?.workers?.[wk.key]?.active_tasks ?? 0"></span>
-                            <!-- 진행률 % (active>0 또는 완료 직후 100% 유지 시 표시) -->
+                            <!-- 진행률 % (active>0 또는 완료 직후 100% 유지 시 표시).
+                                 99% Soft Cap 시 "마무리 중" 텍스트로 대체. -->
                             <span class="text-[10px] font-medium text-gray-600 ml-0.5 relative"
                                   x-show="workerStatus?.workers?.[wk.key]?.status === 'online' && getWorkerProgress(wk.key) > 0"
-                                  x-text="getWorkerProgress(wk.key) + '%'"></span>
+                                  x-text="isWorkerSoftCapped(wk.key) ? '마무리 중' : getWorkerProgress(wk.key) + '%'"
+                                  :class="isWorkerSoftCapped(wk.key) ? 'animate-pulse' : ''"></span>
                         </div>
                     </template>
                     <!-- 대기 큐 표시 (PC) -->
@@ -92,10 +94,11 @@
                                 <span class="text-sm font-bold text-gray-800"
                                       x-show="workerStatus?.workers?.[wk.key]?.status === 'online'"
                                       x-text="workerStatus?.workers?.[wk.key]?.active_tasks ?? 0"></span>
-                                <!-- 진행률 % -->
+                                <!-- 진행률 % / 99% Soft Cap 시 "마무리 중" -->
                                 <span class="text-[10px] text-gray-600"
                                       x-show="workerStatus?.workers?.[wk.key]?.status === 'online' && getWorkerProgress(wk.key) > 0"
-                                      x-text="getWorkerProgress(wk.key) + '%'"></span>
+                                      x-text="isWorkerSoftCapped(wk.key) ? '마무리 중' : getWorkerProgress(wk.key) + '%'"
+                                      :class="isWorkerSoftCapped(wk.key) ? 'animate-pulse' : ''"></span>
                             </div>
                         </div>
                     </template>
