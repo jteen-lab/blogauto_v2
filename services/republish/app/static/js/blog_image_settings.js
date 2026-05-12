@@ -223,14 +223,41 @@ function imageSettingsApp() {
                 this.imgbbApiKeyOriginal = this.imgbbApiKey;
             }
 
-            if (data.overlay_config) {
-                const config = data.overlay_config;
-                this.overlayConfig = {
-                    ...this.overlayConfig,
-                    ...config,
-                    padding: config.padding || this.overlayConfig.padding
-                };
-            }
+            // 회귀 방지: 이전 블로그의 overlayConfig가 spread merge로 잔존하면
+            // template_image/font_file 등이 누수되어 블로그 간 자원이 섞임.
+            // 매번 기본값에서 시작해 서버 응답으로만 재구성한다.
+            const defaults = {
+                template_image: null,
+                font_file: null,
+                font_size: 64,
+                line_height: 1.25,
+                text_align: 'center',
+                vertical_align: 'center',
+                text_color: '#111111',
+                stroke_enabled: false,
+                stroke_color: '#000000',
+                stroke_width: 0,
+                shadow_enabled: false,
+                shadow_color: '#000000',
+                shadow_blur: 0,
+                shadow_offset_x: 0,
+                shadow_offset_y: 0,
+                padding: { left: 60, right: 60, top: 80, bottom: 80 }
+            };
+            const config = data.overlay_config || {};
+            this.overlayConfig = {
+                ...defaults,
+                ...config,
+                // file path는 서버 응답에 키가 없으면 명시적으로 null
+                template_image: config.template_image || null,
+                font_file: config.font_file || null,
+                padding: config.padding || defaults.padding
+            };
+
+            // 미리보기 상태도 함께 리셋 (이전 블로그의 이미지/폰트 잔존 방지)
+            this.templatePreviewUrl = '';
+            this.templateImage = null;
+            this.loadedFont = null;
 
             if (this.overlayConfig.template_image) {
                 this.templatePreviewUrl = `/api/v1/blogs/${this.getBlogId()}/settings/image/file?file_type=template&t=${Date.now()}`;
@@ -498,13 +525,17 @@ function imageSettingsApp() {
             this.saveError = '';
 
             try {
+                // 회귀 방지: payload에서 file path 키(template_image/font_file) 제외.
+                // 이 값들은 image/upload, image/file 엔드포인트로만 변경한다.
+                // 이전 블로그의 stale state가 섞여 들어가도 서버가 안전.
+                const { template_image, font_file, ...overlayWithoutPaths } = this.overlayConfig;
                 const payload = {
                     image_mode: this.imageMode,
                     ai_image_service: this.aiImageService,
                     ai_image_model: this.aiImageModel,
                     cover_source: this.coverSource,
                     section_source: this.sectionSource,
-                    overlay_config: this.overlayConfig
+                    overlay_config: overlayWithoutPaths
                 };
 
                 // imgbb API 키: 변경된 경우만 포함 (마스킹 값 재전송 방지)

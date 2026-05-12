@@ -29,6 +29,49 @@ ALLOWED_FONT_EXTENSIONS: Set[str] = {".ttf", ".otf", ".woff", ".woff2"}
 MEDIA_ROOT = Path(__file__).parent.parent.parent / "media"
 
 
+def sanitize_overlay_file_paths(
+    blog_id: int,
+    overlay_config: dict,
+) -> tuple[dict, bool]:
+    """오버레이 설정에서 다른 블로그 소속 file path를 안전하게 제거한다.
+
+    template_image와 font_file은 'blogs/{blog_id}/' 접두사로 시작해야 한다.
+    그 외 경로(다른 블로그/오염/외부 경로)는 자동 제거한다.
+
+    또한 경로가 'blogs/{blog_id}/' 접두사를 만족하더라도 실제 파일이
+    존재하지 않으면 함께 제거한다 (orphan 경로 자가 치유).
+
+    Returns:
+        (정리된 config 사본, 변경 발생 여부)
+    """
+    if not isinstance(overlay_config, dict):
+        return ({}, False)
+    cleaned = dict(overlay_config)
+    expected_prefix = f"blogs/{blog_id}/"
+    modified = False
+    for key in ("template_image", "font_file"):
+        path = cleaned.get(key)
+        if not path:
+            continue
+        if not isinstance(path, str) or not path.startswith(expected_prefix):
+            logger.warning(
+                f"[OVERLAY_CLEAN] 다른 블로그 path 제거 | "
+                f"blog_id={blog_id} | {key}={path}"
+            )
+            cleaned.pop(key, None)
+            modified = True
+            continue
+        full = MEDIA_ROOT / path
+        if not full.exists():
+            logger.warning(
+                f"[OVERLAY_CLEAN] orphan path 제거 | "
+                f"blog_id={blog_id} | {key}={path}"
+            )
+            cleaned.pop(key, None)
+            modified = True
+    return (cleaned, modified)
+
+
 async def get_blog_or_404(
     blog_id: int,
     user: User,

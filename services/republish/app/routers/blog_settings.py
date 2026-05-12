@@ -43,6 +43,7 @@ from ..services.blog_settings_service import (
     delete_uploaded_file,
     generate_css,
     apply_placeholders,
+    sanitize_overlay_file_paths,
     ALLOWED_IMAGE_EXTENSIONS,
     ALLOWED_FONT_EXTENSIONS,
     MEDIA_ROOT,
@@ -142,8 +143,18 @@ async def get_blog_settings(
 
     logger.info(f"블로그 설정 조회 | blog_id={blog_id} | user_id={current_user.id}")
 
+    # 자가치유: 다른 블로그 path / orphan 경로 자동 제거
+    raw_overlay = dict(blog.overlay_config or {})
+    cleaned_overlay, was_cleaned = sanitize_overlay_file_paths(
+        blog_id, raw_overlay,
+    )
+    if was_cleaned:
+        blog.overlay_config = cleaned_overlay
+        flag_modified(blog, 'overlay_config')
+        await db.commit()
+        await db.refresh(blog)
     # overlay_config에서 ai_image_service, cover/section_source 추출
-    overlay_config = dict(blog.overlay_config or {})
+    overlay_config = dict(cleaned_overlay)
     ai_image_service = overlay_config.pop("ai_image_service", "openai")
     cover_source = overlay_config.pop("cover_source", "ai")
     section_source = overlay_config.pop("section_source", "template")
@@ -193,7 +204,17 @@ async def get_image_settings(
 ) -> ImageSettingsResponse:
     """이미지 설정 조회."""
     blog = await get_blog_or_404(blog_id, current_user, db)
-    overlay_config = dict(blog.overlay_config or {})
+    # 자가치유: 다른 블로그 path / orphan 경로 자동 제거
+    raw_overlay = dict(blog.overlay_config or {})
+    cleaned_overlay, was_cleaned = sanitize_overlay_file_paths(
+        blog_id, raw_overlay,
+    )
+    if was_cleaned:
+        blog.overlay_config = cleaned_overlay
+        flag_modified(blog, 'overlay_config')
+        await db.commit()
+        await db.refresh(blog)
+    overlay_config = dict(cleaned_overlay)
 
     # ai_image_service는 overlay_config 내에 저장됨
     ai_image_service = overlay_config.pop("ai_image_service", "openai")
@@ -239,18 +260,28 @@ async def save_image_settings(
 
     blog.image_mode = request.image_mode
 
-    # ai_image_service, cover_source, section_source를 overlay_config에 함께 저장
-    # 기존 파일 경로 보존
-    existing_config = dict(blog.overlay_config or {})
+    # ai_image_service, cover_source, section_source를 overlay_config에 함께 저장.
+    # file path(template_image/font_file)는 이 엔드포인트에서 절대 변경 불가:
+    # 항상 DB의 기존 값을 강제 사용한다. 변경은 image/upload, image/file
+    # 엔드포인트에서만 가능. (블로그 간 stale state 오염 회귀 방지)
+    existing_config_raw = dict(blog.overlay_config or {})
+    existing_config, _ = sanitize_overlay_file_paths(
+        blog_id, existing_config_raw,
+    )
     overlay_data = request.overlay_config.model_dump()
     overlay_data["ai_image_service"] = request.ai_image_service
     overlay_data["cover_source"] = request.cover_source
     overlay_data["section_source"] = request.section_source
-    # 기존 파일 경로 유지
-    if "template_image" in existing_config:
+    # file path는 무조건 DB 값으로 덮어씀 (없으면 키 제거).
+    # 요청의 template_image/font_file은 무시한다.
+    if existing_config.get("template_image"):
         overlay_data["template_image"] = existing_config["template_image"]
-    if "font_file" in existing_config:
+    else:
+        overlay_data.pop("template_image", None)
+    if existing_config.get("font_file"):
         overlay_data["font_file"] = existing_config["font_file"]
+    else:
+        overlay_data.pop("font_file", None)
     blog.overlay_config = overlay_data
     flag_modified(blog, 'overlay_config')
 
