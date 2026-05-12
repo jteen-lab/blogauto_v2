@@ -10,6 +10,7 @@ Features:
 - 배치 처리 및 증분 크롤링
 - 에러 핸들링 및 재시도
 """
+import os
 import httpx
 from datetime import datetime
 from typing import List, Optional, Dict, Any, Tuple
@@ -24,6 +25,20 @@ from ..core.logger import get_logger
 from . import blogger_crawl_helper as bch
 
 logger = get_logger("crawl_service", "crawl.log")
+
+
+def _resolve_max_crawl_posts() -> int:
+    """크롤링 최대 글 수 — 환경변수 MAX_CRAWL_POSTS로 조정 가능.
+
+    기본 10000으로 상향. 500은 일반 블로그도 잘리는 너무 낮은 값.
+    0 이하/잘못된 값은 기본값으로 fallback.
+    """
+    raw = os.getenv("MAX_CRAWL_POSTS", "10000").strip()
+    try:
+        v = int(raw)
+        return v if v > 0 else 10000
+    except (TypeError, ValueError):
+        return 10000
 
 
 @dataclass
@@ -50,7 +65,9 @@ class CrawlService:
     # API 요청 설정
     REQUEST_TIMEOUT = 30.0
     MAX_POSTS_PER_REQUEST = 100
-    MAX_TOTAL_POSTS = 500
+    # 환경변수 MAX_CRAWL_POSTS로 조정 (기본 10000). 707개 등 일반 블로그도
+    # 잘리지 않도록 500 → 10000 상향. 매우 큰 블로그는 환경변수로 추가 확대.
+    MAX_TOTAL_POSTS = _resolve_max_crawl_posts()
 
     def __init__(self, db_session: AsyncSession):
         self.db = db_session
