@@ -527,15 +527,62 @@ function imageSettingsApp() {
             try {
                 // 회귀 방지: payload에서 file path 키(template_image/font_file) 제외.
                 // 이 값들은 image/upload, image/file 엔드포인트로만 변경한다.
-                // 이전 블로그의 stale state가 섞여 들어가도 서버가 안전.
                 const { template_image, font_file, ...overlayWithoutPaths } = this.overlayConfig;
+
+                // 422 방지: Pydantic 검증을 통과하도록 안전한 값으로 정규화.
+                // 색상/enum/숫자 필드에 null/undefined/공백/범위 밖 값이
+                // 들어가면 422가 발생하므로 송신 직전 강제 정규화한다.
+                const VALID_MODE = ['template', 'ai', 'both'];
+                const VALID_AI_SVC = ['openai', 'nanobanana'];
+                const VALID_SRC = ['ai', 'template'];
+                const VALID_ALIGN = ['left', 'center', 'right'];
+                const VALID_VALIGN = ['top', 'center', 'bottom'];
+                const clampInt = (v, min, max, def) => {
+                    const n = parseInt(v, 10);
+                    if (Number.isNaN(n)) return def;
+                    return Math.max(min, Math.min(max, n));
+                };
+                const clampFloat = (v, min, max, def) => {
+                    const n = parseFloat(v);
+                    if (Number.isNaN(n)) return def;
+                    return Math.max(min, Math.min(max, n));
+                };
+                const safeColor = (v, def) => {
+                    if (typeof v !== 'string') return def;
+                    const t = v.trim();
+                    return t || def;
+                };
+                const oc = overlayWithoutPaths;
+                const safePadding = (oc.padding && typeof oc.padding === 'object') ? oc.padding : {};
+                const normalizedOverlay = {
+                    font_size: clampInt(oc.font_size, 8, 200, 64),
+                    line_height: clampFloat(oc.line_height, 0.5, 3.0, 1.25),
+                    text_align: VALID_ALIGN.includes(oc.text_align) ? oc.text_align : 'center',
+                    vertical_align: VALID_VALIGN.includes(oc.vertical_align) ? oc.vertical_align : 'center',
+                    text_color: safeColor(oc.text_color, '#111111'),
+                    stroke_enabled: !!oc.stroke_enabled,
+                    stroke_color: safeColor(oc.stroke_color, '#000000'),
+                    stroke_width: clampInt(oc.stroke_width, 0, 20, 0),
+                    shadow_enabled: !!oc.shadow_enabled,
+                    shadow_color: safeColor(oc.shadow_color, 'rgba(0,0,0,0.35)'),
+                    shadow_blur: clampInt(oc.shadow_blur, 0, 50, 0),
+                    shadow_offset_x: clampInt(oc.shadow_offset_x, -50, 50, 0),
+                    shadow_offset_y: clampInt(oc.shadow_offset_y, -50, 50, 0),
+                    padding: {
+                        left: clampInt(safePadding.left, 0, 9999, 60),
+                        right: clampInt(safePadding.right, 0, 9999, 60),
+                        top: clampInt(safePadding.top, 0, 9999, 80),
+                        bottom: clampInt(safePadding.bottom, 0, 9999, 80),
+                    },
+                };
+
                 const payload = {
-                    image_mode: this.imageMode,
-                    ai_image_service: this.aiImageService,
-                    ai_image_model: this.aiImageModel,
-                    cover_source: this.coverSource,
-                    section_source: this.sectionSource,
-                    overlay_config: overlayWithoutPaths
+                    image_mode: VALID_MODE.includes(this.imageMode) ? this.imageMode : 'template',
+                    ai_image_service: VALID_AI_SVC.includes(this.aiImageService) ? this.aiImageService : 'openai',
+                    ai_image_model: this.aiImageModel || null,
+                    cover_source: VALID_SRC.includes(this.coverSource) ? this.coverSource : 'ai',
+                    section_source: VALID_SRC.includes(this.sectionSource) ? this.sectionSource : 'template',
+                    overlay_config: normalizedOverlay,
                 };
 
                 // imgbb API 키: 변경된 경우만 포함 (마스킹 값 재전송 방지)
@@ -553,8 +600,27 @@ function imageSettingsApp() {
                     this.saveSuccess = true;
                     setTimeout(() => { this.saveSuccess = false; }, 3000);
                 } else {
-                    const error = await response.json();
-                    this.saveError = error.detail || '저장 실패';
+                    // 422 등 실패 시 어떤 필드에서 막혔는지 자세히 출력
+                    let errBody = null;
+                    try { errBody = await response.json(); } catch (_) {}
+                    console.error(
+                        '[IMAGE_SETTINGS] 저장 실패',
+                        '\n  status:', response.status,
+                        '\n  detail:', errBody,
+                        '\n  payload:', payload,
+                    );
+                    let msg = '저장 실패';
+                    if (errBody && Array.isArray(errBody.detail)) {
+                        msg = errBody.detail.map(e => {
+                            const loc = (e.loc || []).join('.');
+                            return `${loc}: ${e.msg}`;
+                        }).join(' | ');
+                    } else if (errBody && errBody.detail) {
+                        msg = typeof errBody.detail === 'string'
+                            ? errBody.detail
+                            : JSON.stringify(errBody.detail);
+                    }
+                    this.saveError = msg;
                 }
             } catch (error) {
                 console.error('[IMAGE_SETTINGS] 저장 오류:', error);
