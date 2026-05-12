@@ -432,6 +432,20 @@ async def sync_published_posts(
     if not result.success:
         raise HTTPException(status_code=500, detail=result.error)
 
+    # 4. GP 구간 분류용 total_post_count 갱신 (sync 시 자동 보정).
+    # 이 값이 갱신되지 않으면 블로그가 영구히 구간1로 오분류됨.
+    if result.platform_post_count and result.platform_post_count > 0:
+        from datetime import datetime
+        import pytz
+        prev_count = blog.total_post_count
+        blog.total_post_count = result.platform_post_count
+        blog.post_count_updated_at = datetime.now(pytz.timezone('Asia/Seoul'))
+        await db.commit()
+        logger.info(
+            f"[SYNC] total_post_count 갱신 | blog_id={blog_id} | "
+            f"{prev_count} → {result.platform_post_count}"
+        )
+
     return {
         "success": True,
         "message": (
