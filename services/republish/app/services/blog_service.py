@@ -197,6 +197,12 @@ class BlogService:
             c = counts.get(blog.id) or {"published_total": 0, "matched_published": 0}
             d["crawled_count"] = c["published_total"]
             d["matched_count"] = c["matched_published"]
+            # GP 구간 분류용 total_post_count 보강:
+            # 저장된 total_post_count가 0/누락이면 DB의 published count를
+            # fallback으로 사용. 사용자가 sync 안 눌렀어도 GP 분류 가능.
+            stored_total = blog.total_post_count or 0
+            db_published = c["published_total"]
+            d["total_post_count"] = max(stored_total, db_published)
             items.append(BlogListResponse(**d))
         return items
 

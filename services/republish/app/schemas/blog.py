@@ -177,6 +177,8 @@ class BlogListResponse(BaseModel):
     crawl_status: str = Field("never", description="크롤링 상태")
     crawled_count: int = Field(0, description="크롤링된 포스트 수")
     matched_count: int = Field(0, description="매칭된 포스트 수")
+    # GP 구간 분류용 - 플랫폼 누적 글 수
+    total_post_count: int = Field(0, description="플랫폼 누적 발행 글 수")
     last_crawled_at: Optional[datetime] = Field(None, description="마지막 크롤링 시간")
     last_matched_at: Optional[datetime] = Field(None, description="마지막 매칭 시간")
     created_at: datetime = Field(..., description="생성일시")

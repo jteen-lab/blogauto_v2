@@ -830,32 +830,48 @@ function flowFormData() {
             }
         },
 
-        // GP 설정에서 로컬로 blogStageMap 구성 (생성 모드용)
+        // GP 설정에서 로컬로 blogStageMap 구성 (생성 모드용).
+        // 각 블로그의 total_post_count로 stages에서 해당 구간 선택.
+        // post_count_min/post_count_max (inclusive) 기준 매칭.
         _buildLocalGPStageMap(gpSettings) {
             const stages = gpSettings?.stages || [];
-            console.log('[_buildLocalGPStageMap] gpSettings keys:', Object.keys(gpSettings || {}));
-            console.log('[_buildLocalGPStageMap] stages count:', stages.length);
-            if (stages.length > 0) {
-                console.log('[_buildLocalGPStageMap] stage[0].publish:', JSON.stringify(stages[0]?.publish));
-                console.log('[_buildLocalGPStageMap] stage[0].republish:', JSON.stringify(stages[0]?.republish));
+            if (stages.length === 0) {
+                this.blogStageMap = {};
+                return;
             }
-            console.log('[_buildLocalGPStageMap] selectedBlogs:', JSON.stringify(this.formData.selectedBlogs));
-            if (stages.length === 0) return;
 
-            // 첫 번째 스테이지의 활성화 상태를 기본값으로 사용
-            const firstStage = stages[0] || {};
-            const publishEnabled = firstStage.publish?.enabled || false;
-            const republishEnabled = firstStage.republish?.enabled || false;
-            const stageName = firstStage.label || firstStage.name || '기본';
+            // 블로그 ID → post_count 빠른 조회용 맵
+            const blogPostCounts = {};
+            (this.blogs || []).forEach(b => {
+                blogPostCounts[b.id] = b.total_post_count || 0;
+            });
 
-            const summaryParts = [];
-            if (firstStage.generate?.enabled) summaryParts.push('생성');
-            if (publishEnabled) summaryParts.push('발행');
-            if (republishEnabled) summaryParts.push('재발행');
+            // 한 블로그의 post_count로 해당 stage 찾기
+            const resolveStage = (postCount) => {
+                for (let i = 0; i < stages.length; i++) {
+                    const s = stages[i];
+                    const minV = s.post_count_min ?? 0;
+                    const maxV = s.post_count_max;
+                    if (maxV === null || maxV === undefined) {
+                        if (postCount >= minV) return s;
+                    } else if (postCount >= minV && postCount <= maxV) {
+                        return s;
+                    }
+                }
+                return stages[stages.length - 1];  // fallback: 마지막 stage
+            };
 
-            // 선택된 블로그 모두에 동일한 스테이지 적용
             const stageMap = {};
             this.formData.selectedBlogs.forEach(blogId => {
+                const postCount = blogPostCounts[blogId] || 0;
+                const stage = resolveStage(postCount) || {};
+                const publishEnabled = stage.publish?.enabled || false;
+                const republishEnabled = stage.republish?.enabled || false;
+                const stageName = stage.label || stage.name || '기본';
+                const summaryParts = [];
+                if (stage.generate?.enabled) summaryParts.push('생성');
+                if (publishEnabled) summaryParts.push('발행');
+                if (republishEnabled) summaryParts.push('재발행');
                 stageMap[blogId] = {
                     stageName,
                     summary: summaryParts.join(' / '),
@@ -864,8 +880,8 @@ function flowFormData() {
                 };
             });
             this.blogStageMap = stageMap;
-            console.log('[_buildLocalGPStageMap] FINAL blogStageMap:', JSON.stringify(this.blogStageMap));
-            console.log('[_buildLocalGPStageMap] flowHasGP:', this.flowHasGP);
+            console.log('[_buildLocalGPStageMap] post_count별 분류 완료:',
+                JSON.stringify(blogPostCounts), '→', JSON.stringify(this.blogStageMap));
         },
 
         // GP 상태 리셋

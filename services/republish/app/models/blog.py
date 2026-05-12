@@ -257,6 +257,8 @@ class Blog(Base):
             "last_matched_at": self.last_matched_at,
             "crawled_count": self.crawled_count,
             "matched_count": self.matched_count,
+            # GP 구간 분류용 - 플랫폼 누적 글 수
+            "total_post_count": self.total_post_count or 0,
             # 타임스탬프
             "created_at": self.created_at,
             "updated_at": self.updated_at
