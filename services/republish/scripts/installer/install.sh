@@ -11,8 +11,8 @@ set -euo pipefail
 INSTALL_DIR="${INSTALL_DIR:-/opt/blogauto}"
 IMAGE_REGISTRY="${IMAGE_REGISTRY:-ghcr.io/jteen-lab/blogauto}"
 IMAGE_TAG="${IMAGE_TAG:-stable}"
-COMPOSE_URL="${COMPOSE_URL:-https://jteen-lab.github.io/blogauto-deploy/docker-compose.prod.yml}"
-WRAPPER_URL="${WRAPPER_URL:-https://jteen-lab.github.io/blogauto-deploy/blogauto-cli.sh}"
+COMPOSE_URL="${COMPOSE_URL:-https://raw.githubusercontent.com/jteen-lab/blogauto-deploy/main/docker-compose.prod.yml}"
+WRAPPER_URL="${WRAPPER_URL:-https://raw.githubusercontent.com/jteen-lab/blogauto-deploy/main/blogauto-cli.sh}"
 MIN_RAM_MB=900
 MIN_DISK_GB=5
 
