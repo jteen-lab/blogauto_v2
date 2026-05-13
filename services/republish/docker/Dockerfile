@@ -19,11 +19,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # 애플리케이션 코드 복사
 COPY app/ app/
-COPY logs/ logs/
 COPY alembic/ alembic/
 COPY alembic.ini .
 
-# 로그 디렉토리 권한 설정
+# 로그 디렉토리 생성 (런타임에 로그 쓰기용 — git에 빈 폴더 안 올라가도 OK)
 RUN mkdir -p logs && chmod 755 logs
 
 # 비특권 사용자 생성 및 전환
