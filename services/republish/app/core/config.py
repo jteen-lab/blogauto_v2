@@ -77,6 +77,13 @@ class Settings(BaseSettings):
     use_celery_publish: bool = False      # Phase 3 완료 시 True
     use_celery_utility: bool = False      # Phase 4 완료 시 True
 
+    # 중앙 인증 시스템 (Phase C 후행 추가용 — 지금은 비활성)
+    # CENTRAL_AUTH_ENABLED=true 로 켜면 모든 요청이 중앙 서버 JWT 검증을 거침.
+    # 현재 단계에서는 false 유지 (코드 위치만 잡아둠 — 인증 미들웨어 자리).
+    central_auth_enabled: bool = False
+    central_auth_url: Optional[str] = None
+    instance_id: Optional[str] = None  # 인스턴스 고유 식별자 (Phase C에서 자동 생성)
+
     @validator("database_url", pre=True)
     def build_database_url(cls, v: Optional[str], values: dict) -> str:
         """데이터베이스 URL 생성"""

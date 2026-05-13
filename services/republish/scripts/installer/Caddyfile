@@ -1,0 +1,51 @@
+# BlogAuto 리버스 프록시 — Caddy (자동 HTTPS)
+# install.sh가 PUBLIC_HOST 환경변수로 도메인/IP를 주입
+
+{$PUBLIC_HOST} {
+    # 자동 Let's Encrypt 인증서 (도메인인 경우)
+    # PUBLIC_HOST가 IP인 경우 HTTP만 (자동 감지)
+    encode gzip
+
+    # 정적 파일 캐싱
+    @static {
+        path /static/*
+    }
+    header @static Cache-Control "public, max-age=3600"
+
+    # API 라우팅
+    reverse_proxy app:8000 {
+        # 헬스 체크
+        health_uri /health
+        health_interval 30s
+        health_timeout 10s
+
+        # 큰 업로드 (이미지/폰트)
+        transport http {
+            read_buffer 8KB
+            response_header_timeout 60s
+        }
+    }
+
+    # 보안 헤더
+    header {
+        Strict-Transport-Security "max-age=31536000;"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
+    # 점검 모드 (옵션) — /opt/blogauto/maintenance 파일이 있으면 503 반환
+    @maintenance file /maintenance
+    handle @maintenance {
+        respond "BlogAuto가 업데이트 중입니다. 잠시 후 다시 시도해주세요." 503
+    }
+
+    # 에러 로그
+    log {
+        output file /data/access.log {
+            roll_size 10MB
+            roll_keep 5
+        }
+        level INFO
+    }
+}

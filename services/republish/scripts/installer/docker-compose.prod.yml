@@ -1,0 +1,188 @@
+# BlogAuto 프로덕션 — install.sh가 자동 다운로드
+# 사용자가 직접 수정할 필요 없음. 환경변수는 .env 에서 관리.
+# 자동 업데이트: Watchtower가 1시간마다 ghcr.io 이미지 확인
+
+services:
+  # PostgreSQL ─────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      TZ: ${TZ:-Asia/Seoul}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"  # DB는 자동 업데이트 제외
+
+  # Redis ──────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes --protected-mode no
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
+
+  # BlogAuto 메인 앱 ────────────────────────────────────
+  app:
+    image: ${BLOGAUTO_IMAGE:-ghcr.io/jteen-lab/blogauto:stable}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      TZ: ${TZ:-Asia/Seoul}
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - app_media:/app/media
+      - app_generated:/app/app/static/generated
+      - app_logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+
+  # Celery 워커 (생성/발행/유틸리티/이미지) ────────────────
+  worker-generation:
+    image: ${BLOGAUTO_IMAGE:-ghcr.io/jteen-lab/blogauto:stable}
+    restart: unless-stopped
+    command: celery -A app.core.celery_app worker -Q generation_queue -n generation@%h --concurrency=2
+    depends_on:
+      - postgres
+      - redis
+    env_file: .env
+    volumes:
+      - app_media:/app/media
+      - app_generated:/app/app/static/generated
+      - app_logs:/app/logs
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+
+  worker-publish:
+    image: ${BLOGAUTO_IMAGE:-ghcr.io/jteen-lab/blogauto:stable}
+    restart: unless-stopped
+    command: celery -A app.core.celery_app worker -Q publish_queue -n publish@%h --concurrency=3
+    depends_on:
+      - postgres
+      - redis
+    env_file: .env
+    volumes:
+      - app_media:/app/media
+      - app_generated:/app/app/static/generated
+      - app_logs:/app/logs
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+
+  worker-utility:
+    image: ${BLOGAUTO_IMAGE:-ghcr.io/jteen-lab/blogauto:stable}
+    restart: unless-stopped
+    command: celery -A app.core.celery_app worker -Q utility_queue -n utility@%h --concurrency=2
+    depends_on:
+      - postgres
+      - redis
+    env_file: .env
+    volumes:
+      - app_media:/app/media
+      - app_generated:/app/app/static/generated
+      - app_logs:/app/logs
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+
+  worker-image:
+    image: ${BLOGAUTO_IMAGE:-ghcr.io/jteen-lab/blogauto:stable}
+    restart: unless-stopped
+    command: celery -A app.core.celery_app worker -Q image_queue -n image@%h --concurrency=1
+    depends_on:
+      - postgres
+      - redis
+    env_file: .env
+    volumes:
+      - app_media:/app/media
+      - app_generated:/app/app/static/generated
+      - app_logs:/app/logs
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+
+  # APScheduler ────────────────────────────────────────
+  scheduler:
+    image: ${BLOGAUTO_IMAGE:-ghcr.io/jteen-lab/blogauto:stable}
+    restart: unless-stopped
+    command: python -m app.scheduler.run
+    depends_on:
+      - postgres
+      - redis
+    env_file: .env
+    volumes:
+      - app_media:/app/media
+      - app_logs:/app/logs
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+
+  # Caddy — 자동 HTTPS 리버스 프록시 ────────────────────
+  # 도메인 있으면 Let's Encrypt 자동 발급, 없으면 HTTP만
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
+
+  # Watchtower — 자동 업데이트 (.env로 비활성 가능) ───────
+  watchtower:
+    image: containrrr/watchtower:latest
+    restart: unless-stopped
+    profiles: ["with-watchtower"]
+    environment:
+      WATCHTOWER_POLL_INTERVAL: ${WATCHTOWER_POLL_INTERVAL:-3600}
+      WATCHTOWER_LABEL_ENABLE: "true"   # label=true 컨테이너만
+      WATCHTOWER_CLEANUP: "true"        # 이전 이미지 정리
+      WATCHTOWER_INCLUDE_RESTARTING: "true"
+      WATCHTOWER_TIMEOUT: "120s"
+      WATCHTOWER_LIFECYCLE_HOOKS: "true"  # pre/post-update hook
+      TZ: ${TZ:-Asia/Seoul}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - app_logs:/logs
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
+
+volumes:
+  postgres_data:
+  redis_data:
+  app_media:
+  app_generated:
+  app_logs:
+  caddy_data:
+  caddy_config:
