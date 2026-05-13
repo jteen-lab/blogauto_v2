@@ -17,7 +17,7 @@ function globalSummary() {
             // 초기값 설정 (API 로드 전 0 표시)
             total_blogs: 0, wordpress: 0, blogger: 0, active_blogs: 0, inactive_blogs: 0,
             topics: 0, subtopics: 0, keywords: 0,
-            total_modules: 0, prompt_modules: 0, generate_modules: 0, publish_modules: 0, republish_modules: 0, growth_profile_modules: 0,
+            total_modules: 0, prompt_modules: 0, growth_profile_modules: 0, collect_modules: 0, data_modules: 0,
             total_flows: 0, active_flows: 0, inactive_flows: 0,
             week_generate: 0, week_publish: 0, week_republish: 0,
             today_generate: 0, today_publish: 0, today_republish: 0
@@ -77,13 +77,13 @@ function globalSummary() {
             { key: 'topics', label: '주제', group: 'category', bgClass: 'bg-green-50', textClass: 'text-green-600' },
             { key: 'subtopics', label: '하위주제', group: 'category', bgClass: 'bg-green-50', textClass: 'text-green-600' },
             { key: 'keywords', label: '키워드', group: 'category', bgClass: 'bg-green-50', textClass: 'text-green-600' },
-            // 모듈 (5개)
+            // 모듈 (4개) — 생성/발행/재발행은 GP에 통합되어 별도 모듈 없음.
+            // 수집(collect)/데이터(data) 모듈은 별도 운영.
             { key: 'total_modules', label: '전체 모듈', group: 'module', bgClass: 'bg-purple-50', textClass: 'text-purple-600' },
             { key: 'prompt_modules', label: '프롬프트 모듈', group: 'module', bgClass: 'bg-purple-50', textClass: 'text-purple-600' },
-            { key: 'generate_modules', label: '생성 모듈', group: 'module', bgClass: 'bg-purple-50', textClass: 'text-purple-600' },
-            { key: 'publish_modules', label: '발행 모듈', group: 'module', bgClass: 'bg-purple-50', textClass: 'text-purple-600' },
-            { key: 'republish_modules', label: '재발행 모듈', group: 'module', bgClass: 'bg-purple-50', textClass: 'text-purple-600' },
             { key: 'growth_profile_modules', label: 'GP 모듈', group: 'module', bgClass: 'bg-emerald-50', textClass: 'text-emerald-600' },
+            { key: 'collect_modules', label: '수집 모듈', group: 'module', bgClass: 'bg-purple-50', textClass: 'text-purple-600' },
+            { key: 'data_modules', label: '데이터 모듈', group: 'module', bgClass: 'bg-purple-50', textClass: 'text-purple-600' },
             // 플로우 (3개)
             { key: 'total_flows', label: '전체 플로우', group: 'flow', bgClass: 'bg-cyan-50', textClass: 'text-cyan-600' },
             { key: 'active_flows', label: '활성 플로우', group: 'flow', bgClass: 'bg-cyan-50', textClass: 'text-cyan-600' },

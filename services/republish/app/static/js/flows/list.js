@@ -791,24 +791,47 @@ function flowListApp() {
                     items.push({ label: '간격', value: `${settings.interval_hours}시간` });
                 }
             } else if (typeCode === 'growth_profile') {
-                // 성장 프로파일 모듈 정보 표시
+                // 성장 프로파일 모듈 정보 표시.
+                // 첫 stage만 보면 구간1 비활성 GP가 슬라이드 항목 부족으로
+                // 표시되지 않으므로 모든 stages를 검사해 합집합 표시.
                 const settings = module.settings || {};
                 const stages = settings.stages || [];
                 if (stages.length > 0) {
                     items.push({ label: '구간', value: `${stages.length}단계` });
                 }
-                // 활성 모듈 표시
-                const activeModules = [];
-                const firstStage = stages[0] || {};
-                if (firstStage.generate?.enabled) activeModules.push('생성');
-                if (firstStage.publish?.enabled) activeModules.push('발행');
-                if (firstStage.republish?.enabled) activeModules.push('재발행');
-                if (activeModules.length > 0) {
-                    items.push({ label: '활성', value: activeModules.join('/') });
+                // 모든 stages에서 활성 모듈 합집합
+                const activeSet = new Set();
+                stages.forEach(s => {
+                    if (s.generate?.enabled) activeSet.add('생성');
+                    if (s.publish?.enabled) activeSet.add('발행');
+                    if (s.republish?.enabled) activeSet.add('재발행');
+                });
+                if (activeSet.size > 0) {
+                    items.push({ label: '활성', value: Array.from(activeSet).join('/') });
+                }
+                // 구간별 활성 요약 (예: 구간2부터 발행 시작)
+                if (stages.length > 1) {
+                    const stageLabels = stages.map((s, i) => {
+                        const name = s.label || s.name || `구간${i + 1}`;
+                        const parts = [];
+                        if (s.generate?.enabled) parts.push('생성');
+                        if (s.publish?.enabled) parts.push('발행');
+                        if (s.republish?.enabled) parts.push('재발행');
+                        return `${name}:${parts.join('/') || '비활성'}`;
+                    });
+                    items.push({ label: '구간상세', value: stageLabels.join(' · ') });
                 }
                 // 워밍업 표시
                 if (settings.warmup?.enabled) {
                     items.push({ label: '워밍업', value: `${settings.warmup.warmup_days || 0}일` });
+                }
+                // 스케줄 매트릭스 활성 시간 (있으면)
+                const matrix = settings.schedule_matrix;
+                if (matrix && Array.isArray(matrix)) {
+                    const activeCount = matrix.flat().filter(v => v).length;
+                    if (activeCount > 0) {
+                        items.push({ label: '활성시간', value: `${activeCount}시간/주` });
+                    }
                 }
             }
 
@@ -844,10 +867,17 @@ function flowListApp() {
             return duration;
         },
 
-        // 모듈 슬라이드 필요 여부 판단 (정보 아이템 3개 이상)
+        // 모듈 슬라이드 필요 여부 판단.
+        // 정보 아이템 2개 이상 또는 단일 항목이라도 텍스트가 길면 슬라이드.
+        // (GP 모듈은 '구간상세' 한 줄이 길어서 단일 아이템이어도 슬라이드 필요)
         needsModuleSlide(module) {
             const items = this.getModuleInfoItems(module);
-            return items.length >= 3;
+            if (items.length >= 2) return true;
+            if (items.length === 1) {
+                const text = `${items[0].label}: ${items[0].value}`;
+                return text.length >= 20;
+            }
+            return false;
         },
 
         // 블로그 슬라이드 필요 여부 판단 (2개 이상이면 일단 슬라이드 활성화, 실제로는 initBlogSlideCheck에서 너비 기반 체크)

@@ -7,11 +7,15 @@
 """
 from datetime import datetime, timedelta
 from typing import Optional, List
+import pytz
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 from sqlalchemy import func, select
 from pydantic import BaseModel
+
+# KST 기준 (서버 시간대와 무관하게 일관된 카운트)
+KST = pytz.timezone('Asia/Seoul')
 
 from ..core.database import get_db_session
 from ..core.logger import get_logger
@@ -106,15 +110,22 @@ async def get_dashboard_stats(db: AsyncSession = Depends(get_db_session)):
     22개 요약탭 전체 카운팅 제공
     """
     try:
-        today = datetime.now().date()
-        today_start = datetime.combine(today, datetime.min.time())
-        today_end = datetime.combine(today + timedelta(days=1), datetime.min.time())
+        # KST 기준 오늘/이번주 경계 (서버가 UTC라도 일관된 카운트).
+        # AutorunLog.created_at은 timezone-aware라 TZ-aware datetime과 비교.
+        now_kst = datetime.now(KST)
+        today = now_kst.date()
+        today_start = KST.localize(datetime.combine(today, datetime.min.time()))
+        today_end = KST.localize(datetime.combine(today + timedelta(days=1), datetime.min.time()))
 
-        # 이번주 계산 (월요일 0시 ~ 일요일 24시)
+        # 이번주 계산 (월요일 0시 KST ~ 일요일 24시 KST)
         # weekday(): 월=0, 화=1, 수=2, 목=3, 금=4, 토=5, 일=6
         days_since_monday = today.weekday()
-        week_start = datetime.combine(today - timedelta(days=days_since_monday), datetime.min.time())
-        week_end = datetime.combine(week_start.date() + timedelta(days=7), datetime.min.time())
+        week_start = KST.localize(datetime.combine(
+            today - timedelta(days=days_since_monday), datetime.min.time()
+        ))
+        week_end = KST.localize(datetime.combine(
+            week_start.date() + timedelta(days=7), datetime.min.time()
+        ))
 
         # === 블로그 관련 (삭제되지 않은 블로그만) ===
         result = await db.execute(
@@ -181,6 +192,10 @@ async def get_dashboard_stats(db: AsyncSession = Depends(get_db_session)):
         publish_modules = module_by_code.get("publish", 0)
         republish_modules = module_by_code.get("republish", 0)
         growth_profile_modules = module_by_code.get("growth_profile", 0)
+        # 현재 시스템에서 생성/발행/재발행은 GP에 통합됨.
+        # 수집/데이터 모듈은 별도 모듈로 운영.
+        collect_modules = module_by_code.get("collect", 0)
+        data_modules = module_by_code.get("data", 0)
 
         # === 플로우 관련 ===
         result = await db.execute(select(func.count(Flow.id)))
@@ -279,6 +294,8 @@ async def get_dashboard_stats(db: AsyncSession = Depends(get_db_session)):
             "publish_modules": publish_modules,
             "republish_modules": republish_modules,
             "growth_profile_modules": growth_profile_modules,
+            "collect_modules": collect_modules,
+            "data_modules": data_modules,
             # 플로우
             "total_flows": total_flows,
             "active_flows": active_flows,

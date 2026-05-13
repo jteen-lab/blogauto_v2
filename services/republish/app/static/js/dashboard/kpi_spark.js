@@ -87,7 +87,7 @@ function compactDashboard() {
                         this._get(`${A}/dashboard/hourly`),
                         this._get(`${A}/dashboard/celery/workers`),
                         this._get(`${A}/dashboard/logs?limit=8`),
-                        this._get(`${A}/generation/content/list?page_size=4`),
+                        this._get(`${A}/generation/content/list?page_size=20`),
                         this._get(`${A}/dashboard/celery/flower-url`),
                     ]);
                 this.trends = trends || { dates: [], generated: [], published: [], republished: [] };
