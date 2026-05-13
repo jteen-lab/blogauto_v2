@@ -362,21 +362,44 @@ function getModuleInfoItems(module) {
             items.push({ label: '간격', value: `${settings.interval_hours}시간` });
         }
     } else if (typeCode === 'growth_profile') {
+        // 모든 stages를 검사해 활성 모듈 합집합 + 구간별 상세 표시.
+        // (구간1만 보면 비활성 GP는 정보 부족으로 슬라이드 안 됨)
         const settings = module.settings || {};
         const stages = settings.stages || [];
         if (stages.length > 0) {
             items.push({ label: '구간', value: `${stages.length}단계` });
         }
-        const activeModules = [];
-        const firstStage = stages[0] || {};
-        if (firstStage.generate?.enabled) activeModules.push('생성');
-        if (firstStage.publish?.enabled) activeModules.push('발행');
-        if (firstStage.republish?.enabled) activeModules.push('재발행');
-        if (activeModules.length > 0) {
-            items.push({ label: '활성', value: activeModules.join('/') });
+        const activeSet = new Set();
+        stages.forEach(s => {
+            if (s.generate?.enabled) activeSet.add('생성');
+            if (s.publish?.enabled) activeSet.add('발행');
+            if (s.republish?.enabled) activeSet.add('재발행');
+        });
+        if (activeSet.size > 0) {
+            items.push({ label: '활성', value: Array.from(activeSet).join('/') });
+        }
+        // 구간별 활성 요약
+        if (stages.length > 1) {
+            const stageLabels = stages.map((s, i) => {
+                const name = s.label || s.name || `구간${i + 1}`;
+                const parts = [];
+                if (s.generate?.enabled) parts.push('생성');
+                if (s.publish?.enabled) parts.push('발행');
+                if (s.republish?.enabled) parts.push('재발행');
+                return `${name}:${parts.join('/') || '비활성'}`;
+            });
+            items.push({ label: '구간상세', value: stageLabels.join(' · ') });
         }
         if (settings.warmup?.enabled) {
             items.push({ label: '워밍업', value: `${settings.warmup.warmup_days || 0}일` });
+        }
+        // 스케줄 매트릭스 활성 시간 (있으면)
+        const matrix = settings.schedule_matrix;
+        if (matrix && Array.isArray(matrix)) {
+            const activeCount = matrix.flat().filter(v => v).length;
+            if (activeCount > 0) {
+                items.push({ label: '활성시간', value: `${activeCount}시간/주` });
+            }
         }
     }
 

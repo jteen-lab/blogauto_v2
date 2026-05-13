@@ -32,12 +32,13 @@ function compactDashboard() {
             { key: 'topics', label: '주제', group: 'category' },
             { key: 'subtopics', label: '하위주제', group: 'category' },
             { key: 'keywords', label: '키워드', group: 'category' },
+            // 현재 시스템: 생성/발행/재발행은 GP에 통합 → 별도 모듈 없음.
+            // 수집/데이터 모듈은 별도 운영.
             { key: 'total_modules', label: '전체 모듈', group: 'module' },
             { key: 'prompt_modules', label: '프롬프트', group: 'module' },
-            { key: 'generate_modules', label: '생성', group: 'module' },
-            { key: 'publish_modules', label: '발행', group: 'module' },
-            { key: 'republish_modules', label: '재발행', group: 'module' },
             { key: 'growth_profile_modules', label: 'GP', group: 'module' },
+            { key: 'collect_modules', label: '수집', group: 'module' },
+            { key: 'data_modules', label: '데이터', group: 'module' },
             { key: 'total_flows', label: '전체 플로우', group: 'flow' },
             { key: 'active_flows', label: '활성 플로우', group: 'flow' },
             { key: 'inactive_flows', label: '비활성 플로우', group: 'flow' },
