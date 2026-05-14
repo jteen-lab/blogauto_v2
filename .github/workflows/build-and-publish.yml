@@ -76,7 +76,7 @@ jobs:
       - name: Build & Push (multi-arch)
         uses: docker/build-push-action@v5
         with:
-          context: services/republish
+          context: .
           file: services/republish/docker/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true

@@ -14,13 +14,16 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # requirements.txt 복사 및 종속성 설치
-COPY requirements.txt .
+COPY services/republish/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 애플리케이션 코드 복사
-COPY app/ app/
-COPY alembic/ alembic/
-COPY alembic.ini .
+# 애플리케이션 코드 복사 (build context = 레포 루트)
+COPY services/republish/app/ app/
+COPY services/republish/alembic/ alembic/
+COPY services/republish/alembic.ini .
+
+# shared/ 폴더 복사 (위 코드들이 sys.path 로 사용)
+COPY shared/ shared/
 
 # 로그 디렉토리 생성 (런타임에 로그 쓰기용 — git에 빈 폴더 안 올라가도 OK)
 RUN mkdir -p logs && chmod 755 logs
