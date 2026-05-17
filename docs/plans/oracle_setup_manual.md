@@ -37,7 +37,11 @@
 2. 다음 옵션으로 설정:
    - **Name**: `blogauto-server` (원하는 이름)
    - **Image**: `Canonical Ubuntu 22.04`
-   - **Shape**: `VM.Standard.E2.1.Micro` (Always Free)
+   - **Shape**: ⭐ **`VM.Standard.A1.Flex`** (ARM, Always Free)
+     - **2 OCPU + 12 GB RAM** 권장 (BlogAuto 9개 컨테이너 안정 운영)
+     - 가벼운 사용: 최소 1 OCPU + 6 GB RAM
+     - 여유 있게: 4 OCPU + 24 GB RAM (Always Free 한도 최대)
+     - ⚠️ E2.1.Micro (1 GB RAM) 는 **부족합니다**. OOM 발생 가능
    - **Networking**: 기본값 그대로
    - **SSH keys**: **Generate SSH key pair** 선택 → **Save private key** 클릭 (절대 잃어버리면 안 됨)
 3. **Create** 클릭 → 1~2분 대기 → **Running** 상태 확인

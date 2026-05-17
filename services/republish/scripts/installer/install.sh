@@ -11,10 +11,13 @@ set -euo pipefail
 INSTALL_DIR="${INSTALL_DIR:-/opt/blogauto}"
 IMAGE_REGISTRY="${IMAGE_REGISTRY:-ghcr.io/jteen-lab/blogauto}"
 IMAGE_TAG="${IMAGE_TAG:-stable}"
-COMPOSE_URL="${COMPOSE_URL:-https://raw.githubusercontent.com/jteen-lab/blogauto-deploy/main/docker-compose.prod.yml}"
-WRAPPER_URL="${WRAPPER_URL:-https://raw.githubusercontent.com/jteen-lab/blogauto-deploy/main/blogauto-cli.sh}"
-MIN_RAM_MB=900
-MIN_DISK_GB=5
+# 보조 파일은 blogauto_v2 (public repo) 에서 직접 받음 → blogauto-deploy 중복 업로드 불필요
+SRC_BASE="${SRC_BASE:-https://raw.githubusercontent.com/jteen-lab/blogauto_v2/main/services/republish/scripts/installer}"
+COMPOSE_URL="${COMPOSE_URL:-${SRC_BASE}/docker-compose.prod.yml}"
+CADDYFILE_URL="${CADDYFILE_URL:-${SRC_BASE}/Caddyfile}"
+WRAPPER_URL="${WRAPPER_URL:-${SRC_BASE}/blogauto-cli.sh}"
+MIN_RAM_MB=4000
+MIN_DISK_GB=10
 
 # ── 인자 파싱 ──────────────────────────────────────────────
 RESTORE_FROM=""
@@ -219,7 +222,8 @@ run_wizard() {
 generate_env() {
     local secret_key encryption_key jwt_secret postgres_pass
     secret_key=$(openssl rand -hex 32)
-    encryption_key=$(openssl rand -base64 32 | tr -d '/+=' | head -c 44)
+    # Fernet 키: 32 바이트 → URL-safe base64 (44자, '+/=' 그대로 두고 '+/' → '-_' 만 변환)
+    encryption_key=$(openssl rand 32 | base64 | tr '+/' '-_' | tr -d '\n')
     jwt_secret=$(openssl rand -hex 32)
     postgres_pass=$(openssl rand -hex 24)
 
@@ -271,13 +275,19 @@ EOF
     ok ".env 생성 완료 (권한 600)"
 }
 
-# ── 6. docker-compose 다운로드 ────────────────────────────
+# ── 6. docker-compose + Caddyfile 다운로드 ─────────────────
 fetch_compose() {
     log "docker-compose.yml 다운로드 중..."
     if ! $SUDO curl -fsSL "$COMPOSE_URL" -o "$INSTALL_DIR/docker-compose.yml"; then
         die "docker-compose.yml 다운로드 실패. 네트워크 확인 후 재시도: $COMPOSE_URL"
     fi
     ok "docker-compose.yml 준비"
+
+    log "Caddyfile 다운로드 중..."
+    if ! $SUDO curl -fsSL "$CADDYFILE_URL" -o "$INSTALL_DIR/Caddyfile"; then
+        die "Caddyfile 다운로드 실패. 네트워크 확인 후 재시도: $CADDYFILE_URL"
+    fi
+    ok "Caddyfile 준비"
 }
 
 # ── 7. 데이터 복원 (관리자 마이그레이션) ───────────────────

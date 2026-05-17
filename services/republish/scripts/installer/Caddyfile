@@ -1,9 +1,11 @@
-# BlogAuto 리버스 프록시 — Caddy (자동 HTTPS)
+# BlogAuto 리버스 프록시 — Caddy
 # install.sh가 PUBLIC_HOST 환경변수로 도메인/IP를 주입
+#
+# - IP 사용 시: HTTP만 (Let's Encrypt 는 IP 인증서 발급 불가)
+# - 도메인 사용 시: HTTPS 별도 블록 활성화 (아래 주석 참고)
 
-{$PUBLIC_HOST} {
-    # 자동 Let's Encrypt 인증서 (도메인인 경우)
-    # PUBLIC_HOST가 IP인 경우 HTTP만 (자동 감지)
+# === HTTP (IP 또는 도메인 모두 동작) ===
+http://{$PUBLIC_HOST} {
     encode gzip
 
     # 정적 파일 캐싱

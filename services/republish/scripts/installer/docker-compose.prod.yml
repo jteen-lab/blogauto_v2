@@ -68,7 +68,7 @@ services:
   worker-generation:
     image: ${BLOGAUTO_IMAGE:-ghcr.io/jteen-lab/blogauto:stable}
     restart: unless-stopped
-    command: celery -A app.core.celery_app worker -Q generation_queue -n generation@%h --concurrency=2
+    command: celery -A app.core.celery_config worker -Q generation_queue -n generation@%h --concurrency=2
     depends_on:
       - postgres
       - redis
@@ -83,7 +83,7 @@ services:
   worker-publish:
     image: ${BLOGAUTO_IMAGE:-ghcr.io/jteen-lab/blogauto:stable}
     restart: unless-stopped
-    command: celery -A app.core.celery_app worker -Q publish_queue -n publish@%h --concurrency=3
+    command: celery -A app.core.celery_config worker -Q publish_queue -n publish@%h --concurrency=3
     depends_on:
       - postgres
       - redis
@@ -98,7 +98,7 @@ services:
   worker-utility:
     image: ${BLOGAUTO_IMAGE:-ghcr.io/jteen-lab/blogauto:stable}
     restart: unless-stopped
-    command: celery -A app.core.celery_app worker -Q utility_queue -n utility@%h --concurrency=2
+    command: celery -A app.core.celery_config worker -Q utility_queue -n utility@%h --concurrency=2
     depends_on:
       - postgres
       - redis
@@ -113,7 +113,7 @@ services:
   worker-image:
     image: ${BLOGAUTO_IMAGE:-ghcr.io/jteen-lab/blogauto:stable}
     restart: unless-stopped
-    command: celery -A app.core.celery_app worker -Q image_queue -n image@%h --concurrency=1
+    command: celery -A app.core.celery_config worker -Q image_queue -n image@%h --concurrency=1
     depends_on:
       - postgres
       - redis
@@ -125,20 +125,8 @@ services:
     labels:
       com.centurylinklabs.watchtower.enable: "true"
 
-  # APScheduler ────────────────────────────────────────
-  scheduler:
-    image: ${BLOGAUTO_IMAGE:-ghcr.io/jteen-lab/blogauto:stable}
-    restart: unless-stopped
-    command: python -m app.scheduler.run
-    depends_on:
-      - postgres
-      - redis
-    env_file: .env
-    volumes:
-      - app_media:/app/media
-      - app_logs:/app/logs
-    labels:
-      com.centurylinklabs.watchtower.enable: "true"
+  # 스케줄러는 메인 app 컨테이너의 FastAPI lifespan 이 담당
+  # (별도 컨테이너 없음 — 이중 실행 방지)
 
   # Caddy — 자동 HTTPS 리버스 프록시 ────────────────────
   # 도메인 있으면 Let's Encrypt 자동 발급, 없으면 HTTP만
