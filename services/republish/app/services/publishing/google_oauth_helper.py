@@ -46,7 +46,7 @@ def _read_env_file(cid: str, cse: str) -> Tuple[str, str]:
     return cid, cse
 
 
-def get_google_oauth_credentials() -> Tuple[str, str]:
+async def get_google_oauth_credentials() -> Tuple[str, str]:
     """Google OAuth Client ID/Secret 조회.
 
     우선순위: DB(user_settings) → 환경변수 → .env 파일
@@ -54,7 +54,7 @@ def get_google_oauth_credentials() -> Tuple[str, str]:
     Returns:
         (client_id, client_secret) 튜플. 미설정 시 빈 문자열.
     """
-    cid, cse = _get_credentials_from_db()
+    cid, cse = await _get_credentials_from_db()
     if cid and cse:
         return cid, cse
 
@@ -71,31 +71,24 @@ def get_google_oauth_credentials() -> Tuple[str, str]:
     return cid, cse
 
 
-def _get_credentials_from_db() -> Tuple[str, str]:
-    """DB(user_settings)에서 Blogger OAuth 자격증명 조회."""
+async def _get_credentials_from_db() -> Tuple[str, str]:
+    """DB(user_settings)에서 Blogger OAuth 자격증명 조회.
+
+    현재 이벤트 루프의 세션을 직접 사용하므로 호출자는 async 컨텍스트여야 함.
+    """
     try:
-        import asyncio
         from ...core.database import db_manager
         from ...models.user_settings import UserSettings
         from sqlalchemy import select
 
-        async def _query():
-            async with db_manager.get_session() as db:
-                result = await db.execute(
-                    select(UserSettings).limit(1)
-                )
-                s = result.scalar_one_or_none()
-                if s and s.blogger_client_id and s.blogger_client_secret:
-                    return s.blogger_client_id, s.blogger_client_secret
-            return "", ""
-
-        try:
-            loop = asyncio.get_running_loop()
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                return pool.submit(asyncio.run, _query()).result()
-        except RuntimeError:
-            return asyncio.run(_query())
+        async with db_manager.get_session() as db:
+            result = await db.execute(
+                select(UserSettings).limit(1)
+            )
+            s = result.scalar_one_or_none()
+            if s and s.blogger_client_id and s.blogger_client_secret:
+                return s.blogger_client_id, s.blogger_client_secret
+        return "", ""
     except Exception as e:
         logger.debug(f"[OAUTH_HELPER] DB 조회 실패 (폴백 사용): {e}")
         return "", ""
@@ -120,7 +113,7 @@ async def refresh_access_token(
     if refresh_token.startswith("ya29."):
         return refresh_token
 
-    cid, cse = get_google_oauth_credentials()
+    cid, cse = await get_google_oauth_credentials()
     if not cid or not cse:
         logger.error(
             "[OAUTH_HELPER] CLIENT_ID/SECRET 미설정 → "
