@@ -102,7 +102,7 @@ async def _update_execution_state(
     """
     try:
         from sqlalchemy import select, and_
-        from app.models.flow import FlowBlog
+        from app.models.flow_blog import FlowBlog
         from app.models.flow_execution_state import FlowExecutionState
 
         fb_result = await db.execute(
