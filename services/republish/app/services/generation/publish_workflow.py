@@ -115,7 +115,6 @@ class PublishWorkflow:
             "image_uploaded": pub_result.image_uploaded,
             "post_id": post.id,
             "post_title": post.title,
-            "crawled_post": post,
             "inventory": complete_info["inventory"],
             "needs_generation": complete_info["needs_generation"],
         }
