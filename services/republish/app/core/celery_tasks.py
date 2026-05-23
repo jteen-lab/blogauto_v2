@@ -131,7 +131,7 @@ async def _async_generate_via_executor(
         # record_execution은 스케줄러의 _execute_module_callback()에서 디스패치 시점에 처리
         try:
             from sqlalchemy import select, and_
-            from app.models.flow import FlowBlog
+            from app.models.flow_blog import FlowBlog
             from app.models.flow_execution_state import FlowExecutionState
 
             is_ok = result.get("success") and not result.get("skipped")
