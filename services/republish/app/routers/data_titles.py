@@ -700,38 +700,37 @@ async def remove_duplicate_titles(
 @router.post("/temp/reclassify")
 async def reclassify_uncategorized_titles(
     force_all: bool = Query(False, description="True면 전체 재분류, False면 미분류만"),
+    target: str = Query("temp", description="대상: temp(임시제목) 또는 main(정식제목)"),
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_user),
 ):
     """
-    제목 카테고리 재분류
+    제목 카테고리 재분류.
 
     Args:
-        force_all: True면 이미 분류된 제목도 포함하여 전체 재분류 (subtopic_id 갱신)
-                  False면 topic_id가 NULL인 미분류 제목만 재분류 (기본값)
+        force_all: True면 이미 분류된 제목도 포함하여 전체 재분류.
+        target: "temp"이면 임시제목, "main"이면 정식제목 대상.
     """
     from ..services.category_matcher_service import CategoryMatcherService
 
+    if target not in ("temp", "main"):
+        raise HTTPException(status_code=400, detail="target은 temp 또는 main이어야 합니다")
+
+    model = MainTitle if target == "main" else TempTitle
+    target_label = "정식제목" if target == "main" else "임시제목"
+
     try:
-        # 1. 제목 조회 (force_all 여부에 따라)
-        # 순수 컬럼 값만 조회하여 ORM 지연 로딩 문제 방지
-        base_query = select(
-            TempTitle.id,
-            TempTitle.title
-        )
+        base_query = select(model.id, model.title)
 
         if force_all:
-            # 전체 제목 조회 (이미 분류된 것 포함, 모든 status)
             result = await db.execute(base_query)
-            mode_str = "전체 재분류"
+            mode_str = f"{target_label} 전체 재분류"
         else:
-            # 미분류 제목만 조회
             result = await db.execute(
-                base_query.where(TempTitle.topic_id == None)
+                base_query.where(model.topic_id == None)
             )
-            mode_str = "미분류 재분류"
+            mode_str = f"{target_label} 미분류 재분류"
 
-        # 튜플 리스트로 가져옴: [(id, title), ...]
         titles_data = result.all()
 
         if not titles_data:
@@ -742,26 +741,26 @@ async def reclassify_uncategorized_titles(
                 "message": "재분류할 제목이 없습니다"
             }
 
-        # 2. 카테고리 매처 초기화 (현재 사용자의 키워드만 로드)
         matcher = CategoryMatcherService(db, user_id=current_user.id)
-        await matcher._load_keywords(force_reload=True)  # 항상 최신 키워드 로드
+        await matcher._load_keywords(force_reload=True)
 
-        # 3. 각 제목에 대해 매칭 시도 (순수 데이터로 처리)
         matched_count = 0
         for title_id, title_text in titles_data:
             topic_id, subtopic_id, matched_keyword_id = \
                 await matcher.match_and_apply_to_title(title_text)
 
             if topic_id:
-                # UPDATE 쿼리로 직접 업데이트 (ORM 객체 접근 회피)
+                update_values: dict = {
+                    "topic_id": topic_id,
+                    "subtopic_id": subtopic_id,
+                }
+                if target == "temp":
+                    update_values["matched_keyword_id"] = matched_keyword_id
+
                 await db.execute(
-                    update(TempTitle)
-                    .where(TempTitle.id == title_id)
-                    .values(
-                        topic_id=topic_id,
-                        subtopic_id=subtopic_id,
-                        matched_keyword_id=matched_keyword_id
-                    )
+                    update(model)
+                    .where(model.id == title_id)
+                    .values(**update_values)
                 )
                 matched_count += 1
 
@@ -777,7 +776,8 @@ async def reclassify_uncategorized_titles(
             "total": len(titles_data),
             "matched": matched_count,
             "mode": "all" if force_all else "uncategorized",
-            "message": f"{len(titles_data)}개 중 {matched_count}개 제목이 분류되었습니다"
+            "target": target,
+            "message": f"{target_label} {len(titles_data)}개 중 {matched_count}개가 분류되었습니다"
         }
 
     except Exception as e:

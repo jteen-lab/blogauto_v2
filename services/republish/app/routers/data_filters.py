@@ -5,6 +5,7 @@ Features:
 - ContentFilter CRUD
 - 시스템 필터 보호
 - 페이지네이션
+- 기존 데이터에 필터 적용 삭제
 """
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -510,4 +511,28 @@ async def remove_duplicate_filters(
         "total_before": len(all_filters),
         "total_after": len(all_filters) - deleted_count,
         "message": f"{deleted_count}개 중복 필터가 삭제되었습니다"
+    }
+
+
+@router.post(
+    "/apply-to-existing",
+    summary="기존 데이터에 필터 적용 삭제",
+    description="활성 필터를 임시제목/시드키워드에 적용하여 매칭 항목을 삭제합니다",
+)
+async def apply_filters_to_existing(
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """활성 필터를 기존 임시제목·시드키워드에 적용하여 매칭 항목 삭제."""
+    from ..services.filter_apply_service import apply_filters_to_existing_data
+
+    result = await apply_filters_to_existing_data(db)
+    return {
+        "success": True,
+        "deleted_titles": result.deleted_titles,
+        "deleted_keywords": result.deleted_keywords,
+        "message": (
+            f"필터 적용 완료: 임시제목 {result.deleted_titles}건, "
+            f"시드키워드 {result.deleted_keywords}건 삭제됨"
+        ) if result.total > 0 else "활성 필터에 매칭되는 항목이 없습니다",
     }
