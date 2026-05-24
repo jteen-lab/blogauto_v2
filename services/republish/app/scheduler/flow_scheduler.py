@@ -238,8 +238,23 @@ class FlowScheduler:
                             f"Interval={interval_minutes}분"
                         )
 
-                    # 즉시 실행 + 스케줄 등록
-                    if immediate_execution:
+                    # fixed_time 모드의 collect/data 모듈은 즉시 실행 금지
+                    # (정해진 시각에만 실행되어야 하므로 등록 직후 트리거 안 함)
+                    skip_immediate = False
+                    if (
+                        immediate_execution
+                        and module_type_code in ("collect", "data")
+                        and not gp_settings
+                    ):
+                        module_settings = module.settings or {}
+                        if module_settings.get("schedule_mode") == "fixed_time":
+                            skip_immediate = True
+                            logger.info(
+                                f"[FLOW_SCHEDULER] fixed_time 모드 즉시 실행 스킵 | "
+                                f"FlowID={flow_id} | ActionType={module_type_code}"
+                            )
+
+                    if immediate_execution and not skip_immediate:
                         await self._schedule_immediate_execution(
                             flow, action_type=module_type_code, state=state
                         )
@@ -769,6 +784,21 @@ class FlowScheduler:
         gp_settings: dict = None,
     ) -> None:
         """다음 실행 시간 계산 및 스케줄 등록 (GP 기반, action_type 사용)"""
+        # fixed_time 모드 우선 처리 (GP 없는 collect/data)
+        if not gp_settings and action_type in ("collect", "data"):
+            fixed_next = self._get_module_next_fixed_time(flow, action_type)
+            if fixed_next:
+                await self._schedule_at_time(
+                    flow, action_type=action_type, state=state,
+                    run_time=fixed_next,
+                )
+                logger.info(
+                    f"[FLOW_SCHEDULER] fixed_time 스케줄 등록 | "
+                    f"FlowID={flow.id} | ActionType={action_type} | "
+                    f"RunTime={fixed_next.strftime('%Y-%m-%d %H:%M:%S %Z')}"
+                )
+                return
+
         # GP 설정에서 schedule_matrix/jitter 사용 (GP 없으면 기본값)
         if gp_settings:
             schedule_matrix = gp_settings.get("schedule_matrix")
@@ -1044,16 +1074,31 @@ class FlowScheduler:
 
                 # action_type별 실행
                 if action_type == "collect":
-                    
+
                     if await _use_celery("use_celery_utility", db):
-                        from app.core.task_dispatcher import get_dispatcher, PRIORITY_NORMAL
-                        dispatcher = get_dispatcher()
-                        task_id = dispatcher.dispatch_utility(
-                            "tasks.collect_keywords",
-                            kwargs={"module_id": module.id, "flow_id": flow_id},
-                            priority=PRIORITY_NORMAL,
-                        )
-                        result = {"success": True, "message": f"Celery 큐 등록: {task_id}"}
+                        # 모듈 단위 중복 디스패치 방지 (Redis TTL 락)
+                        # collect task 가 끝나기 전 다음 trigger 가 또 디스패치하는 것을 차단
+                        if not self._acquire_module_dispatch_lock(
+                            "collect", module.id
+                        ):
+                            logger.info(
+                                f"[FLOW_SCHEDULER] 수집 모듈 이전 디스패치 처리 중, 스킵 | "
+                                f"FlowID={flow_id} | module_id={module.id}"
+                            )
+                            result = {
+                                "success": True,
+                                "skipped": True,
+                                "message": "이전 수집 작업 진행 중",
+                            }
+                        else:
+                            from app.core.task_dispatcher import get_dispatcher, PRIORITY_NORMAL
+                            dispatcher = get_dispatcher()
+                            task_id = dispatcher.dispatch_utility(
+                                "tasks.collect_keywords",
+                                kwargs={"module_id": module.id, "flow_id": flow_id},
+                                priority=PRIORITY_NORMAL,
+                            )
+                            result = {"success": True, "message": f"Celery 큐 등록: {task_id}"}
                     else:
                         result = await self._execute_collect_module(module, db, flow)
                     duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
@@ -1086,16 +1131,30 @@ class FlowScheduler:
                     )
 
                 elif action_type == "data":
-                    
+
                     if await _use_celery("use_celery_utility", db):
-                        from app.core.task_dispatcher import get_dispatcher, PRIORITY_NORMAL
-                        dispatcher = get_dispatcher()
-                        task_id = dispatcher.dispatch_utility(
-                            "tasks.transfer_titles",
-                            kwargs={"module_id": module.id, "flow_id": flow_id},
-                            priority=PRIORITY_NORMAL,
-                        )
-                        result = {"success": True, "message": f"Celery 큐 등록: {task_id}"}
+                        # 모듈 단위 중복 디스패치 방지 (Redis TTL 락)
+                        if not self._acquire_module_dispatch_lock(
+                            "data", module.id
+                        ):
+                            logger.info(
+                                f"[FLOW_SCHEDULER] 데이터 모듈 이전 디스패치 처리 중, 스킵 | "
+                                f"FlowID={flow_id} | module_id={module.id}"
+                            )
+                            result = {
+                                "success": True,
+                                "skipped": True,
+                                "message": "이전 데이터 작업 진행 중",
+                            }
+                        else:
+                            from app.core.task_dispatcher import get_dispatcher, PRIORITY_NORMAL
+                            dispatcher = get_dispatcher()
+                            task_id = dispatcher.dispatch_utility(
+                                "tasks.transfer_titles",
+                                kwargs={"module_id": module.id, "flow_id": flow_id},
+                                priority=PRIORITY_NORMAL,
+                            )
+                            result = {"success": True, "message": f"Celery 큐 등록: {task_id}"}
                     else:
                         result = await self._execute_data_module(module, db)
                     duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
@@ -1251,6 +1310,26 @@ class FlowScheduler:
         """
         if not state:
             return
+
+        # fixed_time 모드 우선 처리 (GP 없는 collect/data 등에 해당)
+        # 정해진 시각에만 실행하므로 interval 계산 없이 직접 schedule
+        if (
+            fallback_interval <= 0
+            and not gp_settings
+            and action_type in ("collect", "data")
+        ):
+            fixed_next = self._get_module_next_fixed_time(flow, action_type)
+            if fixed_next:
+                await self._schedule_at_time(
+                    flow, action_type=action_type, state=state,
+                    run_time=fixed_next,
+                )
+                logger.info(
+                    f"[FLOW_SCHEDULER] fixed_time 다음 실행 등록 | "
+                    f"FlowID={flow.id} | ActionType={action_type} | "
+                    f"RunTime={fixed_next.strftime('%Y-%m-%d %H:%M:%S %Z')}"
+                )
+                return
 
         # 간격 결정: 폴백 > GP > 모듈 settings > 기본값(60분)
         if fallback_interval > 0:
@@ -1450,8 +1529,7 @@ class FlowScheduler:
         """
         GP가 없을 때 모듈 자체 settings에서 폴백 간격(분) 조회
 
-        모듈의 settings.interval_minutes 값을 우선 사용하고,
-        없으면 default_minutes를 반환합니다.
+        우선순위: interval_minutes → interval_hours(× 60) → default_minutes
 
         Args:
             flow: 모듈 링크가 로드된 플로우
@@ -1467,19 +1545,111 @@ class FlowScheduler:
                 continue
             if module.module_type.code == action_type:
                 module_settings = module.settings or {}
+
                 interval = module_settings.get("interval_minutes")
                 if interval and isinstance(interval, (int, float)) and interval > 0:
                     logger.debug(
-                        f"[FLOW_SCHEDULER] 모듈 폴백 간격 | "
+                        f"[FLOW_SCHEDULER] 모듈 폴백 간격 (분) | "
                         f"ActionType={action_type} | Interval={int(interval)}분"
                     )
                     return int(interval)
+
+                hours = module_settings.get("interval_hours")
+                if hours and isinstance(hours, (int, float)) and hours > 0:
+                    logger.debug(
+                        f"[FLOW_SCHEDULER] 모듈 폴백 간격 (시 → 분) | "
+                        f"ActionType={action_type} | Interval={int(hours * 60)}분"
+                    )
+                    return int(hours * 60)
                 break
         logger.debug(
             f"[FLOW_SCHEDULER] 기본 폴백 간격 사용 | "
             f"ActionType={action_type} | Interval={default_minutes}분"
         )
         return default_minutes
+
+    def _get_module_next_fixed_time(
+        self,
+        flow: Flow,
+        action_type: str,
+    ) -> Optional[datetime]:
+        """모듈 settings 의 schedule_mode/fixed_times 기반 다음 실행 시각
+
+        fixed_time 모드가 아니거나 유효한 fixed_times 가 없으면 None 반환.
+        반환 시각은 KST 기준 가장 가까운 미래 시각.
+        """
+        for link in flow.module_links:
+            module = link.module
+            if not module or not module.module_type:
+                continue
+            if module.module_type.code != action_type:
+                continue
+            settings = module.settings or {}
+            if settings.get("schedule_mode") != "fixed_time":
+                return None
+            fixed_times = settings.get("fixed_times") or []
+            if not fixed_times:
+                return None
+
+            now = datetime.now(KST)
+            today_midnight = now.replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            candidates: list[datetime] = []
+            for t_str in fixed_times:
+                try:
+                    h_str, m_str = str(t_str).split(":")
+                    h, m = int(h_str), int(m_str)
+                except (ValueError, AttributeError):
+                    logger.warning(
+                        f"[FLOW_SCHEDULER] fixed_times 파싱 실패 | "
+                        f"value={t_str!r}"
+                    )
+                    continue
+                if not (0 <= h <= 23 and 0 <= m <= 59):
+                    continue
+                candidate = today_midnight.replace(hour=h, minute=m)
+                # 이미 지난 시각이면 다음 날로
+                if candidate <= now:
+                    candidate = candidate + timedelta(days=1)
+                candidates.append(candidate)
+            if not candidates:
+                return None
+            return min(candidates)
+        return None
+
+    def _acquire_module_dispatch_lock(
+        self,
+        action_type: str,
+        module_id: int,
+        ttl_seconds: int = 1800,
+    ) -> bool:
+        """모듈 단위 디스패치 중복 방지 락 (Redis SETNX, TTL 30분 기본)
+
+        같은 모듈의 이전 task 가 워커에서 처리되는 동안 새 trigger 가 또
+        디스패치하는 것을 차단. TTL 이 만료되면 자동 해제되므로
+        task 가 오래 걸려도 결국 다시 잡힌다.
+
+        Returns:
+            True: 락 획득 (디스패치 가능)
+            False: 이미 락 보유 중 (디스패치 스킵)
+        """
+        try:
+            import os
+            import redis as redis_lib
+
+            redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
+            redis_client = redis_lib.from_url(redis_url)
+            lock_key = f"flow_module_dispatch_lock:{action_type}:{module_id}"
+            acquired = redis_client.set(lock_key, "1", nx=True, ex=ttl_seconds)
+            return bool(acquired)
+        except Exception as e:
+            # Redis 장애 시 락 없이 디스패치 허용 (보수적이지 않게, 가용성 우선)
+            logger.warning(
+                f"[FLOW_SCHEDULER] 디스패치 락 조회 실패 (락 없이 진행) | "
+                f"action={action_type} | module_id={module_id} | error={e}"
+            )
+            return True
 
     def _find_gp_settings(self, flow: Flow) -> Optional[dict]:
         """
