@@ -66,6 +66,10 @@ async def _async_collect(module_id: int, action_type: str) -> dict:
     name="tasks.collect_keywords",
     queue="utility_queue",
     max_retries=0,
+    acks_late=False,       # 시작 시 즉시 ack: 90분 작업이라 worker 재시작/메모리
+                           # 초과 graceful restart 시 broker 가 redeliver 하는 것을
+                           # 방지. 글로벌 task_acks_late=True 를 task 단위로 override.
+                           # max_retries=0 이므로 명시적 재시도도 발생하지 않음.
     soft_time_limit=5400,  # 90분: bulk collect Phase 2 sitemap 크롤링은 30~80분 소요
     time_limit=5700,       # 95분 하드 제한
 )
@@ -108,6 +112,7 @@ def collect_keywords(
     name="tasks.transfer_titles",
     queue="utility_queue",
     max_retries=0,
+    acks_late=False,       # 시작 시 즉시 ack (collect_keywords 와 동일 사유)
     soft_time_limit=1800,  # 30분
     time_limit=2100,        # 35분 하드 제한
 )
