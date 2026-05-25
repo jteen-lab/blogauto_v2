@@ -209,10 +209,10 @@ function moduleFormApp(module = null, moduleType = null) {
             if (typeCode === 'prompt') {
                 console.log('프롬프트 모듈 감지 - 카테고리 로드 시작');
                 this.loadCategories();
-                // 다른 모듈의 사용 현황 로드 (충돌 감지용, 신규/편집 공통)
-                if (this.loadUsedBlogCategories) {
-                    this.loadUsedBlogCategories();
-                }
+                // used-blog-categories 는 아래 경로에서 자동 호출되므로
+                // 여기서는 fire-and-forget 호출을 하지 않는다 (중복 방지):
+                //   - 편집 모드: initPromptModuleFromData → initPromptModuleLinkingFromData
+                //   - 신규 모드: onCategoryChange / _loadBlogsForBlogMode 등 사용자 액션
                 // 편집 모드일 경우 기존 데이터 로드
                 if (this.isEdit) {
                     this.initPromptModuleFromData();
@@ -409,6 +409,16 @@ function moduleFormApp(module = null, moduleType = null) {
             this.loading = true;
 
             try {
+                // in-flight used-blog-categories 가 있으면 먼저 끝나길 기다린다.
+                // (느린 used-blog-categories 와 submitForm 이 동시에 동일 DB
+                //  connection pool 을 다투면 응답이 빈 본문으로 끊겨
+                //  "Unexpected end of JSON input" SyntaxError 발생 회귀 방지)
+                const inflight =
+                    this.promptModule?.linking?._usedMappingsInflight;
+                if (inflight) {
+                    try { await inflight; } catch (_) { /* 매핑 로드 실패는 저장 차단 사유가 아님 */ }
+                }
+
                 // 요청 데이터 준비
                 const requestData = this.prepareRequestData();
 

@@ -88,20 +88,33 @@ const promptModuleLinkingMethods = {
     },
 
     async loadUsedBlogCategories() {
-        try {
-            const params = new URLSearchParams();
-            if (this.isEdit && this.module?.id) {
-                params.append('exclude_module_id', this.module.id);
-            }
-            const url = `/api/v1/modules/used-blog-categories?${params.toString()}`;
-            const resp = await fetch(url, { credentials: 'include' });
-            if (resp.ok) {
-                const data = await resp.json();
-                this.promptModule.linking.usedMappings = data.mappings || [];
-            }
-        } catch (e) {
-            console.error('[연동] 매핑 로드 오류:', e);
+        // in-flight 가드: 같은 폼에서 다중 호출 시 동일 Promise 재사용
+        // (이전 회귀에서 fire-and-forget 호출과 init/카테고리 변경이 겹쳐
+        //  동시에 2~3개 요청이 발생, 64초 걸리던 백엔드와 connection pool을
+        //  다투며 submitForm 응답이 끊겨 SyntaxError 가 났던 패턴 방지)
+        if (this.promptModule.linking._usedMappingsInflight) {
+            return this.promptModule.linking._usedMappingsInflight;
         }
+        const run = async () => {
+            try {
+                const params = new URLSearchParams();
+                if (this.isEdit && this.module?.id) {
+                    params.append('exclude_module_id', this.module.id);
+                }
+                const url = `/api/v1/modules/used-blog-categories?${params.toString()}`;
+                const resp = await fetch(url, { credentials: 'include' });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    this.promptModule.linking.usedMappings = data.mappings || [];
+                }
+            } catch (e) {
+                console.error('[연동] 매핑 로드 오류:', e);
+            } finally {
+                this.promptModule.linking._usedMappingsInflight = null;
+            }
+        };
+        this.promptModule.linking._usedMappingsInflight = run();
+        return this.promptModule.linking._usedMappingsInflight;
     },
 
     async loadBlogCategories(blogId) {
