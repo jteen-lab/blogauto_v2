@@ -7,6 +7,7 @@ Features:
 - 페이지네이션 지원
 - 블로그-카테고리 매핑 조회 및 강제 연동
 """
+import time
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from sqlalchemy import select
@@ -66,9 +67,16 @@ async def get_used_blog_categories(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    """Phase 1-1: 사용 중인 블로그-카테고리 매핑 조회"""
-    modules = await _get_prompt_modules(db, current_user.id, exclude_module_id)
+    """Phase 1-1: 사용 중인 블로그-카테고리 매핑 조회.
 
+    64초 회귀 진단을 위해 단계별 타이밍을 로깅한다.
+    합계가 1초 초과 시 WARNING으로 격상해 slow query 탐지를 돕는다.
+    """
+    t0 = time.perf_counter()
+    modules = await _get_prompt_modules(db, current_user.id, exclude_module_id)
+    t_modules = time.perf_counter() - t0
+
+    t_build_start = time.perf_counter()
     raw_mappings = []
     for mod in modules:
         settings = mod.settings or {}
@@ -77,9 +85,12 @@ async def get_used_blog_categories(
             bcm = _build_legacy_map(settings)
         for m in bcm:
             raw_mappings.append({**m, "module_id": mod.id, "module_name": mod.name})
+    t_build = time.perf_counter() - t_build_start
 
-    # 이름 해석
+    t_names_start = time.perf_counter()
     names = await _resolve_category_names(db, raw_mappings)
+    t_names = time.perf_counter() - t_names_start
+
     result = []
     for m in raw_mappings:
         result.append({
@@ -91,6 +102,18 @@ async def get_used_blog_categories(
             "module_id": m["module_id"],
             "module_name": m["module_name"],
         })
+
+    total = time.perf_counter() - t0
+    msg = (
+        f"[USED_BLOG_CAT] total={total:.3f}s | "
+        f"prompt_modules={t_modules:.3f}s({len(modules)}건) | "
+        f"build={t_build:.3f}s({len(raw_mappings)}매핑) | "
+        f"names={t_names:.3f}s | user_id={current_user.id}"
+    )
+    if total > 1.0:
+        logger.warning(msg)
+    else:
+        logger.info(msg)
     return {"mappings": result}
 
 

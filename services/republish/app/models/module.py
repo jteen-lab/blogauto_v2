@@ -28,6 +28,7 @@ class Module(Base):
         Integer,
         ForeignKey("module_types.id"),
         nullable=False,
+        index=True,
         comment="모듈 타입 ID"
     )
     name = Column(String(255), nullable=False, comment="모듈 이름")
