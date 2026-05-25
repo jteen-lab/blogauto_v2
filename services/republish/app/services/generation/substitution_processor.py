@@ -125,6 +125,12 @@ class SubstitutionProcessor:
         if not content:
             return ""
 
+        # AI 응답이 ```markdown ... ``` 또는 ``` ... ``` 로 전체가
+        # 감싸진 경우 unwrap (슈마즈처럼 모델이 응답 전체를 코드 펜스로
+        # 감싸 보내면 마크다운 파서가 <pre><code> 로 처리해버리는 회귀
+        # 방지)
+        content = self._unwrap_outer_fence(content)
+
         lines = content.split("\n")
 
         # 1차 스캔: 헤딩 목록 수집 (목차 링크 생성용)
@@ -440,3 +446,46 @@ class SubstitutionProcessor:
             .replace(">", "&gt;")
             .replace('"', "&quot;")
         )
+
+    @staticmethod
+    def _unwrap_outer_fence(text: str) -> str:
+        """AI 응답이 전체적으로 ``` 코드 펜스로 감싸진 경우 제거.
+
+        모델이 응답을 ```markdown ... ``` 또는 ``` ... ``` 으로 감싸는
+        경우, 마크다운 파서가 본문을 통째로 <pre><code> 로 만들어버린다.
+        본문 안에 다른 ``` 가 있으면 (의도된 코드 블록) 건드리지 않는다.
+        """
+        stripped = text.strip()
+        if not stripped.startswith("```"):
+            return text
+
+        lines = stripped.split("\n")
+        if len(lines) < 2:
+            return text
+
+        first_line = lines[0].strip()
+        if not first_line.startswith("```"):
+            return text
+
+        # 마지막 비어있지 않은 줄이 ``` 인지 확인
+        last_idx = len(lines) - 1
+        while last_idx > 0 and not lines[last_idx].strip():
+            last_idx -= 1
+        if last_idx <= 0 or lines[last_idx].strip() != "```":
+            return text
+
+        # 가운데에 ``` 가 또 있으면 의도된 중첩이라 unwrap 하지 않음
+        inner_fences = sum(
+            1 for ln in lines[1:last_idx]
+            if ln.strip().startswith("```")
+        )
+        if inner_fences > 0:
+            return text
+
+        unwrapped = "\n".join(lines[1:last_idx])
+        logger.debug(
+            "[SUBSTITUTION] 외부 코드 펜스 unwrap | "
+            "원본=%d자 → %d자",
+            len(text), len(unwrapped),
+        )
+        return unwrapped
