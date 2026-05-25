@@ -427,10 +427,35 @@ function moduleFormApp(module = null, moduleType = null) {
                     body: JSON.stringify(requestData)
                 });
 
-                const result = await response.json();
+                // 서버 응답 본문이 비어있거나 JSON 이 아닐 수 있어 안전 파싱
+                // (다른 long-running 요청과 충돌해 connection 이 빈 응답으로
+                // 끊기면 response.json() 이 "Unexpected end of JSON input"
+                // SyntaxError 를 던지던 회귀 방지)
+                const rawText = await response.text();
+                let result = {};
+                if (rawText) {
+                    try {
+                        result = JSON.parse(rawText);
+                    } catch (parseErr) {
+                        console.warn('[submitForm] JSON 파싱 실패:', parseErr);
+                        result = {
+                            detail:
+                                `서버 응답을 해석할 수 없습니다 ` +
+                                `(HTTP ${response.status}). ` +
+                                `잠시 후 다시 시도해주세요.`,
+                        };
+                    }
+                }
 
                 if (!response.ok) {
                     throw new Error(result.detail || '요청 처리 중 오류가 발생했습니다');
+                }
+
+                if (!rawText) {
+                    // 200 OK 인데 본문 빈 경우: 명확한 에러 대신 재시도 안내
+                    throw new Error(
+                        '서버 응답이 비어있습니다. 잠시 후 다시 시도해주세요.'
+                    );
                 }
 
                 // 성공 처리
