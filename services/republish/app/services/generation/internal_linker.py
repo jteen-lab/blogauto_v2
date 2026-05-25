@@ -389,6 +389,26 @@ class InternalLinker:
         if not available:
             return content
 
+        if list_style == "none":
+            # "none" 은 각 링크가 별도 단락으로 변환되어 한 줄씩 띄어
+            # 출력되는 문제가 있어 한 단락 안에 <br> 로 줄바꿈만 처리.
+            inline_parts = []
+            for post in available:
+                if post.url in used_urls:
+                    continue
+                inline_parts.append(
+                    f"[{post.title}]({post.url})"
+                )
+                used_urls.add(post.url)
+            if not inline_parts:
+                return content
+            link_block = (
+                "\n\n---\n\n### 함께 보면 좋은 글\n\n"
+                + "<br>".join(inline_parts)
+            )
+            content += link_block
+            return content
+
         link_lines = []
         for i, post in enumerate(available):
             if post.url not in used_urls:
@@ -398,7 +418,7 @@ class InternalLinker:
                     )
                 elif list_style == "dash":
                     link_lines.append(f"- [{post.title}]({post.url})")
-                else:  # "none"
+                else:
                     link_lines.append(f"[{post.title}]({post.url})")
                 used_urls.add(post.url)
 
