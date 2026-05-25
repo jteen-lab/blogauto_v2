@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Optional, Set
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import select, exists
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.blog import Blog
@@ -194,14 +194,19 @@ class PostSyncService:
         """
         reset_count = 0
         for title_id in title_ids:
-            remaining = await self.db.execute(
-                select(CrawledPost.id).where(
-                    CrawledPost.matched_main_title_id == title_id,
-                    CrawledPost.published_at.isnot(None),
-                    CrawledPost.source == "generated",
+            # 같은 MainTitle 이 여러 블로그에서 발행됐을 수 있으므로 (정상 케이스)
+            # 단순 존재 여부만 확인. scalar_one_or_none 사용 시 multiple rows
+            # 예외가 발생하던 회귀 수정.
+            other_exists = await self.db.scalar(
+                select(
+                    exists().where(
+                        CrawledPost.matched_main_title_id == title_id,
+                        CrawledPost.published_at.isnot(None),
+                        CrawledPost.source == "generated",
+                    )
                 )
             )
-            if remaining.scalar_one_or_none() is None:
+            if not other_exists:
                 title = await self.db.get(MainTitle, title_id)
                 if title and title.status != "available":
                     logger.info(
