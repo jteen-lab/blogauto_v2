@@ -502,10 +502,22 @@ async def save_placeholders(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session)
 ) -> PlaceholdersResponse:
-    """치환자 설정 저장."""
+    """치환자 설정 저장.
+
+    PlaceholdersConfig 에 포함된 사용자 필드(html_tags, css_classes,
+    link_styles, text_replace)만 덮어쓰고, 그 외 시스템 관리 필드
+    (image_hosting.imgbb_api_key, internal_links, blogger_id 캐시 등)는
+    그대로 보존한다. 이전엔 전체 dict 를 교체해서 imgbb 키 등이
+    사라지는 회귀가 있었음.
+    """
     blog = await get_blog_or_404(blog_id, current_user, db)
 
-    blog.placeholders = request.placeholders.model_dump()
+    existing = dict(blog.placeholders or {})
+    user_payload = request.placeholders.model_dump()
+    # 사용자 입력 필드만 덮어쓰기 → 시스템 관리 필드는 보존
+    existing.update(user_payload)
+    blog.placeholders = existing
+    flag_modified(blog, 'placeholders')
     await db.commit()
     await db.refresh(blog)
 
