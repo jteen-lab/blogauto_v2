@@ -416,15 +416,9 @@ async def list_titles_unified(
     cat_filter = await _build_blog_category_filter(blog_id, db)
     if cat_filter is not None:
         main_query = main_query.where(cat_filter)
-    main_query = main_query.where(
-        or_(
-            MainTitle.is_group_representative.is_(True),
-            MainTitle.group_id.is_(None),
-            ~MainTitle.group_id.in_(
-                select(TitleGroup.id).where(TitleGroup.member_count >= 2)
-            ),
-        )
-    )
+
+    # 이 블로그에 매칭된 MainTitle ID 서브쿼리.
+    # 그룹 필터 예외 처리에 사용되므로 그룹 필터보다 먼저 정의한다.
     matched_subq = (
         select(_CP.matched_main_title_id)
         .where(
@@ -435,6 +429,22 @@ async def list_titles_unified(
         .distinct()
         .scalar_subquery()
     )
+
+    # 그룹 필터: 그룹 대표/단독/소그룹 만 표시하여 중복 노출을 줄인다.
+    # 단, 이 블로그에 이미 매칭(발행대기/완료) 된 MainTitle 은
+    # is_group_representative 가 아니더라도 반드시 노출되어야 한다.
+    # (그렇지 않으면 슈마즈처럼 발행대기 글이 목록에서 사라지는 회귀가 발생)
+    main_query = main_query.where(
+        or_(
+            MainTitle.is_group_representative.is_(True),
+            MainTitle.group_id.is_(None),
+            ~MainTitle.group_id.in_(
+                select(TitleGroup.id).where(TitleGroup.member_count >= 2)
+            ),
+            MainTitle.id.in_(matched_subq),
+        )
+    )
+
     if matching_filter == "matched":
         main_query = main_query.where(MainTitle.id.in_(matched_subq))
     elif matching_filter == "unmatched":
