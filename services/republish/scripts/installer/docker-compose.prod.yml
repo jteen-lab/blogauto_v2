@@ -65,6 +65,10 @@ services:
       com.centurylinklabs.watchtower.enable: "true"
 
   # Celery 워커 (생성/발행/유틸리티/이미지) ────────────────
+  # healthcheck disable 이유: 이미지의 Dockerfile HEALTHCHECK 가
+  # curl http://localhost:8000/health 인데, 워커 컨테이너는 HTTP
+  # 서버를 띄우지 않아 항상 fail → docker ps 가 unhealthy 로 보여
+  # 진짜 워커 장애 감지를 가린다. 워커 상태는 Celery Flower 로 모니터링.
   worker-generation:
     image: ${BLOGAUTO_IMAGE:-ghcr.io/jteen-lab/blogauto:stable}
     restart: unless-stopped
@@ -77,6 +81,8 @@ services:
       - app_media:/app/media
       - app_generated:/app/app/static/generated
       - app_logs:/app/logs
+    healthcheck:
+      disable: true
     labels:
       com.centurylinklabs.watchtower.enable: "true"
 
@@ -92,6 +98,8 @@ services:
       - app_media:/app/media
       - app_generated:/app/app/static/generated
       - app_logs:/app/logs
+    healthcheck:
+      disable: true
     labels:
       com.centurylinklabs.watchtower.enable: "true"
 
@@ -107,6 +115,8 @@ services:
       - app_media:/app/media
       - app_generated:/app/app/static/generated
       - app_logs:/app/logs
+    healthcheck:
+      disable: true
     labels:
       com.centurylinklabs.watchtower.enable: "true"
 
@@ -122,11 +132,29 @@ services:
       - app_media:/app/media
       - app_generated:/app/app/static/generated
       - app_logs:/app/logs
+    healthcheck:
+      disable: true
     labels:
       com.centurylinklabs.watchtower.enable: "true"
 
-  # 스케줄러는 메인 app 컨테이너의 FastAPI lifespan 이 담당
-  # (별도 컨테이너 없음 — 이중 실행 방지)
+  # APScheduler ────────────────────────────────────────
+  # 메인 app 컨테이너 lifespan 이 아닌 별도 프로세스로 운영
+  # (이전엔 lifespan 안에 있었으나 운영 서버에서 별도 컨테이너로 분리됨)
+  scheduler:
+    image: ${BLOGAUTO_IMAGE:-ghcr.io/jteen-lab/blogauto:stable}
+    restart: unless-stopped
+    command: python -m app.scheduler.run
+    depends_on:
+      - postgres
+      - redis
+    env_file: .env
+    volumes:
+      - app_media:/app/media
+      - app_logs:/app/logs
+    healthcheck:
+      disable: true
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
 
   # Caddy — 자동 HTTPS 리버스 프록시 ────────────────────
   # 도메인 있으면 Let's Encrypt 자동 발급, 없으면 HTTP만
