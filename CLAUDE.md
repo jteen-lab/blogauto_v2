@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-> **BlogAuto v2** | **버전**: v4.0.0 | **날짜**: 2026-04-07
+> **BlogAuto v2** | **버전**: v4.1.0 | **날짜**: 2026-05-26
 
 ## 언어
 
@@ -44,6 +44,56 @@
 | **@reviewer-agent** | `tests/`, `docs/`, 코드 리뷰 |
 
 **상세 가이드**: `docs/claude/AGENTS.md` 참조
+
+---
+
+## 운영 모드 워크플로우 (2026-05-26 추가)
+
+> 현재 옛 오라클 서버(144.24.82.130, E2.1.Micro)에서 **실 운영 중**. 사용자는 실제 블로그에 글/이미지 생성·발행하면서 운영 중 문제를 발견·보고한다. A1.Flex 마이그레이션은 capacity 확보 대기 중.
+
+### 수정 요청 처리 표준 절차 (사용자 개입 없음, 직접 마무리)
+
+사용자가 "서버에서 X가 안 된다", "이 오류 고쳐줘" 등 운영 중 문제를 보고하면:
+
+1. **로컬에서 수정** — 서버 코드 직접 수정 금지(회귀 위험·SHA 불일치 발생). 모든 수정은 `~/blogauto_v2`(로컬)에서만.
+2. **로컬 자체 테스트** — 데이터 영향이 큰 변경(마이그레이션, 모델 변경, 데이터 마이그레이션 스크립트 등)은 로컬에서 먼저 검증. UI/회귀 fix는 서버 배포 후 사용자 검증으로 갈음 가능.
+3. **파일별 개별 `git commit`** + **`git push origin main`** — push가 GitHub Actions를 트리거해 `ghcr.io/jteen-lab/blogauto:stable` 이미지를 자동 빌드한다.
+4. **GitHub Actions 빌드 완료 대기** — 약 3~7분. 빌드 완료 전에는 서버 pull 무의미.
+5. **서버에 데이터 보존 업데이트 배포** — SSH 접속 후 다음 패턴:
+   ```bash
+   ssh -i ~/.ssh/blogauto-oracle.key ubuntu@144.24.82.130
+   cd ~/blogauto_v2/services/republish     # 또는 실제 배포 디렉토리
+   sudo docker compose pull                 # 새 이미지만 받아옴
+   sudo docker compose up -d                # 컨테이너만 교체 (volume 보존)
+   ```
+6. **검증** — 두 SHA가 일치하는지 확인:
+   - 로컬: `git rev-parse origin/main`
+   - 서버: `sudo docker inspect blogauto-app-1 --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'`
+   - 두 값이 같아야 배포 성공.
+7. **사용자에게 결과 보고** — 무엇을 고쳤는지, 서버 배포·검증까지 완료됐는지 명시.
+
+### 절대 금지 (데이터 손상 방지)
+
+- ❌ `docker compose down -v` — `-v`는 named volume 삭제. PostgreSQL DB / 생성 이미지 / 사용자 업로드 데이터가 날아간다.
+- ❌ `docker volume rm`, `docker system prune --volumes` — 같은 이유로 금지.
+- ❌ 서버에서 직접 코드 편집 (`vim`, `nano` 등) — 로컬과 SHA 불일치 발생, 다음 배포 시 덮어써짐.
+- ❌ 서버에서 `alembic downgrade` — 데이터 손실 가능. 마이그레이션은 항상 upgrade 방향.
+
+### 마이그레이션 동반 배포
+
+새 alembic 마이그레이션이 포함된 경우 서버 배포 시 자동 실행되는지 확인. 자동 실행 안 되면 5번 절차에 추가:
+```bash
+sudo docker compose exec app alembic upgrade head
+```
+
+### 불일치 발생 시 (`git status`에 미커밋 변경, push 안 된 커밋 등)
+
+서버에 반영 안 되어 사용자가 보고한 문제가 안 고쳐진 것처럼 보일 수 있다. 사용자 보고를 받으면 항상 먼저:
+1. `git status` — 미커밋 변경 있는지
+2. `git log origin/main..HEAD` — push 안 된 로컬 커밋 있는지
+3. 서버 SHA — 운영 중인 실제 코드 버전
+
+세 값이 모두 일치하는 게 정상 상태.
 
 ---
 
@@ -126,6 +176,8 @@ blogauto_v2/services/republish/     # 작업 디렉토리
 8. NEVER start servers
 9. ALWAYS use type hints and docstrings
 10. 모든 소통은 한국어
+11. 운영 수정은 로컬 → push → 서버 데이터 보존 배포까지 직접 마무리
+12. 수정 후 로컬 HEAD = origin/main = 서버 image revision SHA (3값 동일)
 ```
 
 ---
@@ -143,4 +195,4 @@ blogauto_v2/services/republish/     # 작업 디렉토리
 
 ---
 
-**Last Updated**: 2026-04-07 | **Version**: v4.0.0
+**Last Updated**: 2026-05-26 | **Version**: v4.1.0

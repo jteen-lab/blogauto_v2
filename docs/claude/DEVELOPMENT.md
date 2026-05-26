@@ -36,14 +36,59 @@ docker exec blogauto_db psql -U blogauto -d blogauto_v2 -c "\dt"
 pytest tests/
 ```
 
-## 배포 (Oracle 서버)
+## 배포 (Oracle 서버) — 데이터 보존 업데이트
+
+> 빌드는 **GitHub Actions가 ghcr.io에서 수행**. 서버는 이미지를 pull만 한다.
+> 운영 데이터(PostgreSQL volume / 생성 이미지 / 사용자 업로드) 절대 손상 금지.
+
+### 표준 절차 (사용자 개입 없음, Claude가 직접 마무리)
 
 ```bash
-ssh -i ~/.ssh/oci_blogauto.key ubuntu@158.180.66.204
+# 1. 로컬에서 수정 후 파일별 commit + push
+git add <파일들>
+git commit -m "fix(<scope>): <subject>"
+git push origin main
+#    → GitHub Actions가 ghcr.io/jteen-lab/blogauto:stable 빌드 (3~7분)
+
+# 2. 빌드 완료 확인 후 서버에서 데이터 보존 업데이트
+ssh -i ~/.ssh/blogauto-oracle.key ubuntu@144.24.82.130
 cd ~/blogauto_v2/services/republish
-git pull origin main
-docker-compose down && docker-compose build --no-cache && docker-compose up -d
+sudo docker compose pull              # 새 이미지만 받아옴
+sudo docker compose up -d             # 컨테이너만 교체 (volume 보존)
+#    ※ 절대 `down -v` 또는 `--volumes` 옵션 쓰지 말 것
+
+# 3. 마이그레이션이 포함된 경우 (alembic 새 파일 추가됐을 때)
+sudo docker compose exec app alembic upgrade head
+
+# 4. 서버 SHA 확인 (로컬 origin/main 과 동일해야 함)
+sudo docker inspect blogauto-app-1 \
+    --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
 ```
+
+### 검증 체크리스트
+
+| 확인 항목 | 명령어 | 기댓값 |
+|---|---|---|
+| 로컬 HEAD | `git rev-parse HEAD` | 새 commit SHA |
+| origin/main | `git rev-parse origin/main` | 로컬 HEAD와 동일 |
+| 서버 image revision | `docker inspect ...image.revision` | origin/main과 동일 |
+| 컨테이너 healthy | `docker ps` | `(healthy)` 또는 운영 normal |
+| 사용자 데이터 | `docker exec postgres ... 'SELECT count(*) FROM blogs'` | 배포 전후 동일 |
+
+### 금지 명령 (데이터 손상)
+
+- ❌ `docker compose down -v` (volume 삭제)
+- ❌ `docker volume rm`, `docker system prune --volumes`
+- ❌ 서버에서 `vim`/`nano`로 코드 직접 편집 (다음 pull 때 덮어쓰여 SHA 불일치 발생)
+- ❌ 서버에서 `alembic downgrade`
+
+### 옛 서버 정보 (현재 운영)
+
+- IP: **144.24.82.130** (E2.1.Micro, ap-chuncheon-1)
+- SSH 키: `~/.ssh/blogauto-oracle.key`
+- 컨테이너: `blogauto-app-1`, `blogauto-worker-{utility,publish,generation,image}-1`, `blogauto-scheduler-1`, `blogauto-postgres-1`, `blogauto-redis-1`, `blogauto-caddy-1`
+- 이미지: `ghcr.io/jteen-lab/blogauto:stable`
+- A1.Flex 마이그레이션 완료 시 새 IP로 교체
 
 ## 개발 프로세스
 
