@@ -1,6 +1,7 @@
 """
 모듈 관리 페이지 라우터
 """
+import json
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -9,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.database import get_db_session
 from ..models.user import User
 from ..services.module_service import ModuleService
+from ..services.prompt_builder import blocks_for_template
 from ..routers.auth import get_current_user
 from ..core.logger import get_logger
 
@@ -45,7 +47,11 @@ async def modules_page(
                 "user": current_user,
                 "modules": modules,
                 "module_types": module_types,
-                "stats": stats
+                "stats": stats,
+                # 프롬프트 빌더용 블록 데이터 (모듈 폼 안의 임베드 패널에서 사용)
+                "prompt_builder_blocks_json": json.dumps(
+                    blocks_for_template(), ensure_ascii=False
+                ),
             }
         )
     except Exception as e:

@@ -56,6 +56,7 @@ from .api.growth_profile import router as growth_profile_router  # Growth Profil
 from .routers.generation_test import router as generation_test_router  # Phase D: 파이프라인 테스트
 from .routers.generation_content import router as generation_content_router  # 생성 콘텐츠 조회/삭제
 from .routers.generation_pages import router as generation_page_router  # 생성 이력 페이지
+from .routers.prompt_builder_pages import router as prompt_builder_page_router  # 프롬프트 빌더 (메뉴 미노출, URL 직접 접근)
 from .routers.dashboard_trends import router as dashboard_trends_router  # 대시보드 v2 트렌드 API
 from .routers.dashboard_logs import router as dashboard_logs_router  # 통합 동작로그 API
 
@@ -254,6 +255,7 @@ app.include_router(flows_page_router)
 app.include_router(autorun_page_router)
 app.include_router(collection_page_router)
 app.include_router(generation_page_router)  # 생성 이력 페이지
+app.include_router(prompt_builder_page_router)  # 프롬프트 빌더 (메뉴 미노출)
 
 # 정적 파일 서빙 (개발환경)
 if settings.is_development:

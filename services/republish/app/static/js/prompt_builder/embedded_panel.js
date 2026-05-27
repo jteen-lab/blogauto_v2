@@ -1,0 +1,162 @@
+/**
+ * 프롬프트 빌더 — 모듈 폼 내부 임베드 패널 HTML.
+ *
+ * 사용 방식:
+ *   - list.html 페이지가 <script id="prompt-builder-blocks-data"> 로 데이터 임베드
+ *   - prompt-form-template-sections.js 의 user_prompt_template textarea 직후에
+ *     `${window.getPromptBuilderEmbeddedHTML()}` 삽입
+ *   - Alpine.js 가 createPromptBuilderState({ mode: 'embedded', onApply: ... }) 생성
+ *   - "반영" 버튼이 onApply 콜백으로 promptModule.contentGeneration.userPromptTemplate 채움
+ */
+window.getPromptBuilderEmbeddedHTML = function () {
+    return `
+    <div class="border-t border-purple-200 pt-4"
+         x-data="createPromptBuilderState({
+             mode: 'embedded',
+             onApply: (text) => { promptModule.contentGeneration.userPromptTemplate = text; }
+         })"
+         x-init="init()">
+
+        <button type="button"
+                @click="expanded = !expanded"
+                class="flex items-center gap-2 text-sm text-purple-600 hover:text-purple-800">
+            <svg class="w-4 h-4 transition-transform"
+                 :class="expanded ? 'rotate-90' : ''"
+                 fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+            <span class="font-semibold">프롬프트 빌더</span>
+            <span class="text-xs text-gray-500">— 페르소나·독자 수준·섹션 패턴·시작 톤을 골라 위 템플릿을 자동 채움</span>
+        </button>
+
+        <div x-show="expanded" x-transition class="mt-4 space-y-4">
+
+            <!-- 빠른 프리셋 -->
+            <div class="bg-purple-50/40 rounded-lg p-3">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-sm font-semibold text-gray-800">빠른 프리셋</h3>
+                    <button type="button" @click="clearAll()"
+                            class="text-xs px-2 py-0.5 border border-red-300 text-red-600 rounded hover:bg-red-50">전체 초기화</button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <template x-for="p in presets" :key="p.code">
+                        <div class="relative group">
+                            <button type="button" @click="applyPreset(p.code)"
+                                    class="w-full text-left p-2 border rounded hover:bg-white transition-colors text-xs">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span class="font-medium text-gray-800" x-text="p.label"></span>
+                                    <span class="px-1 py-0.5 text-[10px] bg-gray-100 rounded"
+                                          x-text="p._custom ? 'CUSTOM' : p.code.toUpperCase()"></span>
+                                </div>
+                                <div class="text-[11px] text-gray-500 mt-0.5" x-text="'추천: ' + p.categories"></div>
+                            </button>
+                            <button type="button" x-show="p._custom"
+                                    @click.stop="deleteCustomPreset(p.code)"
+                                    class="absolute top-1 right-1 text-red-500 hover:text-red-700 text-xs opacity-0 group-hover:opacity-100"
+                                    title="삭제">×</button>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- 커스텀 프리셋 저장 -->
+                <div class="mt-3 flex items-center gap-2">
+                    <input type="text" x-model="newPresetName"
+                           placeholder="현재 조합을 커스텀 프리셋으로 저장할 이름"
+                           class="flex-1 px-2 py-1 border border-gray-300 rounded text-xs">
+                    <button type="button" @click="saveCustomPreset()"
+                            :disabled="!isComplete()"
+                            class="px-3 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed">
+                        프리셋 저장
+                    </button>
+                </div>
+                <div x-show="presetWarning" x-transition class="mt-2 p-2 text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded"
+                     x-text="presetWarning"></div>
+            </div>
+
+            <!-- 섹션 수 -->
+            <div class="bg-white border rounded-lg p-3">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-sm font-semibold text-gray-800">섹션 수</h3>
+                    <span class="text-xs font-mono"><span x-text="sectionCount"></span>개</span>
+                </div>
+                <input type="range" min="4" max="8" step="1" x-model.number="sectionCount" class="w-full">
+                <div class="flex items-center justify-between text-[10px] text-gray-500 mt-1">
+                    <span>4</span><span>5</span><span>6 (기본)</span><span>7</span><span>8</span>
+                </div>
+            </div>
+
+            <!-- 4축 라디오 + EDIT -->
+            ${getBuilderAxisHTML('persona', '페르소나 (어투)', 'personas')}
+            ${getBuilderAxisHTML('reader', '독자 수준', 'readers')}
+            ${getBuilderAxisHTML('pattern', '섹션 패턴', 'patterns')}
+            ${getBuilderAxisHTML('tone', '시작 톤', 'tones')}
+
+            <!-- 미리보기 + 반영 -->
+            <div class="bg-white border rounded-lg p-3">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-sm font-semibold text-gray-800">완성 프롬프트 미리보기</h3>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-500">
+                            <span x-text="charCount"></span>자 · <span x-text="lineCount"></span>줄
+                        </span>
+                        <button type="button" @click="applyToTemplate()" :disabled="!isComplete()"
+                                class="px-3 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed">
+                            <span x-show="!justApplied">사용자 프롬프트 템플릿에 반영</span>
+                            <span x-show="justApplied">반영됨!</span>
+                        </button>
+                    </div>
+                </div>
+                <div x-show="!isComplete()" class="mb-2 p-2 text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded">
+                    4개 블록을 모두 선택하면 반영 버튼이 활성화됩니다.
+                </div>
+                <textarea readonly x-ref="output" x-text="builtPrompt"
+                          class="w-full h-72 font-mono text-[11px] p-2 border rounded bg-gray-50 resize-none whitespace-pre-wrap"></textarea>
+            </div>
+        </div>
+    </div>
+    `;
+};
+
+
+/** 4축 라디오 그룹 + EDIT 영역 HTML 생성 (재사용용 내부 함수) */
+function getBuilderAxisHTML(field, title, listName) {
+    return `
+    <div class="bg-white border rounded-lg p-3">
+        <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-semibold text-gray-800">${title}</h3>
+            <div class="flex items-center gap-2">
+                <span class="text-xs text-gray-500" x-text="selectedLabel('${field}', ${listName})"></span>
+                <button type="button" @click="toggleEdit('${field}')" :disabled="!${field}"
+                        class="text-xs px-2 py-0.5 border rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                        :class="editing.${field} ? 'bg-purple-600 text-white' : 'hover:bg-gray-50'">
+                    <span x-text="editing.${field} ? '닫기' : 'EDIT'"></span>
+                </button>
+            </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <template x-for="opt in ${listName}" :key="opt.code">
+                <label class="flex items-start gap-2 p-2 border rounded cursor-pointer hover:bg-gray-50"
+                       :class="${field} === opt.code ? 'border-purple-500 bg-purple-50' : 'border-gray-200'">
+                    <input type="radio" name="${field}-pb" :value="opt.code" x-model="${field}" class="mt-0.5">
+                    <div>
+                        <div class="font-medium text-xs" x-text="opt.label"></div>
+                        <div class="text-[10px] text-gray-500 mt-0.5">
+                            <span x-text="opt.code"></span>
+                            <span x-show="opt.cluster" class="ml-1">· <span x-text="opt.cluster"></span></span>
+                        </div>
+                    </div>
+                </label>
+            </template>
+        </div>
+        <div x-show="editing.${field}" x-transition class="mt-2 p-2 bg-amber-50 border border-amber-200 rounded">
+            <div class="flex items-center justify-between mb-1 text-[11px]">
+                <span class="text-amber-800">임시 수정 — 이 세션에서만. 다른 옵션 선택 시 초기화됩니다.</span>
+                <button type="button" @click="resetOverride('${field}')"
+                        class="text-red-600 hover:underline">원본으로</button>
+            </div>
+            <textarea x-model="overrides.${field}"
+                      class="w-full h-32 p-2 text-xs border rounded font-mono bg-white"></textarea>
+        </div>
+    </div>
+    `;
+}

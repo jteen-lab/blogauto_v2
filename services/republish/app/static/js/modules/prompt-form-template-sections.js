@@ -218,6 +218,8 @@ function getPromptContentGenSection() {
 키워드: {keywords}"></textarea>
                                     </div>
 
+                                    ${typeof window !== 'undefined' && window.getPromptBuilderEmbeddedHTML ? window.getPromptBuilderEmbeddedHTML() : ''}
+
                                     <!-- 고급 설정 (접기/펼치기) -->
                                     <div class="border-t border-purple-200 pt-4">
                                         <button type="button"
