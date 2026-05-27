@@ -7,10 +7,12 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # 시스템 패키지 업데이트 및 필요한 패키지 설치
+# default-jre-headless: KoNLPy(Okt 형태소 분석)에서 JVM 필요
 RUN apt-get update && apt-get install -y \
     gcc \
     libpq-dev \
     curl \
+    default-jre-headless \
     && rm -rf /var/lib/apt/lists/*
 
 # requirements.txt 복사 및 종속성 설치
