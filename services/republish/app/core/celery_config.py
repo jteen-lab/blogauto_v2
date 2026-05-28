@@ -8,9 +8,11 @@ Celery 설정 모듈
 - utility_queue: 수집/데이터 처리
 - callback_queue: 완료 후처리
 """
+import logging
 import os
 
 from celery import Celery
+from celery.signals import worker_process_init
 from kombu import Queue
 
 # Redis URL (config.py의 redis_url 또는 환경변수)
@@ -88,3 +90,29 @@ celery_app.conf.update(
 from app.core import celery_tasks  # noqa
 from app.core import celery_publish_tasks  # noqa
 from app.core import celery_utility_tasks  # noqa
+
+
+@worker_process_init.connect
+def init_worker_mappers(**kwargs) -> None:
+    """워커 child 프로세스 부팅 시 SQLAlchemy mapper 사전 초기화.
+
+    task 실행 중 mapper 가 lazy 초기화되면, soft time limit 초과 시
+    초기화가 중단되어 mapper 가 half-initialized 상태로 깨진다. 그러면
+    같은 워커 프로세스의 이후 모든 task 가
+    "One or more mappers failed to initialize" 로 연쇄 실패한다.
+    부팅 시 미리 configure_mappers() 를 호출해 이 경로를 차단한다.
+
+    실패해도 워커는 정상 기동한다(개별 task 가 기존처럼 lazy 초기화로 fallback).
+    """
+    try:
+        import app.models  # noqa: F401 — 전체 모델 등록 (mapper 대상 확보)
+        from sqlalchemy.orm import configure_mappers
+
+        configure_mappers()
+        logging.getLogger("celery_config").info(
+            "[WORKER_INIT] SQLAlchemy mapper 사전 초기화 완료"
+        )
+    except Exception as e:  # noqa: BLE001 — 부팅 차단 방지
+        logging.getLogger("celery_config").warning(
+            "[WORKER_INIT] mapper 사전 초기화 실패(무시하고 계속): %s", e
+        )
