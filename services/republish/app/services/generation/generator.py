@@ -240,18 +240,22 @@ class ContentGenerator:
         else:
             # MainTitle.keywords 가 비어있는 transfer 경로 케이스:
             # working_title (재조합 결과) 에서 KoNLPy 로 자동 추출.
-            # 실패 시 빈 문자열로 폴백 — 글 생성 자체는 막지 않는다.
-            from .title_keyword_extractor import (
-                extract_keywords_text,
-                resolve_top_n,
-            )
-            top_n = resolve_top_n(settings)
-            keywords_text = extract_keywords_text(working_title, top_n=top_n)
-            if keywords_text:
-                logger.debug(
-                    f"[GENERATOR] 자동 키워드 추출 | title='{working_title[:30]}' "
-                    f"| top_n={top_n} | result='{keywords_text}'"
+            # 1GB RAM 환경에서 Okt JVM 메모리 부담으로 기본 비활성(설정 플래그).
+            # 비활성 시 {keywords} 는 빈 문자열 — 글 생성 자체는 막지 않는다.
+            from ...core.config import settings as app_settings
+
+            if app_settings.enable_konlpy_keywords:
+                from .title_keyword_extractor import (
+                    extract_keywords_text,
+                    resolve_top_n,
                 )
+                top_n = resolve_top_n(settings)
+                keywords_text = extract_keywords_text(working_title, top_n=top_n)
+                if keywords_text:
+                    logger.debug(
+                        f"[GENERATOR] 자동 키워드 추출 | title='{working_title[:30]}' "
+                        f"| top_n={top_n} | result='{keywords_text}'"
+                    )
 
         # 4. 글 생성
         logger.debug("[GENERATOR] 4단계 시작: AI 글 생성")

@@ -77,6 +77,13 @@ class Settings(BaseSettings):
     use_celery_publish: bool = False      # Phase 3 완료 시 True
     use_celery_utility: bool = False      # Phase 4 완료 시 True
 
+    # KoNLPy 자동 키워드 추출.
+    # 1GB RAM(E2.1.Micro) 환경에서 Okt JVM 이 메모리를 점유해 글 생성 task 가
+    # soft time limit 을 초과하는 문제로 기본 OFF. A1.Flex(24GB) 이전 후
+    # 환경변수 ENABLE_KONLPY_KEYWORDS=true 로 재활성화 가능.
+    # OFF 일 때 {keywords} 는 MainTitle.keywords(수동 입력)만 사용.
+    enable_konlpy_keywords: bool = False
+
     # 중앙 인증 시스템 (Phase C 후행 추가용 — 지금은 비활성)
     # CENTRAL_AUTH_ENABLED=true 로 켜면 모든 요청이 중앙 서버 JWT 검증을 거침.
     # 현재 단계에서는 false 유지 (코드 위치만 잡아둠 — 인증 미들웨어 자리).
