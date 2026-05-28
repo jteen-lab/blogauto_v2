@@ -16,6 +16,11 @@ from ...schemas.ai_api_key import AIProvider
 
 logger = logging.getLogger(__name__)
 
+# AI 호출 자체 타임아웃(초). Celery generate_content soft_time_limit(300s)
+# 보다 충분히 짧게 두어, AI 호출이 hang 해도 task 전체가 soft limit 에 걸려
+# SQLAlchemy mapper 를 깨뜨리는 일을 막는다.
+AI_CALL_TIMEOUT: float = 60.0
+
 
 class AIService:
     """AI API 통합 호출 서비스"""
@@ -262,7 +267,9 @@ class AIService:
         if presence_penalty is not None:
             kwargs["presence_penalty"] = presence_penalty
 
-        client = openai.AsyncOpenAI(api_key=api_key)
+        # 자체 타임아웃: Celery soft_time_limit(300s) 전에 끊어 mapper 깨짐 방지.
+        # hang 시 task 전체가 느려지는 대신 명확한 타임아웃 에러로 빠르게 실패.
+        client = openai.AsyncOpenAI(api_key=api_key, timeout=AI_CALL_TIMEOUT)
         resp = await client.chat.completions.create(**kwargs)
         return resp.choices[0].message.content.strip()
 
@@ -294,7 +301,7 @@ class AIService:
         if top_k is not None:
             kwargs["top_k"] = top_k
 
-        client = anthropic.AsyncAnthropic(api_key=api_key)
+        client = anthropic.AsyncAnthropic(api_key=api_key, timeout=AI_CALL_TIMEOUT)
         resp = await client.messages.create(**kwargs)
         return resp.content[0].text.strip()
 
@@ -335,7 +342,7 @@ class AIService:
                 "parts": [{"text": system_prompt}]
             }
 
-        async with httpx.AsyncClient(timeout=60) as client:
+        async with httpx.AsyncClient(timeout=AI_CALL_TIMEOUT) as client:
             resp = await client.post(url, json=payload)
             resp.raise_for_status()
             data = resp.json()
