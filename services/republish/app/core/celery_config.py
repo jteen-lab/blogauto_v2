@@ -12,7 +12,6 @@ import logging
 import os
 
 from celery import Celery
-from celery.signals import worker_process_init
 from kombu import Queue
 
 # Redis URL (config.py의 redis_url 또는 환경변수)
@@ -92,27 +91,25 @@ from app.core import celery_publish_tasks  # noqa
 from app.core import celery_utility_tasks  # noqa
 
 
-@worker_process_init.connect
-def init_worker_mappers(**kwargs) -> None:
-    """워커 child 프로세스 부팅 시 SQLAlchemy mapper 사전 초기화.
+# ── SQLAlchemy mapper 사전 초기화 (부모 프로세스에서 1회, fork 이전) ──
+# task 실행 중 mapper 가 lazy 초기화되면, soft time limit 초과 시 초기화가
+# 중단되어 mapper 가 half-initialized 상태로 캐시되고, 이후 모든 task 가
+# "One or more mappers failed to initialize" 로 연쇄 실패한다.
+#
+# 주의: 이 작업(import app.models + configure_mappers)은 1GB RAM 환경에서
+# swap 때문에 십수 초가 걸린다. worker_process_init(prefork child 마다 호출)에
+# 두면 4 워커 × N child 가 동시에 실행해 메모리 경쟁으로 부팅이 마비된다.
+# 따라서 celery_config 모듈 로드 시점(워커 부모 프로세스, prefork 이전)에
+# 1회만 수행하고, child 들은 fork 로 이미 초기화된 mapper 를 상속한다.
+try:
+    import app.models  # noqa: F401 — 전체 모델 등록 (mapper 대상 확보)
+    from sqlalchemy.orm import configure_mappers as _configure_mappers
 
-    task 실행 중 mapper 가 lazy 초기화되면, soft time limit 초과 시
-    초기화가 중단되어 mapper 가 half-initialized 상태로 깨진다. 그러면
-    같은 워커 프로세스의 이후 모든 task 가
-    "One or more mappers failed to initialize" 로 연쇄 실패한다.
-    부팅 시 미리 configure_mappers() 를 호출해 이 경로를 차단한다.
-
-    실패해도 워커는 정상 기동한다(개별 task 가 기존처럼 lazy 초기화로 fallback).
-    """
-    try:
-        import app.models  # noqa: F401 — 전체 모델 등록 (mapper 대상 확보)
-        from sqlalchemy.orm import configure_mappers
-
-        configure_mappers()
-        logging.getLogger("celery_config").info(
-            "[WORKER_INIT] SQLAlchemy mapper 사전 초기화 완료"
-        )
-    except Exception as e:  # noqa: BLE001 — 부팅 차단 방지
-        logging.getLogger("celery_config").warning(
-            "[WORKER_INIT] mapper 사전 초기화 실패(무시하고 계속): %s", e
-        )
+    _configure_mappers()
+    logging.getLogger("celery_config").info(
+        "[WORKER_INIT] SQLAlchemy mapper 사전 초기화 완료 (부모 1회)"
+    )
+except Exception as _e:  # noqa: BLE001 — 부팅 차단 방지
+    logging.getLogger("celery_config").warning(
+        "[WORKER_INIT] mapper 사전 초기화 실패(무시하고 계속): %s", _e
+    )
