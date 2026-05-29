@@ -115,26 +115,36 @@ async def _delete_by_keyword_kw(
 async def _delete_by_pattern(
     db: AsyncSession, pattern: re.Pattern, model: type, enabled: bool,
 ) -> int:
-    """정규식 패턴 필터로 임시제목 삭제."""
+    """정규식 패턴 필터로 임시제목 삭제 (Phase 1: 메모리 완화).
+
+    regex 는 Python 문법 의존이라 DB(~*)로 완전 이관 시 결과가 달라질
+    위험이 있어 Python re 를 유지한다. 대신:
+    - db.stream() 행 단위 스트리밍으로 전체 .all() 메모리 적재 방지
+    - 개별 DELETE N개 → id.in_() 일괄 DELETE 1회로 축소
+    """
     if not enabled:
         return 0
-    rows = await db.execute(select(model.id, model.title))
-    to_delete = [tid for tid, title in rows.all() if pattern.search(title)]
-    for tid in to_delete:
-        await db.execute(delete(model).where(model.id == tid))
+    to_delete: list[int] = []
+    stream = await db.stream(select(model.id, model.title))
+    async for tid, title in stream:
+        if title and pattern.search(title):
+            to_delete.append(tid)
+    if to_delete:
+        await db.execute(delete(model).where(model.id.in_(to_delete)))
     return len(to_delete)
 
 
 async def _delete_by_pattern_kw(
     db: AsyncSession, pattern: re.Pattern, enabled: bool,
 ) -> int:
-    """정규식 패턴 필터로 시드키워드 삭제."""
+    """정규식 패턴 필터로 시드키워드 삭제 (Phase 1: 메모리 완화)."""
     if not enabled:
         return 0
-    rows = await db.execute(
-        select(SeedKeyword.id, SeedKeyword.keyword)
-    )
-    to_delete = [kid for kid, kw in rows.all() if pattern.search(kw)]
-    for kid in to_delete:
-        await db.execute(delete(SeedKeyword).where(SeedKeyword.id == kid))
+    to_delete: list[int] = []
+    stream = await db.stream(select(SeedKeyword.id, SeedKeyword.keyword))
+    async for kid, kw in stream:
+        if kw and pattern.search(kw):
+            to_delete.append(kid)
+    if to_delete:
+        await db.execute(delete(SeedKeyword).where(SeedKeyword.id.in_(to_delete)))
     return len(to_delete)

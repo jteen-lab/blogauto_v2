@@ -15,11 +15,12 @@ from datetime import datetime
 from typing import List, Optional, Dict, Tuple, Set
 from dataclasses import dataclass
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, update, func
+from sqlalchemy import select, and_, or_, update, func
 
 from ..models.blog import Blog
 from ..models.crawled_post import CrawledPost
 from ..models.title import MainTitle
+from ..models.category import BlogCategory
 from ..core.logger import get_logger
 
 logger = get_logger("similarity_matcher", "matching.log")
@@ -81,8 +82,8 @@ class SimilarityMatcherService:
                 await self.db.commit()
             return 0, 0
 
-        # 2. 메인 타이틀 조회
-        main_titles = await self._get_main_titles()
+        # 2. 메인 타이틀 조회 (블로그 카테고리로 후보 축소 — Phase 1)
+        main_titles = await self._get_main_titles(blog_id)
         if not main_titles:
             logger.warning(f"메인 타이틀 없음 - 모두 미매칭 처리 | 블로그ID={blog_id}")
             await self._mark_all_unmatched(pending_posts)
@@ -135,14 +136,57 @@ class SimilarityMatcherService:
         )
         return list(result.scalars().all())
 
-    async def _get_main_titles(self) -> List[MainTitle]:
-        """사용 가능한 메인 타이틀 조회"""
-        result = await self.db.execute(
-            select(MainTitle).where(
-                MainTitle.status.in_(["available", "matched", "used"])
+    async def _get_main_titles(self, blog_id: int) -> List[MainTitle]:
+        """블로그 카테고리에 해당하는 메인 타이틀만 조회 (Phase 1: 범위 축소).
+
+        기존: status 조건만으로 전체 정식제목을 .all() 로딩 → 발행글 × 전체
+        제목 N×M 비교로 메모리·CPU 폭증.
+        변경: 블로그의 BlogCategory(topic/subtopic)에 속한 후보만 DB 레벨에서
+        추려 가져온다. inventory_manager 와 동일한 카테고리 필터 패턴.
+        카테고리 미설정 블로그는 기존 동작(전체)으로 폴백한다.
+        """
+        base_status = MainTitle.status.in_(["available", "matched", "used"])
+
+        bc_result = await self.db.execute(
+            select(BlogCategory).where(
+                BlogCategory.blog_id == blog_id,
+                BlogCategory.is_active.is_(True),
             )
         )
-        return list(result.scalars().all())
+        blog_categories = bc_result.scalars().all()
+
+        # 카테고리 미설정 → 전체 폴백 (기존 동작 보존)
+        if not blog_categories:
+            result = await self.db.execute(select(MainTitle).where(base_status))
+            return list(result.scalars().all())
+
+        subtopic_ids = {
+            bc.subtopic_id for bc in blog_categories if bc.subtopic_id
+        }
+        topic_only_ids = {
+            bc.topic_id for bc in blog_categories
+            if bc.topic_id and not bc.subtopic_id
+        }
+        cat_conds = []
+        if subtopic_ids:
+            cat_conds.append(MainTitle.subtopic_id.in_(list(subtopic_ids)))
+        if topic_only_ids:
+            cat_conds.append(MainTitle.topic_id.in_(list(topic_only_ids)))
+
+        # 카테고리는 있으나 topic/subtopic 추출 불가 → 전체 폴백
+        if not cat_conds:
+            result = await self.db.execute(select(MainTitle).where(base_status))
+            return list(result.scalars().all())
+
+        result = await self.db.execute(
+            select(MainTitle).where(base_status, or_(*cat_conds))
+        )
+        titles = list(result.scalars().all())
+        logger.info(
+            f"[MATCH] 후보 축소 | 블로그ID={blog_id} | "
+            f"카테고리 {len(blog_categories)}개 → 후보 제목 {len(titles)}개"
+        )
+        return titles
 
     def _tokenize_titles(
         self,

@@ -55,10 +55,19 @@ class TitleTransferService:
         temp_result = await self.db.execute(temp_query)
         temp_titles = {t.id: t for t in temp_result.scalars().all()}
 
-        # 1-2. 기존 정식 제목 조회 (중복 체크용)
-        existing_titles_query = select(MainTitle.title)
-        existing_result = await self.db.execute(existing_titles_query)
-        existing_titles = set(row[0] for row in existing_result.all())
+        # 1-2. 기존 정식 제목 조회 (중복 체크용) — Phase 1: 범위 축소
+        # 기존: 전체 정식제목 title 을 set 으로 로딩(20만 시 메모리 폭증).
+        # 변경: 전환 대상 임시제목의 title 과 겹치는 것만 IN 으로 조회.
+        # "전환 title 이 기존에 있는가" 판정 결과는 동일(회귀 없음).
+        temp_title_strings = [t.title for t in temp_titles.values()]
+        existing_titles = set()
+        if temp_title_strings:
+            existing_result = await self.db.execute(
+                select(MainTitle.title).where(
+                    MainTitle.title.in_(temp_title_strings)
+                )
+            )
+            existing_titles = set(row[0] for row in existing_result.all())
 
         # 1-3. 기존 그룹과 대표 제목 조회 (자동 그룹화용)
         groups_with_reps = []
