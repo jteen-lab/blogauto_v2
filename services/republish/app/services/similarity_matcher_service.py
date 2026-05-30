@@ -50,6 +50,12 @@ class SimilarityMatcherService:
     # 기본 매칭 임계값 (65%)
     DEFAULT_THRESHOLD = 65.0
 
+    # Phase 2: trgm 후보 추출 설정
+    # - TRGM_SIM_FLOOR: 후보로 끌어올 최소 트라이그램 유사도(낮게 둬 recall 보장)
+    # - TRGM_CANDIDATE_LIMIT: post 당 정밀 비교할 최대 후보 수
+    TRGM_SIM_FLOOR = 0.10
+    TRGM_CANDIDATE_LIMIT = 200
+
     def __init__(self, db_session: AsyncSession):
         self.db = db_session
 
@@ -82,27 +88,15 @@ class SimilarityMatcherService:
                 await self.db.commit()
             return 0, 0
 
-        # 2. 메인 타이틀 조회 (블로그 카테고리로 후보 축소 — Phase 1)
-        main_titles = await self._get_main_titles(blog_id)
-        if not main_titles:
-            logger.warning(f"메인 타이틀 없음 - 모두 미매칭 처리 | 블로그ID={blog_id}")
-            await self._mark_all_unmatched(pending_posts)
-            return 0, len(pending_posts)
+        # 2. 블로그 카테고리 조건 빌드 (Phase 1: 범위 축소)
+        cat_conds = await self._build_category_conditions(blog_id)
 
-        # 3. 메인 타이틀 토큰 캐시 생성
-        title_tokens = self._tokenize_titles(main_titles)
-
-        # 4. 배치 매칭 처리
+        # 3. 배치 매칭 처리 (Phase 2: post 별 trgm 후보 추출 + 정밀 Jaccard)
         matched_count = 0
         unmatched_count = 0
 
         for post in pending_posts:
-            result = await self._find_best_match(
-                post,
-                main_titles,
-                title_tokens,
-                threshold
-            )
+            result = await self._find_best_match(post, threshold, cat_conds)
 
             if result.is_matched:
                 post.mark_matched(result.main_title_id, result.score)
@@ -136,17 +130,13 @@ class SimilarityMatcherService:
         )
         return list(result.scalars().all())
 
-    async def _get_main_titles(self, blog_id: int) -> List[MainTitle]:
-        """블로그 카테고리에 해당하는 메인 타이틀만 조회 (Phase 1: 범위 축소).
+    async def _build_category_conditions(self, blog_id: int) -> Optional[list]:
+        """블로그 카테고리(topic/subtopic) 필터 조건 리스트 빌드 (Phase 1).
 
-        기존: status 조건만으로 전체 정식제목을 .all() 로딩 → 발행글 × 전체
-        제목 N×M 비교로 메모리·CPU 폭증.
-        변경: 블로그의 BlogCategory(topic/subtopic)에 속한 후보만 DB 레벨에서
-        추려 가져온다. inventory_manager 와 동일한 카테고리 필터 패턴.
-        카테고리 미설정 블로그는 기존 동작(전체)으로 폴백한다.
+        Returns:
+            MainTitle 에 적용할 조건 리스트(or_ 로 묶어 사용). 카테고리 미설정
+            또는 추출 불가 시 None(전체 대상 = 기존 동작 폴백).
         """
-        base_status = MainTitle.status.in_(["available", "matched", "used"])
-
         bc_result = await self.db.execute(
             select(BlogCategory).where(
                 BlogCategory.blog_id == blog_id,
@@ -154,11 +144,8 @@ class SimilarityMatcherService:
             )
         )
         blog_categories = bc_result.scalars().all()
-
-        # 카테고리 미설정 → 전체 폴백 (기존 동작 보존)
         if not blog_categories:
-            result = await self.db.execute(select(MainTitle).where(base_status))
-            return list(result.scalars().all())
+            return None
 
         subtopic_ids = {
             bc.subtopic_id for bc in blog_categories if bc.subtopic_id
@@ -172,63 +159,57 @@ class SimilarityMatcherService:
             cat_conds.append(MainTitle.subtopic_id.in_(list(subtopic_ids)))
         if topic_only_ids:
             cat_conds.append(MainTitle.topic_id.in_(list(topic_only_ids)))
+        return cat_conds or None
 
-        # 카테고리는 있으나 topic/subtopic 추출 불가 → 전체 폴백
-        if not cat_conds:
-            result = await self.db.execute(select(MainTitle).where(base_status))
-            return list(result.scalars().all())
-
-        result = await self.db.execute(
-            select(MainTitle).where(base_status, or_(*cat_conds))
-        )
-        titles = list(result.scalars().all())
-        logger.info(
-            f"[MATCH] 후보 축소 | 블로그ID={blog_id} | "
-            f"카테고리 {len(blog_categories)}개 → 후보 제목 {len(titles)}개"
-        )
-        return titles
-
-    def _tokenize_titles(
+    async def _fetch_trgm_candidates(
         self,
-        titles: List[MainTitle]
-    ) -> Dict[int, Set[str]]:
-        """메인 타이틀 토큰화 (캐시용)"""
-        tokens = {}
-        for title in titles:
-            tokens[title.id] = self._tokenize(title.title)
-        return tokens
+        post_title: str,
+        cat_conds: Optional[list],
+    ) -> List[Tuple[int, str]]:
+        """trgm 트라이그램 유사도로 후보 정식제목 추출 (Phase 2).
+
+        GIN(gin_trgm_ops) 인덱스를 사용해 post_title 과 트라이그램 유사도가
+        TRGM_SIM_FLOOR 이상인 제목을 유사도 내림차순 상위 N개만 가져온다.
+        전체 정식제목을 메모리에 올려 전수 Jaccard 하던 것을 대체.
+        """
+        base_status = MainTitle.status.in_(["available", "matched", "used"])
+        sim = func.similarity(MainTitle.title, post_title)
+        query = select(MainTitle.id, MainTitle.title).where(base_status)
+        if cat_conds:
+            query = query.where(or_(*cat_conds))
+        query = (
+            query.where(sim > self.TRGM_SIM_FLOOR)
+            .order_by(sim.desc())
+            .limit(self.TRGM_CANDIDATE_LIMIT)
+        )
+        result = await self.db.execute(query)
+        return [(row[0], row[1]) for row in result.all()]
 
     async def _find_best_match(
         self,
         post: CrawledPost,
-        main_titles: List[MainTitle],
-        title_tokens: Dict[int, Set[str]],
-        threshold: float
+        threshold: float,
+        cat_conds: Optional[list] = None,
     ) -> MatchResult:
-        """
-        크롤링 포스트에 대한 최적 매칭 찾기
+        """크롤링 포스트에 대한 최적 매칭 찾기 (Phase 2: trgm 후보 + Jaccard).
 
-        Returns:
-            MatchResult: 매칭 결과
+        1) DB trgm 으로 유사 후보만 추출(카테고리 필터 포함)
+        2) 추출된 소수 후보에 대해서만 Jaccard 정밀 비교
         """
         post_tokens = self._tokenize(post.title)
+        candidates = await self._fetch_trgm_candidates(post.title, cat_conds)
 
         best_match_id = None
         best_score = 0.0
-
-        for title in main_titles:
-            title_token_set = title_tokens.get(title.id, set())
-
-            # Jaccard 유사도 계산
-            score = self._calculate_jaccard_similarity(post_tokens, title_token_set)
-
+        for cid, ctitle in candidates:
+            score = self._calculate_jaccard_similarity(
+                post_tokens, self._tokenize(ctitle)
+            )
             if score > best_score:
                 best_score = score
-                best_match_id = title.id
+                best_match_id = cid
 
-        # 점수를 백분율로 변환
         score_percent = best_score * 100
-
         return MatchResult(
             crawled_post_id=post.id,
             main_title_id=best_match_id if score_percent >= threshold else None,

@@ -84,6 +84,9 @@ services:
       - ./media:/app/media
       - ../../shared:/app/shared
       - ./.env:/app/.env:ro
+      # 로컬 dev: alembic 마이그레이션을 호스트 파일로 직접 실행 (이미지 재빌드 없이)
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
     ports:
       - "8001:8000"
     restart: unless-stopped
