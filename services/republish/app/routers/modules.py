@@ -19,6 +19,15 @@ from ..models.module import Module
 from ..models.module_type import ModuleType
 from ..models.category import BlogCategory, Topic, SubTopic
 from ..services.module_service import ModuleService
+from ..services.in_memory_ttl_cache import (
+    cache_get as _cache_get,
+    cache_set as _cache_set,
+    cache_invalidate_prefix as _cache_invalidate_prefix,
+)
+
+# Phase 4: 충돌감지 캐시 설정
+_USED_BLOG_CAT_PREFIX = "used_blog_cat:"
+_USED_BLOG_CAT_TTL = 30.0  # 초 — 짧게 두어 stale 영향 최소화
 from ..schemas.module import (
     ModuleCreateRequest,
     ModuleUpdateRequest,
@@ -69,9 +78,18 @@ async def get_used_blog_categories(
 ) -> dict:
     """Phase 1-1: 사용 중인 블로그-카테고리 매핑 조회.
 
+    Phase 4: 사용자별·exclude 별 메모리 TTL 캐시(30초). 짧은 TTL 로 stale
+    영향 최소화. Module create/update/delete 시 명시 무효화.
     64초 회귀 진단을 위해 단계별 타이밍을 로깅한다.
-    합계가 1초 초과 시 WARNING으로 격상해 slow query 탐지를 돕는다.
     """
+    # Phase 4: 캐시 hit 시 즉시 반환
+    cache_key = (
+        f"{_USED_BLOG_CAT_PREFIX}u{current_user.id}:x{exclude_module_id or 0}"
+    )
+    cached = _cache_get(cache_key, _USED_BLOG_CAT_TTL)
+    if cached is not None:
+        return cached
+
     t0 = time.perf_counter()
     modules = await _get_prompt_modules(db, current_user.id, exclude_module_id)
     t_modules = time.perf_counter() - t0
@@ -114,7 +132,9 @@ async def get_used_blog_categories(
         logger.warning(msg)
     else:
         logger.info(msg)
-    return {"mappings": result}
+    payload = {"mappings": result}
+    _cache_set(cache_key, payload)
+    return payload
 
 
 @router.post(
@@ -137,6 +157,9 @@ async def create_module(
 
     service = ModuleService(db)
     module = await service.create_module(current_user, request)
+
+    # Phase 4: 충돌감지 캐시 무효화 (blog_category_map 변경 가능)
+    _cache_invalidate_prefix(_USED_BLOG_CAT_PREFIX)
 
     return ModuleDetailResponse.model_validate(module)
 
@@ -197,6 +220,9 @@ async def update_module(
             detail="모듈을 찾을 수 없습니다"
         )
 
+    # Phase 4: 충돌감지 캐시 무효화
+    _cache_invalidate_prefix(_USED_BLOG_CAT_PREFIX)
+
     return ModuleDetailResponse.model_validate(module)
 
 
@@ -221,6 +247,9 @@ async def copy_module(
             status_code=404,
             detail="복사할 모듈을 찾을 수 없습니다"
         )
+
+    # Phase 4: 충돌감지 캐시 무효화 (복사로 새 매핑 생성)
+    _cache_invalidate_prefix(_USED_BLOG_CAT_PREFIX)
 
     return ModuleDetailResponse.model_validate(module)
 
@@ -251,6 +280,9 @@ async def delete_module(
             status_code=404,
             detail="모듈을 찾을 수 없습니다"
         )
+
+    # Phase 4: 충돌감지 캐시 무효화
+    _cache_invalidate_prefix(_USED_BLOG_CAT_PREFIX)
 
 
 # ──────────────────────────────────────────────────────
@@ -427,6 +459,8 @@ async def release_categories(
         db, current_user.id, exclude_module_id, blog_id, target_cats,
     )
     await db.commit()
+    from ..services.in_memory_ttl_cache import cache_invalidate_prefix as _inv
+    _inv("used_blog_cat:")
     return {"success": True, "affected_modules": affected}
 
 
@@ -484,4 +518,6 @@ async def force_link(
     current_module.settings = cur_settings
     await db.commit()
 
+    from ..services.in_memory_ttl_cache import cache_invalidate_prefix as _inv
+    _inv("used_blog_cat:")
     return {"success": True, "affected_modules": affected}
