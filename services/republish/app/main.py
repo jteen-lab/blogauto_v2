@@ -57,6 +57,7 @@ from .routers.generation_test import router as generation_test_router  # Phase D
 from .routers.generation_content import router as generation_content_router  # 생성 콘텐츠 조회/삭제
 from .routers.generation_pages import router as generation_page_router  # 생성 이력 페이지
 from .routers.prompt_builder_pages import router as prompt_builder_page_router  # 프롬프트 빌더 (메뉴 미노출, URL 직접 접근)
+from .routers.task_status import router as task_status_router  # Phase 3: Celery task 상태 폴링
 from .routers.dashboard_trends import router as dashboard_trends_router  # 대시보드 v2 트렌드 API
 from .routers.dashboard_logs import router as dashboard_logs_router  # 통합 동작로그 API
 
@@ -227,6 +228,7 @@ app.include_router(google_trends_router, prefix=settings.api_v1_prefix)
 app.include_router(naver_datalab_router, prefix=settings.api_v1_prefix)
 app.include_router(google_keyword_planner_router, prefix=settings.api_v1_prefix)
 app.include_router(system_settings_router, prefix=settings.api_v1_prefix)
+app.include_router(task_status_router, prefix=settings.api_v1_prefix)  # Phase 3: Celery task 상태
 app.include_router(engine_router, prefix=settings.api_v1_prefix)
 app.include_router(data_keywords_router, prefix=settings.api_v1_prefix)
 app.include_router(data_titles_router, prefix=settings.api_v1_prefix)

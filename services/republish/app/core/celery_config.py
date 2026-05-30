@@ -89,6 +89,7 @@ celery_app.conf.update(
 from app.core import celery_tasks  # noqa
 from app.core import celery_publish_tasks  # noqa
 from app.core import celery_utility_tasks  # noqa
+from app.core import celery_match_tasks  # noqa  # Phase 3 비동기화
 
 
 # ── SQLAlchemy mapper 사전 초기화 (부모 프로세스에서 1회, fork 이전) ──

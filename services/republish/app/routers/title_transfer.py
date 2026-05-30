@@ -88,9 +88,10 @@ class TransferStatsResponse(BaseModel):
 
 # ===== API 엔드포인트 =====
 
-@router.post("/to-main", response_model=TransferResponse)
+@router.post("/to-main", response_model=None)
 async def transfer_to_main(
     data: MoveToMainRequest,
+    async_mode: bool = False,
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_user),
 ):
@@ -99,7 +100,24 @@ async def transfer_to_main(
 
     선택한 임시 제목들을 정식 제목으로 이동합니다.
     auto_group=true이면 유사도 매칭으로 자동 그룹화합니다.
+
+    Phase 3: async_mode=true 면 Celery 워커 디스패치 + task_id 반환.
     """
+    # Phase 3: 비동기 디스패치 (대량 전환의 중복체크·유사도 부하를 워커로)
+    if async_mode:
+        from ..core.celery_match_tasks import task_transfer_temp_to_main
+        task = task_transfer_temp_to_main.delay(
+            data.temp_title_ids,
+            data.auto_group,
+            data.similarity_threshold,
+        )
+        return {
+            "async": True,
+            "task_id": task.id,
+            "state": "queued",
+            "poll_url": f"/api/v1/tasks/{task.id}",
+        }
+
     try:
         result = await move_temp_to_main(
             db=db,

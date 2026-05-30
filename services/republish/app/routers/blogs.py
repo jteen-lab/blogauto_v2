@@ -792,6 +792,7 @@ async def get_blog_matching_stats(
 )
 async def auto_match_blog_posts(
     blog_id: int,
+    async_mode: bool = False,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
@@ -801,10 +802,15 @@ async def auto_match_blog_posts(
     정식제목 탭에서 블로그 선택 시 호출되어
     pending/unmatched 크롤링 포스트를 자동으로 매칭합니다.
 
-    Returns:
-        matched: 매칭 성공 수
-        unmatched: 미매칭 수
-        skipped: 건너뛴 수
+    Args:
+        async_mode: True 이면 Celery 워커로 디스패치하고 task_id 즉시 반환.
+                    프론트는 GET /api/v1/tasks/{task_id} 폴링으로 결과 확인.
+                    False(기본)는 기존 동기 호출 — 호환성 유지.
+
+    Returns (동기):
+        matched / unmatched / skipped
+    Returns (비동기):
+        async=True, task_id, state=queued
     """
     from ..services.auto_match_service import AutoMatchService
 
@@ -821,10 +827,21 @@ async def auto_match_blog_posts(
     logger.info(
         f"블로그 자동 매칭 API 요청 | "
         f"블로그ID={blog_id} | 사용자={current_user.id} | "
-        f"임계값={threshold}%"
+        f"임계값={threshold}% | async={async_mode}"
     )
 
-    # 자동 매칭 실행
+    # Phase 3: 비동기 모드 — 워커로 디스패치
+    if async_mode:
+        from ..core.celery_match_tasks import task_auto_match_blog
+        task = task_auto_match_blog.delay(blog_id, threshold)
+        return {
+            "async": True,
+            "task_id": task.id,
+            "state": "queued",
+            "poll_url": f"/api/v1/tasks/{task.id}",
+        }
+
+    # 동기 (기존 동작)
     service = AutoMatchService(db)
     result = await service.auto_match(blog_id, threshold)
 
@@ -842,14 +859,38 @@ async def auto_match_blog_posts(
 )
 async def run_blog_rematch(
     blog_id: int,
+    async_mode: bool = False,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    """블로그 재매칭 실행"""
+    """블로그 재매칭 실행
+
+    Args:
+        async_mode: True 이면 Celery 워커 디스패치 + task_id 반환 (Phase 3).
+    """
     from sqlalchemy import select, update as sql_update
     from ..models.blog import Blog
     from ..models.crawled_post import CrawledPost
     from ..services.similarity_matcher_service import SimilarityMatcherService
+
+    # Phase 3: 비동기 디스패치
+    if async_mode:
+        # 권한·임계값 확인을 위해 최소 조회만
+        blog_service = BlogService(db)
+        await blog_service.get_blog_by_id(current_user, blog_id)
+        blog = await db.get(Blog, blog_id)
+        if not blog:
+            raise HTTPException(status_code=404, detail="블로그를 찾을 수 없습니다")
+        config = blog.matching_config or {}
+        threshold = config.get("matching_threshold", 65)
+        from ..core.celery_match_tasks import task_rematch_blog
+        task = task_rematch_blog.delay(blog_id, threshold)
+        return {
+            "async": True,
+            "task_id": task.id,
+            "state": "queued",
+            "poll_url": f"/api/v1/tasks/{task.id}",
+        }
 
     # 블로그 조회 및 권한 확인
     blog_service = BlogService(db)

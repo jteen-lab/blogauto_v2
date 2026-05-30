@@ -520,10 +520,28 @@ async def remove_duplicate_filters(
     description="활성 필터를 임시제목/시드키워드에 적용하여 매칭 항목을 삭제합니다",
 )
 async def apply_filters_to_existing(
+    async_mode: bool = False,
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_user),
 ) -> dict:
-    """활성 필터를 기존 임시제목·시드키워드에 적용하여 매칭 항목 삭제."""
+    """활성 필터를 기존 임시제목·시드키워드에 적용하여 매칭 항목 삭제.
+
+    Args:
+        async_mode: True 이면 Celery 워커로 디스패치 + task_id 반환 (Phase 3).
+                    프론트는 /api/v1/tasks/{task_id} 로 폴링.
+    """
+    # Phase 3: 비동기 디스패치
+    if async_mode:
+        from ..core.celery_match_tasks import task_apply_filters
+        task = task_apply_filters.delay()
+        return {
+            "async": True,
+            "task_id": task.id,
+            "state": "queued",
+            "poll_url": f"/api/v1/tasks/{task.id}",
+        }
+
+    # 동기 (기존 동작)
     from ..services.filter_apply_service import apply_filters_to_existing_data
 
     result = await apply_filters_to_existing_data(db)
