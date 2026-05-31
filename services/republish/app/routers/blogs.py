@@ -446,6 +446,24 @@ async def sync_published_posts(
             f"{prev_count} → {result.platform_post_count}"
         )
 
+    # 5. Phase MATCH-040 C: 동기화 직후 초기 매칭을 백그라운드로 디스패치.
+    # 사용자가 정식제목 탭을 처음 열 때 30초 대기를 겪지 않도록 사전 정리.
+    try:
+        from ..core.celery_match_tasks import task_auto_match_blog
+        config = (blog.matching_config or {}) if blog else {}
+        threshold = config.get("matching_threshold", 65)
+        task = task_auto_match_blog.delay(blog_id, threshold)
+        logger.info(
+            f"[SYNC→MATCH] 초기 매칭 백그라운드 디스패치 | "
+            f"blog_id={blog_id} | task_id={task.id} | threshold={threshold}"
+        )
+    except Exception as e:
+        # 매칭 디스패치 실패는 sync 자체를 막지 않는다.
+        logger.error(
+            f"[SYNC→MATCH] 초기 매칭 디스패치 실패 | "
+            f"blog_id={blog_id} | error={e}"
+        )
+
     return {
         "success": True,
         "message": (
@@ -782,6 +800,181 @@ async def get_blog_matching_stats(
         unmatched_posts=crawled_stats.unmatched if crawled_stats else 0,
         last_matched_at=blog.last_matched_at,
     )
+
+
+@router.get(
+    "/{blog_id}/unmatched-main-titles",
+    summary="블로그 미매칭 정식제목 목록 (그룹2)",
+    description=(
+        "BlogMainTitleScan(matched=False) 카드가 있는 정식제목 = 이 블로그와 "
+        "매칭 시도했으나 실패한 정식제목 목록. 사용자 일괄 정리 도구(D) 용도."
+    ),
+    responses=responses,
+)
+async def get_blog_unmatched_main_titles(
+    blog_id: int,
+    page: int = 1,
+    size: int = 50,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """이 블로그 입장에서 그룹2(매칭 실패) 정식제목 목록 페이지네이션."""
+    from sqlalchemy import select, func
+    from ..models.title import MainTitle
+    from ..models.blog_main_title_scan import BlogMainTitleScan
+
+    blog_service = BlogService(db)
+    await blog_service.get_blog_by_id(current_user, blog_id)
+
+    base = (
+        select(MainTitle)
+        .join(
+            BlogMainTitleScan,
+            BlogMainTitleScan.main_title_id == MainTitle.id,
+        )
+        .where(
+            BlogMainTitleScan.blog_id == blog_id,
+            BlogMainTitleScan.matched.is_(False),
+        )
+        .order_by(MainTitle.id.desc())
+    )
+
+    total = (
+        await db.execute(
+            select(func.count())
+            .select_from(BlogMainTitleScan)
+            .where(
+                BlogMainTitleScan.blog_id == blog_id,
+                BlogMainTitleScan.matched.is_(False),
+            )
+        )
+    ).scalar() or 0
+
+    offset = max(0, (page - 1) * size)
+    rows = (
+        await db.execute(base.offset(offset).limit(size))
+    ).scalars().all()
+
+    items = [
+        {
+            "id": t.id,
+            "title": t.title,
+            "topic_id": t.topic_id,
+            "subtopic_id": t.subtopic_id,
+            "status": t.status,
+            "created_at": t.created_at.isoformat() if t.created_at else None,
+        }
+        for t in rows
+    ]
+
+    return {
+        "blog_id": blog_id,
+        "total": total,
+        "page": page,
+        "size": size,
+        "items": items,
+    }
+
+
+@router.get(
+    "/{blog_id}/match-counts",
+    summary="블로그 매칭 사전체크 카운트",
+    description=(
+        "블로그 선택 시 auto-match 호출 전에 호출하는 사전체크 API. "
+        "pending 발행글 수 + 미검토 그룹3 정식제목 수가 모두 0이면 매칭 스킵 가능."
+    ),
+    responses=responses,
+)
+async def get_blog_match_counts(
+    blog_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """
+    매칭 사전체크 카운트 조회.
+
+    인덱스만 사용해 ms 단위로 응답한다.
+    - pending: 매칭 안 된 신규 발행글 수 (재매칭 대상)
+    - unmatched: 매칭 시도했으나 짝 못 찾은 발행글 수 (참고용, 매칭 대상 아님)
+    - matched: 매칭 완료된 발행글 수 (참고용)
+    - unscanned_titles: 이 블로그 카테고리 ∩ 검토 카드 없는 정식제목 수 (그룹3)
+    - needs_match: pending > 0 OR unscanned_titles > 0 이면 True
+    """
+    from sqlalchemy import select, func, and_, or_
+    from ..models.crawled_post import CrawledPost
+    from ..models.title import MainTitle
+    from ..models.category import BlogCategory
+    from ..models.blog_main_title_scan import BlogMainTitleScan
+
+    # 블로그 존재/권한 확인
+    blog_service = BlogService(db)
+    await blog_service.get_blog_by_id(current_user, blog_id)
+
+    # 1) CrawledPost 매칭 상태별 카운트 (ix_crawled_post_blog_status 활용)
+    post_counts_query = select(
+        CrawledPost.match_status,
+        func.count(CrawledPost.id),
+    ).where(CrawledPost.blog_id == blog_id).group_by(CrawledPost.match_status)
+    post_counts = {
+        row[0]: row[1]
+        for row in (await db.execute(post_counts_query)).all()
+    }
+    pending_count = post_counts.get("pending", 0)
+    unmatched_count = post_counts.get("unmatched", 0)
+    matched_count = post_counts.get("matched", 0)
+
+    # 2) 블로그 카테고리 추출
+    bc_result = await db.execute(
+        select(BlogCategory).where(
+            BlogCategory.blog_id == blog_id,
+            BlogCategory.is_active.is_(True),
+        )
+    )
+    blog_categories = bc_result.scalars().all()
+    subtopic_ids = {bc.subtopic_id for bc in blog_categories if bc.subtopic_id}
+    topic_only_ids = {
+        bc.topic_id for bc in blog_categories
+        if bc.topic_id and not bc.subtopic_id
+    }
+
+    # 3) 카테고리 필터된 정식제목 수
+    base_filter = MainTitle.status.in_(["available", "matched", "used"])
+    cat_conditions = []
+    if subtopic_ids:
+        cat_conditions.append(MainTitle.subtopic_id.in_(list(subtopic_ids)))
+    if topic_only_ids:
+        cat_conditions.append(MainTitle.topic_id.in_(list(topic_only_ids)))
+
+    candidate_subq = select(MainTitle.id).where(base_filter)
+    if cat_conditions:
+        candidate_subq = candidate_subq.where(or_(*cat_conditions))
+
+    # 4) 그룹3 (검토 카드 없는 후보 정식제목) 수 — 후보 ID 차집합 방식
+    candidate_ids = list((await db.execute(candidate_subq)).scalars().all())
+    if candidate_ids:
+        scanned_ids = set(
+            (await db.execute(
+                select(BlogMainTitleScan.main_title_id).where(
+                    BlogMainTitleScan.blog_id == blog_id,
+                    BlogMainTitleScan.main_title_id.in_(candidate_ids),
+                )
+            )).scalars().all()
+        )
+        unscanned_titles_count = len(candidate_ids) - len(scanned_ids)
+    else:
+        unscanned_titles_count = 0
+
+    needs_match = pending_count > 0 or unscanned_titles_count > 0
+
+    return {
+        "blog_id": blog_id,
+        "pending": pending_count,
+        "unmatched": unmatched_count,
+        "matched": matched_count,
+        "unscanned_titles": unscanned_titles_count,
+        "candidate_titles": len(candidate_ids),
+        "needs_match": needs_match,
+    }
 
 
 @router.post(
