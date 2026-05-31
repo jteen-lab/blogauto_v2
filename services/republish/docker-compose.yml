@@ -122,6 +122,14 @@ services:
       - ../../shared:/app/shared
       - ./.env:/app/.env:ro
     restart: unless-stopped
+    # 이미지의 HEALTHCHECK(curl localhost:8000) 는 app 전용. 워커는 8000 미오픈.
+    # celery ping 으로 워커 자체 상태 확인.
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.core.celery_config inspect ping -d generation@$(hostname) -t 10 >/dev/null 2>&1 || exit 1"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 30s
     networks:
       - blogauto_network
 
@@ -149,6 +157,12 @@ services:
       - ../../shared:/app/shared
       - ./.env:/app/.env:ro
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.core.celery_config inspect ping -d publish@$(hostname) -t 10 >/dev/null 2>&1 || exit 1"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 30s
     networks:
       - blogauto_network
 
@@ -176,6 +190,12 @@ services:
       - ../../shared:/app/shared
       - ./.env:/app/.env:ro
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.core.celery_config inspect ping -d image@$(hostname) -t 10 >/dev/null 2>&1 || exit 1"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 30s
     networks:
       - blogauto_network
 
@@ -203,6 +223,12 @@ services:
       - ../../shared:/app/shared
       - ./.env:/app/.env:ro
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.core.celery_config inspect ping -d utility@$(hostname) -t 10 >/dev/null 2>&1 || exit 1"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 30s
     networks:
       - blogauto_network
 
