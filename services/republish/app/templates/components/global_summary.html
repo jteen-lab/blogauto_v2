@@ -217,13 +217,15 @@
                 </select>
                 <span x-show="logBlogList.length === 0" class="text-gray-600 text-[10px]">(목록 로드 중)</span>
 
-                <!-- 액션 라디오 (발행/재발행/생성 등) -->
+                <!-- 액션 라디오 (발행/재발행/생성/수집/데이터 등) -->
                 <span class="text-gray-500 ml-2">액션:</span>
                 <template x-for="a in [
                     {key:'',label:'전체',cls:'bg-gray-600 text-white'},
                     {key:'publish',label:'발행',cls:'bg-blue-700 text-white'},
                     {key:'republish',label:'재발행',cls:'bg-violet-700 text-white'},
                     {key:'generate',label:'생성',cls:'bg-emerald-700 text-white'},
+                    {key:'collect',label:'수집',cls:'bg-amber-700 text-white'},
+                    {key:'data',label:'데이터',cls:'bg-teal-700 text-white'},
                     {key:'queue_publish',label:'발행 큐',cls:'bg-blue-900 text-white'},
                     {key:'queue_republish',label:'재발행 큐',cls:'bg-violet-900 text-white'},
                     {key:'queue_generate',label:'생성 큐',cls:'bg-emerald-900 text-white'},
