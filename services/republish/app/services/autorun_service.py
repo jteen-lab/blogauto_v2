@@ -85,15 +85,18 @@ class AutorunService:
             paused_flows = [f for f in flows if f.status == FlowStatus.PAUSED]
             inactive_flows = [f for f in flows if f.status == FlowStatus.INACTIVE]
 
+            # FES 일괄 조회 (자동 paused 사유 표시용)
+            fes_by_flow = await self._load_fes_summary([f.id for f in flows])
+
             # 요약 정보 생성
             summary = await self._build_status_summary(user.id, flows)
 
             logger.info(f"[GET_AUTORUN_STATUS] 총 {len(flows)}개 플로우 (활성: {len(active_flows)}, 일시정지: {len(paused_flows)}, 비활성: {len(inactive_flows)})")
 
             return AutorunFlowListResponse(
-                active_flows=[self._flow_to_execution_info(f) for f in active_flows],
-                paused_flows=[self._flow_to_execution_info(f) for f in paused_flows],
-                inactive_flows=[self._flow_to_execution_info(f) for f in inactive_flows],
+                active_flows=[self._flow_to_execution_info(f, fes_by_flow.get(f.id)) for f in active_flows],
+                paused_flows=[self._flow_to_execution_info(f, fes_by_flow.get(f.id)) for f in paused_flows],
+                inactive_flows=[self._flow_to_execution_info(f, fes_by_flow.get(f.id)) for f in inactive_flows],
                 summary=summary
             )
 
@@ -143,7 +146,46 @@ class AutorunService:
             next_execution_flow_name=next_execution_flow_name
         )
 
-    def _flow_to_execution_info(self, flow: Flow) -> Dict[str, Any]:
+    async def _load_fes_summary(self, flow_ids: List[int]) -> Dict[int, Dict[str, Any]]:
+        """flow_id 별 자동 paused 사유 요약을 1 회 쿼리로 일괄 조회.
+
+        Returns: {flow_id: {"auto_paused": bool, "max_failures": int,
+                            "last_paused_at": datetime|None,
+                            "paused_actions": [str, ...]}}
+        """
+        if not flow_ids:
+            return {}
+        from ..models.flow_execution_state import FlowExecutionState
+        q = select(FlowExecutionState).where(
+            FlowExecutionState.flow_id.in_(flow_ids)
+        )
+        rows = (await self.db.execute(q)).scalars().all()
+        out: Dict[int, Dict[str, Any]] = {}
+        for r in rows:
+            entry = out.setdefault(r.flow_id, {
+                "auto_paused": False,
+                "max_failures": 0,
+                "last_paused_at": None,
+                "paused_actions": [],
+            })
+            if (r.consecutive_failures or 0) > entry["max_failures"]:
+                entry["max_failures"] = r.consecutive_failures or 0
+            if r.is_paused:
+                entry["auto_paused"] = True
+                if r.action_type and r.action_type not in entry["paused_actions"]:
+                    entry["paused_actions"].append(r.action_type)
+                if r.paused_at and (
+                    entry["last_paused_at"] is None
+                    or r.paused_at > entry["last_paused_at"]
+                ):
+                    entry["last_paused_at"] = r.paused_at
+        return out
+
+    def _flow_to_execution_info(
+        self,
+        flow: Flow,
+        fes_summary: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         """Flow를 FlowExecutionInfo 형태로 변환"""
         # 모듈 링크 정보 구성
         module_links = []
@@ -182,6 +224,12 @@ class AutorunService:
                     } if link.blog else None
                 })
 
+        # FES 기반 자동 paused 사유 노출
+        auto_paused = bool(fes_summary and fes_summary.get("auto_paused"))
+        consecutive_failures = (fes_summary or {}).get("max_failures", 0)
+        paused_at = (fes_summary or {}).get("last_paused_at")
+        paused_actions = (fes_summary or {}).get("paused_actions", [])
+
         return {
             "id": flow.id,
             "name": flow.name,
@@ -193,9 +241,13 @@ class AutorunService:
             "blog_links": blog_links,
             "next_execution": None,  # 스케줄러에서 계산
             "last_execution": None,  # execution_log에서 조회
-            "paused_at": None,  # 일시정지 시간
+            "paused_at": paused_at.isoformat() if paused_at else None,
             "execution_count": 0,  # execution_log에서 계산
-            "success_rate": 0.0  # execution_log에서 계산
+            "success_rate": 0.0,  # execution_log에서 계산
+            # MATCH-040 우선순위3: 자동 paused 사유 노출
+            "auto_paused": auto_paused,
+            "consecutive_failures": consecutive_failures,
+            "paused_actions": paused_actions,
         }
 
     # ===========================================
