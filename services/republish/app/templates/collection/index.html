@@ -1026,7 +1026,7 @@ function dataManagementApp() {
             }
         },
 
-        // MATCH-040 D: 미매칭 정식제목(그룹2) 정리 모달
+        // MATCH-040 D: 미매칭 발행글 정리 모달 (CrawledPost 기준)
         async openUnmatchedTitlesDialog() {
             if (!this.selectedBlogId) {
                 alert('블로그를 먼저 선택하세요.');
@@ -1035,7 +1035,7 @@ function dataManagementApp() {
             this.unmatchedSelectedIds = [];
             try {
                 const res = await fetch(
-                    `${API_BASE}/blogs/${this.selectedBlogId}/unmatched-main-titles?page=1&size=200`,
+                    `${API_BASE}/blogs/${this.selectedBlogId}/crawled-posts?match_status=unmatched&page=1&size=200`,
                     { credentials: 'include' }
                 );
                 if (!res.ok) throw new Error('목록 조회 실패');
@@ -1044,43 +1044,72 @@ function dataManagementApp() {
                 this.unmatchedTitlesTotal = data.total || 0;
                 this.showUnmatchedDialog = true;
             } catch (e) {
-                alert('미매칭 정식제목 목록을 불러오지 못했습니다: ' + e.message);
+                alert('미매칭 발행글 목록을 불러오지 못했습니다: ' + e.message);
+            }
+        },
+
+        async bulkPromoteUnmatchedToMain() {
+            if (this.unmatchedSelectedIds.length === 0) return;
+            if (!confirm(`선택한 ${this.unmatchedSelectedIds.length}개 발행글의 제목을 정식제목으로 등록하고 곧바로 매칭 완료 처리합니다. 진행할까요?`)) return;
+            try {
+                const res = await fetch(
+                    `${API_BASE}/blogs/${this.selectedBlogId}/unmatched-posts/promote-to-main`,
+                    {
+                        method: 'POST',
+                        credentials: 'include',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ post_ids: this.unmatchedSelectedIds }),
+                    }
+                );
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || '정식제목 등록 실패');
+                alert(data.message || `${data.promoted}개 정식제목 등록 완료`);
+                this.showUnmatchedDialog = false;
+                this.loadMatchingPairs();
+            } catch (e) {
+                alert('정식제목 등록 실패: ' + e.message);
             }
         },
 
         async bulkDemoteUnmatchedToTemp() {
             if (this.unmatchedSelectedIds.length === 0) return;
-            if (!confirm(`${this.unmatchedSelectedIds.length}개를 임시제목으로 강등합니다. 진행할까요?`)) return;
+            if (!confirm(`${this.unmatchedSelectedIds.length}개 발행글 제목을 임시제목으로 등록합니다. 진행할까요?`)) return;
             try {
-                const res = await fetch(`${API_BASE}/titles/transfer/to-temp`, {
-                    method: 'POST',
-                    credentials: 'include',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ title_ids: this.unmatchedSelectedIds }),
-                });
+                const res = await fetch(
+                    `${API_BASE}/blogs/${this.selectedBlogId}/unmatched-posts/promote-to-temp`,
+                    {
+                        method: 'POST',
+                        credentials: 'include',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ post_ids: this.unmatchedSelectedIds }),
+                    }
+                );
                 const data = await res.json();
-                if (!res.ok) throw new Error(data.detail || '강등 실패');
-                alert(data.message || `${data.moved}개 강등 완료`);
+                if (!res.ok) throw new Error(data.detail || '임시제목 등록 실패');
+                alert(data.message || `${data.created}개 임시제목 등록 완료`);
                 this.showUnmatchedDialog = false;
                 this.loadMatchingPairs();
             } catch (e) {
-                alert('강등 실패: ' + e.message);
+                alert('임시제목 등록 실패: ' + e.message);
             }
         },
 
         async bulkDeleteUnmatchedTitles() {
             if (this.unmatchedSelectedIds.length === 0) return;
-            if (!confirm(`${this.unmatchedSelectedIds.length}개를 영구 삭제합니다. 다른 블로그에도 영향을 줍니다. 진행할까요?`)) return;
+            if (!confirm(`${this.unmatchedSelectedIds.length}개 발행글을 영구 삭제합니다. 진행할까요?`)) return;
             try {
-                let ok = 0, fail = 0;
-                for (const id of this.unmatchedSelectedIds) {
-                    const r = await fetch(`${API_BASE}/titles/${id}?permanent=true`, {
-                        method: 'DELETE',
+                const res = await fetch(
+                    `${API_BASE}/blogs/${this.selectedBlogId}/unmatched-posts/delete`,
+                    {
+                        method: 'POST',
                         credentials: 'include',
-                    });
-                    if (r.ok) ok++; else fail++;
-                }
-                alert(`삭제 완료: ${ok}개 성공, ${fail}개 실패`);
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ post_ids: this.unmatchedSelectedIds }),
+                    }
+                );
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || '삭제 실패');
+                alert(data.message || `${data.deleted}개 삭제 완료`);
                 this.showUnmatchedDialog = false;
                 this.loadMatchingPairs();
             } catch (e) {
