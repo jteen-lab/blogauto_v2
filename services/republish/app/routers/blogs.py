@@ -11,6 +11,7 @@ Features:
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 
@@ -873,6 +874,191 @@ async def get_blog_unmatched_main_titles(
         "page": page,
         "size": size,
         "items": items,
+    }
+
+
+class _BulkPostIdsRequest(BaseModel):
+    """미매칭 발행글 일괄 처리 요청."""
+    post_ids: List[int]
+
+
+@router.post(
+    "/{blog_id}/unmatched-posts/promote-to-main",
+    summary="미매칭 발행글을 정식제목으로 승급 + 매칭 (V1 기능)",
+    responses=responses,
+)
+async def promote_unmatched_posts_to_main(
+    blog_id: int,
+    body: _BulkPostIdsRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """선택한 미매칭 발행글 각각에 대해:
+
+    1) 발행글 제목으로 새 MainTitle 생성 (블로그 첫 활성 카테고리 따름)
+    2) CrawledPost.match_status='matched' + matched_main_title_id 부여
+    3) BlogMainTitleScan(matched=True) 카드 등록 → 다음 사전체크 0초 유지
+    """
+    from sqlalchemy import select
+    from ..models.crawled_post import CrawledPost
+    from ..models.title import MainTitle
+    from ..models.category import BlogCategory
+    from ..models.blog_main_title_scan import BlogMainTitleScan
+    from datetime import datetime as _dt
+
+    blog_service = BlogService(db)
+    await blog_service.get_blog_by_id(current_user, blog_id)
+
+    # 블로그 첫 활성 카테고리 (분류 시드)
+    bc_row = (
+        await db.execute(
+            select(BlogCategory).where(
+                BlogCategory.blog_id == blog_id,
+                BlogCategory.is_active.is_(True),
+            ).limit(1)
+        )
+    ).scalar_one_or_none()
+    seed_topic = bc_row.topic_id if bc_row else None
+    seed_subtopic = bc_row.subtopic_id if bc_row else None
+
+    posts = (
+        await db.execute(
+            select(CrawledPost).where(
+                CrawledPost.blog_id == blog_id,
+                CrawledPost.id.in_(body.post_ids),
+                CrawledPost.match_status == "unmatched",
+            )
+        )
+    ).scalars().all()
+
+    promoted = 0
+    errors: list[str] = []
+    now = _dt.utcnow()
+    for post in posts:
+        try:
+            new_title = MainTitle(
+                title=post.title,
+                status="matched",
+                topic_id=seed_topic,
+                subtopic_id=seed_subtopic,
+            )
+            db.add(new_title)
+            await db.flush()
+            post.mark_matched(new_title.id, 100.0)
+            db.add(BlogMainTitleScan(
+                blog_id=blog_id,
+                main_title_id=new_title.id,
+                matched=True,
+                scanned_at=now,
+            ))
+            promoted += 1
+        except Exception as e:
+            errors.append(f"post_id={post.id}: {e}")
+
+    await db.commit()
+    logger.info(
+        f"[PROMOTE-MAIN] blog={blog_id} | promoted={promoted}/{len(posts)} | "
+        f"requested={len(body.post_ids)} | errors={len(errors)}"
+    )
+    return {
+        "success": True,
+        "promoted": promoted,
+        "requested": len(body.post_ids),
+        "errors": errors,
+        "message": f"{promoted}개 발행글이 정식제목으로 등록되어 매칭 완료되었습니다.",
+    }
+
+
+@router.post(
+    "/{blog_id}/unmatched-posts/promote-to-temp",
+    summary="미매칭 발행글 제목을 임시제목으로 등록",
+    responses=responses,
+)
+async def promote_unmatched_posts_to_temp(
+    blog_id: int,
+    body: _BulkPostIdsRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """선택한 미매칭 발행글 제목을 TempTitle 로 복제 등록.
+
+    CrawledPost 자체는 그대로 둔다(unmatched 유지). 사용자가 필요 시 별도로
+    영구 삭제 액션을 사용한다.
+    """
+    from sqlalchemy import select
+    from ..models.crawled_post import CrawledPost
+    from ..models.title import TempTitle
+
+    blog_service = BlogService(db)
+    await blog_service.get_blog_by_id(current_user, blog_id)
+
+    posts = (
+        await db.execute(
+            select(CrawledPost).where(
+                CrawledPost.blog_id == blog_id,
+                CrawledPost.id.in_(body.post_ids),
+                CrawledPost.match_status == "unmatched",
+            )
+        )
+    ).scalars().all()
+
+    created = 0
+    errors: list[str] = []
+    for post in posts:
+        try:
+            db.add(TempTitle(title=post.title, status="new"))
+            created += 1
+        except Exception as e:
+            errors.append(f"post_id={post.id}: {e}")
+
+    await db.commit()
+    logger.info(
+        f"[PROMOTE-TEMP] blog={blog_id} | created={created}/{len(posts)}"
+    )
+    return {
+        "success": True,
+        "created": created,
+        "requested": len(body.post_ids),
+        "errors": errors,
+        "message": f"{created}개 임시제목이 등록되었습니다.",
+    }
+
+
+@router.post(
+    "/{blog_id}/unmatched-posts/delete",
+    summary="미매칭 발행글 영구 삭제 (CrawledPost row 삭제)",
+    responses=responses,
+)
+async def delete_unmatched_posts(
+    blog_id: int,
+    body: _BulkPostIdsRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """선택한 미매칭 발행글의 CrawledPost row 영구 삭제."""
+    from sqlalchemy import delete as sql_delete
+    from ..models.crawled_post import CrawledPost
+
+    blog_service = BlogService(db)
+    await blog_service.get_blog_by_id(current_user, blog_id)
+
+    result = await db.execute(
+        sql_delete(CrawledPost).where(
+            CrawledPost.blog_id == blog_id,
+            CrawledPost.id.in_(body.post_ids),
+            CrawledPost.match_status == "unmatched",
+        )
+    )
+    deleted = result.rowcount or 0
+    await db.commit()
+    logger.info(
+        f"[DELETE-UNMATCHED] blog={blog_id} | deleted={deleted}"
+    )
+    return {
+        "success": True,
+        "deleted": deleted,
+        "requested": len(body.post_ids),
+        "message": f"{deleted}개 발행글이 삭제되었습니다.",
     }
 
 
