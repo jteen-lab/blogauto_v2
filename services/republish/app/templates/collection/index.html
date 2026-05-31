@@ -650,6 +650,14 @@ function dataManagementApp() {
         selectedBlogId: '',
         matchingSummary: null,
         matchingFilter: 'all',  // 'all' | 'matched' | 'unmatched' | 'unmatched_crawled'
+        // MATCH-040: 매칭 진행 표시 상태
+        isMatching: false,
+        matchProgressText: '',
+        // MATCH-040 D: 미매칭 정식제목 정리 모달
+        showUnmatchedDialog: false,
+        unmatchedTitlesItems: [],
+        unmatchedTitlesTotal: 0,
+        unmatchedSelectedIds: [],
         blogMatchingConfig: null,  // 블로그 매칭 설정
         unmatchedCrawledPosts: [],  // 미매칭 크롤링 포스트 목록
         selectedUnmatchedCrawled: [],  // 선택된 미매칭 크롤링 포스트 ID
@@ -1018,7 +1026,69 @@ function dataManagementApp() {
             }
         },
 
-        // Phase 2-2: 매칭 페어 및 요약 로드
+        // MATCH-040 D: 미매칭 정식제목(그룹2) 정리 모달
+        async openUnmatchedTitlesDialog() {
+            if (!this.selectedBlogId) {
+                alert('블로그를 먼저 선택하세요.');
+                return;
+            }
+            this.unmatchedSelectedIds = [];
+            try {
+                const res = await fetch(
+                    `${API_BASE}/blogs/${this.selectedBlogId}/unmatched-main-titles?page=1&size=200`,
+                    { credentials: 'include' }
+                );
+                if (!res.ok) throw new Error('목록 조회 실패');
+                const data = await res.json();
+                this.unmatchedTitlesItems = data.items || [];
+                this.unmatchedTitlesTotal = data.total || 0;
+                this.showUnmatchedDialog = true;
+            } catch (e) {
+                alert('미매칭 정식제목 목록을 불러오지 못했습니다: ' + e.message);
+            }
+        },
+
+        async bulkDemoteUnmatchedToTemp() {
+            if (this.unmatchedSelectedIds.length === 0) return;
+            if (!confirm(`${this.unmatchedSelectedIds.length}개를 임시제목으로 강등합니다. 진행할까요?`)) return;
+            try {
+                const res = await fetch(`${API_BASE}/titles/transfer/to-temp`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title_ids: this.unmatchedSelectedIds }),
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || '강등 실패');
+                alert(data.message || `${data.moved}개 강등 완료`);
+                this.showUnmatchedDialog = false;
+                this.loadMatchingPairs();
+            } catch (e) {
+                alert('강등 실패: ' + e.message);
+            }
+        },
+
+        async bulkDeleteUnmatchedTitles() {
+            if (this.unmatchedSelectedIds.length === 0) return;
+            if (!confirm(`${this.unmatchedSelectedIds.length}개를 영구 삭제합니다. 다른 블로그에도 영향을 줍니다. 진행할까요?`)) return;
+            try {
+                let ok = 0, fail = 0;
+                for (const id of this.unmatchedSelectedIds) {
+                    const r = await fetch(`${API_BASE}/titles/${id}?permanent=true`, {
+                        method: 'DELETE',
+                        credentials: 'include',
+                    });
+                    if (r.ok) ok++; else fail++;
+                }
+                alert(`삭제 완료: ${ok}개 성공, ${fail}개 실패`);
+                this.showUnmatchedDialog = false;
+                this.loadMatchingPairs();
+            } catch (e) {
+                alert('삭제 실패: ' + e.message);
+            }
+        },
+
+        // Phase 2-2 + MATCH-040: 매칭 페어 및 요약 로드 (사전체크 가드 포함)
         async loadMatchingPairs() {
             if (!this.selectedBlogId) {
                 this.matchingSummary = null;
@@ -1026,16 +1096,39 @@ function dataManagementApp() {
                 this.blogMatchingConfig = null;
                 this.unmatchedCrawledPosts = [];
                 this.selectedUnmatchedCrawled = [];
+                this.isMatching = false;
+                this.matchProgressText = '';
                 this.loadMainTitles();
                 return;
             }
 
             try {
-                // V3 자동 매칭 실행 (크롤링 포스트와 정식제목 유사도 매칭)
-                await fetch(
-                    `${API_BASE}/blogs/${this.selectedBlogId}/auto-match`,
-                    { method: 'POST', credentials: 'include' }
+                // MATCH-040: 사전체크 — pending 발행글 또는 미검토 정식제목 있을 때만 매칭
+                const countsRes = await fetch(
+                    `${API_BASE}/blogs/${this.selectedBlogId}/match-counts`,
+                    { credentials: 'include' }
                 );
+                let needsMatch = true;
+                let matchTargetText = '';
+                if (countsRes.ok) {
+                    const counts = await countsRes.json();
+                    needsMatch = !!counts.needs_match;
+                    matchTargetText = `신규 ${counts.pending}건 · 새 정식제목 ${counts.unscanned_titles}건`;
+                    console.log('[MATCH-040] 사전체크', counts);
+                }
+
+                if (needsMatch) {
+                    this.isMatching = true;
+                    this.matchProgressText = `매칭 중... (${matchTargetText})`;
+                    await fetch(
+                        `${API_BASE}/blogs/${this.selectedBlogId}/auto-match`,
+                        { method: 'POST', credentials: 'include' }
+                    );
+                    this.isMatching = false;
+                    this.matchProgressText = '';
+                } else {
+                    console.log('[MATCH-040] 사전체크 통과 — 매칭 스킵');
+                }
 
                 // 매칭 요약 로드 (auto-match 결과 반영)
                 const summaryRes = await fetch(
@@ -1057,6 +1150,8 @@ function dataManagementApp() {
                 }
             } catch (e) {
                 console.error('매칭 요약 로드 실패:', e);
+                this.isMatching = false;
+                this.matchProgressText = '';
             }
 
             // 제목 목록 다시 로드
