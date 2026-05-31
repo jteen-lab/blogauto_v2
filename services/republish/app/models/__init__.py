@@ -71,6 +71,9 @@ from .domain_blacklist import DomainBlacklist
 from .generation_history import GenerationHistory
 from .blog_growth_setting import BlogGrowthSetting
 
+# Phase MATCH-040: 블로그 × 정식제목 검토 카드
+from .blog_main_title_scan import BlogMainTitleScan
+
 __all__ = [
     # Core models
     "User",
@@ -133,4 +136,6 @@ __all__ = [
     # Phase G-1: Generation models
     "GenerationHistory",
     "BlogGrowthSetting",
+    # Phase MATCH-040: 검토 카드
+    "BlogMainTitleScan",
 ]
