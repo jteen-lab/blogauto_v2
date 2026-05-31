@@ -778,6 +778,12 @@ async def update_main_title(
     if not title:
         raise HTTPException(status_code=404, detail="제목을 찾을 수 없습니다")
 
+    # Phase MATCH-040: 제목 텍스트가 실제로 바뀌었으면 검토 카드 전체 무효화
+    text_changed = (
+        data.title is not None
+        and data.title != title.title
+    )
+
     if data.title is not None:
         title.title = data.title
     if data.category_id is not None:
@@ -788,6 +794,19 @@ async def update_main_title(
         title.is_group_representative = data.is_group_representative
     if data.status is not None:
         title.status = data.status
+
+    if text_changed:
+        from sqlalchemy import delete as sql_delete
+        from ..models.blog_main_title_scan import BlogMainTitleScan
+        del_result = await db.execute(
+            sql_delete(BlogMainTitleScan).where(
+                BlogMainTitleScan.main_title_id == title_id
+            )
+        )
+        logger.info(
+            f"[MATCH-040] 정식제목 텍스트 변경 → 검토 카드 무효화 | "
+            f"title_id={title_id} | deleted={del_result.rowcount}"
+        )
 
     await db.commit()
     await db.refresh(title)
