@@ -112,22 +112,22 @@
                     :class="matchingFilter === 'unmatched' ? 'btn-primary' : 'bg-white text-gray-600 hover:bg-gray-100'">
                 독립포스트
             </button>
-            <!-- MATCH-040 D: 미매칭 정식제목 일괄 정리 -->
+            <!-- MATCH-040 D: 미매칭 발행글 일괄 정리 -->
             <button @click="openUnmatchedTitlesDialog()"
                     class="ml-auto px-3 py-1.5 rounded-full text-xs font-medium bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100">
-                미매칭 정식제목 정리
+                미매칭 발행글 정리
             </button>
         </div>
     </div>
 
-    <!-- MATCH-040 D: 미매칭 정식제목(그룹2) 일괄 정리 모달 -->
+    <!-- MATCH-040 D: 미매칭 발행글 일괄 정리 모달 -->
     <div x-show="showUnmatchedDialog" x-cloak
          class="fixed inset-0 z-50 bg-black bg-opacity-40 flex items-center justify-center p-4"
          @click.self="showUnmatchedDialog = false">
         <div class="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[80vh] flex flex-col">
             <div class="px-5 py-3 border-b border-gray-200 flex items-center justify-between">
                 <h3 class="text-base font-semibold text-gray-800">
-                    이 블로그와 매칭 실패한 정식제목 (그룹2)
+                    이 블로그의 미매칭 발행글
                     <span class="text-xs text-gray-500 ml-2"
                           x-text="'총 ' + unmatchedTitlesTotal + '개'"></span>
                 </h3>
@@ -139,14 +139,14 @@
                 </button>
             </div>
             <div class="px-5 py-3 text-xs text-gray-600 bg-amber-50 border-b border-amber-200">
-                이 블로그의 발행글 중 어디에도 짝이 없는 정식제목입니다.
-                필요 없으면 임시제목으로 강등하거나 영구 삭제할 수 있습니다.
-                삭제하면 다른 블로그의 매칭에서도 사라집니다.
+                블로그에 발행됐지만 정식제목과 짝이 없는 글입니다.
+                <b class="text-blue-700">정식제목 등록</b>을 누르면 이 글의 제목이 새 정식제목으로 등록되고 곧바로 매칭 완료 상태가 됩니다.
+                필요 없으면 임시제목으로 등록하거나 영구 삭제할 수 있습니다.
             </div>
             <div class="overflow-y-auto flex-1 px-5 py-3">
                 <template x-if="unmatchedTitlesItems.length === 0">
                     <div class="text-center text-sm text-gray-500 py-8">
-                        정리할 미매칭 정식제목이 없습니다.
+                        정리할 미매칭 발행글이 없습니다.
                     </div>
                 </template>
                 <template x-for="item in unmatchedTitlesItems" :key="item.id">
@@ -156,6 +156,10 @@
                                x-model="unmatchedSelectedIds"
                                class="w-4 h-4">
                         <span class="text-sm text-gray-800 flex-1" x-text="item.title"></span>
+                        <a :href="item.url" target="_blank" rel="noopener"
+                           x-show="item.url"
+                           @click.stop
+                           class="text-xs text-blue-500 hover:underline">열기</a>
                         <span class="text-xs text-gray-400" x-text="'#' + item.id"></span>
                     </label>
                 </template>
@@ -165,10 +169,15 @@
                     선택 <span class="font-semibold" x-text="unmatchedSelectedIds.length"></span>개
                 </div>
                 <div class="flex items-center gap-2">
+                    <button @click="bulkPromoteUnmatchedToMain()"
+                            :disabled="unmatchedSelectedIds.length === 0"
+                            class="px-3 py-1.5 rounded text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                        정식제목 등록
+                    </button>
                     <button @click="bulkDemoteUnmatchedToTemp()"
                             :disabled="unmatchedSelectedIds.length === 0"
                             class="px-3 py-1.5 rounded text-xs font-medium bg-amber-100 text-amber-800 hover:bg-amber-200 disabled:opacity-50 disabled:cursor-not-allowed">
-                        임시제목으로 강등
+                        임시제목 등록
                     </button>
                     <button @click="bulkDeleteUnmatchedTitles()"
                             :disabled="unmatchedSelectedIds.length === 0"
