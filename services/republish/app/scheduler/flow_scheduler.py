@@ -851,6 +851,18 @@ class FlowScheduler:
             replace_existing=True
         )
 
+        # FES.next_execution_at 도 동기화하여 UI 가시성 보장.
+        # APScheduler memory store 가 1차 source 이고 이 컬럼은 거울이지만,
+        # 사용자가 "다음 실행 언제?" 를 DB 조회 한 줄로 확인할 수 있어야 한다.
+        if state is not None:
+            try:
+                state.next_execution_at = run_time
+            except Exception as e:
+                logger.warning(
+                    f"[FLOW_SCHEDULER] next_execution_at 동기화 실패 | "
+                    f"FlowID={flow.id} | Error={e}"
+                )
+
         logger.info(
             f"[FLOW_SCHEDULER] Scheduled | FlowID={flow.id} | "
             f"ActionType={action_type} | RunTime={run_time.strftime('%Y-%m-%d %H:%M:%S %Z')}"
