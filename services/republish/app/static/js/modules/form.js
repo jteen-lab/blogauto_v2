@@ -38,6 +38,11 @@ function moduleFormApp(module = null, moduleType = null) {
             ? window.createGrowthProfileState()
             : {},
 
+        // 대량 수집(bulk_collect) 모듈 상태 (Phase D)
+        bcModule: window.createBulkCollectState
+            ? window.createBulkCollectState()
+            : {},
+
         // API 상태 (수집 모듈용)
         apiStatus: {
             naver_ads: false,
@@ -90,11 +95,13 @@ function moduleFormApp(module = null, moduleType = null) {
             keyword_extraction_limit: initialModule?.settings?.keyword_extraction_limit || 50,
             // 수집 유형 선택 (일반/대량)
             enable_normal_collect: initialModule?.settings?.enable_normal_collect ?? true,
+            // DEPRECATED (Phase E): 기존 collect 모듈 호환용 — 신규 모듈은 bulk_collect 타입 사용
             enable_bulk_collect: initialModule?.settings?.enable_bulk_collect ?? false,
             // 일반 수집 수량 설정 (키워드/제목 각각)
             keyword_collect_limit: initialModule?.settings?.keyword_collect_limit || 100,
             title_collect_limit: initialModule?.settings?.title_collect_limit || 100,
             // 대량 수집 설정
+            // DEPRECATED (Phase E): 기존 collect 모듈 호환용 — 신규 모듈은 bulk_collect 타입 사용
             bulk_collect_delay: initialModule?.settings?.bulk_collect_delay || 0.5,
             bulk_urls_per_cycle: initialModule?.settings?.bulk_urls_per_cycle || 3,
             // 데이터 모듈 필드들
@@ -203,6 +210,15 @@ function moduleFormApp(module = null, moduleType = null) {
                         this.gpModule.loadPreset('balanced');
                     }
                 }
+            }
+
+            // 대량 수집(bulk_collect) 초기화 (Phase D)
+            if (typeCode === 'bulk_collect') {
+                if (this.isEdit && this.module?.settings && this.bcModule?.initFromSettings) {
+                    // 편집 모드: 기존 settings 에서 복원
+                    this.bcModule.initFromSettings(this.module.settings);
+                }
+                // 생성 모드는 createBulkCollectState() 의 기본값 사용
             }
 
             // 프롬프트 모듈인 경우 초기화
@@ -536,9 +552,10 @@ function moduleFormApp(module = null, moduleType = null) {
                     }
                 }
 
-                // 수집 유형 검증 (최소 하나 선택 필수)
-                if (!this.formData.enable_normal_collect && !this.formData.enable_bulk_collect) {
-                    this.showError('최소 하나의 수집 유형을 선택해주세요 (일반 수집 또는 대량 수집)');
+                // 수집 유형 검증 (일반 수집 활성화 필수)
+                // Phase E: 대량 수집은 별도 모듈로 분리되어 일반 수집만 필수 체크
+                if (!this.formData.enable_normal_collect) {
+                    this.showError('일반 수집을 활성화해 주세요');
                     return false;
                 }
 
@@ -680,8 +697,16 @@ function moduleFormApp(module = null, moduleType = null) {
                 }
             }
 
+            // 대량 수집(bulk_collect) 검증 (Phase D)
+            if (this.formData.type_code === 'bulk_collect') {
+                if (this.bcModule?.validate && !this.bcModule.validate()) {
+                    this.showError(this.bcModule.validationError || '대량 수집 설정 오류');
+                    return false;
+                }
+            }
+
             // 기타 타입 설정 JSON 검증
-            if (this.formData.type_code !== 'collect' && this.formData.type_code !== 'data' && this.formData.type_code !== 'generate' && this.formData.type_code !== 'prompt' && this.formData.type_code !== 'growth_profile' && this.settingsJson) {
+            if (this.formData.type_code !== 'collect' && this.formData.type_code !== 'data' && this.formData.type_code !== 'generate' && this.formData.type_code !== 'prompt' && this.formData.type_code !== 'growth_profile' && this.formData.type_code !== 'bulk_collect' && this.settingsJson) {
                 try {
                     JSON.parse(this.settingsJson);
                 } catch (e) {
@@ -735,11 +760,13 @@ function moduleFormApp(module = null, moduleType = null) {
                     keyword_extraction_limit: this.formData.keyword_extraction_limit,
                     // 수집 유형 선택 (일반/대량)
                     enable_normal_collect: this.formData.enable_normal_collect,
+                    // DEPRECATED (Phase E): 기존 collect 모듈 호환용 — 신규 모듈은 bulk_collect 타입 사용
                     enable_bulk_collect: this.formData.enable_bulk_collect,
                     // 일반 수집 수량 설정
                     keyword_collect_limit: this.formData.keyword_collect_limit,
                     title_collect_limit: this.formData.title_collect_limit,
                     // 대량 수집 설정
+                    // DEPRECATED (Phase E): 기존 collect 모듈 호환용 — 신규 모듈은 bulk_collect 타입 사용
                     bulk_collect_delay: this.formData.bulk_collect_delay,
                     bulk_urls_per_cycle: this.formData.bulk_urls_per_cycle
                 };
@@ -806,6 +833,11 @@ function moduleFormApp(module = null, moduleType = null) {
                 } else {
                     data.settings = this.formData.settings || {};
                 }
+            } else if (this.formData.type_code === 'bulk_collect') {
+                // 대량 수집(bulk_collect) 설정 직렬화 (Phase D)
+                data.settings = this.bcModule?.toSettings
+                    ? this.bcModule.toSettings()
+                    : (this.formData.settings || {});
             } else {
                 // 설정 JSON 파싱
                 try {

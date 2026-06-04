@@ -99,7 +99,7 @@ function moduleListApp() {
                         return valueA - valueB;
 
                     case 'module_type':
-                        const typeOrder = { 'prompt': 1, 'generate': 2, 'collect': 3, 'data': 4, 'growth_profile': 5 };
+                        const typeOrder = { 'prompt': 1, 'generate': 2, 'collect': 3, 'data': 4, 'growth_profile': 5, 'bulk_collect': 6 };
                         valueA = typeOrder[a.module_type?.code] || 99;
                         valueB = typeOrder[b.module_type?.code] || 99;
                         return valueA - valueB;
@@ -172,7 +172,7 @@ function moduleListApp() {
 
         // 동적 섹션 레이아웃 적용
         applyDynamicLayout() {
-            const moduleTypes = ['prompt', 'collect', 'data', 'growth_profile'];
+            const moduleTypes = ['prompt', 'collect', 'data', 'growth_profile', 'bulk_collect'];
             const visibleSections = moduleTypes.filter(type => this.getModulesByType(type).length > 0);
             const sectionCount = visibleSections.length;
 
@@ -211,7 +211,8 @@ function moduleListApp() {
                 prompt: '📝',
                 collect: '🔍',
                 data: '📊',
-                growth_profile: '📈'
+                growth_profile: '📈',
+                bulk_collect: '🚀'
             };
             return icons[typeCode] || '📦';
         },
@@ -227,7 +228,8 @@ function moduleListApp() {
                 'generate': '생성',
                 'collect': '수집',
                 'data': '데이터',
-                'growth_profile': '성장 프로파일'
+                'growth_profile': '성장 프로파일',
+                'bulk_collect': '대량 수집'
             };
             return fallbackNames[typeCode] || typeCode;
         },
@@ -283,6 +285,23 @@ function moduleListApp() {
                                 </div>
                             </div>
 
+                            <!-- 대량 수집 분리 과도기 안내 (기존 모듈에 enable_bulk_collect 켜져 있을 때만 노출) -->
+                            <div x-show="formData.enable_bulk_collect"
+                                 class="mb-4 p-3 bg-yellow-50 border-l-4 border-yellow-400 rounded">
+                                <div class="flex">
+                                    <div class="flex-shrink-0">
+                                        <span class="text-yellow-600">⚠️</span>
+                                    </div>
+                                    <div class="ml-3">
+                                        <p class="text-sm text-yellow-800 font-semibold">대량 수집 분리 안내</p>
+                                        <p class="text-sm text-yellow-700 mt-1">
+                                            대량 수집은 별도 모듈로 분리되었습니다. 기존 대량 수집 설정은 유지되지만,
+                                            새로 사용하려면 <strong>"대량 수집" 모듈</strong>을 만들어 주세요.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- 수집 대상 설정 -->
                             <div class="space-y-4 mb-6">
                                 <h3 class="text-base font-semibold text-gray-900 flex items-center">
@@ -291,6 +310,70 @@ function moduleListApp() {
                                 <p class="text-xs text-gray-500 -mt-2">수집할 데이터 소스를 선택하세요</p>
 
                                 <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                    <!-- 네이버 데이터랩 (키워드 수집) -->
+                                    <div class="flex items-center p-3 border rounded-lg transition-colors cursor-pointer"
+                                         :class="apiStatus.naver_datalab
+                                                 ? (formData.source_naver_datalab ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:bg-gray-50')
+                                                 : 'border-gray-200 bg-gray-100 opacity-60 cursor-not-allowed'"
+                                         @click="if(apiStatus.naver_datalab) formData.source_naver_datalab = !formData.source_naver_datalab">
+                                        <input type="checkbox"
+                                               :checked="formData.source_naver_datalab"
+                                               :disabled="!apiStatus.naver_datalab"
+                                               class="rounded text-purple-600 focus:ring-purple-500 pointer-events-none">
+                                        <div class="ml-3">
+                                            <span class="text-sm font-medium text-gray-700">네이버 데이터랩</span>
+                                            <span x-show="!apiStatus.naver_datalab" class="block text-xs text-red-500">API 미등록</span>
+                                            <span x-show="apiStatus.naver_datalab" class="block text-xs text-blue-600">키워드 수집</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- 네이버 검색광고 (키워드 수집) -->
+                                    <div class="flex items-center p-3 border rounded-lg transition-colors cursor-pointer"
+                                         :class="apiStatus.naver_ads
+                                                 ? (formData.source_naver_ads ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:bg-gray-50')
+                                                 : 'border-gray-200 bg-gray-100 opacity-60 cursor-not-allowed'"
+                                         @click="if(apiStatus.naver_ads) formData.source_naver_ads = !formData.source_naver_ads">
+                                        <input type="checkbox"
+                                               :checked="formData.source_naver_ads"
+                                               :disabled="!apiStatus.naver_ads"
+                                               class="rounded text-purple-600 focus:ring-purple-500 pointer-events-none">
+                                        <div class="ml-3">
+                                            <span class="text-sm font-medium text-gray-700">네이버 검색광고</span>
+                                            <span x-show="!apiStatus.naver_ads" class="block text-xs text-red-500">API 미등록</span>
+                                            <span x-show="apiStatus.naver_ads" class="block text-xs text-blue-600">키워드 수집</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- 구글 트렌드 (API 키 불필요, 키워드 수집) -->
+                                    <div class="flex items-center p-3 border rounded-lg transition-colors cursor-pointer"
+                                         :class="formData.source_google_trends ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:bg-gray-50'"
+                                         @click="formData.source_google_trends = !formData.source_google_trends">
+                                        <input type="checkbox"
+                                               :checked="formData.source_google_trends"
+                                               class="rounded text-purple-600 focus:ring-purple-500 pointer-events-none">
+                                        <div class="ml-3">
+                                            <span class="text-sm font-medium text-gray-700">구글 트렌드</span>
+                                            <span class="block text-xs text-green-600">API 키 불필요 · 키워드 수집</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- 구글 키워드 플래너 (키워드 수집) -->
+                                    <div class="flex items-center p-3 border rounded-lg transition-colors cursor-pointer"
+                                         :class="apiStatus.google_planner
+                                                 ? (formData.source_google_planner ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:bg-gray-50')
+                                                 : 'border-gray-200 bg-gray-100 opacity-60 cursor-not-allowed'"
+                                         @click="if(apiStatus.google_planner) formData.source_google_planner = !formData.source_google_planner">
+                                        <input type="checkbox"
+                                               :checked="formData.source_google_planner"
+                                               :disabled="!apiStatus.google_planner"
+                                               class="rounded text-purple-600 focus:ring-purple-500 pointer-events-none">
+                                        <div class="ml-3">
+                                            <span class="text-sm font-medium text-gray-700">구글 키워드 플래너</span>
+                                            <span x-show="!apiStatus.google_planner" class="block text-xs text-red-500">API 미등록</span>
+                                            <span x-show="apiStatus.google_planner" class="block text-xs text-blue-600">키워드 수집</span>
+                                        </div>
+                                    </div>
+
                                     <!-- 네이버 뉴스 -->
                                     <div class="flex items-center p-3 border rounded-lg transition-colors cursor-pointer"
                                          :class="apiStatus.naver_news
@@ -509,49 +592,7 @@ function moduleListApp() {
                                     </div>
                                 </div>
 
-                                <!-- 대량 수집 -->
-                                <div class="border border-gray-200 rounded-lg overflow-hidden">
-                                    <div class="flex items-center p-3 bg-gray-50 border-b border-gray-200 cursor-pointer"
-                                         @click="formData.enable_bulk_collect = !formData.enable_bulk_collect">
-                                        <input type="checkbox"
-                                               x-model="formData.enable_bulk_collect"
-                                               class="rounded text-orange-600 focus:ring-orange-500 pointer-events-none">
-                                        <div class="ml-3">
-                                            <span class="text-sm font-medium">🚀 대량 수집</span>
-                                            <p class="text-xs text-gray-500">블로그/사이트의 전체 포스트 제목 수집 (수량 제한 없음)</p>
-                                        </div>
-                                    </div>
-                                    <div x-show="formData.enable_bulk_collect" x-transition class="p-4 bg-white">
-                                        <div class="p-3 bg-orange-50 rounded-lg mb-3">
-                                            <p class="text-xs text-orange-800">
-                                                ⚠️ 키워드 검색 결과의 블로그/사이트에서 <strong>전체 포스트 제목</strong>을 수집합니다.<br>
-                                                • 네이버 블로그: 검색 API로 수집<br>
-                                                • 티스토리/워드프레스 등: RSS 피드로 수집<br>
-                                                • 도메인 필터가 적용되어 차단된 사이트는 제외됩니다
-                                            </p>
-                                        </div>
-                                        <div class="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label class="block text-sm font-medium text-gray-700 mb-2">🔢 주기당 처리 URL 수</label>
-                                                <div class="flex items-center gap-2">
-                                                    <input type="number" x-model.number="formData.bulk_urls_per_cycle" min="1" max="10" step="1"
-                                                           class="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500">
-                                                    <span class="text-sm text-gray-500">개</span>
-                                                </div>
-                                                <p class="text-xs text-gray-400 mt-1">수집 주기마다 제목을 수집할 URL 수</p>
-                                            </div>
-                                            <div>
-                                                <label class="block text-sm font-medium text-gray-700 mb-2">🕐 사이트 간 딜레이</label>
-                                                <div class="flex items-center gap-2">
-                                                    <input type="number" x-model.number="formData.bulk_collect_delay" min="0.1" max="5" step="0.1"
-                                                           class="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500">
-                                                    <span class="text-sm text-gray-500">초</span>
-                                                </div>
-                                                <p class="text-xs text-gray-400 mt-1">각 블로그/사이트 수집 사이의 대기 시간</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                                <!-- 대량 수집 섹션 제거됨 (Phase C, 별도 모듈로 분리 예정) -->
                             </div>
 
                             <!-- 수집 스케줄 모드 -->
@@ -1010,8 +1051,10 @@ function moduleListApp() {
 
                         ${window.getGrowthProfileFormTemplate ? window.getGrowthProfileFormTemplate() : '<!-- growth-profile-form-template.js 로드 필요 -->'}
 
+                        ${window.getBulkCollectFormTemplate ? window.getBulkCollectFormTemplate() : '<!-- bulk-collect-form-template.js 로드 필요 -->'}
+
                         <!-- 기타 타입 설정 -->
-                        <div x-show="formData.type_code !== 'collect' && formData.type_code !== 'data' && formData.type_code !== 'prompt' && formData.type_code !== 'generate' && formData.type_code !== 'growth_profile'">
+                        <div x-show="formData.type_code !== 'collect' && formData.type_code !== 'data' && formData.type_code !== 'prompt' && formData.type_code !== 'generate' && formData.type_code !== 'growth_profile' && formData.type_code !== 'bulk_collect'">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-2">설정 정보 (JSON)</label>
                                 <textarea x-model="settingsJson"
@@ -1064,7 +1107,8 @@ function moduleListApp() {
                 'generate': 'bg-amber-200',
                 'collect': 'bg-purple-200',
                 'data': 'bg-teal-200',
-                'growth_profile': 'bg-emerald-200'
+                'growth_profile': 'bg-emerald-200',
+                'bulk_collect': 'bg-sky-200'
             };
             return colors[typeCode] || 'bg-gray-200';
         },
@@ -1987,6 +2031,64 @@ function getModuleInfoRows(module) {
                 }
             }
             rows.push({ label: `  ${s.label || s.name}`, value: `(${rng}) ${mods.join('/')}` });
+        }
+    } else if (typeCode === 'bulk_collect') {
+        // 대량 수집 모듈 (Phase D)
+        const settings = module.settings || {};
+        const bp = settings.bulk_params || {};
+        const sch = settings.schedule || {};
+
+        // 1. URL 소스 모드
+        const sourceMode = settings.url_source_mode || 'direct_input';
+        if (sourceMode === 'direct_input') {
+            const urlCount = (settings.input_urls || []).length;
+            rows.push({ label: '📥 URL 소스', value: `직접 입력 (${urlCount}개)` });
+        } else if (sourceMode === 'from_collect_module') {
+            const fc = settings.from_collect || {};
+            const orderText = fc.order_mode === 'random' ? '랜덤' : '저장 순서';
+            const limit = fc.max_urls > 0 ? `${fc.max_urls}개` : '무제한';
+            rows.push({ label: '📥 URL 소스', value: `수집 모듈 DB (${orderText}, ${limit})` });
+        }
+
+        // 2. 청크/동시성 요약
+        rows.push({
+            label: '⚙️ 청크',
+            value: `${bp.chunk_size_initial || 100}개`
+                + (bp.adaptive_chunk_enabled ? ' (자동조정)' : '')
+        });
+        rows.push({
+            label: '🔀 동시성',
+            value: `도메인 ${bp.domain_concurrency || 2} / 전체 ${bp.parallel_titles || 10}`
+        });
+
+        // 3. 사이클 + 스케줄 요약
+        rows.push({
+            label: '⏱ 사이클',
+            value: `최대 ${bp.cycle_max_duration_sec || 300}초`
+        });
+        // 지터 표기 — 신규 객체(±%) 우선, 없으면 레거시 평탄 키(양수 %) 사용
+        // 신규: sch.jitter.{enabled, min_percent(-20), max_percent(30)}
+        // 레거시: sch.jitter_enabled / jitter_min_percent(80) / jitter_max_percent(120)
+        let jitterText = '';
+        if (sch.jitter && typeof sch.jitter === 'object' && sch.jitter.enabled) {
+            const mn = sch.jitter.min_percent ?? -20;
+            const mx2 = sch.jitter.max_percent ?? 30;
+            const mnStr = mn >= 0 ? `+${mn}` : `${mn}`;
+            const mxStr = mx2 >= 0 ? `+${mx2}` : `${mx2}`;
+            jitterText = ` (지터 ${mnStr}~${mxStr}%)`;
+        } else if (sch.jitter_enabled) {
+            jitterText = ` (지터 ${sch.jitter_min_percent || 80}~${sch.jitter_max_percent || 120}%)`;
+        }
+        rows.push({
+            label: '⏰ 간격',
+            value: `${sch.interval_minutes || 60}분${jitterText}`
+        });
+
+        // 4. 활성 시간대 요약
+        const mx = sch.schedule_matrix;
+        if (Array.isArray(mx)) {
+            const total = mx.flat().filter(Boolean).length;
+            rows.push({ label: '📅 활성시간', value: `${total}시간/주` });
         }
     }
 

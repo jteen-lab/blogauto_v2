@@ -249,6 +249,7 @@ function flowFormData() {
                 generate: 'bg-amber-200',
                 prompt: 'bg-green-200',
                 collect: 'bg-purple-200',
+                bulk_collect: 'bg-sky-200',
                 data: 'bg-teal-200',
                 growth_profile: 'bg-emerald-200'
             };
@@ -373,6 +374,7 @@ function flowFormData() {
                 prompt: '📝',
                 prompt_generate: '📝✨',
                 collect: '🔍',
+                bulk_collect: '🚀',
                 data: '📊',
                 growth_profile: '📈'
             };
@@ -386,6 +388,7 @@ function flowFormData() {
                 prompt: '프롬프트',
                 prompt_generate: '프롬프트/생성',
                 collect: '수집',
+                bulk_collect: '대량 수집',
                 data: '데이터',
                 growth_profile: '성장 프로파일'
             };

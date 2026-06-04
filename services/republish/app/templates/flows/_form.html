@@ -62,7 +62,7 @@
             </label>
 
             <div class="border border-gray-200 rounded-lg">
-                <!-- 모듈 탭: 4개 (프롬프트/생성, 수집, 데이터, 성장프로파일) -->
+                <!-- 모듈 탭: 5개 (프롬프트/생성, 수집, 대량 수집, 데이터, 성장프로파일) -->
                 <div class="flex border-b border-gray-200 overflow-x-auto">
                     <button type="button"
                             @click="activeModuleTab = 'prompt_generate'"
@@ -80,6 +80,15 @@
                         수집
                         <span x-show="getSelectedCountByTypes(['collect']) > 0"
                               x-text="getSelectedCountByTypes(['collect'])"
+                              class="ml-1 px-1.5 py-0.5 text-xs bg-primary text-white rounded-full"></span>
+                    </button>
+                    <button type="button"
+                            @click="activeModuleTab = 'bulk_collect'"
+                            :class="activeModuleTab === 'bulk_collect' ? 'bg-sky-50 text-sky-700 border-sky-500' : 'bg-white text-gray-500 hover:text-gray-700'"
+                            class="flex-1 px-3 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap min-w-0">
+                        대량 수집
+                        <span x-show="getSelectedCountByTypes(['bulk_collect']) > 0"
+                              x-text="getSelectedCountByTypes(['bulk_collect'])"
                               class="ml-1 px-1.5 py-0.5 text-xs bg-primary text-white rounded-full"></span>
                     </button>
                     <button type="button"

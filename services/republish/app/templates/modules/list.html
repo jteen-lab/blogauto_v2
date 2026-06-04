@@ -391,6 +391,27 @@
                 <span x-text="sectionExpanded ? '접기 ▲' : `더보기 (${getModulesByType('growth_profile').length - 1}개 더) ▼`"></span>
             </button>
         </div>
+
+        {# 대량 수집 섹션 - Phase D #}
+        <div x-show="getModulesByType('bulk_collect').length > 0" class="module-section" x-data="{ sectionExpanded: false }">
+            <div class="section-header">
+                <span class="text-2xl">🚀</span>
+                <h3 class="section-title">대량 수집 모듈</h3>
+                <span class="section-count" x-text="getModulesByType('bulk_collect').length"></span>
+            </div>
+            <div class="module-grid">
+                <template x-for="(module, idx) in getModulesByType('bulk_collect')" :key="module.id + '-' + sortBy + '-' + sortOrder">
+                    <div x-show="sectionExpanded || idx < 1" x-transition>
+                        {% include "modules/_card.html" %}
+                    </div>
+                </template>
+            </div>
+            <button x-show="getModulesByType('bulk_collect').length > 1"
+                    @click="sectionExpanded = !sectionExpanded; if(sectionExpanded) { $nextTick(() => reinitModuleSlides($el.previousElementSibling)) }"
+                    class="card-expand-btn mt-2">
+                <span x-text="sectionExpanded ? '접기 ▲' : `더보기 (${getModulesByType('bulk_collect').length - 1}개 더) ▼`"></span>
+            </button>
+        </div>
     </div>
 
     <!-- 모바일: 탭 레이아웃 -->
@@ -425,6 +446,14 @@
                         class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap"
                         x-show="getModulesByType('growth_profile').length > 0">
                     성장 프로파일
+                </button>
+                {# 대량 수집 탭 - Phase D #}
+                <button type="button"
+                        @click="activeTab = 'bulk_collect'"
+                        :class="activeTab === 'bulk_collect' ? 'bg-sky-50 text-sky-700 border-sky-500' : 'bg-white text-gray-500 hover:text-gray-700'"
+                        class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap"
+                        x-show="getModulesByType('bulk_collect').length > 0">
+                    대량 수집
                 </button>
             </div>
 
@@ -461,6 +490,16 @@
                      x-effect="if (activeTab === 'growth_profile') $nextTick(() => reinitMobileTabSlides($el))">
                     <div class="module-grid">
                         <template x-for="module in getModulesByType('growth_profile')" :key="module.id + '-' + sortBy + '-' + sortOrder">
+                            {% include "modules/_card.html" %}
+                        </template>
+                    </div>
+                </div>
+
+                {# 대량 수집 탭 콘텐츠 - Phase D #}
+                <div x-show="activeTab === 'bulk_collect'"
+                     x-effect="if (activeTab === 'bulk_collect') $nextTick(() => reinitMobileTabSlides($el))">
+                    <div class="module-grid">
+                        <template x-for="module in getModulesByType('bulk_collect')" :key="module.id + '-' + sortBy + '-' + sortOrder">
                             {% include "modules/_card.html" %}
                         </template>
                     </div>
@@ -519,10 +558,18 @@
         </button>
 
         <button onclick="selectOption('moduleTypeSelector', 'growth_profile', '성장 프로파일')"
-                class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-emerald-300 hover:bg-emerald-50 transition-all duration-200 group col-span-2">
+                class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-emerald-300 hover:bg-emerald-50 transition-all duration-200 group">
           <span class="text-3xl mb-2 group-hover:scale-110 transition-transform duration-200">📈</span>
           <span class="font-medium text-gray-900 group-hover:text-emerald-700">성장 프로파일</span>
           <span class="text-xs text-gray-500 mt-1">블로그 성장 단계별 자동화 스케줄</span>
+        </button>
+
+        {# 대량 수집 모듈 - Phase D #}
+        <button onclick="selectOption('moduleTypeSelector', 'bulk_collect', '대량 수집')"
+                class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-sky-300 hover:bg-sky-50 transition-all duration-200 group">
+          <span class="text-3xl mb-2 group-hover:scale-110 transition-transform duration-200">🚀</span>
+          <span class="font-medium text-gray-900 group-hover:text-sky-700">대량 수집</span>
+          <span class="text-xs text-gray-500 mt-1">URL 기반 사이트맵 · 제목 대량 추출</span>
         </button>
       </div>
     </div>
@@ -597,6 +644,9 @@
 <script src="/static/js/modules/growth-profile-form.js?v=20260223"></script>
 <script src="/static/js/modules/growth-profile-form-template-sections.js?v=20260223"></script>
 <script src="/static/js/modules/growth-profile-form-template.js?v=20260223"></script>
+<!-- 대량 수집(bulk_collect) 모듈 폼 - Phase D (2026-06-02) -->
+<script src="/static/js/modules/bulk-collect-form.js?v=20260604_redesign"></script>
+<script src="/static/js/modules/bulk-collect-form-template.js?v=20260604_redesign"></script>
 <script src="/static/js/modules/form.js?v=20260318b"></script>
-<script src="/static/js/modules/list.js?v=20260224"></script>
+<script src="/static/js/modules/list.js?v=20260604_bulkcollect"></script>
 {% endblock %}
