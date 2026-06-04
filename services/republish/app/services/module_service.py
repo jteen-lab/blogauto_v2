@@ -27,8 +27,37 @@ from ..schemas.module import (
     ModuleTypeResponse
 )
 from ..core.logger import get_logger
+from .modules.legacy_bulk_detector import LegacyBulkDetector
 
 logger = get_logger("module_service", "app.log")
+
+
+def _compute_legacy_bulk_warning(module: Module) -> bool:
+    """이미 메모리에 있는 Module 객체로부터 레거시 대량 수집 여부를 계산한다.
+
+    추가 쿼리를 발생시키지 않기 위해 ``module.module_type`` 과
+    ``module.settings`` 를 그대로 활용한다. ``selectinload(Module.module_type)``
+    가 호출된 컨텍스트에서만 사용해야 한다.
+    """
+    try:
+        mt = getattr(module, "module_type", None)
+        if not mt or mt.code != LegacyBulkDetector.TARGET_TYPE_CODE:
+            return False
+        return LegacyBulkDetector._is_legacy_bulk_settings(module.settings)
+    except Exception:  # pragma: no cover
+        return False
+
+
+def to_module_detail_response(module: Module) -> "ModuleDetailResponse":
+    """모듈 단건 응답 빌더(Phase E).
+
+    ``ModuleDetailResponse.model_validate`` 만으로는 ``legacy_bulk_warning`` 이
+    채워지지 않으므로, 이미 메모리에 있는 ``module_type`` / ``settings`` 를
+    이용해 동일 트랜잭션 내에서 추가 쿼리 없이 채워준다.
+    """
+    resp = ModuleDetailResponse.model_validate(module)
+    resp.legacy_bulk_warning = _compute_legacy_bulk_warning(module)
+    return resp
 
 
 class ModuleService:
@@ -119,10 +148,24 @@ class ModuleService:
 
             has_next = (offset + size) < total
 
-            logger.info(f"[GET_MODULES] 총 {total}개 중 {len(modules)}개 조회 완료")
+            # Phase E: 레거시 대량 수집 옵션 감지 — selectinload 로 이미 로딩된
+            # module_type/settings 를 재활용하여 추가 쿼리 없이 메모리에서 계산.
+            response_modules: List[ModuleResponse] = []
+            legacy_count = 0
+            for module in modules:
+                resp = ModuleResponse.model_validate(module)
+                resp.legacy_bulk_warning = _compute_legacy_bulk_warning(module)
+                if resp.legacy_bulk_warning:
+                    legacy_count += 1
+                response_modules.append(resp)
+
+            logger.info(
+                f"[GET_MODULES] 총 {total}개 중 {len(modules)}개 조회 완료 "
+                f"(legacy_bulk={legacy_count})"
+            )
 
             return ModuleListResponse(
-                modules=[ModuleResponse.model_validate(module) for module in modules],
+                modules=response_modules,
                 total=total,
                 page=page,
                 size=size,

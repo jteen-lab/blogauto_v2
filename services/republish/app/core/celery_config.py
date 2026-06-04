@@ -49,6 +49,7 @@ celery_app.conf.task_routes = {
     "tasks.collect_keywords": {"queue": "utility_queue"},
     "tasks.transfer_titles": {"queue": "utility_queue"},
     "tasks.collect_references": {"queue": "utility_queue"},
+    "tasks.bulk_collect_cycle": {"queue": "utility_queue"},  # Phase B
     # 완료 후처리
     "tasks.on_generation_complete": {"queue": "callback_queue"},
     "tasks.on_publish_complete": {"queue": "callback_queue"},

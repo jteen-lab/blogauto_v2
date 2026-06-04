@@ -18,7 +18,10 @@ from ..models import User
 from ..models.module import Module
 from ..models.module_type import ModuleType
 from ..models.category import BlogCategory, Topic, SubTopic
-from ..services.module_service import ModuleService
+from ..services.module_service import (
+    ModuleService,
+    to_module_detail_response as _to_detail_response,
+)
 from ..services.in_memory_ttl_cache import (
     cache_get as _cache_get,
     cache_set as _cache_set,
@@ -161,7 +164,7 @@ async def create_module(
     # Phase 4: 충돌감지 캐시 무효화 (blog_category_map 변경 가능)
     _cache_invalidate_prefix(_USED_BLOG_CAT_PREFIX)
 
-    return ModuleDetailResponse.model_validate(module)
+    return _to_detail_response(module)
 
 
 @router.get(
@@ -185,7 +188,7 @@ async def get_module(
             detail="모듈을 찾을 수 없습니다"
         )
 
-    return ModuleDetailResponse.model_validate(module)
+    return _to_detail_response(module)
 
 
 @router.put(
@@ -223,7 +226,7 @@ async def update_module(
     # Phase 4: 충돌감지 캐시 무효화
     _cache_invalidate_prefix(_USED_BLOG_CAT_PREFIX)
 
-    return ModuleDetailResponse.model_validate(module)
+    return _to_detail_response(module)
 
 
 @router.post(
@@ -251,7 +254,7 @@ async def copy_module(
     # Phase 4: 충돌감지 캐시 무효화 (복사로 새 매핑 생성)
     _cache_invalidate_prefix(_USED_BLOG_CAT_PREFIX)
 
-    return ModuleDetailResponse.model_validate(module)
+    return _to_detail_response(module)
 
 
 @router.delete(

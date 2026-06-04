@@ -267,19 +267,26 @@ async def add_urls_bulk(
             elif re.search(r'\bwp\b|wordpress', domain, re.I):
                 platform = "wordpress"
 
-            # 중복 체크
+            # 중복 체크 (url + source_module_id IS NULL 조합)
+            # alembic 042에서 UNIQUE 제약이 (domain) → (url, source_module_id)로 변경됨.
+            # 수동 적재(bulk-add)는 모듈 귀속이 없으므로 source_module_id=NULL로 저장하고,
+            # NULL끼리는 NULLS DISTINCT 라 애플리케이션 레벨에서 명시 중복 차단.
             existing = await db.execute(
-                select(CollectedUrl).where(CollectedUrl.domain == domain)
+                select(CollectedUrl)
+                .where(CollectedUrl.url == url_str)
+                .where(CollectedUrl.source_module_id.is_(None))
             )
-            if existing.scalar_one_or_none():
+            if existing.scalars().first():
+                logger.debug(f"[BULK_ADD_URL] 중복 URL 스킵: {url_str}")
                 duplicate_count += 1
                 continue
 
-            # URL 추가
+            # URL 추가 (source_module_id=None: 수동 적재 경로)
             new_url = CollectedUrl(
                 url=url_str,
                 domain=domain,
                 platform=platform,
+                source_module_id=None,
                 is_processed=False,
                 is_active=True
             )

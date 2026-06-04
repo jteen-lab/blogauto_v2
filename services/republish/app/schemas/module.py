@@ -54,7 +54,14 @@ class ModuleUpdateRequest(BaseModel):
 
 
 class ModuleResponse(BaseModel):
-    """모듈 응답"""
+    """모듈 응답.
+
+    Note:
+        Phase E (2026-06-02) 부터 ``legacy_bulk_warning`` 필드가 추가되었다.
+        기존 ``collect`` 모듈의 ``settings.enable_bulk_collect=True`` 가
+        남아 있는 경우 True 로 채워져 UI에서 마이그레이션 안내 배지를
+        노출할 수 있도록 한다. 응답 호환을 위해 기본값은 False 다.
+    """
     id: int
     user_id: int
     name: str
@@ -67,6 +74,15 @@ class ModuleResponse(BaseModel):
     # 메타 정보
     created_at: datetime
     updated_at: datetime
+
+    # Phase E: 레거시 대량 수집 옵션 사용 중인지 표시
+    legacy_bulk_warning: Optional[bool] = Field(
+        default=False,
+        description=(
+            "레거시 collect 모듈에 enable_bulk_collect=True 가 남아 있는지 여부. "
+            "True 이면 사용자 마이그레이션 안내 필요."
+        ),
+    )
 
     class Config:
         from_attributes = True

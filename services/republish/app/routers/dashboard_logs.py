@@ -29,6 +29,7 @@ _ACTION_DISPLAY = {
     "publish": "발행",
     "republish": "재발행",
     "collect": "제목 수집",
+    "bulk_collect": "대량 수집",
     "data": "데이터 이동",
     "flow_init": "플로우 초기화",
     "queue_register": "워커 등록",
@@ -58,7 +59,8 @@ async def get_unified_logs(
         search: 메시지 검색어.
         blog_name: 특정 블로그명으로 필터 (빈 값이면 전체).
         action_type: 단일 액션 필터 "publish"|"republish"|"generate"|"collect"|
-                     "queue_register"|"queue_publish"|"queue_republish"|"queue_generate".
+                     "bulk_collect"|"data"|"queue_register"|"queue_publish"|
+                     "queue_republish"|"queue_generate".
                      queue_* 는 queue_register 중 발행/재발행/생성 종류 분리용.
         db: DB 세션.
 
@@ -181,7 +183,7 @@ def _apply_action_type_filter(
         )
     elif action_type in (
         "publish", "republish", "generate", "collect",
-        "data", "queue_register",
+        "bulk_collect", "data", "queue_register",
     ):
         query = query.where(AutorunLog.action == action_type)
         count_query = count_query.where(AutorunLog.action == action_type)
@@ -207,21 +209,27 @@ def _apply_filters(
         count_query = count_query.where(AutorunLog.status == "warning")
 
     # 카테고리 필터 (log_type → AutorunLog.action 매핑)
-    # - action(작업): 모듈 실행 관련 (generate, publish, republish, collect)
+    # - action(작업): 모듈 실행 관련 (generate, publish, republish, collect, bulk_collect)
     # - activity(활동): 시스템 이벤트 (플로우 상태 변경, 블로그 변경 등 작업 외 모든 이벤트)
     # - generation(생성): 생성 전용 (generate만)
     if log_type == "action":
         query = query.where(
-            AutorunLog.action.in_(["generate", "publish", "republish", "collect"])
+            AutorunLog.action.in_(
+                ["generate", "publish", "republish", "collect", "bulk_collect"]
+            )
         )
         count_query = count_query.where(
-            AutorunLog.action.in_(["generate", "publish", "republish", "collect"])
+            AutorunLog.action.in_(
+                ["generate", "publish", "republish", "collect", "bulk_collect"]
+            )
         )
     elif log_type == "activity":
         # 활동: 시스템 이벤트 + 워커 등록 로그
         from sqlalchemy import or_
         activity_filter = or_(
-            AutorunLog.action.notin_(["generate", "publish", "republish", "collect"]),
+            AutorunLog.action.notin_(
+                ["generate", "publish", "republish", "collect", "bulk_collect"]
+            ),
             AutorunLog.action == "queue_register",
         )
         query = query.where(activity_filter)
@@ -301,6 +309,12 @@ async def _serialize_autorun_log(
     if log.status == "success":
         level = "SUCCESS"
         status_text = "성공"
+        # 수집/대량수집 성공 로그는 "성공" 대신 건수 요약(message)을 노출.
+        # 예) "제목 152개, 키워드/URL 20개 수집 (소스 2개)".
+        # 기존에는 message 를 버리고 "제목 수집 - 성공" 만 표시해
+        # 몇 개를 수집했는지 사용자가 알 수 없었다.
+        if log.action in ("collect", "bulk_collect") and log.message:
+            status_text = log.message.strip()
     elif log.status == "skipped":
         level = "INFO"
         reason = log.message or "건너뜀"

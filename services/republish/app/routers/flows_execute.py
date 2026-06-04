@@ -354,6 +354,53 @@ async def _execute_flow_background(
                             action="data"
                         )
 
+            # 6-1. bulk_collect 모듈 실행 (블로그 없이 독립 실행) - Phase B
+            if "bulk_collect" in modules_by_type:
+                for bulk_module in modules_by_type["bulk_collect"]:
+                    module_start_time = datetime.now()
+                    logger.info(
+                        f"[FLOW_BG] 대량수집 모듈 실행: {bulk_module.name}"
+                    )
+                    try:
+                        result = await _execute_bulk_collect_module(
+                            bulk_module, db, flow_id=flow.id,
+                        )
+                        duration_ms = int(
+                            (datetime.now() - module_start_time)
+                            .total_seconds() * 1000
+                        )
+                        await _save_autorun_log(
+                            db=db, user_id=user_id, flow_id=flow.id,
+                            flow_name=flow.name,
+                            module_name=bulk_module.name,
+                            blog_name="-", result=result,
+                            duration_ms=duration_ms, action="bulk_collect",
+                        )
+                        if result.get("success"):
+                            success_count += 1
+                        else:
+                            fail_count += 1
+                        total_processed += 1
+                    except Exception as e:  # noqa: BLE001
+                        fail_count += 1
+                        total_processed += 1
+                        duration_ms = int(
+                            (datetime.now() - module_start_time)
+                            .total_seconds() * 1000
+                        )
+                        logger.error(
+                            f"[FLOW_BG] 대량수집 모듈 오류 | "
+                            f"module={bulk_module.name} | error={e}"
+                        )
+                        await _save_autorun_log(
+                            db=db, user_id=user_id, flow_id=flow.id,
+                            flow_name=flow.name,
+                            module_name=bulk_module.name,
+                            blog_name="-",
+                            result={"success": False, "message": str(e)},
+                            duration_ms=duration_ms, action="bulk_collect",
+                        )
+
             # 7. GP 기반 발행 (publish 모듈 불필요 - GP가 직접 실행)
             if gp_context and gp_context.has_growth_profile() and blogs:
                 from app.services.generation.publisher import Publisher
@@ -1288,6 +1335,109 @@ async def _execute_data_module(
         }
 
 
+async def _execute_bulk_collect_module(
+    module: Module,
+    db: AsyncSession,
+    flow_id: Optional[int] = None,
+) -> Dict[str, Any]:
+    """대량 수집(bulk_collect) 모듈 1 사이클 실행 (Phase B).
+
+    실제 청크 처리는 Celery 태스크 `tasks.bulk_collect_cycle` 가 담당하므로
+    여기서는 큐 디스패치만 수행하고 task_id 만 즉시 반환한다.
+    동기 실행(테스트/디버그) 분기는 settings.bulk_params.run_inline=True 일 때만.
+
+    Args:
+        module: 대량 수집 모듈.
+        db: AsyncSession (inline 실행 분기에서 사용).
+        flow_id: 호출 플로우 ID (선택).
+
+    Returns:
+        Celery 디스패치 결과 또는 inline 실행 결과 dict.
+    """
+    settings = module.settings or {}
+    bulk_params = settings.get("bulk_params", {}) or {}
+    run_inline = bool(bulk_params.get("run_inline", False))
+
+    if run_inline:
+        # 디버그/테스트용 인라인 실행 (워커가 없을 때)
+        from app.services.bulk_collect import (
+            ChunkProcessor, DomainLimiter, LastmodTracker, Timebox,
+        )
+        # UI(bulk-collect-form.js)는 chunk_size_initial 키로 저장.
+        # 구버전 호환을 위해 chunk_size 도 함께 인식한다.
+        chunk_size_raw = (
+            bulk_params.get("chunk_size_initial")
+            or bulk_params.get("chunk_size", 20)
+        )
+        chunk_size = int(chunk_size_raw)
+        cycle_max = int(bulk_params.get("cycle_max_duration_sec", 900))
+        global_conc = int(bulk_params.get("parallel_titles", 10))
+        domain_conc = int(bulk_params.get("domain_concurrency", 2))
+        source_mode = str(
+            settings.get("url_source_mode", "from_collect_module")
+        )
+        order_mode = str(bulk_params.get("order_mode", "stored"))
+
+        limiter = DomainLimiter(global_conc, domain_conc)
+        tracker = LastmodTracker(db)
+        with Timebox(cycle_max) as tb:
+            processor = ChunkProcessor(db, limiter, tb)
+            urls = await processor.load_pending_chunk(
+                module_id=module.id,
+                chunk_size=chunk_size,
+                source_mode=source_mode,
+                order_mode=order_mode,
+            )
+            stats = await processor.process_chunk(urls)
+        try:
+            await tracker.record_cycle_stats(
+                module_id=module.id, blog_domain="_cycle_",
+                duration_sec=stats.duration_sec,
+                processed=stats.processed, failed=stats.failed,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"[BULK_COLLECT] inline stats 저장 실패: {exc}")
+        return {
+            "success": True,
+            "message": (
+                f"inline chunk={len(urls)} "
+                f"processed={stats.processed} failed={stats.failed} "
+                f"dur={stats.duration_sec}s"
+            ),
+            "processed": stats.processed,
+            "failed": stats.failed,
+            "chunk_size": len(urls),
+        }
+
+    # 기본: Celery utility_queue 로 디스패치
+    try:
+        from app.core.task_dispatcher import get_dispatcher, PRIORITY_NORMAL
+        dispatcher = get_dispatcher()
+        task_id = dispatcher.dispatch_utility(
+            "tasks.bulk_collect_cycle",
+            kwargs={"module_id": module.id, "flow_id": flow_id},
+            priority=PRIORITY_NORMAL,
+        )
+        logger.info(
+            f"[BULK_COLLECT] Celery 디스패치 | module={module.name} "
+            f"| task_id={task_id} | flow={flow_id}"
+        )
+        return {
+            "success": True,
+            "queued": True,
+            "task_id": task_id,
+            "message": f"Celery 큐 등록 완료: {task_id}",
+        }
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            f"[BULK_COLLECT] 디스패치 실패 | module={module.name} | {exc}"
+        )
+        return {
+            "success": False,
+            "message": f"디스패치 실패: {exc}",
+        }
+
+
 async def _collect_from_naver_ads(
     db: AsyncSession,
     seed_keywords: List[str],
@@ -1655,7 +1805,14 @@ async def _save_autorun_log(
     duration_ms: int,
     action: str = "republish"
 ) -> None:
-    """AutorunLog DB 저장"""
+    """AutorunLog DB 저장.
+
+    수집/대량수집 액션은 ``autorun_message_builder`` 를 통해 통계가 포함된
+    한국어 메시지로 재구성하고 ``posts_processed/success/failed`` 컬럼도
+    함께 채운다 (기존 NULL 채움).
+    """
+    from app.services.autorun_message_builder import build_collect_log_stats
+
     try:
         # 상태 결정: hold > skipped > success/failed
         # (flow_scheduler.py:_save_autorun_log와 동일 우선순위)
@@ -1698,6 +1855,7 @@ async def _save_autorun_log(
                 "publish": "발행",
                 "republish": "재발행",
                 "collect": "수집",
+                "bulk_collect": "대량 수집",
                 "data": "데이터",
             }
             worker_kind = worker_kind_map.get(action, "유틸")
@@ -1714,6 +1872,13 @@ async def _save_autorun_log(
                 f"{blog_name}{title_part} - {worker_kind} {suffix}"
             )
 
+        # 수집/대량수집은 통계 기반 메시지로 재구성 (queue_register 제외).
+        collect_stats = None
+        if action in ("collect", "bulk_collect"):
+            collect_stats = build_collect_log_stats(result, action)
+            if collect_stats is not None:
+                log_message = collect_stats.message
+
         # AutorunLog 생성
         log = AutorunLog.create_execution_log(
             user_id=user_id,
@@ -1728,6 +1893,12 @@ async def _save_autorun_log(
             duration_ms=duration_ms,
             message=log_message
         )
+
+        # 수집/대량수집 액션의 카운트 컬럼 채우기.
+        if collect_stats is not None:
+            log.posts_processed = collect_stats.posts_processed
+            log.posts_success = collect_stats.posts_success
+            log.posts_failed = collect_stats.posts_failed
 
         db.add(log)
         await db.commit()
@@ -1923,8 +2094,8 @@ async def execute_single_module(
                 "blog_count": len(blogs),
             }
 
-    # 5. collect/data 실행 (Celery 기능 플래그에 따라 분기)
-    
+    # 5. collect/data/bulk_collect 실행 (Celery 기능 플래그에 따라 분기)
+
 
     if type_code in ("collect", "data") and await _use_celery("use_celery_utility", db):
         # Celery 큐로 디스패치
@@ -1957,6 +2128,31 @@ async def execute_single_module(
             "module_name": target_module.name,
             "message": f"'{target_module.name}' 작업이 Celery 큐에 등록되었습니다",
             "task_id": task_id,
+        }
+
+    # bulk_collect (Phase B): Celery 디스패치(또는 inline) 분기
+    if type_code == "bulk_collect":
+        started_at = datetime.now()
+        exec_result = await _execute_bulk_collect_module(
+            target_module, db, flow_id=flow_id,
+        )
+        duration_ms = int(
+            (datetime.now() - started_at).total_seconds() * 1000
+        )
+        await _save_autorun_log(
+            db=db, user_id=current_user.id, flow_id=flow_id,
+            flow_name=flow.name, module_name=target_module.name,
+            blog_name="-", result=exec_result,
+            duration_ms=duration_ms, action="bulk_collect",
+        )
+        status = "queued" if exec_result.get("queued") else "completed"
+        return {
+            "status": status,
+            "module_type": type_code,
+            "module_name": target_module.name,
+            "message": exec_result.get("message", ""),
+            "task_id": exec_result.get("task_id"),
+            "duration_ms": duration_ms,
         }
 
     # 기존 동기 실행 방식 유지

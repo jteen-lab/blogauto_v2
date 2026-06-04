@@ -5,14 +5,19 @@ Features:
 - 기본 간격에 랜덤 변동률 적용
 - 활성 시간대 고려한 다음 실행 시간 계산
 - 제외 요일 스킵 처리
+- bulk_collect 등 별도 모듈 settings 에서 GP 와 동일한 jitter 객체
+  구조를 읽어오는 정규화 헬퍼 제공
 """
 
+import logging
 import random
 from datetime import datetime, timedelta, time
-from typing import List, TYPE_CHECKING
+from typing import Any, Dict, List, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..models.publish_profile import PublishProfile
+
+logger = logging.getLogger(__name__)
 
 
 def calculate_jittered_interval(
@@ -159,3 +164,154 @@ def get_jitter_percentage(original_interval: int, jittered_interval: int) -> flo
 
     percentage = ((jittered_interval - original_interval) / original_interval) * 100
     return round(percentage, 1)
+
+
+# 기본 지터 범위 (GP/bulk_collect 모두 동일)
+DEFAULT_JITTER_MIN_PERCENT = -20
+DEFAULT_JITTER_MAX_PERCENT = 30
+
+
+def normalize_jitter_config(raw: Any) -> Dict[str, Any]:
+    """다양한 지터 설정 구조를 GP 표준 (enabled/min_percent/max_percent) 으로 정규화.
+
+    지원 입력:
+        1. 신 객체 형식 (권장)::
+
+            {"enabled": True, "min_percent": -20, "max_percent": 30}
+
+        2. 구 평탄 형식 (bulk_collect 레거시)::
+
+            {
+                "jitter_enabled": True,
+                "jitter_min_percent": 80,    # 양수만 사용, 100 기준
+                "jitter_max_percent": 120,
+            }
+
+           이 경우 ``min_percent = jitter_min_percent - 100`` 식으로 변환.
+           (80 → -20, 120 → +20). 변환 결과가 비현실적(±200% 이상)이면 기본값.
+
+        3. None 또는 빈 dict → 기본값 반환 (disabled).
+
+    Args:
+        raw: 지터 설정 값. 객체/평탄/None 모두 허용.
+
+    Returns:
+        정규화된 dict ``{enabled, min_percent, max_percent}``.
+
+    Examples:
+        >>> normalize_jitter_config(
+        ...     {"enabled": True, "min_percent": -20, "max_percent": 30}
+        ... )
+        {'enabled': True, 'min_percent': -20, 'max_percent': 30}
+
+        >>> normalize_jitter_config({
+        ...     "jitter_enabled": True,
+        ...     "jitter_min_percent": 80,
+        ...     "jitter_max_percent": 120,
+        ... })
+        {'enabled': True, 'min_percent': -20, 'max_percent': 20}
+
+        >>> normalize_jitter_config(None)
+        {'enabled': False, 'min_percent': -20, 'max_percent': 30}
+    """
+    default = {
+        "enabled": False,
+        "min_percent": DEFAULT_JITTER_MIN_PERCENT,
+        "max_percent": DEFAULT_JITTER_MAX_PERCENT,
+    }
+    if not raw or not isinstance(raw, dict):
+        return default
+
+    # Case 1: 신 객체 형식 - "enabled" 키 존재
+    if "enabled" in raw or "min_percent" in raw or "max_percent" in raw:
+        try:
+            return {
+                "enabled": bool(raw.get("enabled", False)),
+                "min_percent": int(
+                    raw.get("min_percent", DEFAULT_JITTER_MIN_PERCENT)
+                ),
+                "max_percent": int(
+                    raw.get("max_percent", DEFAULT_JITTER_MAX_PERCENT)
+                ),
+            }
+        except (TypeError, ValueError) as exc:
+            logger.warning(
+                "[JITTER] 신 객체 형식 파싱 실패, 기본값 사용 | error=%s | raw=%s",
+                exc, raw,
+            )
+            return default
+
+    # Case 2: 구 평탄 형식 - "jitter_enabled" 키 존재
+    if "jitter_enabled" in raw or "jitter_min_percent" in raw:
+        try:
+            enabled = bool(raw.get("jitter_enabled", False))
+            legacy_min = int(raw.get("jitter_min_percent", 100))
+            legacy_max = int(raw.get("jitter_max_percent", 100))
+            # 100 기준 양수 → ±% 변환 (80 → -20, 120 → +20)
+            min_pct = legacy_min - 100
+            max_pct = legacy_max - 100
+            # 비현실적 값 가드
+            if abs(min_pct) > 200 or abs(max_pct) > 200:
+                logger.warning(
+                    "[JITTER] 레거시 값 범위 이상, 기본값 사용 | "
+                    "legacy_min=%s legacy_max=%s", legacy_min, legacy_max,
+                )
+                return {**default, "enabled": enabled}
+            return {
+                "enabled": enabled,
+                "min_percent": min_pct,
+                "max_percent": max_pct,
+            }
+        except (TypeError, ValueError) as exc:
+            logger.warning(
+                "[JITTER] 레거시 평탄 형식 파싱 실패, 기본값 사용 | error=%s | raw=%s",
+                exc, raw,
+            )
+            return default
+
+    return default
+
+
+def resolve_module_jitter(settings: Dict[str, Any]) -> Dict[str, Any]:
+    """모듈 ``settings`` JSONB 에서 지터 설정을 추출/정규화.
+
+    bulk_collect 모듈의 settings 구조::
+
+        # 신 형식 (권장 - GP 와 통일)
+        {
+            "schedule": {
+                "jitter": {
+                    "enabled": True,
+                    "min_percent": -20,
+                    "max_percent": 30,
+                },
+            },
+        }
+
+        # 구 형식 (레거시 - 호환 지원)
+        {
+            "schedule": {
+                "jitter_enabled": True,
+                "jitter_min_percent": 80,
+                "jitter_max_percent": 120,
+            },
+        }
+
+    Args:
+        settings: ``Module.settings`` dict.
+
+    Returns:
+        ``{enabled, min_percent, max_percent}`` 표준 dict.
+    """
+    if not settings or not isinstance(settings, dict):
+        return normalize_jitter_config(None)
+    schedule = settings.get("schedule") or {}
+    if not isinstance(schedule, dict):
+        return normalize_jitter_config(None)
+
+    # 신 객체 형식 우선
+    obj = schedule.get("jitter")
+    if obj:
+        return normalize_jitter_config(obj)
+    # 레거시 평탄 형식 폴백
+    return normalize_jitter_config(schedule)

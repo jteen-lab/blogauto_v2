@@ -55,15 +55,17 @@ async def save_seo_settings(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    """SEO 설정 저장."""
+    """SEO 설정 저장.
+
+    auto_seo_enabled 활성화 시 detected_plugin이 없으면
+    자동으로 플러그인 감지를 시도합니다.
+    """
     blog = await get_blog_or_404(blog_id, current_user, db)
 
     seo_config = blog.seo_config or {}
 
-    # 클라이언트가 { seo_config: {...} } 래핑으로 전송할 수 있음
     data = request.get("seo_config", request)
 
-    # 허용 필드만 업데이트 (detected_plugin/detected_at은 감지로만 설정)
     allowed_fields = {
         "auto_seo_enabled",
         "focus_keyphrase_method",
@@ -76,6 +78,33 @@ async def save_seo_settings(
         if key in allowed_fields:
             seo_config[key] = value
 
+    # auto_seo_enabled 활성화 시 detected_plugin 없으면 자동 감지
+    warning = None
+    if (
+        seo_config.get("auto_seo_enabled")
+        and not seo_config.get("detected_plugin")
+        and blog.platform.value == "wordpress"
+    ):
+        from ..services.publishing.seo_detector import SEODetector
+
+        detector = SEODetector()
+        detect_result = await detector.detect(blog.url)
+        if detect_result.get("detected_plugin"):
+            seo_config["detected_plugin"] = detect_result["detected_plugin"]
+            seo_config["detected_at"] = detect_result["detected_at"]
+            logger.info(
+                f"SEO 자동 감지 성공 | blog_id={blog_id} | "
+                f"plugin={detect_result['detected_plugin']}"
+            )
+        else:
+            warning = (
+                "SEO 플러그인이 감지되지 않았습니다. "
+                "WordPress에 Yoast SEO가 설치·활성화되어 있는지 확인하세요."
+            )
+            logger.warning(
+                f"SEO 자동 감지 실패 | blog_id={blog_id} | url={blog.url}"
+            )
+
     blog.seo_config = seo_config
     flag_modified(blog, "seo_config")
     await db.commit()
@@ -83,10 +112,13 @@ async def save_seo_settings(
 
     logger.info(f"SEO 설정 저장 | blog_id={blog_id}")
 
-    return {
+    result = {
         "blog_id": blog.id,
         "seo_config": blog.seo_config or {},
     }
+    if warning:
+        result["warning"] = warning
+    return result
 
 
 @router.post(

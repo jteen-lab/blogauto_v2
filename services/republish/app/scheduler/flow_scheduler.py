@@ -229,9 +229,20 @@ class FlowScheduler:
                         )
                     else:
                         module_settings = module.settings or {}
-                        interval_minutes = module_settings.get(
-                            "interval_minutes", 60
-                        )
+                        # bulk_collect 는 nested 경로(settings.schedule.interval_minutes)
+                        # 에 저장한다(UI: _bulk_collect_form.html). 4-3 핫픽스로
+                        # 모듈 타입별 폴백 경로 분기.
+                        if module_type_code == "bulk_collect":
+                            schedule_cfg = (
+                                module_settings.get("schedule") or {}
+                            )
+                            interval_minutes = schedule_cfg.get(
+                                "interval_minutes", 60
+                            )
+                        else:
+                            interval_minutes = module_settings.get(
+                                "interval_minutes", 60
+                            )
                         logger.info(
                             f"[FLOW_SCHEDULER] GP 없음, 폴백 간격 사용 | "
                             f"FlowID={flow_id} | ActionType={module_type_code} | "
@@ -259,10 +270,16 @@ class FlowScheduler:
                             flow, action_type=module_type_code, state=state
                         )
                     else:
+                        # bulk_collect 등 GP 없이 자체 스케줄을 가지는 모듈은
+                        # module_settings 를 넘겨 모듈 단위 지터를 적용한다.
+                        mod_settings_for_jitter = None
+                        if not gp_settings and module_type_code == "bulk_collect":
+                            mod_settings_for_jitter = module.settings or {}
                         await self._schedule_next_execution(
                             db, flow, action_type=module_type_code, state=state,
                             interval_minutes=interval_minutes,
-                            gp_settings=gp_settings
+                            gp_settings=gp_settings,
+                            module_settings=mod_settings_for_jitter,
                         )
 
                     registered_count += 1
@@ -782,8 +799,20 @@ class FlowScheduler:
         state: FlowExecutionState,
         interval_minutes: int,
         gp_settings: dict = None,
+        module_settings: dict = None,
     ) -> None:
-        """다음 실행 시간 계산 및 스케줄 등록 (GP 기반, action_type 사용)"""
+        """다음 실행 시간 계산 및 스케줄 등록 (GP 기반, action_type 사용).
+
+        지터 우선순위:
+            1. GP 가 있으면 GP 의 ``jitter`` 객체 사용.
+            2. ``module_settings`` 가 제공되면 (예: bulk_collect 등 GP 없는
+               자체 스케줄 모듈) ``settings.schedule.jitter`` 를 사용.
+               레거시 평탄 키 ``jitter_enabled/jitter_min_percent/...`` 도
+               자동 폴백.
+            3. 모두 없으면 지터 비활성.
+        """
+        from app.scheduler.jitter import resolve_module_jitter
+
         # fixed_time 모드 우선 처리 (GP 없는 collect/data)
         if not gp_settings and action_type in ("collect", "data"):
             fixed_next = self._get_module_next_fixed_time(flow, action_type)
@@ -799,13 +828,26 @@ class FlowScheduler:
                 )
                 return
 
-        # GP 설정에서 schedule_matrix/jitter 사용 (GP 없으면 기본값)
+        # GP 설정에서 schedule_matrix/jitter 사용 (GP 없으면 모듈 설정 또는 기본값)
         if gp_settings:
             schedule_matrix = gp_settings.get("schedule_matrix")
             jitter = gp_settings.get("jitter", {})
             jitter_enabled = jitter.get("enabled", False)
             jitter_min = jitter.get("min_percent", -15)
             jitter_max = jitter.get("max_percent", 25)
+        elif module_settings:
+            # bulk_collect 등 모듈 자체 지터 (GP 와 동일 함수 재사용)
+            schedule_matrix = None
+            mod_jitter = resolve_module_jitter(module_settings)
+            jitter_enabled = mod_jitter["enabled"]
+            jitter_min = mod_jitter["min_percent"]
+            jitter_max = mod_jitter["max_percent"]
+            if jitter_enabled:
+                logger.info(
+                    f"[FLOW_SCHEDULER] 모듈 지터 적용 | FlowID={flow.id} | "
+                    f"ActionType={action_type} | "
+                    f"jitter=±{jitter_min}~{jitter_max}%"
+                )
         else:
             schedule_matrix = None
             jitter_enabled = False
@@ -1356,7 +1398,7 @@ class FlowScheduler:
                 flow, action_type
             )
 
-        # GP jitter 설정 적용
+        # 지터 적용: GP > bulk_collect 모듈 settings > 비활성
         if gp_settings:
             _jitter = gp_settings.get("jitter", {})
             next_execution = state.calculate_next_execution(
@@ -1366,6 +1408,25 @@ class FlowScheduler:
                 jitter_min_percent=_jitter.get("min_percent", -15),
                 jitter_max_percent=_jitter.get("max_percent", 25),
             )
+        elif action_type == "bulk_collect":
+            # bulk_collect 사이클 재스케줄링도 GP 와 동일 지터 함수 재사용.
+            from app.scheduler.jitter import resolve_module_jitter
+            mod_settings = self._get_module_settings_for_action(
+                flow, action_type
+            ) or {}
+            mod_jitter = resolve_module_jitter(mod_settings)
+            next_execution = state.calculate_next_execution(
+                interval_minutes=interval_minutes,
+                jitter_enabled=mod_jitter["enabled"],
+                jitter_min_percent=mod_jitter["min_percent"],
+                jitter_max_percent=mod_jitter["max_percent"],
+            )
+            if mod_jitter["enabled"]:
+                logger.info(
+                    f"[FLOW_SCHEDULER] bulk_collect 재스케줄 지터 적용 | "
+                    f"FlowID={flow.id} | "
+                    f"jitter=±{mod_jitter['min_percent']}~{mod_jitter['max_percent']}%"
+                )
         else:
             next_execution = state.calculate_next_execution(
                 interval_minutes=interval_minutes,
@@ -1531,6 +1592,25 @@ class FlowScheduler:
     # ===========================================
     # GP(Growth Profile) 기반 스케줄 헬퍼
     # ===========================================
+
+    def _get_module_settings_for_action(
+        self,
+        flow: Flow,
+        action_type: str,
+    ) -> Optional[dict]:
+        """플로우 내 ``action_type`` 에 해당하는 모듈의 settings dict 조회.
+
+        지터/스케줄 등 모듈 단위 설정을 _reschedule_next 같은 콜백에서
+        다시 읽을 때 사용한다. 매칭되는 모듈이 없거나 settings 가 없으면
+        ``None`` 반환.
+        """
+        for link in flow.module_links:
+            module = link.module
+            if not module or not module.module_type:
+                continue
+            if module.module_type.code == action_type:
+                return module.settings or {}
+        return None
 
     def _get_module_fallback_interval(
         self,
@@ -2801,7 +2881,14 @@ class FlowScheduler:
         duration_ms: int,
         action: str = "republish"
     ) -> None:
-        """AutorunLog DB 저장 (flows_execute.py와 동일)"""
+        """AutorunLog DB 저장 (flows_execute.py와 동일).
+
+        수집/대량수집 액션의 경우 ``autorun_message_builder`` 를 통해
+        통계가 포함된 한국어 메시지로 재가공하고, NULL 로 남던
+        ``posts_processed/success/failed`` 컬럼도 함께 채운다.
+        """
+        from app.services.autorun_message_builder import build_collect_log_stats
+
         try:
             # Celery 큐 등록 메시지는 action을 "queue_register"로 변경
             log_message = result.get("message", "")
@@ -2813,6 +2900,7 @@ class FlowScheduler:
                     "publish": "발행",
                     "republish": "재발행",
                     "collect": "수집",
+                    "bulk_collect": "대량 수집",
                     "data": "데이터",
                 }
                 worker_kind = worker_kind_map.get(action, "유틸")
@@ -2828,6 +2916,13 @@ class FlowScheduler:
                 log_message = (
                     f"{blog_name}{title_part} - {worker_kind} {suffix}"
                 )
+
+            # 수집/대량수집은 통계 기반 메시지로 재구성 (queue_register 제외).
+            collect_stats = None
+            if action in ("collect", "bulk_collect"):
+                collect_stats = build_collect_log_stats(result, action)
+                if collect_stats is not None:
+                    log_message = collect_stats.message
 
             # 상태 결정: hold > skipped > success/failed
             if result.get("hold"):
@@ -2868,6 +2963,12 @@ class FlowScheduler:
                 duration_ms=duration_ms,
                 message=log_message
             )
+
+            # 수집/대량수집 액션의 카운트 컬럼 채우기.
+            if collect_stats is not None:
+                log.posts_processed = collect_stats.posts_processed
+                log.posts_success = collect_stats.posts_success
+                log.posts_failed = collect_stats.posts_failed
 
             db.add(log)
             logger.info(f"[FLOW_SCHEDULER] AutorunLog 저장 | blog={blog_name} | action={action} | status={status}")
