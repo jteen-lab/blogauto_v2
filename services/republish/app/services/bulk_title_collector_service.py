@@ -1,5 +1,5 @@
 """
-대량 제목 수집 서비스 (2단계 분리 방식)
+대량 제목 수집 서비스 (2단계 분리 방식) — LEGACY
 
 수집 주기마다 효율적으로 URL과 제목을 분리 수집합니다.
 
@@ -20,6 +20,16 @@
 - 수집 시간 단축 (한 번에 1~3개 URL만 처리)
 - URL 축적 → 점진적 제목 수집
 - 관리 용이 (URL 상태 추적 가능)
+
+------------------------------------------------------------------
+DEPRECATED (Phase B-2026-06-02):
+    이 파일은 `keyword_collector_service` 호환을 위해 보존된다.
+    신규 코드는 `app.services.bulk_collect` 패키지의
+    ChunkProcessor / DomainLimiter / LastmodTracker / Timebox 와
+    `app.services.url_classifier.URLClassifier` 를 사용해야 한다.
+    사이트맵/제목 추출 공용 로직은 `app.services.bulk_collect.sitemap_parser`
+    로 이동했다. Phase E 에서 이 파일은 thin wrapper 로 정리될 예정.
+------------------------------------------------------------------
 """
 import asyncio
 import logging
@@ -80,7 +90,15 @@ class BulkTitleCollectorService:
         max_urls_per_keyword: int = 100
     ) -> Dict[str, Any]:
         """
-        Phase 1: 키워드로 검색하여 URL 수집 및 저장
+        Phase 1: 키워드로 검색하여 URL 수집 및 저장.
+
+        DEPRECATED (Phase E, 2026-06-02):
+            본 메서드는 레거시 ``keyword_collector_service`` 의 호환 경로에서만
+            호출된다. 신규 코드는 ``app.services.bulk_collect`` 패키지의
+            ``ChunkProcessor`` / ``DomainLimiter`` / ``LastmodTracker`` /
+            ``Timebox`` 와 ``app.services.url_classifier.URLClassifier`` 를
+            사용해야 한다. 동작은 호환 유지를 위해 그대로 두지만, 신규 기능
+            확장은 금지한다.
 
         Args:
             keywords: 검색 키워드 목록 (최대 20개)
@@ -122,7 +140,9 @@ class BulkTitleCollectorService:
             "platforms": {}
         }
 
-        # 이번 수집에서 이미 추가된 도메인 추적 (중복 방지)
+        # 이번 수집에서 이미 추가된 도메인 추적 (중복 방지).
+        # DEPRECATED (Phase E): 레거시 "도메인 단위 1회만 적재" 정책.
+        # 신규 bulk_collect 모듈은 사용 안 함 (사이트맵 기반 청크 수집으로 대체).
         added_domains: Set[str] = set()
 
         try:
@@ -227,24 +247,35 @@ class BulkTitleCollectorService:
         """
         URL을 CollectedUrl 테이블에 저장 (중복 시 스킵)
 
+        중복 체크 키: (url, source_module_id IS NULL)
+            - alembic 042에서 UNIQUE 제약이 (domain) → (url, source_module_id)로 변경됨
+            - 레거시 호출자(keyword_collector_service)는 모듈 ID 없이 적재하므로
+              source_module_id=NULL인 row끼리만 url 단위 중복 체크 수행
+            - NULL끼리는 NULLS DISTINCT(기본)라 DB UNIQUE가 안 걸리므로
+              애플리케이션 레벨에서 명시적으로 중복 차단해야 함
+
         Returns:
             True면 새로 저장됨, False면 이미 존재
         """
         try:
-            # 이미 존재하는지 확인
+            # 이미 존재하는지 확인 (url + source_module_id IS NULL 조합)
             existing = await self.db.execute(
-                select(CollectedUrl).where(CollectedUrl.domain == domain)
+                select(CollectedUrl)
+                .where(CollectedUrl.url == url)
+                .where(CollectedUrl.source_module_id.is_(None))
             )
-            if existing.scalar_one_or_none():
+            if existing.scalars().first():
+                logger.debug(f"[BULK_COLLECTOR] 중복 URL 스킵: {url}")
                 return False
 
-            # 새 URL 저장
+            # 새 URL 저장 (source_module_id=None: 레거시 적재 경로)
             new_url = CollectedUrl(
                 url=url,
                 domain=domain,
                 platform=platform,
                 search_keyword=search_keyword,
                 search_title=search_title,
+                source_module_id=None,
                 is_processed=False,
                 is_active=True
             )
@@ -254,7 +285,7 @@ class BulkTitleCollectorService:
         except Exception as e:
             # IntegrityError (중복) 등의 예외 발생 시 세션 상태 복구
             await self.db.rollback()
-            logger.warning(f"[BULK_COLLECTOR] URL 저장 오류 ({domain}): {e}")
+            logger.warning(f"[BULK_COLLECTOR] URL 저장 오류 ({url}): {e}")
             return False
 
     # =========================================================================

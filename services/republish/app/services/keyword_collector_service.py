@@ -998,7 +998,8 @@ class KeywordCollectorService:
         enable_normal_collect: bool = True,
         enable_bulk_collect: bool = False,
         bulk_collect_delay: float = 0.5,
-        bulk_urls_per_cycle: int = 3
+        bulk_urls_per_cycle: int = 3,
+        module_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         모든 소스에서 키워드/제목 수집
@@ -1011,9 +1012,15 @@ class KeywordCollectorService:
             title_limit: 제목 최대 수집 수량 (None=무제한, 대량 수집용)
             enable_related_search: 연관 키워드 확장 여부 (기본 True)
             enable_normal_collect: 일반 수집 활성화 (기본 True)
-            enable_bulk_collect: 대량 수집 활성화 (기본 False)
-            bulk_collect_delay: 대량 수집 시 사이트 간 딜레이 (초)
-            bulk_urls_per_cycle: 대량 수집 시 주기당 처리할 URL 수 (기본 3)
+            enable_bulk_collect: 대량 수집 활성화 (기본 False).
+                DEPRECATED (Phase E, 2026-06-02): 대량 수집은 별도 모듈 타입
+                ``bulk_collect`` 로 분리되었으며 본 인자는 레거시 호환을 위해
+                유지된다. True 가 전달되면 ``logger.warning`` 으로 호출 사실을
+                기록한다.
+            bulk_collect_delay: 대량 수집 시 사이트 간 딜레이 (초). DEPRECATED.
+            bulk_urls_per_cycle: 대량 수집 시 주기당 처리할 URL 수 (기본 3).
+                DEPRECATED.
+            module_id: 호출 모듈 ID(있을 때). DEPRECATED 로그에 식별자로 포함된다.
 
         Returns:
             수집 결과 요약
@@ -1211,8 +1218,23 @@ class KeywordCollectorService:
             )
 
         # ★ 대량 수집 실행 (enable_bulk_collect가 True인 경우)
+        # DEPRECATED (Phase E, 2026-06-02):
+        #     대량 수집은 별도 모듈 타입 ``bulk_collect`` 로 분리되었음.
+        #     기존 collect 모듈의 enable_bulk_collect=True 옵션은 과도기 동안만
+        #     동작을 유지한다 (옵션 C — 사용자 수동 마이그레이션 정책).
+        #     사용자 마이그레이션 완료 후 별도 작업으로 이 분기 전체를 제거할
+        #     예정이며, 호출 빈도를 운영자가 파악할 수 있도록 warning 로그를
+        #     남긴다. 동작 자체는 변경하지 않는다.
         bulk_result = None
         if enable_bulk_collect:
+            logger.warning(
+                "[DEPRECATED:BULK_COLLECT] 레거시 collect 모듈의 대량 수집 분기 "
+                "호출됨 | module_id=%s, urls_per_cycle=%s, delay=%s. "
+                "새 bulk_collect 모듈로 마이그레이션 권장.",
+                module_id,
+                bulk_urls_per_cycle,
+                bulk_collect_delay,
+            )
             logger.info(
                 f"[COLLECTOR] 🚀 대량 수집 시작 "
                 f"(urls_per_cycle={bulk_urls_per_cycle}, max_titles_per_url=무제한)..."
