@@ -53,6 +53,8 @@ function createPromptBuilderState(opts = {}) {
         justApplied: false,
         newPresetName: '',
         presetWarning: '',
+        blockMsg: '',       // 옵션 저장/추가/삭제 안내 메시지
+        blockBusy: false,   // CRUD 진행 중 중복요청 방지
 
         // ── 초기화 ────────────────────────────────────────
         init() {
@@ -202,11 +204,9 @@ function createPromptBuilderState(opts = {}) {
                 const lists = { persona: this.personas, reader: this.readers, pattern: this.patterns, tone: this.tones };
                 const list = lists[field];
                 if (!list) return;
-                let body = this.find(list, this[field])?.body || '';
-                if (field === 'pattern') {
-                    body = this.renderPatternBody(this.find(list, this[field]));
-                }
-                this.overrides[field] = body;
+                // 편집/저장은 항상 '원문 그대로'. (pattern 도 renderPatternBody 로
+                // 재가공하지 않음 — 재가공하면 fallback 섹션이 덧붙어 저장이 오염됨)
+                this.overrides[field] = this.find(list, this[field])?.body || '';
             }
         },
         resetOverride(field) {
@@ -214,12 +214,119 @@ function createPromptBuilderState(opts = {}) {
             this.editing[field] = false;
         },
 
+        // ── 옵션 영구 저장/추가/삭제 (DB CRUD) ───────────────
+        _listFor(field) {
+            return {
+                persona: this.personas, reader: this.readers,
+                pattern: this.patterns, tone: this.tones,
+            }[field];
+        },
+        _applyBlocks(field, items) {
+            if (!Array.isArray(items)) return;
+            if (field === 'persona') this.personas = items;
+            else if (field === 'reader') this.readers = items;
+            else if (field === 'pattern') this.patterns = items;
+            else if (field === 'tone') this.tones = items;
+        },
+        flashBlockMsg(msg) {
+            this.blockMsg = msg;
+            setTimeout(() => { if (this.blockMsg === msg) this.blockMsg = ''; }, 2000);
+        },
+        async reloadBlocks() {
+            try {
+                const res = await fetch('/api/v1/prompt-builder/blocks', { credentials: 'include' });
+                if (!res.ok) return;
+                const all = await res.json();
+                const byType = { persona: [], reader: [], pattern: [], tone: [] };
+                for (const b of all) {
+                    if (b.is_active && byType[b.block_type]) {
+                        byType[b.block_type].push({
+                            id: b.id, code: b.code, label: b.label,
+                            cluster: b.cluster || '', body: b.body,
+                        });
+                    }
+                }
+                ['persona', 'reader', 'pattern', 'tone'].forEach((f) => {
+                    if (byType[f].length) this._applyBlocks(f, byType[f]);
+                });
+            } catch (e) { console.warn('[prompt-builder] reloadBlocks 실패:', e); }
+        },
+        async persistBlock(field) {
+            if (this.blockBusy) return;
+            const blk = this.find(this._listFor(field), this[field]);
+            if (!blk || !blk.id) { this.flashBlockMsg('기본 데이터라 저장 불가'); return; }
+            const body = this.overrides[field];
+            if (body == null || !body.trim()) { this.flashBlockMsg('내용이 비었습니다'); return; }
+            this.blockBusy = true;
+            try {
+                const res = await fetch('/api/v1/prompt-builder/blocks/' + blk.id, {
+                    method: 'PUT', credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ body }),
+                });
+                if (!res.ok) { this.flashBlockMsg('저장 실패 (HTTP ' + res.status + ')'); return; }
+                await this.reloadBlocks();
+                this.overrides[field] = null;
+                this.editing[field] = false;
+                this.flashBlockMsg('영구 저장됨');
+            } finally { this.blockBusy = false; }
+        },
+        async saveAsNewBlock(field) {
+            if (this.blockBusy) return;
+            const cur = this.find(this._listFor(field), this[field]);
+            const body = (this.overrides[field] != null ? this.overrides[field] : (cur ? cur.body : '')).trim();
+            if (!body) { this.flashBlockMsg('내용이 비었습니다'); return; }
+            const label = (window.prompt('새 옵션 이름을 입력하세요') || '').trim();
+            if (!label) return;
+            this.blockBusy = true;
+            try {
+                const res = await fetch('/api/v1/prompt-builder/blocks', {
+                    method: 'POST', credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ block_type: field, label, body }),
+                });
+                if (!res.ok) { this.flashBlockMsg('추가 실패 (HTTP ' + res.status + ')'); return; }
+                const created = await res.json();
+                await this.reloadBlocks();
+                this[field] = created.code;
+                this.overrides[field] = null;
+                this.editing[field] = false;
+                this.flashBlockMsg('새 옵션 추가됨: ' + label);
+            } finally { this.blockBusy = false; }
+        },
+        async deleteSelectedBlock(field) {
+            if (this.blockBusy) return;
+            const blk = this.find(this._listFor(field), this[field]);
+            if (!blk || !blk.id) { this.flashBlockMsg('기본 데이터라 삭제 불가'); return; }
+            if (!window.confirm('선택한 옵션을 삭제할까요?\n' + blk.label)) return;
+            this.blockBusy = true;
+            try {
+                const res = await fetch('/api/v1/prompt-builder/blocks/' + blk.id, {
+                    method: 'DELETE', credentials: 'include',
+                });
+                if (!res.ok) { this.flashBlockMsg('삭제 실패 (HTTP ' + res.status + ')'); return; }
+                this[field] = '';
+                this.overrides[field] = null;
+                this.editing[field] = false;
+                await this.reloadBlocks();
+                this.flashBlockMsg('삭제됨');
+            } finally { this.blockBusy = false; }
+        },
+
         // ── 패턴 본문 동적 재생성 ─────────────────────────
         renderPatternBody(pattern) {
             if (!pattern) return '(블록을 선택하세요)';
-            const n = this.sectionCount;
+            // 기본 제공 패턴(P1~P5)만 섹션 수에 맞춰 동적 재배치.
+            // 커스텀/수정 패턴은 작성한 원문을 그대로 사용(재가공 시 fallback
+            // 섹션이 덧붙어 사용자 의도가 깨짐).
+            const isBuiltin = /^P[1-5]$/i.test(pattern.code || '');
             const parsed = this.parsePatternBody(pattern.body);
-            const layout = this.computeLayout(n);
+            const sectionLines = parsed.tables.length + parsed.lists.length + parsed.others.length;
+            if (!isBuiltin || sectionLines === 0) {
+                return pattern.body;
+            }
+            const n = this.sectionCount;
+            const layout = this.computeLayout(n, pattern.code);
             const letters = 'ABCDEFGHIJKL'.split('');
             const pools = { table: [...parsed.tables], list: [...parsed.lists], other: [...parsed.others] };
             const fallback = { table: '추가 비교·정리표', list: '추가 정리 목록', other: '심화·확장 관점' };
@@ -238,7 +345,7 @@ function createPromptBuilderState(opts = {}) {
             return [parsed.header, ...newLines].join('\n');
         },
         parsePatternBody(body) {
-            const sectionRe = /^- ([A-Z]):\s*(.+)$/;
+            const sectionRe = /^\s*-\s*([A-Z]):\s*(.+)$/;
             const tables = [], lists = [], others = [], headerLines = [];
             for (const raw of body.split('\n')) {
                 const m = raw.match(sectionRe);
@@ -250,13 +357,29 @@ function createPromptBuilderState(opts = {}) {
             }
             return { header: headerLines.join('\n'), tables, lists, others };
         },
-        computeLayout(n) {
+        computeLayout(n, patternCode = '') {
+            // 패턴별 구조 차별화: 표/목록 배치를 패턴마다 다르게 한다.
             const layout = new Array(n).fill('other');
-            layout[1] = 'table';
-            layout[2] = 'list';
-            if (n >= 5) {
-                layout[n - 2] = 'table';
-                layout[n - 1] = 'list';
+            const code = (patternCode || this.pattern || '').toUpperCase();
+            const setT = (i) => { if (i >= 0 && i < n) layout[i] = 'table'; };
+            const setL = (i) => { if (i >= 0 && i < n) layout[i] = 'list'; };
+            const mid = Math.floor(n / 2);
+            switch (code) {
+                case 'P2': // 교육·안내형: 표1 + 목록2(체크리스트·FAQ)
+                    setT(1); setL(2); setL(n - 1);
+                    break;
+                case 'P3': // 가이드·튜토리얼형: 단계 목록 중심(목록 多, 표 1)
+                    setL(1); setL(2); setT(mid); setL(n - 1);
+                    break;
+                case 'P5': // 경험·공감형: 서술 중심(표1·목록1)
+                    setT(mid); setL(n - 1);
+                    break;
+                case 'P1': // 정보·정리형 / 분석·결정형: 표2·목록2 균형
+                case 'P4':
+                default:
+                    setT(1); setL(2);
+                    if (n >= 5) { setT(n - 2); setL(n - 1); }
+                    break;
             }
             return layout;
         },
@@ -294,7 +417,7 @@ function createPromptBuilderState(opts = {}) {
         buildStructure() {
             const n = this.sectionCount;
             const letters = 'ABCDEFGHIJKL'.split('');
-            const layout = this.computeLayout(n);
+            const layout = this.computeLayout(n, this.pattern);
             const mid = Math.ceil(n / 2);
             const front = letters.slice(0, mid);
             const back = letters.slice(mid, n);

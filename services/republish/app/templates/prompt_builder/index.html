@@ -116,6 +116,15 @@
                     </div>
                     <textarea x-model="overrides.persona"
                               class="w-full h-40 p-2 text-xs border rounded font-mono bg-white"></textarea>
+                    <div class="flex items-center gap-2 mt-2">
+                        <button type="button" @click="persistBlock('persona')" :disabled="blockBusy"
+                                class="px-3 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-40">영구 저장</button>
+                        <button type="button" @click="saveAsNewBlock('persona')" :disabled="blockBusy"
+                                class="px-3 py-1 text-xs bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-40">새 옵션으로 저장</button>
+                        <button type="button" @click="deleteSelectedBlock('persona')" :disabled="blockBusy"
+                                class="px-3 py-1 text-xs border border-red-300 text-red-600 rounded hover:bg-red-50 disabled:opacity-40">삭제</button>
+                        <span x-show="blockMsg" x-text="blockMsg" class="text-xs text-emerald-700"></span>
+                    </div>
                 </div>
             </div>
 
@@ -152,6 +161,15 @@
                     </div>
                     <textarea x-model="overrides.reader"
                               class="w-full h-40 p-2 text-xs border rounded font-mono bg-white"></textarea>
+                    <div class="flex items-center gap-2 mt-2">
+                        <button type="button" @click="persistBlock('reader')" :disabled="blockBusy"
+                                class="px-3 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-40">영구 저장</button>
+                        <button type="button" @click="saveAsNewBlock('reader')" :disabled="blockBusy"
+                                class="px-3 py-1 text-xs bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-40">새 옵션으로 저장</button>
+                        <button type="button" @click="deleteSelectedBlock('reader')" :disabled="blockBusy"
+                                class="px-3 py-1 text-xs border border-red-300 text-red-600 rounded hover:bg-red-50 disabled:opacity-40">삭제</button>
+                        <span x-show="blockMsg" x-text="blockMsg" class="text-xs text-emerald-700"></span>
+                    </div>
                 </div>
             </div>
 
@@ -191,6 +209,15 @@
                     </div>
                     <textarea x-model="overrides.pattern"
                               class="w-full h-52 p-2 text-xs border rounded font-mono bg-white"></textarea>
+                    <div class="flex items-center gap-2 mt-2">
+                        <button type="button" @click="persistBlock('pattern')" :disabled="blockBusy"
+                                class="px-3 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-40">영구 저장</button>
+                        <button type="button" @click="saveAsNewBlock('pattern')" :disabled="blockBusy"
+                                class="px-3 py-1 text-xs bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-40">새 옵션으로 저장</button>
+                        <button type="button" @click="deleteSelectedBlock('pattern')" :disabled="blockBusy"
+                                class="px-3 py-1 text-xs border border-red-300 text-red-600 rounded hover:bg-red-50 disabled:opacity-40">삭제</button>
+                        <span x-show="blockMsg" x-text="blockMsg" class="text-xs text-emerald-700"></span>
+                    </div>
                 </div>
             </div>
 
@@ -230,6 +257,15 @@
                     </div>
                     <textarea x-model="overrides.tone"
                               class="w-full h-40 p-2 text-xs border rounded font-mono bg-white"></textarea>
+                    <div class="flex items-center gap-2 mt-2">
+                        <button type="button" @click="persistBlock('tone')" :disabled="blockBusy"
+                                class="px-3 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-40">영구 저장</button>
+                        <button type="button" @click="saveAsNewBlock('tone')" :disabled="blockBusy"
+                                class="px-3 py-1 text-xs bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-40">새 옵션으로 저장</button>
+                        <button type="button" @click="deleteSelectedBlock('tone')" :disabled="blockBusy"
+                                class="px-3 py-1 text-xs border border-red-300 text-red-600 rounded hover:bg-red-50 disabled:opacity-40">삭제</button>
+                        <span x-show="blockMsg" x-text="blockMsg" class="text-xs text-emerald-700"></span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -264,5 +300,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="/static/js/prompt_builder/app.js"></script>
+<script src="/static/js/prompt_builder/app.js?v=20260607_fix"></script>
 {% endblock %}

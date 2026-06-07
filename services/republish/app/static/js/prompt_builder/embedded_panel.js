@@ -150,12 +150,21 @@ function getBuilderAxisHTML(field, title, listName) {
         </div>
         <div x-show="editing.${field}" x-transition class="mt-2 p-2 bg-amber-50 border border-amber-200 rounded">
             <div class="flex items-center justify-between mb-1 text-[11px]">
-                <span class="text-amber-800">임시 수정 — 이 세션에서만. 다른 옵션 선택 시 초기화됩니다.</span>
+                <span class="text-amber-800">옵션 편집 — "영구 저장"으로 이 옵션을 갱신하거나 "새 옵션으로" 추가하세요.</span>
                 <button type="button" @click="resetOverride('${field}')"
-                        class="text-red-600 hover:underline">원본으로</button>
+                        class="text-gray-500 hover:underline">원본으로</button>
             </div>
             <textarea x-model="overrides.${field}"
                       class="w-full h-32 p-2 text-xs border rounded font-mono bg-white"></textarea>
+            <div class="flex items-center gap-2 mt-2">
+                <button type="button" @click="persistBlock('${field}')" :disabled="blockBusy"
+                        class="px-2 py-1 text-[11px] bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-40">영구 저장</button>
+                <button type="button" @click="saveAsNewBlock('${field}')" :disabled="blockBusy"
+                        class="px-2 py-1 text-[11px] bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-40">새 옵션으로 저장</button>
+                <button type="button" @click="deleteSelectedBlock('${field}')" :disabled="blockBusy"
+                        class="px-2 py-1 text-[11px] border border-red-300 text-red-600 rounded hover:bg-red-50 disabled:opacity-40">삭제</button>
+                <span x-show="blockMsg" x-text="blockMsg" class="text-[11px] text-emerald-700"></span>
+            </div>
         </div>
     </div>
     `;
