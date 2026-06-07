@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.database import get_db_session
 from ..models.user import User
 from ..services.module_service import ModuleService
-from ..services.prompt_builder import blocks_for_template
+from ..services.prompt_builder.store import load_blocks_for_template
 from ..routers.auth import get_current_user
 from ..core.logger import get_logger
 
@@ -50,7 +50,7 @@ async def modules_page(
                 "stats": stats,
                 # 프롬프트 빌더용 블록 데이터 (모듈 폼 안의 임베드 패널에서 사용)
                 "prompt_builder_blocks_json": json.dumps(
-                    blocks_for_template(), ensure_ascii=False
+                    await load_blocks_for_template(db), ensure_ascii=False
                 ),
             }
         )

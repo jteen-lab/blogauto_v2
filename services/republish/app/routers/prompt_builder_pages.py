@@ -13,10 +13,12 @@ import json
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.database import get_db_session
 from ..models.user import User
 from ..routers.auth import get_current_user
-from ..services.prompt_builder import blocks_for_template
+from ..services.prompt_builder.store import load_blocks_for_template
 
 templates = Jinja2Templates(directory="app/templates")
 
@@ -27,14 +29,15 @@ router = APIRouter(tags=["프롬프트 빌더 (내부)"])
 async def prompt_builder_page(
     request: Request,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
 ) -> HTMLResponse:
     """프롬프트 빌더 페이지.
 
-    blocks_for_template() 의 데이터를 JSON 으로 직렬화해 템플릿에
+    옵션 블록을 DB(prompt_blocks)에서 읽어 JSON 으로 직렬화해 템플릿에
     전달한다. 페이지의 Alpine.js 가 이 JSON 을 읽어 옵션을 렌더하고
     선택값 변경 시 클라이언트에서 즉시 본문을 조립한다.
     """
-    blocks = blocks_for_template()
+    blocks = await load_blocks_for_template(db)
     return templates.TemplateResponse(
         "prompt_builder/index.html",
         {
