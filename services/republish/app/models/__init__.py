@@ -60,6 +60,9 @@ from .collected_url import CollectedUrl
 # Phase A-041: Bulk Collect 모듈 분리 — 진행 상태
 from .bulk_collect_progress import BulkCollectProgress
 
+# 프롬프트 빌더 옵션 블록 (DB화)
+from .prompt_block import PromptBlock
+
 # Phase M-1: Crawled Post models (유사도 매칭)
 from .crawled_post import CrawledPost
 
@@ -128,6 +131,7 @@ __all__ = [
     "ContentFilter",
     # Phase D-2: Bulk Collection models
     "CollectedUrl",
+    "PromptBlock",
     # Phase A-041: Bulk Collect 모듈 분리 — 진행 상태
     "BulkCollectProgress",
     # Phase M-1: Crawled Post models
