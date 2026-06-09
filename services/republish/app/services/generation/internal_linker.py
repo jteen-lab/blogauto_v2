@@ -30,7 +30,7 @@ for _path in _shared_paths:
         sys.path.insert(0, _path)
         break
 
-from services.similarity_service import SimilarityService
+from services.similarity_service import SimilarityService, KOREAN_STOPWORDS
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +105,11 @@ class InternalLinker:
         body_count = link_settings.get("body_count", 1)
         body_link_type = link_settings.get("body_link_type", "quote")
 
+        # 버튼 클래스: 블로그 placeholders.link_styles 기준 (CSS 치환자와 일치).
+        # 버튼 링크는 div 래퍼로 생성해야 .button-link 블록 스타일이 적용된다.
+        blog_link_styles = (blog.placeholders or {}).get("link_styles") or {}
+        button_class = blog_link_styles.get("button_class") or "button-link"
+
         # SimilarityService 인스턴스 생성
         sim_service = SimilarityService(threshold=similarity_threshold)
 
@@ -123,19 +128,22 @@ class InternalLinker:
 
         used_urls: set = set()
 
-        # 1. 서론 뒤 링크 삽입 (유사도 기반 매칭)
-        intro_similar = self._find_similar_by_score(
-            current_title, all_posts, sim_service, limit=intro_count
+        # 1. 서론 뒤 링크 삽입 (키워드 매칭 + 최신순/랜덤 fallback)
+        # 글 제목 전체 유사도(≥임계값)는 긴 SEO 제목 간에는 거의 0건이라,
+        # 서론은 공통 핵심 키워드 기반으로 매칭하고 부족분을 보충한다.
+        intro_posts = self._find_intro_posts(
+            current_title, all_posts, used_urls, intro_count, sim_service
         )
         content = self._insert_intro_links(
-            content, intro_similar, used_urls, intro_count, intro_link_type
+            content, intro_posts, used_urls, intro_count, intro_link_type,
+            button_class=button_class,
         )
 
-        # 2. 본문 섹션 링크 삽입 (섹션 제목별 유사도 매칭)
-        section_headings = self._extract_section_headings(content)
+        # 2. 본문 섹션 링크 삽입 (각 ## 섹션 끝, 섹션 제목별 유사도 매칭)
         content = self._insert_section_links(
-            content, all_posts, section_headings, used_urls, sim_service,
+            content, all_posts, used_urls, sim_service,
             body_count=body_count, body_link_type=body_link_type,
+            button_class=button_class,
         )
 
         # 3. 결론 뒤 링크 삽입 (랜덤 포스트)
@@ -193,6 +201,96 @@ class InternalLinker:
         scored.sort(key=lambda x: x[1], reverse=True)
         return [post for post, _ in scored[:limit]]
 
+    def _extract_keywords(
+        self, text: str, sim_service: SimilarityService
+    ) -> set:
+        """제목에서 핵심 키워드 집합 추출.
+
+        SimilarityService.normalize_text 로 정규화한 뒤 토큰화하고,
+        불용어와 1글자 토큰을 제거한다. KoNLPy 는 1GB RAM 환경 부담으로
+        사용하지 않는다(generator 의 자동 키워드 추출 정책과 동일).
+
+        Args:
+            text: 원본 제목
+            sim_service: 정규화에 사용할 유사도 서비스
+
+        Returns:
+            핵심 키워드 집합 (정규화·소문자 상태)
+        """
+        norm = sim_service.normalize_text(text)
+        return {
+            t for t in norm.split()
+            if len(t) > 1 and t not in KOREAN_STOPWORDS
+        }
+
+    def _find_intro_posts(
+        self,
+        current_title: str,
+        posts: List[CrawledPost],
+        used_urls: set,
+        count: int,
+        sim_service: SimilarityService,
+    ) -> List[CrawledPost]:
+        """서론 링크 후보 선정: 키워드 매칭 우선 + 최신순/랜덤 fallback.
+
+        1) 현재 글 제목과 공통 핵심 키워드가 1개 이상인 포스트를 겹침 수
+           내림차순으로 정렬해 상위 count 개 선택.
+        2) count 에 못 미치면 남은 포스트를 발행일 내림차순(없으면 뒤)으로
+           보충한다. 본론 75% 임계값과 독립적으로 동작한다.
+
+        Args:
+            current_title: 현재 글 제목
+            posts: 블로그 내 발행 포스트 목록
+            used_urls: 이미 사용된 URL 집합(중복 방지)
+            count: 채울 링크 개수
+            sim_service: 키워드 정규화용 유사도 서비스
+
+        Returns:
+            서론에 삽입할 포스트 목록 (최대 count 개)
+        """
+        if count <= 0:
+            return []
+
+        target_kw = self._extract_keywords(current_title, sim_service)
+
+        # 1. 키워드 겹침 매칭 (공통 키워드 1개 이상)
+        scored: list = []
+        if target_kw:
+            for post in posts:
+                if not post.url or post.url in used_urls:
+                    continue
+                post_kw = self._extract_keywords(post.title, sim_service)
+                overlap = len(target_kw & post_kw)
+                if overlap > 0:
+                    scored.append((post, overlap))
+            scored.sort(key=lambda x: x[1], reverse=True)
+
+        matched = [post for post, _ in scored[:count]]
+
+        # 2. 부족분 fallback (최신 발행순 → 발행일 없는 것 뒤로)
+        if len(matched) < count:
+            chosen_urls = {p.url for p in matched} | used_urls
+            remaining = [
+                p for p in posts
+                if p.url and p.url not in chosen_urls
+            ]
+            with_date = [p for p in remaining if p.published_at]
+            without_date = [p for p in remaining if not p.published_at]
+            with_date.sort(key=lambda p: p.published_at, reverse=True)
+            ordered = with_date + without_date
+            need = count - len(matched)
+            matched.extend(ordered[:need])
+            logger.debug(
+                f"[INTERNAL_LINK] 서론 키워드매칭={len(scored)} "
+                f"| fallback 보충={min(need, len(ordered))}"
+            )
+        else:
+            logger.debug(
+                f"[INTERNAL_LINK] 서론 키워드매칭={len(scored)} (fallback 불필요)"
+            )
+
+        return matched
+
     def _find_best_match_for_section(
         self,
         section_title: str,
@@ -220,18 +318,6 @@ class InternalLinker:
 
     # ── 헤딩 추출 ──────────────────────────────────
 
-    def _extract_section_headings(self, content: str) -> List[str]:
-        """본론 ## 헤딩 텍스트 추출 (서론 첫번째/결론 마지막 제외)"""
-        headings = re.findall(r'^## (.+)', content, re.MULTILINE)
-        if len(headings) <= 2:
-            return []
-        body_headings = headings[1:-1]
-        logger.debug(
-            f"[INTERNAL_LINK] 헤딩 추출 | 전체={len(headings)} "
-            f"| 본론={len(body_headings)} | {body_headings}"
-        )
-        return body_headings
-
     # ── 링크 삽입 ──────────────────────────────────
 
     def _insert_intro_links(
@@ -241,25 +327,34 @@ class InternalLinker:
         used_urls: set,
         max_count: int,
         link_type: str = "button",
+        button_class: str = "button-link",
     ) -> str:
-        """서론 뒤에 링크 삽입 (버튼 또는 일반)"""
+        """서론(도입부) 끝에 링크 삽입 (버튼 또는 일반).
+
+        서론은 글 타이틀(# H1) 다음, 첫 본문 섹션(## H2) 직전까지다.
+        따라서 첫 본문 섹션 헤딩 '앞'에 링크 블록을 삽입한다.
+        """
         available = [p for p in posts if p.url and p.url not in used_urls]
         if not available:
-            logger.debug("[INTERNAL_LINK] 서론: 삽입 가능한 유사 포스트 없음")
+            logger.debug("[INTERNAL_LINK] 서론: 삽입 가능한 포스트 없음")
             return content
 
         links_to_insert = available[:max_count]
 
         if link_type == "button":
-            link_block = self._build_button_links(links_to_insert)
+            link_block = self._build_button_links(
+                links_to_insert, button_class
+            )
         else:
             link_block = self._build_normal_links(links_to_insert)
 
         for post in links_to_insert:
             used_urls.add(post.url)
 
-        # 두 번째 ## 헤딩(첫 본론) 앞에 삽입 (서론 끝 위치)
-        headings = list(re.finditer(r'^## .+', content, re.MULTILINE))
+        # 첫 본문 섹션 헤딩 앞에 삽입(= 서론 끝). 첫 헤딩은 글 타이틀이므로
+        # 레벨 무관 모든 헤딩 중 '두 번째'(첫 섹션) 앞에 넣는다. ## 만 보면
+        # # 타이틀을 놓쳐 두 번째 섹션 뒤에 삽입되던 버그를 방지한다.
+        headings = list(re.finditer(r'^#{1,6} .+', content, re.MULTILINE))
         if len(headings) >= 2:
             insert_pos = headings[1].start()
             content = (
@@ -267,10 +362,8 @@ class InternalLinker:
                 + link_block + "\n\n"
                 + content[insert_pos:]
             )
-        elif headings:
-            # 헤딩 1개뿐이면 끝에 추가
-            content += "\n\n" + link_block
         else:
+            # 헤딩이 1개 이하면 본문 구분이 없어 끝에 추가
             content += "\n\n" + link_block
 
         logger.debug(
@@ -282,23 +375,27 @@ class InternalLinker:
         self,
         content: str,
         all_posts: List[CrawledPost],
-        section_headings: List[str],
         used_urls: set,
         sim_service: SimilarityService,
         body_count: int = 1,
         body_link_type: str = "quote",
+        button_class: str = "button-link",
     ) -> str:
-        """
-        본문 섹션 뒤에 유사 링크 삽입 (유사도 기반)
+        """본문 각 섹션 끝에 유사 링크 삽입 (섹션 제목별 유사도 매칭).
+
+        글 구조는 '# 타이틀 / 서론 / ## 섹션들 / ## 결론'. 본문 섹션은
+        첫 헤딩(타이틀) 다음의 '섹션 레벨' 헤딩들 중 마지막(결론)을 제외한
+        것이다. 각 본문 섹션 제목과 유사도 매칭되는 포스트가 있을 때만
+        해당 섹션 끝(다음 섹션 헤딩 직전)에 링크를 삽입한다.
 
         Args:
             content: 마크다운 본문
             all_posts: 전체 포스트 목록
-            section_headings: 본론 헤딩 텍스트 목록
             used_urls: 이미 사용된 URL 집합
             sim_service: 유사도 서비스
             body_count: 섹션당 삽입할 링크 수 (0이면 스킵)
-            body_link_type: 링크 유형 ("quote" 또는 "normal")
+            body_link_type: 링크 유형 ("quote" | "normal" | "button")
+            button_class: 버튼형일 때 div 래퍼에 적용할 CSS 클래스
 
         Returns:
             링크가 삽입된 마크다운 글
@@ -306,76 +403,85 @@ class InternalLinker:
         if body_count <= 0:
             logger.debug("[INTERNAL_LINK] 본론: body_count=0, 스킵")
             return content
-
-        if not section_headings or not all_posts:
+        if not all_posts:
             return content
 
-        headings = list(re.finditer(
-            r'^(## .+)', content, re.MULTILINE
+        heads = list(re.finditer(
+            r'^(#{1,6})[ \t]+(.+?)[ \t]*$', content, re.MULTILINE
         ))
-        if len(headings) < 3:
-            logger.debug(
-                f"[INTERNAL_LINK] 본론: 헤딩 {len(headings)}개 "
-                f"(최소 3개 필요)"
-            )
+        if len(heads) < 2:
             return content
 
-        # 본론 섹션 인덱스 (첫 번째=서론 뒤, 마지막=결론 제외)
-        body_indices = list(range(1, len(headings) - 1))
-        offset = 0
+        # 섹션 레벨 = 타이틀(첫 헤딩) 다음 첫 헤딩의 레벨 (보통 ## H2)
+        section_level = len(heads[1].group(1))
+        section_heads = [
+            m for m in heads if len(m.group(1)) == section_level
+        ]
+        # 첫 헤딩이 타이틀이고 섹션 레벨과 같으면(예: ## 타이틀 구조) 제외
+        if section_heads and section_heads[0].start() == heads[0].start():
+            section_heads = section_heads[1:]
+        if len(section_heads) < 2:
+            # 본문 섹션(결론 제외)이 없으면 스킵
+            logger.debug("[INTERNAL_LINK] 본론: 본문 섹션 부족, 스킵")
+            return content
+
+        body_heads = section_heads[:-1]  # 마지막=결론 제외
+
+        # 각 섹션 끝(다음 섹션 헤딩 직전)에 삽입. 뒤에서부터 적용해 위치
+        # 오프셋 관리를 피한다. used_urls 는 루프 중 즉시 갱신해 중복 방지.
+        insertions: list = []
         inserted = 0
-
-        for idx, heading_idx in enumerate(body_indices):
-            if idx >= len(section_headings):
-                break
-
-            section_title = section_headings[idx]
+        for i, head in enumerate(body_heads):
+            section_title = head.group(2).strip()
+            next_start = section_heads[i + 1].start()
             available = [
                 p for p in all_posts
                 if p.url and p.url not in used_urls
             ]
-
-            # body_count만큼 유사 포스트 매칭
             matched_posts = self._find_similar_by_score(
                 section_title, available, sim_service, limit=body_count
             )
             if not matched_posts:
                 continue
-
-            # 링크 텍스트 생성 (body_link_type에 따라)
-            link_lines = []
+            link_lines = [
+                self._format_body_link(p, body_link_type, button_class)
+                for p in matched_posts
+            ]
             for post in matched_posts:
-                if body_link_type == "normal":
-                    link_lines.append(
-                        f"[{post.title}]({post.url})"
-                    )
-                else:  # "quote" (기본값)
-                    link_lines.append(
-                        f"> 관련 글: [{post.title}]({post.url})"
-                    )
                 used_urls.add(post.url)
-
             link_text = "\n\n" + "\n\n".join(link_lines) + "\n"
-
-            # 다음 헤딩 바로 앞에 삽입
-            next_heading_pos = (
-                headings[heading_idx + 1].start() + offset
-                if heading_idx + 1 < len(headings)
-                else len(content)
-            )
-            content = (
-                content[:next_heading_pos]
-                + link_text
-                + content[next_heading_pos:]
-            )
-            offset += len(link_text)
+            insertions.append((next_start, link_text))
             inserted += len(matched_posts)
+
+        for pos, text in sorted(insertions, key=lambda x: x[0], reverse=True):
+            content = content[:pos] + text + content[pos:]
 
         logger.debug(
             f"[INTERNAL_LINK] 본론 링크 {inserted}개 삽입 "
-            f"(섹션 {len(body_indices)}개 중)"
+            f"(본문 섹션 {len(body_heads)}개 중)"
         )
         return content
+
+    def _format_body_link(
+        self,
+        post: CrawledPost,
+        link_type: str,
+        button_class: str = "button-link",
+    ) -> str:
+        """본론 링크 한 줄 포맷 (버튼 / 일반 / 인용).
+
+        - button: div 래퍼 버튼 (서론 버튼과 동일, .button-link 블록 스타일)
+        - normal: 일반 마크다운 링크
+        - quote(기본): 인용문 형태
+        """
+        if link_type == "button":
+            return (
+                f'<div class="{button_class}">'
+                f'<a href="{post.url}">{post.title}</a></div>'
+            )
+        if link_type == "normal":
+            return f"[{post.title}]({post.url})"
+        return f"> 관련 글: [{post.title}]({post.url})"
 
     def _insert_conclusion_links(
         self,
@@ -434,12 +540,22 @@ class InternalLinker:
 
     # ── 링크 블록 빌더 ──────────────────────────────
 
-    def _build_button_links(self, posts: List[CrawledPost]) -> str:
-        """버튼 스타일 링크 블록 생성 (마크다운)"""
+    def _build_button_links(
+        self, posts: List[CrawledPost], button_class: str = "button-link"
+    ) -> str:
+        """버튼 스타일 링크 블록 생성 (div 래퍼).
+
+        CSS 치환자의 버튼 클래스(.button-link 등)는 블록 요소(div)를
+        가정하므로 ``<div class="..."><a></div>`` 형태로 생성한다.
+        과거 ``<center><a>`` 방식은 apply_placeholders 의 공통 center
+        unwrap 으로 ``<a class="button-link">`` (inline) 만 남아 버튼
+        스타일이 적용되지 않았다.
+        """
         lines = []
         for post in posts:
             lines.append(
-                f'<center><a href="{post.url}">{post.title}</a></center>'
+                f'<div class="{button_class}">'
+                f'<a href="{post.url}">{post.title}</a></div>'
             )
         return "\n".join(lines)
 
