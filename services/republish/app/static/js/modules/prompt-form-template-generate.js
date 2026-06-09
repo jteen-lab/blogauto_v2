@@ -74,6 +74,7 @@ function getPromptInternalLinksSection() {
                                                     class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 text-sm">
                                                 <option value="quote">인용형 (&gt; 관련 글)</option>
                                                 <option value="normal">일반 링크</option>
+                                                <option value="button">버튼형</option>
                                             </select>
                                         </div>
                                     </div>
