@@ -46,6 +46,9 @@ pytrends>=4.9.0
 # 키워드 추출 (형태소 분석)
 konlpy>=0.6.0
 
+# 제목 유사도 매칭 (SimilarityService — 미설치 시 difflib 폴백)
+rapidfuzz>=3.0.0
+
 # AI 서비스 (Google Gemini, OpenAI, Anthropic)
 google-generativeai>=0.8.0
 openai>=1.0.0
