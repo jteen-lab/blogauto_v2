@@ -27,10 +27,13 @@ async def _async_collect(
     결과를 저장하여 사용자가 동작 로그에서 수집 건수·실패 사유 등을
     확인할 수 있게 한다.
     """
-    from app.core.database import db_manager
+    # Celery prefork 워커에서 전역 db_manager 의 풀 커넥션은 첫 이벤트 루프에
+    # 바인딩되어 두 번째 태스크부터 "Event loop is closed" 로 죽는다. NullPool
+    # 기반 celery_db_session 을 사용한다(cycle_runner·publish 태스크와 동일).
+    from app.core.celery_async_bridge import celery_db_session
 
     started_at = time.monotonic()
-    async with db_manager.get_session() as db:
+    async with celery_db_session() as db:
         module = await _load_module_with_type(db, module_id)
         if not module:
             return {
