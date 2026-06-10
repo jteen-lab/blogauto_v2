@@ -1417,18 +1417,14 @@ class KeywordCollectorService:
             )
             return False
 
-        # 3. DB 중복 체크 (대소문자 무시)
-        from sqlalchemy import func
-        query = select(TempTitle).where(
-            func.lower(TempTitle.title) == title_lower
-        ).limit(1)
-        result = await self.db.execute(query)
-        existing = result.scalars().first()
-
-        if existing:
-            # DB에 이미 존재 → 세션 캐시에 추가하고 스킵
+        # 3. DB 중복 체크 (임시+정식 모두, 대소문자 무시)
+        from .title_dedup import title_exists
+        if await title_exists(self.db, title):
+            # 임시 또는 정식에 이미 존재 → 세션 캐시에 추가하고 스킵
             self._seen_titles.add(title_lower)
-            logger.debug(f"[DEDUP-1] DB 중복 제목 스킵: '{title[:30]}...'")
+            logger.debug(
+                f"[DEDUP-1] DB 중복 제목 스킵(임시/정식): '{title[:30]}...'"
+            )
             return False
 
         # 4. 카테고리 매칭 (Topic > SubTopic > Keyword)

@@ -22,6 +22,7 @@ import re
 from ..core.database import get_db_session
 from ..core.logger import get_logger
 from ..models.title import TempTitle, MainTitle
+from ..services.title_dedup import title_exists
 from ..models.keyword import KeywordCategory, CollectedKeyword
 from ..models.category import Topic, SubTopic
 from ..models.user import User
@@ -532,11 +533,8 @@ async def create_temp_titles_bulk(
             short_count += 1
             continue
 
-        # 중복 체크
-        existing = await db.execute(
-            select(TempTitle).where(TempTitle.title == title_text)
-        )
-        if existing.scalar_one_or_none():
+        # 중복 체크 (임시+정식 모두, 대소문자 무시)
+        if await title_exists(db, title_text):
             skipped_count += 1
             continue
 
@@ -623,10 +621,8 @@ async def upload_titles_excel(
             short_count += 1
             continue
 
-        existing = await db.execute(
-            select(TempTitle).where(TempTitle.title == title_text)
-        )
-        if existing.scalar_one_or_none():
+        # 중복 체크 (임시+정식 모두, 대소문자 무시)
+        if await title_exists(db, title_text):
             skipped_count += 1
             continue
 

@@ -300,6 +300,7 @@ class ChunkProcessor:
         (`process_chunk`)가 일괄 수행한다.
         """
         from app.models.title import TempTitle
+        from ..title_dedup import title_exists
 
         seen: set[str] = set()
         saved = 0
@@ -312,12 +313,8 @@ class ChunkProcessor:
             key = title.lower()
             if key in seen:
                 continue
-            exists = await self.db.execute(
-                select(TempTitle.id)
-                .where(sa_func.lower(TempTitle.title) == key)
-                .limit(1)
-            )
-            if exists.scalar_one_or_none() is not None:
+            # 임시(TempTitle) + 정식(MainTitle) 모두와 중복 체크
+            if await title_exists(self.db, title):
                 seen.add(key)
                 continue
             blog_url = f"https://{row.domain}/" if row.domain else row.url
