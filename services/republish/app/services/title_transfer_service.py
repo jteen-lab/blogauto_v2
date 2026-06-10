@@ -126,9 +126,11 @@ class TitleTransferService:
                 result["errors"].append(f"ID {temp_id}: 이미 이동됨")
                 continue
 
-            # 중복 체크
+            # 중복 체크: 정식/기존에 같은 제목이 있으면 임시제목을 삭제한다
+            # (이동 조치한 제목은 status 만 바꿔 남기지 않고 제거)
             if temp_title.title in existing_titles:
                 duplicate_temp_ids.append(temp_id)
+                temp_ids_to_delete.append(temp_id)
                 result["duplicates"] += 1
                 continue
 
@@ -163,11 +165,8 @@ class TitleTransferService:
 
         # === 3단계: DB 저장 ===
 
-        # 중복 제목 상태 업데이트
-        for temp_id in duplicate_temp_ids:
-            temp_title = temp_titles.get(temp_id)
-            if temp_title:
-                temp_title.status = "duplicate"
+        # 중복 제목은 status 변경이 아니라 삭제 대상(temp_ids_to_delete)에
+        # 포함되어 아래 3단계에서 임시제목 테이블에서 제거된다.
 
         # MainTitle 개별 추가 (savepoint + IntegrityError 시 중복 스킵)
         items_added: List[Dict[str, Any]] = []
@@ -182,9 +181,7 @@ class TitleTransferService:
                 title_text = item['main_title'].title
                 logger.info(f"[TRANSFER] 중복 제목 스킵 (DB 제약): '{title_text[:30]}'")
                 result["duplicates"] += 1
-                # 삭제 대상에서 제거
-                if item['temp_id'] in temp_ids_to_delete:
-                    temp_ids_to_delete.remove(item['temp_id'])
+                # 중복(이미 정식 존재)이어도 임시제목은 삭제 대상 유지하여 제거
                 continue
         main_titles_to_add = items_added
 
