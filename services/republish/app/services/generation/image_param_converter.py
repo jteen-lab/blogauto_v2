@@ -38,6 +38,31 @@ DALLE_STYLE_MAP = {
     "minimal": "natural",  # 근사 매핑
 }
 
+# OpenAI 기본 이미지 모델. dall-e-3/2는 다수 계정에서 더 이상 접근 불가
+# ("The model 'dall-e-3' does not exist") → 현행 표준 gpt-image-1 사용.
+DEFAULT_OPENAI_IMAGE_MODEL = "gpt-image-1"
+
+# 통합 aspect_ratio → gpt-image-1 size 매핑
+# (gpt-image는 1024x1024 / 1536x1024 / 1024x1536 / auto만 허용. 1792 미지원)
+GPT_IMAGE_SIZE_MAP = {
+    "16:9": "1536x1024",
+    "9:16": "1024x1536",
+    "1:1": "1024x1024",
+    "4:3": "1536x1024",
+    "3:4": "1024x1536",
+}
+
+# 통합 quality → gpt-image-1 quality 매핑
+# (gpt-image는 low/medium/high/auto만 허용. standard/hd 미지원)
+GPT_IMAGE_QUALITY_MAP = {
+    "standard": "medium",
+    "hd": "high",
+    "low": "low",
+    "medium": "medium",
+    "high": "high",
+    "auto": "auto",
+}
+
 # 통합 style → Nanobanana style 매핑 (대부분 직접 전달)
 NANO_STYLE_MAP = {
     "realistic": "realistic",
@@ -112,16 +137,31 @@ def _convert_to_dalle(
     model: Optional[str],
 ) -> dict:
     """
-    통합 파라미터 → DALL-E 파라미터 변환
+    통합 파라미터 → OpenAI 이미지 파라미터 변환 (모델별 분기)
+
+    - gpt-image-1 계열(기본): size/quality만, style·response_format 미지원
+    - dall-e-3/2(레거시): style/quality 포함
 
     Returns:
-        {"size": str, "quality": str, "style": str, "model": str}
+        gpt-image: {"size", "quality", "model"}
+        dall-e:    {"size", "quality", "style", "model"}
     """
+    resolved_model = model or DEFAULT_OPENAI_IMAGE_MODEL
+    m = resolved_model.lower()
+
+    if m.startswith("gpt-image"):
+        return {
+            "size": GPT_IMAGE_SIZE_MAP.get(aspect_ratio, "1536x1024"),
+            "quality": GPT_IMAGE_QUALITY_MAP.get(quality, "medium"),
+            "model": resolved_model,
+        }
+
+    # 레거시 dall-e-3/dall-e-2
     return {
         "size": DALLE_SIZE_MAP.get(aspect_ratio, "1024x1024"),
         "quality": quality if quality in ("standard", "hd") else "standard",
         "style": DALLE_STYLE_MAP.get(style, "natural"),
-        "model": model or "dall-e-3",
+        "model": resolved_model,
     }
 
 

@@ -200,8 +200,11 @@ class AIImageService:
             # dall-e-3: response_format 미전송(미지원), style/quality 지원
             kwargs["quality"] = quality
             kwargs["style"] = style
-        # gpt-image-1 계열: response_format/style 미지원, quality 값 체계도
-        # 달라(standard/hd 부적합) 추가 파라미터 미전송 → 기본값 사용
+        else:
+            # gpt-image-1 계열: response_format/style 미지원, b64 기본 반환.
+            # quality는 low/medium/high/auto만 허용 → 유효 값만 전송.
+            if quality in ("low", "medium", "high", "auto"):
+                kwargs["quality"] = quality
 
         resp = await client.images.generate(**kwargs)
 
