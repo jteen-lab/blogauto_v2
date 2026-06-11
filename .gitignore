@@ -27,6 +27,9 @@ venv/
 # Test files
 *.json
 !requirements.json
+# 런타임 필수 데이터(이미지 빌드에 포함되어야 함) — *.json 무차별 제외에서 복구
+!shared/data/
+!shared/data/**/*.json
 
 # Temp files
 *.txt
