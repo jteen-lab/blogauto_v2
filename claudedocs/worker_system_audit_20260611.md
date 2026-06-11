@@ -110,10 +110,12 @@ $ git check-ignore -v shared/data/korean_locations.json
 
 ## 4. 권고 조치
 
-### 즉시 (적용/대기)
-- [x] 지역 데이터 git 추적 복구(.gitignore/.dockerignore) — 로컬 완료, push 대기.
-- [ ] 서버 워커 compose를 17워커 autoscale 설계로 정렬 + utility에 callback_queue 구독 복원 — **§5 결정 필요** (서버 2 vCPU / 11GB 환경 반영).
-- [ ] 서버 `/opt/blogauto/docker-compose.yml`을 레포로 편입(버전 관리)해 설계-운영 표류 차단.
+### 즉시 (전부 완료·서버 검증)
+- [x] 지역 데이터 git 추적 복구(.gitignore/.dockerignore) — 커밋 3c450b5, 서버 이미지 내 존재 확인.
+- [x] 서버 워커 17워커 autoscale 복원 + utility callback_queue 구독 — 커밋 04237fd. 부팅 배너로 확증: generation `{min=3,max=8}`, publish `{min=2,max=5}`, image 2, utility 2(+callback_queue). 합계 최소9/최대17.
+- [x] 서버 `/opt/blogauto/docker-compose.yml`을 레포 SSOT(installer compose)로 동기화.
+- [x] (배포 중 발견) 죽은 scheduler 서비스(`python -m app.scheduler.run`, 모듈 부재→크래시루프) 제거 — 커밋 2bd9aa3. 스케줄러는 app lifespan 구동, 별도 컨테이너 없음(A1.Flex 토폴로지).
+- [x] 3-SHA 일치: 로컬=origin=서버이미지=2bd9aa3.
 
 ### 지침 보강 (재발 방지)
 - 배포 검증에 **자산·런타임 정합성 체크** 추가: ① 이미지 내 필수 데이터 파일 존재 확인 ② 서버 워커 command가 설계와 일치하는지 확인.
