@@ -115,7 +115,11 @@ sudo docker compose exec app alembic upgrade head
 - [ ] 타입 힌트 + Docstring 작성
 - [ ] 테스트 통과
 - [ ] .env.required 업데이트 (새 환경변수 시)
+- [ ] 런타임 의존 데이터 파일은 git 추적됨 (`git check-ignore` 출력 없음) — 로컬 볼륨마운트로만 동작 ≠ 서버 이미지 포함
+- [ ] 배포 후 이미지 내 필수 자산 존재 확인 (`docker exec <app> ls <경로>`)
 ```
+
+> **로컬-서버 비대칭 주의**: 로컬은 볼륨마운트, 서버는 빌드 이미지만 사용. "로컬에서 됨"이 서버를 보장하지 않음. 상세 §`docs/claude/REGRESSION_PREVENTION.md` 7장.
 
 ---
 

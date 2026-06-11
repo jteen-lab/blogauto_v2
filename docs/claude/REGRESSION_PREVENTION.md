@@ -136,4 +136,28 @@ async with celery_db_session() as db: ...
 
 ---
 
-> **최종 수정**: 2026-05-02
+## 7. 로컬-서버 환경 비대칭 (MUST) — 2026-06-11 추가
+
+> 배경: 지역 데이터(`shared/data/korean_locations.json`)가 로컬에선 동작하나 서버 이미지엔 누락된 사고. 원인은 `.gitignore`의 `*.json` 무차별 제외로 파일이 git 미추적 → GitHub Actions 체크아웃에 없음 → 이미지 COPY에서 빠짐. 로컬은 볼륨마운트(`../../shared:/app/shared`)로 워킹트리 파일을 직접 제공해 차이를 못 느낌.
+
+### "로컬에서 됨" ≠ "서버에서 됨"
+- 로컬 dev는 **볼륨 마운트**(`./app`, `../../shared`)로 워킹트리 파일을 직접 쓴다. git 추적 여부·이미지 포함 여부와 무관하게 동작한다.
+- 서버는 **GitHub Actions가 빌드한 이미지**만 쓴다. 이미지에 들어간 것 = `git 추적된 파일` ∩ `Dockerfile COPY 대상` ∩ `.dockerignore 미제외`.
+
+### 런타임 의존 자산(데이터 파일) 추가/수정 시 체크
+- [ ] `git check-ignore <파일>` → 출력 없어야 함(=추적 가능). 출력 있으면 `.gitignore`에 `!경로` 화이트리스트 추가.
+- [ ] 광역 패턴(`*.json`, `*.txt`, `data/`, `media/`)에 런타임 자산이 걸리지 않는지 확인. 걸리면 명시적 예외.
+- [ ] `.dockerignore` 패턴은 슬래시 없으면 **모든 하위 디렉토리** 매칭(`data/`가 `shared/data/`까지 제외). 빌드 컨텍스트 루트 한정은 `/data/`로.
+- [ ] 배포 후 이미지 내 실제 존재 확인: `docker exec <app> ls <경로>`.
+
+### 서버 인프라 설정 표류 금지
+- 서버 `/opt/blogauto/docker-compose.yml`은 레포 `docker-compose.yml`과 **별개로 손수 작성되면 설계가 유실**된다(워커 autoscale 17 설계가 서버에선 고정 8로 축소된 사례).
+- 인프라 설정 변경은 레포를 단일 출처(SSOT)로 관리하고, 서버는 그것을 pull 한다.
+
+### 배포 검증은 SHA 일치를 넘어선다
+- 3-SHA 일치(로컬 HEAD = origin/main = 서버 image revision)는 **코드 버전**만 보장한다.
+- 추가 확인: ① 이미지 내 필수 데이터 파일 존재 ② 서버 워커 command가 설계와 일치(`docker inspect <worker> --format '{{join .Args " "}}'`).
+
+---
+
+> **최종 수정**: 2026-06-11
