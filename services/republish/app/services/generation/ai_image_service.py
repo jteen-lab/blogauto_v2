@@ -122,6 +122,8 @@ class AIImageService:
         style = params.get("style", "natural")
         model = params.get("model", "dall-e-3")
 
+        import openai
+
         try:
             image_bytes = await self._call_dalle_api(
                 api_key=key.api_key, prompt=prompt, model=model,
@@ -140,10 +142,26 @@ class AIImageService:
                 "provider": "dalle",
                 "model": model,
             }
+        except openai.BadRequestError as e:
+            # 400: 파라미터/프롬프트/콘텐츠 정책 문제 → 키 자체는 정상이므로
+            # 키를 ERROR로 표시하지 않는다(코드 버그가 키를 죽이는 연쇄 방지).
+            logger.error(
+                f"[AI_IMAGE] DALL-E 요청 오류(키 보존): {str(e)[:150]}"
+            )
+            return None
+        except (openai.AuthenticationError, openai.PermissionDeniedError) as e:
+            # 401/403: 키 자체가 무효/권한 없음 → ERROR 표시
+            await self.key_manager.mark_key_error(key.id, str(e)[:200])
+            logger.error(f"[AI_IMAGE] DALL-E 인증/권한 실패: {str(e)[:120]}")
+            return None
+        except openai.RateLimitError as e:
+            # 429: 사용량 제한 → RATE_LIMITED(쿨다운 후 자동 복구)
+            await self.key_manager.mark_key_rate_limited(key.id)
+            logger.error(f"[AI_IMAGE] DALL-E rate limit: {str(e)[:120]}")
+            return None
         except Exception as e:
-            error_msg = str(e)
-            await self.key_manager.mark_key_error(key.id, error_msg[:200])
-            logger.error(f"[AI_IMAGE] DALL-E 실패: {error_msg[:100]}")
+            # 기타(네트워크 등) 일시 오류 → 키 보존, 로그만
+            logger.error(f"[AI_IMAGE] DALL-E 실패: {str(e)[:150]}")
             return None
 
     async def _call_dalle_api(
@@ -151,9 +169,15 @@ class AIImageService:
         size: str, quality: str, style: str,
     ) -> Optional[bytes]:
         """
-        OpenAI DALL-E API 호출 (b64_json 모드)
+        OpenAI 이미지 API 호출 (모델별 파라미터 분기)
 
-        base64 이미지 데이터를 직접 수신하여 SAS URL 다운로드 문제를 우회합니다.
+        OpenAI 이미지 API는 모델마다 지원 파라미터가 다르다:
+        - dall-e-2: response_format(url/b64_json) 지원, style 미지원
+        - dall-e-3: response_format 미지원(URL 반환), style/quality 지원
+        - gpt-image-1 계열: response_format/style 미지원, b64_json 기본 반환
+
+        과거 코드는 모든 모델에 response_format="b64_json"을 보내
+        dall-e-3에서 400 "Unknown parameter: 'response_format'"으로 실패했다.
 
         Returns:
             생성된 이미지의 바이트 데이터 또는 None
@@ -162,20 +186,55 @@ class AIImageService:
         import base64
 
         client = openai.AsyncOpenAI(api_key=api_key)
-        resp = await client.images.generate(
-            model=model,
-            prompt=prompt,
-            size=size,
-            quality=quality,
-            style=style,
-            response_format="b64_json",
-            n=1,
-        )
+        m = (model or "").lower()
+        kwargs: dict = {
+            "model": model,
+            "prompt": prompt,
+            "size": size,
+            "n": 1,
+        }
+        if m.startswith("dall-e-2"):
+            # dall-e-2만 response_format 지원, style/hd quality 미지원
+            kwargs["response_format"] = "b64_json"
+        elif m.startswith("dall-e-3"):
+            # dall-e-3: response_format 미전송(미지원), style/quality 지원
+            kwargs["quality"] = quality
+            kwargs["style"] = style
+        # gpt-image-1 계열: response_format/style 미지원, quality 값 체계도
+        # 달라(standard/hd 부적합) 추가 파라미터 미전송 → 기본값 사용
 
-        if resp.data and resp.data[0].b64_json:
-            logger.info("[AI_IMAGE] DALL-E: 이미지 데이터 수신 완료")
-            return base64.b64decode(resp.data[0].b64_json)
+        resp = await client.images.generate(**kwargs)
+
+        if not resp.data:
+            logger.error("[AI_IMAGE] DALL-E: 응답 data 없음")
+            return None
+
+        item = resp.data[0]
+        b64 = getattr(item, "b64_json", None)
+        if b64:
+            logger.info("[AI_IMAGE] DALL-E: b64 이미지 데이터 수신 완료")
+            return base64.b64decode(b64)
+
+        url = getattr(item, "url", None)
+        if url:
+            logger.info("[AI_IMAGE] DALL-E: URL 응답 → 다운로드")
+            return await self._download_image_bytes(url)
+
+        logger.error("[AI_IMAGE] DALL-E: 응답에 b64_json/url 모두 없음")
         return None
+
+    async def _download_image_bytes(self, url: str) -> Optional[bytes]:
+        """이미지 URL에서 바이트 다운로드 (dall-e-3 등 URL 응답용)"""
+        import httpx
+
+        try:
+            async with httpx.AsyncClient(timeout=60) as client:
+                resp = await client.get(url)
+                resp.raise_for_status()
+                return resp.content
+        except Exception as e:
+            logger.error(f"[AI_IMAGE] 이미지 URL 다운로드 실패: {str(e)[:120]}")
+            return None
 
     async def _generate_with_nanobanana(
         self, prompt: str, params: dict, blog_id: int,
