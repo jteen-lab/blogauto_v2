@@ -72,7 +72,7 @@ services:
   worker-generation:
     image: ${BLOGAUTO_IMAGE:-ghcr.io/jteen-lab/blogauto:stable}
     restart: unless-stopped
-    command: celery -A app.core.celery_config worker -Q generation_queue -n generation@%h --concurrency=2
+    command: celery -A app.core.celery_config worker -Q generation_queue --autoscale=8,3 --prefetch-multiplier=1 --max-tasks-per-child=50 -n generation@%h
     depends_on:
       - postgres
       - redis
@@ -89,7 +89,7 @@ services:
   worker-publish:
     image: ${BLOGAUTO_IMAGE:-ghcr.io/jteen-lab/blogauto:stable}
     restart: unless-stopped
-    command: celery -A app.core.celery_config worker -Q publish_queue -n publish@%h --concurrency=3
+    command: celery -A app.core.celery_config worker -Q publish_queue --autoscale=5,2 --prefetch-multiplier=1 --max-tasks-per-child=100 -n publish@%h
     depends_on:
       - postgres
       - redis
@@ -106,7 +106,7 @@ services:
   worker-utility:
     image: ${BLOGAUTO_IMAGE:-ghcr.io/jteen-lab/blogauto:stable}
     restart: unless-stopped
-    command: celery -A app.core.celery_config worker -Q utility_queue -n utility@%h --concurrency=2
+    command: celery -A app.core.celery_config worker -Q utility_queue,callback_queue --concurrency=2 --prefetch-multiplier=2 --max-tasks-per-child=200 -n utility@%h
     depends_on:
       - postgres
       - redis
@@ -123,7 +123,7 @@ services:
   worker-image:
     image: ${BLOGAUTO_IMAGE:-ghcr.io/jteen-lab/blogauto:stable}
     restart: unless-stopped
-    command: celery -A app.core.celery_config worker -Q image_queue -n image@%h --concurrency=1
+    command: celery -A app.core.celery_config worker -Q image_queue --concurrency=2 --prefetch-multiplier=1 --max-tasks-per-child=50 -n image@%h
     depends_on:
       - postgres
       - redis
