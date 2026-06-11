@@ -138,23 +138,11 @@ services:
       com.centurylinklabs.watchtower.enable: "true"
 
   # APScheduler ────────────────────────────────────────
-  # 메인 app 컨테이너 lifespan 이 아닌 별도 프로세스로 운영
-  # (이전엔 lifespan 안에 있었으나 운영 서버에서 별도 컨테이너로 분리됨)
-  scheduler:
-    image: ${BLOGAUTO_IMAGE:-ghcr.io/jteen-lab/blogauto:stable}
-    restart: unless-stopped
-    command: python -m app.scheduler.run
-    depends_on:
-      - postgres
-      - redis
-    env_file: .env
-    volumes:
-      - app_media:/app/media
-      - app_logs:/app/logs
-    healthcheck:
-      disable: true
-    labels:
-      com.centurylinklabs.watchtower.enable: "true"
+  # 스케줄러는 메인 app 컨테이너의 lifespan(app/main.py)에서 구동된다.
+  # (get_scheduler().start() + republish_job + setup_flow_scheduler)
+  # 별도 scheduler 컨테이너(python -m app.scheduler.run)는 해당 모듈이
+  # 존재하지 않아 크래시 루프만 유발하고, lifespan 스케줄러와 이중화 위험이
+  # 있어 제거함. A1.Flex 운영 토폴로지(스케줄러=app lifespan, 별도 컨테이너 없음)와 일치.
 
   # Caddy — 자동 HTTPS 리버스 프록시 ────────────────────
   # 도메인 있으면 Let's Encrypt 자동 발급, 없으면 HTTP만
