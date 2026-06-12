@@ -32,8 +32,8 @@ function imageSettingsApp() {
         // AI 이미지 서비스: openai (DALL-E), nanobanana (Nano Banana)
         aiImageService: 'openai',
 
-        // AI 이미지 모델
-        aiImageModel: 'dall-e-3',
+        // AI 이미지 모델 (DALL-E는 OpenAI에서 은퇴 → gpt-image-1)
+        aiImageModel: 'gpt-image-1',
 
         // both 모드: 대표/섹션 이미지 소스
         coverSource: 'ai',
@@ -42,9 +42,7 @@ function imageSettingsApp() {
         // 서비스별 사용 가능한 모델 목록
         AI_IMAGE_MODELS: {
             openai: [
-                { value: 'dall-e-3', label: 'DALL-E 3 (추천)' },
-                { value: 'dall-e-2', label: 'DALL-E 2' },
-                { value: 'gpt-image-1', label: 'GPT Image 1' },
+                { value: 'gpt-image-1', label: 'GPT Image 1 (추천)' },
             ],
             nanobanana: [
                 { value: 'gemini-3-pro-image-preview', label: 'Gemini 3 Pro (추천)' },
@@ -519,6 +517,14 @@ function imageSettingsApp() {
             }
             const blogId = this.getBlogId();
             if (!blogId) return;
+
+            // 폰트 필수: 모든 이미지 모드에서 제목 오버레이용 폰트가 반드시 필요.
+            // (AI 생성 이미지는 텍스트 없이 만들고 제목은 이 폰트로 오버레이함)
+            if (!this.overlayConfig.font_file) {
+                this.saveError = '폰트 파일은 필수입니다. 폰트 파일(.ttf/.otf)을 업로드한 후 저장하세요.';
+                this.showMessage(this.saveError, 'error');
+                return;
+            }
 
             this.saving = true;
             this.saveSuccess = false;
