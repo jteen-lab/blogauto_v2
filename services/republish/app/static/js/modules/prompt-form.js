@@ -81,11 +81,11 @@ function createPromptModuleState() {
 
         textReplaceEnabled: true,
         imageGeneration: {
-            enabled: false,
+            enabled: true,
             aspectRatio: '16:9',
             style: 'realistic',
             quality: 'standard',
-            promptTemplate: '{title} 주제의 전문적인 블로그 대표 이미지, {keywords} 포함, 현대적인 디자인, 깔끔한 구성',
+            promptTemplate: '{title} 주제를 상징하는 전문적인 블로그 대표 배경 이미지, {keywords} 관련 시각 요소, 현대적이고 깔끔한 일러스트 배경',
             titleOverlay: false,
             sectionCustom: false,
             sectionPromptTemplate: '{title} 주제의 블로그 섹션 일러스트, 심플하고 집중적인 디자인',
@@ -186,11 +186,11 @@ const promptModuleMethods = {
                 if (ig.dalle?.quality) quality = ig.dalle.quality;
             }
             this.promptModule.imageGeneration = {
-                enabled: ig.enabled ?? false,
+                enabled: ig.enabled ?? true,
                 aspectRatio: aspectRatio,
                 style: style,
                 quality: quality,
-                promptTemplate: ig.prompt_template || '{title} 주제의 전문적인 블로그 대표 이미지, {keywords} 포함, 현대적인 디자인, 깔끔한 구성',
+                promptTemplate: ig.prompt_template || '{title} 주제를 상징하는 전문적인 블로그 대표 배경 이미지, {keywords} 관련 시각 요소, 현대적이고 깔끔한 일러스트 배경',
                 titleOverlay: ig.title_overlay ?? false,
                 sectionCustom: ig.section_custom ?? false,
                 sectionPromptTemplate: ig.section_prompt_template || '{title} 주제의 블로그 섹션 일러스트, 심플하고 집중적인 디자인',

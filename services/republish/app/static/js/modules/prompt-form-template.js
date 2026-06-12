@@ -210,12 +210,9 @@ function getPromptImageSection() {
                             <div class="space-y-4">
                                 <div class="flex items-center justify-between">
                                     <h3 class="text-base font-semibold text-gray-900 flex items-center gap-2">🖼️ 이미지 생성 설정</h3>
-                                    <label class="flex items-center cursor-pointer">
-                                        <input type="checkbox" x-model="promptModule.imageGeneration.enabled" class="w-4 h-4 text-green-600 rounded focus:ring-green-500">
-                                        <span class="ml-2 text-sm text-gray-600">활성화</span>
-                                    </label>
+                                    <span class="text-xs text-gray-500">블로그 이미지 설정에 따라 자동 적용</span>
                                 </div>
-                                <div x-show="promptModule.imageGeneration.enabled" x-transition class="space-y-4 p-4 bg-green-50 rounded-lg">
+                                <div x-transition class="space-y-4 p-4 bg-green-50 rounded-lg">
 ${getImageModeGuides()}
                                     <div>
                                         <label class="flex items-center cursor-pointer gap-2">
