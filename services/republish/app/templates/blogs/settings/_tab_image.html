@@ -59,91 +59,100 @@
             </div>
         </div>
 
-        <!-- 2. 폰트/템플릿 업로드 (폰트는 전 모드 공통·필수, 템플릿 이미지는 template/both) -->
+        <!-- 2. 공통 폰트 (모든 이미지 방식에 동일 적용·필수) -->
         <div x-transition class="mb-6">
             <h3 class="text-base font-semibold text-gray-900 mb-3 flex items-center gap-2">
                 <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
                 </svg>
-                폰트/템플릿 업로드
+                공통 폰트 <span class="text-red-500 ml-1">*</span>
             </h3>
+            <div class="mb-3 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
+                이 폰트는 <strong>템플릿 이미지 · AI 생성 · 혼용</strong> 모든 방식의 제목 오버레이에 <strong>동일하게</strong> 적용됩니다. (방식별 폰트 분리 없음)
+            </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <!-- 템플릿 이미지 업로드 (template/both 모드만) -->
-                <div class="border rounded-lg p-4" x-show="imageMode === 'template' || imageMode === 'both'">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">템플릿 이미지</label>
-                    <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-purple-400 transition-colors"
-                         @dragover.prevent="dragOverTemplate = true"
-                         @dragleave.prevent="dragOverTemplate = false"
-                         @drop.prevent="handleTemplateDrop($event)"
-                         :class="dragOverTemplate ? 'border-purple-400 bg-purple-50' : ''">
-                        <input type="file" id="templateFileInput" accept=".png,.jpg,.jpeg,.webp" class="hidden"
-                               @change="handleTemplateUpload($event)">
-                        <div x-show="!overlayConfig.template_image" class="py-4">
-                            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                            </svg>
-                            <p class="mt-2 text-sm text-gray-600">드래그앤드롭 또는</p>
-                            <button type="button" @click="document.getElementById('templateFileInput').click()"
-                                    class="mt-1 text-sm text-purple-600 hover:text-purple-700 font-medium">
-                                파일 선택
-                            </button>
-                            <p class="mt-1 text-xs text-gray-400">PNG, JPG, WEBP (최대 5MB)</p>
-                        </div>
-                        <div x-show="overlayConfig.template_image" class="relative">
-                            <img :src="templatePreviewUrl" alt="템플릿 미리보기" class="max-h-32 mx-auto rounded">
-                            <p class="mt-2 text-xs text-gray-600" x-text="overlayConfig.template_image"></p>
-                            <button type="button" @click="deleteTemplateFile()"
-                                    class="mt-2 px-3 py-1 text-xs text-red-600 border border-red-300 rounded hover:bg-red-50">
-                                삭제
-                            </button>
-                        </div>
+            <!-- 폰트 파일 업로드 (단일·전 모드 공통·필수) -->
+            <div class="border rounded-lg p-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    폰트 파일 <span class="text-red-500">*</span>
+                    <span class="text-xs text-gray-400">(필수 · 제목 오버레이용 한글 폰트)</span>
+                </label>
+                <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-accent transition-colors"
+                     @dragover.prevent="dragOverFont = true"
+                     @dragleave.prevent="dragOverFont = false"
+                     @drop.prevent="handleFontDrop($event)"
+                     :class="dragOverFont ? 'border-primary bg-primary-lt' : ''">
+                    <input type="file" id="fontFileInput" accept=".ttf,.otf" class="hidden"
+                           @change="handleFontUpload($event)">
+                    <div x-show="!overlayConfig.font_file" class="py-4">
+                        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        <p class="mt-2 text-sm text-gray-600">드래그앤드롭 또는</p>
+                        <button type="button" @click="document.getElementById('fontFileInput').click()"
+                                class="mt-1 text-sm text-accent hover:opacity-80 font-medium">
+                            파일 선택
+                        </button>
+                        <p class="mt-1 text-xs text-gray-400">TTF, OTF</p>
                     </div>
-                    <div x-show="uploadingTemplate" class="mt-2 flex items-center gap-2 text-sm text-gray-500">
-                        <div class="loading w-4 h-4"></div>
-                        업로드 중...
+                    <div x-show="overlayConfig.font_file">
+                        <svg class="mx-auto h-10 w-10 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        <p class="mt-2 text-xs text-gray-600" x-text="overlayConfig.font_file"></p>
+                        <button type="button" @click="deleteFontFile()"
+                                class="mt-2 px-3 py-1 text-xs text-red-600 border border-red-300 rounded hover:bg-red-50">
+                            삭제
+                        </button>
                     </div>
                 </div>
+                <div x-show="uploadingFont" class="mt-2 flex items-center gap-2 text-sm text-gray-500">
+                    <div class="loading w-4 h-4"></div>
+                    업로드 중...
+                </div>
+            </div>
+        </div>
 
-                <!-- 폰트 파일 업로드 (전 모드 공통·필수) -->
-                <div class="border rounded-lg p-4">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">
-                        폰트 파일 <span class="text-red-500">*</span>
-                        <span class="text-xs text-gray-400">(필수 · 제목 오버레이용 한글 폰트)</span>
-                    </label>
-                    <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-accent transition-colors"
-                         @dragover.prevent="dragOverFont = true"
-                         @dragleave.prevent="dragOverFont = false"
-                         @drop.prevent="handleFontDrop($event)"
-                         :class="dragOverFont ? 'border-primary bg-primary-lt' : ''">
-                        <input type="file" id="fontFileInput" accept=".ttf,.otf" class="hidden"
-                               @change="handleFontUpload($event)">
-                        <div x-show="!overlayConfig.font_file" class="py-4">
-                            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                            </svg>
-                            <p class="mt-2 text-sm text-gray-600">드래그앤드롭 또는</p>
-                            <button type="button" @click="document.getElementById('fontFileInput').click()"
-                                    class="mt-1 text-sm text-accent hover:opacity-80 font-medium">
-                                파일 선택
-                            </button>
-                            <p class="mt-1 text-xs text-gray-400">TTF, OTF</p>
-                        </div>
-                        <div x-show="overlayConfig.font_file">
-                            <svg class="mx-auto h-10 w-10 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                            </svg>
-                            <p class="mt-2 text-xs text-gray-600" x-text="overlayConfig.font_file"></p>
-                            <button type="button" @click="deleteFontFile()"
-                                    class="mt-2 px-3 py-1 text-xs text-red-600 border border-red-300 rounded hover:bg-red-50">
-                                삭제
-                            </button>
-                        </div>
+        <!-- 2-1. 템플릿 이미지 (template/both 모드만) -->
+        <div x-show="imageMode === 'template' || imageMode === 'both'" x-transition class="mb-6">
+            <h3 class="text-base font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+                템플릿 이미지
+            </h3>
+            <div class="border rounded-lg p-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">템플릿 이미지</label>
+                <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-purple-400 transition-colors"
+                     @dragover.prevent="dragOverTemplate = true"
+                     @dragleave.prevent="dragOverTemplate = false"
+                     @drop.prevent="handleTemplateDrop($event)"
+                     :class="dragOverTemplate ? 'border-purple-400 bg-purple-50' : ''">
+                    <input type="file" id="templateFileInput" accept=".png,.jpg,.jpeg,.webp" class="hidden"
+                           @change="handleTemplateUpload($event)">
+                    <div x-show="!overlayConfig.template_image" class="py-4">
+                        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                        <p class="mt-2 text-sm text-gray-600">드래그앤드롭 또는</p>
+                        <button type="button" @click="document.getElementById('templateFileInput').click()"
+                                class="mt-1 text-sm text-purple-600 hover:text-purple-700 font-medium">
+                            파일 선택
+                        </button>
+                        <p class="mt-1 text-xs text-gray-400">PNG, JPG, WEBP (최대 5MB)</p>
                     </div>
-                    <div x-show="uploadingFont" class="mt-2 flex items-center gap-2 text-sm text-gray-500">
-                        <div class="loading w-4 h-4"></div>
-                        업로드 중...
+                    <div x-show="overlayConfig.template_image" class="relative">
+                        <img :src="templatePreviewUrl" alt="템플릿 미리보기" class="max-h-32 mx-auto rounded">
+                        <p class="mt-2 text-xs text-gray-600" x-text="overlayConfig.template_image"></p>
+                        <button type="button" @click="deleteTemplateFile()"
+                                class="mt-2 px-3 py-1 text-xs text-red-600 border border-red-300 rounded hover:bg-red-50">
+                            삭제
+                        </button>
                     </div>
+                </div>
+                <div x-show="uploadingTemplate" class="mt-2 flex items-center gap-2 text-sm text-gray-500">
+                    <div class="loading w-4 h-4"></div>
+                    업로드 중...
                 </div>
             </div>
         </div>
@@ -275,15 +284,20 @@
             </div>
         </div>
 
-        <!-- 4. 미리보기 영역 (템플릿 또는 혼용 모드) -->
-        <div x-show="imageMode === 'template' || imageMode === 'both'" x-transition class="mb-6">
+        <!-- 4. 미리보기 영역 (전 모드 공통) -->
+        <div x-transition class="mb-6">
             <h3 class="text-base font-semibold text-gray-900 mb-3 flex items-center gap-2">
                 <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
                 </svg>
-                미리보기
+                제목 오버레이 미리보기
             </h3>
+
+            <!-- AI/혼용 모드 안내 -->
+            <div x-show="imageMode === 'ai' || imageMode === 'both'" class="mb-2 p-2 bg-gray-50 border border-gray-200 rounded text-xs text-gray-600">
+                AI 생성 이미지는 매번 새로 생성되므로, 아래는 <strong>예시 배경</strong> 위에 폰트·크기·색상·위치를 적용한 오버레이 미리보기입니다.
+            </div>
 
             <!-- 테스트 텍스트 입력 -->
             <div class="mb-3">
@@ -295,13 +309,15 @@
 
             <!-- Canvas 미리보기 -->
             <div class="border rounded-lg p-4 bg-gray-100 overflow-auto">
-                <div x-show="!overlayConfig.template_image" class="text-center py-8 text-gray-500">
+                <!-- 템플릿 모드에서 템플릿 미업로드 시 안내 -->
+                <div x-show="imageMode === 'template' && !overlayConfig.template_image" class="text-center py-8 text-gray-500">
                     <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                     </svg>
                     <p class="mt-2 text-sm">템플릿 이미지를 업로드하면 미리보기가 표시됩니다</p>
                 </div>
-                <canvas x-ref="previewCanvas" x-show="overlayConfig.template_image"
+                <!-- AI/혼용: 예시 배경 / 템플릿: 업로드 이미지 위 오버레이 -->
+                <canvas x-ref="previewCanvas" x-show="imageMode !== 'template' || overlayConfig.template_image"
                         class="max-w-full mx-auto" style="max-height: 400px;"
                         role="img" aria-label="이미지 미리보기 캔버스"></canvas>
             </div>

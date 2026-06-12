@@ -117,6 +117,11 @@ function imageSettingsApp() {
                 }
             });
 
+            // 이미지 모드 전환 시 미리보기 갱신(AI/혼용은 예시 배경 위 오버레이)
+            this.$watch('imageMode', () => {
+                this.$nextTick(() => this.updatePreview());
+            });
+
             // 전역 이벤트 리스너 등록 - blogSettingsApp에서 setBlog 호출 시
             window.addEventListener('blog-settings-loaded', (e) => {
                 if (e.detail && e.detail.blogId) {
@@ -452,21 +457,42 @@ function imageSettingsApp() {
             // $refs가 아직 바인딩되지 않았을 수 있으므로 안전하게 접근
             if (!this.$refs) return;
             const canvas = this.$refs.previewCanvas;
-            if (!canvas || !this.templateImage) return;
+            if (!canvas) return;
 
             const ctx = canvas.getContext('2d');
-            const img = this.templateImage;
             const config = this.overlayConfig;
 
-            canvas.width = img.width;
-            canvas.height = img.height;
-            ctx.drawImage(img, 0, 0);
+            // 배경 결정: 템플릿 이미지가 있으면 그 위에, 없으면(AI/혼용) 예시 배경 위에
+            let bgW, bgH;
+            if (this.templateImage) {
+                bgW = this.templateImage.width;
+                bgH = this.templateImage.height;
+                canvas.width = bgW;
+                canvas.height = bgH;
+                ctx.drawImage(this.templateImage, 0, 0);
+            } else {
+                // AI 생성 대표 이미지 기본 크기(16:9, gpt-image-1) 기준 예시 배경
+                bgW = 1536;
+                bgH = 1024;
+                canvas.width = bgW;
+                canvas.height = bgH;
+                const grad = ctx.createLinearGradient(0, 0, bgW, bgH);
+                grad.addColorStop(0, '#e5e7eb');
+                grad.addColorStop(1, '#cbd5e1');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, bgW, bgH);
+                ctx.fillStyle = 'rgba(107,114,128,0.45)';
+                ctx.font = '30px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'top';
+                ctx.fillText('AI 생성 이미지 예시 배경 (실제 이미지는 생성 시 결정)', bgW / 2, 24);
+            }
 
             // 텍스트 영역 계산
             const textAreaX = config.padding.left;
             const textAreaY = config.padding.top;
-            const textAreaWidth = img.width - config.padding.left - config.padding.right;
-            const textAreaHeight = img.height - config.padding.top - config.padding.bottom;
+            const textAreaWidth = bgW - config.padding.left - config.padding.right;
+            const textAreaHeight = bgH - config.padding.top - config.padding.bottom;
 
             // 폰트 설정
             const fontFamily = this.loadedFont ? 'CustomFont' : 'sans-serif';
@@ -501,7 +527,7 @@ function imageSettingsApp() {
             });
 
             // 패딩 경계 점선 표시
-            this.drawPaddingGuide(ctx, img.width, img.height, config.padding);
+            this.drawPaddingGuide(ctx, bgW, bgH, config.padding);
         },
 
         // 캔버스 미리보기 헬퍼 (blog_image_preview.js에서 제공)
