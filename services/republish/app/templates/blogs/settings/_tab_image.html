@@ -59,18 +59,18 @@
             </div>
         </div>
 
-        <!-- 2. 템플릿/폰트 업로드 (템플릿 또는 혼용 모드) -->
-        <div x-show="imageMode === 'template' || imageMode === 'both'" x-transition class="mb-6">
+        <!-- 2. 폰트/템플릿 업로드 (폰트는 전 모드 공통·필수, 템플릿 이미지는 template/both) -->
+        <div x-transition class="mb-6">
             <h3 class="text-base font-semibold text-gray-900 mb-3 flex items-center gap-2">
                 <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
                 </svg>
-                템플릿/폰트 업로드
+                폰트/템플릿 업로드
             </h3>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <!-- 템플릿 이미지 업로드 -->
-                <div class="border rounded-lg p-4">
+                <!-- 템플릿 이미지 업로드 (template/both 모드만) -->
+                <div class="border rounded-lg p-4" x-show="imageMode === 'template' || imageMode === 'both'">
                     <label class="block text-sm font-medium text-gray-700 mb-2">템플릿 이미지</label>
                     <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-purple-400 transition-colors"
                          @dragover.prevent="dragOverTemplate = true"
@@ -105,9 +105,12 @@
                     </div>
                 </div>
 
-                <!-- 폰트 파일 업로드 -->
+                <!-- 폰트 파일 업로드 (전 모드 공통·필수) -->
                 <div class="border rounded-lg p-4">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">폰트 파일</label>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        폰트 파일 <span class="text-red-500">*</span>
+                        <span class="text-xs text-gray-400">(필수 · 제목 오버레이용 한글 폰트)</span>
+                    </label>
                     <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-accent transition-colors"
                          @dragover.prevent="dragOverFont = true"
                          @dragleave.prevent="dragOverFont = false"
@@ -145,8 +148,8 @@
             </div>
         </div>
 
-        <!-- 3. 오버레이 설정 (템플릿 또는 혼용 모드) -->
-        <div x-show="imageMode === 'template' || imageMode === 'both'" x-transition class="mb-6">
+        <!-- 3. 오버레이 설정 (전 모드 공통) -->
+        <div x-transition class="mb-6">
             <h3 class="text-base font-semibold text-gray-900 mb-3 flex items-center gap-2">
                 <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
