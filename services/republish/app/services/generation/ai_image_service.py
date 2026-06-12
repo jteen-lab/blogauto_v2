@@ -25,10 +25,20 @@ logger = logging.getLogger(__name__)
 IMAGE_DIR = Path(settings.image_storage_dir)
 IMAGE_URL_PREFIX = settings.image_url_prefix
 
-# 기본 이미지 프롬프트 (한글)
+# 기본 이미지 프롬프트 (한글) — 텍스트 비유발형(배경 묘사)
+# 제목은 프롬프트가 아니라 폰트 오버레이로 넣는다.
 DEFAULT_PROMPT_TEMPLATE = (
-    "{title} 주제의 전문적인 블로그 대표 이미지, "
-    "{keywords} 포함, 현대적인 디자인, 깔끔한 구성"
+    "{title} 주제를 상징하는 전문적인 블로그 대표 배경 이미지, "
+    "{keywords} 관련 시각 요소, 현대적이고 깔끔한 일러스트 배경"
+)
+
+# 텍스트 렌더링 억제 가드. gpt-image 계열은 프롬프트에 한글 제목이 들어가면
+# 이미지에 글자를 직접 그리며 없는 정보(전화번호 등)까지 지어낸다.
+# 항상 프롬프트 끝에 강제로 덧붙여 글자 없는 배경만 생성하게 한다.
+NO_TEXT_GUARD = (
+    "Important: render absolutely no text in the image. "
+    "No letters, no words, no numbers, no captions, no labels, no signs, "
+    "no watermark, no typography of any kind anywhere in the image."
 )
 
 
@@ -77,6 +87,9 @@ class AIImageService:
             prompt = re.sub(r',\s*featuring\s*,', ',', prompt)
             prompt = re.sub(r',\s*,', ',', prompt)
             prompt = re.sub(r'\s{2,}', ' ', prompt).strip()
+
+        # 텍스트 렌더링 억제 가드 강제 추가 (제목은 폰트 오버레이로 넣음)
+        prompt = f"{prompt}. {NO_TEXT_GUARD}"
 
         logger.info(
             f"[AI_IMAGE] 이미지 생성 시작 | "

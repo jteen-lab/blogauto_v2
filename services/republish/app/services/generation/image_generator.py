@@ -168,6 +168,20 @@ class ImageGenerator:
                 error="title_overlay 사용 시 blog.overlay_config 필수",
             )
 
+        # 폰트 필수: 업로드된 폰트가 없으면 한글이 □(글리프 없음)로 렌더되므로
+        # 시스템 폰트로 폴백하지 않고 명확히 실패시킨다.
+        if not overlay_config.get("font_file"):
+            logger.error(
+                "[IMAGE_GEN] title_overlay=True이지만 폰트 파일 미설정"
+            )
+            return ImageResult(
+                success=False, image_mode="ai",
+                error=(
+                    "제목 오버레이에는 폰트 파일이 필요합니다. "
+                    "블로그 설정 > 이미지 탭에서 폰트 파일을 업로드하세요."
+                ),
+            )
+
         overlaid_path = await overlay_title_on_image(
             template_image_svc=self.template_image,
             image_path=result.image_url,
