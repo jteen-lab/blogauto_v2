@@ -145,18 +145,18 @@ class PublishWorkflow:
             return await service.republish(blog)
 
         elif blog.platform == BlogPlatform.BLOGGER:
-            if not blog.google_credential_id:
-                return {
-                    "success": False,
-                    "message": "Google 인증 정보가 없습니다",
-                }
+            # 발행과 동일하게 레거시 oauth(blog.oauth_token_encrypted) 또는
+            # credential 어느 쪽이든 사용. google_credential_id 없이도 진행하고,
+            # 토큰 해석 실패 시에만 republish 내부에서 인증 오류를 반환한다.
             from app.services.blogger_service import (
                 BloggerRepublishService,
             )
             from app.models.google_credential import GoogleCredential
-            credential = await self.db.get(
-                GoogleCredential, blog.google_credential_id,
-            )
+            credential = None
+            if blog.google_credential_id:
+                credential = await self.db.get(
+                    GoogleCredential, blog.google_credential_id,
+                )
             async with BloggerRepublishService() as svc:
                 return await svc.republish(blog, credential)
 

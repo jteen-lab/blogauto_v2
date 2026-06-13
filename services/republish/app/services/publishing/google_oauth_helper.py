@@ -151,3 +151,44 @@ async def refresh_access_token(
             "[OAUTH_HELPER] 토큰 교환 오류: %s", e,
         )
     return None
+
+
+async def resolve_blogger_access_token(blog, credential=None) -> Optional[str]:
+    """Blogger access_token 획득 (발행/재발행 공용).
+
+    발행기(blogger_publisher._get_access_token)와 동일한 우선순위:
+    1) Blog.oauth_token_encrypted(레거시) 복호화 — refresh_token이면 교환
+    2) GoogleCredential.get_access_token() (중앙 인증)
+
+    재발행이 google_credential_id 없이도 레거시 oauth로 동작하도록 통일한다.
+
+    Args:
+        blog: Blog 모델 (oauth_token_encrypted 보유 가능)
+        credential: GoogleCredential (선택)
+
+    Returns:
+        access_token 또는 None (둘 다 없을 때)
+    """
+    from ...core.encryption import decrypt_api_key
+
+    raw_token = None
+    enc = getattr(blog, "oauth_token_encrypted", None)
+    if enc:
+        try:
+            raw_token = decrypt_api_key(enc)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[OAUTH_HELPER] 레거시 토큰 복호화 실패: %s", e)
+
+    if not raw_token and credential is not None:
+        try:
+            raw_token = credential.get_access_token()
+        except Exception:  # noqa: BLE001
+            raw_token = None
+
+    if not raw_token:
+        return None
+
+    # refresh_token이면 access_token 발급, 이미 access_token이면 그대로
+    if raw_token.startswith("1//"):
+        return await refresh_access_token(raw_token)
+    return raw_token

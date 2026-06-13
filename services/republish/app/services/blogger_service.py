@@ -17,7 +17,10 @@ import httpx
 from ..models.blog import Blog
 from ..models.google_credential import GoogleCredential
 from ..core.logger import get_logger
-from .publishing.google_oauth_helper import refresh_access_token
+from .publishing.google_oauth_helper import (
+    refresh_access_token,
+    resolve_blogger_access_token,
+)
 
 logger = get_logger("blogger_service", "republish.log")
 
@@ -41,6 +44,9 @@ class BloggerRepublishService:
         self.client = httpx.AsyncClient(timeout=30.0)
         self.max_retries = 3
         self.base_backoff = 2
+        # 발행과 동일하게 레거시 oauth/credential에서 해석한 access_token.
+        # republish() 시작 시 1회 해석해 저장하고 _get_auth_headers가 사용.
+        self._resolved_token: Optional[str] = None
 
     async def __aenter__(self):
         return self
@@ -48,9 +54,13 @@ class BloggerRepublishService:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.client.aclose()
 
-    def _get_auth_headers(self, credential: GoogleCredential) -> Dict[str, str]:
-        """인증 헤더 생성"""
-        access_token = credential.get_access_token()
+    def _get_auth_headers(
+        self, credential: Optional[GoogleCredential] = None
+    ) -> Dict[str, str]:
+        """인증 헤더 생성 (해석된 토큰 우선, 없으면 credential)"""
+        access_token = self._resolved_token or (
+            credential.get_access_token() if credential else None
+        )
         return {
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json"
@@ -303,19 +313,38 @@ class BloggerRepublishService:
         logger.info(f"[BLOGGER] Publishing post | BloggerID={blogger_id} | PostID={post_id}")
         return await self._make_request("POST", url, headers, credential=credential)
 
-    async def republish(self, blog: Blog, credential: GoogleCredential) -> Dict[str, Any]:
+    async def republish(
+        self, blog: Blog, credential: Optional[GoogleCredential] = None
+    ) -> Dict[str, Any]:
         """
         재발행 실행 (임시저장 → 재발행)
 
+        인증은 발행과 동일하게 레거시 oauth(blog.oauth_token_encrypted) 또는
+        credential 어느 쪽이든 사용한다(google_credential_id 없이도 동작).
+
         Args:
             blog: 블로그 객체
-            credential: Google 인증 정보
+            credential: Google 인증 정보 (선택)
 
         Returns:
             재발행 결과
         """
         try:
             logger.info(f"[BLOGGER] Starting republish | BlogID={blog.id} | BlogName={blog.name}")
+
+            # 0. access_token 해석 (레거시 oauth 우선, credential 폴백)
+            self._resolved_token = await resolve_blogger_access_token(
+                blog, credential
+            )
+            if not self._resolved_token:
+                logger.warning(
+                    f"[BLOGGER] 재발행 인증 토큰 없음 | BlogID={blog.id}"
+                )
+                return {
+                    "success": False,
+                    "message": "Google 인증 정보가 없습니다",
+                    "blog_id": blog.id,
+                }
 
             # 1. 블로그 ID 조회
             blogger_id = await self.get_blog_id(blog, credential)
