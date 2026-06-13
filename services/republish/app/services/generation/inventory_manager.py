@@ -183,9 +183,30 @@ class InventoryManager:
         post.mark_published(published_url, platform_post_id=platform_post_id)
         await self.db.flush()
 
+        # Fix ①: 발행 시 blogs.total_post_count를 실제 발행수 기준으로 보정.
+        # GP 단계 판정·블로그 카드 카운트가 발행 직후 반영되도록 한다.
+        # max(기존값, DB발행수)로 멱등 갱신 — 동기화로 받은 플랫폼 카운트가
+        # 더 크면 보존하고, 재발행 등 중복 호출에도 카운트가 부풀지 않는다.
+        from sqlalchemy import func as _func
+        from ...models.blog import Blog as _Blog
+        pub_count_r = await self.db.execute(
+            select(_func.count(CrawledPost.id)).where(
+                CrawledPost.blog_id == post.blog_id,
+                CrawledPost.published_at.isnot(None),
+            )
+        )
+        published_total = pub_count_r.scalar() or 0
+        blog = await self.db.get(_Blog, post.blog_id)
+        if blog:
+            blog.total_post_count = max(
+                blog.total_post_count or 0, published_total
+            )
+            await self.db.flush()
+
         logger.info(
             f"[INVENTORY_MGR] 발행 완료 처리 | "
             f"post_id={post.id} | blog_id={post.blog_id} | "
+            f"total_post_count={blog.total_post_count if blog else '?'} | "
             f"title='{post.title[:30]}'"
         )
 
