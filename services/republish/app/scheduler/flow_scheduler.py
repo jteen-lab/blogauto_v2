@@ -38,6 +38,7 @@ async def _use_celery(key: str, db: AsyncSession) -> bool:
 from ..core.logger import get_logger
 from ..services.generation.growth_profile_resolver import GrowthProfileResolver
 from ..services.generation.flow_execution_context import StageParams
+from ..services.generation.post_count_helper import build_effective_post_counts
 from .scheduler import scheduler_instance
 
 logger = get_logger("flow_scheduler", "republish.log")
@@ -2459,7 +2460,7 @@ class FlowScheduler:
         if gp_settings:
             gp_context = GrowthProfileResolver.build_execution_context(
                 flow.id, gp_settings,
-                {b.id: b.total_post_count or 0 for b in blogs}
+                await build_effective_post_counts(db, blogs)
             )
 
         warmup_mgr = WarmupManager(db)
@@ -2739,7 +2740,7 @@ class FlowScheduler:
         if gp_settings:
             gp_context = GrowthProfileResolver.build_execution_context(
                 flow.id, gp_settings,
-                {b.id: b.total_post_count or 0 for b in blogs}
+                await build_effective_post_counts(db, blogs)
             )
 
         # GP 모듈 이름 찾기
