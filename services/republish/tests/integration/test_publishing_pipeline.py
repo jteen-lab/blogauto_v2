@@ -404,18 +404,29 @@ class TestPublisherPipeline:
         p.inventory_manager.mark_as_published.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_pipeline_image_upload_failure(
+    async def test_pipeline_image_upload_failure_aborts(
         self, mock_db, wp_blog, sample_post_with_image,
     ):
-        """이미지 업로드 실패해도 글은 발행 성공"""
+        """대표이미지 업로드 실패 시 발행 중단(이미지 없는 발행 금지)
+
+        - 플랫폼 발행/상태 갱신 미호출
+        - 실패 기록 호출, success=False 반환
+        """
         p = self._build(mock_db, image_result=ImageUploadResult(
-            success=False, error="타임아웃",
+            success=False,
+            error="imgbb API 키가 설정되지 않았습니다",
         ))
         with patch.object(PublisherPipeline, "_resolve_image_path",
                           return_value="/tmp/t.webp"):
-            result = await p.publish_post(wp_blog, sample_post_with_image)
-        assert result.success is True
-        assert result.image_uploaded is False
+            result = await p.publish_post(
+                wp_blog, sample_post_with_image,
+            )
+        assert result.success is False
+        assert "대표이미지 업로드 실패" in (result.error or "")
+        p.wp_publisher.publish.assert_not_called()
+        p.inventory_manager.mark_as_published.assert_not_called()
+        sample_post_with_image.record_publish_failure \
+            .assert_called_once()
 
     @pytest.mark.asyncio
     async def test_pipeline_publish_failure(
