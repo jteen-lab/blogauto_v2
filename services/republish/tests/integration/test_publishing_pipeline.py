@@ -272,12 +272,13 @@ class TestBloggerPublisher:
 
     @pytest.mark.asyncio
     async def test_publish_success(self, blogger_blog, sample_post):
-        """201 응답 시 성공"""
+        """201 응답 시 성공 (중복 없음)"""
         resp = create_mock_httpx_response(
             status_code=201,
             json_data={"id": "abc", "url": "https://test.blogspot.com/p.html"},
         )
         self.pub._send_request = AsyncMock(return_value=resp)
+        self.pub._find_recent_post_by_title = AsyncMock(return_value=None)
         result = await self.pub.publish(
             blogger_blog, sample_post, SAMPLE_HTML,
             credential=create_mock_credential(),
@@ -288,25 +289,48 @@ class TestBloggerPublisher:
 
     @pytest.mark.asyncio
     async def test_publish_token_expired(self, blogger_blog, sample_post):
-        """401 -> 토큰 만료 에러"""
+        """401 -> 토큰 만료 에러 (재시도 불가)"""
         self.pub._send_request = AsyncMock(
             return_value=create_mock_httpx_response(status_code=401),
         )
+        self.pub._find_recent_post_by_title = AsyncMock(return_value=None)
         result = await self.pub.publish(
             blogger_blog, sample_post, SAMPLE_HTML,
             credential=create_mock_credential(),
         )
         assert result.success is False
         assert "토큰" in result.error
+        assert result.retryable is False
 
     @pytest.mark.asyncio
     async def test_publish_no_credential(self, blogger_blog, sample_post):
-        """credential=None -> 인증 에러"""
+        """credential=None -> 인증 에러 (재시도 불가)"""
         result = await self.pub.publish(
             blogger_blog, sample_post, SAMPLE_HTML, credential=None,
         )
         assert result.success is False
         assert "인증" in result.error
+        assert result.retryable is False
+
+    @pytest.mark.asyncio
+    async def test_publish_idempotency_skips_create(
+        self, blogger_blog, sample_post,
+    ):
+        """중복 조회로 동일 글 발견 시 신규 생성 생략 (멱등성)"""
+        self.pub._send_request = AsyncMock()
+        self.pub._find_recent_post_by_title = AsyncMock(return_value={
+            "id": "dup1", "url": "https://test.blogspot.com/dup.html",
+            "title": sample_post.title,
+        })
+        result = await self.pub.publish(
+            blogger_blog, sample_post, SAMPLE_HTML,
+            credential=create_mock_credential(),
+        )
+        assert result.success is True
+        assert result.platform_post_id == "dup1"
+        assert "dup.html" in result.published_url
+        # 신규 발행 POST가 호출되지 않아야 함
+        self.pub._send_request.assert_not_called()
 
     def test_extract_blog_id_from_placeholders(self, blogger_blog):
         """placeholders.blogger_id에서 ID 추출"""
@@ -427,6 +451,24 @@ class TestPublisherPipeline:
         p.inventory_manager.mark_as_published.assert_not_called()
         sample_post_with_image.record_publish_failure \
             .assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_pipeline_image_failure_propagates_retryable(
+        self, mock_db, wp_blog, sample_post_with_image,
+    ):
+        """이미지 영구 실패(retryable=False)가 결과에 전파됨"""
+        p = self._build(mock_db, image_result=ImageUploadResult(
+            success=False,
+            error="imgbb API 키가 설정되지 않았습니다",
+            retryable=False,
+        ))
+        with patch.object(PublisherPipeline, "_resolve_image_path",
+                          return_value="/tmp/t.webp"):
+            result = await p.publish_post(
+                wp_blog, sample_post_with_image,
+            )
+        assert result.success is False
+        assert result.retryable is False
 
     @pytest.mark.asyncio
     async def test_pipeline_publish_failure(
