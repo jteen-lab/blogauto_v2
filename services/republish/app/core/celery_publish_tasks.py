@@ -194,6 +194,20 @@ def publish_post(
             return result
 
         error_msg = result.get("message") or result.get("error") or "발행 실패"
+
+        # 영구 실패(인증·키 미설정, 4xx 등)는 재시도해도 성공할 수 없으므로
+        # Celery 재시도를 생략한다. 실패는 이미 AutorunLog/last_publish_error에 기록됨.
+        if not result.get("retryable", True):
+            logger.warning(
+                f"[TASK:PUBLISH] 영구 실패(재시도 안 함) | blog={blog_id} "
+                f"| 사유: {error_msg}"
+            )
+            return {
+                "success": False,
+                "retryable": False,
+                "message": error_msg,
+            }
+
         raise RuntimeError(f"발행 실패: {error_msg}")
 
     except TaskSkipped:

@@ -156,7 +156,9 @@ class ImageUploader:
             app_password = decrypt_api_key(blog.api_secret_encrypted)
         except Exception as e:
             return ImageUploadResult(
-                success=False, error=f"API 인증 정보 복호화 실패: {e}"
+                success=False,
+                error=f"API 인증 정보 복호화 실패: {e}",
+                retryable=False,
             )
 
         auth_str = base64.b64encode(
@@ -303,6 +305,7 @@ class ImageUploader:
                 success=False,
                 error="imgbb API 키가 설정되지 않았습니다. "
                 "블로그 설정 > 치환자 > image_hosting.imgbb_api_key",
+                retryable=False,
             )
 
         image_b64 = base64.b64encode(image_data).decode()

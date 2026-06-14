@@ -105,6 +105,7 @@ class PublisherPipeline:
                     crawled_post.id, e,
                 )
             result.error = error_msg
+            result.retryable = image_result.retryable
             return result
 
         # Step 2: HTML 가공
@@ -158,6 +159,7 @@ class PublisherPipeline:
         if not publish_result.success:
             result.error = publish_result.error
             result.retry_count = publish_result.retry_count
+            result.retryable = publish_result.retryable
 
             # 발행 실패 기록
             try:
@@ -285,7 +287,9 @@ class PublisherPipeline:
             logger.error(
                 "[PIPELINE] %s | blog=%s", msg, blog.name,
             )
-            return ImageUploadResult(success=False, error=msg)
+            return ImageUploadResult(
+                success=False, error=msg, retryable=False,
+            )
 
         result = await self.image_uploader.upload_image(
             blog, image_path, title=post.title,

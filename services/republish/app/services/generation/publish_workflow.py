@@ -88,11 +88,13 @@ class PublishWorkflow:
         if not pub_result.success:
             logger.warning(
                 f"[PUBLISH_WF] 플랫폼 발행 실패 | blog_id={blog_id} | "
-                f"error={pub_result.error}"
+                f"error={pub_result.error} | "
+                f"retryable={pub_result.retryable}"
             )
             return {
                 "success": False,
                 "message": pub_result.error or "플랫폼 발행 실패",
+                "retryable": pub_result.retryable,
             }
 
         # 3. 후처리 (재고/상태 업데이트)

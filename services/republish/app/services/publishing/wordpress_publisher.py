@@ -115,6 +115,7 @@ class WordPressPublisher:
             )
         except Exception as e:
             result.error = f"API 인증 정보 복호화 실패: {e}"
+            result.retryable = False
             logger.error(
                 "[WP_PUBLISH] %s | blog=%s",
                 result.error, blog.name,
@@ -162,6 +163,7 @@ class WordPressPublisher:
                     f"HTTP {resp.status_code}: "
                     f"{self._parse_error(resp)}"
                 )
+                result.retryable = False
                 logger.error(
                     "[WP_PUBLISH] 발행 실패 | blog=%s"
                     " | %s", blog.name, result.error,
@@ -275,6 +277,8 @@ class WordPressPublisher:
         else:
             result.success = False
             result.error = "draft→publish 전환 실패"
+            # draft가 이미 생성됨 → 재시도 시 중복 draft 발생하므로 영구 처리
+            result.retryable = False
 
         logger.info(
             "[WP_PUBLISH] 발행 완료 | blog=%s | "
