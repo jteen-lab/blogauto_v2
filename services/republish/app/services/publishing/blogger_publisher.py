@@ -7,6 +7,7 @@ OAuth 2.0 (GoogleCredential) 인증을 사용합니다.
 설계 문서: publish_module_implementation_plan.md - Phase 3.3.2
 """
 import asyncio
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import httpx
@@ -68,6 +69,7 @@ class BloggerPublisher:
                 "OAuth 인증 실패. 블로그 설정에서 "
                 "Refresh Token을 입력하세요."
             )
+            result.retryable = False
             logger.error(
                 "[BLOGGER_PUBLISH] %s | blog=%s",
                 result.error, blog.name,
@@ -83,6 +85,7 @@ class BloggerPublisher:
                 "Blogger ID를 확인할 수 없습니다. "
                 "블로그 URL 또는 설정을 확인하세요."
             )
+            result.retryable = False
             logger.error(
                 "[BLOGGER_PUBLISH] %s | blog=%s",
                 result.error, blog.name,
@@ -92,6 +95,23 @@ class BloggerPublisher:
         api_url = (
             f"{BLOGGER_API_BASE}/blogs/{blog_id}/posts"
         )
+
+        # 멱등성: 발행 직전 동일 제목 최근 글 조회 → 있으면 신규 생성 생략
+        # (직전 시도가 응답 유실로 중단됐어도 재시도 시 중복 생성 방지)
+        existing = await self._find_recent_post_by_title(
+            blog_id, post.title, access_token,
+        )
+        if existing:
+            result.success = True
+            result.published_url = existing.get("url", "")
+            result.platform_post_id = str(existing.get("id", ""))
+            logger.warning(
+                "[BLOGGER_PUBLISH] 중복 방지: 동일 글 이미 존재 → "
+                "기존 글 채택 | blog=%s | post_id=%s | url=%s",
+                blog.name, result.platform_post_id,
+                result.published_url,
+            )
+            return result
 
         payload = {
             "kind": "blogger#post",
@@ -108,6 +128,11 @@ class BloggerPublisher:
         token_refreshed = False
         for attempt in range(MAX_RETRIES):
             try:
+                logger.info(
+                    "[BLOGGER_PUBLISH] POST 전송 | blog=%s | "
+                    "attempt=%d/%d",
+                    blog.name, attempt + 1, MAX_RETRIES,
+                )
                 resp = await self._send_request(
                     api_url, access_token, payload
                 )
@@ -157,6 +182,7 @@ class BloggerPublisher:
                             access_token = new_token
                             continue
                     result.error = "OAuth 토큰 갱신 실패"
+                    result.retryable = False
                     return result
 
                 if resp.status_code == 401:
@@ -164,16 +190,19 @@ class BloggerPublisher:
                         "OAuth 토큰 갱신 후에도 인증 실패. "
                         "Google 계정 재인증이 필요합니다."
                     )
+                    result.retryable = False
                     logger.error(
                         "[BLOGGER_PUBLISH] 토큰 갱신 후 "
                         "재인증 실패 | blog=%s", blog.name,
                     )
                     return result
 
+                # 그 외 상태 코드는 4xx 클라이언트 오류로 간주 → 영구 실패
                 error_msg = self._parse_error(resp)
                 result.error = (
                     f"HTTP {resp.status_code}: {error_msg}"
                 )
+                result.retryable = False
                 logger.error(
                     "[BLOGGER_PUBLISH] 발행 실패 | "
                     "blog=%s | %s",
@@ -192,6 +221,16 @@ class BloggerPublisher:
                 if attempt < MAX_RETRIES - 1:
                     await asyncio.sleep(BACKOFF_BASE ** attempt)
                     continue
+            except asyncio.CancelledError:
+                # 코루틴 취소는 except Exception으로 잡히지 않는다.
+                # POST가 Google에 도달해 글이 생성됐을 수 있으므로 로그 후 재전파.
+                logger.error(
+                    "[BLOGGER_PUBLISH] 코루틴 중단(취소) | blog=%s | "
+                    "post_id=%s | 발행 도중 중단 — Blogger에 글이 "
+                    "생성됐을 수 있음(다음 시도 시 중복 조회로 차단)",
+                    blog.name, getattr(post, "id", "?"),
+                )
+                raise
             except Exception as e:
                 result.error = f"Blogger API 오류: {e}"
                 logger.error(
@@ -267,6 +306,93 @@ class BloggerPublisher:
                 "%s", e,
             )
         return None
+
+    async def _find_recent_post_by_title(
+        self,
+        blog_id: str,
+        title: str,
+        access_token: str,
+        window_minutes: int = 10,
+    ) -> Optional[dict]:
+        """동일 제목 + 최근 발행 글 조회 (멱등성/중복 방지).
+
+        직전 발행 시도가 응답 유실/취소로 중단됐어도, 재시도 시 이미
+        생성된 글을 찾아 중복 생성을 막는다. 조회 자체가 실패하면
+        None을 반환해 정상 발행을 차단하지 않는다.
+
+        Args:
+            blog_id: Blogger 블로그 ID
+            title: 발행하려는 글 제목
+            access_token: OAuth access token
+            window_minutes: 최근으로 간주할 시간 윈도우(분)
+
+        Returns:
+            매칭된 글 dict(url, id 포함) 또는 None
+        """
+        target = (title or "").strip()
+        if not target:
+            return None
+        try:
+            async with httpx.AsyncClient(
+                timeout=PUBLISH_TIMEOUT,
+            ) as client:
+                resp = await client.get(
+                    f"{BLOGGER_API_BASE}/blogs/{blog_id}/posts",
+                    params={
+                        "fetchBodies": "false",
+                        "fetchImages": "false",
+                        "maxResults": 10,
+                        "orderBy": "published",
+                    },
+                    headers={
+                        "Authorization": f"Bearer {access_token}",
+                    },
+                )
+            if resp.status_code != 200:
+                logger.warning(
+                    "[BLOGGER_PUBLISH] 중복 조회 실패(무시) | "
+                    "status=%d", resp.status_code,
+                )
+                return None
+            items = resp.json().get("items", []) or []
+            cutoff = datetime.now(timezone.utc) - timedelta(
+                minutes=window_minutes,
+            )
+            for item in items:
+                if (item.get("title") or "").strip() != target:
+                    continue
+                published = self._parse_published(
+                    item.get("published"),
+                )
+                # 시간 파싱 실패 시에도 제목 일치하면 중복으로 간주(보수적)
+                if published is None or published >= cutoff:
+                    return item
+        except Exception as e:
+            logger.warning(
+                "[BLOGGER_PUBLISH] 중복 조회 오류(무시) | %s", e,
+            )
+        return None
+
+    @staticmethod
+    def _parse_published(
+        value: Optional[str],
+    ) -> Optional[datetime]:
+        """Blogger published(RFC3339)를 aware datetime으로 변환.
+
+        Args:
+            value: RFC3339 문자열 (예: 2026-06-13T18:35:00+09:00)
+
+        Returns:
+            파싱된 datetime 또는 실패 시 None
+        """
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(
+                value.replace("Z", "+00:00"),
+            )
+        except Exception:
+            return None
 
     def _get_labels(
         self,
