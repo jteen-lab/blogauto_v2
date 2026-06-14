@@ -78,10 +78,34 @@ class PublisherPipeline:
             crawled_post.title[:30], platform,
         )
 
-        # Step 1: 이미지 업로드
+        # Step 1: 대표이미지 업로드
         image_result = await self._upload_image(
             blog, crawled_post
         )
+
+        # Step 1.5: 대표이미지 업로드 실패 시 발행 중단
+        # (이미지 없는 발행 금지 — imgbb 키 미설정 등)
+        if image_result is not None and not image_result.success:
+            error_msg = (
+                "대표이미지 업로드 실패로 발행을 중단합니다: "
+                f"{image_result.error}"
+            )
+            logger.error(
+                "[PIPELINE] 발행 중단(이미지 실패) | blog=%s | "
+                "post_id=%d | error=%s",
+                blog.name, crawled_post.id, image_result.error,
+            )
+            try:
+                crawled_post.record_publish_failure(error_msg)
+                await self.db.commit()
+            except Exception as e:
+                logger.error(
+                    "[PIPELINE] 발행 실패 기록 오류 | "
+                    "post_id=%d | %s",
+                    crawled_post.id, e,
+                )
+            result.error = error_msg
+            return result
 
         # Step 2: HTML 가공
         final_html = self._prepare_html(
@@ -238,7 +262,15 @@ class PublisherPipeline:
         blog: Blog,
         post: CrawledPost,
     ) -> Optional[ImageUploadResult]:
-        """이미지 업로드 (존재 시)"""
+        """대표이미지 업로드 (존재 시).
+
+        Returns:
+            - None: 발행할 대표이미지가 없는 글(image_url 미설정)
+              → 정상 발행 진행
+            - ImageUploadResult(success=True): 업로드 성공
+            - ImageUploadResult(success=False): 업로드 실패
+              → 호출 측에서 발행을 중단한다(이미지 없는 발행 금지).
+        """
         if not post.image_url:
             return None
 
@@ -246,24 +278,25 @@ class PublisherPipeline:
             post.image_url
         )
         if not image_path:
-            logger.warning(
-                "[PIPELINE] 이미지 경로 확인 불가: %s",
-                post.image_url,
+            msg = (
+                "대표이미지 파일을 찾을 수 없음: "
+                f"{post.image_url}"
             )
-            return None
+            logger.error(
+                "[PIPELINE] %s | blog=%s", msg, blog.name,
+            )
+            return ImageUploadResult(success=False, error=msg)
 
         result = await self.image_uploader.upload_image(
             blog, image_path, title=post.title,
         )
 
         if not result.success:
-            logger.warning(
-                "[PIPELINE] 이미지 업로드 실패, "
-                "이미지 없이 발행 계속 | error=%s",
-                result.error,
+            logger.error(
+                "[PIPELINE] 대표이미지 업로드 실패 | "
+                "blog=%s | error=%s",
+                blog.name, result.error,
             )
-            # 로컬 이미지 경로가 발행에 포함되지 않도록 정리
-            post.image_url = None
 
         return result
 
