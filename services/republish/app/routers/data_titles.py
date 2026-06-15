@@ -796,6 +796,54 @@ class BulkReplaceRequest(BaseModel):
     title_ids: Optional[List[int]] = None
 
 
+def _build_replace_previews(
+    titles,
+    find_text: str,
+    replace_text: str,
+    case_sensitive: bool,
+    existing_titles: set,
+) -> tuple:
+    """치환 미리보기 목록을 계산한다 (순수 함수, preview/apply 공용).
+
+    Args:
+        titles: 대상 제목 객체 목록(.id, .title 보유).
+        find_text: 찾을 단어.
+        replace_text: 바꿀 단어(빈 문자열이면 삭제).
+        case_sensitive: 대소문자 구분 여부.
+        existing_titles: 결과가 이 집합에 있으면 중복으로 스킵한다.
+            처리 중 생성된 결과도 누적해 같은 배치 내 중복도 막는다.
+            빈 집합이면 중복 스킵 없이 모두 치환(임시제목용).
+
+    Returns:
+        (previews, duplicates, empty_count) 튜플.
+        previews: [{"id", "original", "replaced"}] 목록.
+    """
+    pattern = re.escape(find_text)
+    flags = 0 if case_sensitive else re.IGNORECASE
+    previews: list = []
+    duplicates = 0
+    empty_count = 0
+    seen = set(existing_titles)
+    for t in titles:
+        new_text = re.sub(pattern, replace_text, t.title, flags=flags)
+        new_text = re.sub(r'\s+', ' ', new_text.strip())
+
+        if len(new_text) < 2:
+            empty_count += 1
+            continue
+        if new_text == t.title:
+            continue
+        if new_text in seen:
+            duplicates += 1
+            continue
+
+        previews.append({
+            "id": t.id, "original": t.title, "replaced": new_text,
+        })
+        seen.add(new_text)
+    return previews, duplicates, empty_count
+
+
 @router.post("/bulk-replace")
 async def bulk_replace_titles(
     request: BulkReplaceRequest,
@@ -807,9 +855,6 @@ async def bulk_replace_titles(
         model = TempTitle if request.target == "temp" else MainTitle
         title_field = TempTitle.title if request.target == "temp" else MainTitle.title
 
-        pattern = re.escape(request.find_text)
-        flags = 0 if request.case_sensitive else re.IGNORECASE
-
         query = select(model).where(title_field.ilike(f"%{request.find_text}%"))
         if request.title_ids:
             query = query.where(model.id.in_(request.title_ids))
@@ -817,31 +862,24 @@ async def bulk_replace_titles(
         result = await db.execute(query)
         titles = result.scalars().all()
 
-        previews = []
-        duplicates = 0
-        empty_count = 0
-        existing_titles = set()
-
-        if request.mode == "apply":
+        # 중복 비교 집합: mode가 아니라 target 기준으로 결정한다.
+        # - main(정식제목): uq_main_title_topic 유니크 제약이 있어 중복 생성 시
+        #   IntegrityError → 전체 제목을 미리 로드해 중복 결과를 스킵.
+        # - temp(임시제목): title 유니크 제약 없음(중복 허용) → 빈 집합으로 두어
+        #   결과가 기존 제목과 같아도 자유롭게 치환(이후 dedup 처리).
+        # preview/apply 모두 동일 집합을 사용해 두 모드 결과를 일치시킨다.
+        existing_titles: set = set()
+        if request.target == "main":
             all_result = await db.execute(select(title_field))
             existing_titles = {r[0] for r in all_result.fetchall()}
 
-        for t in titles:
-            new_text = re.sub(pattern, request.replace_text, t.title, flags=flags)
-            new_text = new_text.strip()
-            new_text = re.sub(r'\s+', ' ', new_text)
-
-            if len(new_text) < 2:
-                empty_count += 1
-                continue
-            if new_text == t.title:
-                continue
-            if new_text in existing_titles:
-                duplicates += 1
-                continue
-
-            previews.append({"id": t.id, "original": t.title, "replaced": new_text})
-            existing_titles.add(new_text)
+        previews, duplicates, empty_count = _build_replace_previews(
+            titles,
+            request.find_text,
+            request.replace_text,
+            request.case_sensitive,
+            existing_titles,
+        )
 
         if request.mode == "preview":
             return {
