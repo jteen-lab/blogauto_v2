@@ -392,6 +392,8 @@ def _get_action_type(action: str) -> str:
         return "republish"
     if action in ("collect",):
         return "collect"
+    if action in ("bulk_collect",):
+        return "bulk_collect"
     if action in ("data",):
         return "data"
     if action in ("queue_register",):

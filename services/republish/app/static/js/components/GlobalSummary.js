@@ -817,13 +817,14 @@ function globalSummary() {
                 publish: 'bg-blue-800/60 text-blue-300',
                 republish: 'bg-violet-800/60 text-violet-300',
                 collect: 'bg-cyan-800/60 text-cyan-300',
+                bulk_collect: 'bg-sky-800/60 text-sky-300',
                 data: 'bg-amber-800/60 text-amber-300',
                 queue_register: 'bg-indigo-800/60 text-indigo-300',
             };
             return map[actionType] || 'bg-gray-700/60 text-gray-400';
         },
         getActionLabel(actionType) {
-            const map = { generate: '생성', publish: '발행', republish: '재발행', collect: '수집', data: '데이터', queue_register: '워커 등록' };
+            const map = { generate: '생성', publish: '발행', republish: '재발행', collect: '수집', bulk_collect: '대량수집', data: '데이터', queue_register: '워커 등록' };
             return map[actionType] || '시스템';
         },
         getLogRowBorderClass(actionType) {
