@@ -83,6 +83,9 @@ class ChunkProcessor:
         self.timebox = timebox
         self.http_timeout: float = http_timeout
         self.save_temp_titles: bool = save_temp_titles
+        # 제목 저장 시 분류/필터용 (cycle당 1회 로드, 청크 간 재사용)
+        self._category_matcher = None
+        self._title_filters = None
 
     # ------------------------------------------------------------------
     # 청크 로딩
@@ -298,12 +301,17 @@ class ChunkProcessor:
         gather 종료 후 호출되어야 한다(동시 DB 접근 금지). 같은 제목은
         세션 캐시 + DB(lower) 중복 체크로 한 번만 저장한다. 커밋은 호출자
         (`process_chunk`)가 일괄 수행한다.
+
+        뉴스수집과 동일하게 제목 필터링 + 카테고리 자동 분류를 적용한다.
         """
         from app.models.title import TempTitle
         from ..title_dedup import title_exists
 
+        await self._ensure_classifiers()
+
         seen: set[str] = set()
         saved = 0
+        filtered = 0
         for row in urls:
             if row.title_fetch_status != "done" or not row.title:
                 continue
@@ -313,24 +321,112 @@ class ChunkProcessor:
             key = title.lower()
             if key in seen:
                 continue
+            # 제목 필터 (뉴스수집 _check_filter와 동일 규칙)
+            if self._match_title_filter(title):
+                seen.add(key)
+                filtered += 1
+                continue
             # 임시(TempTitle) + 정식(MainTitle) 모두와 중복 체크
             if await title_exists(self.db, title):
                 seen.add(key)
                 continue
-            blog_url = f"https://{row.domain}/" if row.domain else row.url
-            self.db.add(
-                TempTitle(
-                    title=title[:500],
-                    source_blog_url=(blog_url or "")[:1000],
-                    source_post_url=(row.url or "")[:1000],
-                    collection_stage="bulk_collect",
-                    status="new",
-                )
-            )
+            cat = await self._match_title_category(title)
+            self.db.add(self._build_temp_title(row, title, cat))
             seen.add(key)
             saved += 1
-        if saved:
-            logger.info("process_chunk TempTitle 저장 %d건", saved)
+        if saved or filtered:
+            logger.info(
+                "process_chunk TempTitle 저장 %d건 (필터제외 %d건)",
+                saved, filtered,
+            )
+
+    @staticmethod
+    def _build_temp_title(
+        row: CollectedUrl,
+        title: str,
+        cat: Tuple[Optional[int], Optional[int], Optional[int]],
+    ):
+        """분류 결과를 포함한 TempTitle ORM 인스턴스 생성."""
+        from app.models.title import TempTitle
+
+        blog_url = f"https://{row.domain}/" if row.domain else row.url
+        topic_id, subtopic_id, matched_keyword_id = cat
+        return TempTitle(
+            title=title[:500],
+            source_blog_url=(blog_url or "")[:1000],
+            source_post_url=(row.url or "")[:1000],
+            collection_stage="bulk_collect",
+            status="new",
+            topic_id=topic_id,
+            subtopic_id=subtopic_id,
+            matched_keyword_id=matched_keyword_id,
+        )
+
+    async def _ensure_classifiers(self) -> None:
+        """카테고리 매처/제목 필터를 1회 로드 (청크 간 재사용)."""
+        if self._category_matcher is None:
+            from ..category_matcher_service import CategoryMatcherService
+            self._category_matcher = CategoryMatcherService(self.db)
+        if self._title_filters is None:
+            from ...models.content_filter import ContentFilter
+            result = await self.db.execute(
+                select(ContentFilter).where(
+                    ContentFilter.is_active.is_(True)
+                )
+            )
+            self._title_filters = list(result.scalars().all())
+            logger.info(
+                "대량수집 제목 필터 %d개 로드", len(self._title_filters),
+            )
+
+    def _match_title_filter(self, title: str) -> bool:
+        """활성 ContentFilter(target=title/both)에 걸리면 True.
+
+        걸린 필터의 매칭 카운트를 증가시킨다. 뉴스수집 _check_filter와
+        동일 규칙(keyword/pattern/domain)을 적용한다.
+        """
+        import re
+
+        text_lower = title.lower().strip()
+        for f in (self._title_filters or []):
+            target = (f.target_type or "both").lower().strip()
+            if target not in ("title", "both"):
+                continue
+            value = (f.filter_value or "").lower().strip()
+            if not value:
+                continue
+            ftype = (f.filter_type or "keyword").lower().strip()
+            matched = False
+            if ftype == "pattern":
+                try:
+                    matched = bool(re.search(value, text_lower))
+                except re.error:
+                    continue
+            else:  # keyword / domain
+                matched = value in text_lower
+            if matched:
+                f.increment_match()
+                logger.info(
+                    "대량수집 제목 필터링: '%s' → '%s'",
+                    title[:40], f.filter_value,
+                )
+                return True
+        return False
+
+    async def _match_title_category(
+        self, title: str,
+    ) -> Tuple[Optional[int], Optional[int], Optional[int]]:
+        """제목 카테고리 매칭 (실패해도 저장은 계속)."""
+        try:
+            return await self._category_matcher.match_and_apply_to_title(
+                title,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "대량수집 카테고리 매칭 오류 title='%s' err=%s",
+                title[:30], exc,
+            )
+            return (None, None, None)
 
 
 __all__ = ["ChunkProcessor", "ChunkStats"]
