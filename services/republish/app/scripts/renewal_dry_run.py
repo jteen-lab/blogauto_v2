@@ -11,7 +11,7 @@ import os
 import sys
 
 
-async def main(post_id: int) -> None:
+async def main(post_id: int, apply: bool = False) -> None:
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
     from sqlalchemy.orm import sessionmaker
 
@@ -33,10 +33,15 @@ async def main(post_id: int) -> None:
         blog = await db.get(Blog, post.blog_id)
         print(f"대상: blog={blog.name} | post={post.id} | "
               f"platform_post_id={post.platform_post_id}")
-        res = await RenewalService(db).renew_post(blog, post, dry_run=True)
-        print(json.dumps(res, ensure_ascii=False, indent=2))
+        mode = "APPLY(라이브 수정)" if apply else "DRY-RUN(미변경)"
+        print(f"모드: {mode}")
+        res = await RenewalService(db).renew_post(
+            blog, post, dry_run=not apply,
+        )
+        print("RESULT: " + json.dumps(res, ensure_ascii=False))
     await engine.dispose()
 
 
 if __name__ == "__main__":
-    asyncio.run(main(int(sys.argv[1])))
+    apply_mode = len(sys.argv) > 2 and sys.argv[2] == "apply"
+    asyncio.run(main(int(sys.argv[1]), apply_mode))
