@@ -50,6 +50,7 @@ from .routers.title_groups import router as title_groups_router  # Phase C: Titl
 from .routers.title_transfer import router as title_transfer_router  # Phase D: Title Transfer API
 from .routers.blog_settings import router as blog_settings_router  # 블로그 설정 API
 from .routers.blog_settings_seo import router as blog_settings_seo_router  # 블로그 SEO 설정 API
+from .routers.blog_settings_renewal import router as blog_settings_renewal_router  # 블로그 재발행 리뉴얼 설정 API
 from .routers.ai_api_keys import router as ai_api_keys_router  # AI API 키 다계정 관리
 from .routers.reference_collection import router as reference_collection_router  # 참조자료 수집
 from .api.growth_profile import router as growth_profile_router  # Growth Profile API
@@ -240,6 +241,7 @@ app.include_router(title_groups_router, prefix=settings.api_v1_prefix)  # Phase 
 app.include_router(title_transfer_router, prefix=settings.api_v1_prefix)  # Phase D: Title Transfer
 app.include_router(blog_settings_router, prefix=settings.api_v1_prefix)  # 블로그 설정
 app.include_router(blog_settings_seo_router, prefix=settings.api_v1_prefix)  # 블로그 SEO 설정
+app.include_router(blog_settings_renewal_router, prefix=settings.api_v1_prefix)  # 블로그 재발행 리뉴얼 설정
 app.include_router(ai_api_keys_router)  # AI API 키 다계정 관리 (prefix 포함)
 app.include_router(reference_collection_router, prefix=settings.api_v1_prefix)  # 참조자료 수집
 app.include_router(growth_profile_router, prefix=settings.api_v1_prefix)  # Growth Profile
