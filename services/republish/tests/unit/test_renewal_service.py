@@ -14,7 +14,7 @@ async def test_dry_run_no_update():
     svc._resolve_module = AsyncMock(return_value=SimpleNamespace(id=5, settings={}))
     blog = SimpleNamespace(id=1, name="t", renewal_config={"title_mode": "keep"})
     post = SimpleNamespace(id=9, platform_post_id="100", url="https://x/9",
-                           source="generated", subtopic_id=None, topic_id=None)
+                           source="generated", matched_main_title_id=None)
     live = SimpleNamespace(platform_post_id="100", title="라이브 제목",
                            content_html="<p>old</p>", featured_image_url="https://i.ibb.co/a.webp",
                            image_origin="blogauto")
@@ -40,7 +40,7 @@ async def test_apply_updates_and_marks_renewed():
     svc._resolve_module = AsyncMock(return_value=SimpleNamespace(id=5, settings={}))
     blog = SimpleNamespace(id=1, name="t", renewal_config={"title_mode": "recombine"})
     post = SimpleNamespace(id=9, platform_post_id="100", url="https://x/9",
-                           source="generated", subtopic_id=None, topic_id=None,
+                           source="generated", matched_main_title_id=None,
                            title="", content_html="", image_url=None, last_renewed_at=None)
     live = SimpleNamespace(platform_post_id="100", title="라이브", content_html="<p>o</p>",
                            featured_image_url="", image_origin="none")

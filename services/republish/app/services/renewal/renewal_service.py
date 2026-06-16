@@ -50,10 +50,10 @@ class RenewalService:
         if not module:
             return {"success": False, "error": "생성 프롬프트 모듈 확인 불가"}
 
+        subtopic_id, topic_id = await self._resolve_category(crawled_post)
         rc = await RenewalGenerator(self.db, self.user_id).regenerate(
             blog, module, live.title, plan,
-            subtopic_id=crawled_post.subtopic_id,
-            topic_id=crawled_post.topic_id,
+            subtopic_id=subtopic_id, topic_id=topic_id,
         )
         if not rc.success:
             return {"success": False, "error": rc.error}
@@ -109,3 +109,18 @@ class RenewalService:
                 if module:
                     return module
         return None
+
+    async def _resolve_category(self, crawled_post: CrawledPost):
+        """매칭된 MainTitle에서 (subtopic_id, topic_id) 추출. 없으면 (None, None)."""
+        if crawled_post.matched_main_title_id:
+            from ...models.title import MainTitle
+
+            mt = await self.db.get(
+                MainTitle, crawled_post.matched_main_title_id,
+            )
+            if mt:
+                return (
+                    getattr(mt, "subtopic_id", None),
+                    getattr(mt, "topic_id", None),
+                )
+        return None, None
