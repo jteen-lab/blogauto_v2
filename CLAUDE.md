@@ -65,7 +65,12 @@
    cd ~/blogauto_v2/services/republish     # 또는 실제 배포 디렉토리
    sudo docker compose pull                 # 새 이미지만 받아옴
    sudo docker compose up -d                # 컨테이너만 교체 (volume 보존)
+   sudo docker image prune -f               # 교체로 dangling된 옛 이미지 정리(안전: 태그없는 미사용만)
    ```
+   > 옛 `:stable` 이미지는 교체 시 dangling(태그없음)으로 남아 누적됨(배포당 ~1.7GB).
+   > `docker image prune -f`는 dangling 이미지만 삭제하며 volume/실행이미지/DB는 건드리지 않음.
+   > 서버에 주간 cron(`0 4 * * 0 docker image prune -f`)도 설치돼 있으나, 배포마다 함께 정리 권장.
+   > ⚠️ `docker system prune -a --volumes` 절대 금지(볼륨 삭제=데이터 손실).
 6. **검증** — 두 SHA가 일치하는지 확인:
    - 로컬: `git rev-parse origin/main`
    - 서버: `sudo docker inspect blogauto-app-1 --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'`
