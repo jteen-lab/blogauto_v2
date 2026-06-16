@@ -51,7 +51,9 @@ class RenewalService:
             return {"success": False, "error": "생성 프롬프트 모듈 확인 불가"}
 
         subtopic_id, topic_id = await self._resolve_category(crawled_post)
-        rc = await RenewalGenerator(self.db, self.user_id).regenerate(
+        # user_id 미지정 시 블로그 소유자로 폴백(AIService 키 조회용).
+        gen_user_id = self.user_id or blog.user_id
+        rc = await RenewalGenerator(self.db, gen_user_id).regenerate(
             blog, module, live.title, plan,
             subtopic_id=subtopic_id, topic_id=topic_id,
         )
