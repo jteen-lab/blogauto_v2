@@ -118,6 +118,15 @@ class Blog(Base):
         comment="SEO 플러그인 설정: detected_plugin, auto_seo_enabled, focus_keyphrase_method, slug_method, meta_description_method"
     )
 
+    # 재발행 리뉴얼 정책 (P1)
+    renewal_config = Column(
+        JSON,
+        default=dict,
+        nullable=True,
+        comment="재발행 리뉴얼 설정: default_period_months, title_mode(keep|recombine), "
+                "delete_grace_days, category_periods({subtopic_id: months})"
+    )
+
     # 포스트 통계 (재발행 모듈 적용 구간 필터링용)
     total_post_count = Column(Integer, nullable=True, comment="누적 포스트 수")
     post_count_updated_at = Column(DateTime(timezone=True), nullable=True, comment="포스트 수 업데이트 시점")
@@ -250,6 +259,8 @@ class Blog(Base):
             "matching_config": self.matching_config or {},
             # SEO 설정
             "seo_config": self.seo_config or {},
+            # 재발행 리뉴얼 정책 (P1)
+            "renewal_config": self.renewal_config or {},
             # 크롤링/매칭 상태 (Phase M-1)
             "is_new_blog": self.is_new_blog,
             "crawl_status": self.crawl_status,

@@ -112,6 +112,13 @@ class CrawledPost(Base):
         comment="플랫폼 발행 후 반환된 포스트 ID",
     )
 
+    # 마지막 리뉴얼 시각 (재발행 리뉴얼 주기 판단 기준, P1)
+    last_renewed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="마지막 리뉴얼(재생성 갱신) 시각. NULL이면 미리뉴얼",
+    )
+
     # SEO 메타데이터
     seo_meta: Mapped[Optional[dict]] = mapped_column(
         JSON,
