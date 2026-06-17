@@ -28,9 +28,14 @@ class RenewalService:
         self.user_id = user_id
 
     async def renew_post(
-        self, blog: Blog, crawled_post: CrawledPost, dry_run: bool = True,
+        self, blog: Blog, crawled_post: CrawledPost,
+        dry_run: bool = True, include_content: bool = False,
     ) -> dict:
-        """글 1개 리뉴얼. dry_run이면 재생성 결과만 반환(갱신 안 함)."""
+        """글 1개 리뉴얼. dry_run이면 재생성 결과만 반환(갱신 안 함).
+
+        include_content=True면 dry_run 결과에 원본/재생성 본문 전문을 포함
+        (설정 시 원본 vs 리뉴얼 비교 미리보기용).
+        """
         cfg = blog.renewal_config or {}
         title_mode = cfg.get("title_mode", "keep")
 
@@ -46,7 +51,7 @@ class RenewalService:
             live.featured_image_url or "",
         )
 
-        module = await self._resolve_module(crawled_post)
+        module = await self._resolve_module(blog, crawled_post)
         if not module:
             return {"success": False, "error": "생성 프롬프트 모듈 확인 불가"}
 
@@ -61,7 +66,7 @@ class RenewalService:
             return {"success": False, "error": rc.error}
 
         if dry_run:
-            return {
+            result = {
                 "success": True, "dry_run": True,
                 "title_mode": title_mode,
                 "recombine": plan.recombine_title,
@@ -71,6 +76,12 @@ class RenewalService:
                 "content_len": len(rc.content_html),
                 "warnings": rc.warnings,
             }
+            if include_content:
+                # 설정 시 원본 vs 리뉴얼 비교용 본문 전문
+                result["original_html"] = live.content_html
+                result["new_html"] = rc.content_html
+                result["reuse_image_url"] = plan.reuse_image_url
+            return result
 
         upd = await RenewalUpdater(self.db).update(
             blog, live.platform_post_id, rc.title, rc.content_html,
@@ -93,15 +104,36 @@ class RenewalService:
             "url": upd.get("link"), "image_action": plan.image_action,
         }
 
-    async def _resolve_module(self, crawled_post: CrawledPost):
+    async def _resolve_module(self, blog: Blog, crawled_post: CrawledPost):
         """리뉴얼에 쓸 생성 프롬프트 모듈 결정.
 
-        blogauto 글은 GenerationHistory.prompt_module_id(원본 생성 모듈)를 사용.
-        레거시 글(이력 없음)은 None → 호출측에서 스킵(P3에서 폴백 보강).
+        1순위: 그 블로그에 연동된 생성(prompt) 모듈(플로우 연결) — 현재 양식
+            일치, 안전. (향후 카테고리별 프롬프트 분기 여지)
+        2순위: 그 글의 원본 생성 모듈(GenerationHistory.prompt_module_id).
+        둘 다 없으면 None(레거시 등) → 호출측 스킵.
         """
+        from sqlalchemy import select
+
+        from ...models.flow_blog import FlowBlog
+        from ...models.flow_module import FlowModule
         from ...models.generation_history import GenerationHistory
         from ...models.module import Module
+        from ...models.module_type import ModuleType
 
+        # 1) 블로그에 연동된 생성(prompt) 모듈
+        q = (
+            select(Module)
+            .join(FlowModule, FlowModule.module_id == Module.id)
+            .join(FlowBlog, FlowBlog.flow_id == FlowModule.flow_id)
+            .join(ModuleType, Module.module_type_id == ModuleType.id)
+            .where(FlowBlog.blog_id == blog.id, ModuleType.code == "prompt")
+            .limit(1)
+        )
+        module = (await self.db.execute(q)).scalars().first()
+        if module:
+            return module
+
+        # 2) 원본 생성 모듈(이력)
         if crawled_post.generation_history_id:
             gh = await self.db.get(
                 GenerationHistory, crawled_post.generation_history_id,

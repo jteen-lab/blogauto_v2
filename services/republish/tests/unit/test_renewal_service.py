@@ -57,3 +57,25 @@ async def test_apply_updates_and_marks_renewed():
     assert post.title == "재조합" and post.content_html == "<div>n</div>"
     assert post.last_renewed_at is not None
     db.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_dry_run_include_content_returns_both():
+    """include_content=True면 원본/재생성 본문 전문 포함(미리보기용)."""
+    db = MagicMock(); db.commit = AsyncMock()
+    svc = RenewalService(db)
+    svc._resolve_module = AsyncMock(return_value=SimpleNamespace(id=5, settings={}))
+    blog = SimpleNamespace(id=1, name="t", user_id=1, renewal_config={"title_mode": "keep"})
+    post = SimpleNamespace(id=9, platform_post_id="100", url="https://x/9",
+                           source="generated", matched_main_title_id=None)
+    live = SimpleNamespace(platform_post_id="100", title="라이브", content_html="<p>원본</p>",
+                           featured_image_url="https://i.ibb.co/a.webp", image_origin="blogauto")
+    rc = SimpleNamespace(success=True, title="라이브", content_html="<div>리뉴얼본</div>",
+                         image_url="https://i.ibb.co/a.webp", warnings=[])
+    with patch("app.services.renewal.renewal_service.RenewalSource") as Src, \
+         patch("app.services.renewal.renewal_service.RenewalGenerator") as Gen:
+        Src.return_value.fetch = AsyncMock(return_value=live)
+        Gen.return_value.regenerate = AsyncMock(return_value=rc)
+        res = await svc.renew_post(blog, post, dry_run=True, include_content=True)
+    assert res["original_html"] == "<p>원본</p>"
+    assert res["new_html"] == "<div>리뉴얼본</div>"

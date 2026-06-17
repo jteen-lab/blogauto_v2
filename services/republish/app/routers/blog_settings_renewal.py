@@ -4,9 +4,9 @@
 삭제 유예)을 Blog.renewal_config(JSON)에 저장/조회한다. 카테고리 주기는
 그 블로그가 선택한 서브카테고리(blog_categories)만 대상으로 한다.
 """
-from typing import Dict, List
+from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -126,3 +126,47 @@ async def save_renewal_settings(
         "message": "리뉴얼 설정이 저장되었습니다",
         "renewal_config": blog.renewal_config,
     }
+
+
+@router.post("/renewal/preview", summary="리뉴얼 미리보기(원본 vs 재생성)")
+async def preview_renewal(
+    blog_id: int,
+    post_id: Optional[int] = Query(default=None),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """설정 시 결과 확인용. dry-run으로 원본/재생성 본문을 함께 반환.
+
+    post_id 미지정 시 그 블로그의 가장 오래된 리뉴얼 가능 글로 자동 선택한다.
+    실제 라이브 글/DB는 변경하지 않으며, 생성 호출이 발생해 수십 초 걸린다.
+    """
+    from ..models.crawled_post import CrawledPost
+    from ..services.renewal.renewal_service import RenewalService
+
+    blog = await get_blog_or_404(blog_id, current_user, db)
+
+    if post_id:
+        post = await db.get(CrawledPost, post_id)
+    else:
+        post = (
+            await db.execute(
+                select(CrawledPost)
+                .where(
+                    CrawledPost.blog_id == blog_id,
+                    CrawledPost.source == "generated",
+                    CrawledPost.published_at.isnot(None),
+                    CrawledPost.platform_post_id.isnot(None),
+                    CrawledPost.generation_history_id.isnot(None),
+                )
+                .order_by(CrawledPost.published_at.asc())
+                .limit(1)
+            )
+        ).scalars().first()
+    if not post or post.blog_id != blog_id:
+        return {"success": False, "error": "미리보기할 글이 없습니다"}
+
+    res = await RenewalService(db, blog.user_id).renew_post(
+        blog, post, dry_run=True, include_content=True,
+    )
+    res["post_id"] = post.id
+    return res
