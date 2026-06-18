@@ -10,6 +10,7 @@ from app.routers.blog_settings_renewal import (
 def test_defaults():
     cfg = _normalize_config(RenewalSettingsRequest())
     assert cfg == {
+        "enabled": False,
         "default_period_months": 6,
         "title_mode": "keep",
         "delete_grace_days": 7,

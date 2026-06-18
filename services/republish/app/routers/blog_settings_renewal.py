@@ -29,6 +29,7 @@ TITLE_MODES = ("keep", "recombine")
 class RenewalSettingsRequest(BaseModel):
     """리뉴얼 설정 저장 요청."""
 
+    enabled: bool = False
     default_period_months: int = Field(6, ge=1, le=120)
     title_mode: str = Field("keep", pattern="^(keep|recombine)$")
     delete_grace_days: int = Field(7, ge=0, le=365)
@@ -48,6 +49,7 @@ def _normalize_config(req: RenewalSettingsRequest) -> dict:
             continue
         cats[str(key)] = min(months, 120)
     return {
+        "enabled": bool(req.enabled),
         "default_period_months": req.default_period_months,
         "title_mode": req.title_mode if req.title_mode in TITLE_MODES else "keep",
         "delete_grace_days": req.delete_grace_days,
@@ -92,6 +94,7 @@ async def get_renewal_settings(
     cfg = dict(blog.renewal_config or {})
     return {
         "renewal_config": {
+            "enabled": cfg.get("enabled", False),
             "default_period_months": cfg.get("default_period_months", 6),
             "title_mode": cfg.get("title_mode", "keep"),
             "delete_grace_days": cfg.get("delete_grace_days", 7),
