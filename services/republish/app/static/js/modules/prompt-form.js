@@ -52,6 +52,8 @@ function createPromptModuleState() {
             topK: 40,
             systemPrompt: '당신은 전문적인 블로그 콘텐츠 작성자입니다. SEO에 최적화된 고품질 블로그 글을 작성해주세요.',
             userPromptTemplate: '제목: {title}\n\n위 제목으로 블로그 글을 작성해주세요.\n카테고리: {category}\n키워드: {keywords}',
+            renewalMode: 'inherit',
+            renewalText: '',
             showAdvanced: false
         },
 
@@ -159,6 +161,8 @@ const promptModuleMethods = {
                 topK: cg.top_k ?? 40,
                 systemPrompt: cg.system_prompt || '',
                 userPromptTemplate: cg.user_prompt_template || '',
+                renewalMode: (cg.renewal_prompt && cg.renewal_prompt.mode) || 'inherit',
+                renewalText: (cg.renewal_prompt && cg.renewal_prompt.text) || '',
                 showAdvanced: false
             };
         }
@@ -425,7 +429,12 @@ const promptModuleMethods = {
                 presence_penalty: this.promptModule.contentGeneration.presencePenalty,
                 top_k: this.promptModule.contentGeneration.topK,
                 system_prompt: this.promptModule.contentGeneration.systemPrompt,
-                user_prompt_template: this.promptModule.contentGeneration.userPromptTemplate
+                user_prompt_template: this.promptModule.contentGeneration.userPromptTemplate,
+                // 재발행 리뉴얼 프롬프트 (mode: inherit|new|additional)
+                renewal_prompt: {
+                    mode: this.promptModule.contentGeneration.renewalMode || 'inherit',
+                    text: this.promptModule.contentGeneration.renewalText || ''
+                }
             },
             // 내부링크 설정
             internal_links: {
