@@ -22,6 +22,10 @@ function createPromptTestState() {
         fullPipelineCurrentStep: 0,
         // 테스트 블로그 선택
         testBlogId: null,
+        // 재발행 리뉴얼 미리보기 상태
+        renewalPreviewing: false,
+        renewalPreviewOpen: false,
+        renewalPv: {},
         // 각 단계 결과 (문자열 키 기반)
         results: {
             selectTitle: null,
@@ -52,6 +56,36 @@ const promptTestMethods = {
     },
     getTestBlogId() {
         return parseInt(this.promptTest.testBlogId) || null;
+    },
+    async previewRenewal() {
+        // 선택 블로그의 가장 오래된 글 1개를 이 모듈 설정(저장본)으로 리뉴얼
+        // dry-run하여 원본 vs 리뉴얼 결과를 비교(라이브/DB 미변경).
+        const blogId = this.getTestBlogId();
+        if (!blogId) {
+            const msg = '테스트 블로그를 먼저 선택하세요';
+            if (typeof showErrorMessage === 'function') showErrorMessage(msg); else alert(msg);
+            return;
+        }
+        this.promptTest.renewalPreviewing = true;
+        try {
+            const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
+            const resp = await fetch(`${apiBase}/blogs/${blogId}/settings/renewal/preview`, {
+                method: 'POST', credentials: 'include',
+            });
+            const data = await resp.json();
+            if (resp.ok && data.success) {
+                this.promptTest.renewalPv = data;
+                this.promptTest.renewalPreviewOpen = true;
+            } else {
+                const msg = '리뉴얼 미리보기 실패: ' + (data.error || resp.status);
+                if (typeof showErrorMessage === 'function') showErrorMessage(msg); else alert(msg);
+            }
+        } catch (e) {
+            console.warn('[prompt-test] 리뉴얼 미리보기 오류', e);
+            if (typeof showErrorMessage === 'function') showErrorMessage('리뉴얼 미리보기 중 오류');
+        } finally {
+            this.promptTest.renewalPreviewing = false;
+        }
     },
     getSelectedBlogOptions() {
         const selected = this.promptModule.selectedBlogs || [];

@@ -95,46 +95,14 @@
         </div>
     </div>
 
-    <!-- 저장 / 미리보기 -->
-    <div class="pt-2 flex items-center gap-2">
+    <!-- 저장 -->
+    <div class="pt-2">
         <button type="button" @click="save()" :disabled="saving"
                 class="px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
             <span x-show="!saving">저장</span>
             <span x-show="saving">저장 중...</span>
         </button>
-        <button type="button" @click="preview()" :disabled="previewing"
-                class="px-5 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 disabled:opacity-50">
-            <span x-show="!previewing">리뉴얼 미리보기</span>
-            <span x-show="previewing">생성 중… (수십 초)</span>
-        </button>
-        <span class="text-xs text-gray-400">가장 오래된 글 1개로 원본↔리뉴얼 결과를 비교(라이브 미변경)</span>
-    </div>
-
-    <!-- 원본 vs 리뉴얼 비교 모달 -->
-    <div x-show="showPreview" x-cloak class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
-         @click.self="showPreview=false">
-        <div class="bg-white rounded-lg w-full max-w-6xl h-[88vh] flex flex-col shadow-xl">
-            <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-                <div class="text-sm">
-                    <span class="font-semibold">리뉴얼 미리보기</span>
-                    <span class="text-gray-500 ml-2" x-text="'제목: ' + (pv.new_title||'') + (pv.recombine ? ' (재조합)' : ' (유지)')"></span>
-                    <span class="ml-2 px-2 py-0.5 rounded text-xs"
-                          :class="pv.image_action==='reuse' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'"
-                          x-text="pv.image_action==='reuse' ? '이미지 재사용' : '이미지 새 생성'"></span>
-                </div>
-                <button @click="showPreview=false" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
-            </div>
-            <div class="grid grid-cols-2 gap-0 flex-1 overflow-hidden">
-                <div class="flex flex-col border-r border-gray-200 overflow-hidden">
-                    <div class="px-3 py-1.5 bg-gray-50 text-xs font-medium text-gray-600 border-b">기존 글(원본)</div>
-                    <iframe class="flex-1 w-full" :srcdoc="pv.original_html || ''"></iframe>
-                </div>
-                <div class="flex flex-col overflow-hidden">
-                    <div class="px-3 py-1.5 bg-indigo-50 text-xs font-medium text-indigo-700 border-b">리뉴얼 결과</div>
-                    <iframe class="flex-1 w-full" :srcdoc="pv.new_html || ''"></iframe>
-                </div>
-            </div>
-        </div>
+        <span class="text-xs text-gray-400 ml-2">리뉴얼 결과 미리보기는 생성 모듈(프롬프트) 편집 화면의 테스트 패널에서 확인합니다.</span>
     </div>
 </div>
 
@@ -148,9 +116,6 @@ function renewalSettingsApp() {
         useCategoryPeriods: false,
         cfg: { default_period_months: 6, title_mode: 'keep', delete_grace_days: 7, category_periods: {} },
         categories: [],
-        previewing: false,
-        showPreview: false,
-        pv: {},
 
         init() {
             if (this.blogId) this.loadConfig(this.blogId);
@@ -178,30 +143,6 @@ function renewalSettingsApp() {
                 console.warn('[renewal] 설정 로드 실패', e);
             } finally {
                 this.loading = false;
-            }
-        },
-
-        async preview() {
-            if (!this.blogId) return;
-            this.previewing = true;
-            try {
-                const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
-                const resp = await fetch(`${apiBase}/blogs/${this.blogId}/settings/renewal/preview`, {
-                    method: 'POST', credentials: 'include',
-                });
-                const data = await resp.json();
-                if (resp.ok && data.success) {
-                    this.pv = data;
-                    this.showPreview = true;
-                } else {
-                    const msg = '미리보기 실패: ' + (data.error || resp.status);
-                    if (typeof showErrorMessage === 'function') showErrorMessage(msg); else alert(msg);
-                }
-            } catch (e) {
-                console.warn('[renewal] 미리보기 오류', e);
-                if (typeof showErrorMessage === 'function') showErrorMessage('미리보기 중 오류');
-            } finally {
-                this.previewing = false;
             }
         },
 
