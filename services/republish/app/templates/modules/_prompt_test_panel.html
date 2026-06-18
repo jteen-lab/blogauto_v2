@@ -39,43 +39,6 @@
                 </button>
             </div>
 
-            <!-- 재발행 리뉴얼 미리보기 (이 모듈 프롬프트로 재발행 시 생성되는 글 확인) -->
-            <div class="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                <button type="button" @click="previewRenewal()" :disabled="promptTest.renewalPreviewing"
-                        class="px-3 py-1.5 text-xs font-medium text-white bg-amber-600 rounded-lg hover:bg-amber-700 disabled:opacity-50">
-                    <span x-show="!promptTest.renewalPreviewing">🔄 리뉴얼 미리보기</span>
-                    <span x-show="promptTest.renewalPreviewing">생성 중… (수십 초)</span>
-                </button>
-                <span class="text-xs text-amber-700">선택 블로그의 가장 오래된 글을 이 모듈 프롬프트로 재발행 시 생성되는 글을 원본과 비교(저장 후 실행, 라이브 미변경)</span>
-            </div>
-
-            <!-- 원본 vs 리뉴얼 비교 모달 -->
-            <div x-show="promptTest.renewalPreviewOpen" x-cloak class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
-                 @click.self="promptTest.renewalPreviewOpen=false">
-                <div class="bg-white rounded-lg w-full max-w-6xl h-[88vh] flex flex-col shadow-xl">
-                    <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-                        <div class="text-sm">
-                            <span class="font-semibold">리뉴얼 미리보기</span>
-                            <span class="text-gray-500 ml-2" x-text="'제목: ' + (promptTest.renewalPv.new_title||'') + (promptTest.renewalPv.recombine ? ' (재조합)' : ' (유지)')"></span>
-                            <span class="ml-2 px-2 py-0.5 rounded text-xs"
-                                  :class="promptTest.renewalPv.image_action==='reuse' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'"
-                                  x-text="promptTest.renewalPv.image_action==='reuse' ? '이미지 재사용' : '이미지 새 생성'"></span>
-                        </div>
-                        <button @click="promptTest.renewalPreviewOpen=false" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
-                    </div>
-                    <div class="grid grid-cols-2 gap-0 flex-1 overflow-hidden">
-                        <div class="flex flex-col border-r border-gray-200 overflow-hidden">
-                            <div class="px-3 py-1.5 bg-gray-50 text-xs font-medium text-gray-600 border-b">기존 글(원본)</div>
-                            <iframe class="flex-1 w-full" :srcdoc="promptTest.renewalPv.original_html || ''"></iframe>
-                        </div>
-                        <div class="flex flex-col overflow-hidden">
-                            <div class="px-3 py-1.5 bg-indigo-50 text-xs font-medium text-indigo-700 border-b">리뉴얼 결과</div>
-                            <iframe class="flex-1 w-full" :srcdoc="promptTest.renewalPv.new_html || ''"></iframe>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <!-- 탭 네비게이션 (7단계) -->
             <div class="flex border-b border-gray-200 overflow-x-auto">
                 <template x-for="step in [

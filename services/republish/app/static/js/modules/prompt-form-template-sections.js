@@ -218,6 +218,29 @@ function getPromptContentGenSection() {
 키워드: {keywords}"></textarea>
                                     </div>
 
+                                    <!-- 재발행 리뉴얼 프롬프트 -->
+                                    <div class="border-t border-purple-200 pt-4">
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">재발행 리뉴얼 프롬프트</label>
+                                        <select x-model="promptModule.contentGeneration.renewalMode"
+                                                class="w-full sm:w-80 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-sm">
+                                            <option value="inherit">생성 프롬프트 승계 (그대로 사용)</option>
+                                            <option value="new">새 프롬프트 (리뉴얼 전용으로 교체)</option>
+                                            <option value="additional">추가 프롬프트 (생성 프롬프트 + 지침 결합)</option>
+                                        </select>
+                                        <p class="text-xs text-gray-500 mt-1">재발행 리뉴얼 시 글 생성에 사용할 프롬프트 방식입니다.</p>
+                                        <div x-show="promptModule.contentGeneration.renewalMode !== 'inherit'" x-transition class="mt-3">
+                                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                                <span x-text="promptModule.contentGeneration.renewalMode === 'new' ? '리뉴얼 전용 프롬프트' : '추가 지침'"></span>
+                                                <span class="text-xs text-gray-500">(변수: {title}, {category}, {keywords}, {existing_content})</span>
+                                            </label>
+                                            <textarea x-model="promptModule.contentGeneration.renewalText"
+                                                      rows="4"
+                                                      class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-sm font-mono"
+                                                      placeholder="예) 기존 글의 정보를 보존하면서 최신 정보나 변경된 내용을 추가해 더 풍부하게 확장해 주세요."></textarea>
+                                            <p class="text-xs text-gray-400 mt-1">추가 프롬프트: 기존 글 본문이 자동 첨부되어 "보존 + 확장" 작성이 됩니다. 새 프롬프트: {existing_content} 변수로 기존 글을 넣을 수 있습니다.</p>
+                                        </div>
+                                    </div>
+
                                     ${typeof window !== 'undefined' && window.getPromptBuilderEmbeddedHTML ? window.getPromptBuilderEmbeddedHTML() : ''}
 
                                     <!-- 고급 설정 (접기/펼치기) -->
