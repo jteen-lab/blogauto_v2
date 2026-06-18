@@ -61,6 +61,7 @@ class RenewalService:
         rc = await RenewalGenerator(self.db, gen_user_id).regenerate(
             blog, module, live.title, plan,
             subtopic_id=subtopic_id, topic_id=topic_id,
+            existing_content=live.content_html,
         )
         if not rc.success:
             return {"success": False, "error": rc.error}

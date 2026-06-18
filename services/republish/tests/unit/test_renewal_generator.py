@@ -81,3 +81,30 @@ async def test_reference_required_zero_aborts():
     res = await rg.regenerate(_blog(), module, "원본 제목", plan)
     assert res.success is False
     assert "참조자료" in res.error
+
+
+def test_renewal_prompt_inherit_default():
+    from app.services.renewal.renewal_generator import RenewalGenerator
+    assert RenewalGenerator._renewal_prompt({}, "<p>x</p>") == ("", "", "")
+
+
+def test_renewal_prompt_new_mode():
+    from app.services.renewal.renewal_generator import RenewalGenerator
+    s = {"content_generation": {"renewal_prompt": {"mode": "new", "text": "새 {title}"}}}
+    o, e, x = RenewalGenerator._renewal_prompt(s, "<p>기존</p>")
+    assert o == "새 {title}" and e == "" and x == "기존"
+
+
+def test_renewal_prompt_additional_injects_existing():
+    from app.services.renewal.renewal_generator import RenewalGenerator
+    s = {"content_generation": {"renewal_prompt": {"mode": "additional", "text": "보존 확장"}}}
+    o, e, x = RenewalGenerator._renewal_prompt(s, "<h2>T</h2><p>본문</p>")
+    assert o == ""
+    assert "보존 확장" in e and "T 본문" in e
+    assert x == "T 본문"
+
+
+def test_strip_html_caps_length():
+    from app.services.renewal.renewal_generator import RenewalGenerator, EXISTING_CONTENT_MAX_CHARS
+    long = "<p>" + ("가" * (EXISTING_CONTENT_MAX_CHARS + 500)) + "</p>"
+    assert len(RenewalGenerator._strip_html(long)) == EXISTING_CONTENT_MAX_CHARS

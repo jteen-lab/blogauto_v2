@@ -34,6 +34,9 @@ async def generate_content_with_meta(
     blog: Blog,
     category_name: str = "",
     keywords_text: str = "",
+    prompt_override: str = "",
+    extra_instruction: str = "",
+    existing_content: str = "",
 ) -> dict:
     """AI로 글 생성 (블로그 AI 설정 기준)
 
@@ -45,6 +48,9 @@ async def generate_content_with_meta(
         blog: 블로그 객체
         category_name: 카테고리 이름 ({category} 치환용)
         keywords_text: 키워드 텍스트 ({keywords} 치환용)
+        prompt_override: 비어있지 않으면 모듈 프롬프트 대신 사용(리뉴얼 새 프롬프트)
+        extra_instruction: 프롬프트 말미에 덧붙일 추가 지침(리뉴얼 추가 프롬프트)
+        existing_content: {existing_content} 치환용 기존 글 본문(리뉴얼 확장)
 
     Returns:
         dict: {"content": str, "model": str, "provider": str}
@@ -56,9 +62,10 @@ async def generate_content_with_meta(
     ai_config = blog.ai_config or {}
     writing_ai = ai_config.get("writing_ai", {})
 
-    # 프롬프트: 모듈 새 형식 -> 모듈 레거시 키 -> 기본값
+    # 프롬프트: 리뉴얼 새 프롬프트(override) -> 모듈 새 형식 -> 레거시 -> 기본값
     prompt_template = (
-        cg.get("user_prompt_template")
+        prompt_override
+        or cg.get("user_prompt_template")
         or settings.get("generation_prompt")
         or DEFAULT_CONTENT_PROMPT
     )
@@ -68,7 +75,11 @@ async def generate_content_with_meta(
         .replace("{reference_materials}", reference_injection)
         .replace("{category}", category_name)
         .replace("{keywords}", keywords_text)
+        .replace("{existing_content}", existing_content)
     )
+    # 리뉴얼 추가 지침을 프롬프트 말미에 결합
+    if extra_instruction:
+        full_prompt = f"{full_prompt}\n\n{extra_instruction}"
 
     # AI 제공자: 블로그 ai_config.writing_ai 설정만 사용
     provider = writing_ai.get("provider")

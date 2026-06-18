@@ -9,8 +9,12 @@
 - 출력만 만들고 라이브 글 갱신은 하지 않는다(P2c가 담당, 데이터 변경 분리).
 """
 import random
+import re
 from dataclasses import dataclass, field
 from typing import Optional
+
+# 기존 글 주입 시 토큰 폭증 방지용 상한
+EXISTING_CONTENT_MAX_CHARS = 8000
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -54,8 +58,13 @@ class RenewalGenerator:
         subtopic_id: Optional[int] = None,
         topic_id: Optional[int] = None,
         text_replace_enabled: bool = True,
+        existing_content: str = "",
     ) -> RenewalContent:
-        """라이브 글을 현재 양식·최신 내용으로 재생성한다."""
+        """라이브 글을 현재 양식·최신 내용으로 재생성한다.
+
+        existing_content: 라이브 글 본문(HTML). 리뉴얼 프롬프트가 '추가/새'
+            모드일 때 기존 내용 보존·확장용으로 주입한다.
+        """
         settings = module.settings or {}
         ai_config = blog.ai_config or {}
         warnings: list = []
@@ -77,6 +86,9 @@ class RenewalGenerator:
 
         category_name = await self._category_name(subtopic_id, topic_id)
 
+        override, extra, existing_for_prompt = self._renewal_prompt(
+            settings, existing_content,
+        )
         content_result = await generate_content_with_meta(
             ai_service=self.gen.ai_service,
             title=working_title,
@@ -85,6 +97,9 @@ class RenewalGenerator:
             blog=blog,
             category_name=category_name,
             keywords_text="",
+            prompt_override=override,
+            extra_instruction=extra,
+            existing_content=existing_for_prompt,
         )
         content_with_links = await self.gen.internal_linker.insert_links(
             content=content_result["content"],
@@ -112,6 +127,45 @@ class RenewalGenerator:
             seo_meta=seo_meta,
             warnings=warnings,
         )
+
+    @staticmethod
+    def _strip_html(html: str) -> str:
+        """HTML 태그 제거 + 공백 정리 + 상한 절단(프롬프트 주입용)."""
+        if not html:
+            return ""
+        text = re.sub(r"<[^>]+>", " ", html)
+        text = re.sub(r"\s+", " ", text).strip()
+        return text[:EXISTING_CONTENT_MAX_CHARS]
+
+    @classmethod
+    def _renewal_prompt(cls, settings: dict, existing_content: str):
+        """모듈 settings의 리뉴얼 프롬프트 모드 해석.
+
+        content_generation.renewal_prompt = {mode, text}:
+        - inherit(기본): 생성 프롬프트 그대로(기존 글 미주입, 현재 동작).
+        - new: text를 프롬프트로 교체(+기존 글은 {existing_content}로 제공).
+        - additional: text를 추가 지침으로 결합 + 기존 글 본문을 보존·확장하도록 주입.
+
+        Returns:
+            (prompt_override, extra_instruction, existing_for_prompt)
+        """
+        cg = settings.get("content_generation", {}) if isinstance(settings, dict) else {}
+        rp = (cg.get("renewal_prompt") or {}) if isinstance(cg, dict) else {}
+        mode = (rp.get("mode") or "inherit").strip()
+        text = (rp.get("text") or "").strip()
+        existing_text = cls._strip_html(existing_content)
+
+        if mode == "new" and text:
+            return text, "", existing_text
+        if mode == "additional" and text:
+            extra = text
+            if existing_text:
+                extra = (
+                    f"{text}\n\n[기존 글 본문 — 아래 내용을 보존·반영하고 "
+                    f"최신 정보를 추가해 확장하라]\n{existing_text}"
+                )
+            return "", extra, existing_text
+        return "", "", ""  # inherit: 현재 동작 유지
 
     async def _resolve_title(
         self, blog, module, live_title, plan, settings, ai_config,
