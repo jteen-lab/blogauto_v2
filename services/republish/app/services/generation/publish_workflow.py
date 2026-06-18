@@ -139,6 +139,28 @@ class PublishWorkflow:
         if not blog:
             return {"success": False, "message": f"Blog({blog_id}) 없음"}
 
+        # 리뉴얼 게이트: 리뉴얼 사용(enabled) + 주기 도래 글이 있으면 리뉴얼,
+        # 없거나 비활성이면 아래 기존 date-bump 재발행으로 진행.
+        cfg = blog.renewal_config or {}
+        if cfg.get("enabled"):
+            due = await self._find_due_renewable_post(blog, cfg)
+            if due:
+                from app.services.renewal.renewal_service import RenewalService
+                logger.info(
+                    "[REPUBLISH] 리뉴얼 대상 | blog=%s | post=%s",
+                    blog.name, due.id,
+                )
+                res = await RenewalService(
+                    self.db, blog.user_id,
+                ).renew_post(blog, due, dry_run=False)
+                if res.get("success"):
+                    res["action"] = "renewed"
+                    return res
+                logger.warning(
+                    "[REPUBLISH] 리뉴얼 실패 → date-bump 폴백 | %s",
+                    res.get("error"),
+                )
+
         if blog.platform == BlogPlatform.WORDPRESS:
             from app.services.wordpress_service import (
                 WordPressRepublishService,
@@ -166,3 +188,54 @@ class PublishWorkflow:
             "success": False,
             "message": f"지원하지 않는 플랫폼: {blog.platform}",
         }
+
+    async def _find_due_renewable_post(self, blog, cfg: Dict[str, Any]):
+        """리뉴얼 주기가 도래한 가장 오래된 리뉴얼 가능 글을 찾는다.
+
+        나이 기준 = COALESCE(last_renewed_at, published_at)(우리 DB).
+        주기 = category_periods[subtopic_id] ?? default_period_months(월).
+        도래 글 없으면 None.
+        """
+        from datetime import datetime, timezone
+
+        from dateutil.relativedelta import relativedelta
+        from sqlalchemy import func, select
+
+        from app.models.crawled_post import CrawledPost
+        from app.models.title import MainTitle
+
+        default_months = int(cfg.get("default_period_months", 6) or 6)
+        cat_periods = cfg.get("category_periods", {}) or {}
+        now = datetime.now(timezone.utc)
+
+        age_key = func.coalesce(
+            CrawledPost.last_renewed_at, CrawledPost.published_at,
+        )
+        rows = (await self.db.execute(
+            select(CrawledPost)
+            .where(
+                CrawledPost.blog_id == blog.id,
+                CrawledPost.source == "generated",
+                CrawledPost.published_at.isnot(None),
+                CrawledPost.platform_post_id.isnot(None),
+                CrawledPost.generation_history_id.isnot(None),
+            )
+            .order_by(age_key.asc())
+            .limit(50)
+        )).scalars().all()
+
+        for post in rows:
+            ref = post.last_renewed_at or post.published_at
+            if not ref:
+                continue
+            if ref.tzinfo is None:
+                ref = ref.replace(tzinfo=timezone.utc)
+            period = default_months
+            if post.matched_main_title_id and cat_periods:
+                mt = await self.db.get(MainTitle, post.matched_main_title_id)
+                sub = getattr(mt, "subtopic_id", None) if mt else None
+                if sub is not None:
+                    period = int(cat_periods.get(str(sub), default_months))
+            if ref <= now - relativedelta(months=period):
+                return post
+        return None
