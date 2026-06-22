@@ -40,8 +40,7 @@ logger = get_logger("titles", "app.log")
 async def _cleanup_post_images(
     post: CrawledPost, db: AsyncSession
 ) -> int:
-    """
-    CrawledPost에 연결된 이미지 파일(대표/섹션)을 삭제합니다.
+    """CrawledPost 이미지 파일 삭제(공용 유틸 위임).
 
     Args:
         post: 삭제 대상 CrawledPost
@@ -50,48 +49,9 @@ async def _cleanup_post_images(
     Returns:
         삭제된 이미지 파일 수
     """
-    import json
-    from pathlib import Path
+    from ..services.post_image_cleanup import delete_post_images
 
-    deleted = 0
-
-    def _remove_file(image_url: str | None) -> int:
-        if not image_url:
-            return 0
-        try:
-            filename = image_url.split("/")[-1]
-            path = Path(settings.image_storage_dir) / filename
-            if path.exists():
-                path.unlink()
-                return 1
-        except Exception as e:
-            logger.warning(f"[TITLES] 이미지 삭제 실패: {e}")
-        return 0
-
-    # 대표 이미지
-    deleted += _remove_file(post.image_url)
-
-    # GenerationHistory 연결 이미지
-    if post.generation_history_id:
-        gh_result = await db.execute(
-            select(GenerationHistory)
-            .where(GenerationHistory.id == post.generation_history_id)
-        )
-        gen_history = gh_result.scalar_one_or_none()
-        if gen_history:
-            deleted += _remove_file(gen_history.image_url)
-            # 섹션 이미지
-            if gen_history.section_images:
-                try:
-                    items = json.loads(gen_history.section_images)
-                    if isinstance(items, list):
-                        for item in items:
-                            url = item.get("image_url") if isinstance(item, dict) else None
-                            deleted += _remove_file(url)
-                except (json.JSONDecodeError, Exception) as e:
-                    logger.warning(f"[TITLES] 섹션 이미지 삭제 실패: {e}")
-
-    return deleted
+    return await delete_post_images(post, db)
 
 
 async def _build_blog_category_filter(
@@ -365,6 +325,7 @@ async def list_main_titles(
                 url=cp.url,
                 match_score=cp.match_score,
                 published_at=cp.published_at,
+                last_renewed_at=cp.last_renewed_at,
                 image_url=cp.image_url,
                 has_content=bool(cp.content_html),
             )
@@ -586,6 +547,10 @@ async def list_titles_unified(
                 "match_score": cp.match_score,
                 "published_at": (
                     cp.published_at.isoformat() if cp.published_at else None
+                ),
+                "last_renewed_at": (
+                    cp.last_renewed_at.isoformat()
+                    if cp.last_renewed_at else None
                 ),
                 "image_url": cp.image_url,
                 "has_content": bool(cp.content_html),
