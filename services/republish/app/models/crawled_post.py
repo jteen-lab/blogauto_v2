@@ -119,6 +119,13 @@ class CrawledPost(Base):
         comment="마지막 리뉴얼(재생성 갱신) 시각. NULL이면 미리뉴얼",
     )
 
+    # 저장 정리 시각 (유예 경과 후 본문/이미지 삭제, P4)
+    purged_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="본문/이미지 정리 시각. NULL이면 미정리(메타는 항상 보존)",
+    )
+
     # SEO 메타데이터
     seo_meta: Mapped[Optional[dict]] = mapped_column(
         JSON,
