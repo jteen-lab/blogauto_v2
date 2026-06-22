@@ -143,9 +143,33 @@ class PublishWorkflow:
         # 없거나 비활성이면 아래 기존 date-bump 재발행으로 진행.
         cfg = blog.renewal_config or {}
         if cfg.get("enabled"):
+            # P4 저장 정리: 유예 경과 글 본문/이미지 삭제(메타 보존). 비차단.
+            try:
+                from app.services.renewal.renewal_cleanup import (
+                    cleanup_purged_posts,
+                )
+                await cleanup_purged_posts(self.db, blog, cfg)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "[REPUBLISH] 저장정리 오류(무시) | blog=%s | %s",
+                    blog.name, exc,
+                )
             due = await self._find_due_renewable_post(blog, cfg)
             if due:
                 from app.services.renewal.renewal_service import RenewalService
+                # #4 미매칭 글이면 리뉴얼 직전 자동 정식제목 등록 시도
+                # (카테고리 주기·제목 재조합이 동작하도록). 실패해도 비차단.
+                if not due.matched_main_title_id:
+                    try:
+                        from app.services.auto_match_service import (
+                            AutoMatchService,
+                        )
+                        await AutoMatchService(self.db).match_single_post(due)
+                    except Exception as exc:  # noqa: BLE001
+                        logger.warning(
+                            "[REPUBLISH] 단일매칭 오류(무시) | post=%s | %s",
+                            due.id, exc,
+                        )
                 logger.info(
                     "[REPUBLISH] 리뉴얼 대상 | blog=%s | post=%s",
                     blog.name, due.id,
