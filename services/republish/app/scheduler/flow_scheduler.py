@@ -554,9 +554,11 @@ class FlowScheduler:
                         "message": f"플로우를 찾을 수 없습니다: {flow_id}"
                     }
 
-                # 모듈 찾기 (collect/data/generate/prompt만 모듈 필요)
+                # 모듈 찾기 (collect/bulk_collect/data/generate/prompt만 모듈 필요)
                 target_module = None
-                if action_type in ("collect", "data", "generate", "prompt"):
+                if action_type in (
+                    "collect", "bulk_collect", "data", "generate", "prompt",
+                ):
                     for link in flow.module_links:
                         module = link.module
                         if module and module.module_type and module.module_type.code == action_type:
@@ -603,6 +605,27 @@ class FlowScheduler:
                         result=result,
                         duration_ms=duration_ms,
                         action="collect"
+                    )
+
+                elif action_type == "bulk_collect":
+                    from app.routers.flows_execute import (
+                        _execute_bulk_collect_module,
+                    )
+                    result = await _execute_bulk_collect_module(
+                        target_module, db, flow_id=flow.id,
+                    )
+                    duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
+
+                    await self._save_autorun_log(
+                        db=db,
+                        user_id=flow.user_id,
+                        flow_id=flow.id,
+                        flow_name=flow.name,
+                        module_name=module_name,
+                        blog_name="-",
+                        result=result,
+                        duration_ms=duration_ms,
+                        action="bulk_collect"
                     )
 
                 elif action_type == "publish":
@@ -1046,7 +1069,9 @@ class FlowScheduler:
 
                 # 모듈이 필요한 액션 타입은 모듈 찾기
                 module = None
-                if action_type in ("collect", "data", "generate", "prompt"):
+                if action_type in (
+                    "collect", "bulk_collect", "data", "generate", "prompt",
+                ):
                     for link in flow.module_links:
                         if link.module and link.module.module_type:
                             if link.module.module_type.code == action_type:
@@ -1172,6 +1197,47 @@ class FlowScheduler:
 
                     logger.info(
                         f"[FLOW_SCHEDULER] 수집 모듈 실행 완료 | FlowID={flow_id} | "
+                        f"Success={result.get('success', False)} | Duration={duration_ms}ms"
+                    )
+
+                elif action_type == "bulk_collect":
+                    # 대량 수집: 기존 수동/테스트와 동일 실행기로 연결.
+                    # 모듈 단위 중복 디스패치 방지(이전 사이클 진행 중 스킵).
+                    if not self._acquire_module_dispatch_lock(
+                        "bulk_collect", module.id
+                    ):
+                        logger.info(
+                            f"[FLOW_SCHEDULER] 대량수집 모듈 이전 디스패치 처리 중, 스킵 | "
+                            f"FlowID={flow_id} | module_id={module.id}"
+                        )
+                        result = {
+                            "success": True,
+                            "skipped": True,
+                            "message": "이전 대량수집 사이클 진행 중",
+                        }
+                    else:
+                        from app.routers.flows_execute import (
+                            _execute_bulk_collect_module,
+                        )
+                        result = await _execute_bulk_collect_module(
+                            module, db, flow_id=flow.id,
+                        )
+                    duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
+
+                    await self._save_autorun_log(
+                        db=db,
+                        user_id=flow.user_id,
+                        flow_id=flow.id,
+                        flow_name=flow.name,
+                        module_name=module.name,
+                        blog_name="-",
+                        result=result,
+                        duration_ms=duration_ms,
+                        action="bulk_collect"
+                    )
+
+                    logger.info(
+                        f"[FLOW_SCHEDULER] 대량수집 모듈 실행 완료 | FlowID={flow_id} | "
                         f"Success={result.get('success', False)} | Duration={duration_ms}ms"
                     )
 
