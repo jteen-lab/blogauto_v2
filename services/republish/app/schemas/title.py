@@ -83,6 +83,7 @@ class CrawledPostInfo(BaseModel):
     url: Optional[str] = None
     match_score: Optional[float] = None
     published_at: Optional[datetime] = None
+    last_renewed_at: Optional[datetime] = None
     image_url: Optional[str] = None
     has_content: bool = False
 

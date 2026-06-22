@@ -492,6 +492,10 @@
                                             'bg-purple-100 text-purple-800': getMatchingStatusText(row) === '발행완료'
                                         }" class="px-2 py-0.5 rounded text-xs whitespace-nowrap"
                                            x-text="getMatchingStatusText(row)"></span>
+                                        <template x-if="isRenewed(row)">
+                                            <span class="ml-1 px-2 py-0.5 rounded text-xs whitespace-nowrap bg-sky-100 text-sky-700"
+                                                  :title="'최근 리뉴얼: ' + renewedAtText(row)">🔄 리뉴얼</span>
+                                        </template>
                                     </template>
                                     <template x-if="row._kind === 'unmatched'">
                                         <span class="text-orange-600 text-xs px-2 py-0.5 bg-orange-100 rounded whitespace-nowrap">미매칭</span>

@@ -1589,6 +1589,23 @@ function dataManagementApp() {
             return '독립포스트';
         },
 
+        // #2 리뉴얼 표시: 매칭 글이 한 번이라도 리뉴얼됐는지
+        isRenewed(title) {
+            return !!(title && title.matched_crawled_post
+                && title.matched_crawled_post.last_renewed_at);
+        },
+
+        // 최근 리뉴얼일 (YYYY-MM-DD), 없으면 '-'
+        renewedAtText(title) {
+            const v = title?.matched_crawled_post?.last_renewed_at;
+            if (!v) return '-';
+            try {
+                return new Date(v).toISOString().slice(0, 10);
+            } catch (e) {
+                return String(v).slice(0, 10);
+            }
+        },
+
         // 전체 보기 + 미매칭 크롤링 포스트 함께 로드
         async loadMainTitlesWithCrawled() {
             // 백엔드 통합 페이지네이션 API 호출 (대용량 데이터 안전).
