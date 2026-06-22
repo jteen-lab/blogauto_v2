@@ -102,6 +102,48 @@ class AutoMatchService:
             "unscanned_processed": len(unscanned_titles),
         }
 
+    async def match_single_post(
+        self,
+        post: CrawledPost,
+        threshold: float = DEFAULT_THRESHOLD,
+    ) -> bool:
+        """단일 발행글을 그 블로그 카테고리 후보와 매칭 (재발행 리뉴얼 #4).
+
+        재발행(리뉴얼) 직전 미매칭 글을 정식제목에 자동 등록해 카테고리 주기·
+        제목 재조합이 동작하도록 한다. 기존 카테고리 필터·유사도 로직 재사용.
+        성공 시 ``mark_matched`` 기록 후 commit, 실패 시 그대로 둠(비차단).
+
+        Args:
+            post: 매칭 대상 CrawledPost.
+            threshold: 매칭 임계 점수(기본 DEFAULT_THRESHOLD).
+
+        Returns:
+            매칭 성공 여부.
+        """
+        candidate_titles = await self._get_category_filtered_titles(post.blog_id)
+        if not candidate_titles:
+            logger.info(
+                "[AUTO_MATCH] 단일매칭 후보 없음 | blog_id=%s | post=%s",
+                post.blog_id, post.id,
+            )
+            return False
+        best_id, best_score = self._find_best_match(
+            post.title, candidate_titles,
+        )
+        if best_id is not None and best_score >= threshold:
+            post.mark_matched(best_id, best_score)
+            await self.db.commit()
+            logger.info(
+                "[AUTO_MATCH] 단일매칭 성공 | post=%s → title=%s (%.1f%%)",
+                post.id, best_id, best_score,
+            )
+            return True
+        logger.info(
+            "[AUTO_MATCH] 단일매칭 임계미달 | post=%s | best=%.1f%%",
+            post.id, best_score,
+        )
+        return False
+
     async def _handle_no_candidates(self, blog_id: int) -> dict:
         """후보 정식제목 0건 시 pending 전체 unmatched 처리."""
         logger.warning(
