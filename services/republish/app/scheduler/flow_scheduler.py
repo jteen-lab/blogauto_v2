@@ -250,16 +250,24 @@ class FlowScheduler:
                             f"Interval={interval_minutes}분"
                         )
 
-                    # fixed_time 모드의 collect/data 모듈은 즉시 실행 금지
+                    # fixed_time 모드의 collect/data/bulk_collect 모듈은 즉시 실행 금지
                     # (정해진 시각에만 실행되어야 하므로 등록 직후 트리거 안 함)
                     skip_immediate = False
                     if (
                         immediate_execution
-                        and module_type_code in ("collect", "data")
+                        and module_type_code in (
+                            "collect", "data", "bulk_collect",
+                        )
                         and not gp_settings
                     ):
                         module_settings = module.settings or {}
-                        if module_settings.get("schedule_mode") == "fixed_time":
+                        # bulk_collect 는 settings.schedule.* 중첩 경로 사용
+                        if module_type_code == "bulk_collect":
+                            _sched = module_settings.get("schedule") or {}
+                            _mode = _sched.get("schedule_mode")
+                        else:
+                            _mode = module_settings.get("schedule_mode")
+                        if _mode == "fixed_time":
                             skip_immediate = True
                             logger.info(
                                 f"[FLOW_SCHEDULER] fixed_time 모드 즉시 실행 스킵 | "
@@ -837,8 +845,10 @@ class FlowScheduler:
         """
         from app.scheduler.jitter import resolve_module_jitter
 
-        # fixed_time 모드 우선 처리 (GP 없는 collect/data)
-        if not gp_settings and action_type in ("collect", "data"):
+        # fixed_time 모드 우선 처리 (GP 없는 collect/data/bulk_collect)
+        if not gp_settings and action_type in (
+            "collect", "data", "bulk_collect",
+        ):
             fixed_next = self._get_module_next_fixed_time(flow, action_type)
             if fixed_next:
                 await self._schedule_at_time(
@@ -1432,12 +1442,12 @@ class FlowScheduler:
         if not state:
             return
 
-        # fixed_time 모드 우선 처리 (GP 없는 collect/data 등에 해당)
+        # fixed_time 모드 우선 처리 (GP 없는 collect/data/bulk_collect 등에 해당)
         # 정해진 시각에만 실행하므로 interval 계산 없이 직접 schedule
         if (
             fallback_interval <= 0
             and not gp_settings
-            and action_type in ("collect", "data")
+            and action_type in ("collect", "data", "bulk_collect")
         ):
             fixed_next = self._get_module_next_fixed_time(flow, action_type)
             if fixed_next:
@@ -1744,9 +1754,17 @@ class FlowScheduler:
             if module.module_type.code != action_type:
                 continue
             settings = module.settings or {}
-            if settings.get("schedule_mode") != "fixed_time":
+            # bulk_collect 는 스케줄 설정을 settings.schedule.* 중첩에 저장한다.
+            # collect/data 는 top-level(settings.schedule_mode/fixed_times).
+            if action_type == "bulk_collect":
+                sched = settings.get("schedule") or {}
+                schedule_mode = sched.get("schedule_mode")
+                fixed_times = sched.get("fixed_times") or []
+            else:
+                schedule_mode = settings.get("schedule_mode")
+                fixed_times = settings.get("fixed_times") or []
+            if schedule_mode != "fixed_time":
                 return None
-            fixed_times = settings.get("fixed_times") or []
             if not fixed_times:
                 return None
 
