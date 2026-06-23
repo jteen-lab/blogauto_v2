@@ -169,7 +169,42 @@ function getBCScheduleSection() {
             </h3>
             <p class="text-xs text-gray-500 -mt-2">사이클이 실행될 시간대와 간격을 설정합니다.</p>
 
-            <div class="bg-gray-50 rounded-lg p-4">
+            <!-- 스케줄 모드 선택 (고정 시간 권장 / 간격 기반) -->
+            <div class="flex gap-4 mb-2">
+                <label class="flex items-center cursor-pointer">
+                    <input type="radio" x-model="bcModule.schedule_mode" value="fixed_time"
+                           class="text-blue-600 focus:ring-blue-500">
+                    <span class="ml-2 text-sm">고정 시간 (권장)</span>
+                </label>
+                <label class="flex items-center cursor-pointer">
+                    <input type="radio" x-model="bcModule.schedule_mode" value="interval"
+                           class="text-blue-600 focus:ring-blue-500">
+                    <span class="ml-2 text-sm">간격 기반</span>
+                </label>
+            </div>
+
+            <!-- 고정 시간 모드: 매일 지정 시각에 실행 -->
+            <div x-show="bcModule.schedule_mode === 'fixed_time'" class="p-4 bg-blue-50 rounded-lg">
+                <label class="block text-sm font-medium text-gray-700 mb-2">수집 시간 설정</label>
+                <div class="flex flex-wrap gap-2 mb-3">
+                    <template x-for="(time, idx) in bcModule.fixed_times" :key="idx">
+                        <span class="inline-flex items-center px-3 py-1 bg-blue-200 text-blue-800 rounded-full text-sm">
+                            <span x-text="time"></span>
+                            <button type="button" @click="bcModule.removeFixedTime(time)"
+                                    class="ml-2 text-blue-600 hover:text-blue-800">×</button>
+                        </span>
+                    </template>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="time" x-model="bcModule.newFixedTime"
+                           class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <button type="button" @click="bcModule.addFixedTime()"
+                            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">추가</button>
+                </div>
+                <p class="mt-2 text-xs text-gray-500">매일 지정된 시간에 1 사이클을 실행합니다</p>
+            </div>
+
+            <div x-show="bcModule.schedule_mode === 'interval'" class="bg-gray-50 rounded-lg p-4">
                 <div class="flex flex-wrap gap-2 mb-4">
                     <button type="button" @click="bcModule.selectAllHours()"
                             class="px-3 py-1 text-xs bg-blue-100 text-blue-800 rounded-full hover:bg-blue-200">
@@ -233,7 +268,7 @@ function getBCScheduleSection() {
                 </div>
             </div>
 
-            <div class="p-3 bg-gray-50 rounded-lg">
+            <div x-show="bcModule.schedule_mode === 'interval'" class="p-3 bg-gray-50 rounded-lg">
                 <label class="block text-xs font-medium text-gray-700 mb-1">실행 간격 (분)</label>
                 <input type="number" x-model.number="bcModule.interval_minutes"
                        min="1" max="1440"
@@ -242,8 +277,8 @@ function getBCScheduleSection() {
                 <p class="mt-1 text-xs text-gray-400">기본 60분 (사이클 사이의 베이스 간격)</p>
             </div>
 
-            <!-- 지터(랜덤 변동) — GP 폼과 동일한 ±% 구조 -->
-            <div class="p-4 bg-gray-50 rounded-lg space-y-3">
+            <!-- 지터(랜덤 변동) — 간격 모드에만 적용 -->
+            <div x-show="bcModule.schedule_mode === 'interval'" class="p-4 bg-gray-50 rounded-lg space-y-3">
                 <label class="flex items-center cursor-pointer">
                     <input type="checkbox" x-model="bcModule.schedule_jitter.enabled"
                            class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500">

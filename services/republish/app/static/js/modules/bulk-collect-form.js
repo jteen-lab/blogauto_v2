@@ -52,6 +52,10 @@ function createBulkCollectState() {
         },
 
         // --- 3. 스케줄 ---
+        // 스케줄 모드: 'fixed_time'(고정 시간, 권장·기본) | 'interval'(간격+매트릭스)
+        schedule_mode: 'fixed_time',
+        fixed_times: ['06:00', '18:00'],
+        newFixedTime: '',
         schedule_matrix: _bcDefaultMatrix(),
         days: ['월', '화', '수', '목', '금', '토', '일'],
         interval_minutes: 60,
@@ -119,6 +123,25 @@ function createBulkCollectState() {
                 url: u,
                 ...this.urlPreview(u)
             }));
+        },
+
+        // ───────────────────────────────────────────────
+        // 고정 시간(fixed_time) 편집 (collect 폼 패턴 재사용)
+        // ───────────────────────────────────────────────
+        addFixedTime() {
+            if (!this.newFixedTime) return;
+            if (this.fixed_times.includes(this.newFixedTime)) {
+                this.validationError = '이미 등록된 시간입니다';
+                return;
+            }
+            this.fixed_times.push(this.newFixedTime);
+            this.fixed_times.sort();
+            this.newFixedTime = '';
+        },
+
+        removeFixedTime(time) {
+            const idx = this.fixed_times.indexOf(time);
+            if (idx > -1) this.fixed_times.splice(idx, 1);
         },
 
         // ───────────────────────────────────────────────
@@ -193,6 +216,13 @@ function createBulkCollectState() {
                 this.bulk_params = { ...this.bulk_params, ...settings.bulk_params };
             }
             const sch = settings.schedule || {};
+            // 스케줄 모드/고정시간 (없으면 기본 fixed_time + 기본 시각)
+            if (sch.schedule_mode === 'interval' || sch.schedule_mode === 'fixed_time') {
+                this.schedule_mode = sch.schedule_mode;
+            }
+            if (Array.isArray(sch.fixed_times) && sch.fixed_times.length > 0) {
+                this.fixed_times = [...sch.fixed_times];
+            }
             if (Array.isArray(sch.schedule_matrix)) {
                 this.schedule_matrix = JSON.parse(JSON.stringify(sch.schedule_matrix));
             }
@@ -262,6 +292,8 @@ function createBulkCollectState() {
                         !!this.bulk_params.quiet_hours_chunk_boost
                 },
                 schedule: {
+                    schedule_mode: this.schedule_mode,
+                    fixed_times: [...this.fixed_times],
                     schedule_matrix: JSON.parse(JSON.stringify(this.schedule_matrix)),
                     interval_minutes: Number(this.interval_minutes) || 60,
                     // 지터를 GP 폼과 동일한 객체 구조로 저장
