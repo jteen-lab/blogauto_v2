@@ -52,11 +52,29 @@ function buildCssSelector(selector, placeholderConfig) {
     const cssClasses = placeholderConfig?.css_classes || {};
     const linkStyles = placeholderConfig?.link_styles || {};
 
+    // a.button:hover (버튼 마우스오버)인 경우
+    // 버튼 hover 스타일도 래퍼(div) 안의 a 에 적용 -> ".button-link a:hover"
+    if (selector === 'a.button:hover') {
+        return `${buttonWrapperSelector(placeholderConfig)} a:hover`;
+    }
+
     // a.button (버튼 링크)인 경우
     // 실제 발행 HTML은 <div class="button-link"><a>...</a></div> 구조이므로
     // 버튼 시각 스타일은 래퍼(div) 안의 a 에 적용해야 한다 -> ".button-link a"
     if (selector === 'a.button') {
         return `${buttonWrapperSelector(placeholderConfig)} a`;
+    }
+
+    // a:hover (일반 링크 마우스오버)인 경우
+    // 일반 a 처리 로직을 재사용하여 ':hover' 접미
+    if (selector === 'a:hover') {
+        const defaultClass = linkStyles.default_class;
+        if (defaultClass && defaultClass.trim()) {
+            const classes = defaultClass.trim().split(/\s+/).map(c => `.${c}`).join('');
+            return `a${classes}:hover`;
+        }
+        // 일반 a 태그 (클래스 없이)
+        return 'a:hover';
     }
 
     // a (일반 링크)인 경우

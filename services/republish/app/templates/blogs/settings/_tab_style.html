@@ -189,16 +189,64 @@
                             </div>
                         </div>
 
-                        <!-- 글자 스타일 -->
+                        <!-- 글자 스타일 / 정렬 -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs text-gray-600 mb-1">글자 스타일</label>
+                                <select x-model="currentStyles['font-style']"
+                                        @change="updateStyle('font-style', $event.target.value)"
+                                        class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-accent">
+                                    <option value="">선택안함</option>
+                                    <option value="normal">Normal</option>
+                                    <option value="italic">Italic</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-600 mb-1">정렬 (text-align)</label>
+                                <select x-model="currentStyles['text-align']"
+                                        @change="updateStyle('text-align', $event.target.value)"
+                                        class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-accent">
+                                    <option value="">미설정</option>
+                                    <option value="left">Left</option>
+                                    <option value="center">Center</option>
+                                    <option value="right">Right</option>
+                                    <option value="justify">Justify</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- 텍스트 장식 / 변형 -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs text-gray-600 mb-1">밑줄 (text-decoration)</label>
+                                <select x-model="currentStyles['text-decoration']"
+                                        @change="updateStyle('text-decoration', $event.target.value)"
+                                        class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-accent">
+                                    <option value="">미설정</option>
+                                    <option value="none">None</option>
+                                    <option value="underline">Underline</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-600 mb-1">대소문자 (text-transform)</label>
+                                <select x-model="currentStyles['text-transform']"
+                                        @change="updateStyle('text-transform', $event.target.value)"
+                                        class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-accent">
+                                    <option value="">미설정</option>
+                                    <option value="none">None</option>
+                                    <option value="uppercase">Uppercase</option>
+                                    <option value="lowercase">Lowercase</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- 글꼴 (font-family) -->
                         <div>
-                            <label class="block text-xs text-gray-600 mb-1">글자 스타일</label>
-                            <select x-model="currentStyles['font-style']"
-                                    @change="updateStyle('font-style', $event.target.value)"
-                                    class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-accent">
-                                <option value="">선택안함</option>
-                                <option value="normal">Normal</option>
-                                <option value="italic">Italic</option>
-                            </select>
+                            <label class="block text-xs text-gray-600 mb-1">글꼴 (font-family)</label>
+                            <input type="text" x-model="currentStyles['font-family']"
+                                   @input="updateStyle('font-family', $event.target.value)"
+                                   placeholder="Arial"
+                                   class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-accent">
                         </div>
                     </div>
 
@@ -335,6 +383,58 @@
                             <!-- 팁 -->
                             <div class="p-2 bg-primary-lt border border-primary rounded text-xs text-primary">
                                 💡 <strong>팁:</strong> 좌측만 두껍게 하려면 좌측 테두리만 설정하고 나머지는 "없음"으로 두세요.
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="border-gray-200">
+
+                    <!-- 레이아웃 섹션 -->
+                    <div class="space-y-3">
+                        <h5 class="text-xs font-semibold text-gray-500 uppercase tracking-wide">레이아웃</h5>
+
+                        <!-- display / box-sizing -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs text-gray-600 mb-1">표시 (display)</label>
+                                <select x-model="currentStyles['display']"
+                                        @change="updateStyle('display', $event.target.value)"
+                                        class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-accent">
+                                    <option value="">미설정</option>
+                                    <option value="block">Block</option>
+                                    <option value="inline-block">Inline-block</option>
+                                    <option value="inline">Inline</option>
+                                    <option value="flex">Flex</option>
+                                    <option value="none">None</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-600 mb-1">박스 모델 (box-sizing)</label>
+                                <select x-model="currentStyles['box-sizing']"
+                                        @change="updateStyle('box-sizing', $event.target.value)"
+                                        class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-accent">
+                                    <option value="">미설정</option>
+                                    <option value="content-box">Content-box</option>
+                                    <option value="border-box">Border-box</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- width / list-style (단위는 직접 입력) -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs text-gray-600 mb-1">너비 (width, 단위 포함)</label>
+                                <input type="text" x-model="currentStyles['width']"
+                                       @input="updateStyle('width', $event.target.value)"
+                                       placeholder="100%"
+                                       class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-accent">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-600 mb-1">목록 스타일 (list-style)</label>
+                                <input type="text" x-model="currentStyles['list-style']"
+                                       @input="updateStyle('list-style', $event.target.value)"
+                                       placeholder="disc inside"
+                                       class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-accent">
                             </div>
                         </div>
                     </div>

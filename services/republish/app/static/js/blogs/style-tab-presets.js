@@ -75,7 +75,7 @@ const PIXEL_PROPERTIES = [
  */
 const STYLE_SELECTORS = [
     'h1', 'h2', 'h3', 'h4', 'h5',
-    'p', 'a', 'a.button', 'li',
+    'p', 'a', 'a:hover', 'a.button', 'a.button:hover', 'li',
     'ul', 'ol',
     'table', 'th', 'td',
     'blockquote'
@@ -89,7 +89,9 @@ const SELECTOR_LABELS = {
     'h5': 'h5',
     'p': 'p',
     'a': 'a (일반 링크)',
+    'a:hover': '링크 (마우스오버)',
     'a.button': 'a (버튼 링크)',
+    'a.button:hover': '버튼 (마우스오버)',
     'li': 'li',
     'ul': 'ul',
     'ol': 'ol',

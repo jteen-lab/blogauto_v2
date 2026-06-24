@@ -50,14 +50,15 @@ function styleTabApp() {
         // 선택자 목록 (프리셋 파일에서 가져오거나 기본값)
         selectors: typeof STYLE_SELECTORS !== 'undefined' ? STYLE_SELECTORS : [
             'h1', 'h2', 'h3', 'h4', 'h5',
-            'p', 'a', 'a.button', 'li',
+            'p', 'a', 'a:hover', 'a.button', 'a.button:hover', 'li',
             'ul', 'ol', 'table', 'th', 'td', 'blockquote'
         ],
 
         // 선택자 표시명
         selectorLabels: typeof SELECTOR_LABELS !== 'undefined' ? SELECTOR_LABELS : {
             'h1': 'h1', 'h2': 'h2', 'h3': 'h3', 'h4': 'h4', 'h5': 'h5',
-            'p': 'p', 'a': 'a (일반 링크)', 'a.button': 'a (버튼 링크)',
+            'p': 'p', 'a': 'a (일반 링크)', 'a:hover': '링크 (마우스오버)',
+            'a.button': 'a (버튼 링크)', 'a.button:hover': '버튼 (마우스오버)',
             'li': 'li', 'ul': 'ul', 'ol': 'ol',
             'table': 'table', 'th': 'th', 'td': 'td', 'blockquote': 'blockquote'
         },
@@ -208,7 +209,16 @@ function styleTabApp() {
                 'border-left-style': config['border-left-style'] || '',
                 'border-left-width': config['border-left-width'] || '',
                 'border-left-color': config['border-left-color'] || '',
-                'background-color': config['background-color'] || ''
+                'background-color': config['background-color'] || '',
+                // 추가 속성 (P2) - px 자동부여 대상 아님, 사용자가 단위 직접 입력
+                'text-align': config['text-align'] || '',
+                'text-decoration': config['text-decoration'] || '',
+                'text-transform': config['text-transform'] || '',
+                'font-family': config['font-family'] || '',
+                'display': config['display'] || '',
+                'width': config['width'] || '',
+                'box-sizing': config['box-sizing'] || '',
+                'list-style': config['list-style'] || ''
             };
         },
 
