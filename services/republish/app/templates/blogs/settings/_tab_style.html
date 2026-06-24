@@ -12,8 +12,21 @@
 
     <!-- 상단 도구바 -->
     <div class="flex flex-wrap items-center justify-between gap-2 p-3 bg-gray-50 border rounded-lg">
-        <div class="text-xs text-gray-600">
-            선택자 <span x-text="Object.keys(styleConfig).length" class="font-semibold">0</span>개 설정됨
+        <div class="flex items-center gap-2 text-xs text-gray-600">
+            <span>선택자 <span x-text="Object.keys(styleConfig).length" class="font-semibold">0</span>개 설정됨</span>
+            <!-- 플랫폼별 CSS 접두 안내 (P4) -->
+            <template x-if="platform === 'blogger'">
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-medium"
+                      title="Blogger 본문은 .post-body 스코프 안에 있어 모든 규칙에 .post-body 접두가 붙습니다.">
+                    Blogger → <code class="mx-0.5">.post-body</code> 접두 적용
+                </span>
+            </template>
+            <template x-if="platform && platform !== 'blogger'">
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-[10px] font-medium"
+                      :title="platform + ' : 접두 없이 CSS를 출력합니다.'">
+                    <span x-text="platform"></span> → 접두 없음
+                </span>
+            </template>
         </div>
         <div class="flex flex-wrap items-center gap-2">
             <!-- 프리셋 드롭다운 -->

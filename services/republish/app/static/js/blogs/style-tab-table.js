@@ -59,14 +59,26 @@ function styleTabTableMixin() {
          * tableConfig -> styleConfig 동기화 (테이블 UI 변경 시)
          */
         syncStyleConfigFromTable() {
+            // 둥근 모서리 활성 여부 (>0)
+            const radius = parseInt(this.tableConfig.borderRadius || 0);
+            const roundEnabled = radius > 0;
+
             // table 선택자
             const tbl = {};
             tbl['width'] = this.tableConfig.tableWidth === 'custom'
                 ? (this.tableConfig.tableWidthCustom || '100%')
                 : this.tableConfig.tableWidth;
-            tbl['border-collapse'] = this.tableConfig.borderCollapse;
-            if (this.tableConfig.borderCollapse === 'separate' && this.tableConfig.borderSpacing !== '0') {
-                tbl['border-spacing'] = this.tableConfig.borderSpacing;
+            if (roundEnabled) {
+                // 둥근 표는 border-collapse:separate + overflow:hidden + radius 필요
+                tbl['border-collapse'] = 'separate';
+                tbl['border-spacing'] = '0';
+                tbl['overflow'] = 'hidden';
+                tbl['border-radius'] = String(radius);
+            } else {
+                tbl['border-collapse'] = this.tableConfig.borderCollapse;
+                if (this.tableConfig.borderCollapse === 'separate' && this.tableConfig.borderSpacing !== '0') {
+                    tbl['border-spacing'] = this.tableConfig.borderSpacing;
+                }
             }
             Object.assign(tbl, this._buildTableBorder());
             this.styleConfig['table'] = tbl;
@@ -103,7 +115,41 @@ function styleTabTableMixin() {
                 delete this.styleConfig['tr:nth-child(odd)'];
             }
 
+            // 표 고급 (둥근 모서리 중복선 제거 + 첫 열 너비)
+            this._applyTableAdvanced(roundEnabled);
+
             this.debounceUpdatePreview();
+        },
+
+        /**
+         * 표 고급 의사선택자 규칙 적용/제거 (P4)
+         * - 둥근 모서리: 마지막 열/행 중복선 제거를 위해 border-right/border-bottom 0
+         * - 첫 열 너비: th/td:first-child width
+         * @param {boolean} roundEnabled - 둥근 모서리 활성 여부
+         */
+        _applyTableAdvanced(roundEnabled) {
+            // 둥근 표 중복선 제거 규칙
+            if (roundEnabled) {
+                this.styleConfig['tr th:last-child'] = { 'border-right': '0' };
+                this.styleConfig['tr td:last-child'] = { 'border-right': '0' };
+                this.styleConfig['tr:last-child td'] = { 'border-bottom': '0' };
+                this.styleConfig['tr:last-child th'] = { 'border-bottom': '0' };
+            } else {
+                delete this.styleConfig['tr th:last-child'];
+                delete this.styleConfig['tr td:last-child'];
+                delete this.styleConfig['tr:last-child td'];
+                delete this.styleConfig['tr:last-child th'];
+            }
+
+            // 첫 열 너비
+            const fcw = (this.tableConfig.firstColWidth || '').trim();
+            if (fcw) {
+                this.styleConfig['th:first-child'] = { 'width': fcw };
+                this.styleConfig['td:first-child'] = { 'width': fcw };
+            } else {
+                delete this.styleConfig['th:first-child'];
+                delete this.styleConfig['td:first-child'];
+            }
         },
 
         /**
@@ -145,6 +191,10 @@ function styleTabTableMixin() {
             this.tableConfig.zebraEnabled = Object.keys(even).length > 0;
             this.tableConfig.zebraEvenColor = even['background-color'] || '#f9fafb';
             this.tableConfig.zebraOddColor = (this.styleConfig['tr:nth-child(odd)'] || {})['background-color'] || '#ffffff';
+
+            // 표 고급 (P4) - 둥근 모서리 / 첫 열 너비 역동기화
+            this.tableConfig.borderRadius = parseInt(tbl['border-radius'] || '0');
+            this.tableConfig.firstColWidth = (this.styleConfig['th:first-child'] || {})['width'] || '';
         },
 
         /**

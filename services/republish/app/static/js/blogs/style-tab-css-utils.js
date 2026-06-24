@@ -104,10 +104,13 @@ function buildCssSelector(selector, placeholderConfig) {
  * @param {string[]} selectors - 선택자 목록
  * @param {Object} styleConfig - 선택자별 스타일 설정
  * @param {Object} placeholderConfig - 치환자 설정
+ * @param {string} [prefix=''] - 모든 규칙 선택자 앞에 붙일 접두 (예: '.post-body ' for Blogger)
  * @returns {string} 생성된 CSS 코드
  */
-function generateCssFromConfig(selectors, styleConfig, placeholderConfig) {
+function generateCssFromConfig(selectors, styleConfig, placeholderConfig, prefix = '') {
     const lines = [];
+    // 접두 문자열 (플랫폼별 스코프, 빈 문자열이면 기존 동작 유지)
+    const px = prefix || '';
 
     for (const selector of selectors) {
         const config = styleConfig[selector];
@@ -133,22 +136,22 @@ function generateCssFromConfig(selectors, styleConfig, placeholderConfig) {
             // <div class="button-link"><a>...</a></div> 구조에서 한 줄 버튼으로 보인다.
             if (selector === 'a.button') {
                 const wrapper = buttonWrapperSelector(placeholderConfig);
-                lines.push(`${wrapper} {`);
+                lines.push(`${px}${wrapper} {`);
                 lines.push('    display: block;');
                 lines.push('    margin-bottom: 10px;');
                 lines.push('}');
                 lines.push('');
             }
-            // CSS 선택자 결정 (치환자 클래스 적용)
+            // CSS 선택자 결정 (치환자 클래스 적용) + 접두 결합
             const cssSelector = buildCssSelector(selector, placeholderConfig);
-            lines.push(`${cssSelector} {`);
+            lines.push(`${px}${cssSelector} {`);
             lines.push(...properties);
             lines.push('}');
             lines.push('');
         }
     }
 
-    // 숨겨진 선택자 CSS 생성 (Zebra Striping 등)
+    // 숨겨진 선택자 CSS 생성 (Zebra Striping, 표 고급 의사선택자 등)
     const hiddenSelectors = typeof HIDDEN_SELECTORS !== 'undefined' ? HIDDEN_SELECTORS : [];
     for (const selector of hiddenSelectors) {
         const config = styleConfig[selector];
@@ -160,7 +163,8 @@ function generateCssFromConfig(selectors, styleConfig, placeholderConfig) {
             properties.push(`    ${prop}: ${value}${unit};`);
         }
         if (properties.length > 0) {
-            lines.push(`${selector} {`);
+            // 숨김 선택자에도 동일하게 접두 적용
+            lines.push(`${px}${selector} {`);
             lines.push(...properties);
             lines.push('}');
             lines.push('');
@@ -217,9 +221,16 @@ function applyClassesToPreviewHtml(htmlContent, placeholderConfig) {
  * 미리보기용 전체 HTML 문서 생성
  * @param {string} css - 생성된 CSS
  * @param {string} content - 본문 HTML
+ * @param {string} [prefixClass=''] - 본문 래퍼 클래스 (예: 'post-body' for Blogger)
+ *   값이 있으면 본문을 <div class="..."> 로 감싸 prefixed CSS가 미리보기에 적용되게 함.
  * @returns {string} 전체 HTML 문서
  */
-function generatePreviewHtml(css, content) {
+function generatePreviewHtml(css, content, prefixClass = '') {
+    // 접두 클래스가 있으면 본문을 래퍼 div로 감싼다 (미리보기 = 실제 일치)
+    const body = prefixClass
+        ? `<div class="${prefixClass}">${content}</div>`
+        : content;
+
     return `
         <!DOCTYPE html>
         <html>
@@ -232,7 +243,7 @@ function generatePreviewHtml(css, content) {
                 ${css}
             </style>
         </head>
-        <body>${content}</body>
+        <body>${body}</body>
         </html>
     `;
 }

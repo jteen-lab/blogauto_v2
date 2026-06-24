@@ -265,8 +265,15 @@ const TABLE_PRESETS = {
 
 /**
  * 숨겨진 선택자 (좌측 목록에 표시하지 않지만 CSS 생성에 포함)
+ * - zebra: 행 교대 색상
+ * - 표 고급(P4): 첫 열 너비(th/td:first-child), 둥근 표 중복선 제거(last-child)
  */
-const HIDDEN_SELECTORS = ['tr:nth-child(even)', 'tr:nth-child(odd)'];
+const HIDDEN_SELECTORS = [
+    'tr:nth-child(even)', 'tr:nth-child(odd)',
+    'th:first-child', 'td:first-child',
+    'tr th:last-child', 'tr td:last-child',
+    'tr:last-child td', 'tr:last-child th'
+];
 
 /**
  * 샘플 HTML 콘텐츠

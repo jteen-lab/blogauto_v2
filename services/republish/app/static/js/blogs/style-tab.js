@@ -42,6 +42,9 @@ function styleTabApp() {
             tableWidthCustom: '',
             borderCollapse: 'collapse',
             borderSpacing: '0',
+            // 표 고급 (P4)
+            borderRadius: 0,      // 둥근 모서리 (px, 0이면 미적용)
+            firstColWidth: '',    // 첫 열 너비 (예: '35%', 빈값이면 미적용)
         },
 
         // 테이블 프리셋 참조 (Alpine x-for에서 접근 가능하도록)
@@ -87,6 +90,10 @@ function styleTabApp() {
         generatedCss: '',
         previewHtml: '',
         blogId: null,
+
+        // 블로그 플랫폼 (소문자 정규화: 'blogger' | 'wordpress' | '')
+        // Blogger는 본문이 .post-body 스코프 안에 들어가므로 CSS 접두가 필요하다.
+        platform: '',
 
         // 샘플 콘텐츠 (프리셋 파일에서 가져오거나 기본값)
         sampleContent: typeof SAMPLE_CONTENT !== 'undefined' ? SAMPLE_CONTENT : `
@@ -136,7 +143,11 @@ function styleTabApp() {
                 const parentData = settingsEl._x_dataStack[0];
                 if (parentData.selectedBlog && parentData.selectedBlog.id) {
                     this.blogId = parentData.selectedBlog.id;
-                    console.log('[styleTabApp] 부모에서 blogId 가져옴:', this.blogId);
+                    // 부모 selectedBlog에서 platform 취득 (소문자 정규화)
+                    if (parentData.selectedBlog.platform) {
+                        this.platform = String(parentData.selectedBlog.platform).toLowerCase();
+                    }
+                    console.log('[styleTabApp] 부모에서 blogId 가져옴:', this.blogId, 'platform:', this.platform);
                     this.load();
                     return true;
                 }
@@ -280,67 +291,6 @@ function styleTabApp() {
         },
 
         /**
-         * CSS 생성 (유틸리티 함수 사용)
-         */
-        generateCss() {
-            if (typeof generateCssFromConfig === 'function') {
-                this.generatedCss = generateCssFromConfig(
-                    this.selectors,
-                    this.styleConfig,
-                    this.placeholderConfig
-                );
-            } else {
-                // 폴백: 유틸리티 없으면 간단 구현
-                this.generatedCss = this.generateCssFallback();
-            }
-            return this.generatedCss;
-        },
-
-        /**
-         * CSS 생성 폴백 (유틸리티 로드 실패 시)
-         */
-        generateCssFallback() {
-            const lines = [];
-            for (const selector of this.selectors) {
-                const config = this.styleConfig[selector];
-                if (!config || Object.keys(config).length === 0) continue;
-                const props = Object.entries(config)
-                    .filter(([, v]) => v)
-                    .map(([p, v]) => `    ${p}: ${v}${this.needsPixelUnitFallback(p) && !isNaN(v) ? 'px' : ''};`);
-                if (props.length > 0) {
-                    lines.push(`${selector} {`, ...props, '}', '');
-                }
-            }
-            return lines.join('\n');
-        },
-
-        needsPixelUnitFallback(prop) {
-            return ['font-size', 'border-width', 'border-radius',
-                'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
-                'padding-top', 'padding-right', 'padding-bottom', 'padding-left'
-            ].includes(prop);
-        },
-
-        /**
-         * 미리보기 업데이트 (유틸리티 함수 사용)
-         */
-        updatePreview() {
-            const css = this.generateCss();
-            let previewContent = this.sampleContent;
-
-            if (typeof applyClassesToPreviewHtml === 'function') {
-                previewContent = applyClassesToPreviewHtml(this.sampleContent, this.placeholderConfig);
-            }
-
-            if (typeof generatePreviewHtml === 'function') {
-                this.previewHtml = generatePreviewHtml(css, previewContent);
-            } else {
-                // 폴백
-                this.previewHtml = `<!DOCTYPE html><html><head><style>${css}</style></head><body>${previewContent}</body></html>`;
-            }
-        },
-
-        /**
          * CSS 복사
          */
         async copyCss() {
@@ -391,7 +341,12 @@ function styleTabApp() {
                 if (styleRes.ok) {
                     const data = await styleRes.json();
                     if (data.style_config) this.styleConfig = data.style_config;
+                    // API 응답에 platform 있으면 사용 (소문자 정규화)
+                    if (data.platform) this.platform = String(data.platform).toLowerCase();
                 }
+
+                // API 응답에 platform 없으면 부모 selectedBlog에서 보강
+                if (!this.platform) this.syncPlatformFromParent();
 
                 if (placeholderRes.ok) {
                     const data = await placeholderRes.json();
@@ -491,6 +446,10 @@ function styleTabApp() {
     // 테마 갤러리 + 버튼 디자인 믹스인 합성 (P3)
     const themesMixin = typeof styleTabThemesMixin === 'function' ? styleTabThemesMixin() : {};
     Object.assign(base, themesMixin);
+
+    // 플랫폼별 CSS 접두 믹스인 합성 (P4)
+    const platformMixin = typeof styleTabPlatformMixin === 'function' ? styleTabPlatformMixin() : {};
+    Object.assign(base, platformMixin);
 
     return base;
 }
