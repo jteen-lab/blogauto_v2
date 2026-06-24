@@ -94,7 +94,7 @@ function styleTabApp() {
             <h1>제목 (H1)</h1>
             <h2>소제목 (H2)</h2>
             <p>일반 텍스트 단락입니다. <a href="#">일반 링크</a></p>
-            <p><a href="#" class="button-link">버튼 링크</a></p>
+            <div class="button-link"><a href="#">버튼 링크</a></div>
             <blockquote>인용문 텍스트입니다.</blockquote>
         `,
 

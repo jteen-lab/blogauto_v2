@@ -29,6 +29,20 @@ function needsPixelUnit(property) {
 }
 
 /**
+ * 버튼 링크 래퍼(div) 선택자 반환 (예: ".button-link" 또는 ".btn.primary")
+ * @param {Object} placeholderConfig - 치환자 설정
+ * @returns {string} 래퍼 div CSS 선택자
+ */
+function buttonWrapperSelector(placeholderConfig) {
+    const linkStyles = placeholderConfig?.link_styles || {};
+    const buttonClass = linkStyles.button_class;
+    if (buttonClass && buttonClass.trim()) {
+        return buttonClass.trim().split(/\s+/).map(c => `.${c}`).join('');
+    }
+    return '.button-link';
+}
+
+/**
  * CSS 선택자 빌드 (치환자 CSS 클래스 연동)
  * @param {string} selector - 기본 선택자 (h1, p, a, a.button 등)
  * @param {Object} placeholderConfig - 치환자 설정
@@ -39,14 +53,10 @@ function buildCssSelector(selector, placeholderConfig) {
     const linkStyles = placeholderConfig?.link_styles || {};
 
     // a.button (버튼 링크)인 경우
+    // 실제 발행 HTML은 <div class="button-link"><a>...</a></div> 구조이므로
+    // 버튼 시각 스타일은 래퍼(div) 안의 a 에 적용해야 한다 -> ".button-link a"
     if (selector === 'a.button') {
-        const buttonClass = linkStyles.button_class;
-        if (buttonClass && buttonClass.trim()) {
-            // 다중 클래스 지원: "btn primary" -> "a.btn.primary"
-            const classes = buttonClass.trim().split(/\s+/).map(c => `.${c}`).join('');
-            return `a${classes}`;
-        }
-        return 'a.button-link'; // 기본값
+        return `${buttonWrapperSelector(placeholderConfig)} a`;
     }
 
     // a (일반 링크)인 경우
@@ -101,6 +111,16 @@ function generateCssFromConfig(selectors, styleConfig, placeholderConfig) {
         }
 
         if (properties.length > 0) {
+            // 버튼 링크는 래퍼(div) 블록 규칙을 함께 생성해야
+            // <div class="button-link"><a>...</a></div> 구조에서 한 줄 버튼으로 보인다.
+            if (selector === 'a.button') {
+                const wrapper = buttonWrapperSelector(placeholderConfig);
+                lines.push(`${wrapper} {`);
+                lines.push('    display: block;');
+                lines.push('    margin-bottom: 10px;');
+                lines.push('}');
+                lines.push('');
+            }
             // CSS 선택자 결정 (치환자 클래스 적용)
             const cssSelector = buildCssSelector(selector, placeholderConfig);
             lines.push(`${cssSelector} {`);

@@ -277,7 +277,7 @@ const SAMPLE_CONTENT = `
     <h5>작은 제목 (H5)</h5>
     <p>일반 텍스트 단락입니다. 여러 문장이 포함될 수 있습니다.</p>
     <p>두 번째 단락입니다. <a href="#">일반 링크</a>도 포함되어 있습니다.</p>
-    <p><a href="#" class="button-link">버튼 링크</a></p>
+    <div class="button-link"><a href="#">버튼 링크</a></div>
     <ul>
         <li>순서 없는 목록 1</li>
         <li>순서 없는 목록 2</li>
