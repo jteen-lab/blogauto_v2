@@ -646,8 +646,8 @@ function moduleListApp() {
                                 </div>
                             </div>
 
-                            <!-- 활성 시간대 (스케줄 매트릭스) -->
-                            <div>
+                            <!-- 활성 시간대 (스케줄 매트릭스) - 간격 모드에만 표시 -->
+                            <div x-show="formData.collect_schedule_mode === 'interval'">
                                 <label class="block text-sm font-medium text-gray-700 mb-2">활성 시간대</label>
                                 <div class="bg-gray-50 rounded-lg p-4">
                                     <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
