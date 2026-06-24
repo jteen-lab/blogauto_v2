@@ -75,19 +75,17 @@ function styleTabApp() {
         // 선택자별 스타일 설정
         styleConfig: {},
 
+        // 테마 갤러리 (P3): 목록 / 적용된 테마 id / 메인 색상
+        themes: typeof STYLE_THEMES !== 'undefined' ? STYLE_THEMES : [],
+        appliedThemeId: null,
+        mainColor: '',
+
         // 현재 선택자의 스타일 (편집용)
         currentStyles: {},
-
-        // 미리보기 모드
+        // 미리보기 모드 / 생성된 CSS / 미리보기 HTML / 블로그 ID
         previewMode: 'desktop',
-
-        // 생성된 CSS
         generatedCss: '',
-
-        // 미리보기 HTML
         previewHtml: '',
-
-        // 블로그 ID
         blogId: null,
 
         // 샘플 콘텐츠 (프리셋 파일에서 가져오거나 기본값)
@@ -490,8 +488,9 @@ function styleTabApp() {
     const tableMixin = typeof styleTabTableMixin === 'function' ? styleTabTableMixin() : {};
     Object.assign(base, tableMixin);
 
+    // 테마 갤러리 + 버튼 디자인 믹스인 합성 (P3)
+    const themesMixin = typeof styleTabThemesMixin === 'function' ? styleTabThemesMixin() : {};
+    Object.assign(base, themesMixin);
+
     return base;
 }
-
-// 선택자 변경 감시는 x-effect 또는 @change 이벤트로 처리
-// 별도의 Alpine.effect 중첩은 불안정할 수 있어 제거
