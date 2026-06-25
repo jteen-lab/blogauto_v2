@@ -241,9 +241,67 @@ function generatePreviewHtml(css, content, prefixClass = '') {
                 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 16px; }
                 table { border-collapse: collapse; width: 100%; }
                 ${css}
+                /* C: 미리보기 클릭 편집 - 편집 가능 요소 hover 표시 */
+                .__sp-hover { outline: 2px dashed #6366f1 !important; outline-offset: 2px; cursor: pointer; }
             </style>
         </head>
-        <body>${body}</body>
+        <body>${body}${previewClickScript()}</body>
         </html>
     `;
+}
+
+/**
+ * 미리보기 문서에 주입할 클릭 편집 스크립트 (C)
+ * 클릭한 요소의 태그/클래스로 선택자를 판별해
+ * window.parent.postMessage({type:'style-select', selector})를 전송한다.
+ * hover 시 점선 outline을 표시한다.
+ * @returns {string} <script> 문자열
+ */
+function previewClickScript() {
+    return `
+<script>
+(function () {
+    // 클릭/hover 요소 → 편집 선택자 판별
+    function resolveSelector(el) {
+        if (!el || el === document.body) return null;
+        var tag = (el.tagName || '').toLowerCase();
+        // 버튼 링크: .button-link 등 래퍼 div 안의 a → 'a.button'
+        if (tag === 'a' && el.closest && el.closest('.button-link')) return 'a.button';
+        if (el.classList && el.classList.contains('button-link')) return 'a.button';
+        // 일반 링크
+        if (tag === 'a') return 'a';
+        // 제목
+        if (/^h[1-6]$/.test(tag)) return tag;
+        // 표 요소
+        if (tag === 'th') return 'th';
+        if (tag === 'td') return 'td';
+        if (tag === 'table' || tag === 'thead' || tag === 'tbody' || tag === 'tr') return 'table';
+        // 목록
+        if (tag === 'li') return 'li';
+        if (tag === 'ul') return 'ul';
+        if (tag === 'ol') return 'ol';
+        // 인용/문단
+        if (tag === 'blockquote') return 'blockquote';
+        if (tag === 'p') return 'p';
+        // 상위 요소로 한 단계 위임
+        return resolveSelector(el.parentElement);
+    }
+    var current = null;
+    document.body.addEventListener('mouseover', function (e) {
+        var sel = resolveSelector(e.target);
+        if (current) { current.classList.remove('__sp-hover'); current = null; }
+        if (sel && e.target.classList) { e.target.classList.add('__sp-hover'); current = e.target; }
+    });
+    document.body.addEventListener('mouseout', function () {
+        if (current) { current.classList.remove('__sp-hover'); current = null; }
+    });
+    document.body.addEventListener('click', function (e) {
+        var sel = resolveSelector(e.target);
+        if (sel) {
+            try { e.preventDefault(); } catch (_) {}
+            window.parent.postMessage({ type: 'style-select', selector: sel }, '*');
+        }
+    });
+})();
+</` + `script>`;
 }

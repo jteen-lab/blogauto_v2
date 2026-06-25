@@ -100,6 +100,10 @@ function styleTabPlatformMixin() {
 
         /**
          * 미리보기 업데이트 (유틸리티 함수 사용, 플랫폼 래퍼 적용)
+         *
+         * A) 렌더 견고화: Alpine :srcdoc 재렌더가 불안정해 편집이 반영 안 되는
+         *    버그를 근본 수정. previewHtml 갱신(폴백 유지) 후 iframe contentDocument에
+         *    직접 써서 확실히 재렌더한다.
          */
         updatePreview() {
             const css = this.generateCss();
@@ -109,14 +113,41 @@ function styleTabPlatformMixin() {
                 previewContent = applyClassesToPreviewHtml(this.sampleContent, this.placeholderConfig);
             }
 
+            let fullHtml;
             if (typeof generatePreviewHtml === 'function') {
                 // 플랫폼에 맞춰 본문 래퍼 적용 (Blogger면 post-body 래핑)
-                this.previewHtml = generatePreviewHtml(css, previewContent, this.previewWrapperClass());
+                fullHtml = generatePreviewHtml(css, previewContent, this.previewWrapperClass());
             } else {
                 // 폴백
                 const wrapClass = this.previewWrapperClass();
                 const body = wrapClass ? `<div class="${wrapClass}">${previewContent}</div>` : previewContent;
-                this.previewHtml = `<!DOCTYPE html><html><head><style>${css}</style></head><body>${body}</body></html>`;
+                fullHtml = `<!DOCTYPE html><html><head><style>${css}</style></head><body>${body}</body></html>`;
+            }
+
+            // previewHtml도 갱신(직접쓰기 실패 시 :srcdoc 폴백 가능하도록)
+            this.previewHtml = fullHtml;
+            // iframe contentDocument 직접 쓰기로 확실하게 재렌더
+            this.renderPreviewToIframe(fullHtml);
+        },
+
+        /**
+         * iframe contentDocument에 미리보기 HTML을 직접 써서 렌더
+         * Alpine :srcdoc 바인딩보다 안정적으로 동작한다.
+         * iframe이 아직 없으면(초기화 타이밍) previewHtml만 유지(폴백).
+         * @param {string} fullHtml - 전체 미리보기 HTML 문서
+         */
+        renderPreviewToIframe(fullHtml) {
+            const f = document.getElementById('stylePreviewFrame');
+            if (!f) { this.previewHtml = fullHtml; return; } // 폴백
+            try {
+                const doc = f.contentDocument || (f.contentWindow && f.contentWindow.document);
+                if (!doc) { this.previewHtml = fullHtml; return; }
+                doc.open();
+                doc.write(fullHtml);
+                doc.close();
+            } catch (e) {
+                // 직접 쓰기 실패 시 previewHtml 폴백 유지
+                this.previewHtml = fullHtml;
             }
         }
     };

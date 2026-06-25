@@ -129,6 +129,15 @@ function styleTabApp() {
             this.initDefaultStyles();
             this.loadCurrentSelectorStyles();
             this.updatePreview();
+            // iframe 마운트 보장 후 1회 더 직접 렌더 (A: 초기 직접쓰기 견고화)
+            this.$nextTick(() => this.updatePreview());
+
+            // 미리보기 클릭 → 해당 선택자 편집 (C)
+            window.addEventListener('message', (e) => {
+                if (e.data && e.data.type === 'style-select') {
+                    this.setActiveSelectorFromPreview(e.data.selector);
+                }
+            });
 
             // 부모 컴포넌트에서 blogId 가져오기 시도
             this.tryLoadFromParent();
@@ -450,6 +459,10 @@ function styleTabApp() {
     // 플랫폼별 CSS 접두 믹스인 합성 (P4)
     const platformMixin = typeof styleTabPlatformMixin === 'function' ? styleTabPlatformMixin() : {};
     Object.assign(base, platformMixin);
+
+    // 편집기 보조 믹스인 합성 (B/C: 유형별 편집 + 클릭 편집)
+    const editorMixin = typeof styleTabEditorMixin === 'function' ? styleTabEditorMixin() : {};
+    Object.assign(base, editorMixin);
 
     return base;
 }

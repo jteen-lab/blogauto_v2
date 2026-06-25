@@ -1,0 +1,79 @@
+<!--
+  블로그 설정 - 스타일 탭: 버튼 디자인 쉬운 설정 패널
+  File: app/templates/blogs/settings/_style_button_easy.html
+  Last-Updated: 2026-06-25
+
+  기능:
+  - 버튼 링크(a.button / a.button:hover) 시각 스타일을 쉬운 컨트롤로 편집
+  - 기존 _tab_style.html의 "버튼 디자인 (쉬운 설정)" 패널을 그대로 추출
+  - 메서드: getButtonStyle / setButtonOption / setButtonFullWidth / isButtonFullWidth (themes 믹스인)
+  - 저장 키: a.button, a.button:hover (저장 형식 불변)
+-->
+<div class="space-y-3">
+    <div class="flex items-center justify-between">
+        <h5 class="text-xs font-semibold text-gray-500 uppercase tracking-wide">버튼 디자인 (쉬운 설정)</h5>
+        <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-600">버튼 링크 공통</span>
+    </div>
+
+    <!-- 기본 색상 -->
+    <div class="grid grid-cols-2 gap-3">
+        <div>
+            <label class="block text-xs text-gray-600 mb-1">배경색</label>
+            <input type="color"
+                   :value="getButtonStyle('background-color') || '#2563eb'"
+                   @input="setButtonOption('background-color', $event.target.value)"
+                   class="w-full h-8 border border-gray-300 rounded cursor-pointer">
+        </div>
+        <div>
+            <label class="block text-xs text-gray-600 mb-1">글자색</label>
+            <input type="color"
+                   :value="getButtonStyle('color') || '#ffffff'"
+                   @input="setButtonOption('color', $event.target.value)"
+                   class="w-full h-8 border border-gray-300 rounded cursor-pointer">
+        </div>
+    </div>
+
+    <!-- 모서리 둥글기 -->
+    <div>
+        <label class="block text-xs text-gray-600 mb-1">
+            모서리 둥글기 <span class="text-gray-400" x-text="(getButtonStyle('border-radius') || '0') + 'px'"></span>
+        </label>
+        <input type="range" min="0" max="20" step="1"
+               :value="getButtonStyle('border-radius') || '0'"
+               @input="setButtonOption('border-radius', $event.target.value)"
+               class="w-full">
+    </div>
+
+    <!-- 전체폭 -->
+    <div>
+        <label class="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+            <input type="checkbox"
+                   :checked="isButtonFullWidth()"
+                   @change="setButtonFullWidth($event.target.checked)"
+                   class="rounded border-gray-300 text-accent focus:ring-accent">
+            버튼 전체폭으로 표시
+        </label>
+    </div>
+
+    <!-- 마우스오버 색상 -->
+    <div class="grid grid-cols-2 gap-3 pt-2 border-t border-gray-100">
+        <div>
+            <label class="block text-xs text-gray-600 mb-1">오버 배경색</label>
+            <input type="color"
+                   :value="getButtonStyle('background-color', true) || '#1d4ed8'"
+                   @input="setButtonOption('background-color', $event.target.value, true)"
+                   class="w-full h-8 border border-gray-300 rounded cursor-pointer">
+        </div>
+        <div>
+            <label class="block text-xs text-gray-600 mb-1">오버 글자색</label>
+            <input type="color"
+                   :value="getButtonStyle('color', true) || '#ffffff'"
+                   @input="setButtonOption('color', $event.target.value, true)"
+                   class="w-full h-8 border border-gray-300 rounded cursor-pointer">
+        </div>
+    </div>
+
+    <div class="p-2 bg-primary-lt border border-primary rounded text-xs text-primary">
+        💡 <strong>팁:</strong> 여기서 바꾼 값은 <code>a (버튼 링크)</code> 선택자에 저장됩니다.
+    </div>
+</div>
