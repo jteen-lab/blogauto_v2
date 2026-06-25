@@ -9,7 +9,7 @@
  * - 스타일 탭 선택자와 일치하도록 th, td 포함
  * - 링크(a)는 link_styles에서 별도 관리하므로 제외
  */
-const CSS_CLASS_TAGS = ['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'ul', 'ol', 'li', 'table', 'th', 'td', 'blockquote'];
+const CSS_CLASS_TAGS = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'ul', 'ol', 'li', 'table', 'th', 'td', 'blockquote'];
 
 /**
  * 치환자 탭 메인 컴포넌트
@@ -157,7 +157,12 @@ function replaceTabApp() {
             // 각 태그의 className은 기존 저장값이 있으면 채우고, 없으면 빈 문자열
             // (a / a.button 등 링크 관련 항목은 link_styles에서 별도 관리하므로 css_classes 표시에서 제외됨)
             const savedCssClasses = this.placeholders.css_classes || {};
-            this.cssClassRows = CSS_CLASS_TAGS.map(tag => ({
+            // 고정 목록 + 기존 저장된 비표준 태그(예: 헤딩 다운시프트로 생긴 h6)도
+            // 함께 표시·보존해 저장 시 데이터 손실을 막는다. (a/a.button은 링크에서 별도 관리)
+            const extraTags = Object.keys(savedCssClasses).filter(
+                t => t !== 'a' && t !== 'a.button' && !CSS_CLASS_TAGS.includes(t)
+            );
+            this.cssClassRows = [...CSS_CLASS_TAGS, ...extraTags].map(tag => ({
                 id: this.generateId(),
                 tag,
                 className: savedCssClasses[tag] || ''
