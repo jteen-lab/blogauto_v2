@@ -1,8 +1,15 @@
 /**
  * 치환자 탭 Alpine.js 컴포넌트
  * File: app/static/js/blogs/replace-tab.js
- * Last-Updated: 2026-01-23
+ * Last-Updated: 2026-06-25
  */
+
+/**
+ * CSS 클래스 치환 고정 태그 목록
+ * - 스타일 탭 선택자와 일치하도록 th, td 포함
+ * - 링크(a)는 link_styles에서 별도 관리하므로 제외
+ */
+const CSS_CLASS_TAGS = ['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'ul', 'ol', 'li', 'table', 'th', 'td', 'blockquote'];
 
 /**
  * 치환자 탭 메인 컴포넌트
@@ -146,14 +153,15 @@ function replaceTabApp() {
                 to
             }));
 
-            // CSS 클래스 치환 (a 태그는 링크 스타일에서 별도 관리하므로 제외)
-            this.cssClassRows = Object.entries(this.placeholders.css_classes || {})
-                .filter(([tag]) => tag !== 'a' && tag !== 'a.button')
-                .map(([tag, className]) => ({
-                    id: this.generateId(),
-                    tag,
-                    className
-                }));
+            // CSS 클래스 치환: 고정 태그 목록을 항상 전체 렌더
+            // 각 태그의 className은 기존 저장값이 있으면 채우고, 없으면 빈 문자열
+            // (a / a.button 등 링크 관련 항목은 link_styles에서 별도 관리하므로 css_classes 표시에서 제외됨)
+            const savedCssClasses = this.placeholders.css_classes || {};
+            this.cssClassRows = CSS_CLASS_TAGS.map(tag => ({
+                id: this.generateId(),
+                tag,
+                className: savedCssClasses[tag] || ''
+            }));
 
             // 링크 스타일 동기화
             const linkStyles = this.placeholders.link_styles || {};
@@ -180,12 +188,13 @@ function replaceTabApp() {
                     this.placeholders.html_tags[row.from] = row.to;
                 });
 
-            // CSS 클래스 치환
+            // CSS 클래스 치환: 고정 목록 중 클래스명이 비지 않은 것만 저장
+            // (빈칸은 저장하지 않음 → 백엔드가 자동 스킵하여 기본 태그 그대로 발행)
             this.placeholders.css_classes = {};
             this.cssClassRows
-                .filter(row => row.tag && row.className)
+                .filter(row => row.tag && row.className && row.className.trim())
                 .forEach(row => {
-                    this.placeholders.css_classes[row.tag] = row.className;
+                    this.placeholders.css_classes[row.tag] = row.className.trim();
                 });
 
             // 링크 스타일 동기화
@@ -215,27 +224,9 @@ function replaceTabApp() {
             this.checkCyclicMapping();
         },
 
-        // === CSS 클래스 치환 행 관리 ===
-        addCssRow() {
-            this.cssClassRows.push({ id: this.generateId(), tag: '', className: '' });
-        },
-        removeCssRow(index) {
-            this.cssClassRows.splice(index, 1);
-        },
-
-        /**
-         * 기본 태그 프리셋 추가
-         */
-        addDefaultTags() {
-            const defaultTags = ['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'ul', 'ol', 'li', 'a', 'table', 'blockquote'];
-            const existingTags = new Set(this.cssClassRows.map(row => row.tag));
-
-            defaultTags.forEach(tag => {
-                if (!existingTags.has(tag)) {
-                    this.cssClassRows.push({ id: this.generateId(), tag, className: '' });
-                }
-            });
-        },
+        // === CSS 클래스 치환 ===
+        // 고정 태그 목록(CSS_CLASS_TAGS)을 사용하므로 행 추가/삭제/기본태그추가 없음.
+        // 각 태그는 항상 표시되며 클래스명만 입력/수정한다.
 
         /**
          * 순환 매핑 체크
