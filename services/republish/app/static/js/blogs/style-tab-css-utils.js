@@ -37,7 +37,7 @@ function buttonWrapperSelector(placeholderConfig) {
     const linkStyles = placeholderConfig?.link_styles || {};
     const buttonClass = linkStyles.button_class;
     if (buttonClass && buttonClass.trim()) {
-        return buttonClass.trim().split(/\s+/).map(c => `.${c}`).join('');
+        return buttonClass.trim().split(/[\s.]+/).filter(Boolean).map(c => `.${c}`).join('');
     }
     return '.button-link';
 }
@@ -70,7 +70,7 @@ function buildCssSelector(selector, placeholderConfig) {
     if (selector === 'a:hover') {
         const defaultClass = linkStyles.default_class;
         if (defaultClass && defaultClass.trim()) {
-            const classes = defaultClass.trim().split(/\s+/).map(c => `.${c}`).join('');
+            const classes = defaultClass.trim().split(/[\s.]+/).filter(Boolean).map(c => `.${c}`).join('');
             return `a${classes}:hover`;
         }
         // 일반 a 태그 (클래스 없이)
@@ -81,7 +81,7 @@ function buildCssSelector(selector, placeholderConfig) {
     if (selector === 'a') {
         const defaultClass = linkStyles.default_class;
         if (defaultClass && defaultClass.trim()) {
-            const classes = defaultClass.trim().split(/\s+/).map(c => `.${c}`).join('');
+            const classes = defaultClass.trim().split(/[\s.]+/).filter(Boolean).map(c => `.${c}`).join('');
             return `a${classes}`;
         }
         // 일반 a 태그 (클래스 없이)
@@ -91,7 +91,7 @@ function buildCssSelector(selector, placeholderConfig) {
     // 일반 태그인 경우 css_classes에서 확인
     const tagClass = cssClasses[selector];
     if (tagClass && tagClass.trim()) {
-        const classes = tagClass.trim().split(/\s+/).map(c => `.${c}`).join('');
+        const classes = tagClass.trim().split(/[\s.]+/).filter(Boolean).map(c => `.${c}`).join('');
         return `${selector}${classes}`;
     }
 
@@ -187,8 +187,13 @@ function applyClassesToPreviewHtml(htmlContent, placeholderConfig) {
     let result = htmlContent;
 
     // 각 태그에 클래스 추가 (정규식 사용)
-    for (const [tag, className] of Object.entries(cssClasses)) {
-        if (!className || tag === 'a') continue; // a 태그는 별도 처리
+    for (const [tag, rawClass] of Object.entries(cssClasses)) {
+        if (!rawClass || tag === 'a') continue; // a 태그는 별도 처리
+
+        // 점/공백을 구분자로 정제해 유효한 클래스 속성 생성
+        // (예: '.entry-content.h2' → 'entry-content h2'). buildCssSelector 와 동일 규칙.
+        const className = rawClass.trim().split(/[\s.]+/).filter(Boolean).join(' ');
+        if (!className) continue;
 
         // <tag> 또는 <tag ... 형태 찾아서 클래스 추가
         const regex = new RegExp(`<${tag}(\\s|>)`, 'gi');
