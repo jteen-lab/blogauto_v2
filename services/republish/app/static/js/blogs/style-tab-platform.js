@@ -149,6 +149,24 @@ function styleTabPlatformMixin() {
             // srcdoc 속성을 직접 설정하면 iframe이 매번 새 문서로 강제 재로드된다.
             // document.write 는 Edge 등에서 재호출 시 조용히 실패하는 경우가 있어 신뢰 불가.
             f.srcdoc = fullHtml;
+            // [진단] iframe 로드 후 제목이 실제 스타일을 먹는지 자동 로깅
+            const plat = this.platform || '(빈값)';
+            f.addEventListener('load', function onload() {
+                f.removeEventListener('load', onload);
+                try {
+                    const d = f.contentDocument;
+                    const h = d && d.querySelector('h1');
+                    const st = d && d.querySelector('style');
+                    console.log(
+                        '[STYLE-DIAG] platform=', plat,
+                        '| h1색상=', h ? getComputedStyle(h).color : 'NO_H1',
+                        '| h1부모class=', h ? h.parentElement.className : '-',
+                        '| 접두.post-body=', !!(st && st.textContent.includes('.post-body'))
+                    );
+                } catch (e) {
+                    console.log('[STYLE-DIAG] iframe 진단 실패:', e && e.message);
+                }
+            });
         }
     };
 }
