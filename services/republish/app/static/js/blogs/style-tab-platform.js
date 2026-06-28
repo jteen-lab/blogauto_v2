@@ -146,16 +146,9 @@ function styleTabPlatformMixin() {
         renderPreviewToIframe(fullHtml) {
             const f = document.getElementById('stylePreviewFrame');
             if (!f) { this.previewHtml = fullHtml; return; } // 폴백
-            try {
-                const doc = f.contentDocument || (f.contentWindow && f.contentWindow.document);
-                if (!doc) { this.previewHtml = fullHtml; return; }
-                doc.open();
-                doc.write(fullHtml);
-                doc.close();
-            } catch (e) {
-                // 직접 쓰기 실패 시 previewHtml 폴백 유지
-                this.previewHtml = fullHtml;
-            }
+            // srcdoc 속성을 직접 설정하면 iframe이 매번 새 문서로 강제 재로드된다.
+            // document.write 는 Edge 등에서 재호출 시 조용히 실패하는 경우가 있어 신뢰 불가.
+            f.srcdoc = fullHtml;
         }
     };
 }
