@@ -225,6 +225,20 @@
             <div x-show="!tableMode" id="styleEditorPanel" x-data="{ showAdvanced: false }">
                 <div class="p-4 space-y-4">
 
+                    <!-- 리스트 편집 대상 칩 (최상단·항상 보임: li/ul/ol 개별 편집) -->
+                    <div x-show="activeKind() === 'list'" class="p-2 bg-violet-50 border border-violet-100 rounded">
+                        <label class="block text-xs text-violet-700 font-medium mb-1">편집 대상 — 목록은 항목/전체를 따로 꾸밀 수 있어요</label>
+                        <div class="flex gap-1">
+                            <template x-for="chip in [{sel:'li',label:'목록 항목(li)'},{sel:'ul',label:'순서없는 목록(ul)'},{sel:'ol',label:'순서있는 목록(ol)'}]" :key="'top-'+chip.sel">
+                                <button type="button"
+                                        @click="activeSelector = chip.sel; loadCurrentSelectorStyles()"
+                                        class="flex-1 px-2 py-1.5 text-[11px] font-medium rounded border transition-colors"
+                                        :class="activeSelector === chip.sel ? 'bg-violet-600 text-white border-violet-600' : 'bg-white border-violet-200 text-violet-600 hover:bg-violet-100'"
+                                        x-text="chip.label"></button>
+                            </template>
+                        </div>
+                    </div>
+
                     <!-- ===== 버튼 유형: 쉬운 설정 패널만 노출 (B) ===== -->
                     <div x-show="activeKind() === 'button'" class="space-y-3">
                         {% include "blogs/settings/_style_button_easy.html" %}
@@ -343,19 +357,6 @@
                     <div x-show="activeKind() === 'list'" class="space-y-3">
                         <hr class="border-gray-200">
                         <h5 class="text-xs font-semibold text-gray-500 uppercase tracking-wide">목록</h5>
-                        <!-- 편집 대상 칩: li/ul/ol 개별 선택 (각 선택자에 다른 스타일 지정 가능) -->
-                        <div>
-                            <label class="block text-xs text-gray-600 mb-1">편집 대상</label>
-                            <div class="flex gap-1">
-                                <template x-for="chip in [{sel:'li',label:'목록 항목(li)'},{sel:'ul',label:'순서없는 목록(ul)'},{sel:'ol',label:'순서있는 목록(ol)'}]" :key="chip.sel">
-                                    <button type="button"
-                                            @click="activeSelector = chip.sel; loadCurrentSelectorStyles()"
-                                            class="flex-1 px-2 py-1.5 text-[10px] font-medium rounded border transition-colors"
-                                            :class="activeSelector === chip.sel ? 'tab-active' : 'border-gray-200 text-gray-500 hover:bg-gray-50'"
-                                            x-text="chip.label"></button>
-                                </template>
-                            </div>
-                        </div>
                         <div>
                             <label class="block text-xs text-gray-600 mb-1">목록 스타일 (list-style)</label>
                             <input type="text" x-model="currentStyles['list-style']"
