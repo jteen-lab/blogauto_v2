@@ -106,8 +106,7 @@ function styleTabPlatformMixin() {
          *    직접 써서 확실히 재렌더한다.
          */
         updatePreview() {
-            // [진단] 호출 여부 + 실패 지점 특정용 라벨 로깅 + 견고화(오류가 컴포넌트를 깨지 않게)
-            console.log('[STYLE-PREVIEW] updatePreview 호출');
+            // 견고화: 미리보기 오류가 컴포넌트(반응성)를 깨지 않도록 try/catch
             try {
                 const css = this.generateCss();
                 let previewContent = this.sampleContent;
@@ -127,13 +126,10 @@ function styleTabPlatformMixin() {
                     fullHtml = `<!DOCTYPE html><html><head><style>${css}</style></head><body>${body}</body></html>`;
                 }
 
-                // previewHtml도 갱신(직접쓰기 실패 시 :srcdoc 폴백 가능하도록)
                 this.previewHtml = fullHtml;
-                // iframe contentDocument 직접 쓰기로 확실하게 재렌더
                 this.renderPreviewToIframe(fullHtml);
-                console.log('[STYLE-PREVIEW] updatePreview 완료 | css길이=', css ? css.length : 0);
             } catch (e) {
-                console.error('[STYLE-PREVIEW] updatePreview 실패:', e && e.message, e);
+                console.error('[스타일 미리보기] 갱신 오류:', e && e.message);
             }
         },
 
@@ -149,31 +145,6 @@ function styleTabPlatformMixin() {
             // srcdoc 속성을 직접 설정하면 iframe이 매번 새 문서로 강제 재로드된다.
             // document.write 는 Edge 등에서 재호출 시 조용히 실패하는 경우가 있어 신뢰 불가.
             f.srcdoc = fullHtml;
-            // [진단] iframe 로드 후 제목이 실제 스타일을 먹는지 자동 로깅
-            const plat = this.platform || '(빈값)';
-            f.addEventListener('load', function onload() {
-                f.removeEventListener('load', onload);
-                try {
-                    const d = f.contentDocument;
-                    const h = d && d.querySelector('h1');
-                    const st = d && d.querySelector('style');
-                    const sc = st ? st.textContent : '';
-                    console.log(
-                        '[STYLE-DIAG] platform=', plat,
-                        '| h1색상=', h ? getComputedStyle(h).color : 'NO_H1',
-                        '| 스타일길이=', sc.length,
-                        '| h1규칙있음=', sc.includes('h1 {'),
-                        '| a규칙있음=', /(^|[^.\w])a\s*\{/.test(sc),
-                        '| style개수=', d ? d.querySelectorAll('style').length : 0
-                    );
-                    const hi = sc.indexOf('h1 {');
-                    console.log('[STYLE-DIAG] h1규칙텍스트=', hi >= 0 ? sc.slice(hi, hi + 130) : '(없음)');
-                    const ai = sc.search(/(^|[^.\w])a\s*\{/);
-                    console.log('[STYLE-DIAG] a규칙텍스트=', ai >= 0 ? sc.slice(ai, ai + 90) : '(없음)');
-                } catch (e) {
-                    console.log('[STYLE-DIAG] iframe 진단 실패:', e && e.message);
-                }
-            });
         }
     };
 }
