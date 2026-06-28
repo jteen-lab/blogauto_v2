@@ -106,28 +106,35 @@ function styleTabPlatformMixin() {
          *    직접 써서 확실히 재렌더한다.
          */
         updatePreview() {
-            const css = this.generateCss();
-            let previewContent = this.sampleContent;
+            // [진단] 호출 여부 + 실패 지점 특정용 라벨 로깅 + 견고화(오류가 컴포넌트를 깨지 않게)
+            console.log('[STYLE-PREVIEW] updatePreview 호출');
+            try {
+                const css = this.generateCss();
+                let previewContent = this.sampleContent;
 
-            if (typeof applyClassesToPreviewHtml === 'function') {
-                previewContent = applyClassesToPreviewHtml(this.sampleContent, this.placeholderConfig);
+                if (typeof applyClassesToPreviewHtml === 'function') {
+                    previewContent = applyClassesToPreviewHtml(this.sampleContent, this.placeholderConfig);
+                }
+
+                let fullHtml;
+                if (typeof generatePreviewHtml === 'function') {
+                    // 플랫폼에 맞춰 본문 래퍼 적용 (Blogger면 post-body 래핑)
+                    fullHtml = generatePreviewHtml(css, previewContent, this.previewWrapperClass());
+                } else {
+                    // 폴백
+                    const wrapClass = this.previewWrapperClass();
+                    const body = wrapClass ? `<div class="${wrapClass}">${previewContent}</div>` : previewContent;
+                    fullHtml = `<!DOCTYPE html><html><head><style>${css}</style></head><body>${body}</body></html>`;
+                }
+
+                // previewHtml도 갱신(직접쓰기 실패 시 :srcdoc 폴백 가능하도록)
+                this.previewHtml = fullHtml;
+                // iframe contentDocument 직접 쓰기로 확실하게 재렌더
+                this.renderPreviewToIframe(fullHtml);
+                console.log('[STYLE-PREVIEW] updatePreview 완료 | css길이=', css ? css.length : 0);
+            } catch (e) {
+                console.error('[STYLE-PREVIEW] updatePreview 실패:', e && e.message, e);
             }
-
-            let fullHtml;
-            if (typeof generatePreviewHtml === 'function') {
-                // 플랫폼에 맞춰 본문 래퍼 적용 (Blogger면 post-body 래핑)
-                fullHtml = generatePreviewHtml(css, previewContent, this.previewWrapperClass());
-            } else {
-                // 폴백
-                const wrapClass = this.previewWrapperClass();
-                const body = wrapClass ? `<div class="${wrapClass}">${previewContent}</div>` : previewContent;
-                fullHtml = `<!DOCTYPE html><html><head><style>${css}</style></head><body>${body}</body></html>`;
-            }
-
-            // previewHtml도 갱신(직접쓰기 실패 시 :srcdoc 폴백 가능하도록)
-            this.previewHtml = fullHtml;
-            // iframe contentDocument 직접 쓰기로 확실하게 재렌더
-            this.renderPreviewToIframe(fullHtml);
         },
 
         /**
