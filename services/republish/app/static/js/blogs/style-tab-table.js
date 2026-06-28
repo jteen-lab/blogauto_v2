@@ -172,11 +172,8 @@ function styleTabTableMixin() {
             this.tableConfig.borderCollapse = tbl['border-collapse'] || 'collapse';
             this.tableConfig.borderSpacing = tbl['border-spacing'] || '0';
 
-            // 테두리
-            this.tableConfig.borderColor = tbl['border-color'] || th['border-color'] || '#e5e7eb';
-            this.tableConfig.borderWidth = parseInt(tbl['border-width'] || '1');
-            this.tableConfig.borderStyle = tbl['border-style'] || 'solid';
-            this.tableConfig.borderPreset = this._detectBorderPreset();
+            // 테두리 — 외곽선/가로선/세로선 3그룹 역동기화 (각 독립)
+            this._syncBorderGroupsFromStyleConfig(tbl, td);
 
             // 헤더 (th)
             this.tableConfig.thBgColor = th['background-color'] || '';
@@ -200,60 +197,83 @@ function styleTabTableMixin() {
         },
 
         /**
-         * 테두리 프리셋에 따른 table 선택자 border 속성 생성
+         * 외곽선(outline) 그룹 → table 선택자 border 속성 생성
+         * outline.on이면 표 바깥 외곽선 적용, off면 테두리 없음(border-style:none).
          * @returns {Object} CSS 속성 객체
          */
         _buildTableBorder() {
-            const p = this.tableConfig.borderPreset;
-            const c = this.tableConfig.borderColor;
-            const w = String(this.tableConfig.borderWidth);
-            const s = this.tableConfig.borderStyle;
-            if (p === 'none') return { 'border-style': 'none' };
-            if (p === 'outline') return { 'border-style': s, 'border-width': w, 'border-color': c };
-            if (p === 'all') return { 'border-style': s, 'border-width': w, 'border-color': c };
-            return {};
+            const o = this.tableConfig.outline || {};
+            if (!o.on) return { 'border-style': 'none' };
+            return {
+                'border-style': o.style,
+                'border-width': String(o.width),
+                'border-color': o.color
+            };
         },
 
         /**
-         * 테두리 프리셋에 따른 셀(th/td) border 속성 생성
+         * 가로선(hline)/세로선(vline) 그룹 → 셀(th/td) border 속성 생성
+         * hline.on → border-bottom-*(가로선), vline.on → border-left/right-*(세로선).
+         * 각 그룹은 자기 색/두께/종류만 사용(독립). 둘 다 off면 빈 객체.
          * @param {string} sel - 선택자 ('th' 또는 'td')
          * @returns {Object} CSS 속성 객체
          */
         _buildCellBorder(sel) {
-            const p = this.tableConfig.borderPreset;
-            const c = this.tableConfig.borderColor;
-            const w = String(this.tableConfig.borderWidth);
-            const s = this.tableConfig.borderStyle;
-            if (p === 'none' || p === 'outline') return { 'border-style': 'none' };
-            if (p === 'all') return { 'border-style': s, 'border-width': w, 'border-color': c };
-            if (p === 'horizontal') {
-                return {
-                    'border-top-style': s, 'border-top-width': w, 'border-top-color': c,
-                    'border-bottom-style': s, 'border-bottom-width': w, 'border-bottom-color': c
-                };
+            const props = {};
+            const h = this.tableConfig.hline || {};
+            const v = this.tableConfig.vline || {};
+            // 가로선: 셀 아래 테두리
+            if (h.on) {
+                props['border-bottom-style'] = h.style;
+                props['border-bottom-width'] = String(h.width);
+                props['border-bottom-color'] = h.color;
             }
-            if (p === 'vertical') {
-                return {
-                    'border-left-style': s, 'border-left-width': w, 'border-left-color': c,
-                    'border-right-style': s, 'border-right-width': w, 'border-right-color': c
-                };
+            // 세로선: 셀 좌/우 테두리
+            if (v.on) {
+                props['border-left-style'] = v.style;
+                props['border-left-width'] = String(v.width);
+                props['border-left-color'] = v.color;
+                props['border-right-style'] = v.style;
+                props['border-right-width'] = String(v.width);
+                props['border-right-color'] = v.color;
             }
-            return {};
+            return props;
         },
 
         /**
-         * 현재 styleConfig에서 테두리 프리셋 역추론
-         * @returns {string} 테두리 프리셋 이름
+         * styleConfig → 테두리 3그룹(outline/hline/vline) 역동기화
+         * - outline: table 선택자의 border-* (외곽선)
+         * - hline: td 선택자의 border-bottom-* (가로선)
+         * - vline: td 선택자의 border-left-* (세로선)
+         * 각 그룹 감지 안 되면 on:false로 둠.
+         * @param {Object} tbl - styleConfig['table']
+         * @param {Object} td - styleConfig['td']
          */
-        _detectBorderPreset() {
-            const tbl = this.styleConfig['table'] || {};
-            const th = this.styleConfig['th'] || {};
-            if (tbl['border-style'] === 'none' || (!tbl['border-style'] && !th['border-style'])) return 'none';
-            if (tbl['border-style'] && th['border-style'] === 'none') return 'outline';
-            if (th['border-bottom-style'] && !th['border-left-style']) return 'horizontal';
-            if (th['border-left-style'] && !th['border-top-style']) return 'vertical';
-            if (tbl['border-style'] || th['border-style']) return 'all';
-            return 'custom';
+        _syncBorderGroupsFromStyleConfig(tbl, td) {
+            // 외곽선 (table border)
+            const outOn = !!tbl['border-style'] && tbl['border-style'] !== 'none';
+            this.tableConfig.outline = {
+                on: outOn,
+                color: tbl['border-color'] || '#e5e7eb',
+                width: parseInt(tbl['border-width'] || '1'),
+                style: outOn ? (tbl['border-style'] || 'solid') : 'solid'
+            };
+            // 가로선 (td border-bottom)
+            const hOn = !!td['border-bottom-style'] && td['border-bottom-style'] !== 'none';
+            this.tableConfig.hline = {
+                on: hOn,
+                color: td['border-bottom-color'] || '#e5e7eb',
+                width: parseInt(td['border-bottom-width'] || '1'),
+                style: hOn ? (td['border-bottom-style'] || 'solid') : 'solid'
+            };
+            // 세로선 (td border-left)
+            const vOn = !!td['border-left-style'] && td['border-left-style'] !== 'none';
+            this.tableConfig.vline = {
+                on: vOn,
+                color: td['border-left-color'] || '#e5e7eb',
+                width: parseInt(td['border-left-width'] || '1'),
+                style: vOn ? (td['border-left-style'] || 'solid') : 'solid'
+            };
         },
 
         /**

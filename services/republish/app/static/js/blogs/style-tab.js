@@ -28,10 +28,11 @@ function styleTabApp() {
 
         // 테이블 설정 (테이블 전용 UI 상태)
         tableConfig: {
-            borderPreset: 'all',
-            borderColor: '#e5e7eb',
-            borderWidth: 1,
-            borderStyle: 'solid',
+            // 테두리 — 외곽선/가로선/세로선 각각 독립 그룹
+            // 그룹 간 색/두께/종류를 공유하지 않으므로 한 선의 색을 바꿔도 다른 선에 영향 없음.
+            outline: { on: true, color: '#e5e7eb', width: 1, style: 'solid' }, // 표 바깥 외곽선
+            hline: { on: true, color: '#e5e7eb', width: 1, style: 'solid' },   // 가로선(행 구분, 셀 border-bottom)
+            vline: { on: true, color: '#e5e7eb', width: 1, style: 'solid' },   // 세로선(열 구분, 셀 border-left/right)
             thBgColor: '#f3f4f6',
             thTextColor: '#1f2937',
             thFontWeight: '600',
