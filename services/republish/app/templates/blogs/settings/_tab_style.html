@@ -125,81 +125,105 @@
         <span class="ml-2 text-gray-500">로딩 중...</span>
     </div>
 
-    <!-- 메인 컨텐츠: 3컬럼 레이아웃 -->
-    <div x-show="!loading" x-cloak class="grid grid-cols-12 gap-4">
+    <!-- 메인 컨텐츠: 미리보기 캔버스 + 플로팅 편집 카드 (Webflow/Gutenberg식) -->
+    <div x-show="!loading" x-cloak class="relative">
 
-        <!-- 좌측: 선택자 목록 (3컬럼) -->
-        <div class="col-span-12 lg:col-span-3">
-            <div class="border rounded-lg overflow-hidden">
-                <div class="px-3 py-2 bg-gray-50 border-b">
-                    <h4 class="text-sm font-medium text-gray-700">선택자 목록</h4>
+        <!-- ===== 미리보기 = 메인 캔버스 (전체 폭) ===== -->
+        <div class="border rounded-lg overflow-hidden">
+            <div class="px-3 py-2 bg-gray-50 border-b flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <h4 class="text-sm font-medium text-gray-700">미리보기</h4>
+                    <span class="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-600"
+                          title="미리보기에서 요소를 클릭하면 해당 편집 카드가 떠오릅니다.">
+                        클릭하면 편집
+                    </span>
                 </div>
-                <!-- 테이블 설정 버튼 -->
-                <div class="px-2 py-2 border-b border-gray-100">
-                    <button @click="enterTableMode()"
-                            class="w-full px-3 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
-                            :class="tableMode ? 'bg-accent-lt text-accent border border-accent' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'">
+                <!-- 반응형 토글 -->
+                <div class="flex items-center gap-1">
+                    <button @click="previewMode = 'mobile'"
+                            :class="previewMode === 'mobile' ? 'bg-accent-lt text-accent' : 'text-gray-500 hover:bg-gray-100'"
+                            class="px-2 py-1 text-xs rounded transition-colors"
+                            title="모바일 (375px)">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18M3 6h18M3 18h18"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
                         </svg>
-                        테이블 설정
+                    </button>
+                    <button @click="previewMode = 'tablet'"
+                            :class="previewMode === 'tablet' ? 'bg-accent-lt text-accent' : 'text-gray-500 hover:bg-gray-100'"
+                            class="px-2 py-1 text-xs rounded transition-colors"
+                            title="태블릿 (768px)">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                        </svg>
+                    </button>
+                    <button @click="previewMode = 'desktop'"
+                            :class="previewMode === 'desktop' ? 'bg-accent-lt text-accent' : 'text-gray-500 hover:bg-gray-100'"
+                            class="px-2 py-1 text-xs rounded transition-colors"
+                            title="PC (1024px)">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                        </svg>
                     </button>
                 </div>
-                <div class="divide-y divide-gray-100 max-h-[500px] overflow-y-auto">
-                    <template x-for="selector in selectors" :key="selector">
-                        <button @click="tableMode = false; activeSelector = selector; loadCurrentSelectorStyles()"
-                                :class="(!tableMode && activeSelector === selector)
-                                    ? 'bg-accent-lt border-l-4 border-l-accent text-accent'
-                                    : 'hover:bg-gray-50 border-l-4 border-l-transparent'"
-                                class="w-full px-3 py-2.5 text-left text-sm transition-colors flex items-center justify-between">
-                            <span class="flex items-center">
-                                <code class="font-mono" x-text="selectorLabels[selector] || selector"></code>
-                                <template x-if="['table','th','td'].includes(selector)">
-                                    <span class="text-[9px] px-1 py-0.5 rounded bg-violet-100 text-violet-600 ml-1">통합</span>
-                                </template>
-                            </span>
-                            <span x-show="hasStyles(selector)" class="w-2 h-2 bg-green-500 rounded-full"></span>
-                        </button>
-                    </template>
+            </div>
+            <div class="p-4 bg-gray-100">
+                <!-- 클릭 안내 (카드 미오픈 시) -->
+                <p x-show="!editorOpen" class="mb-3 text-center text-xs text-gray-500">
+                    미리보기에서 편집할 요소(제목/본문/링크/표 등)를 클릭하세요
+                </p>
+                <div class="mx-auto transition-all duration-300 bg-white shadow rounded overflow-hidden"
+                     :style="{
+                         width: previewMode === 'mobile' ? '375px' : (previewMode === 'tablet' ? '100%' : '100%'),
+                         maxWidth: previewMode === 'mobile' ? '375px' : (previewMode === 'tablet' ? '768px' : '100%')
+                     }">
+                    <!-- JS가 contentDocument에 직접 렌더(renderPreviewToIframe) -->
+                    <iframe id="stylePreviewFrame"
+                            class="w-full h-[600px] border-0"
+                            title="스타일 미리보기"></iframe>
                 </div>
             </div>
         </div>
 
-        <!-- 중앙: 스타일 편집 패널 (5컬럼) -->
-        <div class="col-span-12 lg:col-span-5">
+        <!-- ===== 플로팅 편집 카드 (요소 선택 시에만) ===== -->
+        <div x-show="editorOpen" x-cloak
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 translate-x-4"
+             x-transition:enter-end="opacity-100 translate-x-0"
+             class="absolute top-0 right-0 w-full sm:w-[380px] max-h-[640px] overflow-y-auto bg-white shadow-2xl border rounded-lg z-30">
 
-            <!-- 테이블 전용 편집기 -->
-            <div x-show="tableMode" x-cloak class="border rounded-lg overflow-hidden">
-                <div class="px-3 py-2 bg-gray-50 border-b flex items-center justify-between">
-                    <h4 class="text-sm font-medium text-gray-700">
-                        스타일 편집: <span class="text-primary">테이블 설정</span>
-                    </h4>
-                </div>
-                <div class="p-4">
-                    {% include "blogs/settings/_tab_style_table.html" %}
-                </div>
-            </div>
-
-            <!-- 기존 범용 편집기 (B: 유형별 맞춤 노출 + 고급 편집 접이식) -->
-            <div x-show="!tableMode" id="styleEditorPanel" x-data="{ showAdvanced: false }" class="border rounded-lg overflow-hidden">
-                <div class="px-3 py-2 bg-gray-50 border-b flex items-center justify-between">
-                    <h4 class="text-sm font-medium text-gray-700">
-                        스타일 편집: <code class="text-primary" x-text="selectorLabels[activeSelector] || activeSelector"></code>
-                    </h4>
-                    <button @click="clearSelectorStyles()"
+            <!-- 카드 헤더 (sticky) -->
+            <div class="sticky top-0 z-10 px-3 py-2 bg-gray-50 border-b flex items-center justify-between">
+                <h4 class="text-sm font-medium text-gray-700 truncate">
+                    <template x-if="tableMode">
+                        <span>스타일 편집: <span class="text-primary">표 설정</span></span>
+                    </template>
+                    <template x-if="!tableMode">
+                        <span>스타일 편집: <code class="text-primary" x-text="selectorLabels[activeSelector] || activeSelector"></code></span>
+                    </template>
+                </h4>
+                <div class="flex items-center gap-2 flex-shrink-0">
+                    <button x-show="!tableMode" @click="clearSelectorStyles()"
                             class="text-xs text-red-500 hover:text-red-700">
                         이 선택자 초기화
                     </button>
+                    <!-- 닫기 (×) -->
+                    <button @click="closeEditor()" title="닫기"
+                            class="text-gray-400 hover:text-gray-700 text-lg leading-none w-6 h-6 flex items-center justify-center rounded hover:bg-gray-200">
+                        &times;
+                    </button>
                 </div>
+            </div>
 
-                <!-- 표/버튼 유도 안내 (해당 유형은 쉬운 편집 패널로 이동 권장) -->
-                <template x-if="activeKind() === 'table'">
-                    <div class="px-4 py-3 bg-violet-50 border-b border-violet-100 text-xs text-violet-700">
-                        💡 표는 좌측 <strong>테이블 설정</strong> 버튼의 쉬운 편집을 사용하면 편리합니다. 아래는 개별 속성 편집입니다.
-                    </div>
-                </template>
+            <!-- 카드 본문: 표편집 / 버튼쉬운설정 / 박스모델+유형별 컨트롤 -->
 
-                <div class="p-4 space-y-4 max-h-[500px] overflow-y-auto">
+            <!-- 테이블 전용 편집기 -->
+            <div x-show="tableMode" class="p-4">
+                {% include "blogs/settings/_tab_style_table.html" %}
+            </div>
+
+            <!-- 기존 범용 편집기 (B: 유형별 맞춤 노출 + 고급 편집 접이식) -->
+            <div x-show="!tableMode" id="styleEditorPanel" x-data="{ showAdvanced: false }">
+                <div class="p-4 space-y-4">
 
                     <!-- ===== 버튼 유형: 쉬운 설정 패널만 노출 (B) ===== -->
                     <div x-show="activeKind() === 'button'" class="space-y-3">
@@ -384,99 +408,6 @@
 
                     <hr class="border-gray-200">
 
-                    <!-- 테두리 섹션 (heading 강조선/quote/table/generic에만 노출, B) -->
-                    <div class="space-y-3" x-data="{ borderMode: 'all' }"
-                         x-show="['heading','quote','table','generic'].includes(activeKind())">
-                        <div class="flex items-center justify-between">
-                            <h5 class="text-xs font-semibold text-gray-500 uppercase tracking-wide">테두리</h5>
-                            <div class="flex items-center gap-1 bg-gray-100 rounded p-0.5">
-                                <button @click="borderMode = 'all'"
-                                        :class="borderMode === 'all' ? 'bg-white shadow text-accent' : 'text-gray-500'"
-                                        class="px-2 py-1 text-xs rounded transition-all">
-                                    전체
-                                </button>
-                                <button @click="borderMode = 'each'"
-                                        :class="borderMode === 'each' ? 'bg-white shadow text-accent' : 'text-gray-500'"
-                                        class="px-2 py-1 text-xs rounded transition-all">
-                                    방향별
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- 전체 테두리 설정 -->
-                        <div x-show="borderMode === 'all'" class="space-y-3">
-                            <div class="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label class="block text-xs text-gray-600 mb-1">스타일</label>
-                                    <select x-model="currentStyles['border-style']"
-                                            @change="updateStyle('border-style', $event.target.value)"
-                                            class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-accent">
-                                        <option value="">선택안함</option>
-                                        <option value="none">None</option>
-                                        <option value="solid">Solid</option>
-                                        <option value="dashed">Dashed</option>
-                                        <option value="dotted">Dotted</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-xs text-gray-600 mb-1">두께 (px)</label>
-                                    <input type="number" x-model="currentStyles['border-width']"
-                                           @input="updateStyle('border-width', $event.target.value)"
-                                           placeholder="1"
-                                           class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-accent">
-                                </div>
-                            </div>
-
-                            <div class="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label class="block text-xs text-gray-600 mb-1">색상</label>
-                                    <div class="flex gap-2">
-                                        <input type="color"
-                                               :value="hasColorValue(currentStyles['border-color']) ? currentStyles['border-color'] : '#cccccc'"
-                                               @input="updateStyle('border-color', $event.target.value)"
-                                               class="w-10 h-8 border border-gray-300 rounded cursor-pointer">
-                                        <input type="text" x-model="currentStyles['border-color']"
-                                               @input="updateStyle('border-color', $event.target.value)"
-                                               placeholder="#cccccc"
-                                               class="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded font-mono">
-                                    </div>
-                                </div>
-                                <div>
-                                    <label class="block text-xs text-gray-600 mb-1">둥글기 (px)</label>
-                                    <input type="number" x-model="currentStyles['border-radius']"
-                                           @input="updateStyle('border-radius', $event.target.value)"
-                                           placeholder="0"
-                                           class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-accent">
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- 방향별 테두리 설정 -->
-                        <div x-show="borderMode === 'each'" class="space-y-3">
-                            {% from "blogs/settings/_style_border_inputs.html" import border_direction_input %}
-                            {{ border_direction_input('top', '상단 (Top)', '▲') }}
-                            {{ border_direction_input('right', '우측 (Right)', '▶') }}
-                            {{ border_direction_input('bottom', '하단 (Bottom)', '▼') }}
-                            {{ border_direction_input('left', '좌측 (Left)', '◀') }}
-
-                            <!-- 둥글기 (공통) -->
-                            <div>
-                                <label class="block text-xs text-gray-600 mb-1">둥글기 (px)</label>
-                                <input type="number" x-model="currentStyles['border-radius']"
-                                       @input="updateStyle('border-radius', $event.target.value)"
-                                       placeholder="0"
-                                       class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-accent">
-                            </div>
-
-                            <!-- 팁 -->
-                            <div class="p-2 bg-primary-lt border border-primary rounded text-xs text-primary">
-                                💡 <strong>팁:</strong> 좌측만 두껍게 하려면 좌측 테두리만 설정하고 나머지는 "없음"으로 두세요.
-                            </div>
-                        </div>
-                    </div>
-
-                    <hr class="border-gray-200">
-
                     <!-- 레이아웃 섹션 (generic 전용 - 고급 성격, B) -->
                     <div class="space-y-3" x-show="activeKind() === 'generic'">
                         <h5 class="text-xs font-semibold text-gray-500 uppercase tracking-wide">레이아웃</h5>
@@ -619,65 +550,11 @@
                         </div>
                     </div>
 
-                </div>
-            </div>
-        </div>
+                </div><!-- /범용 편집기 본문 (p-4) -->
+            </div><!-- /범용 편집기 -->
+        </div><!-- /플로팅 편집 카드 -->
 
-        <!-- 우측: 미리보기 영역 (4컬럼) -->
-        <div class="col-span-12 lg:col-span-4">
-            <div class="border rounded-lg overflow-hidden">
-                <div class="px-3 py-2 bg-gray-50 border-b flex items-center justify-between">
-                    <div class="flex items-center gap-2">
-                        <h4 class="text-sm font-medium text-gray-700">미리보기</h4>
-                        <!-- C: 클릭 편집 안내 -->
-                        <span class="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-600"
-                              title="미리보기에서 요소를 클릭하면 해당 선택자 편집으로 이동합니다.">
-                            클릭하면 편집
-                        </span>
-                    </div>
-                    <div class="flex items-center gap-1">
-                        <button @click="previewMode = 'mobile'"
-                                :class="previewMode === 'mobile' ? 'bg-accent-lt text-accent' : 'text-gray-500 hover:bg-gray-100'"
-                                class="px-2 py-1 text-xs rounded transition-colors"
-                                title="모바일 (375px)">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-                            </svg>
-                        </button>
-                        <button @click="previewMode = 'tablet'"
-                                :class="previewMode === 'tablet' ? 'bg-accent-lt text-accent' : 'text-gray-500 hover:bg-gray-100'"
-                                class="px-2 py-1 text-xs rounded transition-colors"
-                                title="태블릿 (768px)">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-                            </svg>
-                        </button>
-                        <button @click="previewMode = 'desktop'"
-                                :class="previewMode === 'desktop' ? 'bg-accent-lt text-accent' : 'text-gray-500 hover:bg-gray-100'"
-                                class="px-2 py-1 text-xs rounded transition-colors"
-                                title="PC (1024px)">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-                <div class="p-4 bg-gray-100">
-                    <div class="mx-auto transition-all duration-300 bg-white shadow rounded overflow-hidden"
-                         :style="{
-                             width: previewMode === 'mobile' ? '375px' : (previewMode === 'tablet' ? '100%' : '100%'),
-                             maxWidth: previewMode === 'mobile' ? '375px' : (previewMode === 'tablet' ? '768px' : '100%')
-                         }">
-                        <!-- A: :srcdoc 제거 - JS가 contentDocument에 직접 렌더(renderPreviewToIframe) -->
-                        <iframe id="stylePreviewFrame"
-                                class="w-full h-[400px] border-0"
-                                title="스타일 미리보기"></iframe>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-    </div>
+    </div><!-- /메인 컨텐츠 (relative 캔버스) -->
 
     <!-- CSS 코드 패널 (접이식) -->
     <div x-show="showCssPanel" x-cloak

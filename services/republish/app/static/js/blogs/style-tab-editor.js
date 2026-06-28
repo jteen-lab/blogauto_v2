@@ -50,22 +50,25 @@ function styleTabEditorMixin() {
         },
 
         /**
-         * 미리보기 클릭으로 전달된 선택자를 활성화 (C)
-         * selectors 목록에 있을 때만 적용. 버튼/표는 테이블모드 해제 후 편집.
+         * 미리보기 클릭으로 전달된 선택자를 활성화 (C / 캔버스 레이아웃)
+         * selectors 목록에 있을 때만 적용. 표 요소(table/th/td)는 쉬운 표편집 카드로,
+         * 그 외는 일반 편집 카드로 진입하며 플로팅 카드를 연다.
          * @param {string} sel - 미리보기에서 판별된 선택자
          */
         setActiveSelectorFromPreview(sel) {
             if (!sel || !this.selectors.includes(sel)) return;
+            // 표 요소 클릭 → 쉬운 표편집 카드 진입 (enterTableMode가 editorOpen도 켬)
+            if (['table', 'th', 'td'].includes(sel)) {
+                this.activeSelector = sel;
+                this.enterTableMode();
+                return;
+            }
+            // 그 외 일반 선택자 → 일반 편집 카드
             this.tableMode = false;
             this.activeSelector = sel;
             this.loadCurrentSelectorStyles();
-            // 편집 영역으로 스크롤 (있을 때만)
-            this.$nextTick(() => {
-                const el = document.getElementById('styleEditorPanel');
-                if (el && typeof el.scrollIntoView === 'function') {
-                    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                }
-            });
+            // 플로팅 편집 카드 열기
+            this.editorOpen = true;
         }
     };
 }

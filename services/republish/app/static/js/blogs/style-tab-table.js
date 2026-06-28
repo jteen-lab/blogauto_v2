@@ -19,6 +19,8 @@ function styleTabTableMixin() {
         enterTableMode() {
             this.tableMode = true;
             this.syncTableConfigFromStyleConfig();
+            // 캔버스 레이아웃: 표 편집 진입 시 플로팅 편집 카드 열기
+            this.editorOpen = true;
         },
 
         /**

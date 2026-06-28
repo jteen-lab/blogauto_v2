@@ -22,6 +22,10 @@ function styleTabApp() {
         // 테이블 전용 편집 모드
         tableMode: false,
 
+        // 캔버스 레이아웃: 플로팅 편집 카드 노출 여부
+        // 미리보기에서 요소를 클릭하면 true(카드 열림), 닫기(×) 시 false.
+        editorOpen: false,
+
         // 테이블 설정 (테이블 전용 UI 상태)
         tableConfig: {
             borderPreset: 'all',
@@ -277,6 +281,14 @@ function styleTabApp() {
         hasStyles(selector) {
             const config = this.styleConfig[selector];
             return config && Object.keys(config).length > 0;
+        },
+
+        /**
+         * 플로팅 편집 카드 닫기 (캔버스 레이아웃)
+         * 닫아도 activeSelector/tableMode 상태는 보존(다시 클릭 시 동일 요소 복원).
+         */
+        closeEditor() {
+            this.editorOpen = false;
         },
 
         /**
