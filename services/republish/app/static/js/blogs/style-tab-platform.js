@@ -166,7 +166,10 @@ function styleTabPlatformMixin() {
                         '| a규칙있음=', /(^|[^.\w])a\s*\{/.test(sc),
                         '| style개수=', d ? d.querySelectorAll('style').length : 0
                     );
-                    console.log('[STYLE-DIAG] style앞부분=', sc.slice(0, 160));
+                    const hi = sc.indexOf('h1 {');
+                    console.log('[STYLE-DIAG] h1규칙텍스트=', hi >= 0 ? sc.slice(hi, hi + 130) : '(없음)');
+                    const ai = sc.search(/(^|[^.\w])a\s*\{/);
+                    console.log('[STYLE-DIAG] a규칙텍스트=', ai >= 0 ? sc.slice(ai, ai + 90) : '(없음)');
                 } catch (e) {
                     console.log('[STYLE-DIAG] iframe 진단 실패:', e && e.message);
                 }
