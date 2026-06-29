@@ -89,9 +89,13 @@ function buildCssSelector(selector, placeholderConfig) {
     }
 
     // 일반 태그인 경우 css_classes에서 확인
+    // 값에 태그명이 함께 들어가도(예: 'post-content h1') 선택자에서 태그명과
+    // 동일한 클래스는 중복 제거 -> 'h1.post-content' (h1.post-content.h1 아님)
     const tagClass = cssClasses[selector];
     if (tagClass && tagClass.trim()) {
-        const classes = tagClass.trim().split(/[\s.]+/).filter(Boolean).map(c => `.${c}`).join('');
+        const classes = tagClass.trim().split(/[\s.]+/).filter(Boolean)
+            .filter(c => c !== selector)
+            .map(c => `.${c}`).join('');
         return `${selector}${classes}`;
     }
 
