@@ -85,7 +85,7 @@
 
 {% block extra_js %}
 <script src="/static/js/blog_image_settings.js?v=20260512_422fix"></script>
-<script src="/static/js/blogs/replace-tab.js?v=20260629_tagscope"></script>
+<script src="/static/js/blogs/replace-tab.js?v=20260629_platform"></script>
 <!-- 스타일 탭 관련 스크립트 (순서 중요: 의존성 먼저) -->
 <script src="/static/js/blogs/style-tab-presets.js?v=20260628_canvas3"></script>
 <script src="/static/js/blogs/style-tab-themes.js?v=20260628_canvas3"></script>
@@ -93,7 +93,7 @@
 <script src="/static/js/blogs/style-tab-table.js?v=20260628_canvas3"></script>
 <script src="/static/js/blogs/style-tab-platform.js?v=20260628_canvas3"></script>
 <script src="/static/js/blogs/style-tab-editor.js?v=20260628_canvas3"></script>
-<script src="/static/js/blogs/style-tab.js?v=20260629_scope"></script>
+<script src="/static/js/blogs/style-tab.js?v=20260629_platform"></script>
 {% endblock %}
 
 {% block content %}
@@ -624,13 +624,13 @@
                     카테고리
                 </button>
                 <button type="button"
-                        @click="activeTab = 'replace'"
+                        @click="switchTab('replace')"
                         :class="activeTab === 'replace' ? 'border-accent text-accent' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
                         class="flex-1 py-3 px-1 text-center border-b-2 font-medium text-sm transition-colors whitespace-nowrap">
                     치환자
                 </button>
                 <button type="button"
-                        @click="activeTab = 'style'"
+                        @click="switchTab('style')"
                         :class="activeTab === 'style' ? 'border-accent text-accent' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
                         class="flex-1 py-3 px-1 text-center border-b-2 font-medium text-sm transition-colors whitespace-nowrap">
                     스타일
@@ -1132,6 +1132,13 @@ function blogSettingsApp() {
             // 매칭 설정 및 통계 로드
             this.loadMatchingSettings(blog.id);
             this.loadMatchingStats(blog.id);
+        },
+
+        // 탭 전환 — 자식 탭(치환자/스타일 등)이 서버 최신값을 다시 로드하도록 알림.
+        // 저장하지 않은 편집은 폐기되고, 다른 탭에서 저장한 값이 반영된다.
+        switchTab(tab) {
+            this.activeTab = tab;
+            window.dispatchEvent(new CustomEvent('blog-tab-changed', { detail: { tab } }));
         },
 
         reset() {

@@ -24,21 +24,16 @@
                 </button>
                 <div x-show="open" @click.away="open = false" x-cloak
                      class="absolute right-0 mt-1 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                    <div class="px-3 py-1.5 text-[11px] text-gray-400 border-b border-gray-100">
+                        기본 클래스에 플랫폼 스타일 클래스를 <strong>추가</strong>합니다
+                    </div>
                     <button @click="applyPreset('wordpress'); open = false"
                             class="w-full px-3 py-2 text-xs text-left text-gray-700 hover:bg-gray-100">
-                        WordPress 기본
-                    </button>
-                    <button @click="applyPreset('tistory'); open = false"
-                            class="w-full px-3 py-2 text-xs text-left text-gray-700 hover:bg-gray-100">
-                        티스토리 기본
-                    </button>
-                    <button @click="applyPreset('naver'); open = false"
-                            class="w-full px-3 py-2 text-xs text-left text-gray-700 hover:bg-gray-100">
-                        네이버 기본
+                        WordPress 스타일 추가
                     </button>
                     <button @click="applyPreset('blogger'); open = false"
                             class="w-full px-3 py-2 text-xs text-left text-gray-700 hover:bg-gray-100">
-                        Google Blogger
+                        Google Blogger 스타일 추가
                     </button>
                 </div>
             </div>
@@ -261,9 +256,13 @@
                 <strong>글 본문에만</strong> 적용됩니다.
             </p>
             <p class="text-xs text-blue-700">
-                기본값은 <strong>'본문클래스 + 태그명'</strong> 형태입니다(예: <code>post-content h1</code>).
-                본문 클래스는 플랫폼마다 다릅니다 — 프리셋 적용 시 워드프레스는 <code>entry-content</code>,
-                Google Blogger는 <code>post-body</code>로 자동 채워져 스타일이 블로그 전체가 아닌 본문 글에만 적용됩니다.
+                기본값은 이 블로그 플랫폼의 <strong>'본문클래스 + 태그명'</strong>으로 자동 입력됩니다
+                — 워드프레스는 <code>entry-content h1</code>, Google Blogger는 <code>post-body h1</code>.
+                이 본문 클래스 덕분에 스타일이 블로그 전체가 아닌 <strong>본문 글에만</strong> 적용됩니다.
+            </p>
+            <p class="text-xs text-blue-700">
+                프리셋은 기본 클래스를 지우지 않고 플랫폼 스타일 클래스를 <strong>추가</strong>만 합니다
+                (예: <code>entry-content h1</code> → <code>entry-content h1 wp-block-heading</code>).
             </p>
         </div>
 
