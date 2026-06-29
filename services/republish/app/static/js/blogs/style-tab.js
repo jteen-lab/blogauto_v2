@@ -131,6 +131,15 @@ function styleTabApp() {
                 this.reloadPlaceholders();
             });
 
+            // 스타일 탭 재진입 시 서버 최신값 재로드.
+            // - 저장하지 않은 스타일 편집 폐기(미저장 값 지속 방지)
+            // - 치환자 탭에서 저장한 최신 CSS 클래스를 CSS 보기/미리보기에 반영
+            window.addEventListener('blog-tab-changed', (e) => {
+                if (e.detail && e.detail.tab === 'style' && this.blogId) {
+                    this.load();
+                }
+            });
+
             this.initDefaultStyles();
             this.loadCurrentSelectorStyles();
             this.updatePreview();
