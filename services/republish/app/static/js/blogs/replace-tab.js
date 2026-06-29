@@ -25,6 +25,9 @@ function replaceTabApp() {
 
         // 데이터
         blogId: null,
+        // 블로그 플랫폼('wordpress' | 'blogger' | 'other')
+        // - 본문 스코프 기본 클래스(entry-content / post-body / post-content)를 결정한다.
+        platform: '',
         placeholders: {
             html_tags: {},
             css_classes: {},
@@ -69,7 +72,19 @@ function replaceTabApp() {
             window.addEventListener('blog-settings-loaded', (e) => {
                 if (e.detail && e.detail.blogId) {
                     this.blogId = e.detail.blogId;
-                    console.log('[replaceTabApp] 이벤트로 blogId 수신:', this.blogId);
+                    if (e.detail.blog && e.detail.blog.platform) {
+                        this.platform = String(e.detail.blog.platform).toLowerCase();
+                    }
+                    console.log('[replaceTabApp] 이벤트로 blogId 수신:', this.blogId, 'platform:', this.platform);
+                    this.load();
+                }
+            });
+
+            // 탭 재진입 시 서버 최신값을 다시 로드.
+            // - 저장하지 않은 편집을 폐기(미저장 값 지속 방지)
+            // - 다른 탭에서 저장한 최신 치환자 설정 반영
+            window.addEventListener('blog-tab-changed', (e) => {
+                if (e.detail && e.detail.tab === 'replace' && this.blogId) {
                     this.load();
                 }
             });
@@ -87,7 +102,10 @@ function replaceTabApp() {
                 const parentData = settingsEl._x_dataStack[0];
                 if (parentData.selectedBlog && parentData.selectedBlog.id) {
                     this.blogId = parentData.selectedBlog.id;
-                    console.log('[replaceTabApp] 부모에서 blogId 가져옴:', this.blogId);
+                    if (parentData.selectedBlog.platform) {
+                        this.platform = String(parentData.selectedBlog.platform).toLowerCase();
+                    }
+                    console.log('[replaceTabApp] 부모에서 blogId 가져옴:', this.blogId, 'platform:', this.platform);
                     this.load();
                     return true;
                 }
@@ -108,6 +126,19 @@ function replaceTabApp() {
          */
         generateId() {
             return `row_${++this.idCounter}_${Date.now()}`;
+        },
+
+        /**
+         * 블로그 플랫폼별 본문 스코프 기본 클래스 반환.
+         * - 워드프레스: 'entry-content', 구글 블로거: 'post-body'
+         * - 그 외/미상: 'post-content' (폴백)
+         * 본문 글에만 스타일이 적용되도록 모든 콘텐츠 태그에 부여되는 베이스 클래스.
+         * @returns {string} 본문 스코프 베이스 클래스
+         */
+        contentBaseClass() {
+            if (this.platform === 'wordpress') return 'entry-content';
+            if (this.platform === 'blogger') return 'post-body';
+            return 'post-content';
         },
 
         /**
@@ -162,14 +193,16 @@ function replaceTabApp() {
             const extraTags = Object.keys(savedCssClasses).filter(
                 t => t !== 'a' && t !== 'a.button' && !CSS_CLASS_TAGS.includes(t)
             );
-            // 빈값이면 본문 스코프 기본값 'post-content {태그명}'을 채워 표시.
-            // (모든 태그가 최소 'post-content 태그'를 가져 스타일이 본문 글에만 적용되며,
-            //  태그명이 함께 들어가 생성 CSS가 'h1.post-content {}' 형태로 식별된다)
+            // 빈값이면 플랫폼별 본문 스코프 기본값 '{본문베이스} {태그명}'을 채워 표시.
+            // (워드프레스→'entry-content h1', 블로거→'post-body h1', 그 외→'post-content h1')
+            // 모든 태그가 본문 베이스를 가져 스타일이 본문 글에만 적용되며,
+            // 태그명이 함께 들어가 생성 CSS가 'h1.entry-content {}' 형태로 식별된다.
             // 저장값이 있으면 그대로 사용.
+            const base = this.contentBaseClass();
             this.cssClassRows = [...CSS_CLASS_TAGS, ...extraTags].map(tag => ({
                 id: this.generateId(),
                 tag,
-                className: savedCssClasses[tag] || `post-content ${tag}`
+                className: savedCssClasses[tag] || `${base} ${tag}`
             }));
 
             // 링크 스타일 동기화
@@ -265,74 +298,82 @@ function replaceTabApp() {
         },
 
         /**
-         * 프리셋 적용
+         * 프리셋 적용 (추가 방식)
+         *
+         * 기본값(플랫폼 본문 베이스 + 태그명, 예: 'entry-content h1')은 그대로 두고,
+         * 프리셋의 태그별 스타일 클래스를 각 행에 "추가"한다(대체 아님).
+         * 예) 워드프레스 프리셋 클릭 → 'entry-content h1' → 'entry-content h1 wp-block-heading'
+         *
+         * @param {string} presetName - 'wordpress' | 'blogger'
          */
         applyPreset(presetName) {
-            /**
-             * 플랫폼 본문 클래스 + 태그명으로 모든 고정 태그(CSS_CLASS_TAGS)의
-             * css_classes 를 "{본문클래스} {태그명}" 형태로 채운다.
-             * (예: 'entry-content h1', 'post-body h2'). 본문클래스가 플랫폼마다 달라
-             * (워드프레스 entry-content / 블로거 post-body) 본문 글에만 스타일이 스코프된다.
-             * @param {string} contentClass - 플랫폼 본문 스코프 클래스
-             * @returns {Object} 전체 태그가 채워진 css_classes
-             */
-            const buildScoped = (contentClass) => {
-                const out = {};
-                CSS_CLASS_TAGS.forEach(tag => {
-                    out[tag] = `${contentClass} ${tag}`;
-                });
-                return out;
-            };
-
-            const presets = {
+            // 프리셋별 태그 스타일 클래스(본문 베이스에 추가됨)
+            // - 워드프레스: 구텐베르크 블록 클래스
+            // - 블로거: 'blogger-{태그}' 스타일 훅 클래스
+            const PRESET_TAG_CLASSES = {
                 wordpress: {
-                    html_tags: { h1: 'h2', h2: 'h3', h3: 'h4' },
-                    css_classes: buildScoped('entry-content'),
-                    link_styles: {
-                        default_class: 'entry-content link',
-                        button_class: 'button-link'
-                    },
-                    text_replace: []
+                    h1: 'wp-block-heading', h2: 'wp-block-heading', h3: 'wp-block-heading',
+                    h4: 'wp-block-heading', h5: 'wp-block-heading', h6: 'wp-block-heading',
+                    ul: 'wp-block-list', ol: 'wp-block-list',
+                    table: 'wp-block-table', blockquote: 'wp-block-quote'
                 },
-                tistory: {
-                    html_tags: {},
-                    css_classes: buildScoped('tistory-content'),
-                    link_styles: {
-                        default_class: 'tistory-content link',
-                        button_class: 'button-link'
-                    },
-                    text_replace: [{ find: '**', replace: '' }]
-                },
-                naver: {
-                    html_tags: { h1: 'h2' },
-                    css_classes: buildScoped('se-main-container'),
-                    link_styles: {
-                        default_class: 'se-main-container link',
-                        button_class: 'button-link'
-                    },
-                    text_replace: []
-                },
-                // Google Blogger 프리셋
-                // - html_tags는 비움(Blogger는 본문 그대로 발행)
-                // - 모든 태그에 'post-body {태그명}' 부여 (Blogger 본문 스코프)
                 blogger: {
-                    html_tags: {},
-                    css_classes: buildScoped('post-body'),
-                    link_styles: {
-                        default_class: 'post-body link',
-                        button_class: 'button-link'
-                    },
-                    text_replace: []
+                    h1: 'blogger-h1', h2: 'blogger-h2', h3: 'blogger-h3',
+                    h4: 'blogger-h4', h5: 'blogger-h5', h6: 'blogger-h6',
+                    p: 'blogger-p', ul: 'blogger-ul', ol: 'blogger-ol',
+                    li: 'blogger-li', table: 'blogger-table', th: 'blogger-th',
+                    td: 'blogger-td', blockquote: 'blogger-quote'
                 }
             };
+            const PRESET_LINK_CLASS = {
+                wordpress: 'wp-block-link',
+                blogger: 'blogger-link'
+            };
+            // 프리셋별 html_tags(병합) — 워드프레스는 H1 하향 정렬
+            const PRESET_HTML_TAGS = {
+                wordpress: { h1: 'h2', h2: 'h3', h3: 'h4' },
+                blogger: {}
+            };
 
-            const preset = presets[presetName];
-            if (preset) {
-                this.placeholders = JSON.parse(JSON.stringify(preset));
-                this.syncToRows();
-                if (typeof showSuccessMessage === 'function') {
-                    showSuccessMessage(`${presetName} 프리셋이 적용되었습니다.`);
+            const tagClasses = PRESET_TAG_CLASSES[presetName];
+            if (!tagClasses) return;
+
+            // 클래스 문자열에 특정 클래스를 중복 없이 추가
+            const addClass = (current, extra) => {
+                if (!extra) return current;
+                const parts = (current || '').trim().split(/\s+/).filter(Boolean);
+                if (!parts.includes(extra)) parts.push(extra);
+                return parts.join(' ');
+            };
+
+            // 기존 행(본문 베이스 + 태그명)에 프리셋 클래스를 추가
+            this.cssClassRows = this.cssClassRows.map(row => ({
+                ...row,
+                className: addClass(row.className, tagClasses[row.tag])
+            }));
+
+            // 링크 기본 클래스에도 프리셋 링크 클래스 추가(버튼 클래스는 구조 유지)
+            this.linkStyles.default_class = addClass(
+                this.linkStyles.default_class, PRESET_LINK_CLASS[presetName]
+            );
+
+            // html_tags 병합(기존 값 보존) — 편집 행(htmlTagRows)에 추가/갱신
+            // (syncFromRows가 html_tags를 htmlTagRows에서 재구성하므로 행에 반영해야 보존됨)
+            const presetHtml = PRESET_HTML_TAGS[presetName];
+            Object.keys(presetHtml).forEach(from => {
+                const existing = this.htmlTagRows.find(r => r.from === from);
+                if (existing) {
+                    existing.to = presetHtml[from];
+                } else {
+                    this.htmlTagRows.push({ id: this.generateId(), from, to: presetHtml[from] });
                 }
+            });
+
+            // 편집 배열 → placeholders 반영
+            this.syncFromRows();
+
+            if (typeof showSuccessMessage === 'function') {
+                showSuccessMessage(`${presetName} 프리셋 클래스가 추가되었습니다.`);
             }
         },
 
