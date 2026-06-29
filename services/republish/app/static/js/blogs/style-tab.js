@@ -313,11 +313,21 @@ function styleTabApp() {
         },
 
         /**
-         * CSS 복사
+         * 생성 CSS를 <style>...</style> 태그로 감싼 문자열 반환
+         * - 표시(pre)/복사(copyCss) 모두 이 형태로 출력해 바로 붙여넣기 가능하게 한다.
+         * - this.generatedCss 원본은 내부 그대로 유지(저장 등에 사용).
+         * @returns {string} <style>로 감싼 생성 CSS
+         */
+        cssWithStyleTag() {
+            return '<style>\n' + (this.generatedCss || '') + '\n</style>';
+        },
+
+        /**
+         * CSS 복사 (<style> 래핑 형태로 복사)
          */
         async copyCss() {
             try {
-                await navigator.clipboard.writeText(this.generatedCss);
+                await navigator.clipboard.writeText(this.cssWithStyleTag());
                 if (typeof showSuccessMessage === 'function') {
                     showSuccessMessage('CSS가 클립보드에 복사되었습니다.');
                 }

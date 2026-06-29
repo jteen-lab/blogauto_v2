@@ -36,6 +36,10 @@
                             class="w-full px-3 py-2 text-xs text-left text-gray-700 hover:bg-gray-100">
                         네이버 기본
                     </button>
+                    <button @click="applyPreset('blogger'); open = false"
+                            class="w-full px-3 py-2 text-xs text-left text-gray-700 hover:bg-gray-100">
+                        Google Blogger
+                    </button>
                 </div>
             </div>
 
@@ -255,6 +259,9 @@
             <p class="text-xs text-blue-700">
                 클래스명을 입력하면 글 본문의 해당 태그에만 그 클래스가 적용되어, 스타일이 블로그 전체가 아닌
                 <strong>글 본문에만</strong> 적용됩니다.
+            </p>
+            <p class="text-xs text-blue-700">
+                기본 <strong>'post-content'</strong> 클래스는 스타일이 블로그 전체가 아닌 본문 글에만 적용되게 합니다.
             </p>
         </div>
 

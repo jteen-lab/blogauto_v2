@@ -162,10 +162,13 @@ function replaceTabApp() {
             const extraTags = Object.keys(savedCssClasses).filter(
                 t => t !== 'a' && t !== 'a.button' && !CSS_CLASS_TAGS.includes(t)
             );
+            // 빈값이면 본문 스코프 기본 클래스 'post-content'를 채워 표시.
+            // (모든 태그가 최소 'post-content'를 가져 스타일이 본문 글에만 적용되게 함)
+            // 저장값이 있으면 그대로 사용.
             this.cssClassRows = [...CSS_CLASS_TAGS, ...extraTags].map(tag => ({
                 id: this.generateId(),
                 tag,
-                className: savedCssClasses[tag] || ''
+                className: savedCssClasses[tag] || 'post-content'
             }));
 
             // 링크 스타일 동기화
@@ -264,13 +267,36 @@ function replaceTabApp() {
          * 프리셋 적용
          */
         applyPreset(presetName) {
+            // 본문 스코프 베이스 클래스
+            // - 모든 콘텐츠 태그에 공통으로 부여하여, 생성 CSS가 'h2.post-content.태그별 {}'
+            //   형태가 되도록 한다. 이러면 스타일이 블로그 전체가 아닌 본문 글(해당 클래스를
+            //   가진 콘텐츠)에만 적용된다.
+            const BASE = 'post-content';
+
+            /**
+             * 태그별 클래스 맵을 받아 모든 고정 태그(CSS_CLASS_TAGS)를
+             * "post-content {태그별}" 형태로 채운 css_classes 객체로 변환.
+             * @param {Object} tagClassMap - { 태그: '태그별클래스' }
+             * @returns {Object} 전체 태그가 채워진 css_classes
+             */
+            const buildScoped = (tagClassMap) => {
+                const out = {};
+                CSS_CLASS_TAGS.forEach(tag => {
+                    out[tag] = `${BASE} ${tagClassMap[tag]}`;
+                });
+                return out;
+            };
+
             const presets = {
                 wordpress: {
                     html_tags: { h1: 'h2', h2: 'h3', h3: 'h4' },
-                    css_classes: {
+                    css_classes: buildScoped({
                         h1: 'entry-title', h2: 'wp-block-heading', h3: 'wp-block-heading',
-                        p: 'has-medium-font-size', ul: 'wp-block-list', ol: 'wp-block-list'
-                    },
+                        h4: 'wp-block-heading', h5: 'wp-block-heading', h6: 'wp-block-heading',
+                        p: 'has-medium-font-size', ul: 'wp-block-list', ol: 'wp-block-list',
+                        li: 'wp-block-list-item', table: 'wp-block-table', th: 'wp-block-table-th',
+                        td: 'wp-block-table-td', blockquote: 'wp-block-quote'
+                    }),
                     link_styles: {
                         default_class: 'wp-block-link',
                         button_class: 'wp-block-button__link'
@@ -279,10 +305,13 @@ function replaceTabApp() {
                 },
                 tistory: {
                     html_tags: {},
-                    css_classes: {
+                    css_classes: buildScoped({
                         h1: 'title', h2: 'subtitle', h3: 'section-title',
-                        p: 'article-content', ul: 'list-style', ol: 'list-style-num'
-                    },
+                        h4: 'sub-section-title', h5: 'minor-title', h6: 'minor-title',
+                        p: 'article-content', ul: 'list-style', ol: 'list-style-num',
+                        li: 'list-item', table: 'article-table', th: 'table-head',
+                        td: 'table-cell', blockquote: 'article-quote'
+                    }),
                     link_styles: {
                         default_class: 'link-default',
                         button_class: 'button-link'
@@ -291,13 +320,34 @@ function replaceTabApp() {
                 },
                 naver: {
                     html_tags: { h1: 'h2' },
-                    css_classes: {
+                    css_classes: buildScoped({
                         h1: 'se-title', h2: 'se-section-title', h3: 'se-sub-title',
-                        p: 'se-text-paragraph', ul: 'se-list', ol: 'se-list-ordered'
-                    },
+                        h4: 'se-sub-title', h5: 'se-minor-title', h6: 'se-minor-title',
+                        p: 'se-text-paragraph', ul: 'se-list', ol: 'se-list-ordered',
+                        li: 'se-list-item', table: 'se-table', th: 'se-table-head',
+                        td: 'se-table-cell', blockquote: 'se-quotation'
+                    }),
                     link_styles: {
                         default_class: 'se-link',
                         button_class: 'se-button-link'
+                    },
+                    text_replace: []
+                },
+                // Google Blogger 프리셋
+                // - html_tags는 비움(Blogger는 본문 그대로 발행)
+                // - 모든 태그에 'post-content blogger-{태그}' 부여 (본문 스코프)
+                blogger: {
+                    html_tags: {},
+                    css_classes: buildScoped({
+                        h1: 'blogger-h1', h2: 'blogger-h2', h3: 'blogger-h3',
+                        h4: 'blogger-h4', h5: 'blogger-h5', h6: 'blogger-h6',
+                        p: 'blogger-p', ul: 'blogger-ul', ol: 'blogger-ol',
+                        li: 'blogger-li', table: 'blogger-table', th: 'blogger-th',
+                        td: 'blogger-td', blockquote: 'blogger-quote'
+                    }),
+                    link_styles: {
+                        default_class: `${BASE} blogger-link`,
+                        button_class: 'button-link'
                     },
                     text_replace: []
                 }
