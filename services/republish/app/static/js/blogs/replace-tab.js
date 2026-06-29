@@ -162,13 +162,14 @@ function replaceTabApp() {
             const extraTags = Object.keys(savedCssClasses).filter(
                 t => t !== 'a' && t !== 'a.button' && !CSS_CLASS_TAGS.includes(t)
             );
-            // 빈값이면 본문 스코프 기본 클래스 'post-content'를 채워 표시.
-            // (모든 태그가 최소 'post-content'를 가져 스타일이 본문 글에만 적용되게 함)
+            // 빈값이면 본문 스코프 기본값 'post-content {태그명}'을 채워 표시.
+            // (모든 태그가 최소 'post-content 태그'를 가져 스타일이 본문 글에만 적용되며,
+            //  태그명이 함께 들어가 생성 CSS가 'h1.post-content {}' 형태로 식별된다)
             // 저장값이 있으면 그대로 사용.
             this.cssClassRows = [...CSS_CLASS_TAGS, ...extraTags].map(tag => ({
                 id: this.generateId(),
                 tag,
-                className: savedCssClasses[tag] || 'post-content'
+                className: savedCssClasses[tag] || `post-content ${tag}`
             }));
 
             // 링크 스타일 동기화
@@ -267,22 +268,18 @@ function replaceTabApp() {
          * 프리셋 적용
          */
         applyPreset(presetName) {
-            // 본문 스코프 베이스 클래스
-            // - 모든 콘텐츠 태그에 공통으로 부여하여, 생성 CSS가 'h2.post-content.태그별 {}'
-            //   형태가 되도록 한다. 이러면 스타일이 블로그 전체가 아닌 본문 글(해당 클래스를
-            //   가진 콘텐츠)에만 적용된다.
-            const BASE = 'post-content';
-
             /**
-             * 태그별 클래스 맵을 받아 모든 고정 태그(CSS_CLASS_TAGS)를
-             * "post-content {태그별}" 형태로 채운 css_classes 객체로 변환.
-             * @param {Object} tagClassMap - { 태그: '태그별클래스' }
+             * 플랫폼 본문 클래스 + 태그명으로 모든 고정 태그(CSS_CLASS_TAGS)의
+             * css_classes 를 "{본문클래스} {태그명}" 형태로 채운다.
+             * (예: 'entry-content h1', 'post-body h2'). 본문클래스가 플랫폼마다 달라
+             * (워드프레스 entry-content / 블로거 post-body) 본문 글에만 스타일이 스코프된다.
+             * @param {string} contentClass - 플랫폼 본문 스코프 클래스
              * @returns {Object} 전체 태그가 채워진 css_classes
              */
-            const buildScoped = (tagClassMap) => {
+            const buildScoped = (contentClass) => {
                 const out = {};
                 CSS_CLASS_TAGS.forEach(tag => {
-                    out[tag] = `${BASE} ${tagClassMap[tag]}`;
+                    out[tag] = `${contentClass} ${tag}`;
                 });
                 return out;
             };
@@ -290,63 +287,39 @@ function replaceTabApp() {
             const presets = {
                 wordpress: {
                     html_tags: { h1: 'h2', h2: 'h3', h3: 'h4' },
-                    css_classes: buildScoped({
-                        h1: 'entry-title', h2: 'wp-block-heading', h3: 'wp-block-heading',
-                        h4: 'wp-block-heading', h5: 'wp-block-heading', h6: 'wp-block-heading',
-                        p: 'has-medium-font-size', ul: 'wp-block-list', ol: 'wp-block-list',
-                        li: 'wp-block-list-item', table: 'wp-block-table', th: 'wp-block-table-th',
-                        td: 'wp-block-table-td', blockquote: 'wp-block-quote'
-                    }),
+                    css_classes: buildScoped('entry-content'),
                     link_styles: {
-                        default_class: 'wp-block-link',
-                        button_class: 'wp-block-button__link'
+                        default_class: 'entry-content link',
+                        button_class: 'button-link'
                     },
                     text_replace: []
                 },
                 tistory: {
                     html_tags: {},
-                    css_classes: buildScoped({
-                        h1: 'title', h2: 'subtitle', h3: 'section-title',
-                        h4: 'sub-section-title', h5: 'minor-title', h6: 'minor-title',
-                        p: 'article-content', ul: 'list-style', ol: 'list-style-num',
-                        li: 'list-item', table: 'article-table', th: 'table-head',
-                        td: 'table-cell', blockquote: 'article-quote'
-                    }),
+                    css_classes: buildScoped('tistory-content'),
                     link_styles: {
-                        default_class: 'link-default',
+                        default_class: 'tistory-content link',
                         button_class: 'button-link'
                     },
                     text_replace: [{ find: '**', replace: '' }]
                 },
                 naver: {
                     html_tags: { h1: 'h2' },
-                    css_classes: buildScoped({
-                        h1: 'se-title', h2: 'se-section-title', h3: 'se-sub-title',
-                        h4: 'se-sub-title', h5: 'se-minor-title', h6: 'se-minor-title',
-                        p: 'se-text-paragraph', ul: 'se-list', ol: 'se-list-ordered',
-                        li: 'se-list-item', table: 'se-table', th: 'se-table-head',
-                        td: 'se-table-cell', blockquote: 'se-quotation'
-                    }),
+                    css_classes: buildScoped('se-main-container'),
                     link_styles: {
-                        default_class: 'se-link',
-                        button_class: 'se-button-link'
+                        default_class: 'se-main-container link',
+                        button_class: 'button-link'
                     },
                     text_replace: []
                 },
                 // Google Blogger 프리셋
                 // - html_tags는 비움(Blogger는 본문 그대로 발행)
-                // - 모든 태그에 'post-content blogger-{태그}' 부여 (본문 스코프)
+                // - 모든 태그에 'post-body {태그명}' 부여 (Blogger 본문 스코프)
                 blogger: {
                     html_tags: {},
-                    css_classes: buildScoped({
-                        h1: 'blogger-h1', h2: 'blogger-h2', h3: 'blogger-h3',
-                        h4: 'blogger-h4', h5: 'blogger-h5', h6: 'blogger-h6',
-                        p: 'blogger-p', ul: 'blogger-ul', ol: 'blogger-ol',
-                        li: 'blogger-li', table: 'blogger-table', th: 'blogger-th',
-                        td: 'blogger-td', blockquote: 'blogger-quote'
-                    }),
+                    css_classes: buildScoped('post-body'),
                     link_styles: {
-                        default_class: `${BASE} blogger-link`,
+                        default_class: 'post-body link',
                         button_class: 'button-link'
                     },
                     text_replace: []
