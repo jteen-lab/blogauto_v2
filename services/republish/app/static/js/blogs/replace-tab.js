@@ -193,24 +193,25 @@ function replaceTabApp() {
             const extraTags = Object.keys(savedCssClasses).filter(
                 t => t !== 'a' && t !== 'a.button' && !CSS_CLASS_TAGS.includes(t)
             );
-            // 빈값이면 플랫폼별 본문 스코프 기본값 '{본문베이스} {태그명}'을 자동 입력.
-            // (워드프레스→'entry-content h1', 블로거→'post-body h1', 그 외→'post-content h1')
-            // 각 본문 태그가 본문 스코프 클래스를 가져 스타일이 본문 글에만 적용되며,
-            // 생성 CSS는 'h1.entry-content {}' 형태가 된다(태그명은 선택자 중복으로 제거됨).
+            // 빈값이면 플랫폼별 본문 스코프 기본값 '{본문베이스}'만 자동 입력(태그명 제외).
+            // (워드프레스→'entry-content', 블로거→'post-body', 그 외→'post-content')
+            // 태그는 '태그' 열에 이미 표시되고 생성 CSS의 선택자에서 자동으로 붙으므로
+            // 값에는 넣지 않는다(발행 HTML에 불필요한 태그명 클래스가 생기지 않게).
+            // 생성 CSS는 '.entry-content h1 {}' 형태가 된다.
             // 저장값이 있으면 그대로 사용.
             const base = this.contentBaseClass();
             this.cssClassRows = [...CSS_CLASS_TAGS, ...extraTags].map(tag => ({
                 id: this.generateId(),
                 tag,
-                className: savedCssClasses[tag] || `${base} ${tag}`
+                className: savedCssClasses[tag] || base
             }));
 
             // 링크 스타일 동기화
-            // 일반 링크 기본 클래스도 다른 본문 태그와 동일하게 '{본문베이스} a'를 자동 입력
-            // (예: 'entry-content a' → 생성 CSS '.entry-content a'). 버튼 클래스는 구조 유지.
+            // 일반 링크 기본 클래스도 다른 본문 태그와 동일하게 '{본문베이스}'만 자동 입력
+            // (예: 'entry-content' → 생성 CSS '.entry-content a'). 버튼 클래스는 구조 유지.
             const linkStyles = this.placeholders.link_styles || {};
             this.linkStyles = {
-                default_class: linkStyles.default_class || `${base} a`,
+                default_class: linkStyles.default_class || base,
                 button_class: linkStyles.button_class || 'button-link'
             };
         },
@@ -302,12 +303,11 @@ function replaceTabApp() {
         /**
          * 프리셋 적용 ('추가' 방식)
          *
-         * 기본 자동입력값(플랫폼 본문 스코프 클래스 + 태그명, 예: 'entry-content h1')은
-         * 그대로 두고, 프리셋의 태그별 스타일 클래스를 태그명 '앞'에 "추가"한다(대체 아님).
-         * 최종 순서는 '기본클래스 + 프리셋클래스 + 태그명'이며, 태그명을 echo하지 않아
-         * 중복이 생기지 않는다.
-         * 예) 'entry-content h1' → 'entry-content wp-block-heading h1'
-         *     'post-body h1'    → 'post-body blogger-heading h1'
+         * 기본 자동입력값(플랫폼 본문 스코프 클래스, 예: 'entry-content')은 그대로 두고,
+         * 프리셋의 태그별 스타일 클래스를 "추가"한다(대체 아님). 값에는 태그명을 넣지 않으며
+         * (태그는 선택자에서 자동으로 붙음), 프리셋 클래스도 태그명을 echo하지 않는다.
+         * 예) 'entry-content' → 'entry-content wp-block-heading' (CSS: '.entry-content h1.wp-block-heading')
+         *     'post-body'     → 'post-body blogger-heading'   (CSS: '.post-body h1.blogger-heading')
          *
          * @param {string} presetName - 'wordpress' | 'blogger'
          */
