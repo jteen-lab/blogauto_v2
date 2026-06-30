@@ -29,11 +29,13 @@ function styleTabPlatformMixin() {
         },
 
         /**
-         * 미리보기 본문 래퍼 클래스 반환 (래퍼 없음 — 클래스는 각 태그에 직접 부여)
-         * @returns {string} 항상 빈 문자열
+         * 미리보기 본문 래퍼 클래스 반환.
+         * 생성 CSS가 '.entry-content h1'처럼 본문 스코프를 조상으로 둔 자손 선택자이므로,
+         * 미리보기 본문도 같은 스코프 래퍼로 감싸야 스타일이 일치한다.
+         * @returns {string} 래퍼 클래스 ('entry-content' | 'post-body' | 'post-content')
          */
         previewWrapperClass() {
-            return '';
+            return this.contentBaseClass();
         },
 
         /**
