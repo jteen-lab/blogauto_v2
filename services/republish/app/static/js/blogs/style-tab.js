@@ -120,7 +120,11 @@ function styleTabApp() {
             window.addEventListener('blog-settings-loaded', (e) => {
                 if (e.detail && e.detail.blogId) {
                     this.blogId = e.detail.blogId;
-                    console.log('[styleTabApp] 이벤트로 blogId 수신:', this.blogId);
+                    // 현재 블로그 기준으로 platform 갱신(이전 블로그 값 고착 방지)
+                    if (e.detail.blog && e.detail.blog.platform) {
+                        this.platform = String(e.detail.blog.platform).toLowerCase();
+                    }
+                    console.log('[styleTabApp] 이벤트로 blogId 수신:', this.blogId, 'platform:', this.platform);
                     this.load();
                 }
             });
@@ -386,8 +390,10 @@ function styleTabApp() {
                     if (data.platform) this.platform = String(data.platform).toLowerCase();
                 }
 
-                // API 응답에 platform 없으면 부모 selectedBlog에서 보강
-                if (!this.platform) this.syncPlatformFromParent();
+                // 항상 현재 블로그(부모 selectedBlog) 기준으로 platform 갱신.
+                // (API에 platform이 없을 때 이전 블로그의 platform이 남아 다른 플랫폼으로
+                //  오인되던 버그 방지 — 블로거인데 entry-content가 출력되는 문제)
+                this.syncPlatformFromParent();
 
                 if (placeholderRes.ok) {
                     const data = await placeholderRes.json();
