@@ -249,18 +249,19 @@
         <!-- 빈칸/본문 스코핑 정책 안내 -->
         <div class="p-3 bg-blue-50 border border-blue-100 rounded-lg space-y-1">
             <p class="text-xs text-blue-700">
-                기본값은 이 블로그 플랫폼의 <strong>본문 스코프 클래스 + 태그명</strong>으로 자동 입력됩니다
-                — 워드프레스 <code>entry-content h1</code>, Google Blogger <code>post-body h1</code>.
-                이 본문 클래스가 각 본문 태그에 붙어 스타일이 블로그 전체가 아닌 <strong>본문 글에만</strong> 적용됩니다.
+                기본값은 이 블로그 플랫폼의 <strong>본문 스코프 클래스</strong>가 자동 입력됩니다
+                — 워드프레스 <code>entry-content</code>, Google Blogger <code>post-body</code>.
+                태그는 '태그' 열에 표시되고 CSS 선택자에 자동으로 붙으므로(<code>.entry-content h1</code>),
+                값에는 넣지 않습니다. 덕분에 스타일이 블로그 전체가 아닌 <strong>본문 글에만</strong> 적용됩니다.
             </p>
             <p class="text-xs text-blue-700">
                 클래스명을 <strong>비워두면</strong> 해당 태그는 치환하지 않습니다(클래스 미적용).
                 (점 <code>.</code>은 클래스명에 넣지 마세요 — 발행 시 무시됩니다.)
             </p>
             <p class="text-xs text-blue-700">
-                프리셋은 기본값을 지우지 않고 플랫폼 스타일 클래스를 태그명 앞에 <strong>추가</strong>합니다
-                (예: <code>entry-content h1</code> → <code>entry-content wp-block-heading h1</code>).
-                클래스 사이는 <strong>공백</strong>으로 구분됩니다(점 <code>.</code> 아님).
+                프리셋은 기본값을 지우지 않고 플랫폼 스타일 클래스를 <strong>추가</strong>합니다
+                (예: <code>entry-content</code> → <code>entry-content wp-block-heading</code> →
+                CSS <code>.entry-content h1.wp-block-heading</code>). 클래스 사이는 <strong>공백</strong> 구분(점 아님).
             </p>
         </div>
 
