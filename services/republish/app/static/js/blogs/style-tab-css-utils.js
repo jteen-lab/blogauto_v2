@@ -43,6 +43,27 @@ function buttonWrapperSelector(placeholderConfig) {
 }
 
 /**
+ * 본문 스코프 자손 선택자 빌드.
+ * 클래스값('본문스코프 [추가클래스...] 태그명')을 본문 스코프를 조상으로 둔
+ * 자손 선택자로 변환한다(클래스가 태그 앞).
+ *   ('h1', 'entry-content h1')                  -> '.entry-content h1'
+ *   ('h1', 'entry-content wp-block-heading h1') -> '.entry-content h1.wp-block-heading'
+ *   ('a',  'entry-content wp-block-link a', ':hover') -> '.entry-content a.wp-block-link:hover'
+ * @param {string} tagName - 실제 태그명 (h1, a 등)
+ * @param {string} classValue - 클래스 문자열
+ * @param {string} [suffix=''] - 선택자 접미 (':hover' 등)
+ * @returns {string} 자손 선택자
+ */
+function descendantSelector(tagName, classValue, suffix = '') {
+    const tokens = classValue.trim().split(/[\s.]+/).filter(Boolean);
+    const scope = tokens[0];                       // 첫 토큰 = 본문 스코프(조상)
+    const elemClasses = tokens.slice(1)            // 나머지 = 요소 클래스
+        .filter(c => c !== tagName)                // 태그명 토큰 제거(선택자 자신)
+        .map(c => `.${c}`).join('');
+    return `.${scope} ${tagName}${elemClasses}${suffix}`;
+}
+
+/**
  * CSS 선택자 빌드 (치환자 CSS 클래스 연동)
  * @param {string} selector - 기본 선택자 (h1, p, a, a.button 등)
  * @param {Object} placeholderConfig - 치환자 설정
@@ -65,45 +86,29 @@ function buildCssSelector(selector, placeholderConfig) {
         return `${buttonWrapperSelector(placeholderConfig)} a`;
     }
 
-    // a:hover (일반 링크 마우스오버)인 경우
-    // 일반 a 처리 로직을 재사용하여 ':hover' 접미
+    // a:hover (일반 링크 마우스오버) — 일반 링크와 동일하게 자손 선택자 + ':hover'
     if (selector === 'a:hover') {
         const defaultClass = linkStyles.default_class;
         if (defaultClass && defaultClass.trim()) {
-            const classes = defaultClass.trim().split(/[\s.]+/).filter(Boolean).map(c => `.${c}`).join('');
-            return `a${classes}:hover`;
+            return descendantSelector('a', defaultClass, ':hover');
         }
-        // 일반 a 태그 (클래스 없이)
         return 'a:hover';
     }
 
-    // a (일반 링크)인 경우
+    // a (일반 링크) — 다른 본문 태그와 동일하게 본문 스코프 자손 선택자로 생성
+    //   'entry-content a' -> '.entry-content a'
     if (selector === 'a') {
         const defaultClass = linkStyles.default_class;
         if (defaultClass && defaultClass.trim()) {
-            const classes = defaultClass.trim().split(/[\s.]+/).filter(Boolean).map(c => `.${c}`).join('');
-            return `a${classes}`;
+            return descendantSelector('a', defaultClass);
         }
-        // 일반 a 태그 (클래스 없이)
         return 'a';
     }
 
-    // 일반 태그인 경우 css_classes에서 확인.
-    // 값은 '본문스코프 [추가클래스...] 태그명' 형태(예: 'entry-content h1' /
-    // 'entry-content wp-block-heading h1'). CSS 선택자는 본문 스코프를 '조상'으로 둔
-    // 자손 선택자로 만든다(클래스가 태그 앞):
-    //   'entry-content h1'                 -> '.entry-content h1'
-    //   'entry-content wp-block-heading h1'-> '.entry-content h1.wp-block-heading'
+    // 일반 태그인 경우 css_classes에서 확인. 본문 스코프 자손 선택자로 변환.
     const tagClass = cssClasses[selector];
     if (tagClass && tagClass.trim()) {
-        const tokens = tagClass.trim().split(/[\s.]+/).filter(Boolean);
-        // 첫 토큰 = 본문 스코프(조상 선택자)
-        const scope = tokens[0];
-        // 나머지 토큰 중 태그명과 같은 것은 제거(태그는 선택자 자신) → 요소 클래스
-        const elemClasses = tokens.slice(1)
-            .filter(c => c !== selector)
-            .map(c => `.${c}`).join('');
-        return `.${scope} ${selector}${elemClasses}`;
+        return descendantSelector(selector, tagClass);
     }
 
     // 클래스 없으면 태그 그대로
