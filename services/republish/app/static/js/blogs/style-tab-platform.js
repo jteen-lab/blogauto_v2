@@ -16,21 +16,28 @@
 function styleTabPlatformMixin() {
     return {
         /**
-         * 플랫폼 기반 CSS 접두 반환
-         * Blogger는 본문이 .post-body 안에 위치하므로 모든 규칙을 스코프해야 한다.
-         * WordPress 등 그 외 플랫폼은 접두 없이 그대로 출력.
-         * @returns {string} CSS 접두 문자열 ('.post-body ' 또는 '')
+         * 플랫폼 기반 CSS 접두 반환 (본문 스코프 = 테마 본문 래퍼의 자손 선택자)
+         * - 워드프레스: 본문이 테마의 <div class="entry-content"> 안에 위치 → '.entry-content '
+         * - 블로거: 본문이 테마의 .post-body 안에 위치 → '.post-body '
+         * 모든 규칙에 접두를 붙여 '.entry-content h1 {}' 형태(자손 선택자)로 생성한다.
+         * 이렇게 하면 본문 글에만 스타일이 적용되고(테마 래퍼 스코프), 각 태그에
+         * 클래스를 따로 붙일 필요가 없다(실제 발행 HTML과 일치).
+         * @returns {string} CSS 접두 문자열 ('.entry-content ' | '.post-body ' | '')
          */
         cssPrefix() {
-            return this.platform === 'blogger' ? '.post-body ' : '';
+            if (this.platform === 'wordpress') return '.entry-content ';
+            if (this.platform === 'blogger') return '.post-body ';
+            return '';
         },
 
         /**
-         * 미리보기 본문 래퍼 클래스 반환 (접두와 일치)
-         * @returns {string} 래퍼 클래스 ('post-body' 또는 '')
+         * 미리보기 본문 래퍼 클래스 반환 (접두와 일치 → 미리보기 = 실제 발행)
+         * @returns {string} 래퍼 클래스 ('entry-content' | 'post-body' | '')
          */
         previewWrapperClass() {
-            return this.platform === 'blogger' ? 'post-body' : '';
+            if (this.platform === 'wordpress') return 'entry-content';
+            if (this.platform === 'blogger') return 'post-body';
+            return '';
         },
 
         /**
