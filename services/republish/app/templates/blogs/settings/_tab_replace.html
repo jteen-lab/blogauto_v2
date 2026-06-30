@@ -250,19 +250,18 @@
         <div class="p-3 bg-blue-50 border border-blue-100 rounded-lg space-y-1">
             <p class="text-xs text-blue-700">
                 클래스명을 <strong>비워두면</strong> 해당 태그는 기본 그대로 발행됩니다(치환하지 않음).
+                기본값은 <strong>공란</strong>이며, 보통 비워두면 됩니다.
             </p>
             <p class="text-xs text-blue-700">
-                클래스명을 입력하면 글 본문의 해당 태그에만 그 클래스가 적용되어, 스타일이 블로그 전체가 아닌
-                <strong>글 본문에만</strong> 적용됩니다.
+                <strong>본문에만 스타일 적용(스코프)</strong>은 여기서 클래스를 붙이지 않아도 됩니다 —
+                스타일 탭이 자동으로 테마 본문 영역(워드프레스 <code>.entry-content</code>,
+                Google Blogger <code>.post-body</code>)의 <strong>자손 선택자</strong>로 CSS를 생성하므로
+                본문 글에만 적용됩니다.
             </p>
             <p class="text-xs text-blue-700">
-                기본값은 이 블로그 플랫폼의 <strong>'본문클래스 + 태그명'</strong>으로 자동 입력됩니다
-                — 워드프레스는 <code>entry-content h1</code>, Google Blogger는 <code>post-body h1</code>.
-                이 본문 클래스 덕분에 스타일이 블로그 전체가 아닌 <strong>본문 글에만</strong> 적용됩니다.
-            </p>
-            <p class="text-xs text-blue-700">
-                프리셋은 기본 클래스를 지우지 않고 플랫폼 스타일 클래스를 <strong>추가</strong>만 합니다
-                (예: <code>entry-content h1</code> → <code>entry-content h1 wp-block-heading</code>).
+                이 칸은 <code>wp-block-heading</code>처럼 특정 태그에 <strong>추가 클래스</strong>가 필요할 때만
+                선택적으로 입력하세요. (점 <code>.</code>은 클래스명에 넣지 마세요 — 발행 시 무시됩니다.)
+                프리셋은 기존값을 지우지 않고 클래스를 추가만 합니다.
             </p>
         </div>
 
