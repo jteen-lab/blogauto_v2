@@ -66,14 +66,14 @@ function styleTabPlatformMixin() {
             const css = Object.assign({}, saved);
             TAGS.forEach(tag => {
                 if (!css[tag] || !String(css[tag]).trim()) {
-                    css[tag] = `${base} ${tag}`;
+                    css[tag] = base;   // 태그명은 선택자에서 자동으로 붙으므로 값엔 본문베이스만
                 }
             });
-            // 일반 링크 기본 클래스도 다른 태그와 동일하게 '{base} a' 보강(미저장 시)
+            // 일반 링크 기본 클래스도 다른 태그와 동일하게 '{base}' 보강(미저장 시)
             const savedLink = (this.placeholderConfig && this.placeholderConfig.link_styles) || {};
             const link = Object.assign({ button_class: 'button-link' }, savedLink);
             if (!link.default_class || !String(link.default_class).trim()) {
-                link.default_class = `${base} a`;
+                link.default_class = base;
             }
             return Object.assign({}, this.placeholderConfig, { css_classes: css, link_styles: link });
         },
