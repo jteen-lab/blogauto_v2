@@ -69,7 +69,13 @@ function styleTabPlatformMixin() {
                     css[tag] = `${base} ${tag}`;
                 }
             });
-            return Object.assign({}, this.placeholderConfig, { css_classes: css });
+            // 일반 링크 기본 클래스도 다른 태그와 동일하게 '{base} a' 보강(미저장 시)
+            const savedLink = (this.placeholderConfig && this.placeholderConfig.link_styles) || {};
+            const link = Object.assign({ button_class: 'button-link' }, savedLink);
+            if (!link.default_class || !String(link.default_class).trim()) {
+                link.default_class = `${base} a`;
+            }
+            return Object.assign({}, this.placeholderConfig, { css_classes: css, link_styles: link });
         },
 
         /**
