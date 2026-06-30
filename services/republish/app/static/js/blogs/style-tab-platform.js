@@ -16,27 +16,23 @@
 function styleTabPlatformMixin() {
     return {
         /**
-         * 플랫폼 기반 CSS 접두 반환 (본문 스코프 = 테마 본문 래퍼의 자손 선택자)
-         * - 워드프레스: 본문이 테마의 <div class="entry-content"> 안에 위치 → '.entry-content '
-         * - 블로거: 본문이 테마의 .post-body 안에 위치 → '.post-body '
-         * 모든 규칙에 접두를 붙여 '.entry-content h1 {}' 형태(자손 선택자)로 생성한다.
-         * 이렇게 하면 본문 글에만 스타일이 적용되고(테마 래퍼 스코프), 각 태그에
-         * 클래스를 따로 붙일 필요가 없다(실제 발행 HTML과 일치).
-         * @returns {string} CSS 접두 문자열 ('.entry-content ' | '.post-body ' | '')
+         * 플랫폼 기반 CSS 접두 반환 (접두 없음)
+         *
+         * 본문 스코프는 접두(자손 선택자)가 아니라 치환자 css_classes(각 본문 태그에
+         * 플랫폼 본문 클래스를 부여: WP=entry-content / Blogger=post-body)로 처리한다.
+         * 따라서 생성 CSS는 'h1.entry-content {}' 형태가 되며, 접두는 붙이지 않는다.
+         * (접두를 함께 쓰면 '.post-body h1.post-body'처럼 이중 스코프가 되어 제거)
+         * @returns {string} 항상 빈 문자열
          */
         cssPrefix() {
-            if (this.platform === 'wordpress') return '.entry-content ';
-            if (this.platform === 'blogger') return '.post-body ';
             return '';
         },
 
         /**
-         * 미리보기 본문 래퍼 클래스 반환 (접두와 일치 → 미리보기 = 실제 발행)
-         * @returns {string} 래퍼 클래스 ('entry-content' | 'post-body' | '')
+         * 미리보기 본문 래퍼 클래스 반환 (래퍼 없음 — 클래스는 각 태그에 직접 부여)
+         * @returns {string} 항상 빈 문자열
          */
         previewWrapperClass() {
-            if (this.platform === 'wordpress') return 'entry-content';
-            if (this.platform === 'blogger') return 'post-body';
             return '';
         },
 
