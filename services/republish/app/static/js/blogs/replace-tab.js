@@ -301,10 +301,11 @@ function replaceTabApp() {
          * 프리셋 적용 ('추가' 방식)
          *
          * 기본 자동입력값(플랫폼 본문 스코프 클래스 + 태그명, 예: 'entry-content h1')은
-         * 그대로 두고, 프리셋의 태그별 스타일 클래스를 각 행에 "추가"한다(대체 아님).
-         * 전체 14개 태그를 채우며, 태그명을 다시 echo하지 않아 중복이 생기지 않는다.
-         * 예) 'entry-content h1' → 'entry-content h1 wp-block-heading'
-         *     'post-body h1'    → 'post-body h1 blogger-heading'
+         * 그대로 두고, 프리셋의 태그별 스타일 클래스를 태그명 '앞'에 "추가"한다(대체 아님).
+         * 최종 순서는 '기본클래스 + 프리셋클래스 + 태그명'이며, 태그명을 echo하지 않아
+         * 중복이 생기지 않는다.
+         * 예) 'entry-content h1' → 'entry-content wp-block-heading h1'
+         *     'post-body h1'    → 'post-body blogger-heading h1'
          *
          * @param {string} presetName - 'wordpress' | 'blogger'
          */
@@ -343,7 +344,7 @@ function replaceTabApp() {
             const tagClasses = PRESET_TAG_CLASSES[presetName];
             if (!tagClasses) return;
 
-            // 클래스 문자열에 특정 클래스를 중복 없이 추가
+            // 클래스 문자열에 특정 클래스를 중복 없이 추가(맨 뒤 append) — 링크용
             const addClass = (current, extra) => {
                 if (!extra) return current;
                 const parts = (current || '').trim().split(/\s+/).filter(Boolean);
@@ -351,10 +352,22 @@ function replaceTabApp() {
                 return parts.join(' ');
             };
 
-            // 기존 행(본문 스코프 + 태그명 자동입력)에 프리셋 클래스를 추가
+            // 프리셋 클래스를 태그명 '앞'에 삽입(태그명은 항상 맨 뒤 유지) — 태그용
+            // → 최종 순서: '기본클래스 + 프리셋클래스 + 태그명'
+            //   예) 'entry-content h1' + wp-block-heading → 'entry-content wp-block-heading h1'
+            const addClassBeforeTag = (current, extra, tag) => {
+                let parts = (current || '').trim().split(/\s+/).filter(Boolean);
+                const hasTag = parts.includes(tag);
+                parts = parts.filter(p => p !== tag);          // 태그명 분리
+                if (extra && !parts.includes(extra)) parts.push(extra); // 프리셋 클래스 추가
+                if (hasTag) parts.push(tag);                   // 태그명을 맨 뒤로 재배치
+                return parts.join(' ');
+            };
+
+            // 기존 행(본문 스코프 + 태그명 자동입력)에 프리셋 클래스를 태그명 앞에 추가
             this.cssClassRows = this.cssClassRows.map(row => ({
                 ...row,
-                className: addClass(row.className, tagClasses[row.tag])
+                className: addClassBeforeTag(row.className, tagClasses[row.tag], row.tag)
             }));
 
             // 링크 기본 클래스에도 프리셋 링크 클래스 추가(버튼 클래스는 구조 유지)
