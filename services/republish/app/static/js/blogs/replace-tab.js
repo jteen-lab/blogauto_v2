@@ -206,9 +206,11 @@ function replaceTabApp() {
             }));
 
             // 링크 스타일 동기화
+            // 일반 링크 기본 클래스도 다른 본문 태그와 동일하게 '{본문베이스} a'를 자동 입력
+            // (예: 'entry-content a' → 생성 CSS '.entry-content a'). 버튼 클래스는 구조 유지.
             const linkStyles = this.placeholders.link_styles || {};
             this.linkStyles = {
-                default_class: linkStyles.default_class || '',
+                default_class: linkStyles.default_class || `${base} a`,
                 button_class: linkStyles.button_class || 'button-link'
             };
         },
@@ -370,9 +372,10 @@ function replaceTabApp() {
                 className: addClassBeforeTag(row.className, tagClasses[row.tag], row.tag)
             }));
 
-            // 링크 기본 클래스에도 프리셋 링크 클래스 추가(버튼 클래스는 구조 유지)
-            this.linkStyles.default_class = addClass(
-                this.linkStyles.default_class, PRESET_LINK_CLASS[presetName]
+            // 일반 링크 기본 클래스에도 다른 태그와 동일하게 프리셋 클래스를 'a' 앞에 추가
+            // (순서: 본문베이스 + 프리셋 + a). 버튼 클래스는 구조 유지.
+            this.linkStyles.default_class = addClassBeforeTag(
+                this.linkStyles.default_class, PRESET_LINK_CLASS[presetName], 'a'
             );
 
             // html_tags 병합(기존 값 보존) — 편집 행(htmlTagRows)에 추가/갱신
