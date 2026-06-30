@@ -88,15 +88,22 @@ function buildCssSelector(selector, placeholderConfig) {
         return 'a';
     }
 
-    // 일반 태그인 경우 css_classes에서 확인
-    // 값에 태그명이 함께 들어가도(예: 'post-content h1') 선택자에서 태그명과
-    // 동일한 클래스는 중복 제거 -> 'h1.post-content' (h1.post-content.h1 아님)
+    // 일반 태그인 경우 css_classes에서 확인.
+    // 값은 '본문스코프 [추가클래스...] 태그명' 형태(예: 'entry-content h1' /
+    // 'entry-content wp-block-heading h1'). CSS 선택자는 본문 스코프를 '조상'으로 둔
+    // 자손 선택자로 만든다(클래스가 태그 앞):
+    //   'entry-content h1'                 -> '.entry-content h1'
+    //   'entry-content wp-block-heading h1'-> '.entry-content h1.wp-block-heading'
     const tagClass = cssClasses[selector];
     if (tagClass && tagClass.trim()) {
-        const classes = tagClass.trim().split(/[\s.]+/).filter(Boolean)
+        const tokens = tagClass.trim().split(/[\s.]+/).filter(Boolean);
+        // 첫 토큰 = 본문 스코프(조상 선택자)
+        const scope = tokens[0];
+        // 나머지 토큰 중 태그명과 같은 것은 제거(태그는 선택자 자신) → 요소 클래스
+        const elemClasses = tokens.slice(1)
             .filter(c => c !== selector)
             .map(c => `.${c}`).join('');
-        return `${selector}${classes}`;
+        return `.${scope} ${selector}${elemClasses}`;
     }
 
     // 클래스 없으면 태그 그대로
