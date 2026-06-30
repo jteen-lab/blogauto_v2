@@ -25,9 +25,6 @@ function replaceTabApp() {
 
         // 데이터
         blogId: null,
-        // 블로그 플랫폼('wordpress' | 'blogger' | 'other')
-        // - 본문 스코프 기본 클래스(entry-content / post-body / post-content)를 결정한다.
-        platform: '',
         placeholders: {
             html_tags: {},
             css_classes: {},
@@ -72,10 +69,7 @@ function replaceTabApp() {
             window.addEventListener('blog-settings-loaded', (e) => {
                 if (e.detail && e.detail.blogId) {
                     this.blogId = e.detail.blogId;
-                    if (e.detail.blog && e.detail.blog.platform) {
-                        this.platform = String(e.detail.blog.platform).toLowerCase();
-                    }
-                    console.log('[replaceTabApp] 이벤트로 blogId 수신:', this.blogId, 'platform:', this.platform);
+                    console.log('[replaceTabApp] 이벤트로 blogId 수신:', this.blogId);
                     this.load();
                 }
             });
@@ -102,10 +96,7 @@ function replaceTabApp() {
                 const parentData = settingsEl._x_dataStack[0];
                 if (parentData.selectedBlog && parentData.selectedBlog.id) {
                     this.blogId = parentData.selectedBlog.id;
-                    if (parentData.selectedBlog.platform) {
-                        this.platform = String(parentData.selectedBlog.platform).toLowerCase();
-                    }
-                    console.log('[replaceTabApp] 부모에서 blogId 가져옴:', this.blogId, 'platform:', this.platform);
+                    console.log('[replaceTabApp] 부모에서 blogId 가져옴:', this.blogId);
                     this.load();
                     return true;
                 }
@@ -126,19 +117,6 @@ function replaceTabApp() {
          */
         generateId() {
             return `row_${++this.idCounter}_${Date.now()}`;
-        },
-
-        /**
-         * 블로그 플랫폼별 본문 스코프 기본 클래스 반환.
-         * - 워드프레스: 'entry-content', 구글 블로거: 'post-body'
-         * - 그 외/미상: 'post-content' (폴백)
-         * 본문 글에만 스타일이 적용되도록 모든 콘텐츠 태그에 부여되는 베이스 클래스.
-         * @returns {string} 본문 스코프 베이스 클래스
-         */
-        contentBaseClass() {
-            if (this.platform === 'wordpress') return 'entry-content';
-            if (this.platform === 'blogger') return 'post-body';
-            return 'post-content';
         },
 
         /**
@@ -193,16 +171,15 @@ function replaceTabApp() {
             const extraTags = Object.keys(savedCssClasses).filter(
                 t => t !== 'a' && t !== 'a.button' && !CSS_CLASS_TAGS.includes(t)
             );
-            // 빈값이면 플랫폼별 본문 스코프 기본값 '{본문베이스} {태그명}'을 채워 표시.
-            // (워드프레스→'entry-content h1', 블로거→'post-body h1', 그 외→'post-content h1')
-            // 모든 태그가 본문 베이스를 가져 스타일이 본문 글에만 적용되며,
-            // 태그명이 함께 들어가 생성 CSS가 'h1.entry-content {}' 형태로 식별된다.
+            // 빈칸 = 치환하지 않음(해당 태그에 클래스 미적용).
+            // 본문 스코프는 css_classes가 아니라 스타일 탭의 본문 래퍼 접두
+            // ('.entry-content '/'.post-body ')가 담당한다(자손 선택자 = 실제 발행과 일치).
+            // 따라서 기본값은 공란이며, wp-block-heading 등 '추가' 클래스가 필요할 때만 입력.
             // 저장값이 있으면 그대로 사용.
-            const base = this.contentBaseClass();
             this.cssClassRows = [...CSS_CLASS_TAGS, ...extraTags].map(tag => ({
                 id: this.generateId(),
                 tag,
-                className: savedCssClasses[tag] || `${base} ${tag}`
+                className: savedCssClasses[tag] || ''
             }));
 
             // 링크 스타일 동기화
@@ -298,17 +275,19 @@ function replaceTabApp() {
         },
 
         /**
-         * 프리셋 적용 (추가 방식)
+         * 프리셋 적용 (선택적 '추가' 클래스)
          *
-         * 기본값(플랫폼 본문 베이스 + 태그명, 예: 'entry-content h1')은 그대로 두고,
-         * 프리셋의 태그별 스타일 클래스를 각 행에 "추가"한다(대체 아님).
-         * 예) 워드프레스 프리셋 클릭 → 'entry-content h1' → 'entry-content h1 wp-block-heading'
+         * 본문 스코프(본문 글에만 적용)는 css_classes가 아니라 스타일 탭의 본문 래퍼
+         * 접두('.entry-content '/'.post-body ')가 담당하므로, css_classes는 비워둬도 된다.
+         * 프리셋은 각 태그에 '추가' 클래스(예: wp-block-heading)가 필요한 경우에만 쓰는
+         * 선택 기능이며, 기존 입력값을 지우지 않고 클래스를 더한다(중복 제거).
+         * 예) 공란 → 'wp-block-heading' / 'wp-block-heading' → (재클릭 시 그대로)
          *
          * @param {string} presetName - 'wordpress' | 'blogger'
          */
         applyPreset(presetName) {
-            // 프리셋별 태그 스타일 클래스(본문 베이스에 추가됨)
-            // - 워드프레스: 구텐베르크 블록 클래스
+            // 프리셋별 태그 스타일 클래스(선택적 추가 클래스)
+            // - 워드프레스: 구텐베르크 블록 클래스(자연스러운 클래스가 있는 태그만)
             // - 블로거: 'blogger-{태그}' 스타일 훅 클래스
             const PRESET_TAG_CLASSES = {
                 wordpress: {
@@ -346,7 +325,7 @@ function replaceTabApp() {
                 return parts.join(' ');
             };
 
-            // 기존 행(본문 베이스 + 태그명)에 프리셋 클래스를 추가
+            // 기존 행(공란이 기본)에 프리셋 클래스를 추가
             this.cssClassRows = this.cssClassRows.map(row => ({
                 ...row,
                 className: addClass(row.className, tagClasses[row.tag])
