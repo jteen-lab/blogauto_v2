@@ -37,24 +37,18 @@ function buttonWrapperSelector(placeholderConfig) {
     const linkStyles = placeholderConfig?.link_styles || {};
     const buttonClass = linkStyles.button_class;
     if (buttonClass && buttonClass.trim()) {
-        return buttonClass.trim().split(/[\s.]+/).filter(Boolean).map(c => `.${c}`).join('');
+        const tokens = buttonClass.trim().split(/[\s.]+/).filter(Boolean);
+        if (tokens.length <= 1) {
+            // 단일 토큰(레거시 'button-link') → 스코프 없이 래퍼만
+            return `.${tokens[0] || 'button-link'}`;
+        }
+        // 첫 토큰 = 본문 스코프(조상), 나머지 = 래퍼(div) 클래스
+        //   'entry-content button-link' → '.entry-content .button-link'
+        const scope = tokens[0];
+        const wrapper = tokens.slice(1).map(c => `.${c}`).join('');
+        return `.${scope} ${wrapper}`;
     }
     return '.button-link';
-}
-
-/**
- * 본문 스코프 접두 반환 (버튼 등 스코프가 필요한 선택자 앞에 붙임).
- * 일반 링크 default_class의 첫 토큰(본문 베이스: entry-content/post-body)을 재사용해
- * '.entry-content ' / '.post-body ' 형태의 조상 접두를 만든다.
- * default_class가 없으면 접두 없음(기존 동작).
- * @param {Object} linkStyles - link_styles 설정
- * @returns {string} 스코프 접두 ('.entry-content ' | '.post-body ' | '')
- */
-function linkScopePrefix(linkStyles) {
-    const dc = ((linkStyles && linkStyles.default_class) || '').trim();
-    if (!dc) return '';
-    const scope = dc.split(/[\s.]+/).filter(Boolean)[0];
-    return scope ? `.${scope} ` : '';
 }
 
 /**
@@ -89,17 +83,17 @@ function buildCssSelector(selector, placeholderConfig) {
     const linkStyles = placeholderConfig?.link_styles || {};
 
     // a.button:hover (버튼 마우스오버)인 경우
-    // 다른 요소와 동일하게 본문 스코프를 조상으로 -> ".entry-content .button-link a:hover"
+    // buttonWrapperSelector가 본문 스코프(조상)까지 포함 -> ".entry-content .button-link a:hover"
     if (selector === 'a.button:hover') {
-        return `${linkScopePrefix(linkStyles)}${buttonWrapperSelector(placeholderConfig)} a:hover`;
+        return `${buttonWrapperSelector(placeholderConfig)} a:hover`;
     }
 
     // a.button (버튼 링크)인 경우
     // 실제 발행 HTML은 <div class="button-link"><a>...</a></div> 구조이므로
-    // 버튼 시각 스타일은 래퍼(div) 안의 a 에 적용한다. 본문 스코프(조상)를 앞에 붙여
-    // 워드프레스는 '.entry-content .button-link a', 블로거는 '.post-body .button-link a'.
+    // 버튼 시각 스타일은 래퍼(div) 안의 a 에 적용한다. 본문 스코프는 button_class의
+    // 첫 토큰(본문 베이스)에서 유도되어 '.entry-content .button-link a' 형태가 된다.
     if (selector === 'a.button') {
-        return `${linkScopePrefix(linkStyles)}${buttonWrapperSelector(placeholderConfig)} a`;
+        return `${buttonWrapperSelector(placeholderConfig)} a`;
     }
 
     // a:hover (일반 링크 마우스오버) — 일반 링크와 동일하게 자손 선택자 + ':hover'
@@ -167,9 +161,8 @@ function generateCssFromConfig(selectors, styleConfig, placeholderConfig, prefix
             // 버튼 링크는 래퍼(div) 블록 규칙을 함께 생성해야
             // <div class="button-link"><a>...</a></div> 구조에서 한 줄 버튼으로 보인다.
             if (selector === 'a.button') {
-                const scope = linkScopePrefix(placeholderConfig?.link_styles || {});
                 const wrapper = buttonWrapperSelector(placeholderConfig);
-                lines.push(`${px}${scope}${wrapper} {`);
+                lines.push(`${px}${wrapper} {`);
                 lines.push('    display: block;');
                 lines.push('    margin-bottom: 10px;');
                 lines.push('}');
