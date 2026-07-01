@@ -49,34 +49,6 @@ function styleTabPlatformMixin() {
             return 'post-content';
         },
 
-        /**
-         * CSS 생성/미리보기에 쓸 '유효' 치환자 설정 반환.
-         *
-         * 치환자 탭을 아직 저장하지 않아 placeholderConfig.css_classes가 비어도,
-         * 각 본문 태그에 플랫폼 기본 클래스('{base} {tag}')를 채워(치환자 자동입력과 동일),
-         * 스타일 탭 CSS/미리보기가 항상 'h1.entry-content {}' 형태로 기본 클래스를 반영하게 한다.
-         * 저장값이 있으면 그대로 사용한다.
-         * @returns {Object} css_classes가 보강된 placeholderConfig 사본
-         */
-        effectivePlaceholderConfig() {
-            const base = this.contentBaseClass();
-            const TAGS = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'ul', 'ol',
-                'li', 'table', 'th', 'td', 'blockquote'];
-            const saved = (this.placeholderConfig && this.placeholderConfig.css_classes) || {};
-            const css = Object.assign({}, saved);
-            TAGS.forEach(tag => {
-                if (!css[tag] || !String(css[tag]).trim()) {
-                    css[tag] = base;   // 태그명은 선택자에서 자동으로 붙으므로 값엔 본문베이스만
-                }
-            });
-            // 일반 링크 기본 클래스도 다른 태그와 동일하게 '{base}' 보강(미저장 시)
-            const savedLink = (this.placeholderConfig && this.placeholderConfig.link_styles) || {};
-            const link = Object.assign({ button_class: 'button-link' }, savedLink);
-            if (!link.default_class || !String(link.default_class).trim()) {
-                link.default_class = base;
-            }
-            return Object.assign({}, this.placeholderConfig, { css_classes: css, link_styles: link });
-        },
 
         /**
          * 부모 컴포넌트(selectedBlog)에서 platform 값 시도 취득
@@ -102,7 +74,7 @@ function styleTabPlatformMixin() {
                 this.generatedCss = generateCssFromConfig(
                     this.selectors,
                     this.styleConfig,
-                    this.effectivePlaceholderConfig(),
+                    this.placeholderConfig,
                     this.cssPrefix()
                 );
             } else {
@@ -157,8 +129,8 @@ function styleTabPlatformMixin() {
                 let previewContent = this.sampleContent;
 
                 if (typeof applyClassesToPreviewHtml === 'function') {
-                    // 기본 클래스 보강된 유효 설정으로 미리보기 요소에도 동일 클래스 부여
-                    previewContent = applyClassesToPreviewHtml(this.sampleContent, this.effectivePlaceholderConfig());
+                    // 저장된 치환자 설정으로만 미리보기 요소에 클래스 부여(미저장 값은 반영 안 함)
+                    previewContent = applyClassesToPreviewHtml(this.sampleContent, this.placeholderConfig);
                 }
 
                 let fullHtml;
