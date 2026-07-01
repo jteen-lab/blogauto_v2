@@ -207,12 +207,14 @@ function replaceTabApp() {
             }));
 
             // 링크 스타일 동기화
-            // 일반 링크 기본 클래스도 다른 본문 태그와 동일하게 '{본문베이스}'만 자동 입력
-            // (예: 'entry-content' → 생성 CSS '.entry-content a'). 버튼 클래스는 구조 유지.
+            // 일반 링크·버튼 링크 모두 다른 본문 태그와 동일하게 본문 베이스를 자동 입력.
+            // - 일반 링크: '{본문베이스}' (예: 'entry-content' → CSS '.entry-content a')
+            // - 버튼 링크: '{본문베이스} button-link' (예: 'entry-content button-link'
+            //   → CSS '.entry-content .button-link a'). 'button-link'는 래퍼 구조 클래스.
             const linkStyles = this.placeholders.link_styles || {};
             this.linkStyles = {
                 default_class: linkStyles.default_class || base,
-                button_class: linkStyles.button_class || 'button-link'
+                button_class: linkStyles.button_class || `${base} button-link`
             };
         },
 
@@ -412,6 +414,7 @@ function replaceTabApp() {
             const base = this.contentBaseClass();
             this.cssClassRows = this.cssClassRows.map(row => ({ ...row, className: base }));
             this.linkStyles.default_class = base;
+            this.linkStyles.button_class = `${base} button-link`;
             this.syncFromRows();
             if (typeof showSuccessMessage === 'function') {
                 showSuccessMessage('기본값으로 초기화되었습니다. 저장을 눌러 반영하세요.');
