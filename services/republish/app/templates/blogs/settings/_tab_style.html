@@ -60,6 +60,10 @@
                     class="px-3 py-1.5 text-xs font-medium border rounded hover:bg-gray-50">
                 CSS 코드
             </button>
+            <button @click="openImportCssModal()"
+                    class="px-3 py-1.5 text-xs font-medium text-primary bg-white border border-primary/40 rounded hover:bg-primary/5">
+                CSS 붙여넣어 추출
+            </button>
             <button @click="resetToDefault()"
                     class="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50">
                 초기화
@@ -582,6 +586,49 @@
         </div>
         <div class="bg-gray-900 p-4 max-h-60 overflow-auto">
             <pre class="text-sm text-green-400 font-mono whitespace-pre-wrap" x-text="cssWithStyleTag()"></pre>
+        </div>
+    </div>
+
+    <!-- 외부 CSS 붙여넣어 추출 모달 -->
+    <div x-show="importCssModal" x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+         @click.self="importCssModal = false">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-lg p-5 space-y-4">
+            <div class="flex items-center justify-between">
+                <h3 class="text-sm font-semibold text-gray-900">외부 CSS 붙여넣어 추출</h3>
+                <button @click="importCssModal = false" class="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+
+            <p class="text-xs text-gray-500">
+                벤치마킹할 블로그의 CSS를 붙여넣으면 지원 태그(h1~h5·p·목록·표·인용·링크)의
+                지원 속성(글꼴·색·여백·테두리 등)만 추출합니다. <strong>시작점</strong>이므로
+                미리보기로 확인·보정 후 <strong>저장</strong>해야 반영됩니다.
+            </p>
+
+            <textarea x-model="importCssText" rows="10" spellcheck="false"
+                      placeholder="여기에 CSS를 붙여넣으세요&#10;예) .entry-content h1 { font-size: 28px; color: #222; }"
+                      class="w-full px-3 py-2 text-xs font-mono border border-gray-300 rounded focus:ring-1 focus:ring-primary"></textarea>
+
+            <!-- 추출 결과 요약 -->
+            <template x-if="importCssReport">
+                <div class="p-3 bg-blue-50 border border-blue-100 rounded text-xs text-blue-700 space-y-1">
+                    <p>가져온 선택자: <strong x-text="importCssReport.matchedSelectors.length"></strong>개
+                        <span class="text-blue-500" x-text="importCssReport.matchedSelectors.length ? '(' + importCssReport.matchedSelectors.join(', ') + ')' : ''"></span>
+                    </p>
+                    <p>무시한 규칙: <strong x-text="importCssReport.ignoredRules"></strong>개 (지원하지 않는 선택자/속성)</p>
+                </div>
+            </template>
+
+            <div class="flex justify-end gap-2 pt-1">
+                <button @click="importCssModal = false"
+                        class="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded hover:bg-gray-200">
+                    닫기
+                </button>
+                <button @click="extractAndApplyCss()"
+                        class="px-3 py-1.5 text-xs font-medium text-white bg-primary rounded hover:opacity-90">
+                    추출해서 적용
+                </button>
+            </div>
         </div>
     </div>
 
