@@ -49,6 +49,18 @@ function replaceTabApp() {
             button_class: 'button-link'
         },
 
+        // 다른 블로그에서 치환값 가져오기(선택 복사)
+        importModal: false,
+        importBlogs: [],        // 관리 중 블로그 목록(현재 블로그 제외)
+        importSourceId: '',     // 선택한 소스 블로그 id
+        importLoading: false,
+        importParts: {          // 복사할 항목 (텍스트/HTML태그는 블로그별로 달라 기본 OFF)
+            css_classes: true,
+            link_styles: true,
+            text_replace: false,
+            html_tags: false
+        },
+
         // 미리보기
         previewHtml: '',
         sampleMarkdown: `# 제목입니다
@@ -418,6 +430,82 @@ function replaceTabApp() {
             this.syncFromRows();
             if (typeof showSuccessMessage === 'function') {
                 showSuccessMessage('기본값으로 초기화되었습니다. 저장을 눌러 반영하세요.');
+            }
+        },
+
+        /**
+         * '다른 블로그에서 가져오기' 모달 열기 + 블로그 목록 로드
+         */
+        async openImportModal() {
+            this.importModal = true;
+            this.importSourceId = '';
+            await this.loadImportBlogs();
+        },
+
+        /**
+         * 관리 중인 블로그 목록 로드(현재 블로그 제외).
+         */
+        async loadImportBlogs() {
+            try {
+                const res = await fetch('/api/v1/blogs', { credentials: 'include' });
+                if (res.ok) {
+                    const data = await res.json();
+                    this.importBlogs = (data.blogs || []).filter(
+                        b => String(b.id) !== String(this.blogId)
+                    );
+                }
+            } catch (error) {
+                console.error('블로그 목록 로드 실패:', error);
+            }
+        },
+
+        /**
+         * 선택한 소스 블로그의 치환자 설정을 체크된 항목만 현재 블로그에 적용.
+         * (편집 상태만 갱신 — 저장해야 서버 반영)
+         */
+        async importFromBlog() {
+            if (!this.importSourceId) {
+                if (typeof showErrorMessage === 'function') {
+                    showErrorMessage('가져올 블로그를 선택하세요.');
+                }
+                return;
+            }
+            this.importLoading = true;
+            try {
+                const res = await fetch(
+                    `/api/v1/blogs/${this.importSourceId}/settings/placeholders`,
+                    { credentials: 'include' }
+                );
+                if (!res.ok) throw new Error('조회 실패');
+                const data = await res.json();
+                const src = data.placeholders || {};
+
+                // 체크된 항목만 교체
+                if (this.importParts.css_classes && src.css_classes) {
+                    this.placeholders.css_classes = src.css_classes;
+                }
+                if (this.importParts.link_styles && src.link_styles) {
+                    this.placeholders.link_styles = src.link_styles;
+                }
+                if (this.importParts.text_replace && src.text_replace) {
+                    this.placeholders.text_replace = src.text_replace;
+                }
+                if (this.importParts.html_tags && src.html_tags) {
+                    this.placeholders.html_tags = src.html_tags;
+                }
+
+                this.syncToRows();
+                this.importModal = false;
+                if (typeof showSuccessMessage === 'function') {
+                    showSuccessMessage('선택 항목을 가져왔습니다. 저장을 눌러 반영하세요.');
+                }
+            } catch (error) {
+                console.error('가져오기 실패:', error);
+                if (typeof showErrorMessage === 'function') {
+                    showErrorMessage('가져오기에 실패했습니다.');
+                }
+            } finally {
+                this.importLoading = false;
             }
         },
 
