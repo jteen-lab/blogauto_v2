@@ -1,0 +1,270 @@
+/**
+ * 스타일 탭 - 외부 CSS 붙여넣기 추출 (벤치마킹)
+ * File: app/static/js/blogs/style-tab-css-import.js
+ *
+ * 외부 블로그 CSS를 파싱해 우리 스타일 모델(선택자·속성)로 추출한다.
+ * - 순수 함수: extractStyleConfigFromCss (파싱/매핑/병합)
+ * - 믹스인: styleTabCssImportMixin (Alpine 컴포넌트에 합성할 상태/메서드)
+ * 추출은 '시작점'이며, 미리보기·보정 후 저장해야 반영된다.
+ */
+
+// 우리 모델이 지원하는 태그 선택자 (a/a:hover는 별도 처리)
+const CSS_IMPORT_TAGS = ['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'ul', 'ol',
+    'li', 'table', 'th', 'td', 'blockquote'];
+
+// 우리 속성 → 조회할 CSS 롱핸드 (CSSOM이 단축속성을 롱핸드로 확장)
+const CSS_IMPORT_PROP_MAP = {
+    'font-size': 'font-size',
+    'font-weight': 'font-weight',
+    'font-style': 'font-style',
+    'font-family': 'font-family',
+    'line-height': 'line-height',
+    'color': 'color',
+    'background-color': 'background-color',
+    'text-align': 'text-align',
+    'text-decoration': 'text-decoration-line',
+    'text-transform': 'text-transform',
+    'margin-top': 'margin-top',
+    'margin-right': 'margin-right',
+    'margin-bottom': 'margin-bottom',
+    'margin-left': 'margin-left',
+    'padding-top': 'padding-top',
+    'padding-right': 'padding-right',
+    'padding-bottom': 'padding-bottom',
+    'padding-left': 'padding-left',
+    'border-top-width': 'border-top-width',
+    'border-right-width': 'border-right-width',
+    'border-bottom-width': 'border-bottom-width',
+    'border-left-width': 'border-left-width',
+    'border-style': 'border-top-style',
+    'border-color': 'border-top-color',
+    'border-radius': 'border-radius',
+    'list-style': 'list-style-type'
+};
+
+// px 단위로 정규화(숫자화)할 속성
+const CSS_IMPORT_PX_PROPS = [
+    'font-size', 'border-radius',
+    'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width',
+    'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+    'padding-top', 'padding-right', 'padding-bottom', 'padding-left'
+];
+
+/**
+ * 외부 CSS 텍스트를 파싱해 style rule 목록 반환.
+ * media="not all"로 붙여 페이지에 적용하지 않고 파싱만 한다.
+ * @param {string} cssText - CSS 문자열
+ * @returns {CSSStyleRule[]} 스타일 규칙 목록
+ */
+function cssImportParseRules(cssText) {
+    const style = document.createElement('style');
+    style.media = 'not all';           // 파싱만, 페이지 미적용
+    style.textContent = cssText;
+    document.head.appendChild(style);
+    const out = [];
+    try {
+        const rules = (style.sheet && style.sheet.cssRules) || [];
+        for (const rule of Array.from(rules)) {
+            // CSSStyleRule = type 1
+            if (rule.type === 1 && rule.selectorText) out.push(rule);
+        }
+    } catch (e) {
+        // 파싱 실패는 빈 배열 (호출부에서 처리)
+    } finally {
+        document.head.removeChild(style);
+    }
+    return out;
+}
+
+/**
+ * 개별 선택자를 우리 모델 선택자로 매핑.
+ * rightmost 심플 선택자에서 태그·hover를 판별한다.
+ * @param {string} sel - 단일 CSS 선택자
+ * @returns {string|null} 'h1' | 'a' | 'a:hover' | null(미지원)
+ */
+function cssImportResolveSelector(sel) {
+    const last = sel.trim().split(/[\s>+~]+/).filter(Boolean).pop() || '';
+    if (!last) return null;
+    const hover = /:hover\b/i.test(last);
+    const tagMatch = last.match(/^([a-zA-Z][a-zA-Z0-9]*)/);
+    const tag = tagMatch ? tagMatch[1].toLowerCase() : '';
+
+    if (CSS_IMPORT_TAGS.includes(tag)) {
+        return hover ? null : tag;      // 이 태그들의 hover는 우리 모델 미지원
+    }
+    if (tag === 'a') {
+        if (/button/i.test(sel)) return null;   // 버튼 링크는 모호 → 제외
+        return hover ? 'a:hover' : 'a';
+    }
+    return null;
+}
+
+/**
+ * 선택자 명시도 근사값 (id*10000 + class/attr/pseudo*100 + tag).
+ * @param {string} sel - 단일 CSS 선택자
+ * @returns {number} 명시도 점수
+ */
+function cssImportSpecificity(sel) {
+    const ids = (sel.match(/#[\w-]+/g) || []).length;
+    const classes = (sel.match(/\.[\w-]+|\[[^\]]+\]|:(?!:)[\w-]+/g) || []).length;
+    const tags = (sel.replace(/[#.][\w-]+|\[[^\]]+\]|::?[\w-]+/g, ' ')
+        .match(/[a-zA-Z][\w-]*/g) || []).length;
+    return ids * 10000 + classes * 100 + tags;
+}
+
+/**
+ * 값 정규화. px 속성은 'Npx' → 'N'(숫자), 그 외 단위/값은 원값 유지.
+ * @param {string} prop - 우리 속성명
+ * @param {string} value - 원본 값
+ * @returns {string|null} 정규화 값 (빈값이면 null)
+ */
+function cssImportNormalizeValue(prop, value) {
+    if (value === null || value === undefined) return null;
+    const v = String(value).trim();
+    if (!v || v === 'initial' || v === 'inherit' || v === 'unset' || v === 'normal' && prop === 'font-family') {
+        return null;
+    }
+    if (CSS_IMPORT_PX_PROPS.includes(prop)) {
+        const m = v.match(/^(-?\d*\.?\d+)px$/);
+        if (m) return m[1];             // 숫자만
+        if (/^0$/.test(v)) return '0';
+        return v;                        // em/rem/%/calc 등은 원값 유지
+    }
+    return v;
+}
+
+/**
+ * 한 규칙의 style에서 지원 속성만 추출.
+ * @param {CSSStyleDeclaration} decl - rule.style
+ * @returns {Object} { 우리속성: 값 }
+ */
+function cssImportExtractProps(decl) {
+    const out = {};
+    for (const ourProp in CSS_IMPORT_PROP_MAP) {
+        const cssProp = CSS_IMPORT_PROP_MAP[ourProp];
+        let raw = '';
+        try {
+            raw = decl.getPropertyValue(cssProp);
+        } catch (e) { /* 무시 */ }
+        const val = cssImportNormalizeValue(ourProp, raw);
+        if (val !== null && val !== '') out[ourProp] = val;
+    }
+    return out;
+}
+
+/**
+ * 외부 CSS 텍스트 → styleConfig 초안 + 리포트.
+ * @param {string} cssText - CSS 문자열
+ * @returns {{styleConfig: Object, report: Object}}
+ */
+function extractStyleConfigFromCss(cssText) {
+    const rules = cssImportParseRules(cssText);
+    const bySelector = {};   // ourSelector -> [{props, spec, order}]
+    let ignoredRules = 0;
+
+    rules.forEach((rule, order) => {
+        const props = cssImportExtractProps(rule.style);
+        const hasProps = Object.keys(props).length > 0;
+        const parts = rule.selectorText.split(',').map(s => s.trim()).filter(Boolean);
+        let matchedAny = false;
+
+        parts.forEach(sel => {
+            const target = cssImportResolveSelector(sel);
+            if (!target) return;
+            matchedAny = true;
+            if (!hasProps) return;
+            (bySelector[target] = bySelector[target] || []).push({
+                props, spec: cssImportSpecificity(sel), order
+            });
+        });
+
+        if (!matchedAny) ignoredRules++;
+    });
+
+    // 선택자별 병합 (명시도 → 소스순서 오름차순, 좌→우로 덮어씀)
+    const styleConfig = {};
+    Object.keys(bySelector).forEach(target => {
+        const list = bySelector[target].slice().sort(
+            (a, b) => (a.spec - b.spec) || (a.order - b.order)
+        );
+        const merged = {};
+        list.forEach(item => Object.assign(merged, item.props));
+        styleConfig[target] = merged;
+    });
+
+    return {
+        styleConfig,
+        report: {
+            totalRules: rules.length,
+            matchedSelectors: Object.keys(styleConfig),
+            ignoredRules
+        }
+    };
+}
+
+/**
+ * 스타일 탭 CSS 추출 믹스인 (styleTabApp에 Object.assign으로 합성).
+ * @returns {Object} 상태 + 메서드
+ */
+function styleTabCssImportMixin() {
+    return {
+        // 상태
+        importCssModal: false,
+        importCssText: '',
+        importCssReport: null,   // { matchedSelectors, ignoredRules }
+
+        /** 모달 열기 */
+        openImportCssModal() {
+            this.importCssText = '';
+            this.importCssReport = null;
+            this.importCssModal = true;
+        },
+
+        /**
+         * 붙여넣은 CSS 추출 → styleConfig에 병합 → 미리보기 갱신.
+         * (편집 상태만 갱신, 저장해야 반영)
+         */
+        extractAndApplyCss() {
+            const text = (this.importCssText || '').trim();
+            if (!text) {
+                if (typeof showErrorMessage === 'function') showErrorMessage('CSS를 붙여넣어 주세요.');
+                return;
+            }
+            let result;
+            try {
+                result = extractStyleConfigFromCss(text);
+            } catch (e) {
+                console.error('CSS 추출 실패:', e);
+                if (typeof showErrorMessage === 'function') showErrorMessage('CSS를 해석하지 못했습니다.');
+                return;
+            }
+            const extracted = result.styleConfig || {};
+            const matched = Object.keys(extracted);
+            if (matched.length === 0) {
+                this.importCssReport = { matchedSelectors: [], ignoredRules: result.report.ignoredRules };
+                if (typeof showErrorMessage === 'function') {
+                    showErrorMessage('가져올 수 있는 스타일을 찾지 못했습니다.');
+                }
+                return;
+            }
+
+            // 선택자별 병합(추출값이 기존값을 덮어씀, 나머지는 유지)
+            matched.forEach(sel => {
+                this.styleConfig[sel] = Object.assign({}, this.styleConfig[sel] || {}, extracted[sel]);
+            });
+
+            this.importCssReport = {
+                matchedSelectors: matched,
+                ignoredRules: result.report.ignoredRules
+            };
+
+            // 편집기/미리보기 갱신
+            if (typeof this.loadCurrentSelectorStyles === 'function') this.loadCurrentSelectorStyles();
+            if (typeof this.updatePreview === 'function') this.updatePreview();
+
+            if (typeof showSuccessMessage === 'function') {
+                showSuccessMessage(`${matched.length}개 선택자 스타일을 가져왔습니다. 저장을 눌러 반영하세요.`);
+            }
+        }
+    };
+}

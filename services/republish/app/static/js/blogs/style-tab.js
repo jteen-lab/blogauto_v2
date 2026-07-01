@@ -502,5 +502,9 @@ function styleTabApp() {
     const editorMixin = typeof styleTabEditorMixin === 'function' ? styleTabEditorMixin() : {};
     Object.assign(base, editorMixin);
 
+    // 외부 CSS 붙여넣기 추출 믹스인 합성
+    const cssImportMixin = typeof styleTabCssImportMixin === 'function' ? styleTabCssImportMixin() : {};
+    Object.assign(base, cssImportMixin);
+
     return base;
 }
