@@ -399,6 +399,26 @@ function replaceTabApp() {
         },
 
         /**
+         * CSS 클래스 치환값 초기화
+         *
+         * 이미 저장·편집한 CSS 클래스명(프리셋 추가분 포함)을 모두 지우고
+         * 플랫폼 본문 스코프 기본값('{본문베이스}')으로 되돌린다. 일반 링크 기본
+         * 클래스도 함께 초기화한다. 저장을 눌러야 서버에 반영된다.
+         */
+        resetCssClasses() {
+            if (!confirm('CSS 클래스 치환값을 플랫폼 기본값으로 초기화할까요?\n(저장을 눌러야 반영됩니다)')) {
+                return;
+            }
+            const base = this.contentBaseClass();
+            this.cssClassRows = this.cssClassRows.map(row => ({ ...row, className: base }));
+            this.linkStyles.default_class = base;
+            this.syncFromRows();
+            if (typeof showSuccessMessage === 'function') {
+                showSuccessMessage('기본값으로 초기화되었습니다. 저장을 눌러 반영하세요.');
+            }
+        },
+
+        /**
          * 저장
          */
         async save() {
