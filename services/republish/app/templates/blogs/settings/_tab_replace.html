@@ -38,6 +38,10 @@
                 </div>
             </div>
 
+            <button @click="openImportModal()"
+                    class="px-3 py-1.5 text-xs font-medium text-primary bg-white border border-primary/40 rounded hover:bg-primary/5">
+                다른 블로그에서 가져오기
+            </button>
             <button @click="resetCssClasses()"
                     class="px-3 py-1.5 text-xs font-medium text-red-600 bg-white border border-red-200 rounded hover:bg-red-50">
                 CSS클래스 초기화
@@ -411,6 +415,62 @@
                         닫기
                     </button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 다른 블로그에서 가져오기 모달 -->
+    <div x-show="importModal" x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+         @click.self="importModal = false">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-5 space-y-4">
+            <div class="flex items-center justify-between">
+                <h3 class="text-sm font-semibold text-gray-900">다른 블로그에서 치환값 가져오기</h3>
+                <button @click="importModal = false" class="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">가져올 블로그</label>
+                <select x-model="importSourceId"
+                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-primary">
+                    <option value="">블로그 선택...</option>
+                    <template x-for="b in importBlogs" :key="b.id">
+                        <option :value="b.id"
+                                x-text="b.name + ' (' + (b.platform === 'wordpress' ? '워드프레스' : b.platform === 'blogger' ? '블로거' : b.platform) + ')'"></option>
+                    </template>
+                </select>
+                <p x-show="importBlogs.length === 0" class="text-xs text-gray-400 mt-1">가져올 다른 블로그가 없습니다.</p>
+            </div>
+
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-2">가져올 항목</label>
+                <div class="space-y-1.5">
+                    <label class="flex items-center gap-2 text-sm text-gray-700">
+                        <input type="checkbox" x-model="importParts.css_classes" class="rounded"> CSS클래스 치환
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-gray-700">
+                        <input type="checkbox" x-model="importParts.link_styles" class="rounded"> 링크 스타일(일반/버튼)
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-gray-700">
+                        <input type="checkbox" x-model="importParts.text_replace" class="rounded"> 텍스트 치환
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-gray-700">
+                        <input type="checkbox" x-model="importParts.html_tags" class="rounded"> HTML 태그 치환
+                    </label>
+                </div>
+                <p class="text-xs text-gray-400 mt-2">가져오면 편집 상태만 바뀝니다. <strong>저장</strong>을 눌러야 반영됩니다.</p>
+            </div>
+
+            <div class="flex justify-end gap-2 pt-1">
+                <button @click="importModal = false"
+                        class="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded hover:bg-gray-200">
+                    취소
+                </button>
+                <button @click="importFromBlog()" :disabled="importLoading || !importSourceId"
+                        class="px-3 py-1.5 text-xs font-medium text-white bg-primary rounded hover:opacity-90 disabled:opacity-50">
+                    <span x-show="!importLoading">가져오기</span>
+                    <span x-show="importLoading">가져오는 중...</span>
+                </button>
             </div>
         </div>
     </div>
