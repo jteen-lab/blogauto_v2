@@ -223,13 +223,69 @@ function styleTabCssImportMixin() {
         // 상태
         importCssModal: false,
         importCssText: '',
-        importCssReport: null,   // { matchedSelectors, ignoredRules }
+        importCssUrl: '',
+        importCssLoading: false,
+        importCssReport: null,   // { matchedSelectors, ignoredRules, source }
 
         /** 모달 열기 */
         openImportCssModal() {
             this.importCssText = '';
+            this.importCssUrl = '';
             this.importCssReport = null;
             this.importCssModal = true;
+        },
+
+        /**
+         * URL 자동 추출: 서버가 헤드리스로 렌더해 computed 스타일을 추출 → styleConfig 병합.
+         * (편집 상태만 갱신, 저장해야 반영)
+         */
+        async extractFromUrl() {
+            const url = (this.importCssUrl || '').trim();
+            if (!url) {
+                if (typeof showErrorMessage === 'function') showErrorMessage('URL을 입력하세요.');
+                return;
+            }
+            if (!this.blogId) {
+                if (typeof showErrorMessage === 'function') showErrorMessage('블로그 ID를 찾을 수 없습니다.');
+                return;
+            }
+            this.importCssLoading = true;
+            try {
+                const res = await fetch(`/api/v1/blogs/${this.blogId}/settings/style/extract-url`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ url })
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.detail || '추출 실패');
+                }
+                const data = await res.json();
+                const extracted = data.style_config || {};
+                const matched = Object.keys(extracted);
+                if (matched.length === 0) {
+                    this.importCssReport = { matchedSelectors: [], ignoredRules: 0, source: 'url' };
+                    if (typeof showErrorMessage === 'function') showErrorMessage('본문에서 스타일을 찾지 못했습니다.');
+                    return;
+                }
+                matched.forEach(sel => {
+                    this.styleConfig[sel] = Object.assign({}, this.styleConfig[sel] || {}, extracted[sel]);
+                });
+                this.importCssReport = { matchedSelectors: matched, ignoredRules: 0, source: 'url' };
+                if (typeof this.loadCurrentSelectorStyles === 'function') this.loadCurrentSelectorStyles();
+                if (typeof this.updatePreview === 'function') this.updatePreview();
+                if (typeof showSuccessMessage === 'function') {
+                    showSuccessMessage(`${matched.length}개 선택자 스타일을 URL에서 가져왔습니다. 저장을 눌러 반영하세요.`);
+                }
+            } catch (error) {
+                console.error('URL 추출 실패:', error);
+                if (typeof showErrorMessage === 'function') {
+                    showErrorMessage('URL 추출에 실패했습니다. (접근 불가 / 차단 / 시간초과)');
+                }
+            } finally {
+                this.importCssLoading = false;
+            }
         },
 
         /**

@@ -600,10 +600,29 @@
             </div>
 
             <p class="text-xs text-gray-500">
-                벤치마킹할 블로그의 CSS를 붙여넣으면 지원 태그(h1~h5·p·목록·표·인용·링크)의
-                지원 속성(글꼴·색·여백·테두리 등)만 추출합니다. <strong>시작점</strong>이므로
+                벤치마킹할 블로그의 스타일을 <strong>URL 자동 추출</strong>(권장) 또는
+                <strong>CSS 붙여넣기</strong>로 가져옵니다. 지원 태그(h1~h5·p·목록·표·인용·링크)의
+                지원 속성(글꼴·색·여백·테두리 등)만 추출하며, <strong>시작점</strong>이므로
                 미리보기로 확인·보정 후 <strong>저장</strong>해야 반영됩니다.
             </p>
+
+            <!-- URL 자동 추출 (권장) -->
+            <div class="p-3 bg-primary/5 border border-primary/20 rounded space-y-2">
+                <label class="block text-xs font-medium text-gray-600">URL 자동 추출 <span class="text-primary">(권장 · 정확)</span></label>
+                <div class="flex gap-2">
+                    <input type="url" x-model="importCssUrl" spellcheck="false"
+                           placeholder="https://예시블로그.com/글-주소"
+                           class="flex-1 px-3 py-2 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-primary">
+                    <button @click="extractFromUrl()" :disabled="importCssLoading || !importCssUrl"
+                            class="px-3 py-2 text-xs font-medium text-white bg-primary rounded hover:opacity-90 disabled:opacity-50 whitespace-nowrap">
+                        <span x-show="!importCssLoading">URL에서 추출</span>
+                        <span x-show="importCssLoading">추출 중...</span>
+                    </button>
+                </div>
+                <p class="text-[11px] text-gray-400">헤드리스 브라우저로 렌더해 최종 계산된 스타일을 읽습니다(반응형·변수 반영).</p>
+            </div>
+
+            <div class="text-center text-[11px] text-gray-400">또는 CSS 직접 붙여넣기</div>
 
             <textarea x-model="importCssText" rows="10" spellcheck="false"
                       placeholder="여기에 CSS를 붙여넣으세요&#10;예) .entry-content h1 { font-size: 28px; color: #222; }"
