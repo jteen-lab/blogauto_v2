@@ -19,6 +19,12 @@ RUN apt-get update && apt-get install -y \
 COPY services/republish/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Playwright Chromium 설치 (스타일 URL 자동 추출용).
+# - PLAYWRIGHT_BROWSERS_PATH: 공용 경로에 설치해 비특권 사용자(appuser)도 접근 가능
+# - --with-deps: 브라우저 실행에 필요한 시스템 라이브러리 설치(root 권한 필요)
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN playwright install --with-deps chromium
+
 # 애플리케이션 코드 복사 (build context = 레포 루트)
 COPY services/republish/app/ app/
 COPY services/republish/alembic/ alembic/
