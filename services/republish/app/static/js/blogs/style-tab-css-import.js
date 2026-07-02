@@ -53,8 +53,10 @@ const CSS_IMPORT_PX_PROPS = [
 /**
  * 외부 CSS 텍스트를 파싱해 style rule 목록 반환.
  * media="not all"로 붙여 페이지에 적용하지 않고 파싱만 한다.
+ * @media / @supports 등 그룹 규칙 내부도 재귀 수집한다(반응형에 들어간 규칙 누락 방지).
+ * 각 규칙에 isMedia 플래그(그룹 규칙 내부 여부)를 부여한다.
  * @param {string} cssText - CSS 문자열
- * @returns {CSSStyleRule[]} 스타일 규칙 목록
+ * @returns {Array<{rule: CSSStyleRule, isMedia: boolean}>} 스타일 규칙 목록
  */
 function cssImportParseRules(cssText) {
     const style = document.createElement('style');
@@ -62,12 +64,18 @@ function cssImportParseRules(cssText) {
     style.textContent = cssText;
     document.head.appendChild(style);
     const out = [];
-    try {
-        const rules = (style.sheet && style.sheet.cssRules) || [];
-        for (const rule of Array.from(rules)) {
-            // CSSStyleRule = type 1
-            if (rule.type === 1 && rule.selectorText) out.push(rule);
+    const collect = (ruleList, inMedia) => {
+        for (const rule of Array.from(ruleList || [])) {
+            if (rule.type === 1 && rule.selectorText) {
+                out.push({ rule, isMedia: inMedia });
+            } else if (rule.cssRules) {
+                // CSSMediaRule(4)/CSSSupportsRule(12) 등 그룹 규칙 → 재귀
+                collect(rule.cssRules, true);
+            }
         }
+    };
+    try {
+        collect(style.sheet && style.sheet.cssRules, false);
     } catch (e) {
         // 파싱 실패는 빈 배열 (호출부에서 처리)
     } finally {
@@ -159,10 +167,11 @@ function cssImportExtractProps(decl) {
  */
 function extractStyleConfigFromCss(cssText) {
     const rules = cssImportParseRules(cssText);
-    const bySelector = {};   // ourSelector -> [{props, spec, order}]
+    const bySelector = {};   // ourSelector -> [{props, spec, order, isMedia}]
     let ignoredRules = 0;
 
-    rules.forEach((rule, order) => {
+    rules.forEach((entry, order) => {
+        const rule = entry.rule;
         const props = cssImportExtractProps(rule.style);
         const hasProps = Object.keys(props).length > 0;
         const parts = rule.selectorText.split(',').map(s => s.trim()).filter(Boolean);
@@ -174,19 +183,22 @@ function extractStyleConfigFromCss(cssText) {
             matchedAny = true;
             if (!hasProps) return;
             (bySelector[target] = bySelector[target] || []).push({
-                props, spec: cssImportSpecificity(sel), order
+                props, spec: cssImportSpecificity(sel), order, isMedia: entry.isMedia
             });
         });
 
         if (!matchedAny) ignoredRules++;
     });
 
-    // 선택자별 병합 (명시도 → 소스순서 오름차순, 좌→우로 덮어씀)
+    // 선택자별 병합.
+    // - base(비-@media) 규칙이 있으면 그것만 사용(데스크톱 기준값 우선),
+    //   없으면 @media 규칙으로 폴백(최소한 태그가 누락되지 않게).
+    // - 그 뒤 명시도 → 소스순서 오름차순으로 정렬해 좌→우로 덮어씀.
     const styleConfig = {};
     Object.keys(bySelector).forEach(target => {
-        const list = bySelector[target].slice().sort(
-            (a, b) => (a.spec - b.spec) || (a.order - b.order)
-        );
+        let list = bySelector[target];
+        if (list.some(x => !x.isMedia)) list = list.filter(x => !x.isMedia);
+        list = list.slice().sort((a, b) => (a.spec - b.spec) || (a.order - b.order));
         const merged = {};
         list.forEach(item => Object.assign(merged, item.props));
         styleConfig[target] = merged;
