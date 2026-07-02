@@ -49,6 +49,15 @@ from ..services.blog_settings_service import (
     MEDIA_ROOT,
 )
 
+from pydantic import BaseModel, Field
+
+
+class ExtractStyleUrlRequest(BaseModel):
+    """URL 스타일 자동 추출 요청 스키마."""
+
+    url: str = Field(..., description="벤치마킹할 블로그 글 URL (http/https)")
+
+
 logger = get_logger("blog_settings_router", "blog_settings.log")
 
 router = APIRouter(prefix="/blogs/{blog_id}/settings", tags=["블로그 설정"])
@@ -604,6 +613,34 @@ async def save_style_settings(
         style_config=blog.style_config or {},
         generated_css=generate_css(blog.style_config or {})
     )
+
+
+@router.post(
+    "/style/extract-url",
+    summary="URL에서 스타일 자동 추출",
+    description="헤드리스 브라우저로 URL을 렌더해 본문 요소의 computed 스타일을 추출합니다"
+)
+async def extract_style_from_url_endpoint(
+    blog_id: int,
+    request: ExtractStyleUrlRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session)
+) -> dict:
+    """URL에서 스타일 자동 추출 (편집 상태 갱신용, 저장은 별도)."""
+    # 권한 확인만 수행 (저장하지 않음)
+    await get_blog_or_404(blog_id, current_user, db)
+
+    from ..services.style.style_url_extractor import extract_style_from_url
+
+    try:
+        result = await extract_style_from_url(request.url)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+
+    logger.info(f"URL 스타일 추출 | blog_id={blog_id} | 선택자={result['report']['matched_selectors']}")
+    return result
 
 
 # =============================================================================
