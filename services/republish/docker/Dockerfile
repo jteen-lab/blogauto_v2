@@ -8,22 +8,28 @@ WORKDIR /app
 
 # 시스템 패키지 업데이트 및 필요한 패키지 설치
 # default-jre-headless: KoNLPy(Okt 형태소 분석)에서 JVM 필요
+# lib*/fonts-liberation: Playwright Chromium 헤드리스 실행에 필요한 런타임 라이브러리
+#   (Debian slim은 Playwright --with-deps가 Ubuntu 패키지명을 써 실패하므로 직접 설치)
 RUN apt-get update && apt-get install -y \
     gcc \
     libpq-dev \
     curl \
     default-jre-headless \
+    libnss3 libnspr4 libdbus-1-3 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
+    libdrm2 libxcb1 libxkbcommon0 libatspi2.0-0 libx11-6 libxcomposite1 \
+    libxdamage1 libxext6 libxfixes3 libxrandr2 libgbm1 libpango-1.0-0 \
+    libcairo2 libasound2 libglib2.0-0 libxshmfence1 fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 
 # requirements.txt 복사 및 종속성 설치
 COPY services/republish/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Playwright Chromium 설치 (스타일 URL 자동 추출용).
-# - PLAYWRIGHT_BROWSERS_PATH: 공용 경로에 설치해 비특권 사용자(appuser)도 접근 가능
-# - --with-deps: 브라우저 실행에 필요한 시스템 라이브러리 설치(root 권한 필요)
+# Playwright Chromium 브라우저 바이너리 설치 (런타임 라이브러리는 위 apt 단계에서 설치됨).
+# --with-deps 대신 브라우저만 받아 Debian 미지원 OS 감지 오류를 회피.
+# PLAYWRIGHT_BROWSERS_PATH: 공용 경로에 설치해 비특권 사용자(appuser)도 접근 가능.
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-RUN playwright install --with-deps chromium
+RUN playwright install chromium
 
 # 애플리케이션 코드 복사 (build context = 레포 루트)
 COPY services/republish/app/ app/
