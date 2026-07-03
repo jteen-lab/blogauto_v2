@@ -36,10 +36,11 @@ const CSS_IMPORT_PROP_MAP = {
     'border-right-width': 'border-right-width',
     'border-bottom-width': 'border-bottom-width',
     'border-left-width': 'border-left-width',
-    'border-style': 'border-top-style',
-    'border-color': 'border-top-color',
     'border-radius': 'border-radius',
-    'list-style': 'list-style-type'
+    'list-style': 'list-style-type',
+    'width': 'width',
+    'border-collapse': 'border-collapse'
+    // border-style / border-color 는 사이드 통합 처리(아래 _extractProps 특수 로직)
 };
 
 // px 단위로 정규화(숫자화)할 속성
@@ -59,9 +60,14 @@ const CSS_IMPORT_PX_PROPS = [
  * @returns {Array<{rule: CSSStyleRule, isMedia: boolean}>} 스타일 규칙 목록
  */
 function cssImportParseRules(cssText) {
+    // 복사본에 <style>...</style> 래퍼나 HTML 주석이 섞여 있으면 CSS 파서가
+    // 첫 규칙을 무효 선택자로 오염시켜 삭제한다. 파싱 전에 제거.
+    const cleaned = String(cssText || '')
+        .replace(/<\/?style[^>]*>/gi, ' ')
+        .replace(/<!--/g, ' ').replace(/-->/g, ' ');
     const style = document.createElement('style');
     style.media = 'not all';           // 파싱만, 페이지 미적용
-    style.textContent = cssText;
+    style.textContent = cleaned;
     document.head.appendChild(style);
     const out = [];
     const collect = (ruleList, inMedia) => {
@@ -101,7 +107,8 @@ function cssImportResolveSelector(sel) {
         return hover ? null : tag;      // 이 태그들의 hover는 우리 모델 미지원
     }
     if (tag === 'a') {
-        if (/button/i.test(sel)) return null;   // 버튼 링크는 모호 → 제외
+        // 버튼 링크(.button-link a 등)는 a.button / a.button:hover 로 매핑
+        if (/button/i.test(sel)) return hover ? 'a.button:hover' : 'a.button';
         return hover ? 'a:hover' : 'a';
     }
     return null;
@@ -148,14 +155,24 @@ function cssImportNormalizeValue(prop, value) {
  */
 function cssImportExtractProps(decl) {
     const out = {};
+    const get = (p) => {
+        try { return decl.getPropertyValue(p); } catch (e) { return ''; }
+    };
+    // 1:1 매핑 속성
     for (const ourProp in CSS_IMPORT_PROP_MAP) {
-        const cssProp = CSS_IMPORT_PROP_MAP[ourProp];
-        let raw = '';
-        try {
-            raw = decl.getPropertyValue(cssProp);
-        } catch (e) { /* 무시 */ }
-        const val = cssImportNormalizeValue(ourProp, raw);
+        const val = cssImportNormalizeValue(ourProp, get(CSS_IMPORT_PROP_MAP[ourProp]));
         if (val !== null && val !== '') out[ourProp] = val;
+    }
+    // border-style/border-color: none이 아닌 첫 사이드에서 대표값 취득
+    // (테마의 좌측 액센트 border-left-* 등 사이드별 테두리도 반영)
+    for (const side of ['top', 'right', 'bottom', 'left']) {
+        const st = (get('border-' + side + '-style') || '').trim();
+        if (st && st.toLowerCase() !== 'none') {
+            out['border-style'] = st;
+            const col = cssImportNormalizeValue('border-color', get('border-' + side + '-color'));
+            if (col) out['border-color'] = col;
+            break;
+        }
     }
     return out;
 }
