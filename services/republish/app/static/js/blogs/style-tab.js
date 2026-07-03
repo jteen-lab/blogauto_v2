@@ -339,17 +339,51 @@ function styleTabApp() {
          * CSS 복사 (<style> 래핑 형태로 복사)
          */
         async copyCss() {
+            const text = this.cssWithStyleTag();
             try {
-                await navigator.clipboard.writeText(this.cssWithStyleTag());
+                // HTTPS/localhost 등 보안 컨텍스트에서만 navigator.clipboard 사용 가능.
+                // HTTP(비보안)에서는 undefined이므로 execCommand 폴백으로 처리.
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(text);
+                } else {
+                    this._fallbackCopy(text);
+                }
                 if (typeof showSuccessMessage === 'function') {
                     showSuccessMessage('CSS가 클립보드에 복사되었습니다.');
                 }
             } catch (error) {
-                console.error('복사 실패:', error);
-                if (typeof showErrorMessage === 'function') {
-                    showErrorMessage('복사에 실패했습니다.');
+                // clipboard API 실패 시에도 폴백 재시도
+                try {
+                    this._fallbackCopy(text);
+                    if (typeof showSuccessMessage === 'function') {
+                        showSuccessMessage('CSS가 클립보드에 복사되었습니다.');
+                    }
+                } catch (e) {
+                    console.error('복사 실패:', e);
+                    if (typeof showErrorMessage === 'function') {
+                        showErrorMessage('복사에 실패했습니다. CSS 코드를 직접 선택해 복사하세요.');
+                    }
                 }
             }
+        },
+
+        /**
+         * execCommand('copy') 기반 클립보드 폴백 (비보안 컨텍스트/HTTP용).
+         * @param {string} text - 복사할 텍스트
+         */
+        _fallbackCopy(text) {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.setAttribute('readonly', '');
+            ta.style.position = 'fixed';
+            ta.style.top = '-9999px';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            const ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            if (!ok) throw new Error('execCommand copy 실패');
         },
 
         /**
