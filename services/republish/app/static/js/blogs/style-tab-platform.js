@@ -49,6 +49,34 @@ function styleTabPlatformMixin() {
             return 'post-content';
         },
 
+        /**
+         * CSS 생성/미리보기에 쓸 '스코프 자동 적용' 치환자 설정 반환.
+         *
+         * 본문 스코프(entry-content/post-body)는 블로그 플랫폼이 정하는 값이므로,
+         * 치환자 저장 여부와 무관하게 스타일 탭이 자동 적용한다. 저장된 css_classes가
+         * 있으면 그대로 쓰고, 비어 있으면 플랫폼 본문 스코프('{base}')만 채운다.
+         * (스타일 '값'은 styleConfig에서 별도 관리되므로, 이 보강은 선택자 스코프에만 영향)
+         * @returns {Object} 스코프가 보강된 placeholderConfig 사본
+         */
+        effectivePlaceholderConfig() {
+            const base = this.contentBaseClass();
+            const TAGS = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'ul', 'ol',
+                'li', 'table', 'th', 'td', 'blockquote'];
+            const saved = (this.placeholderConfig && this.placeholderConfig.css_classes) || {};
+            const css = Object.assign({}, saved);
+            TAGS.forEach(tag => {
+                if (!css[tag] || !String(css[tag]).trim()) css[tag] = base;
+            });
+            const savedLink = (this.placeholderConfig && this.placeholderConfig.link_styles) || {};
+            const link = Object.assign({}, savedLink);
+            if (!link.default_class || !String(link.default_class).trim()) {
+                link.default_class = base;
+            }
+            if (!link.button_class || !String(link.button_class).trim()) {
+                link.button_class = `${base} button-link`;
+            }
+            return Object.assign({}, this.placeholderConfig, { css_classes: css, link_styles: link });
+        },
 
         /**
          * 부모 컴포넌트(selectedBlog)에서 platform 값 시도 취득
@@ -74,7 +102,7 @@ function styleTabPlatformMixin() {
                 this.generatedCss = generateCssFromConfig(
                     this.selectors,
                     this.styleConfig,
-                    this.placeholderConfig,
+                    this.effectivePlaceholderConfig(),
                     this.cssPrefix()
                 );
             } else {
@@ -130,7 +158,7 @@ function styleTabPlatformMixin() {
 
                 if (typeof applyClassesToPreviewHtml === 'function') {
                     // 저장된 치환자 설정으로만 미리보기 요소에 클래스 부여(미저장 값은 반영 안 함)
-                    previewContent = applyClassesToPreviewHtml(this.sampleContent, this.placeholderConfig);
+                    previewContent = applyClassesToPreviewHtml(this.sampleContent, this.effectivePlaceholderConfig());
                 }
 
                 let fullHtml;
