@@ -3179,13 +3179,19 @@ def _rate_limit_recovery_callback() -> None:
 
     async def _do_recovery():
         from ..services.ai_key_manager import AIKeyManager
-        async with db_manager.session() as db:
-            key_manager = AIKeyManager(db, user_id=1)
-            count = await key_manager.reset_rate_limited_keys()
-            if count > 0:
-                logger.info(
-                    f"[RATE_LIMIT_RECOVERY] {count}개 키 자동 복구 완료"
-                )
+        # ensure_future로 던져진 코루틴 내부 예외는 바깥 try/except가 못 잡아
+        # 조용히 삼켜지므로(과거 db_manager.session 오타가 이렇게 은폐됨),
+        # 코루틴 내부에서 직접 로깅한다.
+        try:
+            async with db_manager.get_session() as db:
+                key_manager = AIKeyManager(db, user_id=1)
+                count = await key_manager.reset_rate_limited_keys()
+                if count > 0:
+                    logger.info(
+                        f"[RATE_LIMIT_RECOVERY] {count}개 키 자동 복구 완료"
+                    )
+        except Exception as e:
+            logger.error(f"[RATE_LIMIT_RECOVERY] 복구 코루틴 실패: {e}")
 
     try:
         loop = asyncio.get_event_loop()
