@@ -246,6 +246,159 @@ function extractStyleConfigFromCss(cssText) {
     };
 }
 
+// 우리 요소 선택자 → 샘플 내 조회용 CSS 셀렉터
+const CSS_IMPORT_QUERY = {
+    'h1': 'h1', 'h2': 'h2', 'h3': 'h3', 'h4': 'h4', 'h5': 'h5',
+    'p': 'p', 'ul': 'ul', 'ol': 'ol', 'li': 'li',
+    'table': 'table', 'th': 'th', 'td': 'td', 'blockquote': 'blockquote',
+    'a': 'p a', 'a.button': '.button-link a'
+};
+
+/**
+ * 붙여넣은 CSS의 선택자에서 우리 요소별 클래스/조상 클래스를 수집해
+ * 우리 발행 구조(.entry-content 래퍼 + 각 요소 + .button-link)를 흉내낸 샘플 HTML 생성.
+ * @param {string} cssText - CSS 문자열
+ * @returns {string} 샘플 HTML
+ */
+function cssImportBuildSample(cssText) {
+    const rules = cssImportParseRules(cssText);
+    const tagClasses = {};
+    const ancestor = new Set();
+    const addCls = (key, arr) => {
+        if (!tagClasses[key]) tagClasses[key] = new Set();
+        arr.forEach(c => tagClasses[key].add(c));
+    };
+    rules.forEach(entry => {
+        entry.rule.selectorText.split(',').forEach(raw => {
+            const sel = raw.trim();
+            if (!sel) return;
+            const parts = sel.split(/[\s>+~]+/).filter(Boolean);
+            const last = parts[parts.length - 1] || '';
+            parts.slice(0, -1).forEach(p => {
+                (p.match(/\.[\w-]+/g) || []).forEach(c => ancestor.add(c.slice(1)));
+            });
+            const lastCls = (last.match(/\.[\w-]+/g) || []).map(c => c.slice(1));
+            const target = cssImportResolveSelector(sel);
+            if (target === 'a') addCls('a', lastCls);
+            else if (target === 'a.button') addCls('abutton', lastCls);
+            else if (target && CSS_IMPORT_TAGS.indexOf(target) !== -1) addCls(target, lastCls);
+        });
+    });
+    const cl = (k) => Array.from(tagClasses[k] || []).join(' ');
+    const anc = Array.from(ancestor).join(' ');
+    return '<div class="entry-content ' + anc + '" id="__sp">'
+        + '<h1 class="' + cl('h1') + '">가</h1><h2 class="' + cl('h2') + '">가</h2>'
+        + '<h3 class="' + cl('h3') + '">가</h3><h4 class="' + cl('h4') + '">가</h4><h5 class="' + cl('h5') + '">가</h5>'
+        + '<p class="' + cl('p') + '">가 <a href="#" class="' + cl('a') + '">링크</a></p>'
+        + '<ul class="' + cl('ul') + '"><li class="' + cl('li') + '">가</li></ul>'
+        + '<ol class="' + cl('ol') + '"><li>가</li></ol>'
+        + '<table class="' + cl('table') + '"><thead><tr><th class="' + cl('th') + '">가</th></tr></thead>'
+        + '<tbody><tr><td class="' + cl('td') + '">가</td></tr></tbody></table>'
+        + '<blockquote class="' + cl('blockquote') + '">가</blockquote>'
+        + '<div class="button-link ' + cl('abutton') + '"><a href="#">가</a></div>'
+        + '</div>';
+}
+
+/**
+ * computed 스타일에서 지원 속성 추출 (baseline과 diff해 UA 기본값 제거).
+ * @param {CSSStyleDeclaration} styled - CSS 적용된 요소의 computed
+ * @param {CSSStyleDeclaration} base - CSS 없는 동일 요소의 computed
+ * @returns {Object} { 우리속성: 값 }
+ */
+function cssImportExtractFromComputed(styled, base) {
+    const out = {};
+    const sv = (p) => styled.getPropertyValue(p);
+    const bv = (p) => base.getPropertyValue(p);
+    for (const ourProp in CSS_IMPORT_PROP_MAP) {
+        if (ourProp === 'width') continue;   // computed width는 px로 해석돼 의도(100%)와 달라 제외
+        const cp = CSS_IMPORT_PROP_MAP[ourProp];
+        const v = sv(cp);
+        if (v && v !== bv(cp)) {
+            const nv = cssImportNormalizeValue(ourProp, v);
+            if (nv !== null && nv !== '') out[ourProp] = nv;
+        }
+    }
+    // 테두리: styled/base가 다른 면이 있으면 활성 면 기준 통합 추출
+    const sides = ['top', 'right', 'bottom', 'left'];
+    let firstActive = null;
+    const info = {};
+    sides.forEach(side => {
+        const st = (sv('border-' + side + '-style') || '').toLowerCase();
+        const w = sv('border-' + side + '-width') || '';
+        const diff = st !== (bv('border-' + side + '-style') || '').toLowerCase()
+            || w !== (bv('border-' + side + '-width') || '');
+        const hasBorder = st && st !== 'none' && !/^0(px)?$/.test(w);
+        info[side] = { hasBorder, style: st, width: w, color: sv('border-' + side + '-color') };
+        if (diff && hasBorder && !firstActive) firstActive = side;
+    });
+    if (firstActive) {
+        out['border-style'] = info[firstActive].style;
+        const col = cssImportNormalizeValue('border-color', info[firstActive].color);
+        if (col) out['border-color'] = col;
+        sides.forEach(side => {
+            if (info[side].hasBorder) {
+                const m = (info[side].width || '').match(/^(-?\d*\.?\d+)px$/);
+                out['border-' + side + '-width'] = m ? m[1] : info[side].width;
+            } else {
+                out['border-' + side + '-width'] = '0';
+            }
+        });
+    }
+    return out;
+}
+
+/**
+ * 샘플 HTML을 숨긴 iframe에 렌더 (onload 후 resolve).
+ * @param {string} html - 샘플 HTML
+ * @param {string|null} cleanedCss - 주입할 CSS(없으면 baseline)
+ * @returns {Promise<HTMLIFrameElement>}
+ */
+function cssImportRenderFrame(html, cleanedCss) {
+    return new Promise((resolve) => {
+        const iframe = document.createElement('iframe');
+        iframe.setAttribute('aria-hidden', 'true');
+        iframe.style.cssText = 'position:fixed;left:-99999px;top:0;width:820px;height:20px;border:0;';
+        let settled = false;
+        const done = () => { if (!settled) { settled = true; resolve(iframe); } };
+        iframe.onload = () => requestAnimationFrame(done);
+        const style = cleanedCss ? '<style>' + cleanedCss + '</style>' : '';
+        iframe.srcdoc = '<!DOCTYPE html><html><head><meta charset="utf-8">' + style
+            + '</head><body>' + html + '</body></html>';
+        document.body.appendChild(iframe);
+        setTimeout(done, 1500);   // 폴백 타임아웃
+    });
+}
+
+/**
+ * iframe computed 방식 추출: 동적 샘플 + 붙여넣은 CSS를 렌더해
+ * 각 요소의 computed 스타일을 baseline과 diff하여 styleConfig 추출.
+ * @param {string} cssText - CSS 문자열
+ * @returns {Promise<Object>} styleConfig
+ */
+async function cssImportExtractViaIframe(cssText) {
+    const cleaned = String(cssText || '').replace(/<\/?style[^>]*>/gi, ' ');
+    const sample = cssImportBuildSample(cssText);
+    const styledFrame = await cssImportRenderFrame(sample, cleaned);
+    const baseFrame = await cssImportRenderFrame(sample, null);
+    const styleConfig = {};
+    try {
+        const sWin = styledFrame.contentWindow, sDoc = styledFrame.contentDocument;
+        const bWin = baseFrame.contentWindow, bDoc = baseFrame.contentDocument;
+        for (const sel in CSS_IMPORT_QUERY) {
+            const q = '#__sp ' + CSS_IMPORT_QUERY[sel];
+            const sEl = sDoc.querySelector(q);
+            const bEl = bDoc.querySelector(q);
+            if (!sEl || !bEl) continue;
+            const props = cssImportExtractFromComputed(sWin.getComputedStyle(sEl), bWin.getComputedStyle(bEl));
+            if (Object.keys(props).length) styleConfig[sel] = props;
+        }
+    } finally {
+        styledFrame.remove();
+        baseFrame.remove();
+    }
+    return styleConfig;
+}
+
 /**
  * 스타일 탭 CSS 추출 믹스인 (styleTabApp에 Object.assign으로 합성).
  * @returns {Object} 상태 + 메서드
@@ -321,49 +474,63 @@ function styleTabCssImportMixin() {
         },
 
         /**
-         * 붙여넣은 CSS 추출 → styleConfig에 병합 → 미리보기 갱신.
-         * (편집 상태만 갱신, 저장해야 반영)
+         * 붙여넣은 CSS 추출 → styleConfig 병합 → 미리보기 갱신 (편집 상태만, 저장해야 반영).
+         *
+         * 두 방식 결합:
+         *  ① 선택자 파싱(extractStyleConfigFromCss) — 우리 CSS를 정확히 추출(값 우선).
+         *  ② iframe computed — 동적 샘플+CSS 렌더 후 최종 계산 스타일로 외부/캐스케이드/변수 보완.
+         * 선택자 파싱값이 우선(정확), computed는 파싱이 놓친 부분을 채운다.
          */
-        extractAndApplyCss() {
+        async extractAndApplyCss() {
             const text = (this.importCssText || '').trim();
             if (!text) {
                 if (typeof showErrorMessage === 'function') showErrorMessage('CSS를 붙여넣어 주세요.');
                 return;
             }
-            let result;
+            this.importCssLoading = true;
             try {
-                result = extractStyleConfigFromCss(text);
-            } catch (e) {
-                console.error('CSS 추출 실패:', e);
-                if (typeof showErrorMessage === 'function') showErrorMessage('CSS를 해석하지 못했습니다.');
-                return;
-            }
-            const extracted = result.styleConfig || {};
-            const matched = Object.keys(extracted);
-            if (matched.length === 0) {
-                this.importCssReport = { matchedSelectors: [], ignoredRules: result.report.ignoredRules };
-                if (typeof showErrorMessage === 'function') {
-                    showErrorMessage('가져올 수 있는 스타일을 찾지 못했습니다.');
+                // ① 선택자 파싱 (우리 CSS 정확)
+                let selConfig = {};
+                try { selConfig = (extractStyleConfigFromCss(text) || {}).styleConfig || {}; }
+                catch (e) { console.error('선택자 파싱 실패:', e); }
+
+                // ② iframe computed (외부/캐스케이드/변수 보완)
+                let compConfig = {};
+                try { compConfig = await cssImportExtractViaIframe(text); }
+                catch (e) { console.error('iframe computed 추출 실패:', e); }
+
+                // 병합: 선택자 파싱값 우선, computed로 빈 속성 보완
+                const selectors = new Set(
+                    Object.keys(compConfig).concat(Object.keys(selConfig))
+                );
+                const merged = {};
+                selectors.forEach(sel => {
+                    const m = Object.assign({}, compConfig[sel] || {}, selConfig[sel] || {});
+                    if (Object.keys(m).length) merged[sel] = m;
+                });
+
+                const matched = Object.keys(merged);
+                if (matched.length === 0) {
+                    this.importCssReport = { matchedSelectors: [], ignoredRules: 0 };
+                    if (typeof showErrorMessage === 'function') {
+                        showErrorMessage('가져올 수 있는 스타일을 찾지 못했습니다.');
+                    }
+                    return;
                 }
-                return;
-            }
 
-            // 선택자별 병합(추출값이 기존값을 덮어씀, 나머지는 유지)
-            matched.forEach(sel => {
-                this.styleConfig[sel] = Object.assign({}, this.styleConfig[sel] || {}, extracted[sel]);
-            });
+                matched.forEach(sel => {
+                    this.styleConfig[sel] = Object.assign({}, this.styleConfig[sel] || {}, merged[sel]);
+                });
+                this.importCssReport = { matchedSelectors: matched, ignoredRules: 0 };
 
-            this.importCssReport = {
-                matchedSelectors: matched,
-                ignoredRules: result.report.ignoredRules
-            };
+                if (typeof this.loadCurrentSelectorStyles === 'function') this.loadCurrentSelectorStyles();
+                if (typeof this.updatePreview === 'function') this.updatePreview();
 
-            // 편집기/미리보기 갱신
-            if (typeof this.loadCurrentSelectorStyles === 'function') this.loadCurrentSelectorStyles();
-            if (typeof this.updatePreview === 'function') this.updatePreview();
-
-            if (typeof showSuccessMessage === 'function') {
-                showSuccessMessage(`${matched.length}개 선택자 스타일을 가져왔습니다. 저장을 눌러 반영하세요.`);
+                if (typeof showSuccessMessage === 'function') {
+                    showSuccessMessage(`${matched.length}개 선택자 스타일을 가져왔습니다. 저장을 눌러 반영하세요.`);
+                }
+            } finally {
+                this.importCssLoading = false;
             }
         }
     };
