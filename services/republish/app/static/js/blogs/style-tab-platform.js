@@ -64,7 +64,9 @@ function styleTabPlatformMixin() {
             // 저장값에서 알려진 본문 스코프를 제거하고 현재 플랫폼 base 스코프를 앞에 부여.
             // 추가 토큰(프리셋/래퍼 클래스)은 보존. 값이 비면 fallbackExtra(없으면 base만).
             const withScope = (val, fallbackExtra) => {
-                let toks = String(val || '').trim().split(/\s+/)
+                // 공백·점(.) 모두로 토큰 분해 → 점 붙은 스코프('.entry-content')나
+                // 복합 클래스('a.entry-content')도 정확히 스코프로 인식해 중복 제거.
+                let toks = String(val || '').trim().split(/[\s.]+/)
                     .filter(t => t && SCOPES.indexOf(t) === -1);
                 if (!toks.length) return fallbackExtra ? `${base} ${fallbackExtra}` : base;
                 return `${base} ${toks.join(' ')}`;
