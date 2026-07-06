@@ -60,21 +60,27 @@ function styleTabPlatformMixin() {
          */
         effectivePlaceholderConfig() {
             const base = this.contentBaseClass();
+            const SCOPES = ['entry-content', 'post-body', 'post-content'];
+            // 저장값에서 알려진 본문 스코프를 제거하고 현재 플랫폼 base 스코프를 앞에 부여.
+            // 추가 토큰(프리셋/래퍼 클래스)은 보존. 값이 비면 fallbackExtra(없으면 base만).
+            const withScope = (val, fallbackExtra) => {
+                let toks = String(val || '').trim().split(/\s+/)
+                    .filter(t => t && SCOPES.indexOf(t) === -1);
+                if (!toks.length) return fallbackExtra ? `${base} ${fallbackExtra}` : base;
+                return `${base} ${toks.join(' ')}`;
+            };
             const TAGS = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'ul', 'ol',
                 'li', 'table', 'th', 'td', 'blockquote'];
             const saved = (this.placeholderConfig && this.placeholderConfig.css_classes) || {};
-            const css = Object.assign({}, saved);
-            TAGS.forEach(tag => {
-                if (!css[tag] || !String(css[tag]).trim()) css[tag] = base;
-            });
+            const css = {};
+            TAGS.forEach(tag => { css[tag] = withScope(saved[tag]); });
+            // 저장된 비표준 태그도 보존
+            Object.keys(saved).forEach(t => { if (!(t in css)) css[t] = withScope(saved[t]); });
+
             const savedLink = (this.placeholderConfig && this.placeholderConfig.link_styles) || {};
             const link = Object.assign({}, savedLink);
-            if (!link.default_class || !String(link.default_class).trim()) {
-                link.default_class = base;
-            }
-            if (!link.button_class || !String(link.button_class).trim()) {
-                link.button_class = `${base} button-link`;
-            }
+            link.default_class = withScope(savedLink.default_class);
+            link.button_class = withScope(savedLink.button_class, 'button-link');
             return Object.assign({}, this.placeholderConfig, { css_classes: css, link_styles: link });
         },
 
