@@ -32,15 +32,12 @@ const CSS_IMPORT_PROP_MAP = {
     'padding-right': 'padding-right',
     'padding-bottom': 'padding-bottom',
     'padding-left': 'padding-left',
-    'border-top-width': 'border-top-width',
-    'border-right-width': 'border-right-width',
-    'border-bottom-width': 'border-bottom-width',
-    'border-left-width': 'border-left-width',
     'border-radius': 'border-radius',
     'list-style': 'list-style-type',
     'width': 'width',
     'border-collapse': 'border-collapse'
-    // border-style / border-color 는 사이드 통합 처리(아래 _extractProps 특수 로직)
+    // border-style / border-color / border-*-width 는 사이드 통합 처리
+    // (아래 _extractProps 특수 로직 — 단측 테두리가 다른 면으로 새어나가지 않게)
 };
 
 // px 단위로 정규화(숫자화)할 속성
@@ -163,16 +160,34 @@ function cssImportExtractProps(decl) {
         const val = cssImportNormalizeValue(ourProp, get(CSS_IMPORT_PROP_MAP[ourProp]));
         if (val !== null && val !== '') out[ourProp] = val;
     }
-    // border-style/border-color: none이 아닌 첫 사이드에서 대표값 취득
-    // (테마의 좌측 액센트 border-left-* 등 사이드별 테두리도 반영)
-    for (const side of ['top', 'right', 'bottom', 'left']) {
-        const st = (get('border-' + side + '-style') || '').trim();
-        if (st && st.toLowerCase() !== 'none') {
-            out['border-style'] = st;
-            const col = cssImportNormalizeValue('border-color', get('border-' + side + '-color'));
-            if (col) out['border-color'] = col;
-            break;
-        }
+
+    // 테두리(사이드 통합): 활성 면(style != none && width > 0) 기준으로
+    // generic border-style/border-color 대표값을 잡고, 4면 width를 명시한다.
+    // 비활성 면 width는 0으로 명시해야 generic border-style가 다른 면으로 새지 않는다.
+    // (원본이 border-left-* 단측이든, border 축약(전체)이든 동일하게 재현됨)
+    const sideWidthNum = (raw) => {
+        const v = (raw || '').trim();
+        const m = v.match(/^(-?\d*\.?\d+)px$/);
+        return m ? m[1] : (v && v !== '0' ? v : '0');
+    };
+    const sides = ['top', 'right', 'bottom', 'left'];
+    const active = {};   // side -> {style, widthNum, color}
+    let firstActive = null;
+    sides.forEach(side => {
+        const st = (get('border-' + side + '-style') || '').trim().toLowerCase();
+        const wNum = sideWidthNum(get('border-' + side + '-width'));
+        const hasBorder = st && st !== 'none' && wNum !== '0';
+        active[side] = { hasBorder, style: st, widthNum: wNum, color: get('border-' + side + '-color') };
+        if (hasBorder && !firstActive) firstActive = side;
+    });
+    if (firstActive) {
+        out['border-style'] = active[firstActive].style;
+        const col = cssImportNormalizeValue('border-color', active[firstActive].color);
+        if (col) out['border-color'] = col;
+        // 4면 width 명시(활성=실제값, 비활성=0) — 0도 포함해야 새어나감 방지
+        sides.forEach(side => {
+            out['border-' + side + '-width'] = active[side].hasBorder ? active[side].widthNum : '0';
+        });
     }
     return out;
 }
