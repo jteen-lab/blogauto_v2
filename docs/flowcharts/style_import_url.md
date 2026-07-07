@@ -31,8 +31,8 @@ flowchart TD
 - **헤드리스 computed 스타일**: 렌더된 최종값을 읽어 @media·변수·다중 시트 캐스케이드를 원천 해결.
 - **본문 컨테이너 탐지**: 흔한 본문 셀렉터 우선순위로 탐지, 없으면 body 폴백. 본문 내 대표 요소 샘플링.
 - **지원 속성만 + 노이즈 제거**: 글꼴/색/정렬/장식/여백/패딩/테두리/반경/list-style. none/normal/transparent/0-border/기본정렬 등 no-op은 제외.
-- **단측 테두리 보존(붙여넣기 추출과 동일 로직)**: `border-top-*`만 읽으면 `border-left`만 있는 h3/h4의 테두리가 소실된다. 4면 style/width/color를 모두 읽어, 활성 면(style≠none & width>0) 기준으로 generic `border-style`/`border-color`를 잡고 4면 폭을 명시(비활성=0)해 한 면 테두리도 재현.
-- **버튼형 링크 구분**: 배경색 유무 + 버튼 셀렉터(`.button-link a`/`a.button`/`.wp-block-button a` 등)로 판별해, 배경 있는 링크는 `a.button`, 없는 링크는 일반 `a`로 분리(본문 첫 링크가 버튼이어도 일반 링크 스타일이 오염되지 않게).
+- **단측 테두리 보존 + 대표 면=가장 두꺼운 면**: `border-top-*`만 읽으면 `border-left`만 있는 h3/h4 테두리가 소실된다. 4면 style/width/color를 모두 읽어, 활성 면(style≠none & width>0)이 있으면 그 중 **가장 두꺼운 면**의 style/color를 generic 대표로 쓰고 4면 폭을 명시(비활성=0). 우리 모델은 border-style/color가 단일값이라, 얇은 부수 테두리보다 굵은 강조 테두리를 우선해야 의도가 보존됨(예: h2 왼쪽 12px 빨강 + 아래 1px 흰색 → 빨강 채택).
+- **버튼형 링크 구분**: 버튼 셀렉터(`.button-link a`/`.wp-block-button a` 등) OR 배경색 있음 OR display가 block/inline-block/flex(테두리·패딩 박스형 CTA)면 `a.button`, 그 외는 일반 `a`. 배경 없이 테두리+block인 버튼(티스토리 CTA)도 포착. 애드센스 자동주석(`.google-anno`) 링크는 제외.
 - **h1 폴백**: h1은 보통 글 제목이라 본문 컨테이너 밖. 본문에 없으면 문서 전체 h1을 대표값으로 사용(블로그 CSS의 h1 규칙은 제목 h1에도 적용되므로 유효).
 - **font-family 노이즈 제거**: 요소 computed font-family가 본문 상속 기본값과 같으면 제외(링크 Arial처럼 의도적으로 다른 폰트만 남김).
 - **태그별 관련 속성만**: `list-style`은 목록(ul/ol)에만, `border-collapse`는 `collapse`일 때만 반영(모든 태그 computed 초기값 `disc`/`separate` 노이즈 제거).
