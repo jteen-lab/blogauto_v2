@@ -27,19 +27,38 @@ logger = get_logger(__name__)
 # 일반 링크(a)는 버튼 클래스가 아닌 링크를 우선 선택하고, 버튼형 링크는
 # a.button 키로 별도 수집해 버튼 스타일이 일반 링크로 뭉개지지 않게 한다.
 _COLLECT_JS = r"""
-() => {
+(tagClasses) => {
     const TAG_TARGETS = ['h1','h2','h3','h4','h5','p','ul','ol','li',
         'table','th','td','blockquote'];
+    const TAGS_SET = new Set(TAG_TARGETS.concat(['a']));
     const BTN_SELECTORS = ['.button-link a', 'a.button', 'a.btn', '.btn a',
         'a.wp-block-button__link', '.wp-block-button a', '.btn-link a'];
     const CONTENT_SELECTORS = ['.entry-content', '.post-content', '.post-body',
-        '[itemprop="articleBody"]', 'article', 'main', '.content', '#content'];
+        '[itemprop="articleBody"]', 'article',
+        '.tt_article_useless_p_margin', '.article_view', '.contents_style',
+        '.article-view', '.xe_content', '.se-main-container', '.se_component_wrap',
+        '.post_ct', '.view-content', 'main', '.content', '#content'];
     let container = null;
     for (const sel of CONTENT_SELECTORS) {
         const el = document.querySelector(sel);
         if (el && el.innerText && el.innerText.trim().length > 80) { container = el; break; }
     }
     if (!container) container = document.body;
+
+    // 사이트가 요소에 다는 클래스 관례(tagClasses)를 정리.
+    // '__orphan'(태그 없는 class-only 선택자)은 DOM에서 그 클래스를 가진
+    // 요소의 태그로 해석해 병합한다(예: .wp-block-heading → h2).
+    const tc = {};
+    const srcTC = tagClasses || {};
+    for (const k in srcTC) { if (k !== '__orphan') tc[k] = (srcTC[k] || []).slice(); }
+    for (const c of (srcTC['__orphan'] || [])) {
+        let ex = null;
+        try { ex = document.querySelector('.' + CSS.escape(c)); } catch (e) {}
+        if (ex) {
+            const t = ex.tagName.toLowerCase();
+            if (TAGS_SET.has(t)) { (tc[t] = tc[t] || []); if (tc[t].indexOf(c) < 0) tc[t].push(c); }
+        }
+    }
 
     const PROPS = ['font-size','font-weight','font-style','font-family','line-height',
         'color','background-color','text-align','text-decoration-line','text-transform',
@@ -104,12 +123,16 @@ _COLLECT_JS = r"""
     sample.innerHTML = SAMPLE_HTML;
     container.appendChild(sample);
     try {
+        // 주입 요소에 사이트의 태그별 클래스를 입혀 class 기반 규칙(table.wp-block-table 등)도 매칭
+        const applyCls = (el, tag) => {
+            if (el && tc[tag] && tc[tag].length) el.className = tc[tag].join(' ');
+        };
         for (const tag of TAG_TARGETS) {
             if (out[tag]) continue;             // 실물이 있으면 유지
             const el = sample.querySelector(tag);
-            if (el) out[tag] = read(el);
+            if (el) { applyCls(el, tag); out[tag] = read(el); }
         }
-        if (!out['a']) { const el = sample.querySelector('p a'); if (el) out['a'] = read(el); }
+        if (!out['a']) { const el = sample.querySelector('p a'); if (el) { applyCls(el, 'a'); out['a'] = read(el); } }
         if (!out['a.button']) { const el = sample.querySelector('.button-link a'); if (el) out['a.button'] = read(el); }
     } finally {
         container.removeChild(sample);
@@ -117,6 +140,26 @@ _COLLECT_JS = r"""
     return out;
 }
 """
+
+# 페이지의 모든 스타일시트를 나열: 인라인/접근가능은 cssText, 외부는 href.
+# 외부(교차출처) CSS는 cssRules 접근이 CORS로 막히므로 href만 넘겨 Python이
+# Playwright 네트워크로 원문을 받아 파싱한다(티스토리 등 스킨 CSS 대응).
+_LIST_SHEETS_JS = r"""
+() => {
+    const out = [];
+    for (const s of Array.from(document.styleSheets)) {
+        if (s.href) { out.push({ href: s.href, text: null }); continue; }
+        try {
+            out.push({ href: null, text: Array.from(s.cssRules).map(r => r.cssText).join('\n') });
+        } catch (e) { /* 접근 불가 인라인은 스킵 */ }
+    }
+    return out;
+}
+"""
+
+# 사이트 클래스 관례 수집 대상 태그
+_SUPPORTED_TAGS = {"h1", "h2", "h3", "h4", "h5", "p", "ul", "ol", "li",
+                   "table", "th", "td", "blockquote", "a"}
 
 # computed CSS 롱핸드 → 우리 style_config 키 (테두리 4면은 _extract_border에서 별도 처리)
 _CSS_TO_OUR = {
@@ -278,6 +321,79 @@ def _map_computed(collected: Dict[str, Dict[str, str]]) -> Dict[str, Dict[str, s
     return style_config
 
 
+_COMMENT_RE = re.compile(r"/\*.*?\*/", re.S)
+_SELGROUP_RE = re.compile(r"([^{}]+)\{")
+_LEADTAG_RE = re.compile(r"([a-zA-Z][a-zA-Z0-9]*)")
+_CLASS_RE = re.compile(r"\.([\w-]+)")
+_COMBINATOR_RE = re.compile(r"[\s>+~]+")
+
+
+def _harvest_tag_classes(css_text: str) -> Dict[str, Any]:
+    """
+    CSS 텍스트에서 각 지원 태그가 쓰는 클래스 관례를 수집한다.
+
+    - 태그가 붙은 선택자(`table.wp-block-table`, `.x h2.title`)는 rightmost
+      심플 선택자의 태그·클래스를 그 태그의 관례로 등록.
+    - 태그 없는 class-only 선택자(`.wp-block-heading`)는 태그를 알 수 없으므로
+      '__orphan'에 모아, 브라우저 측에서 DOM으로 태그를 해석하게 한다.
+
+    Returns:
+        {tag: [class,...], "__orphan": [class,...]}
+    """
+    text = _COMMENT_RE.sub("", css_text or "")
+    tag_classes: Dict[str, set] = {}
+    orphan: set = set()
+    for sel_group in _SELGROUP_RE.findall(text):
+        for sel in sel_group.split(","):
+            sel = sel.strip()
+            if not sel or sel.startswith("@"):
+                continue
+            parts = [p for p in _COMBINATOR_RE.split(sel) if p]
+            last = parts[-1] if parts else ""
+            if not last:
+                continue
+            classes = _CLASS_RE.findall(last)
+            if not classes:
+                continue
+            tm = _LEADTAG_RE.match(last)
+            if tm:
+                tag = tm.group(1).lower()
+                if tag in _SUPPORTED_TAGS:
+                    tag_classes.setdefault(tag, set()).update(classes)
+            else:
+                orphan.update(classes)
+
+    result: Dict[str, Any] = {t: sorted(cs) for t, cs in tag_classes.items()}
+    if orphan:
+        result["__orphan"] = sorted(orphan)
+    return result
+
+
+async def _collect_all_css(page: Any) -> str:
+    """
+    페이지의 모든 CSS 원문을 모은다. 인라인/접근가능 스타일시트는 cssText,
+    외부(교차출처) 스타일시트는 Playwright 네트워크로 원문을 받아 CORS를 우회.
+    """
+    try:
+        sheets = await page.evaluate(_LIST_SHEETS_JS)
+    except Exception:  # noqa: BLE001
+        return ""
+    parts = []
+    for info in sheets or []:
+        text = info.get("text")
+        href = info.get("href")
+        if text:
+            parts.append(text)
+        elif href:
+            try:
+                resp = await page.request.get(href, timeout=8000)
+                if resp.ok:
+                    parts.append(await resp.text())
+            except Exception:  # noqa: BLE001
+                continue
+    return "\n".join(parts)
+
+
 def _validate_url(url: str) -> str:
     """http(s) URL만 허용. 유효하지 않으면 ValueError."""
     parsed = urlparse((url or "").strip())
@@ -318,7 +434,11 @@ async def extract_style_from_url(url: str) -> Dict[str, Any]:
                 await page.goto(target, wait_until="load", timeout=25000)
                 # 웹폰트/지연 스타일 안정화 대기(짧게)
                 await page.wait_for_timeout(1200)
-                collected = await page.evaluate(_COLLECT_JS)
+                # 사이트 CSS에서 태그별 클래스 관례를 수집(교차출처 포함)해
+                # 미사용 태그 샘플 주입 시 class 기반 규칙까지 매칭되게 한다.
+                css_text = await _collect_all_css(page)
+                tag_classes = _harvest_tag_classes(css_text)
+                collected = await page.evaluate(_COLLECT_JS, tag_classes)
             finally:
                 await browser.close()
     except Exception as exc:  # noqa: BLE001
