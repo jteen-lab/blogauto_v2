@@ -11,7 +11,8 @@ flowchart TD
     A[스타일 탭: 'URL에서 추출' → URL 입력] --> B[POST /settings/style/extract-url]
     B --> C[백엔드: Playwright Chromium 실행<br/>--no-sandbox, headless]
     C --> D[page.goto(url) 렌더 대기]
-    D --> E[page.evaluate: 본문 컨테이너 탐지<br/>.entry-content/.post-content/article/main...]
+    D --> D2[사이트 CSS 원문 수집<br/>인라인=cssText, 외부=Playwright 네트워크 fetch(CORS 우회)<br/>태그별 클래스 관례 파싱: table.foo/h2.bar + class-only]
+    D2 --> E[page.evaluate: 본문 컨테이너 탐지<br/>.entry-content/티스토리/네이버/article/main...]
     E --> F[대상 태그별 대표 요소의 getComputedStyle 수집<br/>h1~h5,p,ul,ol,li,table,th,td,blockquote<br/>h1 본문에 없으면 문서 제목 h1 폴백<br/>링크는 배경 유무로 일반 a / 버튼 a.button 분리<br/>+ 4면 테두리 style/width/color + 본문 기준폰트]
     F --> F2[본문에 없는 지원 태그는 숨긴 샘플을 본문에 주입<br/>사이트 CSS 상속 상태로 computed 읽고 제거<br/>→ 글 내용과 무관하게 전 태그 추출]
     F2 --> G[브라우저 종료 → 태그별 computed props 반환]
@@ -35,7 +36,8 @@ flowchart TD
 - **h1 폴백**: h1은 보통 글 제목이라 본문 컨테이너 밖. 본문에 없으면 문서 전체 h1을 대표값으로 사용(블로그 CSS의 h1 규칙은 제목 h1에도 적용되므로 유효).
 - **font-family 노이즈 제거**: 요소 computed font-family가 본문 상속 기본값과 같으면 제외(링크 Arial처럼 의도적으로 다른 폰트만 남김).
 - **태그별 관련 속성만**: `list-style`은 목록(ul/ol)에만, `border-collapse`는 `collapse`일 때만 반영(모든 태그 computed 초기값 `disc`/`separate` 노이즈 제거).
-- **미사용 태그 보강(동적 샘플 주입)**: computed는 실물 요소가 있어야 측정 가능 → 글에 없는 태그는 추출 불가. 본문 실물 수집 후, 없는 지원 태그를 숨긴 샘플(off-screen·visibility:hidden)로 본문 컨테이너에 주입해 사이트 CSS를 상속받은 computed를 읽고 제거. 글 내용과 무관하게 전 지원 태그 추출. 한계: 사이트가 특정 클래스(`.wp-block-table` 등)에만 스타일을 건 경우 맨 태그 주입으론 미매치(맨 태그 규칙이면 정상).
+- **미사용 태그 보강(동적 샘플 주입)**: computed는 실물 요소가 있어야 측정 가능 → 글에 없는 태그는 추출 불가. 본문 실물 수집 후, 없는 지원 태그를 숨긴 샘플(off-screen·visibility:hidden)로 본문 컨테이너에 주입해 사이트 CSS를 상속받은 computed를 읽고 제거. 글 내용과 무관하게 전 지원 태그 추출.
+- **클래스 관례 자동 학습(하드코딩 없음)**: 사이트가 `table.wp-block-table`·`h2.wp-block-heading`·`.se-text-paragraph`처럼 요소에 클래스를 달아 스타일을 걸면 맨 태그 주입은 미매치. → 페이지 CSS 원문(외부 CSS는 Playwright 네트워크로 받아 CORS 우회)에서 태그별 클래스를 파싱하고, class-only 선택자(`.wp-block-heading`)는 DOM에서 그 클래스를 가진 요소의 태그로 해석해, 주입 샘플 요소에 그 클래스를 입혀 class 기반 규칙까지 매칭. 사이트별 수동 등록 불필요. 잔여 한계: 스타일이 특정 클래스에만 걸렸는데 그 클래스가 문서 어디에도 안 쓰이면(class-only + 예시요소 부재) 태그 해석 불가.
 - **온디맨드 실행**: 추출 클릭 시에만 Chromium 프로세스 기동→종료(상시 메모리 부담 없음).
 - **저장 필요**: 추출은 편집 상태만 갱신. 저장해야 반영(미저장 초기화 원칙).
 - **보안/견고성**: http(s) URL만 허용, 타임아웃, 실패 시 명확한 오류 반환.
