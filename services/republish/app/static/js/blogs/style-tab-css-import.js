@@ -40,6 +40,27 @@ const CSS_IMPORT_PROP_MAP = {
     // (아래 _extractProps 특수 로직 — 단측 테두리가 다른 면으로 새어나가지 않게)
 };
 
+// 추출이 '관리'하는 속성 키 (1:1 매핑 + 테두리 통합 산출물).
+// 재추출 시 이 키들은 기존 config에서 제거 후 새 추출값으로 대체한다.
+// (과거 오추출로 저장된 잔재 — 예: 잘못 붙은 text-align:center — 를 지우기 위함)
+const CSS_IMPORT_MANAGED_KEYS = Object.keys(CSS_IMPORT_PROP_MAP).concat([
+    'border-style', 'border-color',
+    'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width'
+]);
+
+/**
+ * 추출 결과를 기존 config에 병합. 추출 관리 속성은 대체(잔재 제거),
+ * 그 외 사용자 지정 속성(display/box-sizing 등 모델 외 키)은 보존.
+ * @param {Object} existing - 기존 styleConfig[selector]
+ * @param {Object} incoming - 이번 추출 결과
+ * @returns {Object} 병합된 config
+ */
+function cssImportApplyExtracted(existing, incoming) {
+    const base = Object.assign({}, existing || {});
+    CSS_IMPORT_MANAGED_KEYS.forEach(k => { delete base[k]; });
+    return Object.assign(base, incoming || {});
+}
+
 // px 단위로 정규화(숫자화)할 속성
 const CSS_IMPORT_PX_PROPS = [
     'font-size', 'border-radius',
@@ -463,7 +484,7 @@ function styleTabCssImportMixin() {
                     return;
                 }
                 matched.forEach(sel => {
-                    this.styleConfig[sel] = Object.assign({}, this.styleConfig[sel] || {}, extracted[sel]);
+                    this.styleConfig[sel] = cssImportApplyExtracted(this.styleConfig[sel], extracted[sel]);
                 });
                 this.importCssReport = { matchedSelectors: matched, ignoredRules: 0, source: 'url' };
                 if (typeof this.loadCurrentSelectorStyles === 'function') this.loadCurrentSelectorStyles();
@@ -527,7 +548,7 @@ function styleTabCssImportMixin() {
                 }
 
                 matched.forEach(sel => {
-                    this.styleConfig[sel] = Object.assign({}, this.styleConfig[sel] || {}, merged[sel]);
+                    this.styleConfig[sel] = cssImportApplyExtracted(this.styleConfig[sel], merged[sel]);
                 });
                 this.importCssReport = { matchedSelectors: matched, ignoredRules: 0 };
 
