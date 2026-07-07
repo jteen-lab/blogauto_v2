@@ -12,10 +12,12 @@ flowchart TD
     B --> C[백엔드: Playwright Chromium 실행<br/>--no-sandbox, headless]
     C --> D[page.goto(url) 렌더 대기]
     D --> E[page.evaluate: 본문 컨테이너 탐지<br/>.entry-content/.post-content/article/main...]
-    E --> F[대상 태그별 대표 요소의 getComputedStyle 수집<br/>h1~h5,p,ul,ol,li,table,th,td,blockquote,a]
+    E --> F[대상 태그별 대표 요소의 getComputedStyle 수집<br/>h1~h5,p,ul,ol,li,table,th,td,blockquote,a<br/>+ 버튼형 링크 별도 탐지 → a.button<br/>+ 4면 테두리 style/width/color 수집]
     F --> G[브라우저 종료 → 태그별 computed props 반환]
     G --> H[Python: 지원 속성 매핑·정규화·기본값 노이즈 제거<br/>px 숫자화, none/normal/transparent 스킵]
-    H --> I[style_config + 리포트 반환]
+    H --> H2[테두리 통합: 활성 면 기준 style/color 대표값<br/>+ 4면 폭 명시(비활성=0) → 단측 테두리 보존]
+    H2 --> H3[list-style는 ul/ol에만, border-collapse는 collapse만<br/>→ computed 초기값 노이즈 제거]
+    H3 --> I[style_config + 리포트 반환]
     I --> J[프런트: styleConfig 병합 + 미리보기 갱신 + 요약]
     J --> K[사용자 검토·보정]
     K --> L{저장?}
@@ -27,6 +29,9 @@ flowchart TD
 - **헤드리스 computed 스타일**: 렌더된 최종값을 읽어 @media·변수·다중 시트 캐스케이드를 원천 해결.
 - **본문 컨테이너 탐지**: 흔한 본문 셀렉터 우선순위로 탐지, 없으면 body 폴백. 본문 내 대표 요소 샘플링.
 - **지원 속성만 + 노이즈 제거**: 글꼴/색/정렬/장식/여백/패딩/테두리/반경/list-style. none/normal/transparent/0-border/기본정렬 등 no-op은 제외.
+- **단측 테두리 보존(붙여넣기 추출과 동일 로직)**: `border-top-*`만 읽으면 `border-left`만 있는 h3/h4의 테두리가 소실된다. 4면 style/width/color를 모두 읽어, 활성 면(style≠none & width>0) 기준으로 generic `border-style`/`border-color`를 잡고 4면 폭을 명시(비활성=0)해 한 면 테두리도 재현.
+- **버튼형 링크 구분**: `.button-link a`/`a.button`/`.wp-block-button a` 등을 별도 탐지해 `a.button`으로 매핑. 일반 `a`는 버튼 클래스 제외 링크 우선 선택(버튼 스타일이 일반 링크로 뭉개지지 않게).
+- **태그별 관련 속성만**: `list-style`은 목록(ul/ol)에만, `border-collapse`는 `collapse`일 때만 반영(모든 태그 computed 초기값 `disc`/`separate` 노이즈 제거).
 - **온디맨드 실행**: 추출 클릭 시에만 Chromium 프로세스 기동→종료(상시 메모리 부담 없음).
 - **저장 필요**: 추출은 편집 상태만 갱신. 저장해야 반영(미저장 초기화 원칙).
 - **보안/견고성**: http(s) URL만 허용, 타임아웃, 실패 시 명확한 오류 반환.
