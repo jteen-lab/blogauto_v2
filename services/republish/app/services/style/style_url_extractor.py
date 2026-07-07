@@ -29,7 +29,7 @@ logger = get_logger(__name__)
 _COLLECT_JS = r"""
 () => {
     const TAG_TARGETS = ['h1','h2','h3','h4','h5','p','ul','ol','li',
-        'table','th','td','blockquote','a'];
+        'table','th','td','blockquote'];
     const BTN_SELECTORS = ['.button-link a', 'a.button', 'a.btn', '.btn a',
         'a.wp-block-button__link', '.wp-block-button a', '.btn-link a'];
     const CONTENT_SELECTORS = ['.entry-content', '.post-content', '.post-body',
@@ -58,22 +58,33 @@ _COLLECT_JS = r"""
     };
 
     const out = {};
+    // 본문 기준 폰트(상속 기본값) — 요소별 font-family 노이즈 제거에 사용
+    out['__base'] = { 'font-family': getComputedStyle(container).getPropertyValue('font-family') };
+
     for (const tag of TAG_TARGETS) {
-        let el;
-        if (tag === 'a') {
-            // 버튼 클래스가 아닌 일반 링크 우선, 없으면 첫 링크
-            el = container.querySelector('a:not([class*="button"]):not([class*="btn"])')
-                || container.querySelector('a');
-        } else {
-            el = container.querySelector(tag);
-        }
+        let el = container.querySelector(tag);
+        // h1은 본문 밖(글 제목)에 있는 경우가 많음. 없으면 문서 전체에서 폴백.
+        // 블로그 CSS의 h1 규칙은 제목 h1에도 적용되므로 대표값으로 유효.
+        if (!el && tag === 'h1') el = document.querySelector('h1');
         if (el) out[tag] = read(el);
     }
-    // 버튼형 링크 별도 탐지 → a.button
-    for (const sel of BTN_SELECTORS) {
-        const el = container.querySelector(sel);
-        if (el) { out['a.button'] = read(el); break; }
+
+    // 링크: 배경 유무 + 버튼 셀렉터로 일반/버튼 분리
+    // (본문 첫 링크가 버튼이어도 일반 링크 스타일이 버튼으로 오염되지 않게)
+    const bgNone = (v) => !v || v === 'transparent' || v === 'rgba(0, 0, 0, 0)';
+    const matchesBtn = (el) => {
+        for (const s of BTN_SELECTORS) { try { if (el.matches(s)) return true; } catch (e) {} }
+        return !!el.closest('.button-link, .wp-block-button, .btn-link');
+    };
+    let normalLink = null, btnLink = null;
+    for (const el of Array.from(container.querySelectorAll('a'))) {
+        const isBtn = matchesBtn(el) || !bgNone(getComputedStyle(el).backgroundColor);
+        if (isBtn) { if (!btnLink) btnLink = el; }
+        else if (!normalLink) normalLink = el;
+        if (normalLink && btnLink) break;
     }
+    if (normalLink) out['a'] = read(normalLink);
+    if (btnLink) out['a.button'] = read(btnLink);
     return out;
 }
 """
@@ -211,8 +222,13 @@ def _extract_border(props: Dict[str, str]) -> Dict[str, str]:
 
 def _map_computed(collected: Dict[str, Dict[str, str]]) -> Dict[str, Dict[str, str]]:
     """태그별 computed props → 우리 style_config(지원 속성만, 정규화·테두리 통합)."""
+    collected = collected or {}
+    base_ff = ((collected.get("__base") or {}).get("font-family", "") or "").strip()
+
     style_config: Dict[str, Dict[str, str]] = {}
-    for tag, props in (collected or {}).items():
+    for tag, props in collected.items():
+        if tag == "__base":
+            continue
         mapped: Dict[str, str] = {}
         for css_prop, our_prop in _CSS_TO_OUR.items():
             val = _normalize(our_prop, props.get(css_prop, ""))
@@ -220,6 +236,10 @@ def _map_computed(collected: Dict[str, Dict[str, str]]) -> Dict[str, Dict[str, s
                 continue
             # list-style는 목록 태그에만 (다른 태그 computed 초기값 disc 노이즈 제거)
             if our_prop == "list-style" and tag not in _LIST_TAGS:
+                continue
+            # font-family가 본문 상속 기본값과 같으면 노이즈 → 제외
+            # (링크의 Arial처럼 의도적으로 다른 폰트만 남긴다)
+            if our_prop == "font-family" and base_ff and val.strip() == base_ff:
                 continue
             mapped[our_prop] = val
         # 테두리(4면 통합)
