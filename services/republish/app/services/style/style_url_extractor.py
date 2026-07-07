@@ -89,16 +89,25 @@ _COLLECT_JS = r"""
         if (el) out[tag] = read(el);
     }
 
-    // 2) 링크: 배경 유무 + 버튼 셀렉터로 일반/버튼 분리
-    // (본문 첫 링크가 버튼이어도 일반 링크 스타일이 버튼으로 오염되지 않게)
+    // 2) 링크: 일반/버튼 분리. 버튼 판별 신호:
+    //   - 버튼 셀렉터(.button-link a 등) 매칭, 또는
+    //   - 배경색이 있음, 또는
+    //   - display가 block/inline-block/flex(테두리·패딩 박스형 CTA 링크)
+    //   티스토리 버튼처럼 배경 없이 테두리+block인 버튼도 잡기 위함.
     const bgNone = (v) => !v || v === 'transparent' || v === 'rgba(0, 0, 0, 0)';
     const matchesBtn = (el) => {
         for (const s of BTN_SELECTORS) { try { if (el.matches(s)) return true; } catch (e) {} }
         return !!el.closest('.button-link, .wp-block-button, .btn-link');
     };
+    const isBoxLink = (cs) => {
+        const d = cs.display;
+        return d === 'block' || d === 'inline-block' || d === 'flex' || d === 'inline-flex';
+    };
     let normalLink = null, btnLink = null;
     for (const el of Array.from(container.querySelectorAll('a'))) {
-        const isBtn = matchesBtn(el) || !bgNone(getComputedStyle(el).backgroundColor);
+        if (el.classList.contains('google-anno')) continue;   // 애드센스 자동주석 링크 제외
+        const cs = getComputedStyle(el);
+        const isBtn = matchesBtn(el) || !bgNone(cs.backgroundColor) || isBoxLink(cs);
         if (isBtn) { if (!btnLink) btnLink = el; }
         else if (!normalLink) normalLink = el;
         if (normalLink && btnLink) break;
@@ -263,7 +272,7 @@ def _extract_border(props: Dict[str, str]) -> Dict[str, str]:
     """
     out: Dict[str, str] = {}
     info: Dict[str, Dict[str, Any]] = {}
-    first_active: Optional[str] = None
+    active: list = []
     for side in _BORDER_SIDES:
         style = (props.get(f"border-{side}-style", "") or "").strip().lower()
         width = (props.get(f"border-{side}-width", "") or "").strip()
@@ -274,14 +283,26 @@ def _extract_border(props: Dict[str, str]) -> Dict[str, str]:
             "width": width,
             "color": props.get(f"border-{side}-color", ""),
         }
-        if has and first_active is None:
-            first_active = side
+        if has:
+            active.append(side)
 
-    if first_active is None:
+    if not active:
         return out
 
-    out["border-style"] = info[first_active]["style"]
-    color = _normalize("border-color", info[first_active]["color"])
+    # 대표 면 = 가장 두꺼운 활성 면.
+    # (우리 모델은 border-style/color가 단일값이라 면마다 다르면 하나만 유지 →
+    #  얇은 부수 테두리보다 굵은 강조 테두리를 우선해야 디자인 의도가 보존됨.
+    #  예: h2가 왼쪽 12px 빨강 + 아래 1px 흰색이면 빨강을 대표로.)
+    def _width_num(w: str) -> float:
+        m = _PX_RE.match((w or "").strip())
+        try:
+            return float(m.group(1)) if m else 0.0
+        except (TypeError, ValueError):
+            return 0.0
+
+    rep = max(active, key=lambda s: _width_num(info[s]["width"]))
+    out["border-style"] = info[rep]["style"]
+    color = _normalize("border-color", info[rep]["color"])
     if color:
         out["border-color"] = color
     for side in _BORDER_SIDES:
