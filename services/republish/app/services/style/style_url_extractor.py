@@ -61,6 +61,7 @@ _COLLECT_JS = r"""
     // 본문 기준 폰트(상속 기본값) — 요소별 font-family 노이즈 제거에 사용
     out['__base'] = { 'font-family': getComputedStyle(container).getPropertyValue('font-family') };
 
+    // 1) 본문 실물 요소 우선 수집(있으면 그 요소가 가장 정확)
     for (const tag of TAG_TARGETS) {
         let el = container.querySelector(tag);
         // h1은 본문 밖(글 제목)에 있는 경우가 많음. 없으면 문서 전체에서 폴백.
@@ -69,7 +70,7 @@ _COLLECT_JS = r"""
         if (el) out[tag] = read(el);
     }
 
-    // 링크: 배경 유무 + 버튼 셀렉터로 일반/버튼 분리
+    // 2) 링크: 배경 유무 + 버튼 셀렉터로 일반/버튼 분리
     // (본문 첫 링크가 버튼이어도 일반 링크 스타일이 버튼으로 오염되지 않게)
     const bgNone = (v) => !v || v === 'transparent' || v === 'rgba(0, 0, 0, 0)';
     const matchesBtn = (el) => {
@@ -85,6 +86,34 @@ _COLLECT_JS = r"""
     }
     if (normalLink) out['a'] = read(normalLink);
     if (btnLink) out['a.button'] = read(btnLink);
+
+    // 3) 미사용 태그 보강: 본문에 없는 지원 태그는 숨긴 샘플을 본문 컨테이너에
+    // 주입해 사이트 CSS를 상속받은 computed를 읽고 제거한다. computed는 실물이
+    // 있어야 측정 가능하므로, 글에 없는 태그(표/인용/h5 등)도 이렇게 보강한다.
+    const SAMPLE_HTML =
+        '<h1>가</h1><h2>가</h2><h3>가</h3><h4>가</h4><h5>가</h5>'
+        + '<p>가 <a href="#">링크</a></p>'
+        + '<ul><li>가</li></ul><ol><li>가</li></ol>'
+        + '<table><thead><tr><th>가</th></tr></thead>'
+        + '<tbody><tr><td>가</td></tr></tbody></table>'
+        + '<blockquote>가</blockquote>'
+        + '<div class="button-link"><a href="#">가</a></div>';
+    const sample = document.createElement('div');
+    sample.setAttribute('aria-hidden', 'true');
+    sample.style.cssText = 'position:absolute;left:-99999px;top:0;visibility:hidden';
+    sample.innerHTML = SAMPLE_HTML;
+    container.appendChild(sample);
+    try {
+        for (const tag of TAG_TARGETS) {
+            if (out[tag]) continue;             // 실물이 있으면 유지
+            const el = sample.querySelector(tag);
+            if (el) out[tag] = read(el);
+        }
+        if (!out['a']) { const el = sample.querySelector('p a'); if (el) out['a'] = read(el); }
+        if (!out['a.button']) { const el = sample.querySelector('.button-link a'); if (el) out['a.button'] = read(el); }
+    } finally {
+        container.removeChild(sample);
+    }
     return out;
 }
 """
