@@ -274,14 +274,22 @@ function cssImportBuildSample(cssText) {
             if (!sel) return;
             const parts = sel.split(/[\s>+~]+/).filter(Boolean);
             const last = parts[parts.length - 1] || '';
-            parts.slice(0, -1).forEach(p => {
-                (p.match(/\.[\w-]+/g) || []).forEach(c => ancestor.add(c.slice(1)));
-            });
             const lastCls = (last.match(/\.[\w-]+/g) || []).map(c => c.slice(1));
             const target = cssImportResolveSelector(sel);
+            // 조상 클래스는 '블록/텍스트 요소' 선택자에서만 전역 래퍼로 수집한다.
+            // 버튼/링크 래퍼(.button-link, .my-link 등)는 개별 요소용 래퍼이므로
+            // 전역 .entry-content 래퍼에 얹으면, 그 래퍼의 상속 속성
+            // (text-align/color/font-size 등)이 h1·p·li 등 모든 자식으로 새어나가
+            // computed 추출을 오염시킨다. (예: .button-link{text-align:center} → 전부 center)
+            const isBlockTarget = target && CSS_IMPORT_TAGS.indexOf(target) !== -1;
+            if (isBlockTarget) {
+                parts.slice(0, -1).forEach(p => {
+                    (p.match(/\.[\w-]+/g) || []).forEach(c => ancestor.add(c.slice(1)));
+                });
+            }
             if (target === 'a') addCls('a', lastCls);
             else if (target === 'a.button') addCls('abutton', lastCls);
-            else if (target && CSS_IMPORT_TAGS.indexOf(target) !== -1) addCls(target, lastCls);
+            else if (isBlockTarget) addCls(target, lastCls);
         });
     });
     const cl = (k) => Array.from(tagClasses[k] || []).join(' ');
