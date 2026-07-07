@@ -13,7 +13,8 @@ flowchart TD
     C --> D[page.goto(url) 렌더 대기]
     D --> E[page.evaluate: 본문 컨테이너 탐지<br/>.entry-content/.post-content/article/main...]
     E --> F[대상 태그별 대표 요소의 getComputedStyle 수집<br/>h1~h5,p,ul,ol,li,table,th,td,blockquote<br/>h1 본문에 없으면 문서 제목 h1 폴백<br/>링크는 배경 유무로 일반 a / 버튼 a.button 분리<br/>+ 4면 테두리 style/width/color + 본문 기준폰트]
-    F --> G[브라우저 종료 → 태그별 computed props 반환]
+    F --> F2[본문에 없는 지원 태그는 숨긴 샘플을 본문에 주입<br/>사이트 CSS 상속 상태로 computed 읽고 제거<br/>→ 글 내용과 무관하게 전 태그 추출]
+    F2 --> G[브라우저 종료 → 태그별 computed props 반환]
     G --> H[Python: 지원 속성 매핑·정규화·기본값 노이즈 제거<br/>px 숫자화, none/normal/transparent 스킵]
     H --> H2[테두리 통합: 활성 면 기준 style/color 대표값<br/>+ 4면 폭 명시(비활성=0) → 단측 테두리 보존]
     H2 --> H3[list-style는 ul/ol에만, border-collapse는 collapse만<br/>→ computed 초기값 노이즈 제거]
@@ -34,6 +35,7 @@ flowchart TD
 - **h1 폴백**: h1은 보통 글 제목이라 본문 컨테이너 밖. 본문에 없으면 문서 전체 h1을 대표값으로 사용(블로그 CSS의 h1 규칙은 제목 h1에도 적용되므로 유효).
 - **font-family 노이즈 제거**: 요소 computed font-family가 본문 상속 기본값과 같으면 제외(링크 Arial처럼 의도적으로 다른 폰트만 남김).
 - **태그별 관련 속성만**: `list-style`은 목록(ul/ol)에만, `border-collapse`는 `collapse`일 때만 반영(모든 태그 computed 초기값 `disc`/`separate` 노이즈 제거).
+- **미사용 태그 보강(동적 샘플 주입)**: computed는 실물 요소가 있어야 측정 가능 → 글에 없는 태그는 추출 불가. 본문 실물 수집 후, 없는 지원 태그를 숨긴 샘플(off-screen·visibility:hidden)로 본문 컨테이너에 주입해 사이트 CSS를 상속받은 computed를 읽고 제거. 글 내용과 무관하게 전 지원 태그 추출. 한계: 사이트가 특정 클래스(`.wp-block-table` 등)에만 스타일을 건 경우 맨 태그 주입으론 미매치(맨 태그 규칙이면 정상).
 - **온디맨드 실행**: 추출 클릭 시에만 Chromium 프로세스 기동→종료(상시 메모리 부담 없음).
 - **저장 필요**: 추출은 편집 상태만 갱신. 저장해야 반영(미저장 초기화 원칙).
 - **보안/견고성**: http(s) URL만 허용, 타임아웃, 실패 시 명확한 오류 반환.
