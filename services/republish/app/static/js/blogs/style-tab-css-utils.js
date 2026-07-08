@@ -271,10 +271,12 @@ function generatePreviewHtml(css, content, prefixClass = '') {
                 * { margin: 0; padding: 0; box-sizing: border-box; }
                 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 16px; }
                 table { border-collapse: collapse; width: 100%; }
-                ${css}
                 /* C: 미리보기 클릭 편집 - 편집 가능 요소 hover 표시 */
                 .__sp-hover { outline: 2px dashed #6366f1 !important; outline-offset: 2px; cursor: pointer; }
             </style>
+            <!-- 사용자 생성 CSS는 별도 style 요소로 분리 → 편집 시 이 요소의 textContent만
+                 교체해 iframe 전체 재로드 없이 갱신(마우스 랙 방지). renderPreviewToIframe 참조. -->
+            <style id="__preview_css">${css}</style>
         </head>
         <body>${body}${previewClickScript()}</body>
         </html>

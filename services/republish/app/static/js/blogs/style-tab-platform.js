@@ -181,23 +181,38 @@ function styleTabPlatformMixin() {
                 }
 
                 this.previewHtml = fullHtml;
-                this.renderPreviewToIframe(fullHtml);
+                // 콘텐츠(본문+래퍼)가 이전과 같으면(=스타일 속성만 편집) CSS만 교체한다.
+                const bodyKey = (this.previewWrapperClass() || '') + '\n' + previewContent;
+                this.renderPreviewToIframe(fullHtml, css, bodyKey);
             } catch (e) {
                 console.error('[스타일 미리보기] 갱신 오류:', e && e.message);
             }
         },
 
         /**
-         * iframe contentDocument에 미리보기 HTML을 직접 써서 렌더
-         * Alpine :srcdoc 바인딩보다 안정적으로 동작한다.
-         * iframe이 아직 없으면(초기화 타이밍) previewHtml만 유지(폴백).
+         * iframe contentDocument에 미리보기 HTML을 렌더.
+         * 최적화: 콘텐츠(본문 구조)가 직전과 동일하면 iframe을 통째로 재로드하지 않고
+         * 사용자 CSS(style#__preview_css)의 textContent만 교체한다. 이렇게 하면 스타일
+         * 속성을 슬라이더/색상으로 연속 편집할 때 문서 재파싱·선택스크립트 재실행이
+         * 사라져 메인 스레드 블로킹(마우스 랙)이 발생하지 않는다.
+         * 콘텐츠가 바뀌었거나 iframe이 아직 준비 안 됐으면 srcdoc 전체 렌더로 폴백한다.
          * @param {string} fullHtml - 전체 미리보기 HTML 문서
+         * @param {string} [css] - 사용자 생성 CSS (in-place 교체용)
+         * @param {string} [bodyKey] - 콘텐츠 동일성 키 (변하면 전체 재로드)
          */
-        renderPreviewToIframe(fullHtml) {
+        renderPreviewToIframe(fullHtml, css, bodyKey) {
             const f = document.getElementById('stylePreviewFrame');
             if (!f) { this.previewHtml = fullHtml; return; } // 폴백
-            // srcdoc 속성을 직접 설정하면 iframe이 매번 새 문서로 강제 재로드된다.
-            // document.write 는 Edge 등에서 재호출 시 조용히 실패하는 경우가 있어 신뢰 불가.
+            // 콘텐츠 동일 + style 요소 존재 → CSS만 교체(전체 재로드 회피)
+            if (typeof css === 'string' && bodyKey !== undefined && this._previewBodyKey === bodyKey) {
+                try {
+                    const doc = f.contentDocument;
+                    const styleEl = doc && doc.getElementById('__preview_css');
+                    if (styleEl) { styleEl.textContent = css; return; }
+                } catch (_) { /* 접근 실패 시 아래 전체 재로드로 폴백 */ }
+            }
+            // 최초 렌더 또는 콘텐츠 변경 → 전체 문서 재로드
+            this._previewBodyKey = bodyKey;
             f.srcdoc = fullHtml;
         }
     };
