@@ -33,7 +33,7 @@ function replaceTabApp() {
             css_classes: {},
             link_styles: {
                 default_class: '',
-                button_class: 'button-link'
+                button_class: ''
             },
             text_replace: []
         },
@@ -46,7 +46,7 @@ function replaceTabApp() {
         // 링크 스타일 (별도 관리)
         linkStyles: {
             default_class: '',
-            button_class: 'button-link'
+            button_class: ''
         },
 
         // 다른 블로그에서 치환값 가져오기(선택 복사)
@@ -166,7 +166,7 @@ function replaceTabApp() {
                     this.placeholders = data.placeholders || {
                         html_tags: {},
                         css_classes: {},
-                        link_styles: { default_class: '', button_class: 'button-link' },
+                        link_styles: { default_class: '', button_class: '' },
                         text_replace: []
                     };
                     this.syncToRows();
@@ -219,14 +219,16 @@ function replaceTabApp() {
             }));
 
             // 링크 스타일 동기화
-            // 일반 링크·버튼 링크 모두 다른 본문 태그와 동일하게 본문 베이스를 자동 입력.
-            // - 일반 링크: '{본문베이스}' (예: 'entry-content' → CSS '.entry-content a')
-            // - 버튼 링크: '{본문베이스} button-link' (예: 'entry-content button-link'
-            //   → CSS '.entry-content .button-link a'). 'button-link'는 래퍼 구조 클래스.
+            // - 일반 링크: '{본문베이스}'만 자동 입력 (예: 'entry-content' → CSS '.entry-content a')
+            // - 버튼 링크: 자동 입력하지 않음(빈칸). button_class는 발행 시 버튼 <a>에
+            //   그대로 클래스로 부여되므로(placeholders._apply_link_styles), 본문 스코프
+            //   'entry-content'를 넣으면 링크가 플랫폼 .entry-content 스타일을 상속해
+            //   버튼이 깨진다. 스타일 탭 CSS 생성은 빈값이면 '.button-link' 폴백을 쓰므로
+            //   버튼 스타일에는 영향 없음. 저장값이 있으면 그대로 사용.
             const linkStyles = this.placeholders.link_styles || {};
             this.linkStyles = {
                 default_class: linkStyles.default_class || base,
-                button_class: linkStyles.button_class || `${base} button-link`
+                button_class: linkStyles.button_class || ''
             };
         },
 
@@ -259,7 +261,7 @@ function replaceTabApp() {
             // 링크 스타일 동기화
             this.placeholders.link_styles = {
                 default_class: this.linkStyles.default_class || '',
-                button_class: this.linkStyles.button_class || 'button-link'
+                button_class: this.linkStyles.button_class || ''
             };
 
             // 순환 매핑 체크
@@ -426,7 +428,9 @@ function replaceTabApp() {
             const base = this.contentBaseClass();
             this.cssClassRows = this.cssClassRows.map(row => ({ ...row, className: base }));
             this.linkStyles.default_class = base;
-            this.linkStyles.button_class = `${base} button-link`;
+            // 버튼 링크는 클래스 미부여(빈칸). button_class를 발행 시 버튼 <a>에 그대로
+            // 넣기 때문에 본문 스코프를 넣으면 링크가 깨진다. 스타일 CSS는 '.button-link' 폴백 사용.
+            this.linkStyles.button_class = '';
             this.syncFromRows();
             if (typeof showSuccessMessage === 'function') {
                 showSuccessMessage('기본값으로 초기화되었습니다. 저장을 눌러 반영하세요.');
