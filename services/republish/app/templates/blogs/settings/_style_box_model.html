@@ -95,7 +95,7 @@
       <div class="flex gap-1">
         <input type="color" class="w-9 h-8 border border-gray-300 rounded cursor-pointer"
                :value="hasColorValue(currentStyles['border-color']) ? currentStyles['border-color'] : '#cccccc'"
-               @input="updateStyle('border-color', $event.target.value)">
+               @change="updateStyle('border-color', $event.target.value)">
         <input type="text" x-model="currentStyles['border-color']"
                @input="updateStyle('border-color', $event.target.value)"
                placeholder="#cccccc" class="flex-1 px-2 py-1 text-sm border border-gray-300 rounded font-mono">

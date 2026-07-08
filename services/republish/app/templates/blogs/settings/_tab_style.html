@@ -109,7 +109,7 @@
                     <label class="text-xs font-medium text-gray-600">메인 색상</label>
                     <input type="color"
                            :value="mainColor || '#000000'"
-                           @input="recolorMain($event.target.value)"
+                           @change="recolorMain($event.target.value)"
                            class="w-10 h-8 border border-gray-300 rounded cursor-pointer">
                     <span class="text-xs text-gray-500 font-mono" x-text="mainColor"></span>
                     <span class="text-xs text-gray-400">색상 하나로 전체 강조색이 바뀝니다</span>
@@ -280,7 +280,7 @@
                                 <div class="flex gap-2">
                                     <input type="color"
                                            :value="hasColorValue(currentStyles['color']) ? currentStyles['color'] : '#333333'"
-                                           @input="updateStyle('color', $event.target.value)"
+                                           @change="updateStyle('color', $event.target.value)"
                                            class="w-10 h-8 border border-gray-300 rounded cursor-pointer">
                                     <input type="text" x-model="currentStyles['color']"
                                            @input="updateStyle('color', $event.target.value)"
@@ -442,7 +442,7 @@
                             <div class="flex gap-2">
                                 <input type="color"
                                        :value="hasColorValue(currentStyles['background-color']) ? currentStyles['background-color'] : '#ffffff'"
-                                       @input="updateStyle('background-color', $event.target.value)"
+                                       @change="updateStyle('background-color', $event.target.value)"
                                        class="w-10 h-8 border border-gray-300 rounded cursor-pointer">
                                 <input type="text" x-model="currentStyles['background-color']"
                                        @input="updateStyle('background-color', $event.target.value)"

@@ -22,9 +22,12 @@
                placeholder="두께"
                class="px-2 py-1 text-xs border border-gray-300 rounded text-center">
         <div class="flex gap-1">
+            <!-- 네이티브 색상 팝업은 커밋(@change) 시에만 반영한다. @input(연속)으로
+                 하면 스포이드 사용 중 :value 되쓰기가 열린 팝업을 고아 상태로 만들어
+                 클릭 beep·전체 잠김(새로고침 불가)이 발생함. -->
             <input type="color"
                    :value="hasColorValue(currentStyles['border-{{ direction }}-color']) ? currentStyles['border-{{ direction }}-color'] : '#cccccc'"
-                   @input="updateStyle('border-{{ direction }}-color', $event.target.value)"
+                   @change="updateStyle('border-{{ direction }}-color', $event.target.value)"
                    class="w-8 h-6 border border-gray-300 rounded cursor-pointer">
             <input type="text" x-model="currentStyles['border-{{ direction }}-color']"
                    @input="updateStyle('border-{{ direction }}-color', $event.target.value)"

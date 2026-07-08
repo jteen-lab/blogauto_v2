@@ -21,14 +21,14 @@
             <label class="block text-xs text-gray-600 mb-1">배경색</label>
             <input type="color"
                    :value="getButtonStyle('background-color') || '#2563eb'"
-                   @input="setButtonOption('background-color', $event.target.value)"
+                   @change="setButtonOption('background-color', $event.target.value)"
                    class="w-full h-8 border border-gray-300 rounded cursor-pointer">
         </div>
         <div>
             <label class="block text-xs text-gray-600 mb-1">글자색</label>
             <input type="color"
                    :value="getButtonStyle('color') || '#ffffff'"
-                   @input="setButtonOption('color', $event.target.value)"
+                   @change="setButtonOption('color', $event.target.value)"
                    class="w-full h-8 border border-gray-300 rounded cursor-pointer">
         </div>
     </div>
@@ -61,14 +61,14 @@
             <label class="block text-xs text-gray-600 mb-1">오버 배경색</label>
             <input type="color"
                    :value="getButtonStyle('background-color', true) || '#1d4ed8'"
-                   @input="setButtonOption('background-color', $event.target.value, true)"
+                   @change="setButtonOption('background-color', $event.target.value, true)"
                    class="w-full h-8 border border-gray-300 rounded cursor-pointer">
         </div>
         <div>
             <label class="block text-xs text-gray-600 mb-1">오버 글자색</label>
             <input type="color"
                    :value="getButtonStyle('color', true) || '#ffffff'"
-                   @input="setButtonOption('color', $event.target.value, true)"
+                   @change="setButtonOption('color', $event.target.value, true)"
                    class="w-full h-8 border border-gray-300 rounded cursor-pointer">
         </div>
     </div>
