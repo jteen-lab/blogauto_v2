@@ -1312,6 +1312,20 @@ function openBottomSheet(id) {
     }, 10);
 
     document.body.style.overflow = 'hidden';
+
+    // 설정 시트 한정: 열림 애니메이션(300ms) 후 transform 제거.
+    // transform 조상 안에서는 엣지의 네이티브 색상팝업/스포이드 오버레이가
+    // 좌표계 오작동으로 고착(클릭 beep·전체 잠김)되므로, 열린 뒤 transform을
+    // 없애 네이티브 팝업이 뷰포트 기준으로 정상 위치·정상 닫히게 한다.
+    // (시트는 fixed로 위치가 잡혀 transform 제거해도 화면 위치는 동일)
+    if (id === 'blogSettings') {
+        if (sheet._transformTimer) clearTimeout(sheet._transformTimer);
+        sheet._transformTimer = setTimeout(() => {
+            if (!sheet.classList.contains('translate-y-full')) {
+                sheet.style.transform = 'none';
+            }
+        }, 320);
+    }
 }
 
 function closeBottomSheet(id) {
@@ -1323,6 +1337,14 @@ function closeBottomSheet(id) {
         window.blogCreateAppInstance.resetForm();
     } else if (id === 'blogEditForm' && window.blogEditAppInstance) {
         window.blogEditAppInstance.resetForm();
+    }
+
+    // 닫힘 슬라이드 애니메이션을 위해 transform 복원(열림 중 제거했으면).
+    // 인라인 transform:none 제거 → 리플로우로 translateY(0) 확정 후 아래로 슬라이드.
+    if (sheet._transformTimer) { clearTimeout(sheet._transformTimer); sheet._transformTimer = null; }
+    if (sheet.style.transform) {
+        sheet.style.transform = '';
+        void sheet.offsetHeight;
     }
 
     backdrop.style.opacity = '0';
