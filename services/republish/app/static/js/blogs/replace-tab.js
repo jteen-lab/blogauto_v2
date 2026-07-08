@@ -201,9 +201,17 @@ function replaceTabApp() {
             // (a / a.button 등 링크 관련 항목은 link_styles에서 별도 관리하므로 css_classes 표시에서 제외됨)
             const savedCssClasses = this.placeholders.css_classes || {};
             // 고정 목록 + 기존 저장된 비표준 태그(예: 헤딩 다운시프트로 생긴 h6)도
-            // 함께 표시·보존해 저장 시 데이터 손실을 막는다. (a/a.button은 링크에서 별도 관리)
+            // 함께 표시·보존해 저장 시 데이터 손실을 막는다.
+            // 단, 링크 관련·복합 셀렉터 키는 제외한다:
+            //   - 'a' / 'a.button' : 아래 링크 스타일(link_styles)에서 별도 관리
+            //   - 레거시 링크 셀렉터 키('my-link a', 'button-link a' 등 공백/점/‘link’ 포함):
+            //     예전 저장 데이터가 CSS 클래스 행에 삭제 불가한 항목으로 표시되고
+            //     링크 스타일과 중복되던 문제 → 행에서 제외하면 저장 시 syncFromRows가
+            //     css_classes를 행 기준으로 재구성하며 자동 제거한다.
+            const isLinkOrCompoundKey = (t) =>
+                t === 'a' || t === 'a.button' || /[\s.]/.test(t) || /link/i.test(t);
             const extraTags = Object.keys(savedCssClasses).filter(
-                t => t !== 'a' && t !== 'a.button' && !CSS_CLASS_TAGS.includes(t)
+                t => !CSS_CLASS_TAGS.includes(t) && !isLinkOrCompoundKey(t)
             );
             // 빈값이면 플랫폼별 본문 스코프 기본값 '{본문베이스}'만 자동 입력(태그명 제외).
             // (워드프레스→'entry-content', 블로거→'post-body', 그 외→'post-content')
