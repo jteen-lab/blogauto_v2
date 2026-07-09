@@ -33,6 +33,38 @@
         </div>
     </div>
 
+    <!-- 글자(텍스트): 크기 / 줄 높이 / 굵기 -->
+    <div class="grid grid-cols-3 gap-3">
+        <div>
+            <label class="block text-xs text-gray-600 mb-1">글자 크기(px)</label>
+            <input type="number" min="1"
+                   :value="getButtonStyle('font-size') || ''"
+                   @input="setButtonOption('font-size', $event.target.value)"
+                   placeholder="17"
+                   class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-accent">
+        </div>
+        <div>
+            <label class="block text-xs text-gray-600 mb-1">줄 높이</label>
+            <input type="text"
+                   :value="getButtonStyle('line-height') || ''"
+                   @input="setButtonOption('line-height', $event.target.value)"
+                   placeholder="1.8"
+                   class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-accent">
+        </div>
+        <div>
+            <label class="block text-xs text-gray-600 mb-1">글자 굵기</label>
+            <select :value="getButtonStyle('font-weight') || ''"
+                    @change="setButtonOption('font-weight', $event.target.value)"
+                    class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-accent">
+                <option value="">선택안함</option>
+                <option value="normal">Normal (400)</option>
+                <option value="500">Medium (500)</option>
+                <option value="600">SemiBold (600)</option>
+                <option value="700">Bold (700)</option>
+            </select>
+        </div>
+    </div>
+
     <!-- 모서리 둥글기 -->
     <div>
         <label class="block text-xs text-gray-600 mb-1">
