@@ -157,6 +157,14 @@ function generateCssFromConfig(selectors, styleConfig, placeholderConfig, prefix
             properties.push(`    ${prop}: ${cssValue};`);
         }
 
+        // 버튼 링크 전체폭 기본값(구글 블로거식): width 미설정이면 full-width 기본 적용.
+        // 'width: auto'로 명시하면(전체폭 체크 해제) 작은 버튼으로 opt-out.
+        if (selector === 'a.button' && config['width'] !== 'auto') {
+            if (!config['width']) properties.push('    width: 100%;');
+            if (!config['display']) properties.push('    display: inline-block;');
+            if (!config['box-sizing']) properties.push('    box-sizing: border-box;');
+        }
+
         if (properties.length > 0) {
             // 버튼 링크는 래퍼(div) 블록 규칙을 함께 생성해야
             // <div class="button-link"><a>...</a></div> 구조에서 한 줄 버튼으로 보인다.

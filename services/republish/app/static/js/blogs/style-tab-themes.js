@@ -289,17 +289,11 @@ function styleTabThemesMixin() {
             const key = 'a.button';
             if (!this.styleConfig[key]) this.styleConfig[key] = {};
             const config = this.styleConfig[key];
-            if (enabled) {
-                config['width'] = '100%';
-                config['display'] = 'inline-block';
-                config['box-sizing'] = 'border-box';
-                config['text-align'] = 'center';
-            } else {
-                delete config['width'];
-                delete config['display'];
-                delete config['box-sizing'];
-                delete config['text-align'];
-            }
+            config['display'] = 'inline-block';
+            config['box-sizing'] = 'border-box';
+            config['text-align'] = 'center';
+            // 전체폭은 기본값(구글 블로거식). 해제 시 width:auto로 명시 opt-out(작은 버튼).
+            config['width'] = enabled ? '100%' : 'auto';
             if (this.activeSelector === key) this.loadCurrentSelectorStyles();
             this.debounceUpdatePreview();
         },
@@ -309,7 +303,8 @@ function styleTabThemesMixin() {
          * @returns {boolean}
          */
         isButtonFullWidth() {
-            return (this.styleConfig['a.button'] || {})['width'] === '100%';
+            // width가 'auto'로 명시된 경우만 해제. 미설정(기본)은 전체폭으로 간주(체크).
+            return (this.styleConfig['a.button'] || {})['width'] !== 'auto';
         }
     };
 }
