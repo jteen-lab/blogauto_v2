@@ -45,6 +45,12 @@ class ContentResponse(BaseModel):
     source: str
     is_published: bool
     created_at: Optional[str] = None
+    # 미리보기에서 실제 블로그 스타일을 재현하기 위한 블로그 설정.
+    # (프런트가 style_config로 CSS를 생성해 미리보기 iframe에 주입 — 발행 HTML엔
+    #  클래스만 있고 CSS는 블로그 테마에 있으므로, 초기설정 검증용 미리보기에 필요)
+    platform: Optional[str] = None
+    style_config: Optional[dict] = None
+    placeholders: Optional[dict] = None
 
 
 class ContentListItem(BaseModel):
@@ -171,11 +177,13 @@ async def get_content(
     if not post:
         raise HTTPException(status_code=404, detail="콘텐츠를 찾을 수 없습니다")
 
-    # 블로그 이름 조회
+    # 블로그 이름 + 미리보기 스타일 재현용 설정 조회
     blog_result = await db.execute(
-        select(Blog.name).where(Blog.id == post.blog_id)
+        select(Blog.name, Blog.platform, Blog.style_config, Blog.placeholders)
+        .where(Blog.id == post.blog_id)
     )
-    blog_name = blog_result.scalar_one_or_none()
+    blog_row = blog_result.first()
+    blog_name = blog_row[0] if blog_row else None
 
     return ContentResponse(
         success=True,
@@ -188,6 +196,9 @@ async def get_content(
         source=post.source,
         is_published=post.is_published,
         created_at=post.created_at.isoformat() if post.created_at else None,
+        platform=(blog_row[1] if blog_row else None),
+        style_config=(blog_row[2] if blog_row else None) or {},
+        placeholders=(blog_row[3] if blog_row else None) or {},
     )
 
 
