@@ -164,6 +164,9 @@ function generateCssFromConfig(selectors, styleConfig, placeholderConfig, prefix
                 const wrapper = buttonWrapperSelector(placeholderConfig);
                 lines.push(`${px}${wrapper} {`);
                 lines.push('    display: block;');
+                // 래퍼를 가운데 정렬 → inline-block 버튼이 수평 중앙 배치(블로그 통상 관례).
+                // 전체폭(width:100%) 버튼은 영향 없음.
+                lines.push('    text-align: center;');
                 lines.push('    margin-bottom: 10px;');
                 lines.push('}');
                 lines.push('');
