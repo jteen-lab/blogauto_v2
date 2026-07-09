@@ -561,6 +561,10 @@
 {% endblock %}
 
 {% block extra_js %}
+<!-- 발행대기 글 미리보기에 실제 블로그 스타일 재현: 스타일 탭과 동일한 CSS 생성 유틸 공유
+     (presets = STYLE_SELECTORS/HIDDEN_SELECTORS, css-utils = generateCssFromConfig/buildBlogStyledPreview) -->
+<script src="/static/js/blogs/style-tab-presets.js?v=20260709_preview"></script>
+<script src="/static/js/blogs/style-tab-css-utils.js?v=20260709_preview"></script>
 <script>
 function dataManagementApp() {
     return {
@@ -2554,7 +2558,21 @@ function dataManagementApp() {
         },
 
         // ★ 생성 콘텐츠 미리보기 (iframe srcdoc)
-        _buildSafeHtml(html) {
+        // styleData(styleConfig/placeholders/platform)가 있으면 스타일 탭과 동일한
+        // buildBlogStyledPreview로 실제 블로그 CSS를 주입해 렌더(초기설정 검증용).
+        // 없거나 유틸 미로드 시 기본 렌더로 폴백.
+        _buildSafeHtml(html, styleData) {
+            if (styleData && styleData.styleConfig
+                && Object.keys(styleData.styleConfig).length
+                && typeof buildBlogStyledPreview === 'function') {
+                try {
+                    return buildBlogStyledPreview(
+                        html, styleData.styleConfig, styleData.placeholders, styleData.platform
+                    );
+                } catch (e) {
+                    console.error('[preview] 스타일 주입 실패, 기본 렌더로 폴백', e);
+                }
+            }
             const stripped = html.replace(/<script[\s\S]*?<\/script>/gi, '');
             return '<!DOCTYPE html><html><head><meta charset=utf-8>'
                 + '<style>body{font-family:-apple-system,sans-serif;padding:24px;line-height:1.8;color:#333;max-width:100%}'
@@ -2581,7 +2599,11 @@ function dataManagementApp() {
                 this.contentModal.title = data.title || '';
                 this.contentModal.blogName = data.blog_name || '';
                 this.contentModal.rawHtml = data.content_html || '';
-                this.contentModal.safeHtml = this._buildSafeHtml(this.contentModal.rawHtml);
+                this.contentModal.safeHtml = this._buildSafeHtml(this.contentModal.rawHtml, {
+                    styleConfig: data.style_config,
+                    placeholders: data.placeholders,
+                    platform: data.platform
+                });
             } catch (e) {
                 console.error('[viewGeneratedContent]', e);
                 this.contentModal.rawHtml = '';
