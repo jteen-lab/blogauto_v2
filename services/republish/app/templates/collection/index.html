@@ -564,7 +564,7 @@
 <!-- 발행대기 글 미리보기에 실제 블로그 스타일 재현: 스타일 탭과 동일한 CSS 생성 유틸 공유
      (presets = STYLE_SELECTORS/HIDDEN_SELECTORS, css-utils = generateCssFromConfig/buildBlogStyledPreview) -->
 <script src="/static/js/blogs/style-tab-presets.js?v=20260709_preview"></script>
-<script src="/static/js/blogs/style-tab-css-utils.js?v=20260709_preview"></script>
+<script src="/static/js/blogs/style-tab-css-utils.js?v=20260709_btncenter"></script>
 <script>
 function dataManagementApp() {
     return {
@@ -2616,13 +2616,46 @@ function dataManagementApp() {
         },
 
         async copyContentHtml() {
+            const text = this.contentModal.rawHtml || '';
             try {
-                await navigator.clipboard.writeText(this.contentModal.rawHtml);
+                // navigator.clipboard는 보안 컨텍스트(HTTPS/localhost)에서만 존재.
+                // HTTP에서는 undefined이므로 execCommand 폴백 사용.
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(text);
+                } else {
+                    this._fallbackCopyText(text);
+                }
                 this.contentModal.copied = true;
                 setTimeout(() => { this.contentModal.copied = false; }, 2000);
             } catch (e) {
-                console.error('[copyContentHtml]', e);
+                // clipboard API 실패 시에도 폴백 재시도
+                try {
+                    this._fallbackCopyText(text);
+                    this.contentModal.copied = true;
+                    setTimeout(() => { this.contentModal.copied = false; }, 2000);
+                } catch (e2) {
+                    console.error('[copyContentHtml]', e2);
+                    if (typeof showErrorMessage === 'function') {
+                        showErrorMessage('복사에 실패했습니다. HTML을 직접 선택해 복사하세요.');
+                    }
+                }
             }
+        },
+
+        // execCommand('copy') 기반 클립보드 폴백 (비보안 컨텍스트/HTTP용)
+        _fallbackCopyText(text) {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.setAttribute('readonly', '');
+            ta.style.position = 'fixed';
+            ta.style.top = '-9999px';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            const ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            if (!ok) throw new Error('execCommand copy 실패');
         },
 
         // ★ 이미지 미리보기 모달
