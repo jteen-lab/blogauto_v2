@@ -44,6 +44,8 @@ function styleTabPlatformMixin() {
          * @returns {string} 본문 스코프 베이스 클래스
          */
         contentBaseClass() {
+            // 공용 함수 위임(데이터관리 미리보기와 동일 규칙 보장). 미로드 시 폴백.
+            if (typeof styleContentBaseClass === 'function') return styleContentBaseClass(this.platform);
             if (this.platform === 'wordpress') return 'entry-content';
             if (this.platform === 'blogger') return 'post-body';
             return 'post-content';
@@ -59,6 +61,10 @@ function styleTabPlatformMixin() {
          * @returns {Object} 스코프가 보강된 placeholderConfig 사본
          */
         effectivePlaceholderConfig() {
+            // 공용 함수 위임(데이터관리 미리보기와 동일 규칙 보장). 미로드 시 아래 폴백.
+            if (typeof styleEffectivePlaceholderConfig === 'function') {
+                return styleEffectivePlaceholderConfig(this.placeholderConfig, this.platform);
+            }
             const base = this.contentBaseClass();
             const SCOPES = ['entry-content', 'post-body', 'post-content'];
             // 저장값에서 알려진 본문 스코프를 제거하고 현재 플랫폼 base 스코프를 앞에 부여.

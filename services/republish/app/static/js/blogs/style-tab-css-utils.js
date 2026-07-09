@@ -338,3 +338,82 @@ function previewClickScript() {
 })();
 </` + `script>`;
 }
+
+// =============================================================================
+// 공용: 블로그 스타일 미리보기 (스타일 탭 · 데이터관리 미리보기가 동일 로직 공유)
+// platform.js의 contentBaseClass/effectivePlaceholderConfig 로직을 standalone으로
+// 추출. 두 화면이 같은 함수를 써야 미리보기가 실제 블로그(사용자가 붙인 CSS)와 일치.
+// =============================================================================
+
+/**
+ * 플랫폼별 본문 스코프 기본 클래스.
+ * @param {string} platform - 'wordpress' | 'blogger' | 그 외
+ * @returns {string} 'entry-content' | 'post-body' | 'post-content'
+ */
+function styleContentBaseClass(platform) {
+    const p = String(platform || '').toLowerCase();
+    if (p === 'wordpress') return 'entry-content';
+    if (p === 'blogger') return 'post-body';
+    return 'post-content';
+}
+
+/**
+ * CSS 생성용 '스코프 자동 적용' 치환자 설정 반환(스타일 탭과 동일 규칙).
+ * @param {Object} placeholderConfig - 블로그 placeholders
+ * @param {string} platform - 블로그 플랫폼
+ * @returns {Object} 스코프 보강된 placeholderConfig 사본
+ */
+function styleEffectivePlaceholderConfig(placeholderConfig, platform) {
+    const base = styleContentBaseClass(platform);
+    const SCOPES = ['entry-content', 'post-body', 'post-content'];
+    const withScope = (val, fallbackExtra) => {
+        const toks = String(val || '').trim().split(/[\s.]+/)
+            .filter(t => t && SCOPES.indexOf(t) === -1);
+        if (!toks.length) return fallbackExtra ? `${base} ${fallbackExtra}` : base;
+        return `${base} ${toks.join(' ')}`;
+    };
+    const TAGS = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'ul', 'ol',
+        'li', 'table', 'th', 'td', 'blockquote'];
+    const saved = (placeholderConfig && placeholderConfig.css_classes) || {};
+    const css = {};
+    TAGS.forEach(tag => { css[tag] = withScope(saved[tag]); });
+    Object.keys(saved).forEach(t => { if (!(t in css)) css[t] = withScope(saved[t]); });
+    const savedLink = (placeholderConfig && placeholderConfig.link_styles) || {};
+    const link = Object.assign({}, savedLink);
+    link.default_class = withScope(savedLink.default_class);
+    link.button_class = withScope(savedLink.button_class, 'button-link');
+    return Object.assign({}, placeholderConfig || {}, { css_classes: css, link_styles: link });
+}
+
+/**
+ * 발행 대기 글 본문(content_html)을 블로그 스타일 그대로 렌더하는 전체 미리보기 문서 생성.
+ * - content_html은 생성 시 치환자 클래스가 이미 부여됨(발행 HTML과 동일).
+ * - style_config로 CSS를 생성(사용자가 블로그에 붙인 CSS와 동일)해 주입하고,
+ *   본문을 플랫폼 스코프(.entry-content 등) 래퍼로 감싸 실제 블로그 렌더를 재현.
+ * @param {string} contentHtml - 저장된 글 본문 HTML
+ * @param {Object} styleConfig - 블로그 style_config
+ * @param {Object} placeholderConfig - 블로그 placeholders
+ * @param {string} platform - 블로그 플랫폼
+ * @returns {string} iframe srcdoc용 전체 HTML 문서
+ */
+function buildBlogStyledPreview(contentHtml, styleConfig, placeholderConfig, platform) {
+    const base = styleContentBaseClass(platform);
+    let css = '';
+    try {
+        const selectors = (typeof STYLE_SELECTORS !== 'undefined') ? STYLE_SELECTORS : [];
+        const cfg = styleEffectivePlaceholderConfig(placeholderConfig, platform);
+        if (typeof generateCssFromConfig === 'function') {
+            css = generateCssFromConfig(selectors, styleConfig || {}, cfg, '');
+        }
+    } catch (e) {
+        css = '';
+    }
+    const stripped = String(contentHtml || '').replace(/<script[\s\S]*?<\/script>/gi, '');
+    const body = `<div class="${base}">${stripped}</div>`;
+    return '<!DOCTYPE html><html><head><meta charset="utf-8">'
+        + '<style>* { margin: 0; padding: 0; box-sizing: border-box; }'
+        + 'body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 24px; line-height: 1.8; color: #333; }'
+        + 'img { max-width: 100%; height: auto; } table { border-collapse: collapse; width: 100%; }</style>'
+        + '<style id="__blog_css">' + css + '</style>'
+        + '</head><body>' + body + '</body></html>';
+}
