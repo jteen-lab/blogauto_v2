@@ -33,7 +33,7 @@ function replaceTabApp() {
             css_classes: {},
             link_styles: {
                 default_class: '',
-                button_class: ''
+                button_class: 'button-link'
             },
             text_replace: []
         },
@@ -46,7 +46,7 @@ function replaceTabApp() {
         // 링크 스타일 (별도 관리)
         linkStyles: {
             default_class: '',
-            button_class: ''
+            button_class: 'button-link'
         },
 
         // 다른 블로그에서 치환값 가져오기(선택 복사)
@@ -166,7 +166,7 @@ function replaceTabApp() {
                     this.placeholders = data.placeholders || {
                         html_tags: {},
                         css_classes: {},
-                        link_styles: { default_class: '', button_class: '' },
+                        link_styles: { default_class: '', button_class: 'button-link' },
                         text_replace: []
                     };
                     this.syncToRows();
@@ -226,13 +226,16 @@ function replaceTabApp() {
             }));
 
             // 링크 스타일 동기화 — 일반/버튼 링크 모두 기본 공란.
-            // 스코프는 생성 CSS 선택자(.entry-content a 등)가 담당하므로, 값에 스코프명을
-            // 넣으면 발행 시 링크 <a>에도 클래스가 붙어 테마 규칙이 새어든다(bleed).
-            // 저장된 커스텀 클래스가 있으면 그대로 사용.
+            // - 일반 링크(default_class): 기본 공란. 스코프는 생성 CSS 선택자가 담당하므로
+            //   값에 스코프명을 넣으면 발행 링크에 클래스가 붙어 테마 규칙이 새어든다(bleed).
+            // - 버튼 링크(button_class): 'button-link' 기본. 이는 스코프명이 아니라 우리
+            //   버튼 구조 클래스(.button-link a / .button-link 블록). internal_linker가
+            //   <div class="button-link"><a>로 버튼을 만들 때 이 값을 쓰므로 채워야 한다.
+            //   (테마 클래스가 아니라 우리 클래스라 bleed 없음)
             const linkStyles = this.placeholders.link_styles || {};
             this.linkStyles = {
                 default_class: linkStyles.default_class || '',
-                button_class: linkStyles.button_class || ''
+                button_class: linkStyles.button_class || 'button-link'
             };
         },
 
@@ -265,7 +268,7 @@ function replaceTabApp() {
             // 링크 스타일 동기화
             this.placeholders.link_styles = {
                 default_class: this.linkStyles.default_class || '',
-                button_class: this.linkStyles.button_class || ''
+                button_class: this.linkStyles.button_class || 'button-link'
             };
 
             // 순환 매핑 체크
@@ -432,7 +435,7 @@ function replaceTabApp() {
             }
             this.cssClassRows = this.cssClassRows.map(row => ({ ...row, className: '' }));
             this.linkStyles.default_class = '';
-            this.linkStyles.button_class = '';
+            this.linkStyles.button_class = 'button-link';
             this.syncFromRows();
             if (typeof showSuccessMessage === 'function') {
                 showSuccessMessage('초기화되었습니다. 저장을 눌러 반영하세요.');
