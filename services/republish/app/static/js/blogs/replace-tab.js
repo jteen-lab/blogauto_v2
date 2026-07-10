@@ -213,29 +213,25 @@ function replaceTabApp() {
             const extraTags = Object.keys(savedCssClasses).filter(
                 t => !CSS_CLASS_TAGS.includes(t) && !isLinkOrCompoundKey(t)
             );
-            // 빈값이면 플랫폼별 본문 스코프 기본값 '{본문베이스}'만 자동 입력(태그명 제외).
-            // (워드프레스→'entry-content', 블로거→'post-body', 그 외→'post-content')
-            // 태그는 '태그' 열에 이미 표시되고 생성 CSS의 선택자에서 자동으로 붙으므로
-            // 값에는 넣지 않는다(발행 HTML에 불필요한 태그명 클래스가 생기지 않게).
-            // 생성 CSS는 '.entry-content h1 {}' 형태가 된다.
-            // 저장값이 있으면 그대로 사용.
-            const base = this.contentBaseClass();
+            // CSS 클래스 값은 기본 공란. 본문 스코프(.entry-content 등)는 생성 CSS의
+            // 선택자가 자동으로 담당하므로(effectivePlaceholderConfig가 강제) 값에
+            // 스코프명을 넣을 필요가 없다. 오히려 스코프명을 넣으면 발행 시 그 클래스가
+            // 모든 본문 태그에 붙어, 블로그 테마의 .entry-content 규칙(여백 등)이 개별
+            // 태그로 새어들어와 문단·목록 간격이 벌어진다(bleed). 저장된 커스텀 클래스가
+            // 있으면 그대로 사용.
             this.cssClassRows = [...CSS_CLASS_TAGS, ...extraTags].map(tag => ({
                 id: this.generateId(),
                 tag,
-                className: savedCssClasses[tag] || base
+                className: savedCssClasses[tag] || ''
             }));
 
-            // 링크 스타일 동기화
-            // - 일반 링크: '{본문베이스}'만 자동 입력 (예: 'entry-content' → CSS '.entry-content a')
-            // - 버튼 링크: 자동 입력하지 않음(빈칸). button_class는 발행 시 버튼 <a>에
-            //   그대로 클래스로 부여되므로(placeholders._apply_link_styles), 본문 스코프
-            //   'entry-content'를 넣으면 링크가 플랫폼 .entry-content 스타일을 상속해
-            //   버튼이 깨진다. 스타일 탭 CSS 생성은 빈값이면 '.button-link' 폴백을 쓰므로
-            //   버튼 스타일에는 영향 없음. 저장값이 있으면 그대로 사용.
+            // 링크 스타일 동기화 — 일반/버튼 링크 모두 기본 공란.
+            // 스코프는 생성 CSS 선택자(.entry-content a 등)가 담당하므로, 값에 스코프명을
+            // 넣으면 발행 시 링크 <a>에도 클래스가 붙어 테마 규칙이 새어든다(bleed).
+            // 저장된 커스텀 클래스가 있으면 그대로 사용.
             const linkStyles = this.placeholders.link_styles || {};
             this.linkStyles = {
-                default_class: linkStyles.default_class || base,
+                default_class: linkStyles.default_class || '',
                 button_class: linkStyles.button_class || ''
             };
         },
@@ -425,23 +421,21 @@ function replaceTabApp() {
         /**
          * CSS 클래스 치환값 초기화
          *
-         * 이미 저장·편집한 CSS 클래스명(프리셋 추가분 포함)을 모두 지우고
-         * 플랫폼 본문 스코프 기본값('{본문베이스}')으로 되돌린다. 일반 링크 기본
-         * 클래스도 함께 초기화한다. 저장을 눌러야 서버에 반영된다.
+         * 이미 저장·편집한 CSS 클래스명(프리셋 추가분 포함)을 모두 지우고 공란으로
+         * 되돌린다. 본문 스코프는 생성 CSS 선택자가 담당하므로 값에 스코프명을 넣지
+         * 않는다(넣으면 발행 태그에 클래스가 붙어 테마 여백 규칙이 새어든다).
+         * 일반/버튼 링크 클래스도 함께 공란으로. 저장을 눌러야 서버에 반영된다.
          */
         resetCssClasses() {
-            if (!confirm('CSS 클래스 치환값을 플랫폼 기본값으로 초기화할까요?\n(저장을 눌러야 반영됩니다)')) {
+            if (!confirm('CSS 클래스 치환값을 초기화(공란)할까요?\n(저장을 눌러야 반영됩니다)')) {
                 return;
             }
-            const base = this.contentBaseClass();
-            this.cssClassRows = this.cssClassRows.map(row => ({ ...row, className: base }));
-            this.linkStyles.default_class = base;
-            // 버튼 링크는 클래스 미부여(빈칸). button_class를 발행 시 버튼 <a>에 그대로
-            // 넣기 때문에 본문 스코프를 넣으면 링크가 깨진다. 스타일 CSS는 '.button-link' 폴백 사용.
+            this.cssClassRows = this.cssClassRows.map(row => ({ ...row, className: '' }));
+            this.linkStyles.default_class = '';
             this.linkStyles.button_class = '';
             this.syncFromRows();
             if (typeof showSuccessMessage === 'function') {
-                showSuccessMessage('기본값으로 초기화되었습니다. 저장을 눌러 반영하세요.');
+                showSuccessMessage('초기화되었습니다. 저장을 눌러 반영하세요.');
             }
         },
 
