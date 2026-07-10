@@ -73,15 +73,33 @@ window.getPromptBuilderEmbeddedHTML = function () {
                      x-text="presetWarning"></div>
             </div>
 
-            <!-- 섹션 수 -->
+            <!-- 섹션 수 (실제 개수는 패턴 본문에서 도출) -->
             <div class="bg-white border rounded-lg p-3">
                 <div class="flex items-center justify-between mb-2">
                     <h3 class="text-sm font-semibold text-gray-800">섹션 수</h3>
-                    <span class="text-xs font-mono"><span x-text="sectionCount"></span>개</span>
+                    <span class="text-xs font-mono"><span x-text="derivedSectionCount"></span>개</span>
                 </div>
-                <input type="range" min="4" max="8" step="1" x-model.number="sectionCount" class="w-full">
+                <input type="range" min="4" max="8" step="1" x-model.number="sectionCount" class="w-full"
+                       :disabled="!isBuiltinPattern" :class="!isBuiltinPattern ? 'opacity-40 cursor-not-allowed' : ''">
                 <div class="flex items-center justify-between text-[10px] text-gray-500 mt-1">
                     <span>4</span><span>5</span><span>6 (기본)</span><span>7</span><span>8</span>
+                </div>
+                <p class="text-[10px] mt-1" x-show="!isBuiltinPattern"><span class="text-amber-600">커스텀/수정 패턴은 본문의 섹션 개수가 그대로 적용됩니다.</span></p>
+            </div>
+
+            <!-- 최소 글자수 -->
+            <div class="bg-white border rounded-lg p-3">
+                <h3 class="text-sm font-semibold text-gray-800 mb-2">최소 글자수</h3>
+                <div class="grid grid-cols-3 gap-2">
+                    <label class="text-[10px] text-gray-600">도입
+                        <input type="number" min="0" step="10" x-model.number="introChars"
+                               class="mt-0.5 w-full px-1.5 py-1 text-xs border border-gray-300 rounded"></label>
+                    <label class="text-[10px] text-gray-600">섹션당
+                        <input type="number" min="0" step="10" x-model.number="sectionChars"
+                               class="mt-0.5 w-full px-1.5 py-1 text-xs border border-gray-300 rounded"></label>
+                    <label class="text-[10px] text-gray-600">마치며
+                        <input type="number" min="0" step="10" x-model.number="outroChars"
+                               class="mt-0.5 w-full px-1.5 py-1 text-xs border border-gray-300 rounded"></label>
                 </div>
             </div>
 

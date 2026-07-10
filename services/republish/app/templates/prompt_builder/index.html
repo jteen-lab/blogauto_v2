@@ -69,15 +69,39 @@
             <div class="bg-white rounded-lg shadow-sm border p-4">
                 <div class="flex items-center justify-between mb-2">
                     <h2 class="font-semibold text-gray-800">섹션 수</h2>
-                    <span class="text-sm font-mono"><span x-text="sectionCount"></span>개</span>
+                    <!-- 실제 섹션 수는 항상 '패턴 본문'에서 도출(단일 진실원천) -->
+                    <span class="text-sm font-mono"><span x-text="derivedSectionCount"></span>개</span>
                 </div>
-                <input type="range" min="4" max="8" step="1" x-model.number="sectionCount" class="w-full">
+                <!-- 빌트인 패턴(P1~P5)만 슬라이더로 재배치. 커스텀/수정 패턴은 본문이 섹션을 정하므로 비활성 -->
+                <input type="range" min="4" max="8" step="1" x-model.number="sectionCount" class="w-full"
+                       :disabled="!isBuiltinPattern" :class="!isBuiltinPattern ? 'opacity-40 cursor-not-allowed' : ''">
                 <div class="flex items-center justify-between text-xs text-gray-500 mt-1">
                     <span>4</span><span>5</span><span>6 (기본)</span><span>7</span><span>8</span>
                 </div>
                 <p class="text-xs text-gray-500 mt-2">
-                    변경 시 표·목록 위치가 자동 재배치되고 STRUCTURE 약속과 패턴 본문도 즉시 갱신됩니다.
+                    <span x-show="isBuiltinPattern">슬라이더 변경 시 표·목록 위치와 구조 약속이 패턴 본문에 맞춰 즉시 갱신됩니다.</span>
+                    <span x-show="!isBuiltinPattern" class="text-amber-600">커스텀/수정 패턴은 <strong>패턴 본문의 섹션 개수</strong>가 그대로 적용됩니다(슬라이더 비활성). 구조 약속도 본문과 정확히 일치합니다.</span>
                 </p>
+            </div>
+
+            <!-- 글자수 설정 (구조 약속 하드코딩 제거 → 설정화) -->
+            <div class="bg-white rounded-lg shadow-sm border p-4">
+                <h2 class="font-semibold text-gray-800 mb-2">최소 글자수</h2>
+                <div class="grid grid-cols-3 gap-2">
+                    <label class="text-xs text-gray-600">도입
+                        <input type="number" min="0" step="10" x-model.number="introChars"
+                               class="mt-1 w-full px-2 py-1 text-sm border border-gray-300 rounded">
+                    </label>
+                    <label class="text-xs text-gray-600">섹션당
+                        <input type="number" min="0" step="10" x-model.number="sectionChars"
+                               class="mt-1 w-full px-2 py-1 text-sm border border-gray-300 rounded">
+                    </label>
+                    <label class="text-xs text-gray-600">마치며
+                        <input type="number" min="0" step="10" x-model.number="outroChars"
+                               class="mt-1 w-full px-2 py-1 text-sm border border-gray-300 rounded">
+                    </label>
+                </div>
+                <p class="text-xs text-gray-500 mt-2">구조 약속의 글자수가 이 값으로 생성됩니다(기본 200/250/200).</p>
             </div>
 
             <!-- 페르소나 -->
@@ -300,5 +324,6 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="/static/js/prompt_builder/app.js?v=20260607_fix"></script>
+<script src="/static/js/prompt_builder/structure.js?v=20260710_srcparse"></script>
+<script src="/static/js/prompt_builder/app.js?v=20260710_srcparse"></script>
 {% endblock %}
