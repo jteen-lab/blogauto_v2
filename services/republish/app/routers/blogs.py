@@ -329,7 +329,7 @@ async def update_blog(
 @router.delete(
     "/{blog_id}",
     summary="블로그 삭제",
-    description="블로그를 삭제합니다 (소프트 삭제)",
+    description="블로그와 관련 데이터를 DB에서 완전 삭제합니다 (하드 삭제, 복구 불가)",
     responses={**responses, 200: {"description": "삭제 성공"}},
 )
 async def delete_blog(

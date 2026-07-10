@@ -368,7 +368,13 @@ class BlogService:
 
     async def delete_blog(self, user: User, blog_id: int) -> dict:
         """
-        블로그 삭제 (소프트 삭제)
+        블로그 완전 삭제(하드 삭제).
+
+        blog 및 blog_id로 연결된 모든 데이터를 DB에서 제거한다(소프트삭제 잔재 방지).
+        FK가 NO ACTION인 테이블(카테고리/프로필링크/발행전략/posts/publish_logs)은
+        blogs 삭제 전 먼저 지우고, 나머지(crawled_posts/generation_histories/
+        flow_blogs/module_blogs 등)는 blogs 삭제 시 DB의 ON DELETE CASCADE로 자동
+        정리된다(task_executions는 SET NULL). 되돌릴 수 없음.
 
         Args:
             user: 사용자 객체
@@ -377,17 +383,36 @@ class BlogService:
         Returns:
             삭제 결과
         """
-        blog = await self._get_user_blog(user, blog_id)
+        from sqlalchemy import text
 
-        logger.info(f"블로그 삭제 시도 | 블로그ID={blog_id} | 사용자={user.id}")
+        # blog_id FK가 NO ACTION이라 blogs 삭제 전 반드시 선삭제해야 하는 테이블.
+        # (나머지 blog_id 참조 테이블은 FK가 CASCADE/SET NULL이라 자동 처리)
+        preclean_tables = (
+            "blog_categories", "blog_profile_links", "blog_publish_strategies",
+            "posts", "publish_logs",
+        )
+
+        blog = await self._get_user_blog(user, blog_id)
+        blog_name = blog.name
+
+        logger.info(f"블로그 완전삭제 시도 | 블로그ID={blog_id} | 사용자={user.id}")
 
         try:
-            blog.soft_delete()
+            # ORM identity map과 직접 SQL 삭제 충돌 방지를 위해 세션에서 분리
+            self.db.expunge(blog)
+
+            # 1) NO ACTION FK 테이블 선삭제 (테이블명은 고정 상수 → 인젝션 없음)
+            for table in preclean_tables:
+                await self.db.execute(
+                    text(f"DELETE FROM {table} WHERE blog_id = :bid"), {"bid": blog_id}
+                )
+            # 2) blogs 삭제 → 나머지 관련 테이블 CASCADE/SET NULL 자동 정리
+            await self.db.execute(text("DELETE FROM blogs WHERE id = :bid"), {"bid": blog_id})
             await self.db.commit()
 
-            logger.info(f"블로그 삭제 완료 | 블로그ID={blog_id}")
+            logger.info(f"블로그 완전삭제 완료 | 블로그ID={blog_id} | 이름={blog_name}")
 
-            return {"message": f"블로그 '{blog.name}'이 삭제되었습니다"}
+            return {"message": f"블로그 '{blog_name}'이(가) 완전히 삭제되었습니다"}
 
         except Exception as e:
             await self.db.rollback()
