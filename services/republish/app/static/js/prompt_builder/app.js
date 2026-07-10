@@ -43,6 +43,10 @@ function createPromptBuilderState(opts = {}) {
         pattern: '',
         tone: '',
         sectionCount: 6,
+        // 구조 약속 글자수(하드코딩 제거 → 설정화). 구성마다 조절 가능.
+        introChars: 200,
+        sectionChars: 250,
+        outroChars: 200,
 
         // ── 임시 수정(EDIT) ───────────────────────────────
         overrides: { persona: null, reader: null, pattern: null, tone: null },
@@ -385,63 +389,56 @@ function createPromptBuilderState(opts = {}) {
         },
 
         // ── 본문 조립 ─────────────────────────────────────
-        get builtPrompt() {
-            const D = this.divider;
-            const personaBody = this.bodyFor('persona', this.personas);
-            const readerBody = this.bodyFor('reader', this.readers);
-            const patternBody = this.overrides.pattern !== null
+        // 완성 프롬프트에 들어가는 '최종 패턴 본문'. 구조 약속·섹션 수가 모두
+        // 이 값을 단일 진실원천으로 삼는다(빌트인은 섹션 수로 재배치, 커스텀/수정은 원문).
+        get finalPatternBody() {
+            return this.overrides.pattern !== null
                 ? this.overrides.pattern
                 : this.renderPatternBody(this.find(this.patterns, this.pattern));
-            const toneBody = this.bodyFor('tone', this.tones);
-            const structure = this.buildStructure();
+        },
+        // 최종 패턴 본문을 파싱해 섹션을 순서대로 반환(순수 함수 위임, structure.js)
+        patternSections() {
+            return (typeof pbParsePatternSections === 'function')
+                ? pbParsePatternSections(this.finalPatternBody) : [];
+        },
+        // 커스텀/수정 패턴이면 섹션 수 슬라이더는 무의미(본문이 섹션을 정함) → UI에서 비활성
+        get isBuiltinPattern() {
+            if (this.overrides.pattern !== null) return false;
+            const p = this.find(this.patterns, this.pattern);
+            return !!(p && /^P[1-5]$/i.test(p.code || ''));
+        },
+        get derivedSectionCount() { return this.patternSections().length; },
 
+        get builtPrompt() {
+            const D = this.divider;
             return [
                 '제목: {title}',
                 '카테고리: {category}',
                 '키워드: {keywords}',
                 '',
-                D, personaBody, D,
+                D, this.bodyFor('persona', this.personas), D,
                 '',
-                D, readerBody, D,
+                D, this.bodyFor('reader', this.readers), D,
                 '',
                 D, this.commonRules, D,
                 '',
-                D, patternBody, D,
+                D, this.finalPatternBody, D,
                 '',
-                D, toneBody, D,
+                D, this.bodyFor('tone', this.tones), D,
                 '',
-                D, structure, D,
+                D, this.buildStructure(), D,
             ].join('\n');
         },
 
+        // 구조 약속을 '실제 패턴 본문'에서 유도(순수 함수 위임, structure.js).
+        // 섹션 수·표/목록이 패턴과 항상 일치하고, 글자수는 설정값을 쓴다.
         buildStructure() {
-            const n = this.sectionCount;
-            const letters = 'ABCDEFGHIJKL'.split('');
-            const layout = this.computeLayout(n, this.pattern);
-            const mid = Math.ceil(n / 2);
-            const front = letters.slice(0, mid);
-            const back = letters.slice(mid, n);
-            const noteFor = (slice, startIdx) => {
-                const notes = [];
-                slice.forEach((label, j) => {
-                    const idx = startIdx + j;
-                    if (layout[idx] === 'table') notes.push(`${label} 표 필수`);
-                    if (layout[idx] === 'list') notes.push(`${label} 목록 필수`);
-                });
-                return notes.length ? ` (${notes.join(', ')})` : '';
-            };
-            const lines = [
-                '✦ 구조 약속',
-                'STEP 1 ▸ H1(#) 타이틀 + 도입 200자+ (위 시작톤 적용, "안녕하세요" 금지)',
-                `STEP 2 ▸ ## 섹션 ${front.join('·')} 각 250자+${noteFor(front, 0)}`,
-            ];
-            if (back.length) {
-                lines.push(`STEP 3 ▸ ## 섹션 ${back.join('·')} 각 250자+${noteFor(back, mid)}`);
-                lines.push('STEP 4 ▸ ## 마치며 200자+ (담백한 정리 + 댓글·경험 공유 유도)');
-            } else {
-                lines.push('STEP 3 ▸ ## 마치며 200자+ (담백한 정리 + 댓글·경험 공유 유도)');
-            }
-            return lines.join('\n');
+            if (typeof pbBuildStructure !== 'function') return '';
+            return pbBuildStructure(this.patternSections(), {
+                introChars: this.introChars,
+                sectionChars: this.sectionChars,
+                outroChars: this.outroChars,
+            });
         },
 
         get charCount() { return this.builtPrompt.length; },
