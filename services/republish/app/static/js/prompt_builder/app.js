@@ -8,8 +8,8 @@
  * 기능:
  *  - 페르소나/독자수준/섹션패턴/시작톤 4축 라디오 선택
  *  - 프리셋 1클릭 적용 + 어울리는 카테고리 표기 (기본 10종 + 사용자 커스텀)
- *  - 사용자 커스텀 프리셋 localStorage 저장 + 중복 조합 차단
- *  - 섹션 수 4~8 가변 + 표·목록 자동 재배치
+ *  - 사용자 커스텀 프리셋 localStorage 저장 + 중복 조합 차단(글자수 설정 포함)
+ *  - 섹션 수는 패턴 본문에서 도출해 표시만(사용자 조절 불가 → 프롬프트와 항상 일치)
  *  - 각 4축 EDIT 임시 수정 (라디오 변경 시 자동 초기화)
  */
 
@@ -34,7 +34,6 @@ function createPromptBuilderState(opts = {}) {
         builtinPresets: [],
         customPresets: [],
         commonRules: '',
-        structure: '',
         divider: '',
 
         // ── 선택값 ────────────────────────────────────────
@@ -42,7 +41,6 @@ function createPromptBuilderState(opts = {}) {
         reader: '',
         pattern: '',
         tone: '',
-        sectionCount: 6,
         // 구조 약속 글자수(하드코딩 제거 → 설정화). 구성마다 조절 가능.
         introChars: 200,
         sectionChars: 250,
@@ -87,7 +85,6 @@ function createPromptBuilderState(opts = {}) {
                 this.tones = data.tones || [];
                 this.builtinPresets = data.presets || [];
                 this.commonRules = data.common_rules || '';
-                this.structure = data.structure || '';
                 this.divider = data.divider || '─'.repeat(40);
             } catch (e) {
                 console.error('[prompt-builder] blocks-data 파싱 실패:', e);
@@ -107,6 +104,20 @@ function createPromptBuilderState(opts = {}) {
             this.reader = p.reader;
             this.pattern = p.pattern;
             this.tone = p.tone;
+            // 글자수 설정도 복원(프리셋에 없으면 기본값) → 프리셋 적용이 항상 결정적.
+            this.introChars = (typeof p.introChars === 'number') ? p.introChars : 200;
+            this.sectionChars = (typeof p.sectionChars === 'number') ? p.sectionChars : 250;
+            this.outroChars = (typeof p.outroChars === 'number') ? p.outroChars : 200;
+        },
+
+        // 현재 4축 조합이 이 프리셋과 완전히 일치하는지(테두리 하이라이트용).
+        // 조합 중복 저장이 차단되므로 활성 프리셋은 최대 1개.
+        isActivePreset(p) {
+            return this.isComplete()
+                && p.persona === this.persona
+                && p.reader === this.reader
+                && p.pattern === this.pattern
+                && p.tone === this.tone;
         },
 
         // 현재 4축 조합으로 커스텀 프리셋 저장 (이름 필요)
@@ -146,6 +157,10 @@ function createPromptBuilderState(opts = {}) {
                 reader: this.reader,
                 pattern: this.pattern,
                 tone: this.tone,
+                // 글자수 설정 함께 저장(섹션 수는 패턴 코드에 내재 → 별도 저장 불필요).
+                introChars: this.introChars,
+                sectionChars: this.sectionChars,
+                outroChars: this.outroChars,
                 _custom: true,
             };
             this.customPresets.push(newPreset);
@@ -208,8 +223,7 @@ function createPromptBuilderState(opts = {}) {
                 const lists = { persona: this.personas, reader: this.readers, pattern: this.patterns, tone: this.tones };
                 const list = lists[field];
                 if (!list) return;
-                // 편집/저장은 항상 '원문 그대로'. (pattern 도 renderPatternBody 로
-                // 재가공하지 않음 — 재가공하면 fallback 섹션이 덧붙어 저장이 오염됨)
+                // 편집/저장은 항상 '원문 그대로'(패턴 포함) — 재가공 없이 본문을 그대로 편집.
                 this.overrides[field] = this.find(list, this[field])?.body || '';
             }
         },
@@ -317,96 +331,21 @@ function createPromptBuilderState(opts = {}) {
             } finally { this.blockBusy = false; }
         },
 
-        // ── 패턴 본문 동적 재생성 ─────────────────────────
-        renderPatternBody(pattern) {
-            if (!pattern) return '(블록을 선택하세요)';
-            // 기본 제공 패턴(P1~P5)만 섹션 수에 맞춰 동적 재배치.
-            // 커스텀/수정 패턴은 작성한 원문을 그대로 사용(재가공 시 fallback
-            // 섹션이 덧붙어 사용자 의도가 깨짐).
-            const isBuiltin = /^P[1-5]$/i.test(pattern.code || '');
-            const parsed = this.parsePatternBody(pattern.body);
-            const sectionLines = parsed.tables.length + parsed.lists.length + parsed.others.length;
-            if (!isBuiltin || sectionLines === 0) {
-                return pattern.body;
-            }
-            const n = this.sectionCount;
-            const layout = this.computeLayout(n, pattern.code);
-            const letters = 'ABCDEFGHIJKL'.split('');
-            const pools = { table: [...parsed.tables], list: [...parsed.lists], other: [...parsed.others] };
-            const fallback = { table: '추가 비교·정리표', list: '추가 정리 목록', other: '심화·확장 관점' };
-            const newLines = [];
-            for (let i = 0; i < n; i++) {
-                const role = layout[i];
-                const pool = pools[role];
-                const content = (pool && pool.length) ? pool.shift() : fallback[role];
-                const suffix = (
-                    role === 'table' ? ' ← 표 반드시 포함' :
-                    role === 'list' ? ' ← 번호/불릿 목록 반드시 포함' :
-                    ''
-                );
-                newLines.push(`- ${letters[i]}: ${content}${suffix}`);
-            }
-            return [parsed.header, ...newLines].join('\n');
-        },
-        parsePatternBody(body) {
-            const sectionRe = /^\s*-\s*([A-Z]):\s*(.+)$/;
-            const tables = [], lists = [], others = [], headerLines = [];
-            for (const raw of body.split('\n')) {
-                const m = raw.match(sectionRe);
-                if (!m) { headerLines.push(raw); continue; }
-                const content = m[2].replace(/\s*←.*$/, '').trim();
-                if (/← 표/.test(raw)) tables.push(content);
-                else if (/← (번호|불릿|번호\/불릿) 목록/.test(raw)) lists.push(content);
-                else others.push(content);
-            }
-            return { header: headerLines.join('\n'), tables, lists, others };
-        },
-        computeLayout(n, patternCode = '') {
-            // 패턴별 구조 차별화: 표/목록 배치를 패턴마다 다르게 한다.
-            const layout = new Array(n).fill('other');
-            const code = (patternCode || this.pattern || '').toUpperCase();
-            const setT = (i) => { if (i >= 0 && i < n) layout[i] = 'table'; };
-            const setL = (i) => { if (i >= 0 && i < n) layout[i] = 'list'; };
-            const mid = Math.floor(n / 2);
-            switch (code) {
-                case 'P2': // 교육·안내형: 표1 + 목록2(체크리스트·FAQ)
-                    setT(1); setL(2); setL(n - 1);
-                    break;
-                case 'P3': // 가이드·튜토리얼형: 단계 목록 중심(목록 多, 표 1)
-                    setL(1); setL(2); setT(mid); setL(n - 1);
-                    break;
-                case 'P5': // 경험·공감형: 서술 중심(표1·목록1)
-                    setT(mid); setL(n - 1);
-                    break;
-                case 'P1': // 정보·정리형 / 분석·결정형: 표2·목록2 균형
-                case 'P4':
-                default:
-                    setT(1); setL(2);
-                    if (n >= 5) { setT(n - 2); setL(n - 1); }
-                    break;
-            }
-            return layout;
-        },
-
         // ── 본문 조립 ─────────────────────────────────────
         // 완성 프롬프트에 들어가는 '최종 패턴 본문'. 구조 약속·섹션 수가 모두
-        // 이 값을 단일 진실원천으로 삼는다(빌트인은 섹션 수로 재배치, 커스텀/수정은 원문).
+        // 이 값을 단일 진실원천으로 삼는다. 섹션 수는 사용자 조절 대상이 아니며
+        // 패턴 본문(빌트인 원본 또는 수정 원문)이 섹션 구조를 그대로 정한다.
         get finalPatternBody() {
-            return this.overrides.pattern !== null
-                ? this.overrides.pattern
-                : this.renderPatternBody(this.find(this.patterns, this.pattern));
+            if (this.overrides.pattern !== null) return this.overrides.pattern;
+            const p = this.find(this.patterns, this.pattern);
+            return p ? p.body : '(블록을 선택하세요)';
         },
         // 최종 패턴 본문을 파싱해 섹션을 순서대로 반환(순수 함수 위임, structure.js)
         patternSections() {
             return (typeof pbParsePatternSections === 'function')
                 ? pbParsePatternSections(this.finalPatternBody) : [];
         },
-        // 커스텀/수정 패턴이면 섹션 수 슬라이더는 무의미(본문이 섹션을 정함) → UI에서 비활성
-        get isBuiltinPattern() {
-            if (this.overrides.pattern !== null) return false;
-            const p = this.find(this.patterns, this.pattern);
-            return !!(p && /^P[1-5]$/i.test(p.code || ''));
-        },
+        // 생성될 섹션 수(패턴 본문에서 도출) — 표시 전용, 사용자 조절 불가.
         get derivedSectionCount() { return this.patternSections().length; },
 
         get builtPrompt() {
@@ -449,7 +388,6 @@ function createPromptBuilderState(opts = {}) {
             this.reader = '';
             this.pattern = '';
             this.tone = '';
-            this.sectionCount = 6;
         },
 
         // ── 액션: 복사 / 반영 ─────────────────────────────
