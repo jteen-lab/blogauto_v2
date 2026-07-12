@@ -12,6 +12,9 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional, TypedDict
 
+# 프리셋 카탈로그는 별도 모듈로 분리(500줄 제한). 재-export 로 공개 API 불변(B.PRESETS).
+from .presets import PRESETS  # noqa: F401  (re-export)
+
 
 class StyleBlock(TypedDict):
     """블록 1개의 데이터."""
@@ -274,17 +277,80 @@ TONES: List[StyleBlock] = [
 ]
 
 
-COMMON_RULES: str = (
-    "✦ 글쓰기 기본 원칙\n"
-    "- 마크다운 작성\n"
-    "- 제목(#~######) 앞 번호 금지, 특수문자 금지\n"
-    "- 섹션 제목은 내용을 나타내는 자연어로 작성. "
-    "A/B/C 같은 구조 라벨, STEP·단계 번호를 제목이나 본문에 절대 출력하지 말 것\n"
-    "- \"STEP 1\", \"단계 1\" 같은 메타 텍스트와 구분선(─, ---) 출력 금지\n"
-    "- 위 '구조 약속'의 표·목록 위치와 섹션 수를 정확히 지킬 것\n"
-    "- STEP 1~4 멈추지 않고 한 번에 완성\n"
-    "- 해시태그 금지"
-)
+# 글쓰기 기본 원칙 — 블로그별 문체 차별화를 위해 선택형 축으로 제공.
+# 스타일(이모지·어투)만 다르고, 구조 무결성 규칙(자연어 제목·STEP/구분선 미출력·
+# 표/목록 위치 준수·한 번에 완성)은 모든 옵션이 공통으로 유지한다.
+COMMONS: List[StyleBlock] = [
+    {
+        "code": "C-Default",
+        "label": "기본 (이모지 없음)",
+        "cluster": "",
+        "body": (
+            "✦ 글쓰기 기본 원칙\n"
+            "- 마크다운 작성\n"
+            "- 제목(#~######) 앞 번호 금지, 특수문자 금지\n"
+            "- 섹션 제목은 내용을 나타내는 자연어로 작성. "
+            "A/B/C 같은 구조 라벨, STEP·단계 번호를 제목이나 본문에 절대 출력하지 말 것\n"
+            "- \"STEP 1\", \"단계 1\" 같은 메타 텍스트와 구분선(─, ---) 출력 금지\n"
+            "- 위 '구조 약속'의 표·목록 위치와 섹션 수를 정확히 지킬 것\n"
+            "- STEP 1~4 멈추지 않고 한 번에 완성\n"
+            "- 해시태그 금지"
+        ),
+    },
+    {
+        "code": "C-Emoji",
+        "label": "이모지 강조형",
+        "cluster": "",
+        "body": (
+            "✦ 글쓰기 기본 원칙 (이모지 강조형)\n"
+            "- 마크다운 작성\n"
+            "- 각 ## 섹션 제목 맨 앞에 내용에 어울리는 이모지 1개 배치 (예: \"## 📌 준비물\")\n"
+            "- 본문의 핵심 포인트·팁에 이모지를 적절히 사용해 가독성 강조 (남용 금지)\n"
+            "- 제목(#~######) 앞 번호 금지, 섹션 제목은 자연어로. "
+            "A/B/C 구조 라벨·STEP·단계 번호를 제목이나 본문에 절대 출력하지 말 것\n"
+            "- \"STEP 1\", \"단계 1\" 같은 메타 텍스트와 구분선(─, ---) 출력 금지\n"
+            "- 위 '구조 약속'의 표·목록 위치와 섹션 수를 정확히 지킬 것\n"
+            "- 처음부터 끝까지 멈추지 않고 한 번에 완성\n"
+            "- 해시태그 금지"
+        ),
+    },
+    {
+        "code": "C-Plain",
+        "label": "간결·담백형",
+        "cluster": "",
+        "body": (
+            "✦ 글쓰기 기본 원칙 (간결·담백형)\n"
+            "- 마크다운 작성, 이모지·과장 표현 없이 담백하게\n"
+            "- 문장은 짧고 명료하게, 군더더기 수식어 배제\n"
+            "- 제목(#~######) 앞 번호·특수문자 금지, 섹션 제목은 자연어로. "
+            "A/B/C 구조 라벨·STEP·단계 번호를 제목이나 본문에 절대 출력하지 말 것\n"
+            "- \"STEP 1\", \"단계 1\" 같은 메타 텍스트와 구분선(─, ---) 출력 금지\n"
+            "- 위 '구조 약속'의 표·목록 위치와 섹션 수를 정확히 지킬 것\n"
+            "- 처음부터 끝까지 멈추지 않고 한 번에 완성\n"
+            "- 해시태그 금지"
+        ),
+    },
+    {
+        "code": "C-Story",
+        "label": "경험·스토리텔링형",
+        "cluster": "",
+        "body": (
+            "✦ 글쓰기 기본 원칙 (스토리텔링형)\n"
+            "- 마크다운 작성, 실제 경험담·구체적 사례를 녹여 친근하게\n"
+            "- 독자에게 말을 건네는 대화체 허용 (단, 반말 금지)\n"
+            "- 이모지는 감정 강조에만 가볍게 사용 (선택)\n"
+            "- 제목(#~######) 앞 번호 금지, 섹션 제목은 자연어로. "
+            "A/B/C 구조 라벨·STEP·단계 번호를 제목이나 본문에 절대 출력하지 말 것\n"
+            "- \"STEP 1\", \"단계 1\" 같은 메타 텍스트와 구분선(─, ---) 출력 금지\n"
+            "- 위 '구조 약속'의 표·목록 위치와 섹션 수를 정확히 지킬 것\n"
+            "- 처음부터 끝까지 멈추지 않고 한 번에 완성\n"
+            "- 해시태그 금지"
+        ),
+    },
+]
+
+# 하위호환 별칭 — build_prompt()·blocks_for_template()·__init__ export 가 참조.
+COMMON_RULES: str = COMMONS[0]["body"]
 
 
 STRUCTURE: str = (
@@ -361,103 +427,6 @@ def build_prompt(
     return "\n".join(parts)
 
 
-# 빠른 적용 프리셋 (modules.md 의 V1 카탈로그를 그대로 코드화)
-# 각 프리셋은 (페르소나·독자수준·섹션패턴·시작톤) 4개 코드와 어울리는
-# 카테고리 표기를 함께 갖는다.
-PRESETS: List[Dict[str, str]] = [
-    {
-        "code": "s1-v1",
-        "label": "S1 V1 · 전문가·중급·P1·수치",
-        "categories": "AI · 인공지능 · IT · 개발 · 과학",
-        "persona": "P-Expert",
-        "reader": "R-Intermediate",
-        "pattern": "P1",
-        "tone": "T-Numbers",
-    },
-    {
-        "code": "s1-v2",
-        "label": "S1 V2 · 분석가·결정·P4·수치",
-        "categories": "금융 · 투자 · 부동산 · 경제",
-        "persona": "P-Analyst",
-        "reader": "R-Decision",
-        "pattern": "P4",
-        "tone": "T-Numbers",
-    },
-    {
-        "code": "s2-v1",
-        "label": "S2 V1 · 선생님·입문·P2·학습",
-        "categories": "건강 · 의학 · 영양 · 자기계발",
-        "persona": "P-Teacher",
-        "reader": "R-Beginner",
-        "pattern": "P2",
-        "tone": "T-Learn",
-    },
-    {
-        "code": "s2-v2",
-        "label": "S2 V2 · 선생님·입문·P3·학습",
-        "categories": "육아 · 교육 · 자격증 · 어학",
-        "persona": "P-Teacher",
-        "reader": "R-Beginner",
-        "pattern": "P3",
-        "tone": "T-Learn",
-    },
-    {
-        "code": "s3-v1",
-        "label": "S3 V1 · 친구·입문·P5·공감",
-        "categories": "라이프 · 인테리어 · 홈가전 · 반려동물",
-        "persona": "P-Friend",
-        "reader": "R-Beginner",
-        "pattern": "P5",
-        "tone": "T-Empathy",
-    },
-    {
-        "code": "s3-v2",
-        "label": "S3 V2 · 친구·입문·P2·공감",
-        "categories": "패션 · 뷰티 · 쇼핑 · 직구",
-        "persona": "P-Friend",
-        "reader": "R-Beginner",
-        "pattern": "P2",
-        "tone": "T-Empathy",
-    },
-    {
-        "code": "s4-v1",
-        "label": "S4 V1 · 에세이·중급·P5·장면",
-        "categories": "여행 · 맛집 · 카페 · 음식",
-        "persona": "P-Essayist",
-        "reader": "R-Intermediate",
-        "pattern": "P5",
-        "tone": "T-Scene",
-    },
-    {
-        "code": "s4-v2",
-        "label": "S4 V2 · 에세이·중급·P3·장면",
-        "categories": "문화 · 영화 · 드라마 · 책",
-        "persona": "P-Essayist",
-        "reader": "R-Intermediate",
-        "pattern": "P3",
-        "tone": "T-Scene",
-    },
-    {
-        "code": "s5-v1",
-        "label": "S5 V1 · 중립·중급·P1·정의",
-        "categories": "자동차 · 가전 · 제품 리뷰",
-        "persona": "P-Neutral",
-        "reader": "R-Intermediate",
-        "pattern": "P1",
-        "tone": "T-Definition",
-    },
-    {
-        "code": "s5-v2",
-        "label": "S5 V2 · 중립·중급·P4·정의",
-        "categories": "앱 · 서비스 · DIY · 취미",
-        "persona": "P-Neutral",
-        "reader": "R-Intermediate",
-        "pattern": "P4",
-        "tone": "T-Definition",
-    },
-]
-
-
 def blocks_for_template() -> Dict[str, object]:
     """Jinja2 템플릿에 전달할 dict.
 
@@ -469,6 +438,7 @@ def blocks_for_template() -> Dict[str, object]:
         "readers": READERS,
         "patterns": PATTERNS,
         "tones": TONES,
+        "commons": COMMONS,
         "presets": PRESETS,
         "common_rules": COMMON_RULES,
         "structure": STRUCTURE,

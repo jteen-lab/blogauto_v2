@@ -4,13 +4,13 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-_VALID_TYPES = {"persona", "reader", "pattern", "tone"}
+_VALID_TYPES = {"persona", "reader", "pattern", "tone", "common"}
 
 
 class PromptBlockCreate(BaseModel):
     """블록 생성 요청."""
 
-    block_type: str = Field(..., description="persona|reader|pattern|tone")
+    block_type: str = Field(..., description="persona|reader|pattern|tone|common")
     label: str = Field(..., min_length=1, max_length=100)
     body: str = Field(..., min_length=1)
     code: Optional[str] = Field(

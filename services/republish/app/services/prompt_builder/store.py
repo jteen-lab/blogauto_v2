@@ -25,21 +25,28 @@ _DEFAULT_SOURCES = {
     "reader": B.READERS,
     "pattern": B.PATTERNS,
     "tone": B.TONES,
+    "common": B.COMMONS,
 }
 
 
 async def ensure_seeded(db: AsyncSession) -> None:
-    """prompt_blocks 가 비어 있으면 기본 블록을 시드한다(멱등).
+    """기본 블록을 **축(block_type)별로** 시드한다(멱등).
 
-    이미 한 건이라도 있으면 아무것도 하지 않는다(운영자 수정 보존).
+    각 축은 해당 타입 행이 하나도 없을 때만 시드한다. 전체가 아닌 타입별로
+    검사하므로, 이미 시드된 DB에 새 축(예: common)을 추가해도 안전하게 채워지고
+    운영자가 편집한 기존 축은 건드리지 않는다.
     """
-    count = (
-        await db.execute(select(func.count(PromptBlock.id)))
-    ).scalar() or 0
-    if count > 0:
-        return
     rows: List[PromptBlock] = []
     for block_type, items in _DEFAULT_SOURCES.items():
+        existing = (
+            await db.execute(
+                select(func.count(PromptBlock.id)).where(
+                    PromptBlock.block_type == block_type
+                )
+            )
+        ).scalar() or 0
+        if existing > 0:
+            continue
         for idx, item in enumerate(items):
             rows.append(
                 PromptBlock(
@@ -53,6 +60,8 @@ async def ensure_seeded(db: AsyncSession) -> None:
                     is_builtin=True,
                 )
             )
+    if not rows:
+        return
     db.add_all(rows)
     await db.commit()
     logger.info("[PROMPT_BUILDER] 기본 블록 %d개 시드 완료", len(rows))
@@ -80,6 +89,7 @@ async def load_blocks_for_template(db: AsyncSession) -> Dict[str, object]:
         readers = await _load_by_type(db, "reader")
         patterns = await _load_by_type(db, "pattern")
         tones = await _load_by_type(db, "tone")
+        commons = await _load_by_type(db, "common")
     except Exception as exc:  # noqa: BLE001 - DB 문제 시 상수 폴백
         logger.warning("[PROMPT_BUILDER] DB 블록 로드 실패, 상수 폴백: %s", exc)
         return B.blocks_for_template()
@@ -90,6 +100,7 @@ async def load_blocks_for_template(db: AsyncSession) -> Dict[str, object]:
         "readers": readers or B.READERS,
         "patterns": patterns or B.PATTERNS,
         "tones": tones or B.TONES,
+        "commons": commons or B.COMMONS,
         "presets": B.PRESETS,
         "common_rules": B.COMMON_RULES,
         "structure": B.STRUCTURE,
