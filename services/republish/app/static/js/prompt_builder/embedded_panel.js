@@ -42,7 +42,8 @@ window.getPromptBuilderEmbeddedHTML = function () {
                     <template x-for="p in presets" :key="p.code">
                         <div class="relative group">
                             <button type="button" @click="applyPreset(p.code)"
-                                    class="w-full text-left p-2 border rounded hover:bg-white transition-colors text-xs">
+                                    class="w-full text-left p-2 border-2 rounded transition-colors text-xs"
+                                    :class="isActivePreset(p) ? 'border-purple-500 bg-purple-50 ring-1 ring-purple-400' : 'border-gray-200 hover:bg-white'">
                                 <div class="flex items-center justify-between gap-2">
                                     <span class="font-medium text-gray-800" x-text="p.label"></span>
                                     <span class="px-1 py-0.5 text-[10px] bg-gray-100 rounded"
@@ -73,18 +74,13 @@ window.getPromptBuilderEmbeddedHTML = function () {
                      x-text="presetWarning"></div>
             </div>
 
-            <!-- 섹션 수 (실제 개수는 패턴 본문에서 도출) -->
+            <!-- 섹션 수 (표시 전용 — 패턴 본문에서 도출, 조절 불가) -->
             <div class="bg-white border rounded-lg p-3">
-                <div class="flex items-center justify-between mb-2">
-                    <h3 class="text-sm font-semibold text-gray-800">섹션 수</h3>
-                    <span class="text-xs font-mono"><span x-text="derivedSectionCount"></span>개</span>
+                <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-semibold text-gray-800">생성 섹션 수</h3>
+                    <span class="text-xs font-mono px-2 py-0.5 bg-gray-100 rounded"><span x-text="derivedSectionCount"></span>개</span>
                 </div>
-                <input type="range" min="4" max="8" step="1" x-model.number="sectionCount" class="w-full"
-                       :disabled="!isBuiltinPattern" :class="!isBuiltinPattern ? 'opacity-40 cursor-not-allowed' : ''">
-                <div class="flex items-center justify-between text-[10px] text-gray-500 mt-1">
-                    <span>4</span><span>5</span><span>6 (기본)</span><span>7</span><span>8</span>
-                </div>
-                <p class="text-[10px] mt-1" x-show="!isBuiltinPattern"><span class="text-amber-600">커스텀/수정 패턴은 본문의 섹션 개수가 그대로 적용됩니다.</span></p>
+                <p class="text-[10px] text-gray-500 mt-1">선택한 섹션 패턴이 정하며, 구조 약속도 이 값과 일치합니다.</p>
             </div>
 
             <!-- 최소 글자수 -->

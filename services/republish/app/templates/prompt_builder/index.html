@@ -28,7 +28,8 @@
             <template x-for="p in presets" :key="p.code">
                 <div class="relative group">
                     <button type="button" @click="applyPreset(p.code)"
-                            class="w-full text-left p-3 border rounded hover:bg-gray-50 transition-colors">
+                            class="w-full text-left p-3 border-2 rounded transition-colors"
+                            :class="isActivePreset(p) ? 'border-accent bg-accent/5 ring-1 ring-accent' : 'border-gray-200 hover:bg-gray-50'">
                         <div class="flex items-center justify-between gap-2">
                             <div class="font-medium text-sm text-gray-800" x-text="p.label"></div>
                             <span class="text-xs px-1.5 py-0.5 bg-gray-100 rounded"
@@ -65,23 +66,14 @@
 
         <div class="space-y-4">
 
-            <!-- 섹션 수 컨트롤 -->
+            <!-- 섹션 수 (표시 전용) -->
             <div class="bg-white rounded-lg shadow-sm border p-4">
-                <div class="flex items-center justify-between mb-2">
-                    <h2 class="font-semibold text-gray-800">섹션 수</h2>
-                    <!-- 실제 섹션 수는 항상 '패턴 본문'에서 도출(단일 진실원천) -->
-                    <span class="text-sm font-mono"><span x-text="derivedSectionCount"></span>개</span>
+                <div class="flex items-center justify-between">
+                    <h2 class="font-semibold text-gray-800">생성 섹션 수</h2>
+                    <!-- 섹션 수는 항상 '패턴 본문'에서 도출(단일 진실원천). 조절 불가 → 프롬프트와 항상 일치 -->
+                    <span class="text-sm font-mono px-2 py-0.5 bg-gray-100 rounded"><span x-text="derivedSectionCount"></span>개</span>
                 </div>
-                <!-- 빌트인 패턴(P1~P5)만 슬라이더로 재배치. 커스텀/수정 패턴은 본문이 섹션을 정하므로 비활성 -->
-                <input type="range" min="4" max="8" step="1" x-model.number="sectionCount" class="w-full"
-                       :disabled="!isBuiltinPattern" :class="!isBuiltinPattern ? 'opacity-40 cursor-not-allowed' : ''">
-                <div class="flex items-center justify-between text-xs text-gray-500 mt-1">
-                    <span>4</span><span>5</span><span>6 (기본)</span><span>7</span><span>8</span>
-                </div>
-                <p class="text-xs text-gray-500 mt-2">
-                    <span x-show="isBuiltinPattern">슬라이더 변경 시 표·목록 위치와 구조 약속이 패턴 본문에 맞춰 즉시 갱신됩니다.</span>
-                    <span x-show="!isBuiltinPattern" class="text-amber-600">커스텀/수정 패턴은 <strong>패턴 본문의 섹션 개수</strong>가 그대로 적용됩니다(슬라이더 비활성). 구조 약속도 본문과 정확히 일치합니다.</span>
-                </p>
+                <p class="text-xs text-gray-500 mt-2">선택한 섹션 패턴이 정하는 섹션 수입니다. 구조 약속도 이 값과 정확히 일치합니다.</p>
             </div>
 
             <!-- 글자수 설정 (구조 약속 하드코딩 제거 → 설정화) -->
@@ -324,6 +316,6 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="/static/js/prompt_builder/structure.js?v=20260710_srcparse"></script>
-<script src="/static/js/prompt_builder/app.js?v=20260710_srcparse"></script>
+<script src="/static/js/prompt_builder/structure.js?v=20260712_seclock"></script>
+<script src="/static/js/prompt_builder/app.js?v=20260712_seclock"></script>
 {% endblock %}
