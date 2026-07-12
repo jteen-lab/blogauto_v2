@@ -189,6 +189,52 @@
                 </div>
             </div>
 
+            <!-- 글쓰기 기본 원칙 -->
+            <div class="bg-white rounded-lg shadow-sm border p-4">
+                <div class="flex items-center justify-between mb-1">
+                    <h2 class="font-semibold text-gray-800">글쓰기 기본 원칙</h2>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-500" x-text="selectedLabel('common', commons)"></span>
+                        <button type="button" @click="toggleEdit('common')" :disabled="!common"
+                                class="text-xs px-2 py-1 border rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                                :class="editing.common ? 'bg-accent text-white' : 'hover:bg-gray-50'">
+                            <span x-text="editing.common ? '닫기' : 'EDIT'"></span>
+                        </button>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-500 mb-2">이모지·문체 등 블로그별 글 스타일을 정합니다. 새 원칙을 만들어 선택할 수 있습니다.</p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <template x-for="opt in commons" :key="opt.code">
+                        <label class="flex items-start gap-2 p-3 border rounded cursor-pointer hover:bg-gray-50"
+                               :class="common === opt.code ? 'border-accent bg-accent/5' : 'border-gray-200'">
+                            <input type="radio" name="common" :value="opt.code" x-model="common" class="mt-1">
+                            <div>
+                                <div class="font-medium text-sm" x-text="opt.label"></div>
+                                <div class="text-xs text-gray-500 mt-0.5" x-text="opt.code"></div>
+                            </div>
+                        </label>
+                    </template>
+                </div>
+                <div x-show="editing.common" x-transition class="mt-3 p-3 bg-amber-50 border border-amber-200 rounded">
+                    <div class="flex items-center justify-between mb-2 text-xs">
+                        <span class="text-amber-800">임시 수정 — "새 옵션으로 저장"으로 새 원칙을 추가하거나 "영구 저장"으로 갱신하세요.</span>
+                        <button type="button" @click="resetOverride('common')"
+                                class="text-red-600 hover:underline">원본으로 되돌리기</button>
+                    </div>
+                    <textarea x-model="overrides.common"
+                              class="w-full h-48 p-2 text-xs border rounded font-mono bg-white"></textarea>
+                    <div class="flex items-center gap-2 mt-2">
+                        <button type="button" @click="persistBlock('common')" :disabled="blockBusy"
+                                class="px-3 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-40">영구 저장</button>
+                        <button type="button" @click="saveAsNewBlock('common')" :disabled="blockBusy"
+                                class="px-3 py-1 text-xs bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-40">새 옵션으로 저장</button>
+                        <button type="button" @click="deleteSelectedBlock('common')" :disabled="blockBusy"
+                                class="px-3 py-1 text-xs border border-red-300 text-red-600 rounded hover:bg-red-50 disabled:opacity-40">삭제</button>
+                        <span x-show="blockMsg" x-text="blockMsg" class="text-xs text-emerald-700"></span>
+                    </div>
+                </div>
+            </div>
+
             <!-- 섹션 패턴 -->
             <div class="bg-white rounded-lg shadow-sm border p-4">
                 <div class="flex items-center justify-between mb-2">
@@ -316,6 +362,6 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="/static/js/prompt_builder/structure.js?v=20260712_seclock"></script>
-<script src="/static/js/prompt_builder/app.js?v=20260712_seclock"></script>
+<script src="/static/js/prompt_builder/structure.js?v=20260712_common"></script>
+<script src="/static/js/prompt_builder/app.js?v=20260712_common"></script>
 {% endblock %}

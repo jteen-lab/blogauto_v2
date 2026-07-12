@@ -6,7 +6,7 @@
  *  2) 모듈 폼 안 확장 패널         → mode='embedded' (반영 버튼 + onApply 콜백)
  *
  * 기능:
- *  - 페르소나/독자수준/섹션패턴/시작톤 4축 라디오 선택
+ *  - 페르소나/독자수준/글쓰기기본원칙/섹션패턴/시작톤 5축 라디오 선택
  *  - 프리셋 1클릭 적용 + 어울리는 카테고리 표기 (기본 10종 + 사용자 커스텀)
  *  - 사용자 커스텀 프리셋 localStorage 저장 + 중복 조합 차단(글자수 설정 포함)
  *  - 섹션 수는 패턴 본문에서 도출해 표시만(사용자 조절 불가 → 프롬프트와 항상 일치)
@@ -31,9 +31,9 @@ function createPromptBuilderState(opts = {}) {
         readers: [],
         patterns: [],
         tones: [],
+        commons: [],       // 글쓰기 기본 원칙 옵션(선택형 축)
         builtinPresets: [],
         customPresets: [],
-        commonRules: '',
         divider: '',
 
         // ── 선택값 ────────────────────────────────────────
@@ -41,14 +41,15 @@ function createPromptBuilderState(opts = {}) {
         reader: '',
         pattern: '',
         tone: '',
+        common: '',        // 글쓰기 기본 원칙 선택 코드(로드 시 기본값 자동선택)
         // 구조 약속 글자수(하드코딩 제거 → 설정화). 구성마다 조절 가능.
         introChars: 200,
         sectionChars: 250,
         outroChars: 200,
 
         // ── 임시 수정(EDIT) ───────────────────────────────
-        overrides: { persona: null, reader: null, pattern: null, tone: null },
-        editing: { persona: false, reader: false, pattern: false, tone: false },
+        overrides: { persona: null, reader: null, pattern: null, tone: null, common: null },
+        editing: { persona: false, reader: false, pattern: false, tone: false, common: false },
 
         // ── UI 상태 ───────────────────────────────────────
         justCopied: false,
@@ -66,6 +67,7 @@ function createPromptBuilderState(opts = {}) {
             this.$watch('reader', () => { this.overrides.reader = null; this.editing.reader = false; });
             this.$watch('pattern', () => { this.overrides.pattern = null; this.editing.pattern = false; });
             this.$watch('tone', () => { this.overrides.tone = null; this.editing.tone = false; });
+            this.$watch('common', () => { this.overrides.common = null; this.editing.common = false; });
             this.$watch('newPresetName', () => { this.presetWarning = ''; });
         },
 
@@ -83,12 +85,21 @@ function createPromptBuilderState(opts = {}) {
                 this.readers = data.readers || [];
                 this.patterns = data.patterns || [];
                 this.tones = data.tones || [];
+                this.commons = data.commons || [];
                 this.builtinPresets = data.presets || [];
-                this.commonRules = data.common_rules || '';
                 this.divider = data.divider || '─'.repeat(40);
+                this.ensureCommonSelected();
             } catch (e) {
                 console.error('[prompt-builder] blocks-data 파싱 실패:', e);
             }
+        },
+
+        // 글쓰기 기본 원칙은 항상 하나가 선택돼 있어야 함(기존 하드코딩 동작 유지).
+        // 미선택이거나 선택 코드가 목록에서 사라졌으면 첫 옵션으로 자동 선택.
+        ensureCommonSelected() {
+            if (!this.commons.length) return;
+            const exists = this.commons.some((c) => c.code === this.common);
+            if (!this.common || !exists) this.common = this.commons[0].code;
         },
 
         // ── 프리셋 ─────────────────────────────────────────
@@ -104,6 +115,9 @@ function createPromptBuilderState(opts = {}) {
             this.reader = p.reader;
             this.pattern = p.pattern;
             this.tone = p.tone;
+            // 글쓰기 기본 원칙 복원(프리셋에 없거나 목록에 없으면 기본값 유지).
+            if (p.common && this.commons.some((c) => c.code === p.common)) this.common = p.common;
+            else this.ensureCommonSelected();
             // 글자수 설정도 복원(프리셋에 없으면 기본값) → 프리셋 적용이 항상 결정적.
             this.introChars = (typeof p.introChars === 'number') ? p.introChars : 200;
             this.sectionChars = (typeof p.sectionChars === 'number') ? p.sectionChars : 250;
@@ -157,7 +171,8 @@ function createPromptBuilderState(opts = {}) {
                 reader: this.reader,
                 pattern: this.pattern,
                 tone: this.tone,
-                // 글자수 설정 함께 저장(섹션 수는 패턴 코드에 내재 → 별도 저장 불필요).
+                // 글쓰기 기본 원칙 + 글자수 함께 저장(섹션 수는 패턴 코드에 내재 → 별도 저장 불필요).
+                common: this.common,
                 introChars: this.introChars,
                 sectionChars: this.sectionChars,
                 outroChars: this.outroChars,
@@ -220,7 +235,7 @@ function createPromptBuilderState(opts = {}) {
             const next = !this.editing[field];
             this.editing[field] = next;
             if (next && this.overrides[field] === null) {
-                const lists = { persona: this.personas, reader: this.readers, pattern: this.patterns, tone: this.tones };
+                const lists = { persona: this.personas, reader: this.readers, pattern: this.patterns, tone: this.tones, common: this.commons };
                 const list = lists[field];
                 if (!list) return;
                 // 편집/저장은 항상 '원문 그대로'(패턴 포함) — 재가공 없이 본문을 그대로 편집.
@@ -236,7 +251,7 @@ function createPromptBuilderState(opts = {}) {
         _listFor(field) {
             return {
                 persona: this.personas, reader: this.readers,
-                pattern: this.patterns, tone: this.tones,
+                pattern: this.patterns, tone: this.tones, common: this.commons,
             }[field];
         },
         _applyBlocks(field, items) {
@@ -245,6 +260,7 @@ function createPromptBuilderState(opts = {}) {
             else if (field === 'reader') this.readers = items;
             else if (field === 'pattern') this.patterns = items;
             else if (field === 'tone') this.tones = items;
+            else if (field === 'common') this.commons = items;
         },
         flashBlockMsg(msg) {
             this.blockMsg = msg;
@@ -255,7 +271,7 @@ function createPromptBuilderState(opts = {}) {
                 const res = await fetch('/api/v1/prompt-builder/blocks', { credentials: 'include' });
                 if (!res.ok) return;
                 const all = await res.json();
-                const byType = { persona: [], reader: [], pattern: [], tone: [] };
+                const byType = { persona: [], reader: [], pattern: [], tone: [], common: [] };
                 for (const b of all) {
                     if (b.is_active && byType[b.block_type]) {
                         byType[b.block_type].push({
@@ -264,9 +280,10 @@ function createPromptBuilderState(opts = {}) {
                         });
                     }
                 }
-                ['persona', 'reader', 'pattern', 'tone'].forEach((f) => {
+                ['persona', 'reader', 'pattern', 'tone', 'common'].forEach((f) => {
                     if (byType[f].length) this._applyBlocks(f, byType[f]);
                 });
+                this.ensureCommonSelected();
             } catch (e) { console.warn('[prompt-builder] reloadBlocks 실패:', e); }
         },
         async persistBlock(field) {
@@ -359,7 +376,7 @@ function createPromptBuilderState(opts = {}) {
                 '',
                 D, this.bodyFor('reader', this.readers), D,
                 '',
-                D, this.commonRules, D,
+                D, this.bodyFor('common', this.commons), D,
                 '',
                 D, this.finalPatternBody, D,
                 '',

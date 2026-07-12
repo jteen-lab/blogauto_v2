@@ -99,9 +99,10 @@ window.getPromptBuilderEmbeddedHTML = function () {
                 </div>
             </div>
 
-            <!-- 4축 라디오 + EDIT -->
+            <!-- 5축 라디오 + EDIT -->
             ${getBuilderAxisHTML('persona', '페르소나 (어투)', 'personas')}
             ${getBuilderAxisHTML('reader', '독자 수준', 'readers')}
+            ${getBuilderAxisHTML('common', '글쓰기 기본 원칙', 'commons')}
             ${getBuilderAxisHTML('pattern', '섹션 패턴', 'patterns')}
             ${getBuilderAxisHTML('tone', '시작 톤', 'tones')}
 
