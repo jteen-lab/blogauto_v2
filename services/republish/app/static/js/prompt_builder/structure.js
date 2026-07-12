@@ -36,9 +36,13 @@ function pbParsePatternSections(patternBody) {
  * @returns {string} 구조 약속 텍스트
  */
 function pbBuildStructure(sections, opts) {
-    const intro = (opts && opts.introChars) || 200;
-    const sec = (opts && opts.sectionChars) || 250;
-    const outro = (opts && opts.outroChars) || 200;
+    // 0을 유효값으로 허용하고(빈칸·NaN 등 비유한값만 기본값으로 폴백).
+    // 기존 `|| 200`은 0을 falsy로 취급해 0 입력이 조용히 무시되고,
+    // 빈칸일 때 화면값과 생성값이 어긋나는 문제가 있었다.
+    const num = (v, d) => (Number.isFinite(v) ? v : d);
+    const intro = num(opts && opts.introChars, 200);
+    const sec = num(opts && opts.sectionChars, 250);
+    const outro = num(opts && opts.outroChars, 200);
     const introLine = 'STEP 1 ▸ H1(#) 타이틀 + 도입 ' + intro + '자+ (위 시작톤 적용, "안녕하세요" 금지)';
     const outroLine = (step) => `STEP ${step} ▸ ## 마치며 ${outro}자+ (담백한 정리 + 댓글·경험 공유 유도)`;
 
