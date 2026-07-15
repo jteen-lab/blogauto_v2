@@ -130,6 +130,30 @@
                     <span x-text="detecting ? '감지 중...' : '다시 감지'"></span>
                 </button>
             </div>
+
+            <!-- 쓰기 가능 여부 (감지된 경우) -->
+            <template x-if="seoConfig.detected_plugin && seoConfig.seo_write_capable === false">
+                <div class="mt-3 p-4 bg-rose-50 border border-rose-200 rounded-lg">
+                    <div class="flex items-start gap-2">
+                        <svg class="w-5 h-5 text-rose-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                        <div class="text-sm text-rose-800">
+                            <p class="font-semibold mb-1">이 사이트는 SEO 자동입력이 되지 않습니다</p>
+                            <p class="text-rose-700 mb-2">XML-RPC가 차단돼 있고 SEO 메타가 REST에 등록돼 있지 않아, 발행해도 SEO 메타가 저장되지 않습니다.</p>
+                            <p class="text-rose-700">해결: <code class="px-1 bg-white rounded border">wp-content/mu-plugins/blogauto-seo-meta.php</code> 파일을 설치한 뒤 <b>"다시 감지"</b>를 눌러주세요. (mu-plugins 폴더가 없으면 새로 생성 — 별도 활성화 불필요)</p>
+                        </div>
+                    </div>
+                </div>
+            </template>
+            <template x-if="seoConfig.detected_plugin && seoConfig.seo_write_capable === true">
+                <div class="mt-3 px-4 py-2 bg-green-50 border border-green-200 rounded-lg text-xs text-green-700">
+                    ✓ SEO 자동입력 가능
+                    <span x-show="seoConfig.seo_write_method === 'rest'">(REST 메타)</span>
+                    <span x-show="seoConfig.seo_write_method === 'xmlrpc'">(XML-RPC)</span>
+                    <span x-show="seoConfig.seo_write_method === 'aioseo'">(AIOSEO API)</span>
+                </div>
+            </template>
         </div>
 
         <!-- 2. SEO 자동 입력 토글 -->
