@@ -247,9 +247,10 @@ class WordPressPublisher:
         # SEO custom_fields 업데이트
         # XML-RPC 우선 시도 → 실패 시 REST API meta 업데이트로 fallback
         # (lifein4.com 등 보안 플러그인이 XML-RPC 차단한 사이트 호환)
+        seo_ok: Optional[bool] = None
         if seo_meta and seo_plugin and post_id:
             if seo_plugin == "aioseo":
-                await self._post_aioseo_meta(
+                seo_ok = await self._post_aioseo_meta(
                     blog.url, username,
                     app_password, post_id, seo_meta,
                 )
@@ -259,13 +260,28 @@ class WordPressPublisher:
                     app_password, post_id,
                     seo_meta, seo_plugin,
                 )
-                if not xmlrpc_ok:
+                if xmlrpc_ok:
+                    seo_ok = True
+                else:
                     # XML-RPC 차단 사이트용 REST API fallback
-                    await self._update_seo_via_rest(
+                    seo_ok = await self._update_seo_via_rest(
                         blog.url, username,
                         app_password, post_id,
                         seo_meta, seo_plugin,
                     )
+            # 발행별 SEO 자동입력 결과를 블로그명과 함께 명시(조용한 실패 방지)
+            if seo_ok is False:
+                logger.warning(
+                    "[WP_PUBLISH] SEO 자동입력 실패 | blog=%s | post_id=%s"
+                    " | plugin=%s | 사이트에 mu-plugin(blogauto-seo-meta.php)"
+                    " 설치 또는 xmlrpc 허용 필요",
+                    blog.name, post_id, seo_plugin,
+                )
+            else:
+                logger.info(
+                    "[WP_PUBLISH] SEO 자동입력 성공 | blog=%s | post_id=%s"
+                    " | plugin=%s", blog.name, post_id, seo_plugin,
+                )
 
         # 2단계: draft → publish 전환
         pub_ok = await self._publish_draft(
@@ -517,8 +533,8 @@ class WordPressPublisher:
         self, blog_url: str, username: str,
         app_password: str, post_id: str,
         seo_meta: dict,
-    ) -> None:
-        """AIOSEO 자체 REST API로 SEO 메타 설정"""
+    ) -> bool:
+        """AIOSEO 자체 REST API로 SEO 메타 설정. Returns 성공 여부."""
         url = f"{blog_url.rstrip('/')}/wp-json/aioseo/v1/posts/{post_id}"
         kp = seo_meta.get("focus_keyphrase", "")
         auth = base64.b64encode(f"{username}:{app_password}".encode()).decode()
@@ -534,8 +550,10 @@ class WordPressPublisher:
                 "[WP_PUBLISH] AIOSEO %s | post_id=%s",
                 "성공" if ok else f"실패({resp.status_code})", post_id,
             )
+            return ok
         except Exception as e:
             logger.warning("[WP_PUBLISH] AIOSEO 오류 | %s | %s", post_id, e)
+            return False
 
     async def _send_request(
         self, api_url: str, auth_str: str,
