@@ -92,9 +92,14 @@ async def save_seo_settings(
         if detect_result.get("detected_plugin"):
             seo_config["detected_plugin"] = detect_result["detected_plugin"]
             seo_config["detected_at"] = detect_result["detected_at"]
+            cap = await _probe_write_capability(
+                detector, blog, detect_result["detected_plugin"],
+            )
+            seo_config.update(cap)
             logger.info(
                 f"SEO 자동 감지 성공 | blog_id={blog_id} | "
-                f"plugin={detect_result['detected_plugin']}"
+                f"plugin={detect_result['detected_plugin']} | "
+                f"write_capable={cap.get('seo_write_capable')}"
             )
         else:
             warning = (
@@ -150,6 +155,18 @@ async def detect_seo_plugin(
     seo_config["detected_plugin"] = result.get("detected_plugin")
     seo_config["detected_at"] = result.get("detected_at")
 
+    # 실제 SEO 메타 쓰기 가능 여부 프로브 (감지만으로는 자동입력 성공 보장 못함)
+    plugin = result.get("detected_plugin")
+    if plugin:
+        cap = await _probe_write_capability(detector, blog, plugin)
+        seo_config.update(cap)
+        if cap.get("seo_write_capable") is False:
+            logger.warning(
+                "[SEO_DETECT] 쓰기 불가 | blog_id=%s | plugin=%s | "
+                "xmlrpc 차단 + SEO 메타 REST 미등록(mu-plugin 필요)",
+                blog_id, plugin,
+            )
+
     blog.seo_config = seo_config
     flag_modified(blog, "seo_config")
     await db.commit()
@@ -157,7 +174,8 @@ async def detect_seo_plugin(
 
     logger.info(
         f"SEO 플러그인 재감지 | blog_id={blog_id} | "
-        f"plugin={result.get('detected_plugin')}"
+        f"plugin={result.get('detected_plugin')} | "
+        f"write_capable={seo_config.get('seo_write_capable')}"
     )
 
     return {
@@ -166,3 +184,24 @@ async def detect_seo_plugin(
         "detected_plugin": result.get("detected_plugin"),
         "display_name": result.get("display_name"),
     }
+
+
+async def _probe_write_capability(detector, blog, plugin: str) -> dict:
+    """블로그 자격증명을 복호화해 SEO 쓰기 가능 여부를 검사한다.
+
+    복호화 실패 시 capable=None(판정 보류)로 안전 처리.
+    """
+    from ..core.encryption import decrypt_api_key
+
+    username = app_password = None
+    try:
+        if blog.api_key_encrypted:
+            username = decrypt_api_key(blog.api_key_encrypted)
+        if blog.api_secret_encrypted:
+            app_password = decrypt_api_key(blog.api_secret_encrypted)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[SEO_DETECT] 자격증명 복호화 실패 | %s", e)
+
+    return await detector.check_write_capability(
+        blog.url, username, app_password, plugin,
+    )
