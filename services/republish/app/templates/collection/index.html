@@ -657,7 +657,7 @@ function dataManagementApp() {
         availableBlogs: [],
         selectedBlogId: '',
         matchingSummary: null,
-        matchingFilter: 'all',  // 'all' | 'matched' | 'unmatched' | 'unmatched_crawled'
+        stateFilter: 'all',  // 'all' | 'published' | 'pending' | 'independent' | 'unmatched'
         // MATCH-040: 매칭 진행 표시 상태
         isMatching: false,
         matchProgressText: '',
@@ -1129,7 +1129,7 @@ function dataManagementApp() {
         async loadMatchingPairs() {
             if (!this.selectedBlogId) {
                 this.matchingSummary = null;
-                this.matchingFilter = 'all';
+                this.stateFilter = 'all';
                 this.blogMatchingConfig = null;
                 this.unmatchedCrawledPosts = [];
                 this.selectedUnmatchedCrawled = [];
@@ -1191,10 +1191,16 @@ function dataManagementApp() {
                 this.matchProgressText = '';
             }
 
-            // 제목 목록 다시 로드
+            // 제목 목록 다시 로드 (기본: 전체 상태)
             this.mainTitlePage = 1;
-            this.matchingFilter = 'all';
-            // 전체 필터에서는 미매칭 크롤링 포스트도 함께 로드
+            this.stateFilter = 'all';
+            this.loadMainTitlesWithCrawled();
+        },
+
+        // 상태 카운트 칩 클릭 → 해당 상태 목록만 로드
+        selectState(state) {
+            this.stateFilter = state;
+            this.mainTitlePage = 1;
             this.loadMainTitlesWithCrawled();
         },
 
@@ -1357,9 +1363,6 @@ function dataManagementApp() {
                 // Phase 2-2: 블로그 및 매칭 필터 추가
                 if (this.selectedBlogId) {
                     params.append('blog_id', this.selectedBlogId);
-                    if (this.matchingFilter && this.matchingFilter !== 'all') {
-                        params.append('matching_filter', this.matchingFilter);
-                    }
                 }
 
                 if (this.mainTitleViewMode === 'group') {
@@ -1415,8 +1418,8 @@ function dataManagementApp() {
                 this.mainTitleSortDir = 'asc';
             }
             this.mainTitlePage = 1;
-            // 전체 보기 시 미매칭 크롤링 포스트도 함께 정렬
-            if (this.matchingFilter === 'all') {
+            // 블로그 선택 시 통합(상태 필터) 경로, 미선택 시 일반 정식제목
+            if (this.selectedBlogId) {
                 this.loadMainTitlesWithCrawled();
             } else {
                 this.loadMainTitles();
@@ -1427,8 +1430,7 @@ function dataManagementApp() {
         resetMainTitleSearch() {
             this.mainTitleSearch = '';
             this.mainTitlePage = 1;
-            // 전체 보기 시 미매칭 크롤링 포스트도 함께 로드
-            if (this.matchingFilter === 'all') {
+            if (this.selectedBlogId) {
                 this.loadMainTitlesWithCrawled();
             } else {
                 this.loadMainTitles();
@@ -1631,7 +1633,7 @@ function dataManagementApp() {
                     size: '20',
                     sort_field: this.mainTitleSortField || 'created_at',
                     sort_dir: this.mainTitleSortDir || 'desc',
-                    matching_filter: this.matchingFilter || 'all',
+                    state: this.stateFilter || 'all',
                 });
                 if (this.mainTitleSearch) params.append('search', this.mainTitleSearch);
 
