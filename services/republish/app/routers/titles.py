@@ -344,7 +344,8 @@ async def list_titles_unified(
     search: Optional[str] = Query(None, description="제목 검색"),
     sort_field: Optional[str] = Query("created_at"),
     sort_dir: Optional[str] = Query("desc"),
-    matching_filter: Optional[str] = Query("all", description="all|matched|unmatched"),
+    matching_filter: Optional[str] = Query("all", description="레거시: all|matched|unmatched"),
+    state: Optional[str] = Query(None, description="상태 필터: all|published|pending|independent|unmatched"),
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_user),
 ):
@@ -370,16 +371,19 @@ async def list_titles_unified(
     if not blog:
         raise HTTPException(status_code=404, detail="블로그를 찾을 수 없습니다")
 
-    # 1) 메인 타이틀 쿼리 빌드 (BlogCategory 필터 + hide_group_members + 매칭 필터)
-    main_query = select(MainTitle)
-    if search:
-        main_query = main_query.where(MainTitle.title.ilike(f"%{search}%"))
-    cat_filter = await _build_blog_category_filter(blog_id, db)
-    if cat_filter is not None:
-        main_query = main_query.where(cat_filter)
+    # state 정규화 (레거시 matching_filter 폴백)
+    #   all | published(발행완료) | pending(발행대기) | independent(독립) | unmatched(미매칭)
+    valid_states = {"all", "published", "pending", "independent", "unmatched"}
+    if state:
+        st = state.lower()
+        if st not in valid_states:
+            st = "all"
+    else:
+        # 레거시 매핑: matched→매칭(발행완료+발행대기)는 all로 통합 처리, unmatched→independent
+        st = {"unmatched": "independent"}.get(matching_filter, "all")
 
     # 이 블로그에 매칭된 MainTitle ID 서브쿼리.
-    # 그룹 필터 예외 처리에 사용되므로 그룹 필터보다 먼저 정의한다.
+    # 카테고리/그룹 필터 예외 처리에 사용되므로 먼저 정의한다.
     matched_subq = (
         select(_CP.matched_main_title_id)
         .where(
@@ -391,10 +395,22 @@ async def list_titles_unified(
         .scalar_subquery()
     )
 
-    # 그룹 필터: 그룹 대표/단독/소그룹 만 표시하여 중복 노출을 줄인다.
-    # 단, 이 블로그에 이미 매칭(발행대기/완료) 된 MainTitle 은
-    # is_group_representative 가 아니더라도 반드시 노출되어야 한다.
-    # (그렇지 않으면 슈마즈처럼 발행대기 글이 목록에서 사라지는 회귀가 발생)
+    # 1) 메인 타이틀 쿼리 빌드
+    main_query = select(MainTitle)
+    if search:
+        main_query = main_query.where(MainTitle.title.ilike(f"%{search}%"))
+
+    # 카테고리 필터: 단, 매칭된 제목(발행완료/발행대기)은 카테고리 밖이어도 노출한다.
+    # 카운트(matching-summary)가 CrawledPost 기준(필터 없음)이라, 매칭 제목을
+    # 카테고리로 걸러내면 목록<카운트 불일치가 발생하기 때문.
+    cat_filter = await _build_blog_category_filter(blog_id, db)
+    if cat_filter is not None:
+        main_query = main_query.where(
+            or_(cat_filter, MainTitle.id.in_(matched_subq))
+        )
+
+    # 그룹 필터: 그룹 대표/단독/소그룹만 표시하되, 매칭된 제목은 비대표여도 노출
+    # (그렇지 않으면 그룹 비대표에 매칭된 발행대기 글이 목록에서 사라지는 회귀 발생)
     main_query = main_query.where(
         or_(
             MainTitle.is_group_representative.is_(True),
@@ -406,20 +422,25 @@ async def list_titles_unified(
         )
     )
 
-    if matching_filter == "matched":
+    # state별 메인 쿼리 사전 제한(효율 + 정확성)
+    if st in ("published", "pending"):
         main_query = main_query.where(MainTitle.id.in_(matched_subq))
-    elif matching_filter == "unmatched":
+    elif st == "independent":
         main_query = main_query.where(~MainTitle.id.in_(matched_subq))
 
-    main_count = (
-        await db.execute(
-            select(func.count()).select_from(main_query.subquery())
-        )
-    ).scalar() or 0
+    # unmatched(미매칭 크롤글)만 볼 때는 메인 타이틀 불필요
+    need_main = st != "unmatched"
+    main_count = 0
+    if need_main:
+        main_count = (
+            await db.execute(
+                select(func.count()).select_from(main_query.subquery())
+            )
+        ).scalar() or 0
 
-    # 2) 미매칭 크롤링 쿼리 빌드 (matching_filter='all'에서만 사용)
+    # 2) 미매칭 크롤링 쿼리 빌드 (all 또는 unmatched 상태에서만 사용)
     unmatched_count = 0
-    include_unmatched = matching_filter == "all"
+    include_unmatched = st in ("all", "unmatched")
     if include_unmatched:
         unmatched_query = select(_CP).where(
             _CP.blog_id == blog_id,
@@ -474,7 +495,9 @@ async def list_titles_unified(
     # fetch_limit 보다 크면 SQL 정렬 후순위 row 가 fetch 누락되어
     # "마지막 페이지까지 가도 일부 항목이 보이지 않는" 문제가 발생했다.
     # 통합 정렬과 일관성을 보장하기 위해 두 쿼리 모두 전체 결과를 가져온다.
-    main_rows = (await db.execute(main_query)).scalars().all()
+    main_rows = []
+    if need_main:
+        main_rows = (await db.execute(main_query)).scalars().all()
     unmatched_rows = []
     if include_unmatched:
         unmatched_rows = (await db.execute(unmatched_query)).scalars().all()
@@ -567,18 +590,7 @@ async def list_titles_unified(
             "match_status": cp.match_status,
         }
 
-    # 7) Python 측 통합 정렬
-    # status 정렬은 UI 표시 그룹 (독립포스트/발행대기/발행완료/미매칭) 기준으로
-    # 처리한다. 백엔드 MainTitle.status 컬럼과 UI 표시 상태가 다르기 때문에
-    # 컬럼만 정렬하면 사용자가 보는 동일 그룹이 흩어지는 문제가 있다.
-    # 1차 키: display_status 그룹, 2차 키: title (가나다)
-    DISPLAY_STATUS_ORDER = {
-        "독립포스트": 0,
-        "발행대기": 1,
-        "발행완료": 2,
-        "미매칭크롤": 3,
-    }
-
+    # 7) UI 표시 상태 판정
     def compute_display_status(row: dict) -> str:
         if row.get("_kind") == "unmatched":
             return "미매칭크롤"
@@ -590,6 +602,8 @@ async def list_titles_unified(
     def title_key(row: dict) -> str:
         return (row.get("title") or "").lower()
 
+    # status 정렬은 UI 표시 상태(독립포스트/미매칭크롤/발행대기/발행완료) 문자열을
+    # 기준으로 가나다 정렬한다(한글 음절은 코드포인트가 가나다 순 → 문자열 정렬로 충분).
     def sort_key(row: dict):
         if sort_field == "title":
             return title_key(row)
@@ -601,11 +615,7 @@ async def list_titles_unified(
                 or ""
             )
         if sort_field == "status":
-            # 1차: display_status 그룹, 2차: title 가나다
-            return (
-                DISPLAY_STATUS_ORDER.get(compute_display_status(row), 99),
-                title_key(row),
-            )
+            return (compute_display_status(row), title_key(row))
         if sort_field == "use_count":
             return row.get("use_count") or 0
         return row.get("created_at") or row.get("crawled_at") or ""
@@ -614,30 +624,30 @@ async def list_titles_unified(
     if include_unmatched:
         combined.extend(unmatched_to_dict(cp) for cp in unmatched_rows)
 
-    # status 정렬에서 sort_dir 은 그룹 순서 자체를 뒤집는 의도이므로
-    # 같은 그룹 내 2차 키(title)는 항상 오름차순(가나다)을 유지하기 위해
-    # desc 인 경우에도 안정적인 두 단계 정렬을 사용한다.
-    if sort_field == "status" and sort_dir != "asc":
-        # 1) 2차 키 (title) 오름차순으로 먼저 안정 정렬
-        combined.sort(key=title_key)
-        # 2) 1차 키 (display_status) 내림차순 안정 정렬 (그룹만 역순)
-        combined.sort(
-            key=lambda r: DISPLAY_STATUS_ORDER.get(
-                compute_display_status(r), 99
-            ),
-            reverse=True,
-        )
-    else:
-        combined.sort(key=sort_key, reverse=(sort_dir != "asc"))
+    # 8) 상태 필터 (published/pending/independent는 표시 상태로 정확 분리)
+    _state_label = {
+        "published": "발행완료",
+        "pending": "발행대기",
+        "independent": "독립포스트",
+    }
+    if st in _state_label:
+        target = _state_label[st]
+        combined = [r for r in combined if compute_display_status(r) == target]
+    elif st == "unmatched":
+        combined = [r for r in combined if r.get("_kind") == "unmatched"]
 
-    # 8) 페이지 슬라이싱
+    # 9) 통합 정렬 (가나다: sort_dir 로 오름/내림 토글)
+    combined.sort(key=sort_key, reverse=(sort_dir != "asc"))
+
+    # 10) 상태필터 후 실제 총계로 페이지 슬라이싱
+    total = len(combined)
     start = (page - 1) * size
     page_items = combined[start:start + size]
-    has_next = (start + size) < grand_total
+    has_next = (start + size) < total
 
     return {
         "items": page_items,
-        "total": grand_total,
+        "total": total,
         "main_total": main_count,
         "unmatched_total": unmatched_count,
         "page": page,
