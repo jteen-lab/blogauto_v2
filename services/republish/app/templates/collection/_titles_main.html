@@ -58,63 +58,52 @@
                 </div>
             </div>
 
-            <!-- 매칭 현황 (블로그 선택 시 표시) -->
+            <!-- 매칭 현황 (블로그 선택 시 표시) — 각 항목 클릭 시 해당 상태 목록만 표시 -->
             <div x-show="selectedBlogId && matchingSummary" x-cloak
-                 class="flex items-center gap-3 bg-white rounded-lg px-4 py-2 shadow-sm">
-                <div class="flex items-center gap-2"
-                     :title="'정식제목 ' + (matchingSummary?.total || 0) + ' + 미매칭 ' + (matchingSummary?.unmatched_published || 0) + ' (테이블에 표시되는 모든 row 합계)'">
-                    <span class="text-xs text-gray-500">전체:</span>
-                    <span class="font-bold text-gray-800"
-                          x-text="matchingSummary?.unified_total ?? matchingSummary?.total ?? 0"></span>
-                </div>
-                <div class="w-px h-4 bg-gray-300"></div>
-                <div class="flex items-center gap-2">
+                 class="flex items-center gap-1 bg-white rounded-lg px-2 py-1.5 shadow-sm">
+                <button @click="selectState('all')"
+                        class="flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors"
+                        :class="stateFilter === 'all' ? 'bg-gray-800 text-white' : 'hover:bg-gray-100'"
+                        :title="'테이블에 표시되는 모든 row 합계'">
+                    <span class="text-xs" :class="stateFilter === 'all' ? 'text-gray-200' : 'text-gray-500'">전체:</span>
+                    <span class="font-bold" x-text="matchingSummary?.unified_total ?? matchingSummary?.total ?? 0"></span>
+                </button>
+                <button @click="selectState('published')"
+                        class="flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors"
+                        :class="stateFilter === 'published' ? 'bg-purple-600 text-white' : 'hover:bg-gray-100'">
                     <span class="w-2 h-2 rounded-full bg-purple-500"></span>
-                    <span class="text-xs text-gray-500">발행완료:</span>
-                    <span class="font-bold text-purple-600" x-text="matchingSummary?.published || 0"></span>
-                </div>
-                <div class="w-px h-4 bg-gray-300"></div>
-                <div class="flex items-center gap-2">
+                    <span class="text-xs" :class="stateFilter === 'published' ? 'text-purple-100' : 'text-gray-500'">발행완료:</span>
+                    <span class="font-bold" :class="stateFilter === 'published' ? '' : 'text-purple-600'" x-text="matchingSummary?.published || 0"></span>
+                </button>
+                <button @click="selectState('pending')"
+                        class="flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors"
+                        :class="stateFilter === 'pending' ? 'bg-amber-500 text-white' : 'hover:bg-gray-100'">
                     <span class="w-2 h-2 rounded-full bg-amber-500"></span>
-                    <span class="text-xs text-gray-500">발행대기:</span>
-                    <span class="font-bold text-amber-600" x-text="matchingSummary?.pending || 0"></span>
-                </div>
-                <div class="w-px h-4 bg-gray-300"></div>
-                <div class="flex items-center gap-2">
+                    <span class="text-xs" :class="stateFilter === 'pending' ? 'text-amber-100' : 'text-gray-500'">발행대기:</span>
+                    <span class="font-bold" :class="stateFilter === 'pending' ? '' : 'text-amber-600'" x-text="matchingSummary?.pending || 0"></span>
+                </button>
+                <button @click="selectState('independent')"
+                        class="flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors"
+                        :class="stateFilter === 'independent' ? 'bg-accent text-white' : 'hover:bg-gray-100'">
                     <span class="w-2 h-2 rounded-full bg-primary"></span>
-                    <span class="text-xs text-gray-500">독립:</span>
-                    <span class="font-bold text-accent" x-text="matchingSummary?.unmatched || 0"></span>
-                </div>
-                <div class="w-px h-4 bg-gray-300"></div>
-                <div class="flex items-center gap-2"
-                     :title="'블로그에 발행됐지만 정식제목에 매칭되지 않은 글 수'">
+                    <span class="text-xs" :class="stateFilter === 'independent' ? 'text-white/80' : 'text-gray-500'">독립:</span>
+                    <span class="font-bold" :class="stateFilter === 'independent' ? '' : 'text-accent'" x-text="matchingSummary?.unmatched || 0"></span>
+                </button>
+                <button @click="selectState('unmatched')"
+                        class="flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors"
+                        :class="stateFilter === 'unmatched' ? 'bg-rose-600 text-white' : 'hover:bg-gray-100'"
+                        :title="'블로그에 발행됐지만 정식제목에 매칭되지 않은 글 수'">
                     <span class="w-2 h-2 rounded-full bg-rose-500"></span>
-                    <span class="text-xs text-gray-500">미매칭:</span>
-                    <span class="font-bold text-rose-600" x-text="matchingSummary?.unmatched_published || 0"></span>
-                </div>
+                    <span class="text-xs" :class="stateFilter === 'unmatched' ? 'text-rose-100' : 'text-gray-500'">미매칭:</span>
+                    <span class="font-bold" :class="stateFilter === 'unmatched' ? '' : 'text-rose-600'" x-text="matchingSummary?.unmatched_published || 0"></span>
+                </button>
             </div>
         </div>
 
-        <!-- 매칭 필터 (블로그 선택 시) -->
-        <div x-show="selectedBlogId" x-cloak class="mt-3 flex flex-wrap gap-2">
-            <button @click="matchingFilter = 'all'; mainTitlePage = 1; loadMainTitlesWithCrawled()"
-                    class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
-                    :class="matchingFilter === 'all' ? 'bg-gray-800 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'">
-                전체
-            </button>
-            <button @click="matchingFilter = 'matched'; mainTitlePage = 1; loadMainTitles()"
-                    class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
-                    :class="matchingFilter === 'matched' ? 'bg-green-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'">
-                매칭됨
-            </button>
-            <button @click="matchingFilter = 'unmatched'; mainTitlePage = 1; loadMainTitles()"
-                    class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
-                    :class="matchingFilter === 'unmatched' ? 'btn-primary' : 'bg-white text-gray-600 hover:bg-gray-100'">
-                독립포스트
-            </button>
-            <!-- MATCH-040 D: 미매칭 발행글 일괄 정리 -->
+        <!-- 미매칭 발행글 일괄 정리 (블로그 선택 시) -->
+        <div x-show="selectedBlogId" x-cloak class="mt-3 flex justify-end">
             <button @click="openUnmatchedTitlesDialog()"
-                    class="ml-auto px-3 py-1.5 rounded-full text-xs font-medium bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100">
+                    class="px-3 py-1.5 rounded-full text-xs font-medium bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100">
                 미매칭 발행글 정리
             </button>
         </div>
@@ -196,7 +185,7 @@
                 <input
                     type="text"
                     x-model="mainTitleSearch"
-                    @keyup.enter="mainTitlePage = 1; matchingFilter === 'all' ? loadMainTitlesWithCrawled() : loadMainTitles()"
+                    @keyup.enter="mainTitlePage = 1; selectedBlogId ? loadMainTitlesWithCrawled() : loadMainTitles()"
                     placeholder="제목 검색..."
                     class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-accent focus:border-primary"
                 >
@@ -212,13 +201,13 @@
             </div>
             <select
                 x-model="mainTitleViewMode"
-                @change="mainTitlePage = 1; matchingFilter === 'all' ? loadMainTitlesWithCrawled() : loadMainTitles()"
+                @change="mainTitlePage = 1; selectedBlogId ? loadMainTitlesWithCrawled() : loadMainTitles()"
                 class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-accent">
                 <option value="all">전체 보기</option>
                 <option value="group">그룹별 보기</option>
             </select>
             <button
-                @click="mainTitlePage = 1; matchingFilter === 'all' ? loadMainTitlesWithCrawled() : loadMainTitles()"
+                @click="mainTitlePage = 1; selectedBlogId ? loadMainTitlesWithCrawled() : loadMainTitles()"
                 class="inline-flex items-center justify-center px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors">
                 <svg class="w-4 h-4 md:mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
@@ -659,7 +648,7 @@
                     </div>
                 </template>
                 <!-- 미매칭 크롤링 포스트 (모바일) -->
-                <template x-for="post in (matchingFilter === 'all' ? unmatchedCrawledPosts : [])" :key="'m_crawled_' + post.id">
+                <template x-for="post in unmatchedCrawledPosts" :key="'m_crawled_' + post.id">
                     <div class="mobile-card" :class="{'selected': selectedUnmatchedCrawled.includes(post.id)}">
                         <div class="mobile-card-header">
                             <div class="mobile-card-checkbox">
@@ -760,21 +749,21 @@
     <div class="pagination">
         <div class="text-sm text-gray-600">
             총 <span class="font-semibold"
-                    x-text="(selectedBlogId && matchingFilter === 'all') ? (matchingSummary?.unified_total ?? mainTitleUnifiedTotal ?? mainTitleTotal) : mainTitleTotal"></span>개
+                    x-text="selectedBlogId ? (mainTitleUnifiedTotal ?? mainTitleTotal) : mainTitleTotal"></span>개
             <span x-show="stats.main?.grouped > 0" class="ml-2">
                 (그룹: <span x-text="titleGroupTotal"></span>개)
             </span>
         </div>
         <div class="flex items-center gap-2">
             <button
-                @click="if(mainTitlePage > 1) { mainTitlePage--; (selectedBlogId && matchingFilter === 'all') ? loadMainTitlesWithCrawled() : loadMainTitles(); }"
+                @click="if(mainTitlePage > 1) { mainTitlePage--; selectedBlogId ? loadMainTitlesWithCrawled() : loadMainTitles(); }"
                 :disabled="mainTitlePage <= 1"
                 class="px-3 py-1.5 border rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50">
                 이전
             </button>
             <span class="text-sm text-gray-600 px-2" x-text="`${mainTitlePage} 페이지`"></span>
             <button
-                @click="if(mainTitleHasNext) { mainTitlePage++; (selectedBlogId && matchingFilter === 'all') ? loadMainTitlesWithCrawled() : loadMainTitles(); }"
+                @click="if(mainTitleHasNext) { mainTitlePage++; selectedBlogId ? loadMainTitlesWithCrawled() : loadMainTitles(); }"
                 :disabled="!mainTitleHasNext"
                 class="px-3 py-1.5 border rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50">
                 다음
