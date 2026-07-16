@@ -30,6 +30,9 @@ function seoSettingsApp() {
         seoConfig: {
             detected_plugin: null,
             detected_at: null,
+            seo_write_capable: null,
+            seo_write_method: null,
+            seo_write_checked_at: null,
             auto_seo_enabled: false,
             focus_keyphrase_method: 'title',
             slug_method: 'title',
@@ -82,6 +85,9 @@ function seoSettingsApp() {
                         this.seoConfig = {
                             detected_plugin: data.seo_config.detected_plugin || null,
                             detected_at: data.seo_config.detected_at || null,
+                            seo_write_capable: (data.seo_config.seo_write_capable ?? null),
+                            seo_write_method: data.seo_config.seo_write_method || null,
+                            seo_write_checked_at: data.seo_config.seo_write_checked_at || null,
                             auto_seo_enabled: data.seo_config.auto_seo_enabled || false,
                             focus_keyphrase_method: 'title',
                             slug_method: 'title',
@@ -115,9 +121,15 @@ function seoSettingsApp() {
 
                 if (response.ok) {
                     const data = await response.json();
+                    // 응답의 seo_config에 쓰기 가능 여부(seo_write_capable) 등이 담겨오므로
+                    // 배너 표시를 위해 반드시 화면 상태로 반영한다.
+                    const cfg = data.seo_config || {};
                     if (data.detected_plugin) {
                         this.seoConfig.detected_plugin = data.detected_plugin;
-                        this.seoConfig.detected_at = data.detected_at;
+                        this.seoConfig.detected_at = cfg.detected_at || null;
+                        this.seoConfig.seo_write_capable = (cfg.seo_write_capable ?? null);
+                        this.seoConfig.seo_write_method = cfg.seo_write_method || null;
+                        this.seoConfig.seo_write_checked_at = cfg.seo_write_checked_at || null;
                         this.showMessage(
                             `${this.pluginNames[data.detected_plugin] || data.detected_plugin} 감지 완료`,
                             'success'
@@ -125,6 +137,9 @@ function seoSettingsApp() {
                     } else {
                         this.seoConfig.detected_plugin = null;
                         this.seoConfig.detected_at = null;
+                        this.seoConfig.seo_write_capable = null;
+                        this.seoConfig.seo_write_method = null;
+                        this.seoConfig.seo_write_checked_at = null;
                         this.showMessage('SEO 플러그인을 찾을 수 없습니다', 'error');
                     }
                 } else {
