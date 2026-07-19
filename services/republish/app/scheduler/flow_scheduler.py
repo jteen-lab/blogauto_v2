@@ -1151,6 +1151,10 @@ class FlowScheduler:
                             f"[FLOW_SCHEDULER] GP 비활성 시간대, 재스케줄 | "
                             f"FlowID={flow_id} | ActionType={action_type}"
                         )
+                        # 비활성 시간대 조기 반환 경로에서 실행 잠금 해제 필수.
+                        # 누락 시 is_running=true 로 고착되어 다음 활성 발화(좀비
+                        # 타임아웃 30분)까지 모든 실행이 스킵된다.
+                        state.release_execution_lock()
                         interval_minutes = self._get_gp_interval(
                             gp_settings, blogs, action_type
                         )
