@@ -326,17 +326,24 @@ function styleTabApp() {
         },
 
         /**
-         * 생성 CSS를 <style>...</style> 태그로 감싼 문자열 반환
-         * - 표시(pre)/복사(copyCss) 모두 이 형태로 출력해 바로 붙여넣기 가능하게 한다.
+         * 표시(pre)/복사(copyCss)용 생성 CSS 문자열 반환.
+         * - Google Blogger: <style>...</style> 로 감싼다(테마 편집/HTML 가젯에
+         *   그대로 붙여넣어야 하므로 style 태그 필요).
+         * - WordPress 등 그 외: '추가 CSS(Additional CSS)' 입력란에는 raw CSS만
+         *   넣어야 하므로 <style> 태그를 제거하고 순수 CSS만 반환한다.
          * - this.generatedCss 원본은 내부 그대로 유지(저장 등에 사용).
-         * @returns {string} <style>로 감싼 생성 CSS
+         * @returns {string} 플랫폼에 맞춘 CSS 문자열
          */
         cssWithStyleTag() {
-            return '<style>\n' + (this.generatedCss || '') + '\n</style>';
+            const css = this.generatedCss || '';
+            if (this.platform === 'blogger') {
+                return '<style>\n' + css + '\n</style>';
+            }
+            return css;
         },
 
         /**
-         * CSS 복사 (<style> 래핑 형태로 복사)
+         * CSS 복사 (Blogger는 <style> 래핑, WordPress 등은 raw CSS)
          */
         async copyCss() {
             const text = this.cssWithStyleTag();
