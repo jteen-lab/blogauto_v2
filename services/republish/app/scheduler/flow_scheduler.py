@@ -2410,8 +2410,16 @@ class FlowScheduler:
             min_titles = execution.get("min_titles_required", 1)
 
             # 그룹화 설정
+            # 임계값: 모듈 settings 우선, 없으면 시스템 설정(수동 승격과 통일).
             auto_group = settings.get("auto_group", True)
-            threshold = settings.get("similarity_threshold", 75)
+            threshold = settings.get("similarity_threshold")
+            if threshold is None:
+                from app.services.system_settings_service import (
+                    SystemSettingsService,
+                )
+                threshold = await SystemSettingsService.get_float(
+                    "similarity_threshold", db, 75.0
+                )
 
             # 필터 설정
             filter_opts = settings.get("filter", {})
