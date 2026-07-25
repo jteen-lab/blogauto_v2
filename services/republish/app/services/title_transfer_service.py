@@ -32,10 +32,40 @@ logger = get_logger("title_transfer", "title_transfer.log")
 class TitleTransferService:
     """제목 이동 서비스"""
 
-    def __init__(self, db: AsyncSession, threshold: float = DEFAULT_SIMILARITY_THRESHOLD):
+    def __init__(
+        self,
+        db: AsyncSession,
+        threshold: float = DEFAULT_SIMILARITY_THRESHOLD,
+        user_id: int = 1,
+    ):
         self.db = db
         self.threshold = threshold
+        self.user_id = user_id
         self.similarity_service = SimilarityService(threshold)
+        # 회색지대 AI 설정(move_to_main 시 로드) + 배치 판정 캐시
+        self._sim_cfg: Dict[str, Any] = {}
+        self._ai_cache: Dict[tuple, bool] = {}
+
+    async def _load_similarity_config(self) -> Dict[str, Any]:
+        """유사도 회색지대/AI 설정 로드(SystemSettings)."""
+        from .system_settings_service import SystemSettingsService
+
+        db = self.db
+        return {
+            "gray_lower": await SystemSettingsService.get_float(
+                "similarity_gray_lower", db, 68.0
+            ),
+            "gray_upper": await SystemSettingsService.get_float(
+                "similarity_gray_upper", db, 80.0
+            ),
+            "ai_enabled": await SystemSettingsService.get_bool(
+                "similarity_ai_enabled", db, False
+            ),
+            "ai_provider": (await SystemSettingsService.get(
+                "similarity_ai_provider", db, "") or ""),
+            "ai_model": (await SystemSettingsService.get(
+                "similarity_ai_model", db, "") or ""),
+        }
 
     async def move_to_main(self, temp_title_ids: List[int], auto_group: bool = True) -> Dict[str, Any]:
         """
@@ -187,11 +217,14 @@ class TitleTransferService:
 
         # 그룹화 처리 (새 그룹 생성 포함)
         if auto_group:
+            # 회색지대 AI 설정 로드 + 배치 캐시 초기화(1회)
+            self._sim_cfg = await self._load_similarity_config()
+            self._ai_cache = {}
             for item in main_titles_to_add:
                 main_title = item['main_title']
                 location_info = item['location_info']
 
-                grouped = self._auto_group_title_sync(main_title, location_info, groups_with_reps, new_groups)
+                grouped = await self._auto_group_title(main_title, location_info, groups_with_reps, new_groups)
                 if grouped:
                     result["grouped"] += 1
 
@@ -230,77 +263,123 @@ class TitleTransferService:
         logger.info(f"[TRANSFER] 이동: moved={result['moved']}, grouped={result['grouped']}, deleted={result['deleted']}")
         return result
 
-    def _auto_group_title_sync(
+    def _score_best_group(
+        self,
+        title: MainTitle,
+        groups_with_reps: List[tuple],
+    ) -> Optional[tuple]:
+        """카테고리 일치 그룹 중 최고 유사도 후보 반환(임계값 무관).
+
+        Returns: (group, rep_title, score) 또는 None
+        """
+        best = None
+        best_score = -1.0
+        for group, rep_title in groups_with_reps:
+            if title.category_id and group.category_id != title.category_id:
+                continue
+            result = self.similarity_service.calculate_similarity_v3(
+                title.title, rep_title.title
+            )
+            score = result["score"]
+            if score > best_score:
+                best_score = score
+                best = (group, rep_title, score)
+        return best
+
+    async def _should_group(
+        self, new_title: str, rep_title: str, score: float,
+    ) -> bool:
+        """밴드 판정: 상한↑ 그룹 / 하한↓ 분리 / 회색지대 AI(활성 시).
+
+        AI 비활성 시 기존 동작(임계값 컷) 유지.
+        """
+        cfg = self._sim_cfg
+        if cfg.get("ai_enabled") and cfg.get("ai_provider"):
+            if score >= cfg["gray_upper"]:
+                return True
+            if score <= cfg["gray_lower"]:
+                return False
+            return await self._ai_same_topic(new_title, rep_title, cfg)
+        return score >= self.threshold
+
+    async def _ai_same_topic(
+        self, a: str, b: str, cfg: Dict[str, Any],
+    ) -> bool:
+        """회색지대 두 제목이 같은 주제인지 저렴 AI로 판정(캐시)."""
+        key = tuple(sorted((a.strip(), b.strip())))
+        if key in self._ai_cache:
+            return self._ai_cache[key]
+        verdict = False
+        try:
+            from .ai.ai_service import AIService
+            prompt = (
+                "두 블로그 글 제목이 사실상 같은 주제·내용을 다루면 '예', "
+                "다르면 '아니오'로만 답하세요.\n"
+                f"제목1: {a}\n제목2: {b}\n답:"
+            )
+            ai = AIService(self.db, self.user_id)
+            res = await ai.generate(
+                prompt=prompt,
+                provider=cfg["ai_provider"],
+                model=(cfg["ai_model"] or None),
+                max_tokens=8,
+                temperature=0.0,
+            )
+            text = ((res or {}).get("content") or "").strip().lower()
+            verdict = text.startswith(("예", "네", "yes", "y", "true", "1"))
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"[TRANSFER] 회색지대 AI 판정 실패(분리 처리): {e}")
+            verdict = False
+        self._ai_cache[key] = verdict
+        return verdict
+
+    async def _auto_group_title(
         self,
         title: MainTitle,
         location_info: Optional[Dict],
         groups_with_reps: List[tuple],
-        new_groups: List[TitleGroup]
+        new_groups: List[TitleGroup],
     ) -> bool:
-        """
-        동기식 제목 자동 그룹화 (await 없음)
-        """
-        best_match = None
-        best_score = 0.0
+        """제목 자동 그룹화(밴드+회색지대 AI). attach/신규그룹 로직 유지."""
+        best = self._score_best_group(title, groups_with_reps)
+        if best is not None:
+            group, rep_title, score = best
+            if await self._should_group(title.title, rep_title.title, score):
+                if group.id is not None:
+                    title.group_id = group.id
+                    if not group.representative_title_id:
+                        title.is_group_representative = True
+                        group.representative_title_id = title.id
+                        logger.debug(
+                            f"[TRANSFER] 대표 없는 그룹에 대표 설정: "
+                            f"group_id={group.id}, title_id={title.id}"
+                        )
+                else:
+                    if not hasattr(group, '_pending_members'):
+                        group._pending_members = []
+                    group._pending_members.append(title)
+                title.similarity_score = score
+                title.grouped_at = datetime.utcnow()
+                group.member_count = (group.member_count or 0) + 1
+                return True
 
-        # 미리 조회한 그룹들에서 매칭 찾기
-        for group, rep_title in groups_with_reps:
-            # 카테고리가 일치하는 그룹만 검사
-            if title.category_id and group.category_id != title.category_id:
-                continue
-
-            # V3 다단계 하이브리드 유사도 계산 사용
-            result = self.similarity_service.calculate_similarity_v3(title.title, rep_title.title)
-            score = result["score"]
-            # 항상 threshold 기준으로 판단 (캐노니컬 키 매칭도 threshold 적용)
-            if score >= self.threshold and score > best_score:
-                best_score = score
-                best_match = (group, score)
-
-        if best_match:
-            group, score = best_match
-            # 새로 생성된 그룹인 경우 (아직 flush 전이라 group.id가 None일 수 있음)
-            if group.id is not None:
-                title.group_id = group.id
-                # 그룹에 대표가 없으면 이 제목을 대표로 설정
-                if not group.representative_title_id:
-                    title.is_group_representative = True
-                    group.representative_title_id = title.id
-                    logger.debug(f"[TRANSFER] 대표 없는 그룹에 대표 설정: group_id={group.id}, title_id={title.id}")
-            else:
-                # 나중에 group_id를 설정하기 위해 그룹에 멤버 추가
-                if not hasattr(group, '_pending_members'):
-                    group._pending_members = []
-                group._pending_members.append(title)
-            title.similarity_score = score
-            title.grouped_at = datetime.utcnow()
-            group.member_count = (group.member_count or 0) + 1
-            return True
-
-        # 새 그룹 생성 (동기식)
+        # 새 그룹 생성
         group_name = title.title[:30]
         if location_info:
             loc_str = normalize_location(location_info)
             if loc_str:
                 group_name = f"[{loc_str}] {group_name}"
-
         group = TitleGroup(
             name=group_name,
             category_id=title.category_id,
             location=normalize_location(location_info) if location_info else None,
             member_count=1,
         )
-
-        # 나중에 설정할 대표 제목 저장
         group._pending_rep_title = title
-
         title.is_group_representative = True
         title.grouped_at = datetime.utcnow()
-
-        # 새 그룹을 목록에 추가
         new_groups.append(group)
         groups_with_reps.append((group, title))
-
         return True
 
     async def move_to_temp(self, title_ids: List[int], move_entire_group: bool = True) -> Dict[str, Any]:
