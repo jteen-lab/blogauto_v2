@@ -361,20 +361,17 @@ async def promote_titles(
     데이터 이동 모듈과 동일한 방식 사용:
     - topic_id와 subtopic_id가 모두 있는 제목만 승격
     - 카테고리 정보(topic_id, subtopic_id) 유지
-    - 유사도 기반 자동 그룹화 (임계값 75%)
+    - 유사도 기반 자동 그룹화 (임계값은 시스템 설정 similarity_threshold, 기본 75)
     """
     from ..services.title_transfer_service import move_temp_to_main
+    from ..services.system_settings_service import SystemSettingsService
     from sqlalchemy import select
 
-    # shared 서비스에서 기본 임계값 가져오기
-    import sys
-    import os
-    _shared_paths = ['/app/shared', '/home/jteen/blogauto_v2/shared']
-    for _path in _shared_paths:
-        if os.path.exists(_path) and _path not in sys.path:
-            sys.path.insert(0, _path)
-            break
-    from services.similarity_service import DEFAULT_SIMILARITY_THRESHOLD
+    # 유사도 임계값: 시스템 설정에서 조회(데이터 모듈과 동일 소스로 통일).
+    # 미설정 시 기본 75.
+    threshold = await SystemSettingsService.get_float(
+        "similarity_threshold", db, 75.0
+    )
 
     try:
         # Data Module 방식: topic_id와 subtopic_id가 모두 있는 제목만 필터링
@@ -402,7 +399,7 @@ async def promote_titles(
             db=db,
             temp_title_ids=valid_title_ids,
             auto_group=True,
-            threshold=DEFAULT_SIMILARITY_THRESHOLD  # 유사도 임계값 75% 적용
+            threshold=threshold,  # 시스템 설정 기반(기본 75)
         )
 
         message = f"{result['moved']}개 제목이 승격되었습니다"
