@@ -22,6 +22,13 @@ DEFAULTS: Dict[str, dict] = {
     "ratelimit_anthropic_tpm": {"value": "80000", "type": "int", "category": "ratelimit", "desc": "Anthropic 분당 토큰 제한"},
     "ratelimit_google_rpm": {"value": "60", "type": "int", "category": "ratelimit", "desc": "Google 분당 요청 제한"},
     "ratelimit_google_tpm": {"value": "120000", "type": "int", "category": "ratelimit", "desc": "Google 분당 토큰 제한"},
+    # 유사도 매칭(정식제목 그룹핑) — 수동 승격/데이터 모듈 공통 설정
+    "similarity_threshold": {"value": "75", "type": "float", "category": "similarity", "desc": "그룹핑 유사도 임계값(0-100)"},
+    "similarity_gray_lower": {"value": "68", "type": "float", "category": "similarity", "desc": "회색지대 하한(이하 자동 분리)"},
+    "similarity_gray_upper": {"value": "80", "type": "float", "category": "similarity", "desc": "회색지대 상한(이상 자동 그룹)"},
+    "similarity_ai_enabled": {"value": "false", "type": "bool", "category": "similarity", "desc": "회색지대 AI 판정 사용"},
+    "similarity_ai_provider": {"value": "", "type": "string", "category": "similarity", "desc": "회색지대 AI 제공자(openai/anthropic/google)"},
+    "similarity_ai_model": {"value": "", "type": "string", "category": "similarity", "desc": "회색지대 AI 모델(비우면 기본)"},
 }
 
 _ENV_MAP = {
@@ -34,6 +41,12 @@ _ENV_MAP = {
     "ratelimit_anthropic_tpm": "RATELIMIT_ANTHROPIC_TPM",
     "ratelimit_google_rpm": "RATELIMIT_GOOGLE_RPM",
     "ratelimit_google_tpm": "RATELIMIT_GOOGLE_TPM",
+    "similarity_threshold": "SIMILARITY_THRESHOLD",
+    "similarity_gray_lower": "SIMILARITY_GRAY_LOWER",
+    "similarity_gray_upper": "SIMILARITY_GRAY_UPPER",
+    "similarity_ai_enabled": "SIMILARITY_AI_ENABLED",
+    "similarity_ai_provider": "SIMILARITY_AI_PROVIDER",
+    "similarity_ai_model": "SIMILARITY_AI_MODEL",
 }
 
 
@@ -103,6 +116,17 @@ class SystemSettingsService:
         val = await cls.get(key, db, str(default))
         try:
             return int(val)
+        except (ValueError, TypeError):
+            return default
+
+    @classmethod
+    async def get_float(
+        cls, key: str, db: AsyncSession, default: float = 0.0,
+    ) -> float:
+        """float 설정값 조회."""
+        val = await cls.get(key, db, str(default))
+        try:
+            return float(val)
         except (ValueError, TypeError):
             return default
 
