@@ -6,6 +6,7 @@
 - 매칭 결과를 모아 청크 단위 executemany 벌크 UPDATE
 로 처리한다. celery 태스크에서 호출된다.
 """
+import asyncio
 from typing import Any, Dict
 
 from sqlalchemy import select, update
@@ -54,7 +55,11 @@ async def reclassify_titles(
     )
 
     updates = []
-    for title_id, title_text in rows:
+    for idx, (title_id, title_text) in enumerate(rows):
+        # 앱 내 백그라운드 실행: CPU 매칭 루프가 이벤트 루프를 오래 막지
+        # 않도록 주기적으로 양보(스케줄러/요청 응답성 보호).
+        if idx % 500 == 0:
+            await asyncio.sleep(0)
         text_lower = (title_text or "").lower()
         if len(text_lower.strip()) < 2:
             continue
