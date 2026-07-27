@@ -123,6 +123,12 @@ function settingsApp() {
             {name: 'anthropic', label: 'Anthropic (Claude)', rpm_key: 'ratelimit_anthropic_rpm', tpm_key: 'ratelimit_anthropic_tpm'},
             {name: 'google', label: 'Google (Gemini)', rpm_key: 'ratelimit_google_rpm', tpm_key: 'ratelimit_google_tpm'},
         ],
+        // 유사도 회색지대 AI 판정용 텍스트 모델(제공자별, 저렴 모델 우선)
+        similarityModels: {
+            openai: ['gpt-4o-mini', 'gpt-3.5-turbo', 'gpt-4o', 'gpt-4-turbo', 'gpt-4'],
+            google: ['gemini-2.5-flash-lite-preview-06-17', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-flash-preview-04-17', 'gemini-1.5-pro', 'gemini-2.5-pro-preview-05-06'],
+            anthropic: ['claude-3-5-haiku-latest', 'claude-3-haiku-20240307', 'claude-3-5-sonnet-latest', 'claude-sonnet-4-20250514', 'claude-3-opus-latest'],
+        },
 
         // 테마 설정 상태
         currentTheme: 'default',
