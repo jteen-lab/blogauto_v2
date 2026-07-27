@@ -17,10 +17,10 @@ flowchart TD
     HASC -- 아니오 --> NEWG[새 그룹 생성<br/>T=대표]
     HASC -- 예 --> SCORE["유사도 점수 계산<br/>calculate_similarity_v3<br/>(후보 전부와, 대표만 아님)"]
     SCORE --> BEST[최고점 후보 C*, 점수 S]
-    BEST --> BAND{"B. 밴드 판정<br/>(설정값: 하한 L, 상한 U)"}
-    BAND -- "S >= U" --> GROUP[C*의 그룹에 합류]
-    BAND -- "S <= L" --> NEWG
-    BAND -- "L < S < U (회색지대)" --> CACHE{AI 판정 캐시<br/>(T,C*) 존재?}
+    BEST --> BAND{"B. 밴드 판정<br/>(상한=임계값 T, 하한 L)"}
+    BAND -- "S >= T(임계값)" --> GROUP[C*의 그룹에 합류]
+    BAND -- "S <= L(하한)" --> NEWG
+    BAND -- "L < S < T (회색지대)" --> CACHE{AI 판정 캐시<br/>(T,C*) 존재?}
     CACHE -- 예 --> USECACHE[캐시 결과 사용]
     CACHE -- 아니오 --> AI["저렴 AI 질의<br/>'같은 주제인가?'"]
     AI --> STOREC[판정 캐시에 저장]
