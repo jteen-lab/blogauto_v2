@@ -914,25 +914,34 @@
                                       :class="systemSettings['similarity_ai_enabled'] === 'true' ? 'translate-x-5' : ''"></span>
                             </button>
                         </div>
-                        <div class="grid grid-cols-2 gap-3">
+                        <div class="grid grid-cols-2 gap-3" :class="systemSettings['similarity_ai_enabled'] !== 'true' ? 'opacity-50' : ''">
                             <div>
                                 <label class="block text-xs text-gray-500 mb-1">AI 제공자</label>
                                 <select x-model="systemSettings['similarity_ai_provider']"
+                                        @change="systemSettings['similarity_ai_model'] = ''"
+                                        :disabled="systemSettings['similarity_ai_enabled'] !== 'true'"
+                                        :class="systemSettings['similarity_ai_enabled'] !== 'true' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''"
                                         class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
-                                    <option value="">미사용</option>
+                                    <option value="">-- 선택 --</option>
                                     <option value="openai">OpenAI</option>
                                     <option value="google">Google (Gemini)</option>
                                     <option value="anthropic">Anthropic (Claude)</option>
                                 </select>
                             </div>
                             <div>
-                                <label class="block text-xs text-gray-500 mb-1">AI 모델 (비우면 기본)</label>
-                                <input type="text" x-model="systemSettings['similarity_ai_model']"
-                                       placeholder="예: gemini-2.5-flash-lite"
-                                       class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                                <label class="block text-xs text-gray-500 mb-1">AI 모델</label>
+                                <select x-model="systemSettings['similarity_ai_model']"
+                                        :disabled="systemSettings['similarity_ai_enabled'] !== 'true' || !systemSettings['similarity_ai_provider']"
+                                        :class="(systemSettings['similarity_ai_enabled'] !== 'true' || !systemSettings['similarity_ai_provider']) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''"
+                                        class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                                    <option value="">기본 모델</option>
+                                    <template x-for="m in (similarityModels[systemSettings['similarity_ai_provider']] || [])" :key="m">
+                                        <option :value="m" x-text="m"></option>
+                                    </template>
+                                </select>
                             </div>
                         </div>
-                        <p class="text-[11px] text-gray-400">제공자 미선택 또는 AI 사용 OFF면 임계값 컷으로만 동작(기존과 동일). 회색지대(하한~상한)에 든 점수만 AI 호출.</p>
+                        <p class="text-[11px] text-gray-400">AI 사용을 켜야 제공자·모델을 선택할 수 있습니다. 제공자 미선택 시 임계값 컷으로만 동작(기존과 동일). 회색지대(하한~임계값) 점수만 AI 호출.</p>
                     </div>
                 </div>
                 <div class="flex justify-end">
@@ -1026,4 +1035,4 @@
 </div>
 
 <script src="/static/js/ai_keys.js?v=20260423e"></script>
-<script src="/static/js/settings.js?v=20260423e"></script>
+<script src="/static/js/settings.js?v=20260427_simmodel"></script>
