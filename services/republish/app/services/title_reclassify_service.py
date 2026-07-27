@@ -82,6 +82,9 @@ async def reclassify_titles(
             update(model)
             .where(model.id == bindparam("b_id"))
             .values(**values)
+            # executemany 벌크 UPDATE는 세션 동기화를 끄지 않으면
+            # InvalidRequestError. 세션 객체 동기화 불필요하므로 None.
+            .execution_options(synchronize_session=None)
         )
         for i in range(0, matched, _CHUNK):
             await db.execute(stmt, updates[i:i + _CHUNK])
