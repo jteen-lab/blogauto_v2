@@ -700,82 +700,50 @@ async def reclassify_uncategorized_titles(
     """
     제목 카테고리 재분류.
 
+    수만 건 규모에서 동기 처리 시 프록시 타임아웃(504)이 발생하므로
+    백그라운드(celery)로 위임하고 즉시 반환한다.
+
     Args:
         force_all: True면 이미 분류된 제목도 포함하여 전체 재분류.
         target: "temp"이면 임시제목, "main"이면 정식제목 대상.
     """
-    from ..services.category_matcher_service import CategoryMatcherService
-
     if target not in ("temp", "main"):
         raise HTTPException(status_code=400, detail="target은 temp 또는 main이어야 합니다")
 
-    model = MainTitle if target == "main" else TempTitle
     target_label = "정식제목" if target == "main" else "임시제목"
 
     try:
-        base_query = select(model.id, model.title)
+        from ..core.task_dispatcher import get_dispatcher, PRIORITY_HIGH
 
-        if force_all:
-            result = await db.execute(base_query)
-            mode_str = f"{target_label} 전체 재분류"
-        else:
-            result = await db.execute(
-                base_query.where(model.topic_id == None)
-            )
-            mode_str = f"{target_label} 미분류 재분류"
-
-        titles_data = result.all()
-
-        if not titles_data:
-            return {
-                "success": True,
-                "total": 0,
-                "matched": 0,
-                "message": "재분류할 제목이 없습니다"
-            }
-
-        matcher = CategoryMatcherService(db, user_id=current_user.id)
-        await matcher._load_keywords(force_reload=True)
-
-        matched_count = 0
-        for title_id, title_text in titles_data:
-            topic_id, subtopic_id, matched_keyword_id = \
-                await matcher.match_and_apply_to_title(title_text)
-
-            if topic_id:
-                update_values: dict = {
-                    "topic_id": topic_id,
-                    "subtopic_id": subtopic_id,
-                }
-                if target == "temp":
-                    update_values["matched_keyword_id"] = matched_keyword_id
-
-                await db.execute(
-                    update(model)
-                    .where(model.id == title_id)
-                    .values(**update_values)
-                )
-                matched_count += 1
-
-        await db.commit()
+        dispatcher = get_dispatcher()
+        task_id = dispatcher.dispatch_utility(
+            "tasks.reclassify_titles",
+            kwargs={
+                "target": target,
+                "force_all": force_all,
+                "user_id": current_user.id,
+            },
+            priority=PRIORITY_HIGH,
+        )
 
         logger.info(
-            f"[RECLASSIFY_TITLE] {mode_str} 완료: "
-            f"전체 {len(titles_data)}개 중 {matched_count}개 매칭"
+            f"[RECLASSIFY_TITLE] 백그라운드 디스패치 | target={target} | "
+            f"force_all={force_all} | task_id={task_id}"
         )
 
         return {
             "success": True,
-            "total": len(titles_data),
-            "matched": matched_count,
-            "mode": "all" if force_all else "uncategorized",
+            "started": True,
+            "task_id": task_id,
             "target": target,
-            "message": f"{target_label} {len(titles_data)}개 중 {matched_count}개가 분류되었습니다"
+            "message": (
+                f"{target_label} 카테고리 재분류를 백그라운드에서 시작했습니다. "
+                "건수가 많으면 완료까지 다소 시간이 걸리며, 완료 후 새로고침하면 반영됩니다."
+            ),
         }
 
     except Exception as e:
-        logger.error(f"[RECLASSIFY_TITLE] 에러: {str(e)}", exc_info=True)
-        await db.rollback()
+        logger.error(f"[RECLASSIFY_TITLE] 디스패치 에러: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
