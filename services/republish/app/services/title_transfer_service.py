@@ -117,6 +117,15 @@ class TitleTransferService(SimilarityGroupingMixin):
                     # representative_title_id가 없으면 그룹 멤버 중 첫 번째를 대표로 사용
                     groups_with_reps.append((group, members_by_group[group.id]))
 
+            # 1-4. 그룹 없는 기존 정식제목도 후보에 포함(group=None).
+            # "그룹 대표만 비교 + 무그룹 제목은 후보에서 제외"로 91점짜리 짝도
+            # 못 만나던 문제 보완. 키워드 블로킹으로 비교 비용은 제한된다.
+            ungrouped_result = await self.db.execute(
+                select(MainTitle).where(MainTitle.group_id.is_(None))
+            )
+            for m in ungrouped_result.scalars().all():
+                groups_with_reps.append((None, m))
+
         # === 2단계: 데이터 처리 (DB 조회 없이) ===
 
         # 생성할 MainTitle 목록
@@ -201,6 +210,7 @@ class TitleTransferService(SimilarityGroupingMixin):
             # 회색지대 AI 설정 로드 + 배치 캐시 초기화(1회)
             self._sim_cfg = await self._load_similarity_config()
             self._ai_cache = {}
+            self._token_cache = {}  # 키워드 블로킹 토큰 캐시
             for item in main_titles_to_add:
                 main_title = item['main_title']
                 location_info = item['location_info']
@@ -244,6 +254,25 @@ class TitleTransferService(SimilarityGroupingMixin):
         logger.info(f"[TRANSFER] 이동: moved={result['moved']}, grouped={result['grouped']}, deleted={result['deleted']}")
         return result
 
+    def _new_group(
+        self, rep_title: MainTitle, location_info: Optional[Dict],
+        member_count: int,
+    ) -> TitleGroup:
+        """대표 제목으로 새 그룹 객체 생성(_pending_rep_title 설정)."""
+        group_name = rep_title.title[:30]
+        if location_info:
+            loc_str = normalize_location(location_info)
+            if loc_str:
+                group_name = f"[{loc_str}] {group_name}"
+        group = TitleGroup(
+            name=group_name,
+            category_id=rep_title.category_id,
+            location=normalize_location(location_info) if location_info else None,
+            member_count=member_count,
+        )
+        group._pending_rep_title = rep_title
+        return group
+
     async def _auto_group_title(
         self,
         title: MainTitle,
@@ -251,46 +280,50 @@ class TitleTransferService(SimilarityGroupingMixin):
         groups_with_reps: List[tuple],
         new_groups: List[TitleGroup],
     ) -> bool:
-        """제목 자동 그룹화(밴드+회색지대 AI). attach/신규그룹 로직 유지."""
+        """제목 자동 그룹화(키워드 블로킹 + 밴드 + 회색지대 AI).
+
+        후보는 그룹 대표 + 그룹 없는 기존 제목(group=None). 무그룹 제목과
+        매칭되면 새 그룹에 둘 다 편입한다.
+        """
         best = self._score_best_group(title, groups_with_reps)
         if best is not None:
             group, rep_title, score = best
             if await self._should_group(title.title, rep_title.title, score):
-                if group.id is not None:
+                if group is None:
+                    # 그룹 없는 기존 제목과 매칭 → 새 그룹에 둘 다 편입
+                    new_group = self._new_group(rep_title, None, member_count=2)
+                    new_group._pending_members = [title]
+                    groups_with_reps[:] = [
+                        (g, r) for (g, r) in groups_with_reps
+                        if not (g is None and r is rep_title)
+                    ]
+                    new_groups.append(new_group)
+                    groups_with_reps.append((new_group, rep_title))
+                elif group.id is not None:
                     title.group_id = group.id
                     if not group.representative_title_id:
                         title.is_group_representative = True
                         group.representative_title_id = title.id
-                        logger.debug(
-                            f"[TRANSFER] 대표 없는 그룹에 대표 설정: "
-                            f"group_id={group.id}, title_id={title.id}"
-                        )
+                    group.member_count = (group.member_count or 0) + 1
                 else:
                     if not hasattr(group, '_pending_members'):
                         group._pending_members = []
                     group._pending_members.append(title)
+                    group.member_count = (group.member_count or 0) + 1
                 title.similarity_score = score
                 title.grouped_at = datetime.utcnow()
-                group.member_count = (group.member_count or 0) + 1
+                logger.info(
+                    f"[TRANSFER] 그룹 매칭 | '{title.title[:24]}' ↔ "
+                    f"'{rep_title.title[:24]}' | score={score:.1f}"
+                )
                 return True
 
-        # 새 그룹 생성
-        group_name = title.title[:30]
-        if location_info:
-            loc_str = normalize_location(location_info)
-            if loc_str:
-                group_name = f"[{loc_str}] {group_name}"
-        group = TitleGroup(
-            name=group_name,
-            category_id=title.category_id,
-            location=normalize_location(location_info) if location_info else None,
-            member_count=1,
-        )
-        group._pending_rep_title = title
+        # 매칭 없음 → 자기 혼자 새 그룹
+        new_group = self._new_group(title, location_info, member_count=1)
         title.is_group_representative = True
         title.grouped_at = datetime.utcnow()
-        new_groups.append(group)
-        groups_with_reps.append((group, title))
+        new_groups.append(new_group)
+        groups_with_reps.append((new_group, title))
         return True
 
     async def move_to_temp(self, title_ids: List[int], move_entire_group: bool = True) -> Dict[str, Any]:
