@@ -944,13 +944,7 @@
                         <p class="text-[11px] text-gray-400">AI 사용을 켜야 제공자·모델을 선택할 수 있습니다. 제공자 미선택 시 임계값 컷으로만 동작(기존과 동일). 회색지대(하한~임계값) 점수만 AI 호출.</p>
                     </div>
                 </div>
-                <div class="flex justify-end">
-                    <button @click="saveSystemSettings()" :disabled="savingSystem"
-                            class="px-6 py-2 bg-orange-600 text-white text-sm font-medium rounded-lg hover:bg-orange-700 disabled:opacity-50 transition-colors">
-                        <span x-show="!savingSystem">시스템 설정 저장</span>
-                        <span x-show="savingSystem">저장 중...</span>
-                    </button>
-                </div>
+                <p class="text-[11px] text-gray-400">시스템 설정은 아래 <b>저장</b> 버튼으로 함께 저장됩니다.</p>
             </div>
 
             <!-- 테마 설정 탭 -->
