@@ -234,6 +234,8 @@ class TitleTransferService(SimilarityGroupingMixin):
                 group.representative_title_id = rep_title.id
                 # 제목의 group_id 설정 (새 그룹이므로 이 시점에 group.id가 생성됨)
                 rep_title.group_id = group.id
+                # 대표 플래그 필수(목록/검색이 is_group_representative 기준). P3 누락 수정.
+                rep_title.is_group_representative = True
                 logger.debug(f"[TRANSFER] 새 그룹 생성: group_id={group.id}, rep_title_id={rep_title.id}")
 
             # 새 그룹에 매칭된 멤버들의 group_id 설정
