@@ -8,7 +8,7 @@
 """
 from typing import Any, Dict
 
-from sqlalchemy import bindparam, select, update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.logger import get_logger
@@ -60,32 +60,21 @@ async def reclassify_titles(
             continue
         for kw in sorted_kw:
             if matcher._is_keyword_match(text_lower, kw["keyword"]):
+                # SQLAlchemy 2.0 "ORM bulk update by PK": 각 레코드에 PK(id)와
+                # 갱신 컬럼을 담아 update(model)로 executemany 한다(WHERE 불필요).
                 row = {
-                    "b_id": title_id,
-                    "b_topic": kw["topic_id"],
-                    "b_sub": kw["subtopic_id"],
+                    "id": title_id,
+                    "topic_id": kw["topic_id"],
+                    "subtopic_id": kw["subtopic_id"],
                 }
                 if target == "temp":
-                    row["b_kw"] = kw["keyword_id"]
+                    row["matched_keyword_id"] = kw["keyword_id"]
                 updates.append(row)
                 break
 
     matched = len(updates)
     if matched:
-        values = {
-            "topic_id": bindparam("b_topic"),
-            "subtopic_id": bindparam("b_sub"),
-        }
-        if target == "temp":
-            values["matched_keyword_id"] = bindparam("b_kw")
-        stmt = (
-            update(model)
-            .where(model.id == bindparam("b_id"))
-            .values(**values)
-            # executemany 벌크 UPDATE는 세션 동기화를 끄지 않으면
-            # InvalidRequestError. 세션 객체 동기화 불필요하므로 None.
-            .execution_options(synchronize_session=None)
-        )
+        stmt = update(model)
         for i in range(0, matched, _CHUNK):
             await db.execute(stmt, updates[i:i + _CHUNK])
         await db.commit()
