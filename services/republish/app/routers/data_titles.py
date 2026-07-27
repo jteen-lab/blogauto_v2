@@ -690,61 +690,91 @@ async def remove_duplicate_titles(
     }
 
 
+# 카테고리 재분류 진행 상태(앱 내 백그라운드, 모듈 워커/celery 미사용).
+# 앱 단일 프로세스(스케줄러 인프로세스) 전제로 모듈 전역 1개를 공유한다.
+_reclassify_state: dict = {
+    "running": False, "task_id": None, "target": None,
+    "total": 0, "matched": 0, "done": False, "error": None,
+}
+# create_task 참조 유지(미보관 시 GC로 태스크가 중단될 수 있음)
+_reclassify_tasks: set = set()
+
+
+async def _run_reclassify_background(
+    target: str, force_all: bool, user_id: int,
+) -> None:
+    """앱 내 백그라운드 재분류 실행(모듈 워커 미사용, 자체 세션)."""
+    from ..core.database import db_manager
+    from ..services.title_reclassify_service import reclassify_titles
+
+    state = _reclassify_state
+    try:
+        async with db_manager.get_session() as db:
+            result = await reclassify_titles(
+                db, target=target, force_all=force_all, user_id=user_id,
+            )
+        state["total"] = result.get("total", 0)
+        state["matched"] = result.get("matched", 0)
+    except Exception as e:  # noqa: BLE001
+        logger.error(f"[RECLASSIFY_TITLE] 백그라운드 실패: {e}", exc_info=True)
+        state["error"] = str(e)
+    finally:
+        state["running"] = False
+        state["done"] = True
+
+
 @router.post("/temp/reclassify")
 async def reclassify_uncategorized_titles(
     force_all: bool = Query(False, description="True면 전체 재분류, False면 미분류만"),
     target: str = Query("temp", description="대상: temp(임시제목) 또는 main(정식제목)"),
-    db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    제목 카테고리 재분류.
+    """제목 카테고리 재분류(앱 내 경량 백그라운드, 모듈 워커/celery 미사용).
 
-    수만 건 규모에서 동기 처리 시 프록시 타임아웃(504)이 발생하므로
-    백그라운드(celery)로 위임하고 즉시 반환한다.
-
-    Args:
-        force_all: True면 이미 분류된 제목도 포함하여 전체 재분류.
-        target: "temp"이면 임시제목, "main"이면 정식제목 대상.
+    수만 건 규모라 요청 내 동기 처리는 504가 나므로, 앱 백그라운드 asyncio
+    태스크로 실행하고 즉시 반환한다. 프런트가 /status 폴링으로 완료를 감지해
+    자동 반영한다(예전 UX 복원).
     """
+    import asyncio
+    from uuid import uuid4
+
     if target not in ("temp", "main"):
         raise HTTPException(status_code=400, detail="target은 temp 또는 main이어야 합니다")
 
     target_label = "정식제목" if target == "main" else "임시제목"
 
-    try:
-        from ..core.task_dispatcher import get_dispatcher, PRIORITY_HIGH
-
-        dispatcher = get_dispatcher()
-        task_id = dispatcher.dispatch_utility(
-            "tasks.reclassify_titles",
-            kwargs={
-                "target": target,
-                "force_all": force_all,
-                "user_id": current_user.id,
-            },
-            priority=PRIORITY_HIGH,
-        )
-
-        logger.info(
-            f"[RECLASSIFY_TITLE] 백그라운드 디스패치 | target={target} | "
-            f"force_all={force_all} | task_id={task_id}"
-        )
-
+    if _reclassify_state["running"]:
         return {
-            "success": True,
-            "started": True,
-            "task_id": task_id,
-            "target": target,
-            "message": (
-                f"{target_label} 카테고리 재분류를 백그라운드에서 시작했습니다. "
-                "건수가 많으면 완료까지 다소 시간이 걸리며, 완료 후 새로고침하면 반영됩니다."
-            ),
+            "success": True, "started": False, "already_running": True,
+            "message": "이미 재분류가 진행 중입니다.", "status": _reclassify_state,
         }
 
-    except Exception as e:
-        logger.error(f"[RECLASSIFY_TITLE] 디스패치 에러: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    task_id = str(uuid4())
+    _reclassify_state.update({
+        "running": True, "task_id": task_id, "target": target,
+        "total": 0, "matched": 0, "done": False, "error": None,
+    })
+    _task = asyncio.create_task(
+        _run_reclassify_background(target, force_all, current_user.id)
+    )
+    _reclassify_tasks.add(_task)
+    _task.add_done_callback(_reclassify_tasks.discard)
+    logger.info(
+        f"[RECLASSIFY_TITLE] 앱 내 백그라운드 시작 | target={target} | "
+        f"force_all={force_all} | task_id={task_id}"
+    )
+    return {
+        "success": True, "started": True, "task_id": task_id, "target": target,
+        "message": f"{target_label} 카테고리 재분류를 시작했습니다.",
+    }
+
+
+@router.get("/temp/reclassify/status")
+async def reclassify_status(
+    current_user: User = Depends(get_current_user),
+):
+    """재분류 진행 상태 조회(프런트 폴링용)."""
+    return _reclassify_state
 
 
 # ============================================================
