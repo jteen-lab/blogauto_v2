@@ -883,24 +883,26 @@
                         </svg>
                         유사도 매칭 설정
                     </h4>
-                    <p class="text-xs text-gray-500 -mt-2">정식제목 그룹핑(수동 승격·데이터 모듈 공통). 회색지대 점수는 AI가 '같은 주제?'를 판정.</p>
+                    <p class="text-xs text-gray-500 -mt-2">정식제목 그룹핑(수동 승격·데이터 모듈 공통). 임계값 근처의 애매한 점수만 AI가 '같은 주제?'를 판정.</p>
                     <div class="bg-gray-50 rounded-lg p-3 space-y-3">
-                        <div class="grid grid-cols-3 gap-3">
+                        <div class="grid grid-cols-2 gap-3">
                             <div>
-                                <label class="block text-xs text-gray-500 mb-1">임계값 (0-100)</label>
+                                <label class="block text-xs text-gray-500 mb-1">임계값 (이 값 이상 → 그룹)</label>
                                 <input type="number" min="0" max="100" x-model="systemSettings['similarity_threshold']"
                                        class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
                             </div>
                             <div>
-                                <label class="block text-xs text-gray-500 mb-1">회색지대 하한</label>
+                                <label class="block text-xs text-gray-500 mb-1">회색지대 하한 (이 값 미만 → 분리)</label>
                                 <input type="number" min="0" max="100" x-model="systemSettings['similarity_gray_lower']"
                                        class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
                             </div>
-                            <div>
-                                <label class="block text-xs text-gray-500 mb-1">회색지대 상한</label>
-                                <input type="number" min="0" max="100" x-model="systemSettings['similarity_gray_upper']"
-                                       class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
-                            </div>
+                        </div>
+                        <div class="text-[11px] text-gray-600 bg-white rounded border border-gray-200 px-2 py-1.5 leading-relaxed">
+                            동작:
+                            <span class="text-green-700 font-medium" x-text="'유사도 ≥ ' + (systemSettings['similarity_threshold']||'75') + ' → 자동 그룹'"></span> ·
+                            <span class="text-orange-600 font-medium" x-text="(systemSettings['similarity_gray_lower']||'68') + ' ~ ' + (systemSettings['similarity_threshold']||'75') + ' → AI 판정'"></span> ·
+                            <span class="text-gray-500 font-medium" x-text="'< ' + (systemSettings['similarity_gray_lower']||'68') + ' → 자동 분리'"></span>
+                            <br>※ 회색지대 상한 = 임계값입니다(하한만 임계값보다 낮게 설정).
                         </div>
                         <div class="flex items-center justify-between">
                             <span class="text-sm font-medium text-gray-700">회색지대 AI 판정 사용</span>
