@@ -20,11 +20,9 @@ class SimilarityGroupingMixin:
 
         db = self.db
         return {
+            # 회색지대 하한. 상한은 임계값(self.threshold)이 담당한다.
             "gray_lower": await SystemSettingsService.get_float(
                 "similarity_gray_lower", db, 68.0
-            ),
-            "gray_upper": await SystemSettingsService.get_float(
-                "similarity_gray_upper", db, 80.0
             ),
             "ai_enabled": await SystemSettingsService.get_bool(
                 "similarity_ai_enabled", db, False
@@ -59,13 +57,14 @@ class SimilarityGroupingMixin:
     async def _should_group(
         self, new_title: str, rep_title: str, score: float,
     ) -> bool:
-        """밴드 판정: 상한↑ 그룹 / 하한↓ 분리 / 회색지대 AI(활성 시).
+        """밴드 판정(임계값=상한):
+        임계값↑ 그룹 / 하한↓ 분리 / 하한~임계값(회색지대) AI(활성 시).
 
         AI 비활성 시 기존 동작(임계값 컷) 유지.
         """
         cfg = self._sim_cfg
         if cfg.get("ai_enabled") and cfg.get("ai_provider"):
-            if score >= cfg["gray_upper"]:
+            if score >= self.threshold:
                 return True
             if score <= cfg["gray_lower"]:
                 return False
