@@ -1621,6 +1621,18 @@ function dataManagementApp() {
             this.selectedUnmatchedCrawled = [];
 
             try {
+                // 그룹별 보기: 블로그 선택 여부와 무관하게 그룹 목록 로드
+                if (this.mainTitleViewMode === 'group') {
+                    const gp = new URLSearchParams({ page: String(this.mainTitlePage || 1), size: '20' });
+                    if (this.mainTitleSearch) gp.append('search', this.mainTitleSearch);
+                    const res = await fetch(`${API_BASE}/title-groups?${gp}`, { credentials: 'include' });
+                    const data = await res.json();
+                    this.titleGroups = data.items || [];
+                    this.titleGroupTotal = data.total || 0;
+                    this.mainTitles = [];
+                    this.unifiedTableRows = [];
+                    return;
+                }
                 if (!this.selectedBlogId) {
                     // 블로그 미선택이면 일반 정식제목 로드
                     await this.loadMainTitles();
