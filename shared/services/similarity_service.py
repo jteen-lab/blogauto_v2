@@ -158,6 +158,25 @@ class SimilarityService:
         # 최대 15점 보너스 (Jaccard 유사도 기반)
         return overlap_ratio * 15.0
 
+    def _containment_ratio(self, text1: str, text2: str) -> float:
+        """짧은 제목의 토큰(불용어 포함)이 긴 제목에 얼마나 포함되는지(0~1).
+
+        불용어 제거로 짧은 유사 제목을 놓치던 문제 보완용. 원문 토큰을 쓰고,
+        조사/어미 차이는 부분문자열 매칭으로 흡수한다(가격 ⊆ 가격과,
+        비교 ⊆ 비교하는). len<=1 토큰은 제외.
+        """
+        t1 = [t for t in text1.split() if len(t) > 1]
+        t2 = [t for t in text2.split() if len(t) > 1]
+        if not t1 or not t2:
+            return 0.0
+        short, long_ = (t1, t2) if len(t1) <= len(t2) else (t2, t1)
+        long_set = set(long_)
+        matched = sum(
+            1 for s in short
+            if s in long_set or any(s in lt for lt in long_)
+        )
+        return matched / len(short)
+
     def calculate_text_similarity(self, text1: str, text2: str) -> float:
         """
         순수 텍스트 유사도 계산 (지역명 처리 없음)
@@ -196,6 +215,14 @@ class SimilarityService:
         # 키워드 보너스 적용
         bonus = self._calculate_keyword_bonus(norm1, norm2)
         score = min(100.0, base_score + bonus)
+
+        # 포함도(부분집합) 보정: 짧은 제목이 긴 제목에 대부분 포함되면
+        # 점수를 회색지대(68~74)까지만 끌어올려 AI가 최종 판정하게 한다.
+        # (자동 그룹이 아니라 회색지대 진입까지만 — 오그룹 위험 최소화)
+        contain = self._containment_ratio(norm1, norm2)
+        if len(norm1.split()) >= 2 and len(norm2.split()) >= 2 and contain >= 0.6:
+            contain_score = 68.0 + (contain - 0.6) * 15.0  # 0.6→68 ~ 1.0→74
+            score = max(score, contain_score)
 
         return round(score, 2)
 
