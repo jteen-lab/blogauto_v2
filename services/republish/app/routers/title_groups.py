@@ -63,14 +63,36 @@ async def list_title_groups(
     result = await db.execute(query)
     groups = result.scalars().all()
 
-    # 대표 제목 조회
-    items = []
-    for g in groups:
-        item = TitleGroupResponse.model_validate(g)
-        if g.representative_title_id:
-            rep = await db.get(MainTitle, g.representative_title_id)
-            item.representative_title = rep.title if rep else None
-        items.append(item)
+    # 대표 제목 배치 조회.
+    # 주의: TitleGroupResponse.model_validate(g)로 ORM을 직접 검증하면
+    # 스키마 필드 representative_title 가 ORM 지연로딩 관계를 건드려
+    # async 컨텍스트에서 MissingGreenlet(500)이 발생한다. 명시 dict로 구성.
+    rep_ids = [g.representative_title_id for g in groups if g.representative_title_id]
+    reps: dict = {}
+    if rep_ids:
+        rep_rows = (await db.execute(
+            select(MainTitle.id, MainTitle.title).where(MainTitle.id.in_(rep_ids))
+        )).all()
+        reps = {rid: title for rid, title in rep_rows}
+
+    items = [
+        TitleGroupResponse.model_validate({
+            "id": g.id,
+            "group_uuid": g.group_uuid,
+            "name": g.name,
+            "description": g.description,
+            "category_id": g.category_id,
+            "location": g.location,
+            "main_keyword": g.main_keyword,
+            "is_active": g.is_active,
+            "representative_title_id": g.representative_title_id,
+            "representative_title": reps.get(g.representative_title_id),
+            "member_count": g.member_count or 0,
+            "created_at": g.created_at,
+            "updated_at": g.updated_at,
+        })
+        for g in groups
+    ]
 
     return TitleGroupListResponse(
         items=items, total=total, page=page, size=size, has_next=(page * size) < total
