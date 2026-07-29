@@ -34,39 +34,16 @@ router = APIRouter(prefix="/title-groups", tags=["title-groups"])
 logger = get_logger("title_groups", "app.log")
 
 
-@router.get("", response_model=TitleGroupListResponse)
-async def list_title_groups(
-    page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
-    category_id: Optional[int] = Query(None),
-    search: Optional[str] = Query(None, description="그룹명 검색"),
-    is_active: Optional[bool] = Query(None),
-    db: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(get_current_user),
-):
-    """제목 그룹 목록 조회"""
-    query = select(TitleGroup)
+async def _build_group_items(
+    db: AsyncSession, groups: list
+) -> List[TitleGroupResponse]:
+    """그룹 ORM 목록을 응답 스키마로 변환.
 
-    if category_id:
-        query = query.where(TitleGroup.category_id == category_id)
-    if search:
-        query = query.where(TitleGroup.name.ilike(f"%{search}%"))
-    if is_active is not None:
-        query = query.where(TitleGroup.is_active == is_active)
-
-    count_query = select(func.count()).select_from(query.subquery())
-    total = (await db.execute(count_query)).scalar() or 0
-
-    query = query.order_by(TitleGroup.created_at.desc())
-    query = query.offset((page - 1) * size).limit(size)
-
-    result = await db.execute(query)
-    groups = result.scalars().all()
-
-    # 대표 제목 배치 조회.
-    # 주의: TitleGroupResponse.model_validate(g)로 ORM을 직접 검증하면
-    # 스키마 필드 representative_title 가 ORM 지연로딩 관계를 건드려
-    # async 컨텍스트에서 MissingGreenlet(500)이 발생한다. 명시 dict로 구성.
+    주의: TitleGroupResponse.model_validate(g)로 ORM을 직접 검증하면
+    스키마 필드 representative_title 가 ORM 지연로딩 관계를 건드려
+    async 컨텍스트에서 MissingGreenlet(500)이 발생한다. 대표 제목을
+    배치 조회한 뒤 명시 dict로 구성한다.
+    """
     rep_ids = [g.representative_title_id for g in groups if g.representative_title_id]
     reps: dict = {}
     if rep_ids:
@@ -75,7 +52,7 @@ async def list_title_groups(
         )).all()
         reps = {rid: title for rid, title in rep_rows}
 
-    items = [
+    return [
         TitleGroupResponse.model_validate({
             "id": g.id,
             "group_uuid": g.group_uuid,
@@ -94,8 +71,66 @@ async def list_title_groups(
         for g in groups
     ]
 
+
+async def _group_counts(db: AsyncSession, base) -> tuple:
+    """전체 그룹(제목 1개 포함) / 매칭 그룹(제목 2개+) 카운트 계산."""
+    all_count = (await db.execute(
+        select(func.count()).select_from(base.subquery())
+    )).scalar() or 0
+    matched_count = (await db.execute(
+        select(func.count()).select_from(
+            base.where(TitleGroup.member_count >= 2).subquery()
+        )
+    )).scalar() or 0
+    return all_count, matched_count
+
+
+@router.get("", response_model=TitleGroupListResponse)
+async def list_title_groups(
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    category_id: Optional[int] = Query(None),
+    search: Optional[str] = Query(None, description="그룹명 검색"),
+    is_active: Optional[bool] = Query(None),
+    min_members: Optional[int] = Query(
+        None, ge=1, description="최소 멤버 수 필터(예: 2 = 매칭 그룹만)"
+    ),
+    db: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_user),
+):
+    """제목 그룹 목록 조회.
+
+    min_members=2 지정 시 매칭 그룹(제목 2개+)만 반환. all_count/
+    matched_count는 페이지네이션과 무관하게 동일 필터 기준으로 계산.
+    """
+    base = select(TitleGroup)
+    if category_id:
+        base = base.where(TitleGroup.category_id == category_id)
+    if search:
+        base = base.where(TitleGroup.name.ilike(f"%{search}%"))
+    if is_active is not None:
+        base = base.where(TitleGroup.is_active == is_active)
+
+    all_count, matched_count = await _group_counts(db, base)
+
+    # 목록 쿼리(min_members 반영)
+    list_q = base
+    if min_members is not None:
+        list_q = list_q.where(TitleGroup.member_count >= min_members)
+    total = (await db.execute(
+        select(func.count()).select_from(list_q.subquery())
+    )).scalar() or 0
+
+    list_q = list_q.order_by(TitleGroup.created_at.desc())
+    list_q = list_q.offset((page - 1) * size).limit(size)
+    groups = (await db.execute(list_q)).scalars().all()
+
+    items = await _build_group_items(db, groups)
+
     return TitleGroupListResponse(
-        items=items, total=total, page=page, size=size, has_next=(page * size) < total
+        items=items, total=total, page=page, size=size,
+        has_next=(page * size) < total,
+        all_count=all_count, matched_count=matched_count,
     )
 
 
