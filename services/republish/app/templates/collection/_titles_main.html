@@ -674,13 +674,19 @@
     <!-- 그룹별 보기 모드 -->
     <template x-if="mainTitleViewMode === 'group'">
         <div class="p-4 space-y-3">
-            <!-- 그룹 카운트 바: 전체 그룹(제목 1개 포함) / 매칭 그룹(제목 2개+) -->
-            <div class="flex items-center gap-4 px-1 pb-1 text-sm text-gray-600 border-b border-gray-100">
-                <span>전체 그룹 <span class="font-semibold text-gray-800" x-text="titleGroupAllCount"></span>개</span>
-                <span class="text-gray-300">|</span>
-                <span>매칭 그룹 <span class="font-semibold text-accent" x-text="titleGroupMatchedCount"></span>개
-                    <span class="text-gray-400 text-xs">(제목 2개 이상)</span>
-                </span>
+            <!-- 그룹 카운트 바(토글): 전체 그룹(제목 1개+) / 매칭 그룹(제목 2개+) -->
+            <div class="flex items-center gap-2 px-1 pb-2 text-sm border-b border-gray-100">
+                <button @click="setGroupFilter('all')"
+                        :class="groupFilterMode === 'all' ? 'bg-accent text-white border-accent' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'"
+                        class="px-3 py-1 rounded-full border transition-colors">
+                    전체 그룹 <span class="font-semibold" x-text="titleGroupAllCount"></span>개
+                </button>
+                <button @click="setGroupFilter('matched')"
+                        :class="groupFilterMode === 'matched' ? 'bg-accent text-white border-accent' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'"
+                        class="px-3 py-1 rounded-full border transition-colors">
+                    매칭 그룹 <span class="font-semibold" x-text="titleGroupMatchedCount"></span>개
+                    <span class="text-xs opacity-80">(제목 2개+)</span>
+                </button>
             </div>
             <template x-if="mainTitleLoading">
                 <div class="text-center py-12">
@@ -691,8 +697,8 @@
             <template x-if="!mainTitleLoading && titleGroups.length === 0">
                 <div class="text-center py-12 text-gray-500">
                     <div class="text-4xl mb-2">📁</div>
-                    <div>매칭 그룹이 없습니다</div>
-                    <div class="text-xs text-gray-400 mt-1">제목 2개 이상 그룹핑된 그룹만 표시됩니다</div>
+                    <div x-text="groupFilterMode === 'all' ? '그룹이 없습니다' : '매칭 그룹이 없습니다'"></div>
+                    <div class="text-xs text-gray-400 mt-1" x-show="groupFilterMode === 'matched'">제목 2개 이상 그룹핑된 그룹만 표시됩니다</div>
                 </div>
             </template>
             <template x-for="group in titleGroups" :key="group.id">
