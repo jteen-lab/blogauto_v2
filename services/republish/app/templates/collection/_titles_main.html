@@ -674,6 +674,14 @@
     <!-- 그룹별 보기 모드 -->
     <template x-if="mainTitleViewMode === 'group'">
         <div class="p-4 space-y-3">
+            <!-- 그룹 카운트 바: 전체 그룹(제목 1개 포함) / 매칭 그룹(제목 2개+) -->
+            <div class="flex items-center gap-4 px-1 pb-1 text-sm text-gray-600 border-b border-gray-100">
+                <span>전체 그룹 <span class="font-semibold text-gray-800" x-text="titleGroupAllCount"></span>개</span>
+                <span class="text-gray-300">|</span>
+                <span>매칭 그룹 <span class="font-semibold text-accent" x-text="titleGroupMatchedCount"></span>개
+                    <span class="text-gray-400 text-xs">(제목 2개 이상)</span>
+                </span>
+            </div>
             <template x-if="mainTitleLoading">
                 <div class="text-center py-12">
                     <div class="spinner mx-auto mb-2"></div>
@@ -682,8 +690,9 @@
             </template>
             <template x-if="!mainTitleLoading && titleGroups.length === 0">
                 <div class="text-center py-12 text-gray-500">
-                    <div class="text-4xl mb-2">📂</div>
-                    <div>그룹이 없습니다</div>
+                    <div class="text-4xl mb-2">📁</div>
+                    <div>매칭 그룹이 없습니다</div>
+                    <div class="text-xs text-gray-400 mt-1">제목 2개 이상 그룹핑된 그룹만 표시됩니다</div>
                 </div>
             </template>
             <template x-for="group in titleGroups" :key="group.id">
@@ -691,7 +700,7 @@
                     <div @click="toggleGroupExpand(group.id)"
                          class="p-4 flex justify-between items-center cursor-pointer hover:bg-gray-50">
                         <div class="flex items-center gap-3">
-                            <span x-text="expandedGroupIds.includes(group.id) ? '▼' : '▶'" class="text-gray-400 text-sm"></span>
+                            <span x-text="expandedGroupIds.includes(group.id) ? '📂' : '📁'" class="text-lg"></span>
                             <span class="font-medium" x-text="group.representative_title || group.name"></span>
                             <span class="bg-accent-lt text-accent px-2 py-0.5 rounded text-xs"
                                   x-text="(group.member_count || 0) + '개'"></span>
