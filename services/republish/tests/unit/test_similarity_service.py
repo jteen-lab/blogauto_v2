@@ -308,3 +308,58 @@ class TestFindSimilarGroup:
 
         assert result is not None
         assert result["group"]["id"] == 2
+
+
+class TestCoreDivergenceGuard:
+    """핵심어(차별 키워드) 발산 가드 테스트.
+
+    지명 사전에 없는 destination 등 핵심어가 다른데 골격어 공유로
+    오그룹되던 문제 차단을 검증한다.
+    """
+
+    def _score(self, a: str, b: str) -> dict:
+        return SimilarityService(threshold=75.0).calculate_similarity_v3(a, b)
+
+    def test_travel_different_destination_separated(self):
+        """서로 다른 해외 destination은 템플릿이 같아도 분리."""
+        r = self._score(
+            "베로나 여행 기초 정보, 계절별 날씨, 대중교통, 추천 명소, 추천 음식, 베로나 여행 추천 숙소",
+            "마카오 여행 기초 정보, 계절별 날씨, 방문 전 준비 사항, 대중교통, 추천 명소, 추천 음식, 마카오 여행 추천 숙소",
+        )
+        assert r["groupable"] is False
+        assert r["score"] <= 55.0
+
+    def test_travel_accommodation_different_city_separated(self):
+        """호치민 vs 마드리드 숙소 템플릿 분리."""
+        r = self._score(
+            "베트남 호치민 숙소 추천 지역과 지역별 특징, 호치민 여행 추천 숙소",
+            "스페인 마드리드 여행 숙소 추천 지역과 지역별 특징, 마드리드 여행 추천 숙소",
+        )
+        assert r["groupable"] is False
+
+    def test_different_products_separated(self):
+        """서로 다른 제품(아이폰 vs 갤럭시)은 분리."""
+        r = self._score("아이폰 15 리뷰 총정리", "갤럭시 24 리뷰 총정리")
+        assert r["groupable"] is False
+
+    def test_same_core_keyword_not_affected(self):
+        """공유 핵심어가 있으면 가드 미발동(같은 destination은 그룹)."""
+        r = self._score(
+            "직장인을 위한 일본 2박3일 온천 추천 5곳",
+            "직장인을 위한 2박3일 일본 여행 추천 5곳",
+        )
+        assert r["groupable"] is True
+
+    def test_shared_distinctive_token_not_diverged(self):
+        """공유 차별 토큰(싱그릭스)이 있으면 발산 아님."""
+        svc = SimilarityService(threshold=75.0)
+        assert svc._core_divergence(
+            "싱그릭스 가격 비교 방법", "대상포진 백신 싱그릭스 가격"
+        ) is False
+
+    def test_divergence_detection(self):
+        """핵심어가 완전히 다르면 발산=True."""
+        svc = SimilarityService(threshold=75.0)
+        assert svc._core_divergence(
+            "베로나 여행 추천 숙소", "마카오 여행 추천 숙소"
+        ) is True
