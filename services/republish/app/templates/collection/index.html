@@ -653,6 +653,7 @@ function dataManagementApp() {
         titleGroupTotal: 0,
         titleGroupAllCount: 0,      // 전체 그룹(제목 1개 포함)
         titleGroupMatchedCount: 0,  // 매칭 그룹(제목 2개+)
+        groupFilterMode: 'matched', // 'all'=제목1개+ 모두 | 'matched'=제목2개+
         expandedGroupIds: [],
 
         // ★ Phase 2-2: 블로그 선택 및 매칭 관련
@@ -1368,8 +1369,8 @@ function dataManagementApp() {
                 }
 
                 if (this.mainTitleViewMode === 'group') {
-                    // 그룹별 보기: 제목 2개 이상(매칭 그룹)만 표시
-                    params.append('min_members', '2');
+                    // 그룹별 보기: 'matched'=제목2개+ / 'all'=제목1개+ 모두
+                    params.append('min_members', this.groupFilterMode === 'all' ? '1' : '2');
                     const res = await fetch(`${API_BASE}/title-groups?${params}`, { credentials: 'include' });
                     const data = await res.json();
                     this.titleGroups = data.items || [];
@@ -1377,6 +1378,7 @@ function dataManagementApp() {
                     this.titleGroupAllCount = data.all_count || 0;
                     this.titleGroupMatchedCount = data.matched_count || 0;
                     this.mainTitleHasNext = !!data.has_next;
+                    this.expandedGroupIds = [];  // 재로딩 시 펼침 상태 초기화(잔여 '로딩 중' 방지)
                     this.mainTitles = [];
                     this.unifiedTableRows = [];
                 } else {
@@ -1535,6 +1537,14 @@ function dataManagementApp() {
         },
 
         // 그룹 펼치기/접기
+        // 그룹 카운트 바 토글: 전체 그룹(1개+) / 매칭 그룹(2개+)
+        setGroupFilter(mode) {
+            if (this.groupFilterMode === mode) return;
+            this.groupFilterMode = mode;
+            this.mainTitlePage = 1;
+            this.selectedBlogId ? this.loadMainTitlesWithCrawled() : this.loadMainTitles();
+        },
+
         toggleGroupExpand(groupId) {
             const idx = this.expandedGroupIds.indexOf(groupId);
             if (idx > -1) {
@@ -1556,6 +1566,9 @@ function dataManagementApp() {
                 }
             } catch (e) {
                 console.error('그룹 제목 로드 실패:', e);
+                // 실패 시 빈 배열로 설정해 '로딩 중'에 멈추지 않도록 함
+                const group = this.titleGroups.find(g => g.id === groupId);
+                if (group) group.titles = [];
             }
         },
 
@@ -1628,9 +1641,10 @@ function dataManagementApp() {
 
             try {
                 // 그룹별 보기: 블로그 선택 여부와 무관하게 그룹 목록 로드
-                // min_members=2 → 제목 2개 이상(매칭 그룹)만 표시. 1개짜리는 숨김.
+                // groupFilterMode: 'matched'=제목2개+ / 'all'=제목1개+ 모두
                 if (this.mainTitleViewMode === 'group') {
-                    const gp = new URLSearchParams({ page: String(this.mainTitlePage || 1), size: '20', min_members: '2' });
+                    const minMembers = this.groupFilterMode === 'all' ? '1' : '2';
+                    const gp = new URLSearchParams({ page: String(this.mainTitlePage || 1), size: '20', min_members: minMembers });
                     if (this.mainTitleSearch) gp.append('search', this.mainTitleSearch);
                     const res = await fetch(`${API_BASE}/title-groups?${gp}`, { credentials: 'include' });
                     const data = await res.json();
@@ -1639,6 +1653,7 @@ function dataManagementApp() {
                     this.titleGroupAllCount = data.all_count || 0;
                     this.titleGroupMatchedCount = data.matched_count || 0;
                     this.mainTitleHasNext = !!data.has_next;
+                    this.expandedGroupIds = [];  // 재로딩 시 펼침 상태 초기화(잔여 '로딩 중' 방지)
                     this.mainTitles = [];
                     this.unifiedTableRows = [];
                     return;
