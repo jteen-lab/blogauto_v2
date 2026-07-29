@@ -53,6 +53,29 @@ KOREAN_STOPWORDS = [
     'tistory', 'naver', 'blog', 'daum', 'kakao', 'google',
 ]
 
+# 도메인 골격어(카테고리 공통어) — '핵심어 발산 가드' 판정에서만 제외한다.
+# 점수/보너스 계산에는 사용하지 않으므로 점수를 올리지 않고, 캡 판정만 좌우한다.
+GENERIC_KEYWORDS = frozenset([
+    # 여행 가이드 골격
+    '여행', '여행지', '여행기', '숙소', '호텔', '호스텔', '게스트하우스', '리조트',
+    '명소', '관광', '관광지', '관광명소', '가볼만한곳', '볼거리', '즐길거리', '먹거리',
+    '날씨', '계절', '계절별', '대중교통', '교통', '코스', '일정', '지역', '지역별',
+    '특징', '준비', '사항', '방문', '기초', '필수', '가이드', '팁',
+    '음식', '맛집', '카페',
+    # 블로그 일반 골격
+    '베스트', '리스트', '모음', '가지', '개', '곳',
+])
+
+# 조사/접미 경량 제거용(형태소 분석 없이 토큰 끝 처리)
+PARTICLE_SUFFIXES = (
+    '으로', '에서', '에게', '한테', '과의', '와의', '에는', '에서의',
+    '과', '와', '을', '를', '이', '가', '은', '는', '의', '에', '로', '도', '만',
+    '별', '들',
+)
+
+# 핵심어 발산 시 점수 상한(회색지대 하한 미만으로 눌러 하드 분리)
+CORE_DIVERGENCE_CAP = 55.0
+
 # 제거할 패턴
 BRACKET_PATTERN = re.compile(r'^[\[\(\{<【「『].*?[\]\)\}>】」』]\s*|\s*[\[\(\{<【「『].*?[\]\)\}>】」』]$')
 SEPARATOR_PATTERN = re.compile(r'[\|\-:／/·•]')
@@ -176,6 +199,47 @@ class SimilarityService:
             if s in long_set or any(s in lt for lt in long_)
         )
         return matched / len(short)
+
+    def _strip_token(self, tok: str) -> str:
+        """토큰에서 구두점·조사/접미를 경량 제거(형태소 분석 없이)."""
+        tok = tok.strip(",.·、，。！!?？:;\"'()[]{}")
+        for suf in PARTICLE_SUFFIXES:
+            if len(tok) > len(suf) + 1 and tok.endswith(suf):
+                return tok[:-len(suf)]
+        return tok
+
+    def _distinctive_tokens(self, text: str) -> set:
+        """제목의 '차별 토큰' 집합.
+
+        불용어·도메인 골격어(GENERIC_KEYWORDS)·짧은 토큰을 제외해
+        제목을 구분짓는 핵심어(지명·제품명·주제어)만 남긴다.
+        """
+        norm = self.normalize_text(text)
+        result = set()
+        for raw in norm.split():
+            t = self._strip_token(raw)
+            if len(t) <= 1:
+                continue
+            if t in KOREAN_STOPWORDS or t in GENERIC_KEYWORDS:
+                continue
+            result.add(t)
+        return result
+
+    def _core_divergence(self, title1: str, title2: str) -> bool:
+        """두 제목의 핵심어가 완전히 발산하는지 판정.
+
+        양쪽 모두 차별 토큰이 있고, 서로 공유하는 차별 토큰이
+        (부분문자열 허용) 하나도 없으면 → 서로 다른 핵심 주제로 본다.
+        """
+        d1 = self._distinctive_tokens(title1)
+        d2 = self._distinctive_tokens(title2)
+        if not d1 or not d2:
+            return False
+        for a in d1:
+            for b in d2:
+                if a == b or (len(a) >= 2 and len(b) >= 2 and (a in b or b in a)):
+                    return False  # 공유 차별 토큰 존재 → 발산 아님
+        return True
 
     def calculate_text_similarity(self, text1: str, text2: str) -> float:
         """
@@ -325,6 +389,10 @@ class SimilarityService:
                 }
             }
 
+        # 핵심어 발산 여부(캐노니컬/키워드 전 단계에서 1회 계산).
+        # 발산 시 공유 차별 토큰이 없으므로 캐노니컬 고득점을 부여하지 않는다.
+        diverged = self._core_divergence(title1, title2)
+
         # Stage 1: 캐노니컬 키 완전 일치
         canonical_check = check_canonical_match(title1, title2)
 
@@ -340,7 +408,7 @@ class SimilarityService:
             # 텍스트 유사도가 최소 임계값(75%) 이상이어야 캐노니컬 키 매칭 인정
             min_text_threshold = 75.0
 
-            if canonical_check["match"] and text_similarity >= min_text_threshold:
+            if canonical_check["match"] and text_similarity >= min_text_threshold and not diverged:
                 # 완전 일치: 텍스트 유사도와 100점 중 높은 값 사용
                 final_score = max(text_similarity, 95.0)
                 return {
@@ -358,7 +426,7 @@ class SimilarityService:
                 }
 
             # Stage 1.5: 캐노니컬 키 부분 일치 (지역+장소)
-            if canonical_check.get("partial_match") and text_similarity >= min_text_threshold:
+            if canonical_check.get("partial_match") and text_similarity >= min_text_threshold and not diverged:
                 # 부분 일치: 텍스트 유사도와 90점 중 높은 값 사용
                 final_score = max(text_similarity, 85.0)
                 return {
@@ -393,12 +461,26 @@ class SimilarityService:
         penalty = location_check["penalty"]
         final_score = keyword_score * (1 - penalty)
 
+        # Stage 4.5: 핵심어 발산 가드
+        # 지명 사전에 없는 destination 등 핵심어가 완전히 다른데도 골격어
+        # 공유로 점수가 높은 경우, 상한(CAP)으로 눌러 자동 그룹을 차단한다.
+        stage = "Stage 2: 키워드 유사도"
+        reason = location_check["reason"]
+        if final_score > CORE_DIVERGENCE_CAP and diverged:
+            logger.info(
+                "[SIMILARITY] 핵심어 발산 가드 발동 | %.1f→%.1f | '%s' ↔ '%s'",
+                final_score, CORE_DIVERGENCE_CAP, title1[:20], title2[:20],
+            )
+            final_score = CORE_DIVERGENCE_CAP
+            stage = "Stage 4.5: 핵심어 발산으로 분리"
+            reason = "핵심 키워드 불일치(발산 가드)"
+
         return {
             "score": round(final_score, 2),
             "groupable": final_score >= self.threshold,
-            "reason": location_check["reason"],
+            "reason": reason,
             "details": {
-                "stage": "Stage 2: 키워드 유사도",
+                "stage": stage,
                 "location_check": location_check,
                 "canonical_check": canonical_check,
                 "keyword_score": round(keyword_score, 2),
