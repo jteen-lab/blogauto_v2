@@ -138,12 +138,19 @@ class MainTitleListResponse(BaseModel):
 
 
 class TitleGroupListResponse(BaseModel):
-    """TitleGroup 목록 응답 (페이지네이션)"""
+    """TitleGroup 목록 응답 (페이지네이션)
+
+    카운트 필드:
+    - all_count: 필터 조건에 맞는 전체 그룹 수 (제목 1개짜리 포함)
+    - matched_count: 제목 2개 이상 그룹핑된 '매칭 그룹' 수
+    """
     items: List[TitleGroupResponse]
     total: int
     page: int
     size: int
     has_next: bool
+    all_count: int = 0
+    matched_count: int = 0
 
 
 # ============ 그룹 관리 요청 스키마 ============
