@@ -41,12 +41,26 @@ AUTO_MATCH_THRESHOLD = 94.0
 class SimilarityService(TextSimilarityMixin, GroupingOpsMixin):
     """유사도 매칭 서비스 V3 (텍스트/그룹 믹스인 상속)."""
 
-    def __init__(self, threshold: float = DEFAULT_SIMILARITY_THRESHOLD):
+    def __init__(
+        self,
+        threshold: float = DEFAULT_SIMILARITY_THRESHOLD,
+        token_df: Optional[Dict[str, int]] = None,
+        n_docs: int = 0,
+        rare_df_ratio: Optional[float] = None,
+    ):
         """
         Args:
-            threshold: 유사도 임계값 (0-100, 기본 80)
+            threshold: 유사도 임계값 (0-100, 기본 75)
+            token_df: 코퍼스 토큰 문서빈도(주어 발산 게이트용). 미주입 시
+                기존 핵심어 발산 가드(_core_divergence)로 폴백.
+            n_docs: 코퍼스 문서(제목) 수.
+            rare_df_ratio: 희소 주어 판정 비율(기본 RARE_DF_RATIO).
         """
         self.threshold = threshold
+        self.token_df = token_df or {}
+        self.n_docs = n_docs or 0
+        if rare_df_ratio is not None:
+            self.rare_df_ratio = rare_df_ratio
 
 
     def calculate_similarity_v2(self, title1: str, title2: str) -> float:
@@ -149,9 +163,11 @@ class SimilarityService(TextSimilarityMixin, GroupingOpsMixin):
                 }
             }
 
-        # 핵심어 발산 여부(캐노니컬/키워드 전 단계에서 1회 계산).
-        # 발산 시 공유 차별 토큰이 없으므로 캐노니컬 고득점을 부여하지 않는다.
-        diverged = self._core_divergence(title1, title2)
+        # 식별자 발산 여부(캐노니컬/키워드 전 단계에서 1회 계산).
+        # 지명 불일치는 Stage 0에서 이미 차단됨. 여기서는 '주어(핵심어)' 발산을 본다.
+        # DF 주입 시 주어 발산 게이트 사용, 미주입 시 기존 핵심어 발산 가드로 폴백.
+        subj_div = self._subject_divergence(title1, title2)
+        diverged = subj_div if subj_div is not None else self._core_divergence(title1, title2)
 
         # Stage 1: 캐노니컬 키 완전 일치
         canonical_check = check_canonical_match(title1, title2)
