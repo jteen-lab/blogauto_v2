@@ -52,6 +52,11 @@ PARTICLE_SUFFIXES = (
 # 핵심어 발산 시 점수 상한(회색지대 하한 미만으로 눌러 하드 분리)
 CORE_DIVERGENCE_CAP = 55.0
 
+# 주어(핵심어) 발산 게이트: '희소 주어' 판정 기준(코퍼스 대비 문서빈도 비율).
+# df <= max(RARE_DF_FLOOR, n_docs * RARE_DF_RATIO) 인 토큰을 주어로 본다.
+RARE_DF_RATIO = 0.003
+RARE_DF_FLOOR = 5
+
 # 제거할 패턴
 BRACKET_PATTERN = re.compile(r'^[\[\(\{<【「『].*?[\]\)\}>】」』]\s*|\s*[\[\(\{<【「『].*?[\]\)\}>】」』]$')
 SEPARATOR_PATTERN = re.compile(r'[\|\-:／/·•]')
@@ -209,6 +214,49 @@ class TextSimilarityMixin:
             for b in d2:
                 if a == b or (len(a) >= 2 and len(b) >= 2 and (a in b or b in a)):
                     return False  # 공유 차별 토큰 존재 → 발산 아님
+        return True
+
+    def content_tokens(self, text: str) -> set:
+        """DF 계산·주어 추출 공통 토큰화.
+
+        정규화 → 구두점/공백 분리 → 조사·구두점 제거 → len>1 & 불용어 제외.
+        TokenDF 계산과 주어 판정이 동일 토큰을 쓰도록 공개 메서드로 둔다.
+        """
+        norm = self.normalize_text(text)
+        out = set()
+        for raw in re.split(r'[\s,，、;/·•()\[\]{}]+', norm):
+            t = self._strip_token(raw)
+            if len(t) > 1 and t not in KOREAN_STOPWORDS:
+                out.add(t)
+        return out
+
+    def _rare_df_threshold(self) -> float:
+        """희소(주어) 판정 df 임계값. token_df 주입 시에만 의미."""
+        n = getattr(self, "n_docs", 0) or 0
+        ratio = getattr(self, "rare_df_ratio", RARE_DF_RATIO)
+        return max(RARE_DF_FLOOR, n * ratio)
+
+    def _subject_tokens(self, text: str):
+        """제목의 '주어'(희소 핵심어) 집합. token_df 미주입이면 None."""
+        token_df = getattr(self, "token_df", None)
+        if not token_df or not getattr(self, "n_docs", 0):
+            return None
+        thr = self._rare_df_threshold()
+        return {t for t in self.content_tokens(text) if token_df.get(t, 0) <= thr}
+
+    def _subject_divergence(self, title1: str, title2: str):
+        """DF 기반 주어 발산 판정.
+
+        Returns: True(발산) / False(공유) / None(DF 미주입·주어없음→판정보류)
+        """
+        s1 = self._subject_tokens(title1)
+        s2 = self._subject_tokens(title2)
+        if s1 is None or s2 is None or not s1 or not s2:
+            return None
+        for a in s1:
+            for b in s2:
+                if a == b or (len(a) >= 2 and len(b) >= 2 and (a in b or b in a)):
+                    return False  # 공유 주어 존재 → 발산 아님
         return True
 
     def calculate_text_similarity(self, text1: str, text2: str) -> float:
