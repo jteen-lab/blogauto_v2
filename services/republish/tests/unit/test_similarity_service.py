@@ -363,3 +363,58 @@ class TestCoreDivergenceGuard:
         assert svc._core_divergence(
             "베로나 여행 추천 숙소", "마카오 여행 추천 숙소"
         ) is True
+
+
+class TestSubjectDivergenceGate:
+    """DF 기반 주어(핵심어) 발산 게이트 테스트.
+
+    골격어(고빈도) 공유 + 주어(희소)만 다른 제목을 분리하는지 검증.
+    token_df를 주입해 코퍼스 없이 결정적으로 테스트한다.
+    """
+
+    # 골격어=높은 df, 주어=낮은 df (n_docs=3000 → 희소 임계 df<=9)
+    DF = {
+        '고객센터': 500, '전화번호': 500, '서비스센터': 200, '찾기': 150,
+        '활용법': 120, '필수': 600, '체크리스트': 400, '5가지': 700,
+        '전세자금대출': 300, '금리': 250, '한도': 250, '서류': 200,
+        '제출': 100, '순서': 100, '신청': 200, '조건': 200, '비교': 200,
+        '최대': 150, '효과': 400, '초보자': 800,
+        # 주어(희소)
+        '레노버': 2, 'lg전자': 2, '작타': 1, '뇌출혈보험': 1,
+        '기업은행': 3, '삼성생명': 2, '광주은행': 3, '비교분석': 4,
+    }
+
+    def _svc(self):
+        return SimilarityService(threshold=75.0, token_df=self.DF, n_docs=3000)
+
+    def test_different_company_separated(self):
+        """다른 제품/회사(주어)는 골격어 공유해도 분리."""
+        r = self._svc().calculate_similarity_v3(
+            "레노버 서비스센터 고객센터 전화번호",
+            "LG전자 고객센터 전화번호 서비스센터 찾기",
+        )
+        assert r["groupable"] is False
+
+    def test_different_subject_separated(self):
+        """전혀 다른 주어(작타 vs 뇌출혈보험) 분리."""
+        r = self._svc().calculate_similarity_v3(
+            "작타 활용법 필수 체크리스트 5가지",
+            "뇌출혈보험 필수 체크리스트 5가지",
+        )
+        assert r["groupable"] is False
+
+    def test_same_subject_kept(self):
+        """같은 주어(광주은행) 공유 시 표현 달라도 유지."""
+        r = self._svc().calculate_similarity_v3(
+            "광주은행 전세자금대출 최대 한도 조건 비교분석",
+            "광주은행 전세자금대출 신청 조건 한도 비교",
+        )
+        assert r["groupable"] is True
+
+    def test_fallback_without_df(self):
+        """DF 미주입 시 기존 핵심어 발산 가드로 폴백."""
+        svc = SimilarityService(threshold=75.0)  # token_df 없음
+        assert svc._subject_divergence("레노버 고객센터", "lg전자 고객센터") is None
+        # 폴백 경로로도 지역 발산은 분리
+        r = svc.calculate_similarity_v3("베로나 여행 추천 숙소", "마카오 여행 추천 숙소")
+        assert r["groupable"] is False
