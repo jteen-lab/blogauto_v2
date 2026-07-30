@@ -1,10 +1,10 @@
 """기존 오그룹(핵심어 발산) 일회성 정리 스크립트.
 
-2개 이상 멤버 그룹을 순회하며, 대표 제목과 '핵심어 발산'(_core_divergence)
-관계인 멤버를 그룹에서 해제(group_id=NULL)한다. 새로 도입된 발산 가드가
-'막았을' 그룹핑만 정확히 되돌리는 보수적 정리다.
+2개 이상 멤버 그룹을 순회하며, 배포된 v3 게이트와 동일 기준(주어 발산:
+DF 기반 희소 핵심어 비겹침, DF 없으면 핵심어 발산 폴백)으로 발산 멤버를
+그룹에서 해제(group_id=NULL)한다. 지명·주어 케이스를 함께 정리.
 
-- 기준: SimilarityService._core_divergence(member, representative) == True
+- 기준: _diverged(svc, member, representative) == True
 - 해제 동작: 앱의 remove_titles_from_group과 동일
   (group_id/similarity_score/grouped_at=NULL, 대표 플래그 해제, member_count 갱신)
 - 대표는 유지. 해제된 멤버는 '미그룹'(group_id=NULL)이 되어 이후 재매칭 대상.
@@ -33,6 +33,12 @@ for _p in ("/app/shared", "/home/jteen/blogauto_v2/shared"):
 from services.similarity_service import SimilarityService  # noqa: E402
 
 
+def _diverged(svc, a: str, b: str) -> bool:
+    """배포된 v3 게이트와 동일 판정: 주어 발산 우선, DF 없으면 핵심어 발산 폴백."""
+    sd = svc._subject_divergence(a, b)
+    return sd if sd is not None else svc._core_divergence(a, b)
+
+
 async def run(dry_run: bool) -> None:
     """오그룹 정리 실행."""
     engine = create_async_engine(settings.database_url)
@@ -43,6 +49,10 @@ async def run(dry_run: bool) -> None:
     ungrouped_total = 0
 
     async with async_session() as s:
+        # 주어 발산 게이트용 코퍼스 DF 주입(배포된 v3 로직과 동일 기준).
+        from app.services.token_df_service import TokenDFService
+        await TokenDFService.inject(svc, s)
+
         rows = await s.execute(text(
             """
             SELECT g.id
@@ -72,7 +82,7 @@ async def run(dry_run: bool) -> None:
 
             to_ungroup = [
                 m for m in members
-                if m.id != rep.id and svc._core_divergence(m.title, rep.title)
+                if m.id != rep.id and _diverged(svc, m.title, rep.title)
             ]
             if not to_ungroup:
                 continue
