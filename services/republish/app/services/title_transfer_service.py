@@ -59,6 +59,9 @@ class TitleTransferService(SimilarityGroupingMixin):
         if not temp_title_ids:
             return result
 
+        from .token_df_service import TokenDFService  # 주어 발산 게이트용 DF 주입
+        await TokenDFService.inject(self.similarity_service, self.db)
+
         # === 1단계: 모든 필요한 데이터를 미리 조회 ===
 
         # 1-1. 모든 임시 제목을 한 번에 조회
@@ -66,10 +69,8 @@ class TitleTransferService(SimilarityGroupingMixin):
         temp_result = await self.db.execute(temp_query)
         temp_titles = {t.id: t for t in temp_result.scalars().all()}
 
-        # 1-2. 기존 정식 제목 조회 (중복 체크용) — Phase 1: 범위 축소
-        # 기존: 전체 정식제목 title 을 set 으로 로딩(20만 시 메모리 폭증).
-        # 변경: 전환 대상 임시제목의 title 과 겹치는 것만 IN 으로 조회.
-        # "전환 title 이 기존에 있는가" 판정 결과는 동일(회귀 없음).
+        # 1-2. 기존 정식 제목 조회 (중복 체크용) — 전환 대상 title 과 겹치는
+        # 것만 IN 으로 조회(전체 로딩 시 대량 메모리 방지, 판정 결과 동일).
         temp_title_strings = [t.title for t in temp_titles.values()]
         existing_titles = set()
         if temp_title_strings:
@@ -117,9 +118,8 @@ class TitleTransferService(SimilarityGroupingMixin):
                     # representative_title_id가 없으면 그룹 멤버 중 첫 번째를 대표로 사용
                     groups_with_reps.append((group, members_by_group[group.id]))
 
-            # 1-4. 그룹 없는 기존 정식제목도 후보에 포함(group=None).
-            # "그룹 대표만 비교 + 무그룹 제목은 후보에서 제외"로 91점짜리 짝도
-            # 못 만나던 문제 보완. 키워드 블로킹으로 비교 비용은 제한된다.
+            # 1-4. 그룹 없는 기존 정식제목도 후보에 포함(group=None). 무그룹
+            # 제목을 후보에서 빼던 문제 보완(키워드 블로킹으로 비용 제한).
             ungrouped_result = await self.db.execute(
                 select(MainTitle).where(MainTitle.group_id.is_(None))
             )
