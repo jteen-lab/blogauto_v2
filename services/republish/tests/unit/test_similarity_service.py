@@ -431,6 +431,30 @@ class TestSubjectDivergenceGate:
         )
         assert r["groupable"] is False
 
+    def test_morphological_variant_kept(self):
+        """공유 식별자 다수 + 배타는 형태소 변이(차이/차이점)뿐이면 유지."""
+        df = dict(self.DF)
+        df.update({"동동주": 2, "막걸리": 4, "공통점": 2, "만드": 18,
+                   "차이": 17, "차이점": 18})
+        svc = SimilarityService(threshold=75.0, token_df=df, n_docs=3000)
+        r = svc.calculate_similarity_v3(
+            "동동주 막걸리 차이와 공통점 만드는 방법",
+            "동동주와 막걸리 차이점 및 공통점 만드는 방법",
+        )
+        assert r["groupable"] is True
+
+    def test_rare_modifiers_kept(self):
+        """주어(맞벌이 육아팁) 공유 + 배타는 희소 수식어뿐이면 유지."""
+        df = dict(self.DF)
+        df.update({"맞벌": 7, "육아팁": 14, "실제": 10, "기반": 11,
+                   "놀라운": 3, "가정": 6, "노하우": 9, "가이드": 40})
+        svc = SimilarityService(threshold=75.0, token_df=df, n_docs=3000)
+        r = svc.calculate_similarity_v3(
+            "놀라운 실제 후기 기반 맞벌이 육아팁 가이드",
+            "맞벌이 가정 육아팁 완벽 가이드 실제 후기 노하우",
+        )
+        assert r["groupable"] is True
+
     def test_fallback_without_df(self):
         """DF 미주입 시 기존 핵심어 발산 가드로 폴백."""
         svc = SimilarityService(threshold=75.0)  # token_df 없음
