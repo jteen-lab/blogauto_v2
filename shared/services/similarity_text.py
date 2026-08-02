@@ -246,12 +246,13 @@ class TextSimilarityMixin:
         return {t for t in self.content_tokens(text) if token_df.get(t, 0) <= thr}
 
     def _subject_divergence(self, title1: str, title2: str):
-        """DF 기반 식별자 발산 판정(양쪽 배타 specific, exact 매칭).
+        """DF 기반 식별자 발산 판정(양쪽 배타 specific, 배타≥공유, exact).
 
-        양쪽이 각자 상대에 없는 specific 식별자를 가지면 발산(True).
-        상위어(예: 국가명)를 공유해도 하위어(예: 도시명)가 다르면 발산.
+        양쪽이 각자 상대에 없는 specific 식별자를 갖고, 그 배타 식별자가
+        공유 식별자 수 이상일 때 발산(True). 상위어(국가명) 공유해도 하위어
+        (도시명)가 다르면 발산하되, 공유 식별자가 많고 배타가 소수면(형태소
+        변이 차이/차이점, 희소 수식어) 발산으로 보지 않는다.
         exact 비교(부분문자열 금지) — 자카르타/족자카르타 오매칭 방지.
-        조사/구두점은 content_tokens에서 이미 제거된다.
 
         Returns: True(발산) / False(비발산) / None(DF미주입·한쪽 식별자없음)
         """
@@ -259,7 +260,10 @@ class TextSimilarityMixin:
         s2 = self._subject_tokens(title2)
         if s1 is None or s2 is None or not s1 or not s2:
             return None
-        return bool((s1 - s2) and (s2 - s1))
+        excl1, excl2 = s1 - s2, s2 - s1
+        if not (excl1 and excl2):
+            return False
+        return min(len(excl1), len(excl2)) >= len(s1 & s2)
 
     def calculate_text_similarity(self, text1: str, text2: str) -> float:
         """
