@@ -28,15 +28,22 @@ flowchart TD
     K -- 아니오 --> M[score 유지]
 ```
 
-## 주어 토큰 / 발산 판정
-- `_content_tokens(title)`: 정규화 → 구두점/공백 분리 → 조사·구두점 제거 →
-  len>1 & 불용어 제외. (DF 계산·주어 추출 공통 토큰화)
-- `_subject_tokens(title)`: `_content_tokens` 중 **df ≤ 임계** 토큰.
-  임계 = max(floor, n_docs × RARE_DF_RATIO). 기본 RARE_DF_RATIO=0.003(≈0.3%).
+## 식별자 토큰 / 발산 판정 (v2: 양쪽 배타 specific)
+- `content_tokens(title)`: 정규화 → 구두점/공백 분리 → 조사·구두점 제거 →
+  len>1 & 불용어 제외. (DF 계산·식별자 추출 공통 토큰화)
+- `_subject_tokens(title)`: `content_tokens` 중 **df ≤ 임계** 토큰(=specific 식별자).
+  임계 = max(FLOOR=5, n_docs × RARE_DF_RATIO). **RARE_DF_RATIO=0.01(≈1%)** —
+  케이뱅크/토스뱅크(df~10)도 식별자로 포섭.
 - `_subject_divergence(t1,t2)`:
-  - DF 미주입 → None(폴백 `_core_divergence` 사용)
-  - 한쪽이라도 주어 없음 → None(보류=그룹)
-  - 양쪽 주어 있고 **부분문자열 허용 겹침이 0** → True(발산)
+  - DF 미주입/한쪽 식별자 없음 → None(폴백 `_core_divergence`)
+  - **양쪽이 각자 상대에 없는 specific 식별자(exact)를 가지면 → True(발산)**.
+    상위어(인도네시아) 공유해도 하위어(자카르타/발리) 배타면 발산.
+  - exact 비교(부분문자열 금지) — 자카르타/족자카르타 오매칭 방지.
+
+## 발산 시 처리
+- 하드분리(55) 대신 **회색지대 상한(threshold-1≈74)으로 캡**. 점수>74 & 발산일 때만.
+- 이후 `_should_group`이 회색지대(gray_lower~threshold)면 **AI 판정**(활성 시),
+  비활성이면 분리. → DF가 못 가르는 잔여 오탐(희소 수식어)을 AI가 구제.
 
 ## DF 주입 경로
 - `TokenDFService`(app): MainTitle 전체를 `_content_tokens`로 토큰화해 DF/n_docs

@@ -327,7 +327,8 @@ class TestCoreDivergenceGuard:
             "마카오 여행 기초 정보, 계절별 날씨, 방문 전 준비 사항, 대중교통, 추천 명소, 추천 음식, 마카오 여행 추천 숙소",
         )
         assert r["groupable"] is False
-        assert r["score"] <= 55.0
+        # 발산 시 회색지대 상한(threshold-1) 이하로 캡되어 자동 그룹 안 됨
+        assert r["score"] < 75.0
 
     def test_travel_accommodation_different_city_separated(self):
         """호치민 vs 마드리드 숙소 템플릿 분리."""
@@ -372,16 +373,19 @@ class TestSubjectDivergenceGate:
     token_df를 주입해 코퍼스 없이 결정적으로 테스트한다.
     """
 
-    # 골격어=높은 df, 주어=낮은 df (n_docs=3000 → 희소 임계 df<=9)
+    # 골격어=높은 df, 식별자=낮은 df (n_docs=3000, RARE_DF_RATIO=0.01 → 임계 df<=30)
     DF = {
         '고객센터': 500, '전화번호': 500, '서비스센터': 200, '찾기': 150,
         '활용법': 120, '필수': 600, '체크리스트': 400, '5가지': 700,
         '전세자금대출': 300, '금리': 250, '한도': 250, '서류': 200,
         '제출': 100, '순서': 100, '신청': 200, '조건': 200, '비교': 200,
-        '최대': 150, '효과': 400, '초보자': 800,
-        # 주어(희소)
+        '최대': 150, '효과': 400, '초보자': 800, '여행': 700, '추천': 900,
+        '코스': 40, '신용대출': 300,
+        # 식별자(특정, df<=30)
         '레노버': 2, 'lg전자': 2, '작타': 1, '뇌출혈보험': 1,
         '기업은행': 3, '삼성생명': 2, '광주은행': 3, '비교분석': 4,
+        '인도네시아': 20, '자카르타': 2, '발리': 3,
+        '케이뱅크': 28, '토스뱅크': 29,
     }
 
     def _svc(self):
@@ -410,6 +414,22 @@ class TestSubjectDivergenceGate:
             "광주은행 전세자금대출 신청 조건 한도 비교",
         )
         assert r["groupable"] is True
+
+    def test_compound_partial_overlap_separated(self):
+        """복합 식별자에서 상위어(인도네시아) 공유해도 하위어(도시) 다르면 분리."""
+        r = self._svc().calculate_similarity_v3(
+            "인도네시아 자카르타 여행 추천 코스",
+            "인도네시아 발리 여행 추천 코스",
+        )
+        assert r["groupable"] is False
+
+    def test_borderline_df_entity_separated(self):
+        """경계 DF 엔티티(케이뱅크 vs 토스뱅크)도 식별자로 분리."""
+        r = self._svc().calculate_similarity_v3(
+            "케이뱅크 신용대출 금리 한도 조건",
+            "토스뱅크 신용대출 금리 한도 조건",
+        )
+        assert r["groupable"] is False
 
     def test_fallback_without_df(self):
         """DF 미주입 시 기존 핵심어 발산 가드로 폴백."""
