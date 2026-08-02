@@ -58,7 +58,8 @@ async def _ai_says_different(db, a: str, b: str, cfg: dict, cache: dict) -> bool
     try:
         from app.services.ai.ai_service import AIService
         prompt = (
-            "두 블로그 글 제목이 사실상 같은 주제·내용을 다루면 '예', "
+            "두 블로그 글 제목의 '핵심 대상'(브랜드·기관·지명·제품·인물 등 "
+            "주체)이 같고 다루는 내용도 사실상 같으면 '예', 핵심 대상이 "
             "다르면 '아니오'로만 답하세요.\n"
             f"제목1: {a}\n제목2: {b}\n답:"
         )
