@@ -26,7 +26,6 @@ from .similarity_text import (
     KOREAN_STOPWORDS,
     GENERIC_KEYWORDS,
     PARTICLE_SUFFIXES,
-    CORE_DIVERGENCE_CAP,
     HAS_RAPIDFUZZ,
 )
 from .similarity_grouping_ops import GroupingOpsMixin
@@ -237,19 +236,21 @@ class SimilarityService(TextSimilarityMixin, GroupingOpsMixin):
         penalty = location_check["penalty"]
         final_score = keyword_score * (1 - penalty)
 
-        # Stage 4.5: 핵심어 발산 가드
-        # 지명 사전에 없는 destination 등 핵심어가 완전히 다른데도 골격어
-        # 공유로 점수가 높은 경우, 상한(CAP)으로 눌러 자동 그룹을 차단한다.
+        # Stage 4.5: 식별자 발산 게이트
+        # 핵심 식별자가 다른데 골격어 공유로 점수가 높은 경우, 회색지대 상한
+        # (threshold-1)으로 눌러 자동 그룹을 막고, 회색지대 AI가 최종 판정하도록
+        # 한다. (DF만으로는 '희소 수식어'와 '주어'를 못 가르는 잔여 오탐을 AI가 구제)
         stage = "Stage 2: 키워드 유사도"
         reason = location_check["reason"]
-        if final_score > CORE_DIVERGENCE_CAP and diverged:
+        gray_cap = self.threshold - 1.0
+        if final_score > gray_cap and diverged:
             logger.info(
-                "[SIMILARITY] 핵심어 발산 가드 발동 | %.1f→%.1f | '%s' ↔ '%s'",
-                final_score, CORE_DIVERGENCE_CAP, title1[:20], title2[:20],
+                "[SIMILARITY] 식별자 발산 게이트 발동 | %.1f→%.1f | '%s' ↔ '%s'",
+                final_score, gray_cap, title1[:20], title2[:20],
             )
-            final_score = CORE_DIVERGENCE_CAP
-            stage = "Stage 4.5: 핵심어 발산으로 분리"
-            reason = "핵심 키워드 불일치(발산 가드)"
+            final_score = gray_cap
+            stage = "Stage 4.5: 식별자 발산(회색지대 하향)"
+            reason = "핵심 식별자 불일치(발산 게이트)"
 
         return {
             "score": round(final_score, 2),
