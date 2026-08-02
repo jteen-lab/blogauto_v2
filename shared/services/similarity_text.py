@@ -52,9 +52,10 @@ PARTICLE_SUFFIXES = (
 # 핵심어 발산 시 점수 상한(회색지대 하한 미만으로 눌러 하드 분리)
 CORE_DIVERGENCE_CAP = 55.0
 
-# 주어(핵심어) 발산 게이트: '희소 주어' 판정 기준(코퍼스 대비 문서빈도 비율).
-# df <= max(RARE_DF_FLOOR, n_docs * RARE_DF_RATIO) 인 토큰을 주어로 본다.
-RARE_DF_RATIO = 0.003
+# 식별자 발산 게이트: 'specific(특정) 식별자' 판정 기준(코퍼스 대비 문서빈도).
+# df <= max(RARE_DF_FLOOR, n_docs * RARE_DF_RATIO) 인 토큰을 식별자로 본다.
+# 0.01(≈1%): 케이뱅크/토스뱅크 등 인기 엔티티(df~10)도 식별자로 포섭.
+RARE_DF_RATIO = 0.01
 RARE_DF_FLOOR = 5
 
 # 제거할 패턴
@@ -237,7 +238,7 @@ class TextSimilarityMixin:
         return max(RARE_DF_FLOOR, n * ratio)
 
     def _subject_tokens(self, text: str):
-        """제목의 '주어'(희소 핵심어) 집합. token_df 미주입이면 None."""
+        """제목의 'specific(특정) 식별자' 집합. token_df 미주입이면 None."""
         token_df = getattr(self, "token_df", None)
         if not token_df or not getattr(self, "n_docs", 0):
             return None
@@ -245,19 +246,20 @@ class TextSimilarityMixin:
         return {t for t in self.content_tokens(text) if token_df.get(t, 0) <= thr}
 
     def _subject_divergence(self, title1: str, title2: str):
-        """DF 기반 주어 발산 판정.
+        """DF 기반 식별자 발산 판정(양쪽 배타 specific, exact 매칭).
 
-        Returns: True(발산) / False(공유) / None(DF 미주입·주어없음→판정보류)
+        양쪽이 각자 상대에 없는 specific 식별자를 가지면 발산(True).
+        상위어(예: 국가명)를 공유해도 하위어(예: 도시명)가 다르면 발산.
+        exact 비교(부분문자열 금지) — 자카르타/족자카르타 오매칭 방지.
+        조사/구두점은 content_tokens에서 이미 제거된다.
+
+        Returns: True(발산) / False(비발산) / None(DF미주입·한쪽 식별자없음)
         """
         s1 = self._subject_tokens(title1)
         s2 = self._subject_tokens(title2)
         if s1 is None or s2 is None or not s1 or not s2:
             return None
-        for a in s1:
-            for b in s2:
-                if a == b or (len(a) >= 2 and len(b) >= 2 and (a in b or b in a)):
-                    return False  # 공유 주어 존재 → 발산 아님
-        return True
+        return bool((s1 - s2) and (s2 - s1))
 
     def calculate_text_similarity(self, text1: str, text2: str) -> float:
         """
