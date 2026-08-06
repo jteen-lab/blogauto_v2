@@ -185,6 +185,49 @@ class WordPressAPI:
             logger.error(f"[WP_API] Unexpected error creating post | Blog={blog.id} | Error={e}")
             raise WordPressAPIError(f"예상치 못한 오류: {e}")
 
+    async def create_page(self, blog: Blog, title: str, html_content: str) -> Dict[str, Any]:
+        """새 정적 페이지 발행 (애드센스 F1: 필수 페이지).
+
+        Args:
+            blog: 대상 블로그
+            title: 페이지 제목
+            html_content: 페이지 본문 HTML
+
+        Returns:
+            {"success": True, "remote_id": str, "remote_url": str}
+
+        Raises:
+            WordPressAPIError: REST 쓰기 실패 (권한 없음/플러그인 차단 등)
+        """
+        try:
+            logger.info(f"[WP_API] Creating page | Blog={blog.id} | Title={title[:50]}")
+
+            url = self._get_api_url(blog, "pages")
+            headers = self._get_auth_headers(blog)
+            wp_data = {"title": title, "content": html_content, "status": "publish"}
+
+            result = await self._make_request("POST", url, headers, wp_data)
+
+            remote_id = str(result["data"]["id"])
+            remote_url = result["data"].get("link", "")
+
+            logger.info(f"[WP_API] Page created successfully | Blog={blog.id} | RemoteID={remote_id}")
+
+            return {
+                "success": True,
+                "remote_id": remote_id,
+                "remote_url": remote_url,
+                "response_time_ms": result["response_time_ms"]
+            }
+
+        except WordPressAPIError as e:
+            logger.error(f"[WP_API] Failed to create page | Blog={blog.id} | Error={e.message}")
+            raise
+
+        except Exception as e:
+            logger.error(f"[WP_API] Unexpected error creating page | Blog={blog.id} | Error={e}")
+            raise WordPressAPIError(f"예상치 못한 오류: {e}")
+
     async def update_post(
         self,
         blog: Blog,
