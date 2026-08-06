@@ -127,6 +127,24 @@ class Blog(Base):
                 "delete_grace_days, category_periods({subtopic_id: months})"
     )
 
+    # 애드센스 승인 지원 Sprint 1 (F1: 필수 페이지, F2: 저자성 신호)
+    required_pages_status = Column(
+        String(20),
+        default="none",
+        nullable=False,
+        comment="필수 페이지(개인정보처리방침/이용약관/소개/문의) 발행 상태: none|partial|complete",
+    )
+    required_page_ids = Column(
+        JSON,
+        nullable=True,
+        comment="플랫폼별 생성된 필수 페이지 ID: {privacy, terms, about, contact}",
+    )
+    author_profile = Column(
+        JSON,
+        nullable=True,
+        comment="저자성(E-E-A-T) 신호용 저자 프로필: name/bio/expertise",
+    )
+
     # 포스트 통계 (재발행 모듈 적용 구간 필터링용)
     total_post_count = Column(Integer, nullable=True, comment="누적 포스트 수")
     post_count_updated_at = Column(DateTime(timezone=True), nullable=True, comment="포스트 수 업데이트 시점")
@@ -261,6 +279,10 @@ class Blog(Base):
             "seo_config": self.seo_config or {},
             # 재발행 리뉴얼 정책 (P1)
             "renewal_config": self.renewal_config or {},
+            # 애드센스 승인 지원 Sprint 1
+            "required_pages_status": self.required_pages_status,
+            "required_page_ids": self.required_page_ids or {},
+            "author_profile": self.author_profile or {},
             # 크롤링/매칭 상태 (Phase M-1)
             "is_new_blog": self.is_new_blog,
             "crawl_status": self.crawl_status,
