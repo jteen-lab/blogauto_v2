@@ -7,7 +7,6 @@
 설계 문서: publish_module_implementation_plan.md - Phase 4
 """
 import re
-from pathlib import Path
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,13 +15,14 @@ from ...core.logger import get_logger
 from ...models.blog import Blog, BlogPlatform
 from ...models.crawled_post import CrawledPost
 from ...models.google_credential import GoogleCredential
-from ...core.config import settings
 from ..generation.inventory_manager import InventoryManager
 from .image_uploader import ImageUploader
 from .html_injector import HtmlInjector
 from .wordpress_publisher import WordPressPublisher
 from .blogger_publisher import BloggerPublisher
 from .publish_result import PublishResult, ImageUploadResult
+from .thin_content_gate import check_thin_content
+from .image_path_utils import resolve_image_path, strip_local_image_url
 
 logger = get_logger("publisher_pipeline", "app.log")
 
@@ -90,23 +90,11 @@ class PublisherPipeline:
                 "대표이미지 업로드 실패로 발행을 중단합니다: "
                 f"{image_result.error}"
             )
-            logger.error(
-                "[PIPELINE] 발행 중단(이미지 실패) | blog=%s | "
-                "post_id=%d | error=%s",
-                blog.name, crawled_post.id, image_result.error,
+            return await self._reject_pre_publish(
+                blog, crawled_post, result, error_msg,
+                retryable=image_result.retryable,
+                log_reason="이미지 실패",
             )
-            try:
-                crawled_post.record_publish_failure(error_msg)
-                await self.db.commit()
-            except Exception as e:
-                logger.error(
-                    "[PIPELINE] 발행 실패 기록 오류 | "
-                    "post_id=%d | %s",
-                    crawled_post.id, e,
-                )
-            result.error = error_msg
-            result.retryable = image_result.retryable
-            return result
 
         # Step 2: HTML 가공
         final_html = self._prepare_html(
@@ -147,6 +135,14 @@ class PublisherPipeline:
                     seo_config.get("auto_seo_enabled"),
                     seo_config.get("detected_plugin"),
                 )
+
+        # Step 2.8: 최소 분량 게이트 (F6, thin content 발행 차단)
+        thin_content_error = check_thin_content(final_html)
+        if thin_content_error is not None:
+            return await self._reject_pre_publish(
+                blog, crawled_post, result, thin_content_error,
+                retryable=False, log_reason="분량 미달",
+            )
 
         # Step 3: 플랫폼별 발행
         publish_result = await self._publish_to_platform(
@@ -213,6 +209,36 @@ class PublisherPipeline:
         )
         return result
 
+    async def _reject_pre_publish(
+        self,
+        blog: Blog,
+        crawled_post: CrawledPost,
+        result: PublishResult,
+        error_msg: str,
+        retryable: bool,
+        log_reason: str,
+    ) -> PublishResult:
+        """플랫폼 발행 시도 전 게이트에서 걸린 글을 실패로 기록하고 반환한다.
+
+        Step 1.5(이미지 실패)·Step 2.8(분량 미달) 등 발행 전 검증
+        게이트가 공통으로 사용하는 실패 처리 경로.
+        """
+        logger.error(
+            "[PIPELINE] 발행 중단(%s) | blog=%s | post_id=%d | %s",
+            log_reason, blog.name, crawled_post.id, error_msg,
+        )
+        try:
+            crawled_post.record_publish_failure(error_msg)
+            await self.db.commit()
+        except Exception as e:
+            logger.error(
+                "[PIPELINE] 발행 실패 기록 오류 | post_id=%d | %s",
+                crawled_post.id, e,
+            )
+        result.error = error_msg
+        result.retryable = retryable
+        return result
+
     async def publish_batch(
         self,
         blog: Blog,
@@ -276,7 +302,7 @@ class PublisherPipeline:
         if not post.image_url:
             return None
 
-        image_path = self._resolve_image_path(
+        image_path = resolve_image_path(
             post.image_url
         )
         if not image_path:
@@ -401,9 +427,9 @@ class PublisherPipeline:
         )
 
         for local_url in local_urls:
-            image_path = self._resolve_image_path(local_url)
+            image_path = resolve_image_path(local_url)
             if not image_path:
-                html = self._strip_local_image_url(
+                html = strip_local_image_url(
                     html, local_url
                 )
                 logger.warning(
@@ -418,7 +444,7 @@ class PublisherPipeline:
                     blog, image_path, title=post_title or "image",
                 )
             except Exception as e:
-                html = self._strip_local_image_url(
+                html = strip_local_image_url(
                     html, local_url
                 )
                 logger.error(
@@ -437,7 +463,7 @@ class PublisherPipeline:
                     result.platform_url[:60],
                 )
             else:
-                html = self._strip_local_image_url(
+                html = strip_local_image_url(
                     html, local_url
                 )
                 logger.warning(
@@ -447,67 +473,3 @@ class PublisherPipeline:
                 )
 
         return html
-
-    @staticmethod
-    def _strip_local_image_url(
-        html: str, local_url: str,
-    ) -> str:
-        """
-        업로드 실패한 로컬 이미지 URL을 HTML에서 제거
-
-        img 태그의 src를 빈 값으로 대체하고
-        data-upload-failed 속성을 추가합니다.
-        href 등 나머지 참조도 제거합니다.
-
-        Args:
-            html: 대상 HTML 문자열
-            local_url: 제거할 로컬 URL
-
-        Returns:
-            로컬 URL이 제거된 HTML
-        """
-        # img src 속성 대체
-        html = re.sub(
-            rf'(<img[^>]*?)src=["\']'
-            + re.escape(local_url)
-            + r'["\']([^>]*?>)',
-            r'\1src="" data-upload-failed="true"\2',
-            html,
-        )
-        # href 등 나머지 참조 제거
-        html = html.replace(local_url, "")
-        return html
-
-    @staticmethod
-    def _resolve_image_path(
-        image_url: str,
-    ) -> Optional[str]:
-        """
-        이미지 URL을 로컬 파일 경로로 변환
-
-        image_url 형식: /static/generated/images/xxx.webp
-        """
-        if not image_url:
-            return None
-
-        # 프로젝트 루트 (app/ 의 부모)
-        project_root = Path(__file__).resolve().parents[3]
-
-        # URL 프리픽스 제거 → 로컬 절대 경로
-        if image_url.startswith("/static/"):
-            local_path = project_root / "app" / image_url.lstrip("/")
-        elif image_url.startswith("app/static/"):
-            local_path = project_root / image_url
-        else:
-            local_path = (
-                project_root / settings.image_storage_dir
-                / Path(image_url).name
-            )
-
-        if local_path.exists():
-            return str(local_path)
-
-        logger.debug(
-            "[PIPELINE] 이미지 경로 미존재: %s", local_path,
-        )
-        return None
