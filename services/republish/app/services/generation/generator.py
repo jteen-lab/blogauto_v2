@@ -29,6 +29,7 @@ from .content_generator_helper import (
     generate_content_with_meta,
     DEFAULT_CONTENT_PROMPT,
 )
+from .author_signal_injector import inject_author_signal
 
 logger = logging.getLogger(__name__)
 
@@ -342,6 +343,14 @@ class ContentGenerator:
         except Exception as e:
             logger.warning(
                 "[GENERATOR] SEO 메타 실패 (무시): %s", e
+            )
+
+        # 6.8 저자 바이라인/편집감독 문구 주입 (author_profile 설정 시에만, F2)
+        try:
+            final_html = inject_author_signal(final_html, blog)
+        except Exception as e:
+            logger.warning(
+                "[GENERATOR] 저자 바이라인 주입 실패 (무시): %s", e
             )
 
         # 7. GenerationHistory 저장
