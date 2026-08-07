@@ -1,0 +1,222 @@
+<!--
+  BlogAuto V2: 블로그 설정 - 애드센스 승인 지원 탭 (Sprint 1: F1 필수 페이지, F2 저자 프로필)
+  File: app/templates/blogs/settings/_tab_adsense.html
+
+  기능:
+  - 필수 페이지 4종(개인정보처리방침/이용약관/소개/문의) 생성 상태 조회·생성 트리거
+  - 저자 프로필(이름/소개/전문분야) 저장 — About 페이지 및 글 본문 바이라인에 반영(F2)
+
+  API:
+  - GET  /api/v1/blogs/{blogId}/settings/required-pages
+  - POST /api/v1/blogs/{blogId}/settings/required-pages/generate
+  - GET  /api/v1/blogs/{blogId}/settings/author-profile
+  - POST /api/v1/blogs/{blogId}/settings/author-profile
+
+  설계 문서: docs/flowcharts/adsense_sprint1_p1.md
+-->
+
+<div x-data="adsenseSettingsApp()"
+     x-init="$nextTick(() => {
+         const parent = $el.closest('#blogSettings');
+         if (parent && parent._x_dataStack && parent._x_dataStack[0] && parent._x_dataStack[0].selectedBlog) {
+             blogId = parent._x_dataStack[0].selectedBlog.id;
+         }
+         init();
+     })"
+     x-effect="(() => {
+         const parent = $el.closest('#blogSettings');
+         if (parent && parent._x_dataStack && parent._x_dataStack[0] && parent._x_dataStack[0].selectedBlog) {
+             const newBlog = parent._x_dataStack[0].selectedBlog;
+             if (newBlog.id && newBlog.id !== blogId) {
+                 blogId = newBlog.id;
+                 loaded = false;
+                 if (!loading) init();
+             }
+         }
+     })()"
+     class="space-y-6">
+
+    <!-- 안내 -->
+    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <p class="text-sm text-blue-800 font-medium">애드센스 승인 지원 (Sprint 1)</p>
+        <p class="text-xs text-blue-600 mt-1">
+            필수 페이지·저자 정보는 애드센스 심사의 최소 전제조건입니다. 승인을 보장하지는 않으며,
+            신호·구조를 갖춰 확률을 높이는 용도입니다.
+        </p>
+    </div>
+
+    <!-- 필수 페이지 4종 -->
+    <div class="border border-gray-200 rounded-lg p-4 space-y-3">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm font-medium text-gray-800">필수 페이지 4종</p>
+                <p class="text-xs text-gray-500 mt-0.5">개인정보처리방침 · 이용약관 · 소개 · 문의</p>
+            </div>
+            <span class="text-xs px-2 py-1 rounded-full"
+                  :class="{
+                      'bg-emerald-100 text-emerald-700': pagesStatus === 'complete',
+                      'bg-amber-100 text-amber-700': pagesStatus === 'partial',
+                      'bg-gray-100 text-gray-500': pagesStatus === 'none',
+                  }"
+                  x-text="pagesStatus === 'complete' ? '완료' : (pagesStatus === 'partial' ? '일부 실패' : '미생성')"></span>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <button type="button" @click="generatePages()" :disabled="generating"
+                    class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
+                <span x-show="!generating">필수 페이지 생성</span>
+                <span x-show="generating">생성 중...</span>
+            </button>
+            <span class="text-xs text-gray-400">이미 생성된 페이지는 건너뛰므로 재실행해도 안전합니다.</span>
+        </div>
+
+        <div x-show="Object.keys(pageIds).length > 0" class="text-xs text-gray-500 space-y-1 pt-1">
+            <template x-for="type in ['privacy', 'terms', 'about', 'contact']" :key="type">
+                <div x-show="pageIds[type]" class="flex items-center gap-2">
+                    <span class="text-emerald-600">✓</span>
+                    <span x-text="{privacy: '개인정보처리방침', terms: '이용약관', about: '소개', contact: '문의'}[type]"></span>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- 저자 프로필 -->
+    <div class="border border-gray-200 rounded-lg p-4 space-y-3">
+        <div>
+            <p class="text-sm font-medium text-gray-800">저자 프로필 (E-E-A-T 신호)</p>
+            <p class="text-xs text-gray-500 mt-0.5">
+                이름을 입력하면 소개 페이지와 이후 생성되는 글 본문 하단에 바이라인이 자동 추가됩니다.
+            </p>
+        </div>
+
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">이름</label>
+            <input type="text" x-model="profile.name" placeholder="예: 홍길동"
+                   class="w-full max-w-xs px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">소개</label>
+            <textarea x-model="profile.bio" rows="2" placeholder="예: 10년차 금융 전문가로 생활 재테크 정보를 다룹니다."
+                      class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"></textarea>
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">전문 분야</label>
+            <input type="text" x-model="profile.expertise" placeholder="예: 재테크"
+                   class="w-full max-w-xs px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+        </div>
+
+        <div class="pt-1">
+            <button type="button" @click="saveProfile()" :disabled="saving"
+                    class="px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
+                <span x-show="!saving">저장</span>
+                <span x-show="saving">저장 중...</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+function adsenseSettingsApp() {
+    return {
+        blogId: null,
+        loading: false,
+        loaded: false,
+        generating: false,
+        saving: false,
+        pagesStatus: 'none',
+        pageIds: {},
+        profile: { name: '', bio: '', expertise: '' },
+
+        init() {
+            if (this.blogId) {
+                this.loadPagesStatus(this.blogId);
+                this.loadProfile(this.blogId);
+            }
+        },
+
+        async loadPagesStatus(blogId) {
+            try {
+                const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
+                const resp = await fetch(`${apiBase}/blogs/${blogId}/settings/required-pages`, { credentials: 'include' });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    this.pagesStatus = data.status || 'none';
+                    this.pageIds = data.page_ids || {};
+                }
+            } catch (e) {
+                console.warn('[adsense] 필수 페이지 상태 조회 실패', e);
+            }
+        },
+
+        async loadProfile(blogId) {
+            this.loading = true;
+            try {
+                const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
+                const resp = await fetch(`${apiBase}/blogs/${blogId}/settings/author-profile`, { credentials: 'include' });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    const p = data.author_profile || {};
+                    this.profile = { name: p.name || '', bio: p.bio || '', expertise: p.expertise || '' };
+                    this.loaded = true;
+                }
+            } catch (e) {
+                console.warn('[adsense] 저자 프로필 조회 실패', e);
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async generatePages() {
+            if (!this.blogId) return;
+            this.generating = true;
+            try {
+                const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
+                const resp = await fetch(`${apiBase}/blogs/${this.blogId}/settings/required-pages/generate`, {
+                    method: 'POST',
+                    credentials: 'include',
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (resp.ok) {
+                    this.pagesStatus = data.status || this.pagesStatus;
+                    this.pageIds = data.page_ids || this.pageIds;
+                    if (typeof showSuccessMessage === 'function') showSuccessMessage('필수 페이지 생성을 요청했습니다');
+                } else {
+                    const msg = '생성 실패: ' + (data.detail || resp.status);
+                    if (typeof showErrorMessage === 'function') showErrorMessage(msg); else alert(msg);
+                }
+            } catch (e) {
+                console.warn('[adsense] 필수 페이지 생성 실패', e);
+                if (typeof showErrorMessage === 'function') showErrorMessage('생성 중 오류');
+            } finally {
+                this.generating = false;
+            }
+        },
+
+        async saveProfile() {
+            if (!this.blogId) return;
+            this.saving = true;
+            try {
+                const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
+                const resp = await fetch(`${apiBase}/blogs/${this.blogId}/settings/author-profile`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.profile),
+                });
+                if (resp.ok) {
+                    if (typeof showSuccessMessage === 'function') showSuccessMessage('저자 프로필이 저장되었습니다');
+                } else {
+                    const e = await resp.json().catch(() => ({}));
+                    const msg = '저장 실패: ' + (e.detail || resp.status);
+                    if (typeof showErrorMessage === 'function') showErrorMessage(msg); else alert(msg);
+                }
+            } catch (e) {
+                console.warn('[adsense] 저자 프로필 저장 실패', e);
+                if (typeof showErrorMessage === 'function') showErrorMessage('저장 중 오류');
+            } finally {
+                this.saving = false;
+            }
+        },
+    };
+}
+</script>
