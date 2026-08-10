@@ -30,6 +30,7 @@ class AuthorProfileRequest(BaseModel):
     name: Optional[str] = None
     bio: Optional[str] = None
     expertise: Optional[str] = None
+    contact_email: Optional[str] = None
 
 
 @router.get("/required-pages", summary="필수 페이지 생성 상태 조회")
@@ -57,7 +58,8 @@ async def generate_required_pages(
     이미 생성된 페이지는 건너뛰므로 재호출해도 안전하다(멱등).
     """
     blog = await get_blog_or_404(blog_id, current_user, db)
-    outcome = await RequiredPagesService(db).generate_all(blog, current_user.email)
+    contact_email = (blog.author_profile or {}).get("contact_email") or current_user.email
+    outcome = await RequiredPagesService(db).generate_all(blog, contact_email)
     logger.info(
         "필수 페이지 생성 요청 | blog_id=%s | success=%s | status=%s",
         blog_id, outcome.get("success"), outcome.get("status"),
@@ -89,6 +91,7 @@ async def save_author_profile(
         "name": request.name or "",
         "bio": request.bio or "",
         "expertise": request.expertise or "",
+        "contact_email": request.contact_email or "",
     }
     flag_modified(blog, "author_profile")
     await db.commit()
