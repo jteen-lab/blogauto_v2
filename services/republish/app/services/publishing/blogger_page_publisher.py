@@ -9,11 +9,14 @@ Blogger API는 posts와 pages를 같은 blog 하위 리소스로 다루며 별�
 """
 from typing import Optional
 
+import httpx
+
 from ...models.blog import Blog
 from ...models.google_credential import GoogleCredential
 from ...core.logger import get_logger
 from .blogger_publisher import (
     BLOGGER_API_BASE,
+    PUBLISH_TIMEOUT,
     RETRYABLE_STATUS_CODES,
     BloggerPublisher,
 )
@@ -94,5 +97,144 @@ class BloggerPagePublisher(BloggerPublisher):
         logger.error(
             "[BLOGGER_PAGE] 페이지 생성 실패 | blog=%s | title=%s | %s",
             blog.name, title, result.error,
+        )
+        return result
+
+    async def update_page(
+        self,
+        blog: Blog,
+        page_id: str,
+        title: str,
+        html_content: str,
+        credential: Optional[GoogleCredential] = None,
+    ) -> PublishResult:
+        """Blogger 정적 페이지를 최신 내용으로 갱신합니다.
+
+        API: PUT /blogger/v3/blogs/{blogId}/pages/{pageId}
+        """
+        result = PublishResult(success=False, platform="blogger")
+
+        access_token = await self._get_access_token(blog, credential)
+        if not access_token:
+            result.error = (
+                "OAuth 인증 실패. 블로그 설정에서 Refresh Token을 입력하세요."
+            )
+            result.retryable = False
+            return result
+
+        blog_id = await self._extract_blog_id(blog, access_token)
+        if not blog_id:
+            result.error = "Blogger ID를 확인할 수 없습니다."
+            result.retryable = False
+            return result
+
+        api_url = f"{BLOGGER_API_BASE}/blogs/{blog_id}/pages/{page_id}"
+        payload = {
+            "kind": "blogger#page", "title": title, "content": html_content,
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=PUBLISH_TIMEOUT) as client:
+                resp = await client.put(
+                    api_url,
+                    headers={
+                        "Authorization": f"Bearer {access_token}",
+                        "Content-Type": "application/json",
+                    },
+                    json=payload,
+                )
+        except Exception as e:
+            result.error = f"Blogger Pages API 오류: {e}"
+            logger.error(
+                "[BLOGGER_PAGE] 갱신 예외 발생 | blog=%s | %s", blog.name, e,
+            )
+            return result
+
+        if resp.status_code == 200:
+            data = resp.json()
+            result.success = True
+            result.published_url = data.get("url", "")
+            result.platform_post_id = str(data.get("id", page_id))
+            logger.info(
+                "[BLOGGER_PAGE] 페이지 갱신 성공 | blog=%s | title=%s | id=%s",
+                blog.name, title, page_id,
+            )
+            return result
+
+        if resp.status_code == 404:
+            logger.warning(
+                "[BLOGGER_PAGE] 갱신 대상 없음(404) → 재생성 | blog=%s | id=%s",
+                blog.name, page_id,
+            )
+            return await self.publish_page(blog, title, html_content, credential)
+
+        result.error = f"HTTP {resp.status_code}: {self._parse_error(resp)}"
+        result.retryable = resp.status_code in RETRYABLE_STATUS_CODES
+        logger.error(
+            "[BLOGGER_PAGE] 페이지 갱신 실패 | blog=%s | title=%s | %s",
+            blog.name, title, result.error,
+        )
+        return result
+
+    async def delete_page(
+        self,
+        blog: Blog,
+        page_id: str,
+        credential: Optional[GoogleCredential] = None,
+    ) -> PublishResult:
+        """Blogger 정적 페이지를 삭제합니다.
+
+        API: DELETE /blogger/v3/blogs/{blogId}/pages/{pageId}
+        """
+        result = PublishResult(success=False, platform="blogger")
+
+        access_token = await self._get_access_token(blog, credential)
+        if not access_token:
+            result.error = (
+                "OAuth 인증 실패. 블로그 설정에서 Refresh Token을 입력하세요."
+            )
+            result.retryable = False
+            return result
+
+        blog_id = await self._extract_blog_id(blog, access_token)
+        if not blog_id:
+            result.error = "Blogger ID를 확인할 수 없습니다."
+            result.retryable = False
+            return result
+
+        api_url = f"{BLOGGER_API_BASE}/blogs/{blog_id}/pages/{page_id}"
+
+        try:
+            async with httpx.AsyncClient(timeout=PUBLISH_TIMEOUT) as client:
+                resp = await client.delete(
+                    api_url,
+                    headers={"Authorization": f"Bearer {access_token}"},
+                )
+        except Exception as e:
+            result.error = f"Blogger Pages API 오류: {e}"
+            logger.error(
+                "[BLOGGER_PAGE] 삭제 예외 발생 | blog=%s | %s", blog.name, e,
+            )
+            return result
+
+        if resp.status_code in (200, 204, 404):
+            result.success = True
+            if resp.status_code == 404:
+                logger.warning(
+                    "[BLOGGER_PAGE] 삭제 대상 이미 없음(404) | blog=%s | id=%s",
+                    blog.name, page_id,
+                )
+            else:
+                logger.info(
+                    "[BLOGGER_PAGE] 페이지 삭제 성공 | blog=%s | id=%s",
+                    blog.name, page_id,
+                )
+            return result
+
+        result.error = f"HTTP {resp.status_code}: {self._parse_error(resp)}"
+        result.retryable = resp.status_code in RETRYABLE_STATUS_CODES
+        logger.error(
+            "[BLOGGER_PAGE] 페이지 삭제 실패 | blog=%s | id=%s | %s",
+            blog.name, page_id, result.error,
         )
         return result
