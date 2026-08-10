@@ -47,21 +47,39 @@ async def get_required_pages_status(
     }
 
 
-@router.post("/required-pages/generate", summary="필수 페이지 4종 생성")
+@router.post("/required-pages/generate", summary="필수 페이지 4종 생성/갱신")
 async def generate_required_pages(
     blog_id: int,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    """개인정보처리방침/이용약관/소개/문의 페이지를 생성한다.
+    """개인정보처리방침/이용약관/소개/문의 페이지를 생성하거나 갱신한다.
 
-    이미 생성된 페이지는 건너뛰므로 재호출해도 안전하다(멱등).
+    아직 생성되지 않은 페이지는 신규 생성하고, 이미 생성된 페이지는 저자
+    프로필/연락처 등 최신 정보를 반영해 원격 콘텐츠를 덮어쓴다. 재호출해도
+    안전하다.
     """
     blog = await get_blog_or_404(blog_id, current_user, db)
     contact_email = (blog.author_profile or {}).get("contact_email") or current_user.email
     outcome = await RequiredPagesService(db).generate_all(blog, contact_email)
     logger.info(
-        "필수 페이지 생성 요청 | blog_id=%s | success=%s | status=%s",
+        "필수 페이지 생성/갱신 요청 | blog_id=%s | success=%s | status=%s",
+        blog_id, outcome.get("success"), outcome.get("status"),
+    )
+    return outcome
+
+
+@router.delete("/required-pages", summary="필수 페이지 4종 삭제")
+async def delete_required_pages(
+    blog_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """생성된 필수 페이지 4종을 원격 플랫폼에서 삭제하고 상태를 초기화한다."""
+    blog = await get_blog_or_404(blog_id, current_user, db)
+    outcome = await RequiredPagesService(db).delete_all(blog)
+    logger.info(
+        "필수 페이지 삭제 요청 | blog_id=%s | success=%s | status=%s",
         blog_id, outcome.get("success"), outcome.get("status"),
     )
     return outcome
