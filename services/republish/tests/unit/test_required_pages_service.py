@@ -49,18 +49,23 @@ async def test_generate_all_success_marks_status_complete():
 
 
 @pytest.mark.asyncio
-async def test_generate_all_skips_already_created_pages():
+async def test_generate_all_updates_already_created_pages():
     db = AsyncMock()
     blog = _make_blog(required_page_ids={"privacy": "existing-1"})
     service = RequiredPagesService(db)
+    service._update_one = AsyncMock(side_effect=[_ok("existing-1")])
     service._publish_one = AsyncMock(
         side_effect=[_ok("2"), _ok("3"), _ok("4")],
     )
 
     outcome = await service.generate_all(blog, "owner@example.com")
 
-    assert outcome["results"]["privacy"] == {"success": True, "skipped": True}
+    assert outcome["results"]["privacy"] == {
+        "success": True, "error": None, "url": "https://example.com/existing-1",
+    }
     assert blog.required_page_ids["privacy"] == "existing-1"
+    service._update_one.assert_awaited_once()
+    assert service._update_one.await_args.args[1] == "existing-1"
     assert service._publish_one.await_count == 3
 
 
@@ -93,3 +98,43 @@ async def test_generate_all_rejects_unsupported_platform():
     assert outcome["success"] is False
     assert "지원하지 않는 플랫폼" in outcome["error"]
     db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_delete_all_removes_pages_and_resets_status():
+    db = AsyncMock()
+    blog = _make_blog(
+        required_page_ids={
+            "privacy": "1", "terms": "2", "about": "3", "contact": "4",
+        },
+        required_pages_status="complete",
+    )
+    service = RequiredPagesService(db)
+    service._delete_one = AsyncMock(
+        side_effect=[_ok("1"), _ok("2"), _ok("3"), _ok("4")],
+    )
+
+    outcome = await service.delete_all(blog)
+
+    assert outcome["success"] is True
+    assert outcome["status"] == "none"
+    assert blog.required_page_ids == {}
+    assert blog.required_pages_status == "none"
+    db.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_delete_all_keeps_failed_pages_in_ids():
+    db = AsyncMock()
+    blog = _make_blog(
+        required_page_ids={"privacy": "1", "terms": "2"},
+        required_pages_status="complete",
+    )
+    service = RequiredPagesService(db)
+    failed = PublishResult(success=False, platform="wordpress", error="500 Server Error")
+    service._delete_one = AsyncMock(side_effect=[_ok("1"), failed])
+
+    outcome = await service.delete_all(blog)
+
+    assert outcome["status"] == "partial"
+    assert blog.required_page_ids == {"terms": "2"}
