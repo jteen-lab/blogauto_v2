@@ -228,6 +228,87 @@ class WordPressAPI:
             logger.error(f"[WP_API] Unexpected error creating page | Blog={blog.id} | Error={e}")
             raise WordPressAPIError(f"예상치 못한 오류: {e}")
 
+    async def update_page(
+        self, blog: Blog, remote_id: str, title: str, html_content: str
+    ) -> Dict[str, Any]:
+        """정적 페이지 수정 (애드센스 F1: 필수 페이지 최신 내용 반영).
+
+        Args:
+            blog: 대상 블로그
+            remote_id: 수정할 WordPress 페이지 ID
+            title: 페이지 제목
+            html_content: 페이지 본문 HTML
+
+        Returns:
+            {"success": True, "remote_id": str, "remote_url": str}
+
+        Raises:
+            WordPressAPIError: REST 쓰기 실패
+        """
+        try:
+            logger.info(f"[WP_API] Updating page | Blog={blog.id} | RemoteID={remote_id}")
+
+            url = self._get_api_url(blog, f"pages/{remote_id}")
+            headers = self._get_auth_headers(blog)
+            wp_data = {"title": title, "content": html_content, "status": "publish"}
+
+            result = await self._make_request("POST", url, headers, wp_data)
+
+            remote_url = result["data"].get("link", "")
+
+            logger.info(f"[WP_API] Page updated successfully | Blog={blog.id} | RemoteID={remote_id}")
+
+            return {
+                "success": True,
+                "remote_id": remote_id,
+                "remote_url": remote_url,
+                "response_time_ms": result["response_time_ms"]
+            }
+
+        except WordPressAPIError as e:
+            logger.error(f"[WP_API] Failed to update page | Blog={blog.id} | RemoteID={remote_id} | Error={e.message}")
+            raise
+
+        except Exception as e:
+            logger.error(f"[WP_API] Unexpected error updating page | Blog={blog.id} | RemoteID={remote_id} | Error={e}")
+            raise WordPressAPIError(f"예상치 못한 오류: {e}")
+
+    async def delete_page(self, blog: Blog, remote_id: str) -> Dict[str, Any]:
+        """정적 페이지 삭제 (애드센스 F1: 필수 페이지 삭제).
+
+        Args:
+            blog: 대상 블로그
+            remote_id: 삭제할 WordPress 페이지 ID
+
+        Returns:
+            {"success": True}
+
+        Raises:
+            WordPressAPIError: REST 삭제 실패 (404는 이미 삭제된 것으로 간주해 성공 처리)
+        """
+        try:
+            logger.info(f"[WP_API] Deleting page | Blog={blog.id} | RemoteID={remote_id}")
+
+            url = self._get_api_url(blog, f"pages/{remote_id}") + "?force=true"
+            headers = self._get_auth_headers(blog)
+
+            result = await self._make_request("DELETE", url, headers)
+
+            logger.info(f"[WP_API] Page deleted successfully | Blog={blog.id} | RemoteID={remote_id}")
+
+            return {"success": True, "response_time_ms": result["response_time_ms"]}
+
+        except WordPressAPIError as e:
+            if e.status_code == 404:
+                logger.warning(f"[WP_API] Page already gone | Blog={blog.id} | RemoteID={remote_id}")
+                return {"success": True}
+            logger.error(f"[WP_API] Failed to delete page | Blog={blog.id} | RemoteID={remote_id} | Error={e.message}")
+            raise
+
+        except Exception as e:
+            logger.error(f"[WP_API] Unexpected error deleting page | Blog={blog.id} | RemoteID={remote_id} | Error={e}")
+            raise WordPressAPIError(f"예상치 못한 오류: {e}")
+
     async def update_post(
         self,
         blog: Blog,
