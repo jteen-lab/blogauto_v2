@@ -191,3 +191,9 @@
   실제 DB 컬럼(`niche`/`adsense_status`/`daily_cap`)으로 승격하려면
   F4/F5 착수가 먼저 필요 — 그때 설계 질문(니치 판정 방식, 케이던스
   기본값, 차단 vs 경고) 확정 필요.
+- **(2026-08-11 사용자 확정) 실제 검증은 "F7 프롬프트 적용 + 1일1포"가 동시에
+  충족된 상태여야 함.** 또한 1일1포를 `growth_profile_defaults.py`의 기존
+  3프리셋처럼 사용자가 매번 수동으로 daily_count=1을 맞추게 두지 말고,
+  "애드센스 승인용" 프리셋을 신설해 **기본값으로 1일1포를 고정** — F7 착수 시
+  이 프리셋에 Q-AdsenseGain 블록도 함께 기본 적용하는 방향으로 묶어서 진행.
+  (근거: `docs/plans/adsense_approval_features_plan.md` §9)
