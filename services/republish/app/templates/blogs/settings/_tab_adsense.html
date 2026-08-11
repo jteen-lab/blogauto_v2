@@ -9,15 +9,20 @@
     (docs/plans/contact_page_email_exposure_plan.md)
   - 준비도 요약(F9) — 승인 A/B 테스트 버킷(필수페이지/E-E-A-T O·X) 확인용
 
+  - 발행 케이던스(F5) — 승인 전 저속 모드 일일 발행 상한 저장(opt-in,
+    미설정 시 게이트 비활성) (docs/flowcharts/adsense_sprint2_f5.md)
+
   API:
   - GET    /api/v1/blogs/{blogId}/settings/required-pages
   - POST   /api/v1/blogs/{blogId}/settings/required-pages/generate
   - DELETE /api/v1/blogs/{blogId}/settings/required-pages
   - GET    /api/v1/blogs/{blogId}/settings/author-profile
   - POST   /api/v1/blogs/{blogId}/settings/author-profile
+  - GET    /api/v1/blogs/{blogId}/settings/publish-cadence
+  - POST   /api/v1/blogs/{blogId}/settings/publish-cadence
   - GET    /api/v1/blogs/{blogId}/settings/adsense-readiness
 
-  설계 문서: docs/flowcharts/adsense_sprint1_p1.md
+  설계 문서: docs/flowcharts/adsense_sprint1_p1.md, adsense_sprint2_f5.md
 -->
 
 <div x-data="adsenseSettingsApp()"
@@ -152,6 +157,43 @@
         </div>
     </div>
 
+    <!-- 발행 케이던스 (F5) -->
+    <div class="border border-gray-200 rounded-lg p-4 space-y-3">
+        <div>
+            <p class="text-sm font-medium text-gray-800">발행 케이던스 (승인 전 저속 모드)</p>
+            <p class="text-xs text-gray-500 mt-0.5">
+                일일 발행 상한을 설정하면 승인 상태가 "승인됨"이 아닌 동안 해당
+                한도를 초과하는 발행을 오토런이 자동으로 건너뜁니다. 비워두면
+                평소대로 발행합니다(기존 GP 설정과 무관하게 추가로 동작).
+            </p>
+        </div>
+
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">애드센스 승인 상태</label>
+            <select x-model="cadence.adsense_status"
+                    class="w-full max-w-xs px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                <option value="none">미신청</option>
+                <option value="preparing">준비 중</option>
+                <option value="applied">신청 완료</option>
+                <option value="approved">승인됨</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">일일 발행 상한 (선택)</label>
+            <input type="number" min="1" max="100" x-model.number="cadence.publish_daily_cap"
+                   placeholder="예: 2 (비워두면 무제한)"
+                   class="w-full max-w-xs px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+        </div>
+
+        <div class="pt-1">
+            <button type="button" @click="saveCadence()" :disabled="savingCadence"
+                    class="px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
+                <span x-show="!savingCadence">저장</span>
+                <span x-show="savingCadence">저장 중...</span>
+            </button>
+        </div>
+    </div>
+
     <!-- 준비도 요약 (F9) -->
     <div class="border border-gray-200 rounded-lg p-4 space-y-2">
         <div class="flex items-center justify-between">
@@ -195,12 +237,15 @@ function adsenseSettingsApp() {
         pagesStatus: 'none',
         pageIds: {},
         profile: { name: '', bio: '', expertise: '', contact_email: '', contact_form_url: '' },
+        cadence: { adsense_status: 'none', publish_daily_cap: null },
+        savingCadence: false,
         readiness: null,
 
         init() {
             if (this.blogId) {
                 this.loadPagesStatus(this.blogId);
                 this.loadProfile(this.blogId);
+                this.loadCadence(this.blogId);
                 this.loadReadiness(this.blogId);
             }
         },
@@ -240,6 +285,54 @@ function adsenseSettingsApp() {
                 console.warn('[adsense] 저자 프로필 조회 실패', e);
             } finally {
                 this.loading = false;
+            }
+        },
+
+        async loadCadence(blogId) {
+            const id = blogId || this.blogId;
+            if (!id) return;
+            try {
+                const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
+                const resp = await fetch(`${apiBase}/blogs/${id}/settings/publish-cadence`, { credentials: 'include' });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    this.cadence = {
+                        adsense_status: data.adsense_status || 'none',
+                        publish_daily_cap: data.publish_daily_cap ?? null,
+                    };
+                }
+            } catch (e) {
+                console.warn('[adsense] 발행 케이던스 조회 실패', e);
+            }
+        },
+
+        async saveCadence() {
+            if (!this.blogId) return;
+            this.savingCadence = true;
+            try {
+                const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
+                const resp = await fetch(`${apiBase}/blogs/${this.blogId}/settings/publish-cadence`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        adsense_status: this.cadence.adsense_status,
+                        publish_daily_cap: this.cadence.publish_daily_cap || null,
+                    }),
+                });
+                if (resp.ok) {
+                    this.loadReadiness();
+                    if (typeof showSuccessMessage === 'function') showSuccessMessage('발행 케이던스가 저장되었습니다');
+                } else {
+                    const e = await resp.json().catch(() => ({}));
+                    const msg = '저장 실패: ' + (e.detail || resp.status);
+                    if (typeof showErrorMessage === 'function') showErrorMessage(msg); else alert(msg);
+                }
+            } catch (e) {
+                console.warn('[adsense] 발행 케이던스 저장 실패', e);
+                if (typeof showErrorMessage === 'function') showErrorMessage('저장 중 오류');
+            } finally {
+                this.savingCadence = false;
             }
         },
 
