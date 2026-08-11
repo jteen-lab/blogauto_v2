@@ -1,14 +1,15 @@
-"""블로그 애드센스 승인 지원 설정 API (Sprint 1: F1 필수 페이지, F2 저자 프로필).
+"""블로그 애드센스 승인 지원 설정 API.
 
-필수 페이지(개인정보처리방침/이용약관/소개/문의) 생성 트리거/상태 조회와
-저자 프로필(author_profile) 저장/조회를 제공한다.
+Sprint 1(F1 필수 페이지, F2 저자 프로필) + Sprint 2(F5 발행 케이던스)를
+제공한다. 필수 페이지 생성 트리거/상태 조회, 저자 프로필(author_profile)
+저장/조회, 승인 전 저속 모드 발행 상한 저장/조회를 담당한다.
 
-설계 문서: docs/flowcharts/adsense_sprint1_p1.md
+설계 문서: docs/flowcharts/adsense_sprint1_p1.md, adsense_sprint2_f5.md
 """
 from typing import Optional
 
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -33,6 +34,16 @@ class AuthorProfileRequest(BaseModel):
     expertise: Optional[str] = None
     contact_email: Optional[str] = None
     contact_form_url: Optional[str] = None
+
+
+ADSENSE_STATUS_VALUES = {"none", "preparing", "applied", "approved"}
+
+
+class PublishCadenceRequest(BaseModel):
+    """발행 케이던스 저장 요청 (F5)."""
+
+    adsense_status: str = "none"
+    publish_daily_cap: Optional[int] = Field(None, ge=1, le=100)
 
 
 @router.get("/required-pages", summary="필수 페이지 생성 상태 조회")
@@ -132,3 +143,49 @@ async def get_adsense_readiness(
     """
     blog = await get_blog_or_404(blog_id, current_user, db)
     return await AdsenseReadinessService(db).audit(blog)
+
+
+@router.get("/publish-cadence", summary="발행 케이던스 설정 조회 (F5)")
+async def get_publish_cadence(
+    blog_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """애드센스 승인 상태와 승인 전 저속 모드 일일 발행 상한을 조회한다."""
+    blog = await get_blog_or_404(blog_id, current_user, db)
+    return {
+        "adsense_status": blog.adsense_status,
+        "publish_daily_cap": blog.publish_daily_cap,
+    }
+
+
+@router.post("/publish-cadence", summary="발행 케이던스 설정 저장 (F5)")
+async def save_publish_cadence(
+    blog_id: int,
+    request: PublishCadenceRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """애드센스 승인 상태·발행 상한을 저장한다.
+
+    publish_daily_cap이 설정되고 adsense_status가 approved가 아니면
+    오토런 발행 시 일일 상한이 강제된다(opt-in, `_check_publish_cadence_cap`).
+    """
+    if request.adsense_status not in ADSENSE_STATUS_VALUES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"adsense_status는 {sorted(ADSENSE_STATUS_VALUES)} 중 하나여야 합니다",
+        )
+    blog = await get_blog_or_404(blog_id, current_user, db)
+    blog.adsense_status = request.adsense_status
+    blog.publish_daily_cap = request.publish_daily_cap
+    await db.commit()
+    logger.info(
+        "발행 케이던스 저장 | blog_id=%s | adsense_status=%s | publish_daily_cap=%s",
+        blog_id, blog.adsense_status, blog.publish_daily_cap,
+    )
+    return {
+        "success": True,
+        "adsense_status": blog.adsense_status,
+        "publish_daily_cap": blog.publish_daily_cap,
+    }
