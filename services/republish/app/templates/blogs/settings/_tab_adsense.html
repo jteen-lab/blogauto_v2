@@ -1,16 +1,21 @@
 <!--
-  BlogAuto V2: 블로그 설정 - 애드센스 승인 지원 탭 (Sprint 1: F1 필수 페이지, F2 저자 프로필)
+  BlogAuto V2: 블로그 설정 - 애드센스 승인 지원 탭 (Sprint 1: F1 필수 페이지, F2 저자 프로필, F9 준비도 요약)
   File: app/templates/blogs/settings/_tab_adsense.html
 
   기능:
   - 필수 페이지 4종(개인정보처리방침/이용약관/소개/문의) 생성 상태 조회·생성 트리거
   - 저자 프로필(이름/소개/전문분야) 저장 — About 페이지 및 글 본문 바이라인에 반영(F2)
+  - 문의 폼 URL 저장 — 설정 시 필수 페이지의 mailto 노출을 폼 임베드로 대체
+    (docs/plans/contact_page_email_exposure_plan.md)
+  - 준비도 요약(F9) — 승인 A/B 테스트 버킷(필수페이지/E-E-A-T O·X) 확인용
 
   API:
-  - GET  /api/v1/blogs/{blogId}/settings/required-pages
-  - POST /api/v1/blogs/{blogId}/settings/required-pages/generate
-  - GET  /api/v1/blogs/{blogId}/settings/author-profile
-  - POST /api/v1/blogs/{blogId}/settings/author-profile
+  - GET    /api/v1/blogs/{blogId}/settings/required-pages
+  - POST   /api/v1/blogs/{blogId}/settings/required-pages/generate
+  - DELETE /api/v1/blogs/{blogId}/settings/required-pages
+  - GET    /api/v1/blogs/{blogId}/settings/author-profile
+  - POST   /api/v1/blogs/{blogId}/settings/author-profile
+  - GET    /api/v1/blogs/{blogId}/settings/adsense-readiness
 
   설계 문서: docs/flowcharts/adsense_sprint1_p1.md
 -->
@@ -62,9 +67,20 @@
         </div>
 
         <div>
-            <label class="block text-xs font-medium text-gray-700 mb-1">문의용 이메일</label>
+            <label class="block text-xs font-medium text-gray-700 mb-1">문의 폼 URL (권장)</label>
             <p class="text-xs text-gray-400 mb-1">
-                개인정보처리방침·문의 페이지에 노출됩니다. 비워두면 로그인 계정 이메일이 사용됩니다.
+                Google Forms 등 외부 폼 URL을 입력하면 개인정보처리방침·소개·문의 페이지에
+                <strong>이메일 대신 폼이 삽입</strong>됩니다. 같은 이메일을 여러 블로그에 노출하면
+                동일 소유주 묶음으로 추정될 수 있어 권장합니다.
+            </p>
+            <input type="url" x-model="profile.contact_form_url" placeholder="예: https://forms.gle/xxxxxxxx"
+                   class="w-full max-w-md px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+        </div>
+
+        <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">문의용 이메일 (폼 미설정 시 대체)</label>
+            <p class="text-xs text-gray-400 mb-1">
+                문의 폼 URL이 없을 때만 사용됩니다. 비워두면 로그인 계정 이메일이 사용됩니다.
             </p>
             <div class="flex items-center gap-2">
                 <input type="email" x-model="profile.contact_email" placeholder="예: contact@example.com"
@@ -135,6 +151,36 @@
             </button>
         </div>
     </div>
+
+    <!-- 준비도 요약 (F9) -->
+    <div class="border border-gray-200 rounded-lg p-4 space-y-2">
+        <div class="flex items-center justify-between">
+            <p class="text-sm font-medium text-gray-800">애드센스 준비도 요약</p>
+            <button type="button" @click="loadReadiness()" class="text-xs text-indigo-600 hover:underline">새로고침</button>
+        </div>
+        <p class="text-xs text-gray-500">
+            승인 테스트 버킷(필수 페이지 O/X · E-E-A-T O/X) 확인용 요약입니다. thin content·중복
+            비율 등 정량 지표는 포함되지 않습니다.
+        </p>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1" x-show="readiness">
+            <template x-for="item in [
+                {key: 'required_pages', label: '필수 페이지 4종'},
+                {key: 'author_profile', label: 'E-E-A-T 저자성'},
+                {key: 'contact_form', label: '문의 폼(비노출)'},
+                {key: 'post_count_20plus', label: '발행 20편 이상'},
+            ]" :key="item.key">
+                <div class="flex items-center gap-1.5 text-xs px-2 py-1.5 rounded-lg"
+                     :class="readiness && readiness.checklist[item.key] ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-50 text-gray-500'">
+                    <span x-text="readiness && readiness.checklist[item.key] ? '✓' : '✗'"></span>
+                    <span x-text="item.label"></span>
+                </div>
+            </template>
+        </div>
+        <p class="text-xs text-gray-400 pt-1" x-show="readiness">
+            발행 완료 글 <span x-text="readiness ? readiness.post_count : 0"></span>편 ·
+            체크리스트 <span x-text="readiness ? readiness.checklist_score : 0"></span>/<span x-text="readiness ? readiness.checklist_total : 0"></span>
+        </p>
+    </div>
 </div>
 
 <script>
@@ -148,12 +194,14 @@ function adsenseSettingsApp() {
         saving: false,
         pagesStatus: 'none',
         pageIds: {},
-        profile: { name: '', bio: '', expertise: '', contact_email: '' },
+        profile: { name: '', bio: '', expertise: '', contact_email: '', contact_form_url: '' },
+        readiness: null,
 
         init() {
             if (this.blogId) {
                 this.loadPagesStatus(this.blogId);
                 this.loadProfile(this.blogId);
+                this.loadReadiness(this.blogId);
             }
         },
 
@@ -184,6 +232,7 @@ function adsenseSettingsApp() {
                         bio: p.bio || '',
                         expertise: p.expertise || '',
                         contact_email: p.contact_email || '',
+                        contact_form_url: p.contact_form_url || '',
                     };
                     this.loaded = true;
                 }
@@ -191,6 +240,20 @@ function adsenseSettingsApp() {
                 console.warn('[adsense] 저자 프로필 조회 실패', e);
             } finally {
                 this.loading = false;
+            }
+        },
+
+        async loadReadiness(blogId) {
+            const id = blogId || this.blogId;
+            if (!id) return;
+            try {
+                const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
+                const resp = await fetch(`${apiBase}/blogs/${id}/settings/adsense-readiness`, { credentials: 'include' });
+                if (resp.ok) {
+                    this.readiness = await resp.json();
+                }
+            } catch (e) {
+                console.warn('[adsense] 준비도 요약 조회 실패', e);
             }
         },
 
@@ -207,6 +270,7 @@ function adsenseSettingsApp() {
                 if (resp.ok) {
                     this.pagesStatus = data.status || this.pagesStatus;
                     this.pageIds = data.page_ids || this.pageIds;
+                    this.loadReadiness();
                     if (typeof showSuccessMessage === 'function') showSuccessMessage('필수 페이지 생성/갱신을 요청했습니다');
                 } else {
                     const msg = '생성 실패: ' + (data.detail || resp.status);
@@ -234,6 +298,7 @@ function adsenseSettingsApp() {
                 if (resp.ok) {
                     this.pagesStatus = data.status || 'none';
                     this.pageIds = data.page_ids || {};
+                    this.loadReadiness();
                     if (typeof showSuccessMessage === 'function') showSuccessMessage('필수 페이지를 삭제했습니다');
                 } else {
                     const msg = '삭제 실패: ' + (data.detail || resp.status);
@@ -259,6 +324,7 @@ function adsenseSettingsApp() {
                     body: JSON.stringify(this.profile),
                 });
                 if (resp.ok) {
+                    this.loadReadiness();
                     if (typeof showSuccessMessage === 'function') showSuccessMessage('저자 프로필이 저장되었습니다');
                 } else {
                     const e = await resp.json().catch(() => ({}));
