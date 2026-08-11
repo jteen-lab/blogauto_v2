@@ -4,10 +4,17 @@
 변수(이름/URL/저자 프로필/연락처)로 치환해 생성한다. 발행 자체는
 required_pages_service.py가 담당하며, 이 모듈은 순수 템플릿 렌더링만 한다.
 
+연락 채널: `author_profile.contact_form_url`이 설정된 블로그는 mailto
+노출 대신 외부 문의 폼(Google Forms/Formspree 등)을 삽입한다 — 동일
+소유주 블로그 묶음이 이메일로 드러나는 것을 막기 위함
+(docs/plans/contact_page_email_exposure_plan.md). 미설정 블로그는 기존
+mailto 방식으로 동작(하위호환).
+
 설계 문서: docs/flowcharts/adsense_sprint1_p1.md - F1
 """
+import hashlib
 from datetime import date
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Sequence, Tuple
 
 from ...models.blog import Blog
 
@@ -21,8 +28,9 @@ def build_required_pages(
     """4종 필수 페이지의 (제목, HTML 본문)을 생성한다.
 
     Args:
-        blog: 대상 블로그 (name, url 사용)
-        owner_email: 문의 페이지에 노출할 연락처 (블로그 소유자 이메일)
+        blog: 대상 블로그 (name, url, author_profile 사용)
+        owner_email: contact_form_url 미설정 시 문의 페이지에 노출할
+            연락처(블로그 소유자 이메일)
 
     Returns:
         {page_type: (title, html)} — page_type은 REQUIRED_PAGE_TYPES 값
@@ -33,7 +41,9 @@ def build_required_pages(
         "blog_url": blog.url,
         "operator": profile.get("name") or blog.name,
         "contact_email": owner_email,
+        "contact_form_url": profile.get("contact_form_url") or "",
         "today": date.today().isoformat(),
+        "variant": _variant_index(blog.url or blog.name, 2),
     }
     return {
         "privacy": _privacy_page(ctx),
@@ -43,12 +53,53 @@ def build_required_pages(
     }
 
 
+def _variant_index(key: str, modulo: int) -> int:
+    """블로그별로 안정적인(재실행해도 동일한) 문구 변주 인덱스.
+
+    시각적 분산 목적상 필수 페이지 문구가 모든 블로그에서 완전히 동일하지
+    않도록 한다. `hash()`는 프로세스마다 시드가 달라 값이 흔들리므로
+    md5 기반으로 고정한다.
+    """
+    digest = hashlib.md5(key.encode("utf-8")).hexdigest()
+    return int(digest, 16) % modulo
+
+
+def _pick(ctx: Dict[str, Any], variants: Sequence[str]) -> str:
+    """ctx['variant']에 해당하는 문구 변형을 선택."""
+    return variants[ctx["variant"] % len(variants)]
+
+
+def _contact_section(ctx: Dict[str, str]) -> str:
+    """연락 채널 HTML.
+
+    `contact_form_url`이 설정되면 이메일을 노출하지 않고 문의 폼(링크 +
+    iframe 임베드)을 삽입한다. 미설정이면 기존 mailto 방식으로 대체한다.
+    """
+    form_url = ctx.get("contact_form_url")
+    if form_url:
+        return (
+            f'<p><a href="{form_url}" target="_blank" rel="noopener noreferrer">'
+            f"문의 폼 바로가기</a></p>\n"
+            f'<iframe src="{form_url}" width="100%" height="600" style="border:0;'
+            f'max-width:640px;" title="문의 폼">로딩 중입니다…</iframe>'
+        )
+    return (
+        f'<p><strong>이메일:</strong> '
+        f'<a href="mailto:{ctx["contact_email"]}">{ctx["contact_email"]}</a></p>'
+    )
+
+
 def _privacy_page(ctx: Dict[str, str]) -> Tuple[str, str]:
     """개인정보처리방침 페이지."""
+    intro = _pick(ctx, [
+        f'<p>{ctx["blog_name"]}("{ctx["blog_url"]}", 이하 "본 사이트")는 이용자의 개인정보를\n'
+        f"소중히 여기며 관련 법령을 준수합니다.</p>",
+        f'<p>{ctx["blog_name"]}("{ctx["blog_url"]}")은 이용자의 개인정보 보호를 중요한\n'
+        f"원칙으로 삼고 관련 법령에 따라 운영됩니다.</p>",
+    ])
     html = f"""
 <h2>개인정보처리방침</h2>
-<p>{ctx['blog_name']}("{ctx['blog_url']}", 이하 "본 사이트")는 이용자의 개인정보를
-소중히 여기며 관련 법령을 준수합니다.</p>
+{intro}
 <h3>1. 수집하는 정보</h3>
 <p>본 사이트는 별도의 회원가입 절차 없이 운영되며, 방문 시 광고 서비스(Google
 AdSense 등) 제공을 위해 쿠키·기기 정보 등이 자동으로 수집될 수 있습니다.</p>
@@ -57,8 +108,8 @@ AdSense 등) 제공을 위해 쿠키·기기 정보 등이 자동으로 수집�
 방문 이력을 기반으로 광고를 게재할 수 있습니다. 이용자는 Google 광고 설정
 페이지에서 맞춤 광고를 비활성화할 수 있습니다.</p>
 <h3>3. 문의</h3>
-<p>개인정보 관련 문의는 <a href="mailto:{ctx['contact_email']}">{ctx['contact_email']}</a>
-로 연락 바랍니다.</p>
+<p>개인정보 관련 문의는 아래 채널로 연락 바랍니다.</p>
+{_contact_section(ctx)}
 <p>최종 수정일: {ctx['today']}</p>
 """.strip()
     return "개인정보처리방침", html
@@ -66,10 +117,14 @@ AdSense 등) 제공을 위해 쿠키·기기 정보 등이 자동으로 수집�
 
 def _terms_page(ctx: Dict[str, str]) -> Tuple[str, str]:
     """이용약관 페이지."""
+    intro = _pick(ctx, [
+        f'<p>본 약관은 {ctx["blog_name"]}("{ctx["blog_url"]}")이 제공하는 콘텐츠 이용에\n'
+        f"관한 조건을 규정합니다.</p>",
+        f'<p>{ctx["blog_name"]}("{ctx["blog_url"]}") 이용 시 아래 약관이 적용됩니다.</p>',
+    ])
     html = f"""
 <h2>이용약관</h2>
-<p>본 약관은 {ctx['blog_name']}("{ctx['blog_url']}")이 제공하는 콘텐츠 이용에
-관한 조건을 규정합니다.</p>
+{intro}
 <h3>1. 콘텐츠 이용</h3>
 <p>본 사이트의 게시물은 정보 제공 목적으로 작성되며, 무단 복제 및 재배포를
 금지합니다.</p>
@@ -94,23 +149,32 @@ def _about_page(ctx: Dict[str, str], profile: Dict[str, Any]) -> Tuple[str, str]
             author_block += f"<p>{bio}</p>"
         if expertise:
             author_block += f"<p><strong>전문 분야:</strong> {expertise}</p>"
+    intro = _pick(ctx, [
+        f'<p>{ctx["blog_name"]}은(는) 방문자에게 유용한 정보를 전달하기 위해 운영되는\n'
+        f"블로그입니다. 콘텐츠는 운영자({ctx['operator']})의 검수를 거쳐 발행됩니다.</p>",
+        f'<p>{ctx["blog_name"]}은(는) 운영자({ctx["operator"]})가 직접 검수·편집해\n'
+        f"콘텐츠를 발행하는 블로그입니다.</p>",
+    ])
     html = f"""
 <h2>{ctx['blog_name']} 소개</h2>
-<p>{ctx['blog_name']}은(는) 방문자에게 유용한 정보를 전달하기 위해 운영되는
-블로그입니다. 콘텐츠는 운영자({ctx['operator']})의 검수를 거쳐 발행됩니다.</p>
+{intro}
 {author_block}
-<p>문의: <a href="mailto:{ctx['contact_email']}">{ctx['contact_email']}</a></p>
+<h3>문의</h3>
+{_contact_section(ctx)}
 """.strip()
     return "소개", html
 
 
 def _contact_page(ctx: Dict[str, str]) -> Tuple[str, str]:
     """문의(Contact) 페이지."""
+    intro = _pick(ctx, [
+        f"<p>{ctx['blog_name']} 관련 문의사항은 아래 채널로 연락 주시기 바랍니다.</p>",
+        f"<p>{ctx['blog_name']}에 대해 궁금한 점은 아래 방법으로 문의해 주세요.</p>",
+    ])
     html = f"""
 <h2>문의하기</h2>
-<p>{ctx['blog_name']} 관련 문의사항은 아래 이메일로 연락 주시기 바랍니다.</p>
-<p><strong>이메일:</strong>
-<a href="mailto:{ctx['contact_email']}">{ctx['contact_email']}</a></p>
+{intro}
+{_contact_section(ctx)}
 <p>운영자: {ctx['operator']}</p>
 """.strip()
     return "문의", html
