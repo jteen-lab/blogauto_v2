@@ -76,5 +76,9 @@
 - 실제 Google Forms/Formspree 폼 URL 생성은 외부 수동 작업 — 코드는
   URL을 받아 임베드하는 지점까지만 담당. 블로그별 폼을 분리할지
   캐치올로 모을지는 운영자가 폼 생성 시점에 결정.
+  → **2026-08-11 후속 작업계획으로 이관**:
+  `services/republish/docs/plans/adsense_approval_features_plan.md` F10
+  "문의 폼 자동 생성 기능"에 상세 명세 추가(구현 옵션 3종: Google Forms API/
+  Formspree API/자체 호스팅 엔드포인트, 자체 호스팅이 유력).
 - 블로거 내장 "연락처 양식" 가젯(Layout API) 자동화는 여전히 미조사 —
   현재 iframe 임베드 방식으로 요건은 충족되므로 우선순위 낮음.
