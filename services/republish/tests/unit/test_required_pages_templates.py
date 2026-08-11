@@ -49,3 +49,29 @@ def test_about_page_without_author_profile_has_no_author_block():
     _, html = build_required_pages(blog, "owner@example.com")["about"]
     assert "운영자 소개" not in html
     assert "테스트블로그" in html
+
+
+def test_contact_form_url_replaces_mailto_exposure():
+    """contact_form_url이 설정되면 이메일 텍스트를 노출하지 않아야 한다."""
+    blog = _make_blog(author_profile={"contact_form_url": "https://forms.gle/abc123"})
+    pages = build_required_pages(blog, "owner@example.com")
+    for page_type in ("privacy", "about", "contact"):
+        _, html = pages[page_type]
+        assert "owner@example.com" not in html
+        assert "mailto:" not in html
+        assert "https://forms.gle/abc123" in html
+
+
+def test_contact_page_falls_back_to_mailto_without_form_url():
+    """contact_form_url 미설정 시 기존 mailto 방식으로 동작(하위호환)."""
+    blog = _make_blog()
+    _, html = build_required_pages(blog, "owner@example.com")["contact"]
+    assert "mailto:owner@example.com" in html
+
+
+def test_required_pages_use_stable_phrase_variant_per_blog():
+    """블로그별 문구 변주는 재실행해도 동일해야 한다(재발행 시 diff 최소화)."""
+    blog = _make_blog()
+    _, html_first = build_required_pages(blog, "owner@example.com")["privacy"]
+    _, html_second = build_required_pages(blog, "owner@example.com")["privacy"]
+    assert html_first == html_second
