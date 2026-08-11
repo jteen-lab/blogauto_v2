@@ -1006,6 +1006,42 @@ class FlowScheduler:
 
         return today_count >= daily_count, today_count
 
+    async def _check_publish_cadence_cap(
+        self,
+        db: AsyncSession,
+        blog: Blog,
+    ) -> Optional[Dict[str, Any]]:
+        """애드센스 승인 전 저속 모드 발행 상한 체크 (F5).
+
+        blog.publish_daily_cap이 설정되고 adsense_status가 approved가
+        아닌 블로그에만 적용되는 opt-in 게이트. GP daily_count 체크와
+        별개로 동작하며, `docs/flowcharts/adsense_sprint2_f5.md` 기준.
+
+        Returns:
+            한도 초과 시 스킵 결과 dict, 미초과/미설정 시 None.
+        """
+        if not blog.publish_daily_cap or blog.adsense_status == "approved":
+            return None
+
+        exceeded, today_count = await self._check_daily_limit(
+            db, blog.id, "publish", blog.publish_daily_cap,
+        )
+        if not exceeded:
+            return None
+
+        logger.info(
+            f"[SCHED:PUBLISH] 애드센스 승인 전 저속 모드 한도 도달 | "
+            f"blog={blog.name} | today={today_count}/{blog.publish_daily_cap}"
+        )
+        return {
+            "success": True,
+            "skipped": True,
+            "message": (
+                f"애드센스 승인 전 저속 모드 발행 상한 도달 "
+                f"({today_count}/{blog.publish_daily_cap})"
+            ),
+        }
+
     def _get_next_day_active_start(
         self, gp_settings: dict
     ) -> Optional[datetime]:
@@ -2605,6 +2641,12 @@ class FlowScheduler:
                                 f"{stage_params.publish.daily_count})"
                             ),
                         }
+
+        # 애드센스 승인 전 저속 모드 발행 상한 체크 (F5, GP 설정과 무관하게 적용)
+        for blog in blogs:
+            cadence_result = await self._check_publish_cadence_cap(db, blog)
+            if cadence_result:
+                return cadence_result
 
         success_count = 0
         fail_count = 0
