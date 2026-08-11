@@ -57,5 +57,24 @@
 
 ## 상태
 
-미착수. 다음 세션에서 블로거 Layout API 자동화 가능 여부부터 조사 후
-착수 여부 결정.
+**구현 완료(2026-08-11, 같은 세션 이어서 착수)** — 아래 "대안" 경로로 구현:
+
+- `required_pages_templates.py` — `author_profile.contact_form_url`이
+  설정되면 privacy/about/contact 페이지에서 `mailto:` 노출을 완전히
+  제거하고 외부 폼(iframe 임베드 + 링크)으로 대체. 미설정 블로그는 기존
+  mailto 방식 그대로 동작(하위호환, 회귀 없음).
+- Blogger/WordPress 모두 콘텐츠 HTML만 바뀌는 방식이라 플랫폼별 분기가
+  불필요 — `blogger_page_publisher.py`/`wordpress_api.py` 수정 없이 해결.
+- 문구 변주(paraphrase) — 4종 페이지 각각 인트로 문장 2가지를 블로그별로
+  안정적으로(md5 해시 기반, 재실행해도 동일) 선택하도록 최소 구현.
+- 관리자 UI(`_tab_adsense.html`)에 "문의 폼 URL" 입력 필드 추가, 기존
+  "문의용 이메일"은 폼 미설정 시 대체용으로 문구 변경.
+- 단위테스트 4종 추가(`test_required_pages_templates.py`) — 폼 URL
+  설정 시 이메일 미노출, 미설정 시 하위호환, 변주 안정성 확인.
+
+**미해결(다음 세션 과제)**:
+- 실제 Google Forms/Formspree 폼 URL 생성은 외부 수동 작업 — 코드는
+  URL을 받아 임베드하는 지점까지만 담당. 블로그별 폼을 분리할지
+  캐치올로 모을지는 운영자가 폼 생성 시점에 결정.
+- 블로거 내장 "연락처 양식" 가젯(Layout API) 자동화는 여전히 미조사 —
+  현재 iframe 임베드 방식으로 요건은 충족되므로 우선순위 낮음.
