@@ -145,6 +145,19 @@ class Blog(Base):
         comment="저자성(E-E-A-T) 신호용 저자 프로필: name/bio/expertise",
     )
 
+    # 애드센스 승인 지원 Sprint 2 (F5: 발행 케이던스 조절)
+    adsense_status = Column(
+        String(20),
+        default="none",
+        nullable=False,
+        comment="애드센스 승인 상태: none|preparing|applied|approved",
+    )
+    publish_daily_cap = Column(
+        Integer,
+        nullable=True,
+        comment="승인 전 저속 모드 일일 발행 상한 (NULL이면 게이트 비활성)",
+    )
+
     # 포스트 통계 (재발행 모듈 적용 구간 필터링용)
     total_post_count = Column(Integer, nullable=True, comment="누적 포스트 수")
     post_count_updated_at = Column(DateTime(timezone=True), nullable=True, comment="포스트 수 업데이트 시점")
