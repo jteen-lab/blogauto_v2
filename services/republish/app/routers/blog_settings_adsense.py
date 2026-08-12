@@ -6,7 +6,7 @@ Sprint 1(F1 필수 페이지, F2 저자 프로필) + Sprint 2(F5 발행 케이�
 
 설계 문서: docs/flowcharts/adsense_sprint1_p1.md, adsense_sprint2_f5.md
 """
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -37,6 +37,12 @@ class AuthorProfileRequest(BaseModel):
 
 
 ADSENSE_STATUS_VALUES = {"none", "preparing", "applied", "approved"}
+
+
+class NicheRequest(BaseModel):
+    """F4 니치 강제 설정 저장 요청."""
+
+    niche_topic_ids: Optional[List[int]] = None
 
 
 class PublishCadenceRequest(BaseModel):
@@ -189,3 +195,34 @@ async def save_publish_cadence(
         "adsense_status": blog.adsense_status,
         "publish_daily_cap": blog.publish_daily_cap,
     }
+
+
+@router.get("/niche", summary="니치 강제 설정 조회 (F4)")
+async def get_niche(
+    blog_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """블로그의 니치(허용 topic_id) 목록을 조회한다."""
+    blog = await get_blog_or_404(blog_id, current_user, db)
+    return {"niche_topic_ids": blog.niche_topic_ids or []}
+
+
+@router.post("/niche", summary="니치 강제 설정 저장 (F4)")
+async def save_niche(
+    blog_id: int,
+    request: NicheRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """니치 topic 목록을 저장한다.
+
+    adsense_status=preparing 블로그는 인벤토리 선택 시 이 topic 밖 제목이
+    차단된다(opt-in, `InventoryTrigger._niche_topic_ids`). 빈 목록이면 비활성.
+    """
+    ids = sorted({int(x) for x in (request.niche_topic_ids or [])})
+    blog = await get_blog_or_404(blog_id, current_user, db)
+    blog.niche_topic_ids = ids or None
+    await db.commit()
+    logger.info("니치 강제 저장 | blog_id=%s | topic_ids=%s", blog_id, ids)
+    return {"success": True, "niche_topic_ids": blog.niche_topic_ids or []}
