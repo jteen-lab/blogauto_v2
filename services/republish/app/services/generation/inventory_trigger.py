@@ -17,6 +17,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...models.title import MainTitle
 from ...models.crawled_post import CrawledPost
 from ...models.category import BlogCategory
+from ...models.blog import Blog
+from .adsense_niche import resolve_adsense_niche
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +138,11 @@ class InventoryTrigger:
         else:
             subtopic_ids, topic_only_ids = await self._get_blog_category_filter_ids(blog_id)
             category_source = "blog_category"
+
+        # F4: 애드센스 준비 블로그 니치 강제(옵트인 차단).
+        subtopic_ids, topic_only_ids, category_source = await self._apply_niche(
+            blog_id, subtopic_ids, topic_only_ids, category_source
+        )
 
         has_category = bool(subtopic_ids or topic_only_ids)
 
@@ -354,6 +361,32 @@ class InventoryTrigger:
 
         return subtopic_ids, topic_only_ids
 
+    async def _niche_topic_ids(self, blog_id: int) -> Optional[List[int]]:
+        """F4 니치 강제가 적용될 경우 허용 topic_id 목록, 아니면 None.
+
+        blog.adsense_status=preparing + niche_topic_ids 설정 시에만 강제(옵트인).
+        """
+        blog = await self.db.get(Blog, blog_id)
+        if not blog:
+            return None
+        return resolve_adsense_niche(
+            getattr(blog, "adsense_status", "none"),
+            getattr(blog, "niche_topic_ids", None),
+        )
+
+    async def _apply_niche(self, blog_id, subtopic_ids, topic_only_ids, source):
+        """니치 강제 활성 시 카테고리 필터를 니치 topic으로 대체.
+
+        이탈 주제 제목은 애초에 선택되지 않아 재시도 루프도 방지된다.
+        Returns: (subtopic_ids, topic_only_ids, category_source)
+        """
+        niche_ids = await self._niche_topic_ids(blog_id)
+        if not niche_ids:
+            return subtopic_ids, topic_only_ids, source
+        logger.info("[INVENTORY] F4 니치 강제 | blog_id=%s | topic_ids=%s",
+                    blog_id, niche_ids)
+        return set(), set(niche_ids), "adsense_niche"
+
     async def _find_available_title(
         self, blog_id: int,
         module_settings: Optional[dict] = None,
@@ -381,6 +414,11 @@ class InventoryTrigger:
         else:
             subtopic_ids, topic_only_ids = await self._get_blog_category_filter_ids(blog_id)
             category_source = "blog_category"
+
+        # F4: 애드센스 준비 블로그 니치 강제(옵트인 차단).
+        subtopic_ids, topic_only_ids, category_source = await self._apply_niche(
+            blog_id, subtopic_ids, topic_only_ids, category_source
+        )
 
         has_category = bool(subtopic_ids or topic_only_ids)
 
