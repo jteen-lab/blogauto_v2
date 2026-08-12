@@ -157,6 +157,13 @@ class Blog(Base):
         nullable=True,
         comment="승인 전 저속 모드 일일 발행 상한 (NULL이면 게이트 비활성)",
     )
+    # F4: 니치(주제) 강제 — 애드센스 준비 블로그를 단일 니치 topic으로 제한.
+    # topic_id 목록(JSON). NULL/빈 값이면 니치 강제 비활성(기존 동작).
+    niche_topic_ids = Column(
+        JSON,
+        nullable=True,
+        comment="F4 니치 강제: 허용 topic_id 목록. preparing 상태에서만 차단 적용",
+    )
 
     # 포스트 통계 (재발행 모듈 적용 구간 필터링용)
     total_post_count = Column(Integer, nullable=True, comment="누적 포스트 수")
