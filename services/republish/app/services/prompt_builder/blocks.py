@@ -349,6 +349,47 @@ COMMONS: List[StyleBlock] = [
     },
 ]
 
+# 품질 블록(F7) — 애드센스 정보이득 지시문. 옵트인(선택/자동주입).
+# Q-None 은 "미적용"(기본), Q-AdsenseGain 이 실제 지시문.
+QUALITY: List[StyleBlock] = [
+    {
+        "code": "Q-None",
+        "label": "미적용 (기본)",
+        "cluster": "",
+        "body": "",
+    },
+    {
+        "code": "Q-AdsenseGain",
+        "label": "정보이득 지시문 (애드센스 승인 대비)",
+        "cluster": "",
+        "body": (
+            "✦ 정보이득 지시문 (애드센스 승인 대비)\n"
+            "- 공개된 정보를 그대로 재배열/요약만 하지 말 것. 각 섹션에 아래 중 최소 "
+            "1개 이상 포함:\n"
+            "  (a) 서로 다른 조건/상황을 비교한 구체적 판단 기준\n"
+            "  (b) 실제 적용 시 흔히 놓치는 주의점·예외 상황\n"
+            "  (c) 수치·기간·조건 등 검증 가능한 구체 정보"
+            "(예: \"2026년 기준\", \"3개월 이상 유지 시\")\n"
+            "- 표·목록은 정보 나열이 아니라 \"무엇을 고를지 판단하는 근거\"가 드러나게 "
+            "구성 (예: 단순 스펙 나열 대신 \"이런 경우엔 A, 저런 경우엔 B\")\n"
+            "- 가능한 경우 한 문장 이상 출처를 명시 (예: \"OO 기관 발표에 따르면\"). "
+            "없는 통계·수치를 지어내지 말 것 — 확인 불가 시 정성적 표현으로 대체\n"
+            "- 뻔한 결론/광고성 마무리 문구(\"꼭 확인해보세요!\" 같은 공허한 CTA) 지양, "
+            "실행 가능한 다음 행동 하나로 마무리"
+        ),
+    },
+]
+
+# 애드센스 정보이득 지시문 — 자동 주입(content_generator)이 참조하는 SoT.
+ADSENSE_GAIN_CODE: str = "Q-AdsenseGain"
+
+
+def adsense_gain_directive() -> str:
+    """애드센스 정보이득 지시문 본문 반환(SoT). 없으면 빈 문자열."""
+    block = _find(QUALITY, ADSENSE_GAIN_CODE)
+    return block["body"] if block else ""
+
+
 # 하위호환 별칭 — build_prompt()·blocks_for_template()·__init__ export 가 참조.
 COMMON_RULES: str = COMMONS[0]["body"]
 
@@ -378,11 +419,14 @@ def build_prompt(
     reader_code: str,
     pattern_code: str,
     tone_code: str,
+    quality_code: Optional[str] = None,
 ) -> str:
-    """4개 블록 코드를 받아 완성된 user_prompt_template 텍스트 반환.
+    """블록 코드들을 받아 완성된 user_prompt_template 텍스트 반환.
 
     매칭 실패 시 해당 자리에 "(블록을 선택하세요)" 가 들어가 운영자가
-    어디가 미선택인지 즉시 확인 가능하다.
+    어디가 미선택인지 즉시 확인 가능하다. quality_code 는 선택 인자로,
+    지정 시(예: Q-AdsenseGain) 정보이득 지시문을 STRUCTURE 앞에 삽입한다.
+    미지정/Q-None 이면 기존과 동일 출력(하위호환).
     """
     persona = _find(PERSONAS, persona_code)
     reader = _find(READERS, reader_code)
@@ -419,11 +463,14 @@ def build_prompt(
         DIVIDER,
         tone_body,
         DIVIDER,
-        "",
-        DIVIDER,
-        STRUCTURE,
-        DIVIDER,
     ]
+
+    # 품질 블록(선택) — 정보이득 지시문. 본문이 있을 때만 삽입.
+    quality = _find(QUALITY, quality_code) if quality_code else None
+    if quality and quality["body"]:
+        parts += ["", DIVIDER, quality["body"], DIVIDER]
+
+    parts += ["", DIVIDER, STRUCTURE, DIVIDER]
     return "\n".join(parts)
 
 
@@ -439,6 +486,7 @@ def blocks_for_template() -> Dict[str, object]:
         "patterns": PATTERNS,
         "tones": TONES,
         "commons": COMMONS,
+        "quality": QUALITY,
         "presets": PRESETS,
         "common_rules": COMMON_RULES,
         "structure": STRUCTURE,
