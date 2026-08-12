@@ -313,6 +313,44 @@ DEFAULT_PROFILES: Dict[str, Dict[str, Any]] = {
         ],
         "warmup": {"enabled": False},
     },
+
+    "adsense": {
+        # 애드센스 승인용(F7): 승인 전 1일1포 저속 발행 + 재발행 억제.
+        # 정보이득 지시문(Q-AdsenseGain)은 blog.adsense_status=preparing 시
+        # 생성 단계에서 자동 주입됨(content_generator_helper). 승인 후엔
+        # 운영자가 다른 프리셋(balanced 등)으로 전환한다.
+        "schedule_matrix": _make_schedule_matrix(8, 20, 9, 18),
+        "jitter": {"enabled": True, "min_percent": -10, "max_percent": 20},
+        "stages": [
+            {
+                "name": "adsense_prep",
+                "label": "애드센스 준비기",
+                "post_count_min": 0,
+                "post_count_max": None,
+                "generate": {
+                    "enabled": True,
+                    "min_inventory": 3,
+                    "interval_mode": "auto",
+                    "interval_minutes": None,
+                    "daily_count": 1,
+                },
+                "publish": {
+                    "enabled": True,
+                    "interval_mode": "auto",
+                    "interval_minutes": None,
+                    "daily_count": 1,
+                },
+                "republish": {
+                    "enabled": False,
+                    "interval_mode": "auto",
+                    "interval_minutes": None,
+                    "daily_count": None,
+                },
+                "description": "승인 전 1일1포·재발행 억제(scaled content abuse 회피)",
+            },
+        ],
+        "warmup": {"enabled": False},
+    },
 }
 
 
@@ -349,6 +387,7 @@ def get_available_profiles() -> list:
         "aggressive": ("공격적 성장", "급성장기에 발행 빈도 극대화, 재고 넉넉하게 유지"),
         "balanced": ("균형 성장", "균형 잡힌 기본 설정, 단계별 최적화"),
         "conservative": ("보수적 운영", "안정적 운영 위주, 느린 생성"),
+        "adsense": ("애드센스 승인용", "승인 전 1일1포·재발행 억제 + 정보이득 프롬프트"),
     }
     return [
         {
