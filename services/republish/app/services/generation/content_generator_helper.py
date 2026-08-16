@@ -14,10 +14,6 @@ from ..prompt_builder.blocks import adsense_gain_directive
 
 logger = logging.getLogger(__name__)
 
-# F7: 정보이득 지시문을 자동 주입할 애드센스 단계(옵트인).
-# none/approved/rejected 는 대상 아님(기존 운영 무변화).
-_ADSENSE_GAIN_STATUSES = ("preparing", "applied")
-
 # 기본 글 생성 프롬프트
 DEFAULT_CONTENT_PROMPT = (
     "다음 주제로 블로그 글을 작성해주세요.\n\n"
@@ -86,8 +82,8 @@ async def generate_content_with_meta(
     if extra_instruction:
         full_prompt = f"{full_prompt}\n\n{extra_instruction}"
 
-    # F7: 애드센스 준비 블로그는 정보이득 지시문 자동 주입(옵트인·중복 가드).
-    if getattr(blog, "adsense_status", "none") in _ADSENSE_GAIN_STATUSES:
+    # F7: 프롬프트 모듈 '정보이득 강화' 토글 시 지시문 주입(옵트인·중복 가드).
+    if settings.get("info_gain_enabled"):
         directive = adsense_gain_directive()
         if directive and directive[:20] not in full_prompt:
             full_prompt = f"{full_prompt}\n\n{directive}"
