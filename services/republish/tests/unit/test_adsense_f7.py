@@ -58,42 +58,46 @@ class _StubAI:
         return {"content": "x", "model": "m", "provider": "p"}
 
 
-def _blog(status: str):
+def _blog():
     return SimpleNamespace(
-        adsense_status=status,
         ai_config={"writing_ai": {"provider": "p", "model": "m"}},
         name="테스트블로그",
     )
 
 
-def _settings():
-    return {"content_generation": {"user_prompt_template": "제목: {title}\n본문"}}
+def _settings(info_gain_enabled=None):
+    st = {"content_generation": {"user_prompt_template": "제목: {title}\n본문"}}
+    if info_gain_enabled is not None:
+        st["info_gain_enabled"] = info_gain_enabled
+    return st
 
 
 class TestF7Injection:
-    """adsense_status 옵트인 자동 주입."""
+    """모듈 settings.info_gain_enabled 토글 옵트인 자동 주입."""
 
-    def _run(self, status: str) -> str:
+    def _run(self, info_gain_enabled) -> str:
         ai = _StubAI()
-        asyncio.run(cgh.generate_content_with_meta(ai, "제목", "", _settings(), _blog(status)))
+        asyncio.run(cgh.generate_content_with_meta(
+            ai, "제목", "", _settings(info_gain_enabled), _blog()))
         return ai.captured
 
-    def test_inject_when_preparing(self):
-        assert "정보이득 지시문" in self._run("preparing")
+    def test_inject_when_enabled(self):
+        assert "정보이득 지시문" in self._run(True)
 
-    def test_inject_when_applied(self):
-        assert "정보이득 지시문" in self._run("applied")
+    def test_no_inject_when_disabled(self):
+        assert "정보이득 지시문" not in self._run(False)
 
-    def test_no_inject_when_none(self):
-        assert "정보이득 지시문" not in self._run("none")
-
-    def test_no_inject_when_approved(self):
-        assert "정보이득 지시문" not in self._run("approved")
+    def test_no_inject_when_missing(self):
+        # 토글 키 없는 기존 모듈은 무영향
+        assert "정보이득 지시문" not in self._run(None)
 
     def test_no_double_inject(self):
         ai = _StubAI()
-        st = {"content_generation": {
-            "user_prompt_template": "제목: {title}\n" + adsense_gain_directive()
-        }}
-        asyncio.run(cgh.generate_content_with_meta(ai, "제목", "", st, _blog("preparing")))
+        st = {
+            "info_gain_enabled": True,
+            "content_generation": {
+                "user_prompt_template": "제목: {title}\n" + adsense_gain_directive()
+            },
+        }
+        asyncio.run(cgh.generate_content_with_meta(ai, "제목", "", st, _blog()))
         assert ai.captured.count("정보이득 지시문") == 1
