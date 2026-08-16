@@ -6,10 +6,10 @@ Sprint 1(F1 필수 페이지, F2 저자 프로필) + Sprint 2(F5 발행 케이�
 
 설계 문서: docs/flowcharts/adsense_sprint1_p1.md, adsense_sprint2_f5.md
 """
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -39,17 +39,14 @@ class AuthorProfileRequest(BaseModel):
 ADSENSE_STATUS_VALUES = {"none", "preparing", "applied", "approved"}
 
 
-class NicheRequest(BaseModel):
-    """F4 니치 강제 설정 저장 요청."""
-
-    niche_topic_ids: Optional[List[int]] = None
-
-
 class PublishCadenceRequest(BaseModel):
-    """발행 케이던스 저장 요청 (F5)."""
+    """애드센스 계정 상태 저장 요청 (F5).
+
+    일일 발행 상한(publish_daily_cap)은 성장 프로파일 프리셋으로 이전되어
+    제거됨. adsense_status는 계정 신청 상태 추적(F9 준비도)에만 쓰인다.
+    """
 
     adsense_status: str = "none"
-    publish_daily_cap: Optional[int] = Field(None, ge=1, le=100)
 
 
 @router.get("/required-pages", summary="필수 페이지 생성 상태 조회")
@@ -157,11 +154,10 @@ async def get_publish_cadence(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    """애드센스 승인 상태와 승인 전 저속 모드 일일 발행 상한을 조회한다."""
+    """애드센스 계정 신청 상태를 조회한다."""
     blog = await get_blog_or_404(blog_id, current_user, db)
     return {
         "adsense_status": blog.adsense_status,
-        "publish_daily_cap": blog.publish_daily_cap,
     }
 
 
@@ -172,10 +168,10 @@ async def save_publish_cadence(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    """애드센스 승인 상태·발행 상한을 저장한다.
+    """애드센스 계정 신청 상태를 저장한다.
 
-    publish_daily_cap이 설정되고 adsense_status가 approved가 아니면
-    오토런 발행 시 일일 상한이 강제된다(opt-in, `_check_publish_cadence_cap`).
+    발행량 제어는 성장 프로파일 프리셋으로 이전됨. adsense_status는 F9 준비도
+    감사·계정 상태 추적에만 쓰인다.
     """
     if request.adsense_status not in ADSENSE_STATUS_VALUES:
         raise HTTPException(
@@ -184,45 +180,17 @@ async def save_publish_cadence(
         )
     blog = await get_blog_or_404(blog_id, current_user, db)
     blog.adsense_status = request.adsense_status
-    blog.publish_daily_cap = request.publish_daily_cap
     await db.commit()
     logger.info(
-        "발행 케이던스 저장 | blog_id=%s | adsense_status=%s | publish_daily_cap=%s",
-        blog_id, blog.adsense_status, blog.publish_daily_cap,
+        "애드센스 상태 저장 | blog_id=%s | adsense_status=%s",
+        blog_id, blog.adsense_status,
     )
     return {
         "success": True,
         "adsense_status": blog.adsense_status,
-        "publish_daily_cap": blog.publish_daily_cap,
     }
 
 
-@router.get("/niche", summary="니치 강제 설정 조회 (F4)")
-async def get_niche(
-    blog_id: int,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db_session),
-) -> dict:
-    """블로그의 니치(허용 topic_id) 목록을 조회한다."""
-    blog = await get_blog_or_404(blog_id, current_user, db)
-    return {"niche_topic_ids": blog.niche_topic_ids or []}
-
-
-@router.post("/niche", summary="니치 강제 설정 저장 (F4)")
-async def save_niche(
-    blog_id: int,
-    request: NicheRequest,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db_session),
-) -> dict:
-    """니치 topic 목록을 저장한다.
-
-    adsense_status=preparing 블로그는 인벤토리 선택 시 이 topic 밖 제목이
-    차단된다(opt-in, `InventoryTrigger._niche_topic_ids`). 빈 목록이면 비활성.
-    """
-    ids = sorted({int(x) for x in (request.niche_topic_ids or [])})
-    blog = await get_blog_or_404(blog_id, current_user, db)
-    blog.niche_topic_ids = ids or None
-    await db.commit()
-    logger.info("니치 강제 저장 | blog_id=%s | topic_ids=%s", blog_id, ids)
-    return {"success": True, "niche_topic_ids": blog.niche_topic_ids or []}
+# F4 니치 강제 설정은 프롬프트 모듈 settings(niche_enabled/niche_topic_ids)로
+# 이전됨(2026-08-16). 블로그 단위 /niche 엔드포인트는 제거.
+# 순서도: docs/flowcharts/adsense_module_ui_migration.md
