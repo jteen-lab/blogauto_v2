@@ -13,7 +13,8 @@ function createGrowthProfileState() {
         presets: [
             { key: 'aggressive', name: '공격적 성장', description: '빠른 콘텐츠 축적, 발행 빈도 극대화', stageCount: 3, warmupEnabled: true },
             { key: 'balanced', name: '균형 성장', description: '균형 잡힌 생성/발행/재발행 설정', stageCount: 3, warmupEnabled: true },
-            { key: 'conservative', name: '보수적 운영', description: '안정적 운영, 느린 생성', stageCount: 3, warmupEnabled: false }
+            { key: 'conservative', name: '보수적 운영', description: '안정적 운영, 느린 생성', stageCount: 3, warmupEnabled: false },
+            { key: 'adsense', name: '애드센스 승인용', description: '승인 전 1일1포·재발행 억제 + 정보이득 프롬프트', stageCount: 1, warmupEnabled: false }
         ],
 
         // --- 커스텀 프로파일 ---
@@ -337,7 +338,7 @@ function createGrowthProfileState() {
             if (Object.keys(this.presetDetails).length > 0) return;
             this.presetDetailsLoading = true;
             try {
-                const keys = ['aggressive', 'balanced', 'conservative'];
+                const keys = ['aggressive', 'balanced', 'conservative', 'adsense'];
                 const results = await Promise.all(
                     keys.map(k => fetch(`/api/v1/growth-profile/presets/${k}`, { credentials: 'include' }).then(r => r.ok ? r.json() : null))
                 );
