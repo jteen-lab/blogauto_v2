@@ -96,7 +96,14 @@ function createPromptModuleState() {
             sectionQuality: 'standard'
         },
 
-        blogImageModes: {}
+        blogImageModes: {},
+
+        // 애드센스 승인용 (F4 니치 강제 + F7 정보이득) — 이 모듈에만 적용
+        adsense: {
+            nicheEnabled: false,
+            nicheTopicIds: [],   // 허용 topic_id 배열
+            infoGainEnabled: false
+        }
     };
 }
 
@@ -241,10 +248,28 @@ const promptModuleMethods = {
             this.promptModule.selectedBlogs = settings.blogs.map(b => b.id || b);
         }
 
+        // 애드센스 승인용 설정 복원 (F4 니치 + F7 정보이득)
+        this.promptModule.adsense = {
+            nicheEnabled: settings.niche_enabled ?? false,
+            nicheTopicIds: Array.isArray(settings.niche_topic_ids) ? settings.niche_topic_ids.slice() : [],
+            infoGainEnabled: settings.info_gain_enabled ?? false
+        };
+
         // 양방향 연동 데이터 복원
         if (this.initPromptModuleLinkingFromData) {
             this.initPromptModuleLinkingFromData();
         }
+    },
+
+    // 애드센스 니치 topic 토글 (F4)
+    isNicheTopicSelected(topicId) {
+        return this.promptModule.adsense.nicheTopicIds.includes(topicId);
+    },
+    toggleNicheTopic(topicId) {
+        const ids = this.promptModule.adsense.nicheTopicIds;
+        const idx = ids.indexOf(topicId);
+        if (idx !== -1) ids.splice(idx, 1);
+        else ids.push(topicId);
     },
 
     toggleTopicExpand(topicId) {
@@ -391,6 +416,10 @@ const promptModuleMethods = {
         return {
             // 양방향 연동 설정
             ...linkingData,
+            // 애드센스 승인용 (F4 니치 강제 + F7 정보이득)
+            niche_enabled: this.promptModule.adsense.nicheEnabled,
+            niche_topic_ids: this.promptModule.adsense.nicheTopicIds,
+            info_gain_enabled: this.promptModule.adsense.infoGainEnabled,
             // 카테고리 연결
             categories: this.promptModule.selectedCategories.map(c => ({
                 topic_id: c.topic_id,

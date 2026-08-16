@@ -112,6 +112,47 @@ ${getCategoryBlogModeContent()}
                             </div>`;
 }
 
+/** 1-2. 애드센스 승인용 (F4 니치 강제 + F7 정보이득) — 이 모듈에만 적용 */
+function getPromptAdsenseSection() {
+    return `
+                            <div class="space-y-4 border border-amber-200 bg-amber-50/40 rounded-lg p-4">
+                                <h3 class="text-base font-semibold text-gray-900 flex items-center gap-2">
+                                    💰 애드센스 승인용 설정
+                                    <span class="text-xs font-normal text-gray-500">(선택 · 이 모듈에만 적용)</span>
+                                </h3>
+
+                                <!-- F4 니치(주제) 강제 -->
+                                <div class="space-y-3">
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox" x-model="promptModule.adsense.nicheEnabled" class="w-4 h-4 text-amber-600 rounded focus:ring-amber-500">
+                                        <span class="text-sm font-medium text-gray-800">니치(주제) 강제</span>
+                                    </label>
+                                    <p class="text-xs text-gray-500 pl-6">켜면 이 모듈이 아래 선택한 주제(topic)의 제목만 생성합니다. 애드센스 E-E-A-T 니치 집중용(단일 주제 권장).</p>
+                                    <div x-show="promptModule.adsense.nicheEnabled" x-transition class="pl-6 space-y-2">
+                                        <div x-show="promptModule.topics.length === 0" class="text-xs text-yellow-700">등록된 주제가 없습니다. <a href="/categories" class="text-blue-600 hover:underline">카테고리 관리</a>에서 추가하세요.</div>
+                                        <div x-show="promptModule.topics.length > 0" class="border border-gray-200 rounded-lg max-h-48 overflow-y-auto bg-white">
+                                            <template x-for="topic in promptModule.topics" :key="'niche-' + topic.id">
+                                                <label class="flex items-center gap-2 p-2 border-b border-gray-100 last:border-b-0 hover:bg-amber-50 cursor-pointer">
+                                                    <input type="checkbox" :checked="isNicheTopicSelected(topic.id)" @change="toggleNicheTopic(topic.id)" class="w-4 h-4 text-amber-600 rounded focus:ring-amber-500">
+                                                    <span class="text-sm text-gray-700" x-text="topic.name"></span>
+                                                </label>
+                                            </template>
+                                        </div>
+                                        <p x-show="promptModule.adsense.nicheTopicIds.length === 0" class="text-xs text-red-500">⚠️ 주제를 1개 이상 선택해야 니치 강제가 동작합니다(미선택 시 무시).</p>
+                                    </div>
+                                </div>
+
+                                <!-- F7 정보이득 강화 -->
+                                <div class="space-y-2 border-t border-amber-200 pt-3">
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox" x-model="promptModule.adsense.infoGainEnabled" class="w-4 h-4 text-amber-600 rounded focus:ring-amber-500">
+                                        <span class="text-sm font-medium text-gray-800">정보이득(애드센스) 강화</span>
+                                    </label>
+                                    <p class="text-xs text-gray-500 pl-6">켜면 글 생성 프롬프트에 정보이득 지시문(고유 관점·구체 팁·비교·주의점·출처)을 자동 주입합니다.</p>
+                                </div>
+                            </div>`;
+}
+
 /** 2. 제목 재조합 설정 섹션 */
 function getPromptTitleSection() {
     return `
@@ -380,6 +421,7 @@ function getPromptModuleFormTemplate() {
     return `
                         <div x-show="formData.type_code === 'prompt'" class="space-y-6">
 ${getPromptLinkingSection()}
+${getPromptAdsenseSection()}
 ${getPromptBlogSection()}
 ${getTestBlogAndTitleSection()}
 ${getTestFullPipelineSection()}
