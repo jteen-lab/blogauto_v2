@@ -171,9 +171,12 @@ preparing/applied 블로그에 자동 주입(옵트인·중복가드) + "애드�
 - **영향 영역**: 발행 파이프라인, `SimilarityService`/`TokenDFService`.
 - **근거**: 중복·유사 콘텐츠 감점. 기존 자산 재활용으로 저비용.
 
-**F11. 애드센스 승인 전용 프롬프트 프리셋** `P2` — **미착수**(제안서
-`adsense_prompt_and_growth_profile_proposal.md` §2.4 근거, 2026-08-16 검토 중
-계획서 누락 확인·추가)
+**F11. 애드센스 승인 전용 프롬프트 프리셋** `P2` — **구현 완료(2026-08-17,
+A안·고정)**: `presets.py`에 `adsense-approval` 고정 프리셋 추가(분석가·중급·P1·
+수치). 임베드 패널에서 적용 시 모듈 `info_gain_enabled` 토글 자동 ON + 문체 4축·
+글자수·EDIT·커스텀저장 잠금(승인 테스트용). 새 축(QUALITY) 미노출 — 정보이득
+지시문은 기존 F7 주입 경로 재사용(이중 주입 없음). 순서도
+`docs/flowcharts/adsense_f11_prompt_preset.md`. 마이그레이션 없음.
 - **배경**: F7으로 정보이득 지시문 블록(Q-AdsenseGain)과 자동 주입(프롬프트
   모듈 `info_gain_enabled` 토글)은 구현됐으나, 제안서 §2.4의 **"정보이득 지시문
   + E-E-A-T 궁합이 좋은 4축(페르소나·독자·패턴·톤) 조합을 하나로 묶은 완성형
