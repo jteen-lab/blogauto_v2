@@ -22,6 +22,7 @@ from .wordpress_publisher import WordPressPublisher
 from .blogger_publisher import BloggerPublisher
 from .publish_result import PublishResult, ImageUploadResult
 from .thin_content_gate import check_thin_content
+from .topic_dedup_gate import check_topic_duplicate
 from .image_path_utils import resolve_image_path, strip_local_image_url
 
 logger = get_logger("publisher_pipeline", "app.log")
@@ -142,6 +143,17 @@ class PublisherPipeline:
             return await self._reject_pre_publish(
                 blog, crawled_post, result, thin_content_error,
                 retryable=False, log_reason="분량 미달",
+            )
+
+        # Step 2.9: 발행 전 근접 중복 게이트 (F8, 주제 중복 발행 차단)
+        dedup_error = await check_topic_duplicate(
+            self.db, blog.id, crawled_post.title,
+            exclude_post_id=crawled_post.id,
+        )
+        if dedup_error is not None:
+            return await self._reject_pre_publish(
+                blog, crawled_post, result, dedup_error,
+                retryable=False, log_reason="주제 중복",
             )
 
         # Step 3: 플랫폼별 발행
