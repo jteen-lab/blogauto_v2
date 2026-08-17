@@ -23,12 +23,13 @@ function createPromptBuilderState(opts = {}) {
     return {
         mode: opts.mode || 'page',
         onApply: typeof opts.onApply === 'function' ? opts.onApply : null,
-        // F11: 애드센스 고정 프리셋 적용 시 호출(모듈 info_gain 토글 연동용)
+        // F11: 전용 프롬프트 프리셋(애드센스 승인용) 적용 시 호출(모듈 토글 연동용)
         onApplyPreset: typeof opts.onApplyPreset === 'function' ? opts.onApplyPreset : null,
         blocksDataElementId: opts.blocksDataElementId || null,
         expanded: false, // embedded 모드에서 폼 안 접기/펼치기
-        // F11: 애드센스 고정 프리셋 적용 중이면 문체·옵션 편집 잠금
-        adsenseLocked: false,
+        // F11: 전용 프롬프트(full_prompt) 프리셋 적용 시 이 텍스트를 그대로 사용.
+        // 비어있으면 4축 조합으로 프롬프트를 만든다.
+        fullPromptOverride: '',
 
         // ── 데이터 ────────────────────────────────────────
         personas: [],
@@ -115,6 +116,14 @@ function createPromptBuilderState(opts = {}) {
         applyPreset(code) {
             const p = this.presets.find((x) => x.code === code);
             if (!p) return;
+            // F11: 전용 프롬프트 프리셋(애드센스 승인용) — 4축 조합 대신 완성 프롬프트를
+            // 그대로 사용. 미리보기·반영이 이 텍스트를 쓰며 4축·글자수 설정은 무시된다.
+            if (p.full_prompt) {
+                this.fullPromptOverride = p.full_prompt;
+                if (this.onApplyPreset) this.onApplyPreset(p);
+                return;
+            }
+            this.fullPromptOverride = '';
             this.persona = p.persona;
             this.reader = p.reader;
             this.pattern = p.pattern;
@@ -126,15 +135,15 @@ function createPromptBuilderState(opts = {}) {
             this.introChars = (typeof p.introChars === 'number') ? p.introChars : 200;
             this.sectionChars = (typeof p.sectionChars === 'number') ? p.sectionChars : 250;
             this.outroChars = (typeof p.outroChars === 'number') ? p.outroChars : 200;
-            // F11: 애드센스 고정 프리셋 — 편집 잠금 + 정보이득(F7) 토글 연동
-            this.adsenseLocked = !!p.locked;
-            if (p.info_gain && this.onApplyPreset) this.onApplyPreset(p);
         },
 
         // 현재 4축 조합이 이 프리셋과 완전히 일치하는지(테두리 하이라이트용).
         // 조합 중복 저장이 차단되므로 활성 프리셋은 최대 1개.
         isActivePreset(p) {
+            // 전용 프롬프트 프리셋은 텍스트 일치로 판정
+            if (p.full_prompt) return this.fullPromptOverride === p.full_prompt;
             return this.isComplete()
+                && !this.fullPromptOverride
                 && p.persona === this.persona
                 && p.reader === this.reader
                 && p.pattern === this.pattern
@@ -228,6 +237,7 @@ function createPromptBuilderState(opts = {}) {
             return hit ? hit.label : '미선택';
         },
         isComplete() {
+            if (this.fullPromptOverride) return true; // 전용 프롬프트는 즉시 반영 가능
             return Boolean(this.persona && this.reader && this.pattern && this.tone);
         },
         bodyFor(field, list) {
@@ -373,6 +383,8 @@ function createPromptBuilderState(opts = {}) {
         get derivedSectionCount() { return this.patternSections().length; },
 
         get builtPrompt() {
+            // F11: 전용 프롬프트 프리셋 적용 시 완성 텍스트를 그대로 반환
+            if (this.fullPromptOverride) return this.fullPromptOverride;
             const D = this.divider;
             return [
                 '제목: {title}',
@@ -412,7 +424,7 @@ function createPromptBuilderState(opts = {}) {
             this.reader = '';
             this.pattern = '';
             this.tone = '';
-            this.adsenseLocked = false; // F11: 고정 프리셋 잠금 해제
+            this.fullPromptOverride = ''; // F11: 전용 프롬프트 해제 → 4축 조합 복귀
         },
 
         // ── 액션: 복사 / 반영 ─────────────────────────────
