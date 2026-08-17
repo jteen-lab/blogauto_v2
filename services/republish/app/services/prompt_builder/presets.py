@@ -9,7 +9,21 @@ from __future__ import annotations
 
 from typing import Dict, List
 
-PRESETS: List[Dict[str, str]] = [
+PRESETS: List[Dict[str, object]] = [
+    # F11 애드센스 승인용 고정 프리셋(2026-08-17). 적용 시 정보이득(F7) 토글
+    # 자동 ON + 문체·옵션 편집 잠금(승인 테스트용 고정). 프롬프트 빌더에 별도
+    # 축을 만들지 않고 이 프리셋 하나로만 제공. 순서도 adsense_f11_prompt_preset.md.
+    {
+        "code": "adsense-approval",
+        "label": "🔒 애드센스 승인용 (고정)",
+        "categories": "애드센스 승인 대비 — 근거·비교·출처 강조",
+        "persona": "P-Analyst",
+        "reader": "R-Intermediate",
+        "pattern": "P1",
+        "tone": "T-Numbers",
+        "info_gain": True,   # 적용 시 정보이득 지시문(F7) 토글 자동 ON
+        "locked": True,      # 문체·옵션 편집 잠금(수정 불가)
+    },
     {
         "code": "s1-v1",
         "label": "S1 V1 · 전문가·중급·P1·수치",
