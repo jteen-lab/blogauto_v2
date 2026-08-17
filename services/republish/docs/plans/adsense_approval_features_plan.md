@@ -165,7 +165,14 @@ preparing/applied 블로그에 자동 주입(옵트인·중복가드) + "애드�
 - **영향 영역**: 생성 프롬프트 템플릿(`prompt-form-*`, 생성 서비스).
 - **근거**: Information Gain / Redundancy.
 
-**F8. 발행 전 중복 방지(유사도 게이트 재사용)** `P2`
+**F8. 발행 전 중복 방지(근접 중복 게이트)** `P2` — **구현 완료(2026-08-17,
+경량 Jaccard 방식)**: `topic_dedup_gate.check_topic_duplicate`를
+`publisher_pipeline.publish_post` F6 게이트 직후(단일 choke point)에 삽입. 같은
+블로그 발행완료 글 제목과 Jaccard 유사도 비교, 보수 임계값(0.82) 이상이면
+차단(`_reject_pre_publish`, log_reason="주제 중복"). **계획서의 V3 통합 식별자
+게이트 재사용은 V3가 HOLD·튜닝 미완이라 발행 경로 오차단/비용 리스크로 미채택**,
+경량 Jaccard로 이탈(사용자 확정). 순서도 `docs/flowcharts/adsense_f8_publish_dedup.md`.
+마이그레이션 없음. 향후 임계값/on-off SystemSettings화·topic_id 병행 판정 여지.
 - **내용**: 발행 직전 기존 글과 **주제 중복** 검사 → 중복이면 차단.
 - **구현 방향**: **이번에 구축한 유사도 통합 식별자 게이트**([[project_similarity_unified_gate]] · `docs/flowcharts/unified_discriminator_gate.md`) + 회색지대 AI를 발행 전 검사에 재사용.
 - **영향 영역**: 발행 파이프라인, `SimilarityService`/`TokenDFService`.
