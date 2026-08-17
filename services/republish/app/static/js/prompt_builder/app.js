@@ -23,8 +23,12 @@ function createPromptBuilderState(opts = {}) {
     return {
         mode: opts.mode || 'page',
         onApply: typeof opts.onApply === 'function' ? opts.onApply : null,
+        // F11: 애드센스 고정 프리셋 적용 시 호출(모듈 info_gain 토글 연동용)
+        onApplyPreset: typeof opts.onApplyPreset === 'function' ? opts.onApplyPreset : null,
         blocksDataElementId: opts.blocksDataElementId || null,
         expanded: false, // embedded 모드에서 폼 안 접기/펼치기
+        // F11: 애드센스 고정 프리셋 적용 중이면 문체·옵션 편집 잠금
+        adsenseLocked: false,
 
         // ── 데이터 ────────────────────────────────────────
         personas: [],
@@ -122,6 +126,9 @@ function createPromptBuilderState(opts = {}) {
             this.introChars = (typeof p.introChars === 'number') ? p.introChars : 200;
             this.sectionChars = (typeof p.sectionChars === 'number') ? p.sectionChars : 250;
             this.outroChars = (typeof p.outroChars === 'number') ? p.outroChars : 200;
+            // F11: 애드센스 고정 프리셋 — 편집 잠금 + 정보이득(F7) 토글 연동
+            this.adsenseLocked = !!p.locked;
+            if (p.info_gain && this.onApplyPreset) this.onApplyPreset(p);
         },
 
         // 현재 4축 조합이 이 프리셋과 완전히 일치하는지(테두리 하이라이트용).
@@ -405,6 +412,7 @@ function createPromptBuilderState(opts = {}) {
             this.reader = '';
             this.pattern = '';
             this.tone = '';
+            this.adsenseLocked = false; // F11: 고정 프리셋 잠금 해제
         },
 
         // ── 액션: 복사 / 반영 ─────────────────────────────

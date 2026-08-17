@@ -13,7 +13,8 @@ window.getPromptBuilderEmbeddedHTML = function () {
     <div class="border-t border-purple-200 pt-4"
          x-data="createPromptBuilderState({
              mode: 'embedded',
-             onApply: (text) => { promptModule.contentGeneration.userPromptTemplate = text; }
+             onApply: (text) => { promptModule.contentGeneration.userPromptTemplate = text; },
+             onApplyPreset: (p) => { if (p.info_gain) promptModule.adsense.infoGainEnabled = true; }
          })"
          x-init="init()">
 
@@ -30,6 +31,15 @@ window.getPromptBuilderEmbeddedHTML = function () {
         </button>
 
         <div x-show="expanded" x-transition class="mt-4 space-y-4">
+
+            <!-- F11: 애드센스 고정 프리셋 잠금 안내 -->
+            <div x-show="adsenseLocked" x-transition
+                 class="p-3 text-xs bg-amber-50 border border-amber-300 text-amber-800 rounded-lg flex items-start gap-2">
+                <span>🔒</span>
+                <span>애드센스 승인용 <strong>고정 프리셋</strong>이 적용되어 문체·옵션 편집이
+                    잠겼습니다(승인 테스트용). 정보이득 강화 토글이 자동으로 켜집니다.
+                    수정하려면 다른 프리셋을 고르거나 "전체 초기화"를 누르세요.</span>
+            </div>
 
             <!-- 빠른 프리셋 -->
             <div class="bg-purple-50/40 rounded-lg p-3">
@@ -59,8 +69,8 @@ window.getPromptBuilderEmbeddedHTML = function () {
                     </template>
                 </div>
 
-                <!-- 커스텀 프리셋 저장 -->
-                <div class="mt-3 flex items-center gap-2">
+                <!-- 커스텀 프리셋 저장 (고정 프리셋 적용 중엔 숨김) -->
+                <div x-show="!adsenseLocked" class="mt-3 flex items-center gap-2">
                     <input type="text" x-model="newPresetName"
                            placeholder="현재 조합을 커스텀 프리셋으로 저장할 이름"
                            class="flex-1 px-2 py-1 border border-gray-300 rounded text-xs">
@@ -84,18 +94,18 @@ window.getPromptBuilderEmbeddedHTML = function () {
             </div>
 
             <!-- 최소 글자수 -->
-            <div class="bg-white border rounded-lg p-3">
+            <div class="bg-white border rounded-lg p-3" :class="adsenseLocked ? 'opacity-50' : ''">
                 <h3 class="text-sm font-semibold text-gray-800 mb-2">최소 글자수</h3>
                 <div class="grid grid-cols-3 gap-2">
                     <label class="text-[10px] text-gray-600">도입
-                        <input type="number" min="0" step="10" x-model.number="introChars"
-                               class="mt-0.5 w-full px-1.5 py-1 text-xs border border-gray-300 rounded"></label>
+                        <input type="number" min="0" step="10" x-model.number="introChars" :disabled="adsenseLocked"
+                               class="mt-0.5 w-full px-1.5 py-1 text-xs border border-gray-300 rounded disabled:bg-gray-100"></label>
                     <label class="text-[10px] text-gray-600">섹션당
-                        <input type="number" min="0" step="10" x-model.number="sectionChars"
-                               class="mt-0.5 w-full px-1.5 py-1 text-xs border border-gray-300 rounded"></label>
+                        <input type="number" min="0" step="10" x-model.number="sectionChars" :disabled="adsenseLocked"
+                               class="mt-0.5 w-full px-1.5 py-1 text-xs border border-gray-300 rounded disabled:bg-gray-100"></label>
                     <label class="text-[10px] text-gray-600">마치며
-                        <input type="number" min="0" step="10" x-model.number="outroChars"
-                               class="mt-0.5 w-full px-1.5 py-1 text-xs border border-gray-300 rounded"></label>
+                        <input type="number" min="0" step="10" x-model.number="outroChars" :disabled="adsenseLocked"
+                               class="mt-0.5 w-full px-1.5 py-1 text-xs border border-gray-300 rounded disabled:bg-gray-100"></label>
                 </div>
             </div>
 
@@ -141,18 +151,18 @@ function getBuilderAxisHTML(field, title, listName) {
             <h3 class="text-sm font-semibold text-gray-800">${title}</h3>
             <div class="flex items-center gap-2">
                 <span class="text-xs text-gray-500" x-text="selectedLabel('${field}', ${listName})"></span>
-                <button type="button" @click="toggleEdit('${field}')" :disabled="!${field}"
+                <button type="button" @click="toggleEdit('${field}')" :disabled="!${field} || adsenseLocked"
                         class="text-xs px-2 py-0.5 border rounded disabled:opacity-40 disabled:cursor-not-allowed"
                         :class="editing.${field} ? 'bg-purple-600 text-white' : 'hover:bg-gray-50'">
                     <span x-text="editing.${field} ? '닫기' : 'EDIT'"></span>
                 </button>
             </div>
         </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" :class="adsenseLocked ? 'opacity-50' : ''">
             <template x-for="opt in ${listName}" :key="opt.code">
-                <label class="flex items-start gap-2 p-2 border rounded cursor-pointer hover:bg-gray-50"
-                       :class="${field} === opt.code ? 'border-purple-500 bg-purple-50' : 'border-gray-200'">
-                    <input type="radio" name="${field}-pb" :value="opt.code" x-model="${field}" class="mt-0.5">
+                <label class="flex items-start gap-2 p-2 border rounded hover:bg-gray-50"
+                       :class="(${field} === opt.code ? 'border-purple-500 bg-purple-50' : 'border-gray-200') + (adsenseLocked ? ' cursor-not-allowed' : ' cursor-pointer')">
+                    <input type="radio" name="${field}-pb" :value="opt.code" x-model="${field}" :disabled="adsenseLocked" class="mt-0.5">
                     <div>
                         <div class="font-medium text-xs" x-text="opt.label"></div>
                         <div class="text-[10px] text-gray-500 mt-0.5">
