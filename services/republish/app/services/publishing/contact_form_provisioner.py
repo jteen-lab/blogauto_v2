@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.logger import get_logger
 from ...models.blog import Blog
-from .google_forms_service import create_contact_form, get_forms_access_token
+from .tally_forms_service import create_contact_form, get_tally_api_key
 
 logger = get_logger("contact_form_provisioner", "app.log")
 
@@ -35,13 +35,13 @@ async def ensure_contact_form(blog: Blog, db: AsyncSession) -> Optional[str]:
         # 운영자 수동 입력값 존중
         return profile["contact_form_url"]
 
-    token = await get_forms_access_token(db)
-    if not token:
-        logger.info("[F10] 폼 전용 계정 미설정 → 자동 생성 건너뜀 | blog=%s", blog.name)
+    api_key = await get_tally_api_key(db)
+    if not api_key:
+        logger.info("[F10] Tally API 키 미설정 → 자동 생성 건너뜀 | blog=%s", blog.name)
         return None
 
     try:
-        result = await create_contact_form(token, f"{blog.name} 문의")
+        result = await create_contact_form(api_key, f"{blog.name} 문의")
     except Exception as exc:  # noqa: BLE001
         logger.error("[F10] 문의 폼 생성 실패 | blog=%s | %s", blog.name, exc)
         return None
