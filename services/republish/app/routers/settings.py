@@ -415,10 +415,19 @@ async def get_blogger_limit(db: AsyncSession = Depends(get_db_session)):
 # ============================================================
 
 class FormsAccountRequest(BaseModel):
-    """문의 폼 전용 계정 refresh token 저장 요청."""
+    """문의 폼 전용 계정 저장 요청. 토큰이 마스킹값이면 기존 토큰 유지."""
 
-    refresh_token: str = Field(..., min_length=10)
+    refresh_token: Optional[str] = None
     email: Optional[str] = None
+
+
+def _mask_secret(value: str) -> str:
+    """비밀값 마스킹(앞4****뒤4). 다른 API 키 항목과 동일 포맷."""
+    if not value:
+        return ""
+    if len(value) <= 8:
+        return "****"
+    return f"{value[:4]}****{value[-4:]}"
 
 
 @router.get("/forms-account")
@@ -426,14 +435,21 @@ async def get_forms_account(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    """문의 폼 전용 계정 설정 상태 조회(토큰 값은 노출하지 않음)."""
+    """문의 폼 전용 계정 설정 조회. 토큰은 마스킹값만 반환(다른 키와 동일)."""
+    from ..core.encryption import decrypt_api_key
     from ..services.system_settings_service import SystemSettingsService
     from ..services.publishing.google_forms_service import (
         SETTING_FORMS_REFRESH_TOKEN, SETTING_FORMS_EMAIL,
     )
-    token = await SystemSettingsService.get(SETTING_FORMS_REFRESH_TOKEN, db)
+    enc = await SystemSettingsService.get(SETTING_FORMS_REFRESH_TOKEN, db)
     email = await SystemSettingsService.get(SETTING_FORMS_EMAIL, db)
-    return {"configured": bool(token), "email": email or ""}
+    masked = ""
+    if enc:
+        try:
+            masked = _mask_secret(decrypt_api_key(enc))
+        except Exception:  # noqa: BLE001
+            masked = "****"
+    return {"configured": bool(enc), "email": email or "", "refresh_token": masked}
 
 
 @router.post("/forms-account")
@@ -444,22 +460,44 @@ async def save_forms_account(
 ) -> dict:
     """문의 폼 전용 계정의 refresh token을 암호화 저장한다(F10).
 
-    OAuth Playground 등에서 계정 A로 Forms 스코프 인증 후 발급받은 refresh
-    token을 붙여넣는다. blogauto가 이 토큰으로 Forms API를 호출한다.
+    토큰 칸이 마스킹값(``****`` 포함)이면 변경으로 보지 않고 기존 토큰을 유지한다
+    (다른 API 키 항목과 동일 동작 — 값이 지워지지 않고 마스킹으로 유지).
     """
     from ..core.encryption import encrypt_api_key
     from ..services.system_settings_service import SystemSettingsService
     from ..services.publishing.google_forms_service import (
         SETTING_FORMS_REFRESH_TOKEN, SETTING_FORMS_EMAIL,
     )
-    await SystemSettingsService.set(
-        SETTING_FORMS_REFRESH_TOKEN, encrypt_api_key(request.refresh_token.strip()), db,
-    )
-    if request.email:
+    token = (request.refresh_token or "").strip()
+    existing = await SystemSettingsService.get(SETTING_FORMS_REFRESH_TOKEN, db)
+
+    if token and "****" not in token:
+        await SystemSettingsService.set(
+            SETTING_FORMS_REFRESH_TOKEN, encrypt_api_key(token), db,
+        )
+    elif not existing:
+        raise HTTPException(
+            status_code=422, detail="refresh token을 입력하세요",
+        )
+
+    if request.email is not None:
         await SystemSettingsService.set(SETTING_FORMS_EMAIL, request.email.strip(), db)
     await db.commit()
+
+    stored = await SystemSettingsService.get(SETTING_FORMS_REFRESH_TOKEN, db)
+    masked = ""
+    if stored:
+        try:
+            masked = _mask_secret(decrypt_api_key(stored))
+        except Exception:  # noqa: BLE001
+            masked = "****"
     logger.info("[SETTINGS] 문의 폼 전용 계정 저장 | email=%s", request.email or "")
-    return {"success": True, "configured": True, "email": request.email or ""}
+    return {
+        "success": True,
+        "configured": bool(stored),
+        "email": (request.email or "").strip(),
+        "refresh_token": masked,
+    }
 
 
 # ============================================================
