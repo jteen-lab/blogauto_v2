@@ -64,5 +64,11 @@ class ModuleType(Base):
                 "name": "데이터",
                 "icon": "📊",
                 "display_order": 4
+            },
+            {
+                "code": "contact_form",
+                "name": "문의폼",
+                "icon": "📨",
+                "display_order": 5
             }
         ]

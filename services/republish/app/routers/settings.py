@@ -429,6 +429,15 @@ def _mask_secret(value: str) -> str:
     return f"{value[:4]}****{value[-4:]}"
 
 
+@router.get("/contact-form-templates")
+async def get_contact_form_templates(
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """문의폼 기본 템플릿 목록(contact_form 모듈 UI 드롭다운용)."""
+    from ..services.publishing.contact_form_templates import list_templates
+    return {"templates": list_templates()}
+
+
 @router.get("/tally-account")
 async def get_tally_account(
     current_user: User = Depends(get_current_user),
