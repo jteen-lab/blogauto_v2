@@ -13,6 +13,8 @@ Tally API: POST https://api.tally.so/forms  (Authorization: Bearer tly-...)
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import uuid as uuidlib
 from typing import Any, Dict, List, Optional
 
@@ -22,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...core.encryption import decrypt_api_key
 from ...core.logger import get_logger
 from ..system_settings_service import SystemSettingsService
+from .contact_form_templates import DEFAULT_FIELDS
 
 logger = get_logger("tally_forms_service", "app.log")
 
@@ -31,25 +34,24 @@ TALLY_PUBLIC_URL = "https://tally.so/r/{form_id}"
 # Tally API 키 저장 키(system_settings, value는 암호화)
 SETTING_TALLY_API_KEY = "tally_api_key"
 
-# 문의 폼 질문 구성: (라벨, 입력 블록 타입)
-_CONTACT_FIELDS = [
-    ("이름", "INPUT_TEXT"),
-    ("이메일", "INPUT_EMAIL"),
-    ("문의 내용", "TEXTAREA"),
-]
-
 
 def _new_uuid() -> str:
     return str(uuidlib.uuid4())
 
 
-def build_contact_blocks(title: str) -> List[Dict[str, Any]]:
-    """문의 폼 블록 구성(Tally 실제 스키마).
+def build_blocks_from_fields(
+    title: str, fields: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """필드 구성 → Tally 블록 배열(실호출 검증된 스키마).
 
     FORM_TITLE(groupType TEXT) + 필드마다 LABEL(groupType LABEL) + INPUT
-    (groupType=자기 타입, 예 INPUT_TEXT). **모든 블록은 각자 고유한 groupUuid를 가진다** —
-    Tally는 LABEL/TITLE 블록이 입력 블록과 groupUuid를 공유하면 400을 낸다.
-    (라벨과 입력의 연결은 순서 기반: 라벨이 입력 바로 앞.)
+    (groupType=자기 타입). **모든 블록은 각자 고유한 groupUuid**(Tally는 LABEL/TITLE이
+    입력과 groupUuid 공유 시 400). 라벨-입력 연결은 순서 기반.
+
+    Args:
+        title: 폼 제목
+        fields: [{"label","type","required"}] — type은 INPUT_TEXT/INPUT_EMAIL/
+            INPUT_PHONE_NUMBER/INPUT_NUMBER/TEXTAREA(확정 타입)
     """
     blocks: List[Dict[str, Any]] = [
         {
@@ -60,7 +62,10 @@ def build_contact_blocks(title: str) -> List[Dict[str, Any]]:
             "payload": {"title": title, "safeHTMLSchema": [[title]]},
         }
     ]
-    for label, input_type in _CONTACT_FIELDS:
+    for field in fields:
+        label = field["label"]
+        input_type = field["type"]
+        required = bool(field.get("required", True))
         blocks.append({
             "uuid": _new_uuid(),
             "type": "LABEL",
@@ -72,11 +77,24 @@ def build_contact_blocks(title: str) -> List[Dict[str, Any]]:
             "uuid": _new_uuid(),
             "type": input_type,
             "groupUuid": _new_uuid(),
-            # Tally 검증: 입력 블록의 groupType은 자기 타입과 동일해야 함
-            "groupType": input_type,
-            "payload": {"isRequired": True},
+            "groupType": input_type,  # 입력 블록 groupType은 자기 타입
+            "payload": {"isRequired": required},
         })
     return blocks
+
+
+def build_contact_blocks(title: str) -> List[Dict[str, Any]]:
+    """기본 3필드 문의 폼 블록(하위호환 · 모듈 미배정 폴백)."""
+    return build_blocks_from_fields(title, DEFAULT_FIELDS)
+
+
+def config_hash(title_template: str, fields: List[Dict[str, Any]]) -> str:
+    """폼 구성(제목 템플릿+필드)의 안정적 해시 — 변경 감지(멱등)용."""
+    payload = json.dumps(
+        {"title": title_template or "", "fields": fields or []},
+        sort_keys=True, ensure_ascii=False,
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 
 async def get_tally_api_key(db: AsyncSession) -> Optional[str]:
@@ -122,8 +140,21 @@ async def _get_workspace_id(
     return first.get("id") if isinstance(first, dict) else None
 
 
-async def create_contact_form(api_key: str, title: str) -> Dict[str, str]:
+def _headers(api_key: str) -> Dict[str, str]:
+    return {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+
+
+async def create_contact_form(
+    api_key: str, title: str, fields: Optional[List[Dict[str, Any]]] = None
+) -> Dict[str, str]:
     """Tally 폼을 생성하고 식별자/URL을 반환.
+
+    Args:
+        fields: 필드 구성(None이면 기본 3필드)
 
     Returns:
         {"form_id", "responder_uri", "embed_url"}
@@ -131,17 +162,12 @@ async def create_contact_form(api_key: str, title: str) -> Dict[str, str]:
     Raises:
         httpx.HTTPStatusError: Tally API 오류(응답 본문을 로깅)
     """
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
+    headers = _headers(api_key)
+    blocks = build_blocks_from_fields(title, fields or DEFAULT_FIELDS)
     async with httpx.AsyncClient(timeout=30.0) as client:
         workspace_id = await _get_workspace_id(client, headers)
         body: Dict[str, Any] = {
-            "name": title,
-            "status": "PUBLISHED",
-            "blocks": build_contact_blocks(title),
+            "name": title, "status": "PUBLISHED", "blocks": blocks,
         }
         if workspace_id:
             body["workspaceId"] = workspace_id
@@ -149,15 +175,40 @@ async def create_contact_form(api_key: str, title: str) -> Dict[str, str]:
             logger.warning("[F10] Tally workspaceId 미확인 → 생략하고 생성 시도")
         resp = await client.post(f"{TALLY_API_BASE}/forms", headers=headers, json=body)
         if resp.status_code >= 400:
-            # 400 등 오류 시 응답 본문을 남겨 원인 진단 가능하게
             logger.error(
                 "[F10] Tally 폼 생성 오류 %s | body=%s", resp.status_code, resp.text[:1000]
             )
         resp.raise_for_status()
         data = resp.json()
 
-    logger.info("[F10] Tally 폼 생성 응답 원시: %s", str(data)[:1000])
     form_id = data.get("id") or ""
     public = data.get("url") or (TALLY_PUBLIC_URL.format(form_id=form_id) if form_id else "")
     logger.info("[F10] Tally 폼 생성 | form_id=%s | url=%s | title=%s", form_id, public, title)
+    return {"form_id": form_id, "responder_uri": public, "embed_url": public}
+
+
+async def update_contact_form(
+    api_key: str, form_id: str, title: str, fields: List[Dict[str, Any]]
+) -> Dict[str, str]:
+    """기존 Tally 폼의 필드 구성을 PATCH로 수정(멱등 갱신).
+
+    Tally는 업데이트 시 전체 블록을 전송해야 한다.
+
+    Returns:
+        {"form_id", "responder_uri", "embed_url"}
+    """
+    headers = _headers(api_key)
+    blocks = build_blocks_from_fields(title, fields)
+    body = {"name": title, "status": "PUBLISHED", "blocks": blocks}
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.patch(
+            f"{TALLY_API_BASE}/forms/{form_id}", headers=headers, json=body
+        )
+        if resp.status_code >= 400:
+            logger.error(
+                "[F10] Tally 폼 수정 오류 %s | body=%s", resp.status_code, resp.text[:1000]
+            )
+        resp.raise_for_status()
+    public = TALLY_PUBLIC_URL.format(form_id=form_id)
+    logger.info("[F10] Tally 폼 수정 | form_id=%s | title=%s", form_id, title)
     return {"form_id": form_id, "responder_uri": public, "embed_url": public}

@@ -1,58 +1,69 @@
-"""F10 — Tally 문의 폼 서비스 순수 로직 + 프로비저너 폴백/마이그레이션 테스트."""
+"""F10 — Tally 폼 서비스(필드→블록·해시)+프로비저너(멱등) 테스트."""
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from app.services.publishing.tally_forms_service import (
+    build_blocks_from_fields,
     build_contact_blocks,
+    config_hash,
     get_tally_api_key,
 )
-from app.services.publishing.contact_form_provisioner import ensure_contact_form
+from app.services.publishing.contact_form_templates import (
+    DEFAULT_FIELDS, TEMPLATES, get_template, list_templates,
+)
+from app.services.publishing import contact_form_provisioner as prov
 
 
-class TestContactBlocks:
-    def test_first_block_is_form_title(self):
-        blocks = build_contact_blocks("군타 문의")
+class TestBuildBlocks:
+    def test_form_title_first(self):
+        blocks = build_blocks_from_fields("t", DEFAULT_FIELDS)
         assert blocks[0]["type"] == "FORM_TITLE"
         assert blocks[0]["groupType"] == "TEXT"
-        assert blocks[0]["payload"]["title"] == "군타 문의"
-        assert blocks[0]["payload"]["safeHTMLSchema"] == [["군타 문의"]]
 
-    def test_three_fields_as_label_input_pairs(self):
-        blocks = build_contact_blocks("t")
-        # FORM_TITLE + (LABEL+INPUT)*3 = 7블록
-        assert len(blocks) == 7
-        types = [b["type"] for b in blocks[1:]]
-        assert types == ["LABEL", "INPUT_TEXT", "LABEL", "INPUT_EMAIL", "LABEL", "TEXTAREA"]
+    def test_label_input_pairs_and_group_types(self):
+        fields = [{"label": "이름", "type": "INPUT_TEXT", "required": True},
+                  {"label": "메시지", "type": "TEXTAREA", "required": False}]
+        blocks = build_blocks_from_fields("t", fields)
+        assert len(blocks) == 1 + 2 * 2
+        assert [b["type"] for b in blocks[1:]] == ["LABEL", "INPUT_TEXT", "LABEL", "TEXTAREA"]
+        # 입력 블록 groupType = 자기 타입
+        assert blocks[2]["groupType"] == "INPUT_TEXT"
+        assert blocks[4]["groupType"] == "TEXTAREA"
+        assert blocks[4]["payload"]["isRequired"] is False
 
-    def test_all_blocks_have_group_type(self):
-        for b in build_contact_blocks("t"):
-            assert b.get("groupType"), f"groupType 누락: {b['type']}"
+    def test_every_block_unique_group_uuid(self):
+        blocks = build_blocks_from_fields("t", DEFAULT_FIELDS)
+        gu = [b["groupUuid"] for b in blocks]
+        assert len(gu) == len(set(gu))
 
-    def test_every_block_has_unique_group_uuid(self):
-        # Tally 규칙: LABEL/TITLE은 입력과 groupUuid 공유 금지 → 전 블록 고유
-        blocks = build_contact_blocks("t")
-        group_uuids = [b["groupUuid"] for b in blocks]
-        assert len(group_uuids) == len(set(group_uuids)), "groupUuid가 중복되면 400"
+    def test_default_blocks_match_default_fields(self):
+        assert len(build_contact_blocks("t")) == 1 + 2 * len(DEFAULT_FIELDS)
 
-    def test_label_and_input_group_types(self):
-        # 입력 블록의 groupType은 자기 타입과 동일해야 함(Tally 검증)
-        blocks = build_contact_blocks("t")
-        pairs = [(blocks[1], blocks[2]), (blocks[3], blocks[4]), (blocks[5], blocks[6])]
-        for label, inp in pairs:
-            assert label["groupType"] == "LABEL"
-            assert inp["groupType"] == inp["type"]
 
-    def test_inputs_required(self):
-        blocks = build_contact_blocks("t")
-        inputs = [b for b in blocks if b["type"] in ("INPUT_TEXT", "INPUT_EMAIL", "TEXTAREA")]
-        assert all(b["payload"]["isRequired"] for b in inputs)
+class TestConfigHash:
+    def test_stable_and_sensitive(self):
+        h1 = config_hash("{blog} 문의", DEFAULT_FIELDS)
+        h2 = config_hash("{blog} 문의", DEFAULT_FIELDS)
+        h3 = config_hash("{blog} 문의", DEFAULT_FIELDS + [{"label": "전화", "type": "INPUT_PHONE_NUMBER"}])
+        assert h1 == h2 and h1 != h3
 
-    def test_labels_use_safe_html_schema(self):
-        blocks = build_contact_blocks("t")
-        labels = [b["payload"]["safeHTMLSchema"][0][0] for b in blocks if b["type"] == "LABEL"]
-        assert labels == ["이름", "이메일", "문의 내용"]
+
+class TestTemplates:
+    def test_at_least_five_templates(self):
+        assert len(TEMPLATES) >= 5
+
+    def test_get_and_list(self):
+        assert get_template("basic")["code"] == "basic"
+        codes = {t["code"] for t in list_templates()}
+        assert "basic" in codes and "with_phone" in codes
+
+    def test_only_supported_field_types(self):
+        from app.services.publishing.contact_form_templates import SUPPORTED_FIELD_TYPES
+        for t in TEMPLATES:
+            for f in t["fields"]:
+                assert f["type"] in SUPPORTED_FIELD_TYPES
 
 
 class TestTallyApiKey:
@@ -68,40 +79,48 @@ class TestTallyApiKey:
 class TestProvisioner:
     @pytest.mark.asyncio
     async def test_respects_manual_url(self):
-        blog = SimpleNamespace(
-            name="블로그", author_profile={"contact_form_url": "https://manual/form"}
-        )
-        assert await ensure_contact_form(blog, db=object()) == "https://manual/form"
+        blog = SimpleNamespace(name="B", author_profile={"contact_form_url": "https://manual/f"})
+        assert await prov.ensure_contact_form(blog, db=object()) == "https://manual/f"
 
     @pytest.mark.asyncio
-    async def test_reuses_existing_tally_form(self):
-        blog = SimpleNamespace(
-            name="블로그",
-            author_profile={"contact_form_id": "F1", "contact_form_url": "https://tally.so/r/abc"},
-        )
-        assert await ensure_contact_form(blog, db=object()) == "https://tally.so/r/abc"
+    async def test_skips_when_hash_matches(self):
+        h = config_hash(prov.DEFAULT_TITLE_TEMPLATE, DEFAULT_FIELDS)
+        blog = SimpleNamespace(name="B", author_profile={
+            "contact_form_id": "F1", "contact_form_url": "https://tally.so/r/abc",
+            "contact_form_config_hash": h,
+        })
+        with patch.object(prov, "get_tally_api_key", new=AsyncMock(return_value="k")), \
+             patch.object(prov, "create_contact_form", new=AsyncMock()) as cc, \
+             patch.object(prov, "update_contact_form", new=AsyncMock()) as uc:
+            url = await prov.ensure_contact_form(blog, db=object())
+        assert url == "https://tally.so/r/abc"
+        cc.assert_not_called()
+        uc.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_legacy_google_url_is_regenerated(self):
-        # 옛 구글폼 URL은 재사용하지 않고 (재)생성 경로로 진입 → 키 없으면 None
-        blog = SimpleNamespace(
-            name="블로그",
-            author_profile={
-                "contact_form_id": "gid",
-                "contact_form_url": "https://docs.google.com/forms/d/e/X/viewform?embedded=true",
-            },
-        )
-        with patch(
-            "app.services.publishing.contact_form_provisioner.get_tally_api_key",
-            new=AsyncMock(return_value=None),
-        ):
-            assert await ensure_contact_form(blog, db=object()) is None
+    async def test_patches_when_hash_differs(self):
+        blog = SimpleNamespace(name="B", author_profile={
+            "contact_form_id": "F1", "contact_form_url": "https://tally.so/r/abc",
+            "contact_form_config_hash": "OLD",
+        })
+        db = AsyncMock()
+        with patch.object(prov, "get_tally_api_key", new=AsyncMock(return_value="k")), \
+             patch.object(prov, "update_contact_form", new=AsyncMock(return_value={
+                 "form_id": "F1", "embed_url": "https://tally.so/r/abc"})) as uc:
+            url = await prov.ensure_contact_form(blog, db=db)
+        uc.assert_awaited_once()
+        assert url == "https://tally.so/r/abc"
+
+    @pytest.mark.asyncio
+    async def test_legacy_google_regenerated(self):
+        blog = SimpleNamespace(name="B", author_profile={
+            "contact_form_id": "g", "contact_form_url": "https://docs.google.com/forms/x/viewform",
+        })
+        with patch.object(prov, "get_tally_api_key", new=AsyncMock(return_value=None)):
+            assert await prov.ensure_contact_form(blog, db=object()) is None
 
     @pytest.mark.asyncio
     async def test_none_when_key_unset(self):
-        blog = SimpleNamespace(name="블로그", author_profile={})
-        with patch(
-            "app.services.publishing.contact_form_provisioner.get_tally_api_key",
-            new=AsyncMock(return_value=None),
-        ):
-            assert await ensure_contact_form(blog, db=object()) is None
+        blog = SimpleNamespace(name="B", author_profile={})
+        with patch.object(prov, "get_tally_api_key", new=AsyncMock(return_value=None)):
+            assert await prov.ensure_contact_form(blog, db=object()) is None
