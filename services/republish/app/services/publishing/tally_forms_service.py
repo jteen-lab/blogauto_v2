@@ -6,6 +6,9 @@ webhook)이 네이티브로 가능하다. Google Forms(폼별 응답 분리·알
 한계를 해소하기 위해 채택(사용자 확정 2026-08-18).
 
 Tally API: POST https://api.tally.so/forms  (Authorization: Bearer tly-...)
+- 생성 요청 필수: name, workspaceId, status, blocks
+- 블록 필수: uuid, type, groupUuid, groupType, payload
+- FORM_TITLE(groupType TEXT) + 필드마다 LABEL(groupType LABEL) + INPUT(groupType QUESTION)
 순서도 ``docs/flowcharts/adsense_f10_contact_form.md``.
 """
 from __future__ import annotations
@@ -23,7 +26,6 @@ from ..system_settings_service import SystemSettingsService
 logger = get_logger("tally_forms_service", "app.log")
 
 TALLY_API_BASE = "https://api.tally.so"
-# 공개 폼 URL(링크+iframe 겸용). 최초 실호출 응답으로 form_id 필드/URL 형식 검증.
 TALLY_PUBLIC_URL = "https://tally.so/r/{form_id}"
 
 # Tally API 키 저장 키(system_settings, value는 암호화)
@@ -42,32 +44,35 @@ def _new_uuid() -> str:
 
 
 def build_contact_blocks(title: str) -> List[Dict[str, Any]]:
-    """문의 폼 블록 구성.
+    """문의 폼 블록 구성(Tally 실제 스키마).
 
-    FORM_TITLE + (TITLE 라벨 + INPUT_* 입력) 쌍들. 라벨과 입력은 같은
-    groupUuid로 묶는다(Tally 블록 규칙).
+    FORM_TITLE(groupType TEXT) + 필드마다 LABEL(groupType LABEL) + INPUT
+    (groupType QUESTION). 라벨/입력은 같은 groupUuid로 묶는다.
     """
     blocks: List[Dict[str, Any]] = [
         {
             "uuid": _new_uuid(),
             "type": "FORM_TITLE",
             "groupUuid": _new_uuid(),
-            "payload": {"title": title},
+            "groupType": "TEXT",
+            "payload": {"title": title, "safeHTMLSchema": [[title]]},
         }
     ]
     for label, input_type in _CONTACT_FIELDS:
         group = _new_uuid()
         blocks.append({
             "uuid": _new_uuid(),
-            "type": "TITLE",
+            "type": "LABEL",
             "groupUuid": group,
-            "payload": {"html": label},
+            "groupType": "LABEL",
+            "payload": {"safeHTMLSchema": [[label]]},
         })
         blocks.append({
             "uuid": _new_uuid(),
             "type": input_type,
             "groupUuid": group,
-            "payload": {"isRequired": True, "placeholder": ""},
+            "groupType": "QUESTION",
+            "payload": {"isRequired": True},
         })
     return blocks
 
@@ -84,6 +89,16 @@ async def get_tally_api_key(db: AsyncSession) -> Optional[str]:
         return None
 
 
+async def _get_workspace_id(client: httpx.AsyncClient, headers: Dict[str, str]) -> str:
+    """첫 번째 워크스페이스 id 반환(폼 생성에 필수)."""
+    resp = await client.get(f"{TALLY_API_BASE}/workspaces", headers=headers)
+    resp.raise_for_status()
+    items = resp.json().get("items") or []
+    if not items:
+        raise RuntimeError("Tally 워크스페이스가 없습니다")
+    return items[0]["id"]
+
+
 async def create_contact_form(api_key: str, title: str) -> Dict[str, str]:
     """Tally 폼을 생성하고 식별자/URL을 반환.
 
@@ -91,21 +106,32 @@ async def create_contact_form(api_key: str, title: str) -> Dict[str, str]:
         {"form_id", "responder_uri", "embed_url"}
 
     Raises:
-        httpx.HTTPStatusError: Tally API 오류
+        httpx.HTTPStatusError: Tally API 오류(응답 본문을 로깅)
     """
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
+        "Accept": "application/json",
     }
-    body = {"status": "PUBLISHED", "blocks": build_contact_blocks(title)}
     async with httpx.AsyncClient(timeout=30.0) as client:
+        workspace_id = await _get_workspace_id(client, headers)
+        body = {
+            "name": title,
+            "workspaceId": workspace_id,
+            "status": "PUBLISHED",
+            "blocks": build_contact_blocks(title),
+        }
         resp = await client.post(f"{TALLY_API_BASE}/forms", headers=headers, json=body)
+        if resp.status_code >= 400:
+            # 400 등 오류 시 응답 본문을 남겨 원인 진단 가능하게
+            logger.error(
+                "[F10] Tally 폼 생성 오류 %s | body=%s", resp.status_code, resp.text[:1000]
+            )
         resp.raise_for_status()
         data = resp.json()
 
-    # 최초 실호출 시 실제 응답 필드/URL 형식을 확인하기 위한 원시 로깅
-    logger.info("[F10] Tally 폼 생성 응답 원시: %s", data)
-    form_id = data.get("id") or data.get("formId") or ""
-    public = TALLY_PUBLIC_URL.format(form_id=form_id) if form_id else ""
+    logger.info("[F10] Tally 폼 생성 응답 원시: %s", str(data)[:1000])
+    form_id = data.get("id") or ""
+    public = data.get("url") or (TALLY_PUBLIC_URL.format(form_id=form_id) if form_id else "")
     logger.info("[F10] Tally 폼 생성 | form_id=%s | url=%s | title=%s", form_id, public, title)
     return {"form_id": form_id, "responder_uri": public, "embed_url": public}
