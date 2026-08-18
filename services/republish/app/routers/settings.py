@@ -411,6 +411,58 @@ async def get_blogger_limit(db: AsyncSession = Depends(get_db_session)):
 
 
 # ============================================================
+# F10: 문의 폼 전용 구글 계정(A) 자격
+# ============================================================
+
+class FormsAccountRequest(BaseModel):
+    """문의 폼 전용 계정 refresh token 저장 요청."""
+
+    refresh_token: str = Field(..., min_length=10)
+    email: Optional[str] = None
+
+
+@router.get("/forms-account")
+async def get_forms_account(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """문의 폼 전용 계정 설정 상태 조회(토큰 값은 노출하지 않음)."""
+    from ..services.system_settings_service import SystemSettingsService
+    from ..services.publishing.google_forms_service import (
+        SETTING_FORMS_REFRESH_TOKEN, SETTING_FORMS_EMAIL,
+    )
+    token = await SystemSettingsService.get(SETTING_FORMS_REFRESH_TOKEN, db)
+    email = await SystemSettingsService.get(SETTING_FORMS_EMAIL, db)
+    return {"configured": bool(token), "email": email or ""}
+
+
+@router.post("/forms-account")
+async def save_forms_account(
+    request: FormsAccountRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """문의 폼 전용 계정의 refresh token을 암호화 저장한다(F10).
+
+    OAuth Playground 등에서 계정 A로 Forms 스코프 인증 후 발급받은 refresh
+    token을 붙여넣는다. blogauto가 이 토큰으로 Forms API를 호출한다.
+    """
+    from ..core.encryption import encrypt_api_key
+    from ..services.system_settings_service import SystemSettingsService
+    from ..services.publishing.google_forms_service import (
+        SETTING_FORMS_REFRESH_TOKEN, SETTING_FORMS_EMAIL,
+    )
+    await SystemSettingsService.set(
+        SETTING_FORMS_REFRESH_TOKEN, encrypt_api_key(request.refresh_token.strip()), db,
+    )
+    if request.email:
+        await SystemSettingsService.set(SETTING_FORMS_EMAIL, request.email.strip(), db)
+    await db.commit()
+    logger.info("[SETTINGS] 문의 폼 전용 계정 저장 | email=%s", request.email or "")
+    return {"success": True, "configured": True, "email": request.email or ""}
+
+
+# ============================================================
 # 네이버 검색 API (블로그 검색)
 # ============================================================
 
