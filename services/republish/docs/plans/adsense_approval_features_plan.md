@@ -354,3 +354,11 @@ preparing/applied 블로그에 자동 주입(옵트인·중복가드) + "애드�
   계정 상태 추적용으로 애드센스 탭에 유지.
 - **마이그레이션 없음**(모듈 settings는 자유 JSONB). 순서도
   `docs/flowcharts/adsense_module_ui_migration.md`.
+
+## 12. 문의폼 커스텀 모듈 + 문의 수신함 (2026-08-18 사용자 확정, 착수 전)
+
+> F10 문의폼(Tally) 후속. 블로그별 다른 문의폼을 **멱등 `contact_form` 모듈**로
+> 획일 관리(기존 모듈→플로우→수동/오토런 재사용), 문의 제출은 **blogauto 대시보드
+> 수신함**(webhook/폴링)에서 확인. 두 계획서로 분리, 함께 착수 예정.
+- 문의폼 커스텀 모듈: `docs/plans/adsense_contact_form_module_plan.md`
+- 문의 수신함 대시보드: `docs/plans/adsense_inquiry_dashboard_plan.md`
