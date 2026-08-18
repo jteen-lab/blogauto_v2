@@ -15,6 +15,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from ...models.blog import Blog, BlogPlatform
 from ...core.logger import get_logger
 from .blogger_page_publisher import BloggerPagePublisher
+from .contact_form_provisioner import ensure_contact_form
 from .publish_result import PublishResult
 from .required_pages_templates import REQUIRED_PAGE_TYPES, build_required_pages
 
@@ -36,6 +37,9 @@ class RequiredPagesService:
                 "error": f"지원하지 않는 플랫폼: {blog.platform.value}",
                 "results": {},
             }
+
+        # F10: 문의 폼 자동 생성(폼 계정 설정 시). 실패/미설정이면 mailto 폴백.
+        await ensure_contact_form(blog, self.db)
 
         pages = build_required_pages(blog, owner_email)
         existing_ids = dict(blog.required_page_ids or {})
