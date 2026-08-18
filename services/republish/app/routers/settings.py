@@ -411,14 +411,13 @@ async def get_blogger_limit(db: AsyncSession = Depends(get_db_session)):
 
 
 # ============================================================
-# F10: 문의 폼 전용 구글 계정(A) 자격
+# F10: 문의 폼 — Tally API 연동
 # ============================================================
 
-class FormsAccountRequest(BaseModel):
-    """문의 폼 전용 계정 저장 요청. 토큰이 마스킹값이면 기존 토큰 유지."""
+class TallyAccountRequest(BaseModel):
+    """Tally API 키 저장 요청. 키가 마스킹값이면 기존 키 유지."""
 
-    refresh_token: Optional[str] = None
-    email: Optional[str] = None
+    api_key: Optional[str] = None
 
 
 def _mask_secret(value: str) -> str:
@@ -430,74 +429,59 @@ def _mask_secret(value: str) -> str:
     return f"{value[:4]}****{value[-4:]}"
 
 
-@router.get("/forms-account")
-async def get_forms_account(
+@router.get("/tally-account")
+async def get_tally_account(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    """문의 폼 전용 계정 설정 조회. 토큰은 마스킹값만 반환(다른 키와 동일)."""
+    """Tally API 연동 상태 조회. 키는 마스킹값만 반환(다른 키와 동일)."""
     from ..core.encryption import decrypt_api_key
     from ..services.system_settings_service import SystemSettingsService
-    from ..services.publishing.google_forms_service import (
-        SETTING_FORMS_REFRESH_TOKEN, SETTING_FORMS_EMAIL,
-    )
-    enc = await SystemSettingsService.get(SETTING_FORMS_REFRESH_TOKEN, db)
-    email = await SystemSettingsService.get(SETTING_FORMS_EMAIL, db)
+    from ..services.publishing.tally_forms_service import SETTING_TALLY_API_KEY
+    enc = await SystemSettingsService.get(SETTING_TALLY_API_KEY, db)
     masked = ""
     if enc:
         try:
             masked = _mask_secret(decrypt_api_key(enc))
         except Exception:  # noqa: BLE001
             masked = "****"
-    return {"configured": bool(enc), "email": email or "", "refresh_token": masked}
+    return {"configured": bool(enc), "api_key": masked}
 
 
-@router.post("/forms-account")
-async def save_forms_account(
-    request: FormsAccountRequest,
+@router.post("/tally-account")
+async def save_tally_account(
+    request: TallyAccountRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    """문의 폼 전용 계정의 refresh token을 암호화 저장한다(F10).
+    """Tally API 키를 암호화 저장한다(F10).
 
-    토큰 칸이 마스킹값(``****`` 포함)이면 변경으로 보지 않고 기존 토큰을 유지한다
+    키 칸이 마스킹값(``****`` 포함)이면 변경으로 보지 않고 기존 키를 유지한다
     (다른 API 키 항목과 동일 동작 — 값이 지워지지 않고 마스킹으로 유지).
     """
     from ..core.encryption import encrypt_api_key
     from ..services.system_settings_service import SystemSettingsService
-    from ..services.publishing.google_forms_service import (
-        SETTING_FORMS_REFRESH_TOKEN, SETTING_FORMS_EMAIL,
-    )
-    token = (request.refresh_token or "").strip()
-    existing = await SystemSettingsService.get(SETTING_FORMS_REFRESH_TOKEN, db)
+    from ..services.publishing.tally_forms_service import SETTING_TALLY_API_KEY
+    key = (request.api_key or "").strip()
+    existing = await SystemSettingsService.get(SETTING_TALLY_API_KEY, db)
 
-    if token and "****" not in token:
+    if key and "****" not in key:
         await SystemSettingsService.set(
-            SETTING_FORMS_REFRESH_TOKEN, encrypt_api_key(token), db,
+            SETTING_TALLY_API_KEY, encrypt_api_key(key), db,
         )
     elif not existing:
-        raise HTTPException(
-            status_code=422, detail="refresh token을 입력하세요",
-        )
-
-    if request.email is not None:
-        await SystemSettingsService.set(SETTING_FORMS_EMAIL, request.email.strip(), db)
+        raise HTTPException(status_code=422, detail="Tally API 키를 입력하세요")
     await db.commit()
 
-    stored = await SystemSettingsService.get(SETTING_FORMS_REFRESH_TOKEN, db)
+    stored = await SystemSettingsService.get(SETTING_TALLY_API_KEY, db)
     masked = ""
     if stored:
         try:
             masked = _mask_secret(decrypt_api_key(stored))
         except Exception:  # noqa: BLE001
             masked = "****"
-    logger.info("[SETTINGS] 문의 폼 전용 계정 저장 | email=%s", request.email or "")
-    return {
-        "success": True,
-        "configured": bool(stored),
-        "email": (request.email or "").strip(),
-        "refresh_token": masked,
-    }
+    logger.info("[SETTINGS] Tally API 키 저장")
+    return {"success": True, "configured": bool(stored), "api_key": masked}
 
 
 # ============================================================
