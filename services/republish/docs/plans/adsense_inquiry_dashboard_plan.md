@@ -1,6 +1,9 @@
 # 문의 수신함(대시보드) 작업계획서 (F10 Phase 2)
 
-> **상태**: 설계 확정, 구현 착수 전 · **작성일**: 2026-08-18 · **작성**: Claude
+> **상태**: 구현 완료·배포(폴링 방식, 2026-08-18) · **작성일**: 2026-08-18 · **작성**: Claude
+> ⚠️ blogauto가 바레IP/HTTP라 webhook 인바운드 부적합 → **폴링(동기화 버튼)** 채택.
+> contact_submissions(mig 049) + /contact-inbox 페이지 + sync API. webhook은 HTTPS
+> 도메인 확보 후 후속. 실동기화 검증 완료.
 > **근거**: `docs/plans/adsense_f10_contact_form_plan.md` Phase 2, 사용자 확정
 > (2026-08-18): Tally 대시보드가 아닌 **blogauto 대시보드에서 문의 확인**.
 > 문의폼 커스텀 모듈(`adsense_contact_form_module_plan.md`)과 **함께 진행**.
