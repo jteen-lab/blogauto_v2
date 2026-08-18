@@ -1053,8 +1053,10 @@ function moduleListApp() {
 
                         ${window.getBulkCollectFormTemplate ? window.getBulkCollectFormTemplate() : '<!-- bulk-collect-form-template.js 로드 필요 -->'}
 
+                        ${window.getContactFormModuleFormTemplate ? window.getContactFormModuleFormTemplate() : '<!-- contact-form-template.js 로드 필요 -->'}
+
                         <!-- 기타 타입 설정 -->
-                        <div x-show="formData.type_code !== 'collect' && formData.type_code !== 'data' && formData.type_code !== 'prompt' && formData.type_code !== 'generate' && formData.type_code !== 'growth_profile' && formData.type_code !== 'bulk_collect'">
+                        <div x-show="formData.type_code !== 'collect' && formData.type_code !== 'data' && formData.type_code !== 'prompt' && formData.type_code !== 'generate' && formData.type_code !== 'growth_profile' && formData.type_code !== 'bulk_collect' && formData.type_code !== 'contact_form'">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-2">설정 정보 (JSON)</label>
                                 <textarea x-model="settingsJson"
