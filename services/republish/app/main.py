@@ -36,6 +36,7 @@ from .routers.dashboard import router as dashboard_router
 from .routers.dashboard_celery import router as dashboard_celery_router
 from .routers.settings import router as settings_router, naver_search_router, naver_ads_router, google_trends_router, naver_datalab_router, google_keyword_planner_router, system_settings_router
 from .routers.modules_pages import router as modules_page_router
+from .routers.contact_inbox_pages import router as contact_inbox_page_router  # 문의 수신함 페이지 (F10)
 from .routers.flows_pages import router as flows_page_router
 from .routers.autorun_pages import router as autorun_page_router
 from .routers.engine import router as engine_router
@@ -52,6 +53,7 @@ from .routers.blog_settings import router as blog_settings_router  # 블로그 �
 from .routers.blog_settings_seo import router as blog_settings_seo_router  # 블로그 SEO 설정 API
 from .routers.blog_settings_renewal import router as blog_settings_renewal_router  # 블로그 재발행 리뉴얼 설정 API
 from .routers.blog_settings_adsense import router as blog_settings_adsense_router  # 블로그 애드센스 승인 지원 설정 API
+from .routers.contact_submissions import router as contact_submissions_router  # 문의 수신함 API (F10)
 from .routers.ai_api_keys import router as ai_api_keys_router  # AI API 키 다계정 관리
 from .routers.reference_collection import router as reference_collection_router  # 참조자료 수집
 from .api.growth_profile import router as growth_profile_router  # Growth Profile API
@@ -244,6 +246,7 @@ app.include_router(blog_settings_router, prefix=settings.api_v1_prefix)  # 블�
 app.include_router(blog_settings_seo_router, prefix=settings.api_v1_prefix)  # 블로그 SEO 설정
 app.include_router(blog_settings_renewal_router, prefix=settings.api_v1_prefix)  # 블로그 재발행 리뉴얼 설정
 app.include_router(blog_settings_adsense_router, prefix=settings.api_v1_prefix)  # 블로그 애드센스 승인 지원 설정
+app.include_router(contact_submissions_router, prefix=settings.api_v1_prefix)  # 문의 수신함 (F10)
 app.include_router(ai_api_keys_router)  # AI API 키 다계정 관리 (prefix 포함)
 app.include_router(reference_collection_router, prefix=settings.api_v1_prefix)  # 참조자료 수집
 app.include_router(growth_profile_router, prefix=settings.api_v1_prefix)  # Growth Profile
@@ -258,6 +261,7 @@ app.include_router(categories_page_router)
 app.include_router(republish_page_router)
 # app.include_router(groups_page_router)  # 임시 비활성화
 app.include_router(modules_page_router)
+app.include_router(contact_inbox_page_router)  # 문의 수신함 페이지 (F10)
 app.include_router(flows_page_router)
 app.include_router(autorun_page_router)
 app.include_router(collection_page_router)
