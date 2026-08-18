@@ -1,7 +1,12 @@
-# F10 — 문의 폼 자동 생성 작업계획서 (Google Forms 통합)
+# F10 — 문의 폼 자동 생성 작업계획서 (Tally 통합)
 
-> **상태**: 설계 확정·구현 착수 전(사전 준비물 대기) · **확정일**: 2026-08-18 · **작성**: Claude
+> **상태**: Phase 1 구현 완료·배포 대기 · **확정일**: 2026-08-18 · **작성**: Claude
 > **근거**: `docs/plans/adsense_approval_features_plan.md` F10, 순서도 `docs/flowcharts/adsense_f10_contact_form.md`
+>
+> ⚠️ **2026-08-18 방향 전환(Google Forms → Tally)**: Google Forms는 폼마다 응답이
+> 분리되고 네이티브 통합 수신·이메일 알림이 없어(수백 개 블로그 확인 불가) **Tally로
+> 전환**. 단일 Tally 계정으로 모든 폼을 만들어 대시보드+이메일 알림+webhook으로 통합
+> 수집. 아래 §의 Google Forms 관련 서술은 **순서도(최신, Tally 기준)로 대체**됨.
 
 ## 1. 배경 / 목적
 - blogauto는 수백 개 블로그를 자동 관리한다. 필수 페이지·문의 페이지에 **동일한

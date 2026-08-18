@@ -64,12 +64,15 @@
 - ~~**내용**: 주제 카테고리 기반 상단 메뉴/사이드바 구성(월별 아카이브만 있는 현 구조 개선).~~
 - ~~**영향 영역**: 발행 어댑터, 블로그 초기 세팅.~~
 
-**F10. 문의 폼 자동 생성 기능** `P1` — **설계 확정, 구현 착수 전(2026-08-18)**:
-**블로거·워드프레스 통합 — 양 플랫폼 Google Forms 임베드**(도메인 무구매·자체호스팅
-없음·이메일 미노출·범용 도메인이라 공개 지문 없음). 블로그별 Forms API 자동 생성 →
-`contact_form_url` 자동 채움(기존 iframe 골격 재사용). **착수 전 사전 준비물 필수**:
-GCP Forms API 활성화 + OAuth Forms 스코프 재동의 + WP용 운영자 구글 계정 지정.
-작업계획서 `docs/plans/adsense_f10_contact_form_plan.md`, 순서도
+**F10. 문의 폼 자동 생성 기능** `P1` — **Phase 1 구현 완료·배포 대기(2026-08-18,
+Tally 전환)**: 블로거·워드프레스 통합 — 양 플랫폼 **Tally 폼**. 단일 Tally 계정으로
+블로그별 폼 자동 생성 → `contact_form_url` 자동 채움 → 필수 페이지가 폼+링크로
+렌더(이메일 미노출). **모든 문의가 한 Tally 계정(대시보드+이메일 알림)에 통합
+수집** — Google Forms의 "폼별 응답 분리·알림 없음" 한계로 전환(사용자 확정).
+`tally_forms_service`(생성) + `contact_form_provisioner`(멱등) + `required_pages_service`
+훅 + `settings.tally-account`(API키 저장). **운영자 준비물**: Tally 계정+API 키 입력.
+Tally API 응답 형식은 최초 실호출 로깅으로 실측 검증 예정. Phase 2: webhook→통합
+수신함. 작업계획서 `docs/plans/adsense_f10_contact_form_plan.md`, 순서도
 `docs/flowcharts/adsense_f10_contact_form.md`.
 - **배경**: F1 완료로 mailto 노출 문제는 `contact_form_url` 옵트인으로 해결했으나,
   현재는 폼 URL을 운영자가 Google Forms/Formspree 등 외부에서 **수동으로 하나씩
