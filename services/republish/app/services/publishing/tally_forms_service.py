@@ -47,7 +47,9 @@ def build_contact_blocks(title: str) -> List[Dict[str, Any]]:
     """문의 폼 블록 구성(Tally 실제 스키마).
 
     FORM_TITLE(groupType TEXT) + 필드마다 LABEL(groupType LABEL) + INPUT
-    (groupType QUESTION). 라벨/입력은 같은 groupUuid로 묶는다.
+    (groupType QUESTION). **모든 블록은 각자 고유한 groupUuid를 가진다** —
+    Tally는 LABEL/TITLE 블록이 입력 블록과 groupUuid를 공유하면 400을 낸다.
+    (라벨과 입력의 연결은 순서 기반: 라벨이 입력 바로 앞.)
     """
     blocks: List[Dict[str, Any]] = [
         {
@@ -59,18 +61,17 @@ def build_contact_blocks(title: str) -> List[Dict[str, Any]]:
         }
     ]
     for label, input_type in _CONTACT_FIELDS:
-        group = _new_uuid()
         blocks.append({
             "uuid": _new_uuid(),
             "type": "LABEL",
-            "groupUuid": group,
+            "groupUuid": _new_uuid(),
             "groupType": "LABEL",
             "payload": {"safeHTMLSchema": [[label]]},
         })
         blocks.append({
             "uuid": _new_uuid(),
             "type": input_type,
-            "groupUuid": group,
+            "groupUuid": _new_uuid(),
             "groupType": "QUESTION",
             "payload": {"isRequired": True},
         })

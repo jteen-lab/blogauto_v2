@@ -30,15 +30,18 @@ class TestContactBlocks:
         for b in build_contact_blocks("t"):
             assert b.get("groupType"), f"groupType 누락: {b['type']}"
 
-    def test_label_and_input_share_group_uuid(self):
+    def test_every_block_has_unique_group_uuid(self):
+        # Tally 규칙: LABEL/TITLE은 입력과 groupUuid 공유 금지 → 전 블록 고유
+        blocks = build_contact_blocks("t")
+        group_uuids = [b["groupUuid"] for b in blocks]
+        assert len(group_uuids) == len(set(group_uuids)), "groupUuid가 중복되면 400"
+
+    def test_label_and_input_group_types(self):
         blocks = build_contact_blocks("t")
         pairs = [(blocks[1], blocks[2]), (blocks[3], blocks[4]), (blocks[5], blocks[6])]
         for label, inp in pairs:
-            assert label["groupUuid"] == inp["groupUuid"]
             assert label["groupType"] == "LABEL"
             assert inp["groupType"] == "QUESTION"
-        groups = {blocks[1]["groupUuid"], blocks[3]["groupUuid"], blocks[5]["groupUuid"]}
-        assert len(groups) == 3
 
     def test_inputs_required(self):
         blocks = build_contact_blocks("t")
