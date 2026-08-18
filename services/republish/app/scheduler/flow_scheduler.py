@@ -562,10 +562,11 @@ class FlowScheduler:
                         "message": f"플로우를 찾을 수 없습니다: {flow_id}"
                     }
 
-                # 모듈 찾기 (collect/bulk_collect/data/generate/prompt만 모듈 필요)
+                # 모듈 찾기 (collect/bulk_collect/data/generate/prompt/contact_form만 모듈 필요)
                 target_module = None
                 if action_type in (
                     "collect", "bulk_collect", "data", "generate", "prompt",
+                    "contact_form",
                 ):
                     for link in flow.module_links:
                         module = link.module
@@ -677,6 +678,10 @@ class FlowScheduler:
                     result = await self._execute_generate_module(
                         flow, target_module, blogs, db,
                         gp_settings=gp_settings,
+                    )
+                elif action_type == "contact_form":
+                    result = await self._execute_contact_form_module(
+                        target_module, blogs, db,
                     )
                 else:
                     result = {"success": False, "message": f"지원하지 않는 액션 타입: {action_type}"}
@@ -1081,6 +1086,7 @@ class FlowScheduler:
                 module = None
                 if action_type in (
                     "collect", "bulk_collect", "data", "generate", "prompt",
+                    "contact_form",
                 ):
                     for link in flow.module_links:
                         if link.module and link.module.module_type:
@@ -1323,6 +1329,15 @@ class FlowScheduler:
 
                     logger.info(
                         f"[FLOW_SCHEDULER] 생성 모듈 실행 완료 | FlowID={flow_id} | "
+                        f"Success={result.get('success', False)} | Duration={duration_ms}ms"
+                    )
+                elif action_type == "contact_form":
+                    result = await self._execute_contact_form_module(
+                        module, blogs, db,
+                    )
+                    duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
+                    logger.info(
+                        f"[FLOW_SCHEDULER] 문의폼 모듈 실행 완료 | FlowID={flow_id} | "
                         f"Success={result.get('success', False)} | Duration={duration_ms}ms"
                     )
                 elif action_type == "growth_profile":
@@ -2106,6 +2121,40 @@ class FlowScheduler:
                 "message": str(e),
                 "collected_count": 0
             }
+
+    async def _execute_contact_form_module(
+        self,
+        contact_module: Module,
+        blogs: List[Blog],
+        db: AsyncSession,
+    ) -> Dict[str, Any]:
+        """문의폼 모듈 실행: 연결된 블로그마다 문의폼 보장(멱등).
+
+        폼 없음→생성, 구성 변경→PATCH, 동일→스킵. 반복 실행돼도 저부하.
+        """
+        from ..services.publishing.contact_form_provisioner import ensure_contact_form
+        from ..services.publishing.contact_form_templates import get_template
+
+        settings = contact_module.settings or {}
+        try:
+            template = get_template(settings.get("template_code") or "basic")
+        except KeyError:
+            template = None
+        if not blogs:
+            return {"success": True, "skipped": True, "message": "연결된 블로그 없음"}
+
+        ok = 0
+        for blog in blogs:
+            try:
+                url = await ensure_contact_form(blog, db, template=template)
+                if url:
+                    ok += 1
+            except Exception as exc:  # noqa: BLE001
+                logger.error("[CONTACT_FORM] 실패 | blog=%s | %s", blog.name, exc)
+        return {
+            "success": True,
+            "message": f"문의폼 보장 {ok}/{len(blogs)}",
+        }
 
     async def _execute_generate_module(
         self,

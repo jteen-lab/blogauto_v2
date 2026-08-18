@@ -2176,6 +2176,26 @@ async def execute_single_module(
                 "detail": exec_result.get("message", "")
             })
 
+        elif type_code == "contact_form":
+            # 문의폼 모듈: 연결된 블로그마다 문의폼 보장(멱등)
+            from ..services.publishing.contact_form_provisioner import ensure_contact_form
+            from ..services.publishing.contact_form_templates import get_template
+            cf_settings = target_module.settings or {}
+            try:
+                template = get_template(cf_settings.get("template_code") or "basic")
+            except KeyError:
+                template = None
+            cf_blogs = [link.blog for link in flow.blog_links if link.blog]
+            if not cf_blogs:
+                raise HTTPException(status_code=400, detail="플로우에 연결된 블로그가 없습니다")
+            for blog in cf_blogs:
+                url = await ensure_contact_form(blog, db, template=template)
+                results.append({
+                    "blog_name": blog.name,
+                    "status": "success" if url else "failed",
+                    "detail": url or "문의폼 생성 실패(Tally 키/템플릿 확인)",
+                })
+
         else:
             raise HTTPException(status_code=400, detail=f"지원하지 않는 모듈 타입: {type_code}")
 
