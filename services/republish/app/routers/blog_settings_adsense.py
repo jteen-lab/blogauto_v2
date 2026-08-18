@@ -119,15 +119,27 @@ async def save_author_profile(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    """저자 프로필 저장 (name/bio/expertise). 소개 페이지 생성 시 반영된다."""
+    """저자 프로필 저장 (name/bio/expertise).
+
+    기존 author_profile을 **병합**해 프로비저닝 키(contact_form_id 등)를 보존한다.
+    옛 Google Forms URL은 저장하지 않고 폐기(Tally 자동 생성으로 대체) —
+    저장이 옛 구글폼 URL을 다시 주입하지 못하게 한다.
+    """
     blog = await get_blog_or_404(blog_id, current_user, db)
-    blog.author_profile = {
-        "name": request.name or "",
-        "bio": request.bio or "",
-        "expertise": request.expertise or "",
-        "contact_email": request.contact_email or "",
-        "contact_form_url": request.contact_form_url or "",
-    }
+    profile = dict(blog.author_profile or {})
+    profile["name"] = request.name or ""
+    profile["bio"] = request.bio or ""
+    profile["expertise"] = request.expertise or ""
+    profile["contact_email"] = request.contact_email or ""
+
+    form_url = (request.contact_form_url or "").strip()
+    if "docs.google.com/forms" in form_url:
+        # 옛 구글폼 URL·식별자 폐기 → 다음 필수페이지 생성 시 Tally로 재생성
+        form_url = ""
+        profile.pop("contact_form_id", None)
+    profile["contact_form_url"] = form_url
+
+    blog.author_profile = profile
     flag_modified(blog, "author_profile")
     await db.commit()
     logger.info("저자 프로필 저장 | blog_id=%s", blog_id)
