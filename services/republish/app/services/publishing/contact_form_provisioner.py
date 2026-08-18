@@ -22,18 +22,24 @@ async def ensure_contact_form(blog: Blog, db: AsyncSession) -> Optional[str]:
 
     - 이미 자동 생성된 폼(``contact_form_id``+``contact_form_url``)이 있으면 재사용.
     - 운영자가 수동 입력한 ``contact_form_url``이 있으면 존중(자동 생성 안 함).
+    - **옛 Google Forms(docs.google.com) URL은 stale로 보고 Tally로 재생성**
+      (Google Forms→Tally 전환 마이그레이션).
     - 폼 계정 미설정/생성 실패 시 None(호출측은 기존 mailto로 폴백).
 
     Returns:
         보장된 ``contact_form_url`` 또는 None
     """
     profile = dict(blog.author_profile or {})
+    existing_url = profile.get("contact_form_url") or ""
+    is_legacy_google = "docs.google.com/forms" in existing_url
 
-    if profile.get("contact_form_id") and profile.get("contact_form_url"):
-        return profile["contact_form_url"]
-    if profile.get("contact_form_url"):
-        # 운영자 수동 입력값 존중
-        return profile["contact_form_url"]
+    if not is_legacy_google:
+        if profile.get("contact_form_id") and existing_url:
+            return existing_url
+        if existing_url:
+            # 운영자 수동 입력값 존중
+            return existing_url
+    # 옛 구글폼이거나 폼 없음 → Tally로 (재)생성
 
     api_key = await get_tally_api_key(db)
     if not api_key:
