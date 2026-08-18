@@ -37,11 +37,12 @@ class TestContactBlocks:
         assert len(group_uuids) == len(set(group_uuids)), "groupUuid가 중복되면 400"
 
     def test_label_and_input_group_types(self):
+        # 입력 블록의 groupType은 자기 타입과 동일해야 함(Tally 검증)
         blocks = build_contact_blocks("t")
         pairs = [(blocks[1], blocks[2]), (blocks[3], blocks[4]), (blocks[5], blocks[6])]
         for label, inp in pairs:
             assert label["groupType"] == "LABEL"
-            assert inp["groupType"] == "QUESTION"
+            assert inp["groupType"] == inp["type"]
 
     def test_inputs_required(self):
         blocks = build_contact_blocks("t")
