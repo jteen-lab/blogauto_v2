@@ -89,14 +89,35 @@ async def get_tally_api_key(db: AsyncSession) -> Optional[str]:
         return None
 
 
-async def _get_workspace_id(client: httpx.AsyncClient, headers: Dict[str, str]) -> str:
-    """첫 번째 워크스페이스 id 반환(폼 생성에 필수)."""
+async def _get_workspace_id(
+    client: httpx.AsyncClient, headers: Dict[str, str]
+) -> Optional[str]:
+    """첫 번째 워크스페이스 id 반환(없으면 None → 생성 시 생략).
+
+    응답 형식이 계정/버전마다 다를 수 있어 방어적으로 파싱하고 원시 응답을
+    로깅한다({items}/{workspaces}/bare list 모두 대응).
+    """
     resp = await client.get(f"{TALLY_API_BASE}/workspaces", headers=headers)
-    resp.raise_for_status()
-    items = resp.json().get("items") or []
+    if resp.status_code >= 400:
+        logger.error(
+            "[F10] Tally workspaces 오류 %s | %s", resp.status_code, resp.text[:500]
+        )
+        return None
+    data = resp.json()
+    logger.info("[F10] Tally workspaces 응답 원시: %s", str(data)[:500])
+
+    items: Any = None
+    if isinstance(data, list):
+        items = data
+    elif isinstance(data, dict):
+        for key in ("items", "workspaces", "data"):
+            if isinstance(data.get(key), list) and data[key]:
+                items = data[key]
+                break
     if not items:
-        raise RuntimeError("Tally 워크스페이스가 없습니다")
-    return items[0]["id"]
+        return None
+    first = items[0]
+    return first.get("id") if isinstance(first, dict) else None
 
 
 async def create_contact_form(api_key: str, title: str) -> Dict[str, str]:
@@ -115,12 +136,15 @@ async def create_contact_form(api_key: str, title: str) -> Dict[str, str]:
     }
     async with httpx.AsyncClient(timeout=30.0) as client:
         workspace_id = await _get_workspace_id(client, headers)
-        body = {
+        body: Dict[str, Any] = {
             "name": title,
-            "workspaceId": workspace_id,
             "status": "PUBLISHED",
             "blocks": build_contact_blocks(title),
         }
+        if workspace_id:
+            body["workspaceId"] = workspace_id
+        else:
+            logger.warning("[F10] Tally workspaceId 미확인 → 생략하고 생성 시도")
         resp = await client.post(f"{TALLY_API_BASE}/forms", headers=headers, json=body)
         if resp.status_code >= 400:
             # 400 등 오류 시 응답 본문을 남겨 원인 진단 가능하게
