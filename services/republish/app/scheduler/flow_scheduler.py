@@ -2134,19 +2134,24 @@ class FlowScheduler:
         """
         from ..services.publishing.contact_form_provisioner import ensure_contact_form
         from ..services.publishing.contact_form_templates import get_template
+        from ..services.publishing.contact_form_designs import get_design
 
         settings = contact_module.settings or {}
         try:
             template = get_template(settings.get("template_code") or "basic")
         except KeyError:
             template = None
+        try:
+            design = get_design(settings.get("design_code") or "default")
+        except KeyError:
+            design = None
         if not blogs:
             return {"success": True, "skipped": True, "message": "연결된 블로그 없음"}
 
         ok = 0
         for blog in blogs:
             try:
-                url = await ensure_contact_form(blog, db, template=template)
+                url = await ensure_contact_form(blog, db, template=template, design=design)
                 if url:
                     ok += 1
             except Exception as exc:  # noqa: BLE001

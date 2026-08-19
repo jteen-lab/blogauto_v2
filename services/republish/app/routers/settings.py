@@ -438,6 +438,15 @@ async def get_contact_form_templates(
     return {"templates": list_templates()}
 
 
+@router.get("/contact-form-designs")
+async def get_contact_form_designs(
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """문의폼 디자인 프리셋 목록(contact_form 모듈 UI 드롭다운용)."""
+    from ..services.publishing.contact_form_designs import list_designs
+    return {"designs": list_designs()}
+
+
 @router.get("/tally-account")
 async def get_tally_account(
     current_user: User = Depends(get_current_user),
