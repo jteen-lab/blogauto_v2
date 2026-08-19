@@ -82,3 +82,18 @@
 - 대상 연동을 prompt 모듈과 동일하게 blogs/카테고리로 할지.
 
 > 연계: 문의 수신 확인은 `docs/plans/adsense_inquiry_dashboard_plan.md` 참조(함께 진행).
+
+## 9. 디자인 프리셋 축 추가 (2026-08-19, A안 완료)
+
+필드 템플릿과 **독립된 디자인 축**(A안)을 추가. 같은 필드에 색/테마만 바꾸는
+자유 조합이 가능하다. 디자인은 Tally `settings.styles`로 전달(DARK·CUSTOM 실호출
+201 검증). 모듈 설정은 `{template_code, design_code}` 두 값을 저장한다.
+
+- `app/services/publishing/contact_form_designs.py`(신규): 6종 프리셋
+  (default/dark/brand_blue/brand_green/warm_orange/minimal_mono). `default`는
+  styles=None → Tally 기본 외형(기존 폼 config_hash 불변 → 불필요 PATCH 없음).
+- `tally_forms_service.py`: create/update에 `styles` 인자, `config_hash(...,styles)`.
+- `contact_form_provisioner.py`: `ensure_contact_form(..., design=None)`.
+- 디스패치(flows_execute/flow_scheduler): `settings.design_code` → `get_design`.
+- `GET /settings/contact-form-designs` + UI 디자인 드롭다운(form.js/contact-form-template.js).
+- 배포: f2edddb.
