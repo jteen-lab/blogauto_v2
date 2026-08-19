@@ -99,7 +99,7 @@ function moduleListApp() {
                         return valueA - valueB;
 
                     case 'module_type':
-                        const typeOrder = { 'prompt': 1, 'generate': 2, 'collect': 3, 'data': 4, 'growth_profile': 5, 'bulk_collect': 6 };
+                        const typeOrder = { 'prompt': 1, 'generate': 2, 'collect': 3, 'data': 4, 'contact_form': 5, 'growth_profile': 6, 'bulk_collect': 7 };
                         valueA = typeOrder[a.module_type?.code] || 99;
                         valueB = typeOrder[b.module_type?.code] || 99;
                         return valueA - valueB;
@@ -172,7 +172,7 @@ function moduleListApp() {
 
         // 동적 섹션 레이아웃 적용
         applyDynamicLayout() {
-            const moduleTypes = ['prompt', 'collect', 'data', 'growth_profile', 'bulk_collect'];
+            const moduleTypes = ['prompt', 'collect', 'data', 'contact_form', 'growth_profile', 'bulk_collect'];
             const visibleSections = moduleTypes.filter(type => this.getModulesByType(type).length > 0);
             const sectionCount = visibleSections.length;
 
@@ -212,7 +212,8 @@ function moduleListApp() {
                 collect: '🔍',
                 data: '📊',
                 growth_profile: '📈',
-                bulk_collect: '🚀'
+                bulk_collect: '🚀',
+                contact_form: '📨'
             };
             return icons[typeCode] || '📦';
         },
@@ -229,7 +230,8 @@ function moduleListApp() {
                 'collect': '수집',
                 'data': '데이터',
                 'growth_profile': '성장 프로파일',
-                'bulk_collect': '대량 수집'
+                'bulk_collect': '대량 수집',
+                'contact_form': '문의폼'
             };
             return fallbackNames[typeCode] || typeCode;
         },
@@ -1110,7 +1112,8 @@ function moduleListApp() {
                 'collect': 'bg-purple-200',
                 'data': 'bg-teal-200',
                 'growth_profile': 'bg-emerald-200',
-                'bulk_collect': 'bg-sky-200'
+                'bulk_collect': 'bg-sky-200',
+                'contact_form': 'bg-purple-200'
             };
             return colors[typeCode] || 'bg-gray-200';
         },
