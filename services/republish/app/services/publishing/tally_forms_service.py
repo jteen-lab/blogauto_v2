@@ -88,12 +88,20 @@ def build_contact_blocks(title: str) -> List[Dict[str, Any]]:
     return build_blocks_from_fields(title, DEFAULT_FIELDS)
 
 
-def config_hash(title_template: str, fields: List[Dict[str, Any]]) -> str:
-    """폼 구성(제목 템플릿+필드)의 안정적 해시 — 변경 감지(멱등)용."""
-    payload = json.dumps(
-        {"title": title_template or "", "fields": fields or []},
-        sort_keys=True, ensure_ascii=False,
-    )
+def config_hash(
+    title_template: str,
+    fields: List[Dict[str, Any]],
+    styles: Optional[Dict[str, Any]] = None,
+) -> str:
+    """폼 구성(제목 템플릿+필드+디자인)의 안정적 해시 — 변경 감지(멱등)용.
+
+    ``styles``가 None이면 키를 넣지 않아 기존(디자인 도입 전) 해시와 동일하다
+    → 이미 생성된 폼이 불필요하게 재수정(PATCH)되지 않는다.
+    """
+    data: Dict[str, Any] = {"title": title_template or "", "fields": fields or []}
+    if styles:
+        data["styles"] = styles
+    payload = json.dumps(data, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 
@@ -149,12 +157,16 @@ def _headers(api_key: str) -> Dict[str, str]:
 
 
 async def create_contact_form(
-    api_key: str, title: str, fields: Optional[List[Dict[str, Any]]] = None
+    api_key: str,
+    title: str,
+    fields: Optional[List[Dict[str, Any]]] = None,
+    styles: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, str]:
     """Tally 폼을 생성하고 식별자/URL을 반환.
 
     Args:
         fields: 필드 구성(None이면 기본 3필드)
+        styles: Tally settings.styles(디자인). None이면 기본 외형.
 
     Returns:
         {"form_id", "responder_uri", "embed_url"}
@@ -169,6 +181,8 @@ async def create_contact_form(
         body: Dict[str, Any] = {
             "name": title, "status": "PUBLISHED", "blocks": blocks,
         }
+        if styles:
+            body["settings"] = {"styles": styles}
         if workspace_id:
             body["workspaceId"] = workspace_id
         else:
@@ -188,18 +202,27 @@ async def create_contact_form(
 
 
 async def update_contact_form(
-    api_key: str, form_id: str, title: str, fields: List[Dict[str, Any]]
+    api_key: str,
+    form_id: str,
+    title: str,
+    fields: List[Dict[str, Any]],
+    styles: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, str]:
-    """기존 Tally 폼의 필드 구성을 PATCH로 수정(멱등 갱신).
+    """기존 Tally 폼의 필드/디자인 구성을 PATCH로 수정(멱등 갱신).
 
     Tally는 업데이트 시 전체 블록을 전송해야 한다.
+
+    Args:
+        styles: Tally settings.styles(디자인). None이면 미전송(기존 외형 유지).
 
     Returns:
         {"form_id", "responder_uri", "embed_url"}
     """
     headers = _headers(api_key)
     blocks = build_blocks_from_fields(title, fields)
-    body = {"name": title, "status": "PUBLISHED", "blocks": blocks}
+    body: Dict[str, Any] = {"name": title, "status": "PUBLISHED", "blocks": blocks}
+    if styles:
+        body["settings"] = {"styles": styles}
     async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.patch(
             f"{TALLY_API_BASE}/forms/{form_id}", headers=headers, json=body

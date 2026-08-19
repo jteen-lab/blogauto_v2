@@ -43,11 +43,13 @@ async def ensure_contact_form(
     blog: Blog,
     db: AsyncSession,
     template: Optional[Dict[str, Any]] = None,
+    design: Optional[Dict[str, Any]] = None,
 ) -> Optional[str]:
     """블로그에 문의 폼 URL을 보장(멱등).
 
     Args:
         template: {"title_template","fields"} — 미지정 시 기본 3필드.
+        design: {"styles": {...}} — 미지정/None styles면 Tally 기본 외형.
 
     Returns:
         보장된 contact_form_url 또는 None(미설정/실패 → mailto 폴백)
@@ -63,7 +65,8 @@ async def ensure_contact_form(
         return existing_url
 
     title_template, fields = _resolve_config(template)
-    desired_hash = config_hash(title_template, fields)
+    styles = (design or {}).get("styles")
+    desired_hash = config_hash(title_template, fields, styles)
     title = title_template.replace("{blog}", blog.name)
 
     api_key = await get_tally_api_key(db)
@@ -74,7 +77,7 @@ async def ensure_contact_form(
     # 폼 없음 or 옛 구글폼 → 생성
     if is_legacy_google or not existing_id or not existing_url:
         try:
-            result = await create_contact_form(api_key, title, fields)
+            result = await create_contact_form(api_key, title, fields, styles)
         except Exception as exc:  # noqa: BLE001
             logger.error("[F10] 문의 폼 생성 실패 | blog=%s | %s", blog.name, exc)
             return None
@@ -92,7 +95,7 @@ async def ensure_contact_form(
 
     # 폼 있음 + 구성 변경 → PATCH
     try:
-        await update_contact_form(api_key, existing_id, title, fields)
+        await update_contact_form(api_key, existing_id, title, fields, styles)
     except Exception as exc:  # noqa: BLE001
         logger.error("[F10] 문의 폼 수정 실패 | blog=%s | %s", blog.name, exc)
         return existing_url  # 실패 시 기존 유지
