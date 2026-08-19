@@ -105,6 +105,68 @@
             </template>
         </div>
 
+        <!-- 문의 수신함 요약탭 (클릭 시 대시보드 내 확장) -->
+        <div class="section-card">
+            <div @click="inboxExpanded = !inboxExpanded; if(inboxExpanded) loadInbox()"
+                 class="cursor-pointer flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="text-lg">📨</span>
+                    <span class="font-semibold text-gray-800">문의 수신함</span>
+                    <span x-show="(stats.unread_contacts || 0) > 0"
+                          class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full"
+                          x-text="(stats.unread_contacts || 0) + ' 미읽음'"></span>
+                </div>
+                <svg class="w-4 h-4 text-gray-300 transition-transform"
+                     :class="inboxExpanded ? 'rotate-180' : ''"
+                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+            </div>
+
+            <div x-show="inboxExpanded" x-collapse x-cloak class="mt-3">
+                <div class="flex items-center justify-between mb-2">
+                    <label class="text-xs text-gray-500 flex items-center gap-1">
+                        <input type="checkbox" x-model="inboxUnreadOnly" @change="loadInbox()"> 미읽음만
+                    </label>
+                    <button @click="syncInbox()" :disabled="inboxSyncing"
+                            class="px-3 py-1.5 text-xs bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50">
+                        <span x-show="!inboxSyncing">🔄 새 문의 가져오기</span>
+                        <span x-show="inboxSyncing">가져오는 중...</span>
+                    </button>
+                </div>
+                <p class="text-[11px] text-gray-400 mb-2" x-show="inboxMsg" x-text="inboxMsg"></p>
+                <div x-show="inboxItems.length === 0" class="text-center text-gray-400 text-sm py-6">
+                    문의가 없습니다. "새 문의 가져오기"로 동기화하세요.
+                </div>
+                <div class="space-y-2 max-h-[420px] overflow-y-auto">
+                    <template x-for="s in inboxItems" :key="s.id">
+                        <div class="border rounded-lg p-3"
+                             :class="s.is_read ? 'bg-white border-gray-200' : 'bg-purple-50/40 border-purple-200'">
+                            <div class="flex items-center justify-between mb-1.5">
+                                <div class="flex items-center gap-2">
+                                    <span x-show="!s.is_read" class="w-2 h-2 bg-purple-500 rounded-full"></span>
+                                    <span class="font-medium text-gray-900 text-sm" x-text="s.blog_name"></span>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <span class="text-[11px] text-gray-400" x-text="fmtInboxDate(s.submitted_at)"></span>
+                                    <button @click="toggleInboxRead(s)" class="text-[11px] text-purple-600 hover:underline"
+                                            x-text="s.is_read ? '안읽음' : '읽음'"></button>
+                                </div>
+                            </div>
+                            <div class="space-y-0.5">
+                                <template x-for="f in s.fields" :key="f.label">
+                                    <div class="text-xs flex gap-2">
+                                        <span class="text-gray-500 min-w-[72px]" x-text="f.label"></span>
+                                        <span class="text-gray-900 whitespace-pre-wrap" x-text="f.value || '-'"></span>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+
         <!-- 차트 행: 추이 라인(65%) + 시간대 컬럼(35%) -->
         <div class="grid grid-cols-1 lg:grid-cols-5 gap-3">
             <!-- 생성/발행 추이 라인 차트 -->
@@ -273,7 +335,7 @@
 <script>window.__DASHBOARD_INITIAL__ = {{ initial_data | safe }};</script>
 {% endif %}
 <!-- 대시보드 V2 JS 모듈 (순서 중요: kpi_spark이 메인 컴포넌트 정의) -->
-<script src="/static/js/dashboard/kpi_spark.js?v=20260513_tabs2"></script>
+<script src="/static/js/dashboard/kpi_spark.js?v=20260819inbox"></script>
 <script src="/static/js/dashboard/main_charts.js?v=1"></script>
 <script src="/static/js/dashboard/perf_panel.js?v=1"></script>
 <script src="/static/js/dashboard/content_table.js?v=1"></script>

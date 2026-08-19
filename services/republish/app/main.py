@@ -36,7 +36,6 @@ from .routers.dashboard import router as dashboard_router
 from .routers.dashboard_celery import router as dashboard_celery_router
 from .routers.settings import router as settings_router, naver_search_router, naver_ads_router, google_trends_router, naver_datalab_router, google_keyword_planner_router, system_settings_router
 from .routers.modules_pages import router as modules_page_router
-from .routers.contact_inbox_pages import router as contact_inbox_page_router  # 문의 수신함 페이지 (F10)
 from .routers.flows_pages import router as flows_page_router
 from .routers.autorun_pages import router as autorun_page_router
 from .routers.engine import router as engine_router
@@ -261,7 +260,6 @@ app.include_router(categories_page_router)
 app.include_router(republish_page_router)
 # app.include_router(groups_page_router)  # 임시 비활성화
 app.include_router(modules_page_router)
-app.include_router(contact_inbox_page_router)  # 문의 수신함 페이지 (F10)
 app.include_router(flows_page_router)
 app.include_router(autorun_page_router)
 app.include_router(collection_page_router)

@@ -276,7 +276,17 @@ async def get_dashboard_stats(db: AsyncSession = Depends(get_db_session)):
         )
         today_republish = result.scalar() or 0
 
+        # 미읽음 문의 수 (F10 수신함)
+        from ..models.contact_submission import ContactSubmission
+        result = await db.execute(
+            select(func.count(ContactSubmission.id)).where(
+                ContactSubmission.is_read.is_(False)
+            )
+        )
+        unread_contacts = result.scalar() or 0
+
         return {
+            "unread_contacts": unread_contacts,
             # 블로그
             "total_blogs": total_blogs,
             "wordpress": wordpress_count,
@@ -330,6 +340,7 @@ async def get_dashboard_stats(db: AsyncSession = Depends(get_db_session)):
     except Exception as e:
         logger.error(f"[DASHBOARD] stats 에러: {str(e)}")
         return {
+            "unread_contacts": 0,
             "total_blogs": 0, "wordpress": 0, "blogger": 0,
             "active_blogs": 0, "inactive_blogs": 0,
             "topics": 0, "subtopics": 0, "keywords": 0,

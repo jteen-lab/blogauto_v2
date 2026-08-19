@@ -52,6 +52,32 @@ function compactDashboard() {
         pinnedTabKeys: [],
         stats: {},
 
+        /* ── 문의 수신함 (F10) ── */
+        inboxExpanded: false, inboxItems: [], inboxUnreadOnly: false,
+        inboxSyncing: false, inboxMsg: '',
+        async loadInbox() {
+            try {
+                const r = await fetch('/api/v1/contact-submissions?unread_only=' + this.inboxUnreadOnly, { credentials: 'include' });
+                if (r.ok) { const d = await r.json(); this.inboxItems = d.items || []; this.stats.unread_contacts = d.unread_count ?? this.stats.unread_contacts; }
+            } catch (e) { console.error('[inbox]', e); }
+        },
+        async syncInbox() {
+            this.inboxSyncing = true; this.inboxMsg = '';
+            try {
+                const r = await fetch('/api/v1/contact-submissions/sync', { method: 'POST', credentials: 'include' });
+                const d = await r.json();
+                this.inboxMsg = d.success ? ('동기화 완료 · 새 문의 ' + (d.new || 0) + '건') : ('동기화 실패: ' + (d.message || ''));
+                await this.loadInbox();
+            } catch (e) { this.inboxMsg = '동기화 오류'; } finally { this.inboxSyncing = false; }
+        },
+        async toggleInboxRead(s) {
+            try {
+                const r = await fetch('/api/v1/contact-submissions/' + s.id + '/read?is_read=' + (!s.is_read), { method: 'POST', credentials: 'include' });
+                if (r.ok) { s.is_read = !s.is_read; this.stats.unread_contacts = Math.max(0, (this.stats.unread_contacts || 0) + (s.is_read ? -1 : 1)); }
+            } catch (e) { console.error('[inbox]', e); }
+        },
+        fmtInboxDate(v) { if (!v) return ''; try { return new Date(v).toLocaleString('ko-KR'); } catch (e) { return v; } },
+
         /* ── 초기화 ── */
         async init() {
             this.loadPinnedTabs();
