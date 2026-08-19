@@ -55,8 +55,9 @@ function moduleFormApp(module = null, moduleType = null) {
         },
         apiStatusLoading: false,
 
-        // 문의폼(contact_form) 모듈: 템플릿 목록
+        // 문의폼(contact_form) 모듈: 템플릿 목록 + 디자인 프리셋 목록
         contactFormTemplates: [],
+        contactFormDesigns: [],
 
         // 폼 데이터
         formData: {
@@ -79,8 +80,9 @@ function moduleFormApp(module = null, moduleType = null) {
             collect_fixed_times: initialModule?.settings?.fixed_times || ['06:00', '18:00'],
             collect_interval_hours: initialModule?.settings?.interval_hours || 6,
             collect_type: initialModule?.settings?.collect_type || 'both',
-            // 문의폼(contact_form) 모듈: 선택 템플릿 코드
+            // 문의폼(contact_form) 모듈: 선택 템플릿 코드 + 디자인 코드
             contact_template_code: initialModule?.settings?.template_code || 'basic',
+            contact_design_code: initialModule?.settings?.design_code || 'default',
             // 키워드 수집 소스 (기본값 False - 사용자가 명시적으로 선택)
             source_google_trends: initialModule?.settings?.source_google_trends ?? false,
             source_naver_datalab: initialModule?.settings?.source_naver_datalab ?? false,
@@ -190,6 +192,7 @@ function moduleFormApp(module = null, moduleType = null) {
             console.log('typeCode 확인:', typeCode, 'formData.type_code:', this.formData.type_code, 'moduleType:', this.moduleType);
             if (typeCode === 'contact_form') {
                 this.loadContactFormTemplates();
+                this.loadContactFormDesigns();
             }
             if (typeCode === 'collect') {
                 console.log('수집 모듈 감지 - API 상태 로드 시작');
@@ -847,8 +850,11 @@ function moduleFormApp(module = null, moduleType = null) {
                     ? this.bcModule.toSettings()
                     : (this.formData.settings || {});
             } else if (this.formData.type_code === 'contact_form') {
-                // 문의폼 모듈: 선택한 템플릿 코드만 저장(대상 블로그는 플로우 연동)
-                data.settings = { template_code: this.formData.contact_template_code || 'basic' };
+                // 문의폼 모듈: 템플릿 코드 + 디자인 코드 저장(대상 블로그는 플로우 연동)
+                data.settings = {
+                    template_code: this.formData.contact_template_code || 'basic',
+                    design_code: this.formData.contact_design_code || 'default',
+                };
             } else {
                 // 설정 JSON 파싱
                 try {
@@ -942,6 +948,17 @@ function moduleFormApp(module = null, moduleType = null) {
                     this.contactFormTemplates = d.templates || [];
                 }
             } catch (e) { console.warn('[contact_form] 템플릿 로드 실패', e); }
+        },
+
+        // 문의폼 디자인 프리셋 목록 로드 (contact_form 모듈용)
+        async loadContactFormDesigns() {
+            try {
+                const r = await fetch('/api/v1/settings/contact-form-designs', { credentials: 'include' });
+                if (r.ok) {
+                    const d = await r.json();
+                    this.contactFormDesigns = d.designs || [];
+                }
+            } catch (e) { console.warn('[contact_form] 디자인 로드 실패', e); }
         },
 
         // API 상태 로드 (수집 모듈용)

@@ -1,9 +1,10 @@
 /**
  * 문의폼(contact_form) 모듈 폼 템플릿 — list.js getFullFormTemplate()에서 삽입.
  *
- * 설정은 템플릿 선택(formData.contact_template_code) 하나. 대상 블로그는 이
- * 모듈을 담은 플로우에 연결된 블로그(flow.blog_links)로 실행 시 결정된다.
- * 실행(수동/오토런)은 멱등: 폼 없으면 생성, 구성 바뀌면 수정, 같으면 스킵.
+ * 설정은 두 축: 필드 템플릿(formData.contact_template_code) + 디자인 프리셋
+ * (formData.contact_design_code). 대상 블로그는 이 모듈을 담은 플로우에 연결된
+ * 블로그(flow.blog_links)로 실행 시 결정된다.
+ * 실행(수동/오토런)은 멱등: 폼 없으면 생성, 구성(필드·디자인) 바뀌면 수정, 같으면 스킵.
  */
 window.getContactFormModuleFormTemplate = function () {
     return `
@@ -29,6 +30,20 @@ window.getContactFormModuleFormTemplate = function () {
                 </template>
             </select>
             <p class="mt-1 text-xs text-gray-500">기본 제공 템플릿 중 선택하세요. 항목은 업데이트로 추가됩니다.</p>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">문의폼 디자인</label>
+            <select x-model="formData.contact_design_code"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                <template x-for="d in contactFormDesigns" :key="d.code">
+                    <option :value="d.code" x-text="d.name + ' — ' + d.description"></option>
+                </template>
+                <template x-if="contactFormDesigns.length === 0">
+                    <option value="default">기본(밝은) — Tally 기본 외형</option>
+                </template>
+            </select>
+            <p class="mt-1 text-xs text-gray-500">테마·색상·폰트를 결정합니다. 필드와 독립이라 같은 항목에 색만 바꿀 수 있습니다.</p>
         </div>
     </div>
     `;
