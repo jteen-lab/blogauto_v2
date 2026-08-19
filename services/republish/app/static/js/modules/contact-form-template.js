@@ -34,16 +34,44 @@ window.getContactFormModuleFormTemplate = function () {
 
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">문의폼 디자인</label>
-            <select x-model="formData.contact_design_code"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+            <p class="mb-2 text-xs text-gray-500">테마·색상·폰트를 결정합니다. 각 카드는 실제 폼 색상 미리보기입니다. 필드와 독립이라 같은 항목에 색만 바꿀 수 있습니다.</p>
+
+            <!-- 디자인 미리보기 카드 갤러리 -->
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <template x-for="d in contactFormDesigns" :key="d.code">
-                    <option :value="d.code" x-text="d.name + ' — ' + d.description"></option>
+                    <button type="button"
+                            @click="formData.contact_design_code = d.code"
+                            :class="formData.contact_design_code === d.code
+                                ? 'ring-2 ring-purple-500 border-purple-400'
+                                : 'border-gray-200 hover:border-gray-300'"
+                            class="relative block border rounded-lg overflow-hidden text-left transition-all focus:outline-none">
+                        <!-- 선택 체크 -->
+                        <span x-show="formData.contact_design_code === d.code"
+                              class="absolute top-1 right-1 z-10 w-5 h-5 rounded-full bg-purple-500 text-white text-xs flex items-center justify-center">✓</span>
+                        <!-- 미니 폼 미리보기 -->
+                        <div class="p-2.5 space-y-1.5" :style="{ backgroundColor: (d.preview && d.preview.background) || '#ffffff' }">
+                            <div class="text-[11px] font-semibold truncate"
+                                 :style="{ color: (d.preview && d.preview.text) || '#1f2937' }">문의하기</div>
+                            <div class="h-3 rounded"
+                                 :style="{ border: '1px solid ' + ((d.preview && d.preview.inputBorder) || '#d1d5db') }"></div>
+                            <div class="h-3 rounded"
+                                 :style="{ border: '1px solid ' + ((d.preview && d.preview.inputBorder) || '#d1d5db') }"></div>
+                            <div class="mt-1 h-5 rounded flex items-center justify-center text-[10px] font-medium"
+                                 :style="{ backgroundColor: (d.preview && d.preview.accent) || '#3b82f6', color: (d.preview && d.preview.buttonText) || '#ffffff' }">보내기</div>
+                        </div>
+                        <!-- 이름 -->
+                        <div class="px-2 py-1.5 bg-white border-t border-gray-100">
+                            <div class="text-xs font-medium text-gray-800 truncate" x-text="d.name"></div>
+                            <div class="text-[10px] text-gray-400 truncate" x-text="d.description"></div>
+                        </div>
+                    </button>
                 </template>
                 <template x-if="contactFormDesigns.length === 0">
-                    <option value="default">기본(밝은) — Tally 기본 외형</option>
+                    <div class="col-span-full text-xs text-gray-400 py-3 text-center border border-dashed border-gray-200 rounded-lg">
+                        디자인 목록을 불러오는 중… (기본 외형 적용)
+                    </div>
                 </template>
-            </select>
-            <p class="mt-1 text-xs text-gray-500">테마·색상·폰트를 결정합니다. 필드와 독립이라 같은 항목에 색만 바꿀 수 있습니다.</p>
+            </div>
         </div>
     </div>
     `;
