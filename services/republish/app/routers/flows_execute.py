@@ -1926,6 +1926,9 @@ async def execute_single_module(
     """
     logger.info(f"[MODULE_EXEC] 모듈 개별 실행 | flow_id={flow_id} | module_id={module_id}")
 
+    # 실행 로그용 결과 요약(분기별로 덮어씀). 미설정 분기가 있어도 500이 나지 않게 초기화.
+    exec_result: Dict[str, Any] = {"success": True, "message": ""}
+
     # 1. 플로우 + 모듈 조회
     result = await db.execute(
         select(Flow)
@@ -2227,6 +2230,13 @@ async def execute_single_module(
                         "status": "success" if url else "failed",
                         "detail": url or "문의폼 생성 실패(Tally 키/템플릿 확인)",
                     })
+            # 실행 로그(_save_autorun_log)용 요약 — 없으면 아래에서
+            # UnboundLocalError로 500이 난다(페이지는 이미 생성된 뒤).
+            ok_count = sum(1 for r in results if r["status"] == "success")
+            exec_result = {
+                "success": ok_count > 0,
+                "message": f"애드센스 필수구성 {ok_count}/{len(results)} 완료",
+            }
 
         else:
             raise HTTPException(status_code=400, detail=f"지원하지 않는 모듈 타입: {type_code}")
