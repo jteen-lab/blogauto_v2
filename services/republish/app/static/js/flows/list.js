@@ -133,18 +133,9 @@ function flowListApp() {
             }
         },
 
-        // 플로우 목록 로드
+        // 플로우 목록 로드 (개수와 무관하게 전부)
         async loadFlows() {
-            const response = await fetch('/api/v1/flows', {
-                credentials: 'include'
-            });
-
-            if (!response.ok) {
-                throw new Error('플로우 목록 조회 실패');
-            }
-
-            const data = await response.json();
-            this.flows = data.flows || [];
+            this.flows = await window.fetchAllFlows();
         },
 
         // 모듈 목록 로드 (개수와 무관하게 전부)
