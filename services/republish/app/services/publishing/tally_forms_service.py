@@ -92,15 +92,20 @@ def config_hash(
     title_template: str,
     fields: List[Dict[str, Any]],
     styles: Optional[Dict[str, Any]] = None,
+    apply_styles: bool = False,
 ) -> str:
     """폼 구성(제목 템플릿+필드+디자인)의 안정적 해시 — 변경 감지(멱등)용.
 
-    ``styles``가 None이면 키를 넣지 않아 기존(디자인 도입 전) 해시와 동일하다
-    → 이미 생성된 폼이 불필요하게 재수정(PATCH)되지 않는다.
+    ``styles``가 None이고 ``apply_styles``도 False면 키를 넣지 않아 기존(디자인
+    도입 전) 해시와 동일하다 → 이미 생성된 폼이 불필요하게 재수정되지 않는다.
+    디자인 '기본'을 명시 선택한 경우(apply_styles=True, styles=None)는 "색을
+    지운 상태"가 별도 구성이므로 해시에 반영해야 되돌리기가 감지된다.
     """
     data: Dict[str, Any] = {"title": title_template or "", "fields": fields or []}
     if styles:
         data["styles"] = styles
+    elif apply_styles:
+        data["styles"] = None
     payload = json.dumps(data, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
@@ -161,12 +166,15 @@ async def create_contact_form(
     title: str,
     fields: Optional[List[Dict[str, Any]]] = None,
     styles: Optional[Dict[str, Any]] = None,
+    apply_styles: bool = False,
 ) -> Dict[str, str]:
     """Tally 폼을 생성하고 식별자/URL을 반환.
 
     Args:
         fields: 필드 구성(None이면 기본 3필드)
         styles: Tally settings.styles(디자인). None이면 기본 외형.
+        apply_styles: True면 styles가 None이어도 ``settings.styles``를 전송해
+            Tally 기본 외형으로 **초기화**한다(디자인 '기본' 선택 시 필요).
 
     Returns:
         {"form_id", "responder_uri", "embed_url"}
@@ -181,7 +189,7 @@ async def create_contact_form(
         body: Dict[str, Any] = {
             "name": title, "status": "PUBLISHED", "blocks": blocks,
         }
-        if styles:
+        if styles or apply_styles:
             body["settings"] = {"styles": styles}
         if workspace_id:
             body["workspaceId"] = workspace_id
@@ -207,6 +215,7 @@ async def update_contact_form(
     title: str,
     fields: List[Dict[str, Any]],
     styles: Optional[Dict[str, Any]] = None,
+    apply_styles: bool = False,
 ) -> Dict[str, str]:
     """기존 Tally 폼의 필드/디자인 구성을 PATCH로 수정(멱등 갱신).
 
@@ -214,6 +223,9 @@ async def update_contact_form(
 
     Args:
         styles: Tally settings.styles(디자인). None이면 미전송(기존 외형 유지).
+        apply_styles: True면 styles가 None이어도 ``settings.styles: null``을
+            전송해 이전 디자인을 지운다 — 이게 없으면 색을 넣었던 폼을 디자인
+            '기본'으로 되돌려도 Tally에는 옛 색이 그대로 남는다.
 
     Returns:
         {"form_id", "responder_uri", "embed_url"}
@@ -221,7 +233,7 @@ async def update_contact_form(
     headers = _headers(api_key)
     blocks = build_blocks_from_fields(title, fields)
     body: Dict[str, Any] = {"name": title, "status": "PUBLISHED", "blocks": blocks}
-    if styles:
+    if styles or apply_styles:
         body["settings"] = {"styles": styles}
     async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.patch(

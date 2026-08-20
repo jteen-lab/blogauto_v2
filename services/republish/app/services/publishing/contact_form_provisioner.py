@@ -66,7 +66,10 @@ async def ensure_contact_form(
 
     title_template, fields = _resolve_config(template)
     styles = (design or {}).get("styles")
-    desired_hash = config_hash(title_template, fields, styles)
+    # 모듈이 디자인을 지정했으면 styles가 None('기본')이어도 Tally에 전송해
+    # 이전 디자인을 지운다. 미지정(design=None)일 때만 외형을 건드리지 않는다.
+    apply_styles = design is not None
+    desired_hash = config_hash(title_template, fields, styles, apply_styles)
     title = title_template.replace("{blog}", blog.name)
 
     api_key = await get_tally_api_key(db)
@@ -77,7 +80,9 @@ async def ensure_contact_form(
     # 폼 없음 or 옛 구글폼 → 생성
     if is_legacy_google or not existing_id or not existing_url:
         try:
-            result = await create_contact_form(api_key, title, fields, styles)
+            result = await create_contact_form(
+                api_key, title, fields, styles, apply_styles=apply_styles
+            )
         except Exception as exc:  # noqa: BLE001
             logger.error("[F10] 문의 폼 생성 실패 | blog=%s | %s", blog.name, exc)
             return None
@@ -95,7 +100,9 @@ async def ensure_contact_form(
 
     # 폼 있음 + 구성 변경 → PATCH
     try:
-        await update_contact_form(api_key, existing_id, title, fields, styles)
+        await update_contact_form(
+            api_key, existing_id, title, fields, styles, apply_styles=apply_styles
+        )
     except Exception as exc:  # noqa: BLE001
         logger.error("[F10] 문의 폼 수정 실패 | blog=%s | %s", blog.name, exc)
         return existing_url  # 실패 시 기존 유지
