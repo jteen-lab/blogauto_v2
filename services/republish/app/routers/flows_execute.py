@@ -2182,6 +2182,7 @@ async def execute_single_module(
             from ..services.publishing.contact_form_templates import get_template
             from ..services.publishing.contact_form_designs import get_design
             from ..services.publishing.required_pages_service import RequiredPagesService
+            from ..services.publishing.required_pages_templates import get_preset
             cf_settings = target_module.settings or {}
             try:
                 template = get_template(cf_settings.get("template_code") or "basic")
@@ -2206,10 +2207,17 @@ async def execute_single_module(
                         contact_template=template, contact_design=design,
                     )
                     ok = bool(outcome.get("success"))
+                    # 어떤 설정이 적용됐는지 결과에 노출 — 설정 변경 후 재실행했는지
+                    # 사용자가 바로 확인할 수 있게 한다.
+                    applied = (
+                        f"문체 {get_preset(preset_code)['name']}"
+                        f" · 폼 {(template or {}).get('name', '기본')}"
+                        f" · 디자인 {(design or {}).get('name', '기본')}"
+                    )
                     results.append({
                         "blog_name": blog.name,
                         "status": "success" if ok else "failed",
-                        "detail": (f"필수페이지 {outcome.get('status')} + 문의폼"
+                        "detail": (f"필수페이지 {outcome.get('status')} + 문의폼 ({applied})"
                                    if ok else outcome.get("error", "생성 실패")),
                     })
                 else:
