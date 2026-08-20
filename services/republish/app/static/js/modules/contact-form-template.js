@@ -20,15 +20,33 @@ window.getContactFormModuleFormTemplate = function () {
 
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">문의폼 템플릿</label>
-            <select x-model="formData.contact_template_code"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+            <!-- select+x-for는 옵션이 비동기로 채워질 때 선택값이 첫 항목으로 보여 혼동을 준다.
+                 디자인 갤러리와 동일하게 클릭 즉시 값을 대입하는 버튼 목록으로 처리한다. -->
+            <div class="space-y-1.5">
                 <template x-for="t in contactFormTemplates" :key="t.code">
-                    <option :value="t.code" x-text="t.name + ' — ' + t.description + ' (' + t.field_count + '개 항목)'"></option>
+                    <button type="button"
+                            @click="formData.contact_template_code = t.code"
+                            :class="formData.contact_template_code === t.code
+                                ? 'ring-2 ring-purple-500 border-purple-400 bg-purple-50/50'
+                                : 'border-gray-200 hover:border-gray-300 bg-white'"
+                            class="w-full flex items-start gap-2 px-3 py-2 border rounded-lg text-left transition-all focus:outline-none">
+                        <span class="mt-0.5 w-4 h-4 shrink-0 rounded-full border flex items-center justify-center text-[10px]"
+                              :class="formData.contact_template_code === t.code
+                                  ? 'bg-purple-500 border-purple-500 text-white'
+                                  : 'border-gray-300 text-transparent'">✓</span>
+                        <span class="min-w-0">
+                            <span class="block text-sm font-medium text-gray-800" x-text="t.name"></span>
+                            <span class="block text-xs text-gray-500"
+                                  x-text="t.description + ' · ' + t.field_count + '개 항목'"></span>
+                        </span>
+                    </button>
                 </template>
                 <template x-if="contactFormTemplates.length === 0">
-                    <option value="basic">기본 (이름·이메일·문의 내용)</option>
+                    <div class="text-xs text-gray-400 py-3 text-center border border-dashed border-gray-200 rounded-lg">
+                        템플릿 목록을 불러오는 중… (기본 3항목 적용)
+                    </div>
                 </template>
-            </select>
+            </div>
             <p class="mt-1 text-xs text-gray-500">기본 제공 템플릿 중 선택하세요. 항목은 업데이트로 추가됩니다.</p>
         </div>
 

@@ -23,15 +23,31 @@ window.getContactFormPagesSection = function () {
         <div x-show="formData.generate_pages" class="space-y-4">
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">페이지 문체 프리셋</label>
-                <select x-model="formData.pages_preset_code" @change="onPagesPresetChange()"
-                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                <!-- select+x-for는 옵션 비동기 로드 시 선택값이 첫 항목으로 보인다 → 버튼 목록으로 처리 -->
+                <div class="space-y-1.5">
                     <template x-for="p in requiredPagePresets" :key="p.code">
-                        <option :value="p.code" x-text="p.name + ' — ' + p.description"></option>
+                        <button type="button"
+                                @click="formData.pages_preset_code = p.code; onPagesPresetChange()"
+                                :class="formData.pages_preset_code === p.code
+                                    ? 'ring-2 ring-indigo-500 border-indigo-400 bg-indigo-50/50'
+                                    : 'border-gray-200 hover:border-gray-300 bg-white'"
+                                class="w-full flex items-start gap-2 px-3 py-2 border rounded-lg text-left transition-all focus:outline-none">
+                            <span class="mt-0.5 w-4 h-4 shrink-0 rounded-full border flex items-center justify-center text-[10px]"
+                                  :class="formData.pages_preset_code === p.code
+                                      ? 'bg-indigo-500 border-indigo-500 text-white'
+                                      : 'border-gray-300 text-transparent'">✓</span>
+                            <span class="min-w-0">
+                                <span class="block text-sm font-medium text-gray-800" x-text="p.name"></span>
+                                <span class="block text-xs text-gray-500" x-text="p.description"></span>
+                            </span>
+                        </button>
                     </template>
                     <template x-if="requiredPagePresets.length === 0">
-                        <option value="standard">표준(공식체)</option>
+                        <div class="text-xs text-gray-400 py-3 text-center border border-dashed border-gray-200 rounded-lg">
+                            프리셋 목록을 불러오는 중… (표준 문체 적용)
+                        </div>
                     </template>
-                </select>
+                </div>
                 <p class="mt-1 text-xs text-gray-500">프리셋을 고른 뒤 필요한 페이지만 아래에서 직접 수정할 수 있습니다.</p>
             </div>
 
