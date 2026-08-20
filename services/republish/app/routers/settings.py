@@ -447,6 +447,22 @@ async def get_contact_form_designs(
     return {"designs": list_designs()}
 
 
+@router.get("/required-page-presets")
+async def get_required_page_presets(
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """필수페이지 문체 프리셋 목록(모듈 UI 선택+편집창 프리필용).
+
+    각 프리셋은 페이지별 기본 제목/본문(토큰 HTML)을 포함해, 편집창을
+    프리셋 기본값으로 채운 뒤 사용자가 수정할 수 있게 한다.
+    """
+    from ..services.publishing.required_pages_templates import (
+        REQUIRED_PAGE_TYPES,
+        list_presets,
+    )
+    return {"presets": list_presets(), "page_types": list(REQUIRED_PAGE_TYPES)}
+
+
 @router.get("/tally-account")
 async def get_tally_account(
     current_user: User = Depends(get_current_user),
