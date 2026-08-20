@@ -101,20 +101,34 @@
         <div class="flex items-start gap-2 p-3 bg-indigo-50/60 border border-indigo-200 rounded-lg">
             <span class="text-lg leading-none">📋</span>
             <p class="text-xs text-gray-600">
-                필수 페이지 생성은 <strong>'애드센스 필수구성' 모듈</strong>로 일원화되었습니다.
+                필수 페이지 <strong>생성</strong>은 <strong>'애드센스 필수구성' 모듈</strong>로 일원화되었습니다.
                 모듈 관리에서 모듈을 만들어 플로우에 연결하면 문의폼과 필수 4페이지가
                 블로그마다 함께 생성/갱신됩니다(문체 프리셋 선택·페이지별 편집 지원).
                 위 문의용 이메일/폼 URL은 여기서 저장하면 페이지에 반영됩니다.
+                <strong>삭제</strong>가 필요할 때는 아래 버튼을 사용하세요.
             </p>
         </div>
 
-        <div x-show="Object.keys(pageIds).length > 0" class="text-xs text-gray-500 space-y-1 pt-1">
-            <template x-for="type in ['privacy', 'terms', 'about', 'contact']" :key="type">
-                <div x-show="pageIds[type]" class="flex items-center gap-2">
-                    <span class="text-emerald-600">✓</span>
-                    <span x-text="{privacy: '개인정보처리방침', terms: '이용약관', about: '소개', contact: '문의'}[type]"></span>
-                </div>
-            </template>
+        <div x-show="Object.keys(pageIds).length > 0" class="space-y-2 pt-1">
+            <div class="text-xs text-gray-500 space-y-1">
+                <template x-for="type in ['privacy', 'terms', 'about', 'contact']" :key="type">
+                    <div x-show="pageIds[type]" class="flex items-center gap-2">
+                        <span class="text-emerald-600">✓</span>
+                        <span x-text="{privacy: '개인정보처리방침', terms: '이용약관', about: '소개', contact: '문의'}[type]"></span>
+                    </div>
+                </template>
+            </div>
+            <div class="flex items-center gap-3">
+                <button type="button" @click="deletePages()" :disabled="deleting"
+                        class="px-4 py-2 bg-white border border-red-300 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50 disabled:opacity-50">
+                    <span x-show="!deleting">필수 페이지 삭제</span>
+                    <span x-show="deleting">삭제 중...</span>
+                </button>
+                <span class="text-xs text-gray-400">
+                    원격 블로그에서 4종 페이지를 삭제하고 상태를 초기화합니다.
+                    모듈을 다시 실행하면 새로 생성됩니다.
+                </span>
+            </div>
         </div>
     </div>
 
@@ -221,6 +235,7 @@ function adsenseSettingsApp() {
         blogId: null,
         loading: false,
         loaded: false,
+        deleting: false,
         saving: false,
         pagesStatus: 'none',
         pageIds: {},
@@ -333,6 +348,34 @@ function adsenseSettingsApp() {
                 }
             } catch (e) {
                 console.warn('[adsense] 준비도 요약 조회 실패', e);
+            }
+        },
+
+        async deletePages() {
+            if (!this.blogId) return;
+            if (!confirm('원격 블로그에 생성된 필수 페이지 4종을 모두 삭제합니다. 계속하시겠습니까?')) return;
+            this.deleting = true;
+            try {
+                const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
+                const resp = await fetch(`${apiBase}/blogs/${this.blogId}/settings/required-pages`, {
+                    method: 'DELETE',
+                    credentials: 'include',
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (resp.ok) {
+                    this.pagesStatus = data.status || 'none';
+                    this.pageIds = data.page_ids || {};
+                    this.loadReadiness();
+                    if (typeof showSuccessMessage === 'function') showSuccessMessage('필수 페이지를 삭제했습니다');
+                } else {
+                    const msg = '삭제 실패: ' + (data.detail || resp.status);
+                    if (typeof showErrorMessage === 'function') showErrorMessage(msg); else alert(msg);
+                }
+            } catch (e) {
+                console.warn('[adsense] 필수 페이지 삭제 실패', e);
+                if (typeof showErrorMessage === 'function') showErrorMessage('삭제 중 오류');
+            } finally {
+                this.deleting = false;
             }
         },
 
