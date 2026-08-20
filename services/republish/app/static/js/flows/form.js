@@ -378,7 +378,7 @@ function flowFormData() {
                 bulk_collect: '🚀',
                 data: '📊',
                 growth_profile: '📈',
-                contact_form: '📨'
+                contact_form: '📋'
             };
             return icons[typeCode] || '📦';
         },
@@ -393,7 +393,7 @@ function flowFormData() {
                 bulk_collect: '대량 수집',
                 data: '데이터',
                 growth_profile: '성장 프로파일',
-                contact_form: '문의폼'
+                contact_form: '애드센스 필수구성'
             };
             return names[typeCode] || typeCode;
         },
@@ -436,7 +436,7 @@ function flowFormData() {
                 generate: '▶️ 1회 생성',
                 collect: '▶️ 1회 수집',
                 data: '▶️ 1회 이동',
-                contact_form: '▶️ 문의폼 생성'
+                contact_form: '▶️ 필수구성 생성'
             };
             return labels[typeCode] || '▶️ 실행';
         },

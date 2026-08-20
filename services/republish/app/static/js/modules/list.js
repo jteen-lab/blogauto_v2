@@ -213,7 +213,7 @@ function moduleListApp() {
                 data: '📊',
                 growth_profile: '📈',
                 bulk_collect: '🚀',
-                contact_form: '📨'
+                contact_form: '📋'
             };
             return icons[typeCode] || '📦';
         },
@@ -231,7 +231,7 @@ function moduleListApp() {
                 'data': '데이터',
                 'growth_profile': '성장 프로파일',
                 'bulk_collect': '대량 수집',
-                'contact_form': '문의폼'
+                'contact_form': '애드센스 필수구성'
             };
             return fallbackNames[typeCode] || typeCode;
         },
