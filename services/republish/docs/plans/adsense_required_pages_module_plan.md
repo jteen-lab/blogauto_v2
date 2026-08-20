@@ -62,7 +62,10 @@
 - `_tab_adsense.html`: 필수페이지 `생성/갱신`·`삭제` 버튼 + generating/deleting JS 제거.
 - 상태 readout(F9 준비도 요약의 '필수 페이지 O/X')는 유지(모듈 실행이 상태 갱신).
 - 안내 문구: "필수 페이지는 '애드센스 필수구성' 모듈로 생성합니다".
-- 백엔드 `POST/DELETE /required-pages*`는 즉시 삭제하지 않고 **미사용 유지**(회귀 위험 최소화, 후속 제거).
+- 백엔드 `POST/DELETE /required-pages*`는 즉시 삭제하지 않고 **유지**.
+- **삭제 버튼은 유지(2026-08-20 사용자 요청)** — 생성만 모듈로 일원화하고, 모듈로
+  만든 페이지를 되돌릴 경로가 필요하므로 탭의 `필수 페이지 삭제`는 남긴다.
+  삭제 시 원격 4종 삭제 + `required_page_ids` 초기화 → 모듈 재실행하면 신규 생성.
 
 ## 4. UI
 - 신규 `contact-form-pages.js`: 필수페이지 섹션 템플릿(토글 + 프리셋 선택 + 4 편집창).
@@ -86,6 +89,17 @@
 - 구 템플릿의 블로그별 문구 변주(`_variant_index`)는 제거. 대신 프리셋 3종 선택 +
   페이지별 직접 편집이 그 역할을 대신한다(동일 문구 노출을 사용자가 통제).
 - 애드센스 탭의 미사용 `generatePages/deletePages` JS도 함께 제거(버튼만 지우면 사장 코드).
+
+### 갱신(재실행) 동작 — 2026-08-20 검증
+모듈 설정을 바꾼 뒤 재실행하면 **기존 페이지를 덮어쓴다**(중복 생성 없음).
+- 페이지: `required_page_ids`에 id가 있으면 `_update_one`(Blogger PUT / WP POST)로 갱신.
+  시뮬레이션 결과 2회차 실행에서 update 4 / create 0, 프리셋 변경(standard→friendly)
+  문구·override 본문·새 문의폼 URL이 모두 반영됨.
+- 문의폼: `ensure_contact_form`이 (title/fields/styles) 해시 비교 → 변경 시 Tally PATCH,
+  동일하면 no-op. 모듈의 template_code/design_code 변경이 그대로 전달된다.
+- 보완: WP 갱신이 404(원격에서 페이지 삭제됨)면 재생성으로 폴백(553cc0c).
+  Blogger는 퍼블리셔가 이미 동일 폴백 보유.
+- 보완: 페이지 생성 토글을 꺼도 편집본(override)을 보존(02d951d).
 
 ## 6. 리스크
 - 페이지 멱등: `required_page_ids`로 기존 페이지 update, 신규만 create(기존 로직 유지).
