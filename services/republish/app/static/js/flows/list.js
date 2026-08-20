@@ -147,18 +147,9 @@ function flowListApp() {
             this.flows = data.flows || [];
         },
 
-        // 모듈 목록 로드
+        // 모듈 목록 로드 (개수와 무관하게 전부)
         async loadModules() {
-            const response = await fetch('/api/v1/modules', {
-                credentials: 'include'
-            });
-
-            if (!response.ok) {
-                throw new Error('모듈 목록 조회 실패');
-            }
-
-            const data = await response.json();
-            this.modules = data.modules || [];
+            this.modules = await window.fetchAllModules();
         },
 
         async loadBlogs() {

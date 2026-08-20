@@ -192,16 +192,10 @@ function flowFormData() {
         async loadModules() {
             this.modulesLoading = true;
             try {
-                const response = await fetch('/api/v1/modules', {
-                    credentials: 'include'
-                });
-
-                if (!response.ok) {
-                    throw new Error('모듈 목록 조회 실패');
-                }
-
-                const data = await response.json();
-                this.modules = data.modules || [];
+                // 모듈 개수와 무관하게 전부 불러온다.
+                // 개수를 지정하지 않으면 서버 기본값(20개)만 와서, 나머지 모듈이
+                // 탭에서 사라지고 프롬프트 연동 블로그 잠금까지 풀린다.
+                this.modules = await window.fetchAllModules();
                 console.log('모듈 목록 로드 완료:', this.modules.length, '개');
 
             } catch (error) {
