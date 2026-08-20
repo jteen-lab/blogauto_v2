@@ -73,6 +73,8 @@ window.getContactFormPagesSection = function () {
                         <div class="flex items-center justify-between">
                             <p class="text-[11px] text-gray-400">
                                 토큰: {{blog_name}} {{blog_url}} {{operator}} {{today}} {{author_block}} {{contact}}
+                                <br>{{contact}}는 문의 페이지에선 폼을 바로 보여주고, 다른 페이지에선 바로가기 링크만 넣습니다.
+                                <br>"{{blog_name}}은(는)"처럼 쓰면 이름 받침에 맞춰 조사가 자동으로 정리됩니다.
                             </p>
                             <button type="button" @click="resetPageBody(pt)"
                                     x-show="isPageEdited(pt)"
