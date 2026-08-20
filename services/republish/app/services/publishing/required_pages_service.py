@@ -169,7 +169,12 @@ class RequiredPagesService:
     async def _update_wordpress_page(
         self, blog: Blog, page_id: str, title: str, html: str,
     ) -> PublishResult:
-        """WordPress REST wp/v2/pages/{id} 갱신."""
+        """WordPress REST wp/v2/pages/{id} 갱신.
+
+        원격에서 페이지가 삭제된 경우(404) 재생성으로 폴백한다 — 폴백이 없으면
+        저장된 page_id가 계속 실패해 모듈 재실행으로도 복구되지 않는다
+        (Blogger 퍼블리셔는 동일 폴백을 자체 구현).
+        """
         from ..wordpress_api import WordPressAPI, WordPressAPIError
 
         result = PublishResult(success=False, platform="wordpress")
@@ -180,6 +185,12 @@ class RequiredPagesService:
             result.published_url = res.get("remote_url", "")
             result.platform_post_id = res.get("remote_id")
         except WordPressAPIError as e:
+            if e.status_code == 404:
+                logger.warning(
+                    "[REQUIRED_PAGES] WP 갱신 대상 없음(404) → 재생성 | blog=%s | id=%s",
+                    blog.name, page_id,
+                )
+                return await self._publish_wordpress_page(blog, title, html)
             result.error = str(e.message)
             result.retryable = e.status_code is None or e.status_code >= 500
         except Exception as e:
