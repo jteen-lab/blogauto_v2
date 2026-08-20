@@ -58,6 +58,9 @@ function moduleFormApp(module = null, moduleType = null) {
         // 문의폼(contact_form) 모듈: 템플릿 목록 + 디자인 프리셋 목록
         contactFormTemplates: [],
         contactFormDesigns: [],
+        // 애드센스 필수구성: 필수페이지 문체 프리셋 목록
+        requiredPagePresets: [],
+        _pagesPresetPrev: 'standard',
 
         // 폼 데이터
         formData: {
@@ -83,6 +86,11 @@ function moduleFormApp(module = null, moduleType = null) {
             // 문의폼(contact_form) 모듈: 선택 템플릿 코드 + 디자인 코드
             contact_template_code: initialModule?.settings?.template_code || 'basic',
             contact_design_code: initialModule?.settings?.design_code || 'default',
+            // 애드센스 필수구성: 필수페이지 생성 여부 + 문체 프리셋 + 페이지별 편집본
+            generate_pages: initialModule?.settings?.generate_pages ?? true,
+            pages_preset_code: initialModule?.settings?.pages_preset_code || 'standard',
+            pages_body: { privacy: '', terms: '', about: '', contact: '' },
+            _pages_overrides_init: initialModule?.settings?.pages_overrides || {},
             // 키워드 수집 소스 (기본값 False - 사용자가 명시적으로 선택)
             source_google_trends: initialModule?.settings?.source_google_trends ?? false,
             source_naver_datalab: initialModule?.settings?.source_naver_datalab ?? false,
@@ -193,6 +201,7 @@ function moduleFormApp(module = null, moduleType = null) {
             if (typeCode === 'contact_form') {
                 this.loadContactFormTemplates();
                 this.loadContactFormDesigns();
+                this.loadRequiredPagePresets();
             }
             if (typeCode === 'collect') {
                 console.log('수집 모듈 감지 - API 상태 로드 시작');
@@ -850,10 +859,22 @@ function moduleFormApp(module = null, moduleType = null) {
                     ? this.bcModule.toSettings()
                     : (this.formData.settings || {});
             } else if (this.formData.type_code === 'contact_form') {
-                // 문의폼 모듈: 템플릿 코드 + 디자인 코드 저장(대상 블로그는 플로우 연동)
+                // 애드센스 필수구성 모듈: 문의폼(템플릿/디자인) + 필수페이지(프리셋/편집본)
+                const pagesOverrides = {};
+                if (this.formData.generate_pages) {
+                    ['privacy', 'terms', 'about', 'contact'].forEach(pt => {
+                        // 프리셋 기본과 다른 페이지만 override로 저장(프리셋 변경이 자동 반영되도록)
+                        if (this.isPageEdited(pt)) {
+                            pagesOverrides[pt] = this.formData.pages_body[pt];
+                        }
+                    });
+                }
                 data.settings = {
                     template_code: this.formData.contact_template_code || 'basic',
                     design_code: this.formData.contact_design_code || 'default',
+                    generate_pages: !!this.formData.generate_pages,
+                    pages_preset_code: this.formData.pages_preset_code || 'standard',
+                    pages_overrides: pagesOverrides,
                 };
             } else {
                 // 설정 JSON 파싱
@@ -959,6 +980,63 @@ function moduleFormApp(module = null, moduleType = null) {
                     this.contactFormDesigns = d.designs || [];
                 }
             } catch (e) { console.warn('[contact_form] 디자인 로드 실패', e); }
+        },
+
+        // 필수페이지 문체 프리셋 목록 로드 + 편집창 초기화
+        async loadRequiredPagePresets() {
+            try {
+                const r = await fetch('/api/v1/settings/required-page-presets', { credentials: 'include' });
+                if (r.ok) {
+                    const d = await r.json();
+                    this.requiredPagePresets = d.presets || [];
+                }
+            } catch (e) { console.warn('[contact_form] 필수페이지 프리셋 로드 실패', e); }
+            this._initPagesBody();
+        },
+
+        // 필수페이지 편집창 초기값: 저장된 편집본(override) 우선, 없으면 선택 프리셋 기본
+        _initPagesBody() {
+            const ov = this.formData._pages_overrides_init || {};
+            ['privacy', 'terms', 'about', 'contact'].forEach(pt => {
+                this.formData.pages_body[pt] = ov[pt] || this._presetDefaultBody(this.formData.pages_preset_code, pt);
+            });
+            this._pagesPresetPrev = this.formData.pages_preset_code;
+        },
+
+        // 특정 프리셋/페이지의 기본 본문
+        _presetDefaultBody(presetCode, pageType) {
+            const p = this.requiredPagePresets.find(x => x.code === presetCode);
+            return (p && p.pages && p.pages[pageType] && p.pages[pageType].body) || '';
+        },
+
+        // 프리셋 변경: 사용자가 수정하지 않은 페이지만 새 프리셋 기본값으로 교체
+        onPagesPresetChange() {
+            const prev = this._pagesPresetPrev;
+            const next = this.formData.pages_preset_code;
+            ['privacy', 'terms', 'about', 'contact'].forEach(pt => {
+                const prevDefault = this._presetDefaultBody(prev, pt);
+                if ((this.formData.pages_body[pt] || '') === prevDefault) {
+                    this.formData.pages_body[pt] = this._presetDefaultBody(next, pt);
+                }
+            });
+            this._pagesPresetPrev = next;
+        },
+
+        // 특정 페이지가 프리셋 기본값과 다른지(직접 편집됨)
+        isPageEdited(pageType) {
+            return (this.formData.pages_body[pageType] || '')
+                !== this._presetDefaultBody(this.formData.pages_preset_code, pageType);
+        },
+
+        // 특정 페이지를 현재 프리셋 기본값으로 되돌림
+        resetPageBody(pageType) {
+            this.formData.pages_body[pageType] =
+                this._presetDefaultBody(this.formData.pages_preset_code, pageType);
+        },
+
+        // 페이지 타입 라벨
+        pageTypeLabel(pageType) {
+            return ({ privacy: '개인정보처리방침', terms: '이용약관', about: '소개', contact: '문의' })[pageType] || pageType;
         },
 
         // API 상태 로드 (수집 모듈용)

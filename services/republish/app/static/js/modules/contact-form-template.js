@@ -74,5 +74,5 @@ window.getContactFormModuleFormTemplate = function () {
             </div>
         </div>
     </div>
-    `;
+    ` + (window.getContactFormPagesSection ? window.getContactFormPagesSection() : '');
 };
