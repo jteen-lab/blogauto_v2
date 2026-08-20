@@ -7,7 +7,7 @@ required_pages_status를 갱신한다. 이미 생성된 페이지는 재실행 �
 
 설계 문서: docs/flowcharts/adsense_sprint1_p1.md - F1
 """
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
@@ -28,9 +28,25 @@ class RequiredPagesService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def generate_all(self, blog: Blog, owner_email: str) -> Dict[str, Any]:
+    async def generate_all(
+        self,
+        blog: Blog,
+        owner_email: str,
+        *,
+        preset_code: Optional[str] = None,
+        overrides: Optional[Dict[str, str]] = None,
+        contact_template: Optional[Dict[str, Any]] = None,
+        contact_design: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         """4종 필수 페이지를 생성하거나(신규) 최신 내용으로 갱신(기존)하고
-        blog 상태를 갱신한다."""
+        blog 상태를 갱신한다.
+
+        Args:
+            preset_code: 필수페이지 문체 프리셋(없으면 표준)
+            overrides: {page_type: 편집된 body} — 있으면 프리셋 본문 대신 사용
+            contact_template: 문의폼 필드 템플릿(모듈 설정 연동)
+            contact_design: 문의폼 디자인 프리셋(모듈 설정 연동)
+        """
         if blog.platform not in (BlogPlatform.BLOGGER, BlogPlatform.WORDPRESS):
             return {
                 "success": False,
@@ -39,9 +55,12 @@ class RequiredPagesService:
             }
 
         # F10: 문의 폼 자동 생성(폼 계정 설정 시). 실패/미설정이면 mailto 폴백.
-        await ensure_contact_form(blog, self.db)
+        # 이 서비스가 문의폼 생성을 소유(모듈 디스패치는 generate_all만 호출) → 중복 방지.
+        await ensure_contact_form(
+            blog, self.db, template=contact_template, design=contact_design
+        )
 
-        pages = build_required_pages(blog, owner_email)
+        pages = build_required_pages(blog, owner_email, preset_code, overrides)
         existing_ids = dict(blog.required_page_ids or {})
         results: Dict[str, dict] = {}
 
