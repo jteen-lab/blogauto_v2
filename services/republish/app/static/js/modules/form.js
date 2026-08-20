@@ -860,15 +860,14 @@ function moduleFormApp(module = null, moduleType = null) {
                     : (this.formData.settings || {});
             } else if (this.formData.type_code === 'contact_form') {
                 // 애드센스 필수구성 모듈: 문의폼(템플릿/디자인) + 필수페이지(프리셋/편집본)
+                // 프리셋 기본과 다른 페이지만 override로 저장(프리셋 변경이 자동 반영되도록).
+                // 페이지 생성 토글과 무관하게 저장한다 — 토글을 껐다 켜도 편집본이 남아야 한다.
                 const pagesOverrides = {};
-                if (this.formData.generate_pages) {
-                    ['privacy', 'terms', 'about', 'contact'].forEach(pt => {
-                        // 프리셋 기본과 다른 페이지만 override로 저장(프리셋 변경이 자동 반영되도록)
-                        if (this.isPageEdited(pt)) {
-                            pagesOverrides[pt] = this.formData.pages_body[pt];
-                        }
-                    });
-                }
+                ['privacy', 'terms', 'about', 'contact'].forEach(pt => {
+                    if (this.isPageEdited(pt)) {
+                        pagesOverrides[pt] = this.formData.pages_body[pt];
+                    }
+                });
                 data.settings = {
                     template_code: this.formData.contact_template_code || 'basic',
                     design_code: this.formData.contact_design_code || 'default',
