@@ -69,9 +69,19 @@ logger = get_logger("main", "app.log")
 
 
 async def seed_module_types():
-    """누락된 모듈 타입을 자동으로 추가"""
+    """누락된 모듈 타입을 자동으로 추가하고, 지정된 리네임만 적용한다.
+
+    기존 행의 name/icon은 사용자가 바꿨을 수 있으므로 일괄 덮어쓰지 않는다.
+    `_MODULE_TYPE_RENAMES`에 등록된 (구 이름/구 아이콘)과 정확히 일치할 때만
+    새 값으로 갱신한다. display_order는 사용자 정렬 보존을 위해 건드리지 않는다.
+    """
     from sqlalchemy import select
     from .models.module_type import ModuleType
+
+    # {code: (구 이름, 새 이름, 구 아이콘, 새 아이콘)} — 값이 구 값일 때만 갱신
+    _MODULE_TYPE_RENAMES = {
+        "contact_form": ("문의폼", "애드센스 필수구성", "📨", "📋"),
+    }
 
     try:
         async with db_manager.get_session() as session:
@@ -82,32 +92,41 @@ async def seed_module_types():
             result = await session.execute(select(ModuleType))
             existing = {mt.code: mt for mt in result.scalars().all()}
 
-            # 누락 추가 + 기존 행의 name/icon/display_order 동기화(리네임 반영)
+            # 누락 추가
             added_count = 0
-            updated_count = 0
             for type_data in default_types:
                 code = type_data["code"]
-                name = type_data["name"]
-                icon = type_data.get("icon")
-                order = type_data.get("display_order", 0)
-                if code not in existing:
-                    session.add(ModuleType(
-                        code=code, name=name, icon=icon, display_order=order
-                    ))
-                    added_count += 1
-                    logger.info(f"모듈 타입 추가: {code} ({name})")
-                else:
-                    mt = existing[code]
-                    if mt.name != name or mt.icon != icon or mt.display_order != order:
-                        mt.name = name
-                        mt.icon = icon
-                        mt.display_order = order
-                        updated_count += 1
-                        logger.info(f"모듈 타입 동기화: {code} ({name})")
+                if code in existing:
+                    continue
+                session.add(ModuleType(
+                    code=code,
+                    name=type_data["name"],
+                    icon=type_data.get("icon"),
+                    display_order=type_data.get("display_order", 0),
+                ))
+                added_count += 1
+                logger.info(f"모듈 타입 추가: {code} ({type_data['name']})")
 
-            if added_count or updated_count:
+            # 지정 리네임(구 값과 일치할 때만)
+            renamed_count = 0
+            for code, (old_name, new_name, old_icon, new_icon) in _MODULE_TYPE_RENAMES.items():
+                mt = existing.get(code)
+                if not mt:
+                    continue
+                changed = False
+                if mt.name == old_name:
+                    mt.name = new_name
+                    changed = True
+                if mt.icon == old_icon:
+                    mt.icon = new_icon
+                    changed = True
+                if changed:
+                    renamed_count += 1
+                    logger.info(f"모듈 타입 리네임: {code} → {mt.name} {mt.icon}")
+
+            if added_count or renamed_count:
                 await session.commit()
-                logger.info(f"모듈 타입 추가 {added_count}개 · 동기화 {updated_count}개 완료")
+                logger.info(f"모듈 타입 추가 {added_count}개 · 리네임 {renamed_count}개 완료")
             else:
                 logger.info("모든 모듈 타입이 최신 상태입니다")
 
