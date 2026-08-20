@@ -6,12 +6,15 @@
 순수 렌더링만 한다.
 
 토큰: {{blog_name}} {{blog_url}} {{operator}} {{today}} {{author_block}}
-{{contact}}. `{{contact}}`는 author_profile.contact_form_url이 있으면 문의 폼
-임베드, 없으면 mailto로 확장한다(동일 소유주 이메일 노출 방지).
+{{contact}}. `{{contact}}`는 문의 폼이 있으면 **문의 페이지에서만** 폼을 바로
+노출하고 다른 페이지에는 바로가기 링크만 넣는다. 폼이 없으면 mailto로 확장
+(동일 소유주 이메일 노출 방지). 렌더 후 `fix_josa()`가 "이름은(는)" 식 표기를
+받침에 맞는 조사 하나로 정리한다.
 
 설계: docs/plans/adsense_required_pages_module_plan.md,
 docs/flowcharts/adsense_required_pages_module.md
 """
+import re
 from datetime import date
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -154,7 +157,7 @@ _CONCISE = _pages(
 """,
     about="""
 <h2>{{blog_name}} 소개</h2>
-<p>{{blog_name}} — 운영자 {{operator}}가 검수·발행하는 정보 블로그입니다.</p>
+<p>{{blog_name}} — 운영자 {{operator}}이(가) 검수·발행하는 정보 블로그입니다.</p>
 {{author_block}}
 <h3>문의</h3>
 {{contact}}
@@ -201,15 +204,40 @@ def list_presets() -> List[Dict[str, Any]]:
     ]
 
 
-def _contact_section(ctx: Dict[str, str]) -> str:
-    """연락 채널 HTML — 문의 폼 임베드(있으면) 또는 mailto(폴백)."""
+def _embed_url(form_url: str) -> str:
+    """Tally 응답 URL(tally.so/r/{id})을 임베드용 URL로 변환.
+
+    ``/embed/`` 경로 + 제목 숨김·투명 배경이라 블로그 본문에 자연스럽게 붙는다
+    (페이지에 이미 "문의하기" 제목이 있으므로 폼 제목은 중복).
+    형식이 예상과 다르면 원본을 그대로 쓴다.
+    """
+    if "tally.so/r/" not in form_url:
+        return form_url
+    base = form_url.split("?")[0].replace("tally.so/r/", "tally.so/embed/")
+    return f"{base}?hideTitle=1&transparentBackground=1"
+
+
+def _contact_section(ctx: Dict[str, str], embed: bool) -> str:
+    """연락 채널 HTML — 문의 폼(있으면) 또는 mailto(폴백).
+
+    Args:
+        embed: True면 폼을 iframe으로 바로 노출(문의 페이지), False면 바로가기
+            링크만 남긴다(소개/개인정보처리방침/약관 — 폼이 여러 페이지에
+            중복 노출되지 않게).
+    """
     form_url = ctx.get("contact_form_url")
     if form_url:
-        return (
+        link = (
             f'<p><a href="{form_url}" target="_blank" rel="noopener noreferrer">'
-            f"문의 폼 바로가기</a></p>\n"
-            f'<iframe src="{form_url}" width="100%" height="600" style="border:0;'
-            f'max-width:640px;" title="문의 폼">로딩 중입니다…</iframe>'
+            f"문의 폼 바로가기</a></p>"
+        )
+        if not embed:
+            return link
+        return (
+            f"{link}\n"
+            f'<iframe src="{_embed_url(form_url)}" width="100%" height="600"'
+            f' style="border:0;max-width:640px;" title="문의 폼"'
+            f" loading=\"lazy\">로딩 중입니다…</iframe>"
         )
     return (
         f'<p><strong>이메일:</strong> '
@@ -231,12 +259,60 @@ def _author_block(profile: Dict[str, Any]) -> str:
     return block
 
 
+# "블로그이름은(는)" 처럼 남는 기계적 조사 표기 → 앞말 받침에 맞춰 하나만 남긴다.
+_JOSA_PAIRS = {
+    "은": "는", "는": "은", "이": "가", "가": "이", "을": "를", "를": "을",
+    "과": "와", "와": "과", "으로": "로", "로": "으로",
+}
+_JOSA_RE = re.compile(
+    r"([가-힣A-Za-z0-9])(은|는|이|가|을|를|과|와|으로|로)\((은|는|이|가|을|를|과|와|으로|로)\)"
+)
+# 숫자 읽기의 받침 유무(영/일/삼/육/칠/팔은 받침, 이/사/오/구는 없음)
+_DIGIT_FINAL = {"0": True, "1": True, "2": False, "3": True, "4": False,
+                "5": False, "6": True, "7": True, "8": True, "9": False}
+
+
+def _has_final_consonant(ch: str) -> tuple:
+    """마지막 글자의 (받침 있음, ㄹ 받침) 여부.
+
+    한글은 종성으로 판정하고, 숫자는 읽는 소리, 영문은 모음으로 끝나면 받침
+    없음으로 근사한다(고유명사 표기 편차까지 맞추기는 어려움).
+    """
+    if "가" <= ch <= "힣":
+        final = (ord(ch) - 0xAC00) % 28
+        return bool(final), final == 8  # 8 = ㄹ
+    if ch.isdigit():
+        return _DIGIT_FINAL.get(ch, True), ch in ("1", "7", "8")
+    if ch.isalpha():
+        return ch.lower() not in "aeiouy", ch.lower() == "l"
+    return False, False
+
+
+def _pick_josa(prev_char: str, first: str, second: str) -> str:
+    """앞 글자 받침에 맞는 조사를 고른다(표기 순서 무관)."""
+    has_final, is_rieul = _has_final_consonant(prev_char)
+    # 으로/로는 ㄹ 받침도 "로"를 쓴다
+    if {first, second} == {"으로", "로"}:
+        return "로" if (not has_final or is_rieul) else "으로"
+    with_final = first if first in ("은", "이", "을", "과") else second
+    without_final = _JOSA_PAIRS[with_final]
+    return with_final if has_final else without_final
+
+
+def fix_josa(text: str) -> str:
+    """``{{blog_name}}은(는)`` 식 표기를 실제 이름에 맞는 조사 하나로 정리."""
+    return _JOSA_RE.sub(
+        lambda m: m.group(1) + _pick_josa(m.group(1), m.group(2), m.group(3)),
+        text,
+    )
+
+
 def render_tokens(text: str, ctx: Dict[str, str]) -> str:
-    """본문/제목의 {{토큰}}을 컨텍스트 값으로 치환(사용자 편집 본문에도 동일 적용)."""
+    """본문/제목의 {{토큰}} 치환 + 조사 정리(사용자 편집 본문에도 동일 적용)."""
     result = text
     for key, value in ctx.items():
         result = result.replace("{{" + key + "}}", str(value))
-    return result
+    return fix_josa(result)
 
 
 def build_required_pages(
@@ -268,11 +344,12 @@ def build_required_pages(
     }
     # 파생 토큰(컨텍스트 값에 의존)
     ctx["author_block"] = _author_block(profile)
-    ctx["contact"] = _contact_section(ctx)
 
     preset = get_preset(preset_code)
     pages: Dict[str, Tuple[str, str]] = {}
     for page_type in REQUIRED_PAGE_TYPES:
+        # 문의 페이지에서만 폼을 바로 노출하고, 나머지는 바로가기 링크만 둔다.
+        ctx["contact"] = _contact_section(ctx, embed=(page_type == "contact"))
         spec = preset["pages"][page_type]
         body_src = overrides.get(page_type) or spec["body"]
         title = render_tokens(spec["title"], ctx)
