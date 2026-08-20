@@ -67,8 +67,8 @@ class ModuleType(Base):
             },
             {
                 "code": "contact_form",
-                "name": "문의폼",
-                "icon": "📨",
+                "name": "애드센스 필수구성",
+                "icon": "📋",
                 "display_order": 5
             }
         ]

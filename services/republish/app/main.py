@@ -78,29 +78,38 @@ async def seed_module_types():
             # 기본 모듈 타입 목록
             default_types = ModuleType.get_default_types()
 
-            # 기존 모듈 타입 코드 조회
-            result = await session.execute(select(ModuleType.code))
-            existing_codes = {row[0] for row in result.fetchall()}
+            # 기존 모듈 타입 조회(코드→행)
+            result = await session.execute(select(ModuleType))
+            existing = {mt.code: mt for mt in result.scalars().all()}
 
-            # 누락된 타입 추가
+            # 누락 추가 + 기존 행의 name/icon/display_order 동기화(리네임 반영)
             added_count = 0
+            updated_count = 0
             for type_data in default_types:
-                if type_data["code"] not in existing_codes:
-                    module_type = ModuleType(
-                        code=type_data["code"],
-                        name=type_data["name"],
-                        icon=type_data.get("icon"),
-                        display_order=type_data.get("display_order", 0)
-                    )
-                    session.add(module_type)
+                code = type_data["code"]
+                name = type_data["name"]
+                icon = type_data.get("icon")
+                order = type_data.get("display_order", 0)
+                if code not in existing:
+                    session.add(ModuleType(
+                        code=code, name=name, icon=icon, display_order=order
+                    ))
                     added_count += 1
-                    logger.info(f"모듈 타입 추가: {type_data['code']} ({type_data['name']})")
+                    logger.info(f"모듈 타입 추가: {code} ({name})")
+                else:
+                    mt = existing[code]
+                    if mt.name != name or mt.icon != icon or mt.display_order != order:
+                        mt.name = name
+                        mt.icon = icon
+                        mt.display_order = order
+                        updated_count += 1
+                        logger.info(f"모듈 타입 동기화: {code} ({name})")
 
-            if added_count > 0:
+            if added_count or updated_count:
                 await session.commit()
-                logger.info(f"총 {added_count}개 모듈 타입 추가 완료")
+                logger.info(f"모듈 타입 추가 {added_count}개 · 동기화 {updated_count}개 완료")
             else:
-                logger.info("모든 모듈 타입이 이미 존재합니다")
+                logger.info("모든 모듈 타입이 최신 상태입니다")
 
     except Exception as e:
         logger.error(f"모듈 타입 초기화 실패: {e}")
