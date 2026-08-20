@@ -251,7 +251,8 @@ function flowFormData() {
                 collect: 'bg-purple-200',
                 bulk_collect: 'bg-sky-200',
                 data: 'bg-teal-200',
-                growth_profile: 'bg-emerald-200'
+                growth_profile: 'bg-emerald-200',
+                contact_form: 'bg-fuchsia-200'
             };
             return colors[typeCode] || 'bg-gray-200';
         },
@@ -376,7 +377,8 @@ function flowFormData() {
                 collect: '🔍',
                 bulk_collect: '🚀',
                 data: '📊',
-                growth_profile: '📈'
+                growth_profile: '📈',
+                contact_form: '📨'
             };
             return icons[typeCode] || '📦';
         },
@@ -390,7 +392,8 @@ function flowFormData() {
                 collect: '수집',
                 bulk_collect: '대량 수집',
                 data: '데이터',
-                growth_profile: '성장 프로파일'
+                growth_profile: '성장 프로파일',
+                contact_form: '문의폼'
             };
             return names[typeCode] || typeCode;
         },
@@ -432,7 +435,8 @@ function flowFormData() {
                 prompt: '▶️ 1회 생성',
                 generate: '▶️ 1회 생성',
                 collect: '▶️ 1회 수집',
-                data: '▶️ 1회 이동'
+                data: '▶️ 1회 이동',
+                contact_form: '▶️ 문의폼 생성'
             };
             return labels[typeCode] || '▶️ 실행';
         },
@@ -443,7 +447,8 @@ function flowFormData() {
                 prompt: 'bg-green-100 text-green-700 hover:bg-green-200',
                 generate: 'bg-green-100 text-green-700 hover:bg-green-200',
                 collect: 'bg-purple-100 text-purple-700 hover:bg-purple-200',
-                data: 'bg-teal-100 text-teal-700 hover:bg-teal-200'
+                data: 'bg-teal-100 text-teal-700 hover:bg-teal-200',
+                contact_form: 'bg-fuchsia-100 text-fuchsia-700 hover:bg-fuchsia-200'
             };
             return classes[typeCode] || 'bg-gray-100 text-gray-700 hover:bg-gray-200';
         },
