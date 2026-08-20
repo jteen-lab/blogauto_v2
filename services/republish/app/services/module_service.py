@@ -163,6 +163,14 @@ class ModuleService:
                 f"[GET_MODULES] 총 {total}개 중 {len(modules)}개 조회 완료 "
                 f"(legacy_bulk={legacy_count})"
             )
+            if has_next:
+                # 호출측이 이어받지 않으면 나머지가 화면에서 조용히 사라진다
+                # (플로우 화면이 기본 size=20으로 20개만 받아 회귀했던 사례).
+                logger.warning(
+                    f"[GET_MODULES] 목록이 잘렸습니다 — page={page} size={size} "
+                    f"({offset + len(modules)}/{total}). 호출측이 다음 페이지를 "
+                    f"이어받아야 전체가 표시됩니다."
+                )
 
             return ModuleListResponse(
                 modules=response_modules,
