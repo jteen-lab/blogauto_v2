@@ -2177,10 +2177,11 @@ async def execute_single_module(
             })
 
         elif type_code == "contact_form":
-            # 문의폼 모듈: 연결된 블로그마다 문의폼 보장(멱등)
+            # 애드센스 필수구성 모듈: 연결된 블로그마다 문의폼 + 필수 4페이지 보장(멱등)
             from ..services.publishing.contact_form_provisioner import ensure_contact_form
             from ..services.publishing.contact_form_templates import get_template
             from ..services.publishing.contact_form_designs import get_design
+            from ..services.publishing.required_pages_service import RequiredPagesService
             cf_settings = target_module.settings or {}
             try:
                 template = get_template(cf_settings.get("template_code") or "basic")
@@ -2190,16 +2191,34 @@ async def execute_single_module(
                 design = get_design(cf_settings.get("design_code") or "default")
             except KeyError:
                 design = None
+            generate_pages = cf_settings.get("generate_pages", True)
+            preset_code = cf_settings.get("pages_preset_code") or "standard"
+            overrides = cf_settings.get("pages_overrides") or {}
             cf_blogs = [link.blog for link in flow.blog_links if link.blog]
             if not cf_blogs:
                 raise HTTPException(status_code=400, detail="플로우에 연결된 블로그가 없습니다")
+            svc = RequiredPagesService(db)
             for blog in cf_blogs:
-                url = await ensure_contact_form(blog, db, template=template, design=design)
-                results.append({
-                    "blog_name": blog.name,
-                    "status": "success" if url else "failed",
-                    "detail": url or "문의폼 생성 실패(Tally 키/템플릿 확인)",
-                })
+                email = (blog.author_profile or {}).get("contact_email") or current_user.email
+                if generate_pages:
+                    outcome = await svc.generate_all(
+                        blog, email, preset_code=preset_code, overrides=overrides,
+                        contact_template=template, contact_design=design,
+                    )
+                    ok = bool(outcome.get("success"))
+                    results.append({
+                        "blog_name": blog.name,
+                        "status": "success" if ok else "failed",
+                        "detail": (f"필수페이지 {outcome.get('status')} + 문의폼"
+                                   if ok else outcome.get("error", "생성 실패")),
+                    })
+                else:
+                    url = await ensure_contact_form(blog, db, template=template, design=design)
+                    results.append({
+                        "blog_name": blog.name,
+                        "status": "success" if url else "failed",
+                        "detail": url or "문의폼 생성 실패(Tally 키/템플릿 확인)",
+                    })
 
         else:
             raise HTTPException(status_code=400, detail=f"지원하지 않는 모듈 타입: {type_code}")

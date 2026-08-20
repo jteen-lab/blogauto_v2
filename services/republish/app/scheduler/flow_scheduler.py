@@ -2128,13 +2128,17 @@ class FlowScheduler:
         blogs: List[Blog],
         db: AsyncSession,
     ) -> Dict[str, Any]:
-        """문의폼 모듈 실행: 연결된 블로그마다 문의폼 보장(멱등).
+        """애드센스 필수구성 모듈 실행: 블로그마다 문의폼 + 필수 4페이지 보장(멱등).
 
-        폼 없음→생성, 구성 변경→PATCH, 동일→스킵. 반복 실행돼도 저부하.
+        폼 없음→생성, 구성 변경→PATCH/갱신, 동일→스킵. 반복 실행돼도 저부하.
+        generate_pages=false면 문의폼만 보장(하위호환).
         """
+        from sqlalchemy import select as _select
+        from ..models.user import User
         from ..services.publishing.contact_form_provisioner import ensure_contact_form
         from ..services.publishing.contact_form_templates import get_template
         from ..services.publishing.contact_form_designs import get_design
+        from ..services.publishing.required_pages_service import RequiredPagesService
 
         settings = contact_module.settings or {}
         try:
@@ -2145,20 +2149,39 @@ class FlowScheduler:
             design = get_design(settings.get("design_code") or "default")
         except KeyError:
             design = None
+        generate_pages = settings.get("generate_pages", True)
+        preset_code = settings.get("pages_preset_code") or "standard"
+        overrides = settings.get("pages_overrides") or {}
         if not blogs:
             return {"success": True, "skipped": True, "message": "연결된 블로그 없음"}
 
+        svc = RequiredPagesService(db)
         ok = 0
         for blog in blogs:
             try:
-                url = await ensure_contact_form(blog, db, template=template, design=design)
-                if url:
-                    ok += 1
+                if generate_pages:
+                    email = (blog.author_profile or {}).get("contact_email")
+                    if not email:
+                        row = await db.execute(
+                            _select(User.email).where(User.id == blog.user_id)
+                        )
+                        email = row.scalar_one_or_none() or ""
+                    outcome = await svc.generate_all(
+                        blog, email, preset_code=preset_code, overrides=overrides,
+                        contact_template=template, contact_design=design,
+                    )
+                    if outcome.get("success"):
+                        ok += 1
+                else:
+                    url = await ensure_contact_form(blog, db, template=template, design=design)
+                    if url:
+                        ok += 1
             except Exception as exc:  # noqa: BLE001
                 logger.error("[CONTACT_FORM] 실패 | blog=%s | %s", blog.name, exc)
+        label = "필수구성" if generate_pages else "문의폼"
         return {
             "success": True,
-            "message": f"문의폼 보장 {ok}/{len(blogs)}",
+            "message": f"{label} 보장 {ok}/{len(blogs)}",
         }
 
     async def _execute_generate_module(
