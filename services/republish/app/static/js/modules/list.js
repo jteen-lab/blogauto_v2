@@ -130,18 +130,10 @@ function moduleListApp() {
             this.moduleTypes = await response.json();
         },
 
-        // 모듈 목록 로드
+        // 모듈 목록 로드 (개수와 무관하게 전부 — size=100 고정은 100개 초과 시 잘림)
         async loadModules() {
-            const response = await fetch('/api/v1/modules?size=100', {
-                credentials: 'include'
-            });
-
-            if (!response.ok) {
-                throw new Error('모듈 목록 조회 실패');
-            }
-
-            const data = await response.json();
-            this.modules = (data.modules || []).filter(m => m && m.module_type);
+            const modules = await window.fetchAllModules();
+            this.modules = modules.filter(m => m && m.module_type);
 
             // 캐시 초기화
             this.intervalTextCache = {};

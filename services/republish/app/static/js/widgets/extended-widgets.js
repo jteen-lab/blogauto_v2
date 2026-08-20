@@ -110,7 +110,8 @@ window.workflowGuideComponent = function(stepsData) {
         loadModules: function(typeCode) {
             var self = this;
             self.loading = true;
-            fetch('/api/v1/modules?module_type_code=' + typeCode)
+            // size 미지정 시 서버 기본값(20개)만 오므로 명시한다.
+            fetch('/api/v1/modules?size=100&module_type_code=' + typeCode)
                 .then(function(resp) {
                     if (!resp.ok) {
                         throw new Error('HTTP ' + resp.status);
