@@ -1963,9 +1963,19 @@ async def execute_single_module(
 
     # 4. prompt/generate는 백그라운드 실행 (AI 호출이 수분 소요)
     if type_code in ("prompt", "generate"):
+        from app.services.flow.module_blog_scope import blogs_for_module
+
         blogs = [link.blog for link in flow.blog_links if link.blog]
         if not blogs:
             raise HTTPException(status_code=400, detail="플로우에 연결된 블로그가 없습니다")
+        # 모듈에 블로그가 연동돼 있으면 그 블로그에만 실행한다
+        # (같은 플로우의 다른 프롬프트 모듈용 블로그까지 생성되지 않도록)
+        blogs = blogs_for_module(target_module, blogs)
+        if not blogs:
+            raise HTTPException(
+                status_code=400,
+                detail="이 모듈에 연동된 블로그가 플로우에 없습니다",
+            )
 
         execution_id = str(uuid.uuid4())
 
@@ -2334,9 +2344,19 @@ async def _execute_generate_module_background(
                 logger.error(f"[MODULE_EXEC_BG] 모듈 없음: {module_id}")
                 return
 
+            from app.services.flow.module_blog_scope import blogs_for_module
+
             blogs = [link.blog for link in flow.blog_links if link.blog]
             if not blogs:
                 logger.warning(f"[MODULE_EXEC_BG] 연결된 블로그 없음")
+                return
+            # 모듈에 연동된 블로그로 한정(다른 프롬프트 모듈용 블로그 제외)
+            blogs = blogs_for_module(target_module, blogs)
+            if not blogs:
+                logger.warning(
+                    f"[MODULE_EXEC_BG] 모듈 연동 블로그가 플로우에 없음 | "
+                    f"module={target_module.name}"
+                )
                 return
 
             # 2. GP 컨텍스트 구성 (활성 시간 체크 스킵 — 수동 실행)

@@ -2253,33 +2253,44 @@ class FlowScheduler:
                         )
 
             # 일일 횟수 제한 체크 (Phase 3)
+            # 한도는 블로그별로 판정한다. 예전에는 한 블로그가 한도에 걸리면
+            # 전체를 return 해 같은 플로우의 다른 블로그까지 그날 생성이 멈췄다.
+            limit_reached_blog_ids: set = set()
             if gp_settings:
                 stages = gp_settings.get("stages", [])
+                fallback_daily = None
                 for stage in stages:
                     gen_config = stage.get("generate", {})
                     if gen_config.get("daily_count"):
-                        for blog in blogs:
-                            exceeded, today_count = await self._check_daily_limit(
-                                db, blog.id, "generate",
-                                gen_config["daily_count"],
-                            )
-                            if exceeded:
-                                logger.info(
-                                    f"[SCHED:GENERATE] 일일 한도 도달 | "
-                                    f"blog={blog.name} | "
-                                    f"today={today_count}/"
-                                    f"{gen_config['daily_count']}"
-                                )
-                                return {
-                                    "success": True,
-                                    "skipped": True,
-                                    "message": (
-                                        f"일일 생성 한도 도달 "
-                                        f"({today_count}/"
-                                        f"{gen_config['daily_count']})"
-                                    ),
-                                }
-                        break  # 첫 매칭 stage만 체크
+                        fallback_daily = gen_config["daily_count"]
+                        break  # 첫 매칭 stage를 폴백으로 사용
+
+                for blog in blogs:
+                    # 블로그별 단계가 계산돼 있으면 그 단계의 한도를 우선 적용
+                    stage_params = blog_stage_map.get(blog.id)
+                    daily_count = (
+                        stage_params.generate.daily_count
+                        if stage_params and stage_params.generate.daily_count
+                        else fallback_daily
+                    )
+                    if not daily_count:
+                        continue
+                    exceeded, today_count = await self._check_daily_limit(
+                        db, blog.id, "generate", daily_count,
+                    )
+                    if exceeded:
+                        limit_reached_blog_ids.add(blog.id)
+                        logger.info(
+                            f"[SCHED:GENERATE] 일일 한도 도달(이 블로그만 건너뜀) | "
+                            f"blog={blog.name} | today={today_count}/{daily_count}"
+                        )
+
+                if limit_reached_blog_ids and len(limit_reached_blog_ids) == len(blogs):
+                    return {
+                        "success": True,
+                        "skipped": True,
+                        "message": "모든 블로그가 일일 생성 한도에 도달했습니다",
+                    }
 
             gen_executor = FlowGenerateExecutor(db, flow.user_id)
 
@@ -2287,8 +2298,22 @@ class FlowScheduler:
             total_skipped = 0
             total_failed = 0
 
+            from app.services.flow.module_blog_scope import blogs_for_module
+
             for prompt_module in prompt_modules:
-                for blog in blogs:
+                # 모듈에 블로그가 연동돼 있으면 그 블로그에만 영향을 준다.
+                # (연동이 없는 카테고리 모드 모듈만 플로우 전체 블로그 대상)
+                module_blogs = blogs_for_module(prompt_module, blogs)
+                if not module_blogs:
+                    logger.info(
+                        f"[FLOW_SCHEDULER] 대상 블로그 없음(연동 범위 밖) | "
+                        f"module={prompt_module.name}"
+                    )
+                    continue
+                for blog in module_blogs:
+                    if blog.id in limit_reached_blog_ids:
+                        total_skipped += 1
+                        continue
                     # GP 컨텍스트에서 블로그별 StageParams 조회
                     stage_params = blog_stage_map.get(blog.id)
 
