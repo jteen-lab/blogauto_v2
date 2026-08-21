@@ -44,6 +44,11 @@ from ..schemas.blogger_slot import (
     SlotReservation,
 )
 from ..services.flow_slot_validator import FlowSlotValidator
+from ..services.flow.module_blog_scope import (
+    SINGLETON_TYPE_CODES,
+    is_blog_scoped_module,
+    resolve_scope_union,
+)
 from ..core.logger import get_logger
 
 logger = get_logger("flow_service", "app.log")
@@ -196,6 +201,9 @@ class FlowService:
                 module_result = await self.db.execute(module_query)
                 valid_modules = module_result.scalars().all()
 
+                # 조합 검증(타입별 1개 · 프롬프트/생성 모듈 단일 플로우 점유)
+                await self._validate_module_selection(user.id, valid_modules)
+
                 for idx, module in enumerate(valid_modules):
                     link = FlowModule(
                         flow_id=flow.id, module_id=module.id, execution_order=idx
@@ -203,10 +211,15 @@ class FlowService:
                     self.db.add(link)
                 logger.info(f"[CREATE_FLOW] {len(valid_modules)}개 모듈 연결")
 
+            # 모듈에 연동된 블로그가 있으면 플로우 블로그를 그 범위로 강제
+            scoped_blog_ids = self._enforce_blog_scope(
+                valid_modules, request.blog_ids
+            )
+
             # 초기 블로그 연결
-            if request.blog_ids:
+            if scoped_blog_ids:
                 blog_query = select(Blog).where(
-                    and_(Blog.id.in_(request.blog_ids), Blog.user_id == user.id)
+                    and_(Blog.id.in_(scoped_blog_ids), Blog.user_id == user.id)
                 )
                 blog_result = await self.db.execute(blog_query)
                 valid_blogs = blog_result.scalars().all()
@@ -300,6 +313,10 @@ class FlowService:
                     )
                     module_result = await self.db.execute(module_query)
                     update_valid_modules = module_result.scalars().all()
+                    # 조합 검증(자기 플로우는 점유 검사에서 제외)
+                    await self._validate_module_selection(
+                        user.id, update_valid_modules, flow_id=flow_id
+                    )
                     for idx, module in enumerate(update_valid_modules):
                         link = FlowModule(
                             flow_id=flow.id, module_id=module.id, execution_order=idx
@@ -310,6 +327,13 @@ class FlowService:
                     )
 
             if blog_ids is not None:
+                # 블로그 범위 강제: 모듈이 함께 바뀌면 새 모듈 기준,
+                # 모듈은 그대로면 이미 연결된 모듈 기준으로 판정한다.
+                scope_modules = update_valid_modules
+                if module_ids is None:
+                    scope_modules = await self._get_flow_modules(flow_id)
+                blog_ids = self._enforce_blog_scope(scope_modules, blog_ids)
+
                 await self.db.execute(
                     delete(FlowBlog).where(FlowBlog.flow_id == flow_id)
                 )
@@ -344,6 +368,10 @@ class FlowService:
             logger.info(f"[UPDATE_FLOW] 플로우 수정 완료: {flow_id}")
             return flow
 
+        except HTTPException:
+            # 검증 실패(400 등)는 그대로 전달 — 500으로 덮으면 원인을 알 수 없다
+            await self.db.rollback()
+            raise
         except Exception as e:
             logger.error(f"[UPDATE_FLOW] 오류: {e}")
             await self.db.rollback()
@@ -756,6 +784,99 @@ class FlowService:
     # ===========================================
     # 프롬프트 모듈 블로그 동기화
     # ===========================================
+
+    async def _get_flow_modules(self, flow_id: int) -> List[Module]:
+        """플로우에 이미 연결된 모듈 목록(module_type 로드 포함)."""
+        result = await self.db.execute(
+            select(Module)
+            .join(FlowModule, FlowModule.module_id == Module.id)
+            .where(FlowModule.flow_id == flow_id)
+            .options(selectinload(Module.module_type))
+        )
+        return list(result.scalars().all())
+
+    async def _validate_module_selection(
+        self, user_id: int, modules: List[Module], flow_id: Optional[int] = None
+    ) -> None:
+        """플로우에 담을 모듈 조합을 검증한다.
+
+        1) 성장 프로파일·애드센스 필수구성은 플로우당 1개
+        2) 프롬프트/생성 모듈은 플로우 1곳에만 — 같은 모듈이 두 플로우에서
+           오토런되면 같은 블로그에 이중으로 글이 생성된다.
+
+        Args:
+            flow_id: 수정 중인 플로우(자기 자신은 점유 검사에서 제외)
+
+        Raises:
+            HTTPException: 규칙 위반 시 400
+        """
+        # 1) 타입별 1개 제한
+        for code, label in SINGLETON_TYPE_CODES.items():
+            count = sum(
+                1 for m in modules
+                if m.module_type and m.module_type.code == code
+            )
+            if count > 1:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{label} 모듈은 플로우당 1개만 선택할 수 있습니다",
+                )
+
+        # 2) 프롬프트/생성 모듈의 다른 플로우 점유 검사
+        scoped_ids = [m.id for m in modules if is_blog_scoped_module(m)]
+        if not scoped_ids:
+            return
+
+        query = (
+            select(Module.name, Flow.name, Flow.id)
+            .join(FlowModule, FlowModule.module_id == Module.id)
+            .join(Flow, Flow.id == FlowModule.flow_id)
+            .where(
+                FlowModule.module_id.in_(scoped_ids),
+                Flow.user_id == user_id,
+            )
+        )
+        if flow_id is not None:
+            query = query.where(Flow.id != flow_id)
+
+        result = await self.db.execute(query)
+        conflicts = result.all()
+        if conflicts:
+            detail = ", ".join(
+                f"'{module_name}'은(는) 플로우 '{flow_name}'에서 사용 중"
+                for module_name, flow_name, _ in conflicts
+            )
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"프롬프트/생성 모듈은 플로우 한 곳에서만 사용할 수 있습니다 "
+                    f"(이중 생성 방지). {detail}"
+                ),
+            )
+
+    @staticmethod
+    def _enforce_blog_scope(
+        modules: List[Module], blog_ids: Optional[List[int]]
+    ) -> Optional[List[int]]:
+        """모듈에 연동된 블로그가 있으면 플로우 블로그를 그 범위로 강제한다.
+
+        연동이 하나도 없으면(카테고리 모드 전용) 사용자가 고른 목록을 그대로 둔다.
+
+        Returns:
+            강제 적용된 blog_ids (입력이 None이고 강제 대상도 없으면 None)
+        """
+        scope = resolve_scope_union(modules)
+        if not scope:
+            return blog_ids
+
+        requested = list(blog_ids or [])
+        dropped = [b for b in requested if b not in scope]
+        if dropped:
+            logger.info(
+                f"[BLOG_SCOPE] 모듈 연동 밖 블로그 제외: {dropped} "
+                f"(허용 범위={sorted(scope)})"
+            )
+        return sorted(scope)
 
     async def _sync_prompt_module_blogs(
         self, flow_id: int, user_id: int, modules: List[Module]
