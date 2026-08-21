@@ -132,6 +132,9 @@ function flowFormData() {
         // 블로그 실행 상태 (예: "5_publish", "3_republish")
         executingBlogAction: null,
 
+        // 다른 플로우가 이미 쓰고 있는 프롬프트/생성 모듈 {module_id: 플로우명}
+        moduleUsedByFlow: {},
+
         // GP(Growth Profile) 관련 상태
         flowHasGP: false,
         gpModuleName: '',
@@ -140,7 +143,9 @@ function flowFormData() {
 
         async init() {
             this.resetForm();
-            await Promise.all([this.loadModules(), this.loadBlogs()]);
+            await Promise.all([
+                this.loadModules(), this.loadBlogs(), this.loadModuleUsage(),
+            ]);
 
             // 참고: 모듈/블로그 선택 변경은 체크박스 @change 이벤트로 처리
             // Alpine.js $watch는 배열 인플레이스 변경(.push/.splice)을 감지하지 못함
@@ -204,6 +209,59 @@ function flowFormData() {
             } finally {
                 this.modulesLoading = false;
             }
+        },
+
+        // 다른 플로우가 이미 쓰고 있는 프롬프트/생성 모듈 파악
+        // (같은 모듈이 두 플로우에서 오토런되면 같은 블로그에 이중 생성된다)
+        async loadModuleUsage() {
+            try {
+                const flows = await window.fetchAllFlows();
+                const usage = {};
+                for (const flow of flows) {
+                    for (const link of (flow.module_links || [])) {
+                        const mod = link.module;
+                        if (!mod || !mod.module_type) continue;
+                        if (!['prompt', 'generate'].includes(mod.module_type.code)) continue;
+                        usage[mod.id] = { flowId: flow.id, flowName: flow.name };
+                    }
+                }
+                this.moduleUsedByFlow = usage;
+            } catch (e) {
+                console.warn('[모듈 사용처] 로드 실패', e);
+                this.moduleUsedByFlow = {};
+            }
+        },
+
+        // 이 모듈이 '다른' 플로우에서 사용 중인가(편집 중인 플로우는 제외)
+        isModuleUsedByOtherFlow(moduleId) {
+            const used = this.moduleUsedByFlow[moduleId];
+            return !!used && used.flowId !== this.formData.id;
+        },
+
+        // 사용 중인 플로우 이름(안내 표시용)
+        getModuleUsingFlowName(moduleId) {
+            const used = this.moduleUsedByFlow[moduleId];
+            return used ? used.flowName : '';
+        },
+
+        // 이 모듈을 지금 선택할 수 없는 이유(없으면 빈 문자열)
+        getModuleDisabledReason(module) {
+            if (!module || !module.module_type) return '';
+            const code = module.module_type.code;
+            if (['prompt', 'generate'].includes(code)
+                && this.isModuleUsedByOtherFlow(module.id)) {
+                return `'${this.getModuleUsingFlowName(module.id)}' 플로우에서 사용 중`;
+            }
+            // 성장 프로파일·필수구성은 플로우당 1개
+            const singleton = { growth_profile: '성장 프로파일', contact_form: '애드센스 필수구성' };
+            if (singleton[code] && !this.formData.selectedModules.includes(module.id)) {
+                const already = this.modules.some(m =>
+                    m.module_type?.code === code
+                    && this.formData.selectedModules.includes(m.id)
+                );
+                if (already) return `${singleton[code]}은(는) 플로우당 1개만 선택할 수 있습니다`;
+            }
+            return '';
         },
 
         getModulesByType(typeCode) {
@@ -688,6 +746,13 @@ function flowFormData() {
 
             this.promptLinkedBlogIds = newLinkedArray;
 
+            // 연동 범위가 생기면 범위 밖 블로그는 선택에서 제거(서버도 동일하게 강제)
+            if (newLinkedArray.length > 0) {
+                this.formData.selectedBlogs = this.formData.selectedBlogs.filter(
+                    id => newLinkedIds.has(Number(id))
+                );
+            }
+
             // 배열 재할당으로 Alpine 반응성 보장
             // (.push/.splice 인플레이스 변경은 Alpine이 감지 못할 수 있음)
             this.formData.selectedBlogs = [...this.formData.selectedBlogs];
@@ -724,6 +789,18 @@ function flowFormData() {
         // 프롬프트 연동 블로그 여부 확인
         isPromptLinkedBlog(blogId) {
             return this.promptLinkedBlogIds.includes(blogId);
+        },
+
+        // 선택된 프롬프트/생성 모듈에 연동 블로그가 있으면, 그 밖의 블로그는
+        // 이 플로우에 넣을 수 없다(모듈에 없는 블로그가 그 모듈로 생성되던 문제).
+        isBlogOutOfScope(blogId) {
+            return this.promptLinkedBlogIds.length > 0
+                && !this.promptLinkedBlogIds.includes(blogId);
+        },
+
+        // 블로그 체크박스를 잠글지 여부(연동 블로그=해제 불가, 범위 밖=선택 불가)
+        isBlogLocked(blogId) {
+            return this.isPromptLinkedBlog(blogId) || this.isBlogOutOfScope(blogId);
         },
 
         // 선택된 프롬프트 모듈 존재 여부

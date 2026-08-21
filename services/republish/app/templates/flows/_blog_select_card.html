@@ -2,8 +2,11 @@
 플로우 폼 내 블로그 선택용 미니 카드
 x-for="blog in blogs" 루프 내에서 사용
 -->
-<label class="block cursor-pointer"
-       :class="isBlogSelected(blog.id) ? 'ring-2 ring-accent rounded-xl' : ''">
+<label class="block"
+       :class="[
+           isBlogSelected(blog.id) ? 'ring-2 ring-accent rounded-xl' : '',
+           isBlogOutOfScope(blog.id) ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+       ]">
     <div class="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow overflow-hidden"
          :class="isBlogSelected(blog.id) ? 'border-accent' : ''">
         <!-- 헤더: 플랫폼별 배경색 + 체크박스 + 아이콘 + 이름 -->
@@ -13,9 +16,9 @@ x-for="blog in blogs" 루프 내에서 사용
                    :value="blog.id"
                    x-model="formData.selectedBlogs"
                    @change="$nextTick(() => onBlogSelectionChange())"
-                   :disabled="isPromptLinkedBlog(blog.id)"
+                   :disabled="isBlogLocked(blog.id)"
                    class="w-4 h-4 text-accent bg-white border-gray-300 rounded focus:ring-accent flex-shrink-0"
-                   :class="isPromptLinkedBlog(blog.id) ? 'opacity-60' : ''">
+                   :class="isBlogLocked(blog.id) ? 'opacity-60' : ''">
             <span class="text-sm flex-shrink-0" x-text="blog.platform === 'blogger' ? '📙' : '🌐'"></span>
             <h4 class="font-semibold text-sm truncate" x-text="blog.name"></h4>
         </div>
@@ -24,6 +27,10 @@ x-for="blog in blogs" 루프 내에서 사용
             <div class="text-gray-500 truncate" x-text="blog.url || '-'"></div>
             <template x-if="isPromptLinkedBlog(blog.id)">
                 <span class="inline-block px-1.5 py-0.5 rounded bg-green-100 text-green-700 font-medium">프롬프트 연동</span>
+            </template>
+            <!-- 선택된 프롬프트 모듈에 연동된 블로그만 쓸 수 있다 -->
+            <template x-if="isBlogOutOfScope(blog.id)">
+                <span class="inline-block px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 font-medium">🔒 모듈 연동 블로그만 사용</span>
             </template>
             <template x-if="flowHasGP && blogStageMap[blog.id]">
                 <div class="flex items-center gap-1">

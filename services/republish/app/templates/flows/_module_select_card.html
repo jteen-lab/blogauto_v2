@@ -2,8 +2,11 @@
 플로우 폼 내 모듈 선택용 미니 카드
 x-for="module in getModulesByType(activeModuleTab)" 루프 내에서 사용
 -->
-<label class="block cursor-pointer"
-       :class="isModuleSelected(module.id) ? 'ring-2 ring-accent rounded-xl' : ''">
+<label class="block"
+       :class="[
+           isModuleSelected(module.id) ? 'ring-2 ring-accent rounded-xl' : '',
+           getModuleDisabledReason(module) ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+       ]">
     <div class="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow overflow-hidden"
          :class="isModuleSelected(module.id) ? 'border-accent' : ''">
         <!-- 헤더: 타입별 배경색 + 체크박스 + 아이콘 + 이름 -->
@@ -13,12 +16,18 @@ x-for="module in getModulesByType(activeModuleTab)" 루프 내에서 사용
                    :value="module.id"
                    x-model="formData.selectedModules"
                    @change="$nextTick(() => onModuleSelectionChange())"
+                   :disabled="!!getModuleDisabledReason(module)"
                    class="w-4 h-4 text-accent bg-white border-gray-300 rounded focus:ring-accent flex-shrink-0">
             <span class="text-sm flex-shrink-0" x-text="getModuleIcon(module.module_type.code)"></span>
             <h4 class="font-semibold text-sm truncate flex-1" x-text="module.name"></h4>
         </div>
         <!-- 바디: 설명 + 타입별 정보 + 실행 버튼 -->
         <div class="px-3 py-2 text-xs space-y-1 min-h-[2.5rem]">
+            <!-- 선택할 수 없는 이유(다른 플로우 사용 중 / 플로우당 1개 제한) -->
+            <template x-if="getModuleDisabledReason(module)">
+                <div class="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-medium"
+                     x-text="'🔒 ' + getModuleDisabledReason(module)"></div>
+            </template>
             <div x-show="module.description"
                  class="text-gray-600 truncate"
                  x-text="module.description"></div>
