@@ -236,6 +236,13 @@ function createPromptBuilderState(opts = {}) {
             const hit = this.find(list, this[field]);
             return hit ? hit.label : '미선택';
         },
+        // 전용 프롬프트 적용 여부(불리언).
+        // 주의: fullPromptOverride 는 '' 로 시작하는 **문자열**이라 그대로
+        // :disabled 에 바인딩하면 Alpine 이 null/undefined/false 만 속성을 지우므로
+        // disabled="" 가 항상 붙어 4축이 영구 비활성화된다. 항상 이 게터를 쓸 것.
+        get fullPromptLocked() {
+            return Boolean(this.fullPromptOverride);
+        },
         isComplete() {
             if (this.fullPromptOverride) return true; // 전용 프롬프트는 즉시 반영 가능
             return Boolean(this.persona && this.reader && this.pattern && this.tone);
