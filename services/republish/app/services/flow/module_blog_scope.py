@@ -16,6 +16,20 @@ SINGLETON_TYPE_CODES = {
     "contact_form": "애드센스 필수구성",
 }
 
+# 애드센스 승인 상태에 따른 모듈 역할(Module.settings.adsense_role)
+ROLE_ALWAYS = "always"              # 상태 무관(기본 · 기존 모듈 전부 이 값)
+ROLE_ADSENSE_ONLY = "adsense_only"  # 승인 전에만 실행(애드센스 전용 공용 모듈)
+ROLE_POST_APPROVAL = "post_approval"  # 승인 후에만 실행(정상 운영 모듈)
+
+ADSENSE_ROLES = {
+    ROLE_ALWAYS: "항상 실행",
+    ROLE_ADSENSE_ONLY: "애드센스 승인 전에만",
+    ROLE_POST_APPROVAL: "애드센스 승인 후에만",
+}
+
+# 승인 완료로 보는 상태
+APPROVED_STATUS = "approved"
+
 
 def _collect_blog_ids(settings: Optional[Dict[str, Any]]) -> Set[int]:
     """settings에서 연동 블로그 ID를 모은다.
@@ -70,12 +84,41 @@ def resolve_scope_union(modules: Iterable[Any]) -> Set[int]:
     return union
 
 
-def blogs_for_module(module: Any, blogs: List[Any]) -> List[Any]:
-    """실행 대상 블로그를 그 모듈의 연동 블로그로 좁힌다.
+def resolve_adsense_role(module: Any) -> str:
+    """모듈의 애드센스 역할. 미지정이면 always(하위호환)."""
+    settings = getattr(module, "settings", None) or {}
+    role = settings.get("adsense_role")
+    return role if role in ADSENSE_ROLES else ROLE_ALWAYS
 
-    연동이 없는 모듈(카테고리 모드)은 받은 목록을 그대로 돌려준다 — 하위호환.
+
+def is_module_active_for_blog(module: Any, blog: Any) -> bool:
+    """이 블로그에 대해 모듈을 지금 실행해야 하는지.
+
+    모듈 전체를 켜고 끄지 않고 **블로그마다** 판정한다. 공용 니치 모듈에 여러
+    블로그가 붙었을 때 일부만 승인되는 상황이 정상이기 때문이다
+    (A는 승인 → 건너뜀 / B는 심사 중 → 계속 실행).
+    """
+    role = resolve_adsense_role(module)
+    if role == ROLE_ALWAYS:
+        return True
+
+    approved = (getattr(blog, "adsense_status", None) == APPROVED_STATUS)
+    if role == ROLE_ADSENSE_ONLY:
+        return not approved
+    if role == ROLE_POST_APPROVAL:
+        return approved
+    return True
+
+
+def blogs_for_module(module: Any, blogs: List[Any]) -> List[Any]:
+    """실행 대상 블로그를 좁힌다.
+
+    1) 모듈에 연동된 블로그로 한정(연동이 없으면 받은 목록 그대로 — 하위호환)
+    2) 애드센스 역할에 따라 블로그별로 다시 걸러낸다
     """
     scope = resolve_module_blog_ids(module)
-    if not scope:
-        return blogs
-    return [b for b in blogs if getattr(b, "id", None) in scope]
+    candidates = (
+        blogs if not scope
+        else [b for b in blogs if getattr(b, "id", None) in scope]
+    )
+    return [b for b in candidates if is_module_active_for_blog(module, b)]
