@@ -73,6 +73,10 @@ class FlowGenerateExecutor:
             module_settings = self._filter_categories_for_blog(
                 module_settings, blog_id
             )
+            # 모듈 통합형 자동 전환: adsense_auto 를 켠 모듈은 블로그의 애드센스
+            # 상태에 따라 니치 강제·정보이득이 켜지고 꺼진다(계획서 3.2).
+            from .adsense_auto_settings import resolve_for_blog
+            module_settings = resolve_for_blog(module_settings, blog)
 
             # 디스패치 시점에 결정된 title_id가 있으면 그것을 강제 사용.
             # 재고 정책은 블로그별이므로 글로벌 status='used'는 차단하지 않고
