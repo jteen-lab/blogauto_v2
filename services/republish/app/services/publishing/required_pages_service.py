@@ -82,6 +82,7 @@ class RequiredPagesService:
         blog.required_page_ids = existing_ids
         flag_modified(blog, "required_page_ids")
         blog.required_pages_status = self._compute_status(existing_ids)
+        self._advance_adsense_status(blog)
         await self.db.commit()
 
         logger.info(
@@ -94,6 +95,24 @@ class RequiredPagesService:
             "page_ids": existing_ids,
             "results": results,
         }
+
+    @staticmethod
+    def _advance_adsense_status(blog: Blog) -> None:
+        """필수 페이지 4종이 갖춰지면 애드센스 상태를 '준비중'으로 올린다.
+
+        미신청(none)에서만 전진시킨다. 이미 신청/승인 단계로 넘어간 블로그를
+        되돌리면 애드센스 전용 모듈이 다시 켜지는 등 역효과가 나기 때문이다.
+        (계획서 docs/plans/adsense_status_automation_plan.md 3.4)
+        """
+        if blog.required_pages_status != "complete":
+            return
+        if (blog.adsense_status or "none") != "none":
+            return
+        blog.adsense_status = "preparing"
+        logger.info(
+            "[ADSENSE_STATUS] 필수페이지 완료 → 준비중 자동 전환 | blog=%s",
+            blog.name,
+        )
 
     async def delete_all(self, blog: Blog) -> Dict[str, Any]:
         """생성된 필수 페이지 4종을 원격 플랫폼에서 삭제하고 상태를 초기화한다."""
