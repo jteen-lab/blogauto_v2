@@ -144,6 +144,7 @@ class InventoryTrigger:
         )
 
         has_category = bool(subtopic_ids or topic_only_ids)
+        sibling_ids = await self._resolve_siblings(blog_id, module_settings)
 
         # 카테고리 OR 조건 빌드
         category_conditions = []
@@ -167,6 +168,7 @@ class InventoryTrigger:
         matched_titles = await self._query_titles_list(
             blog_id_str, category_conditions,
             matched_only=True, limit=limit,
+            sibling_blog_ids=sibling_ids,
         )
 
         # 2차: 부족하면 카테고리 일치 available 제목 보충 (매칭 무관)
@@ -177,6 +179,7 @@ class InventoryTrigger:
                 blog_id_str, category_conditions,
                 matched_only=False, limit=remaining,
                 exclude_ids=exclude_ids,
+                sibling_blog_ids=sibling_ids,
             )
             matched_titles.extend(fallback_titles)
 
@@ -185,6 +188,7 @@ class InventoryTrigger:
             matched_titles = await self._query_titles_list(
                 blog_id_str, [],
                 matched_only=False, limit=limit,
+                sibling_blog_ids=sibling_ids,
             )
 
         return matched_titles
@@ -196,6 +200,7 @@ class InventoryTrigger:
         matched_only: bool,
         limit: int,
         exclude_ids: Optional[List[int]] = None,
+        sibling_blog_ids: Optional[List[int]] = None,
     ) -> List[MainTitle]:
         """
         필터 조건 조합으로 제목 목록 조회 (블로그별 재고 정책)
@@ -214,7 +219,7 @@ class InventoryTrigger:
         conditions = [MainTitle.status != "archived"]
         conditions.append(
             MainTitle.id.notin_(
-                self._published_title_ids_subquery(blog_id_str)
+                self._published_title_ids_subquery(blog_id_str, sibling_blog_ids)
             )
         )
 
@@ -238,7 +243,10 @@ class InventoryTrigger:
         return list(result.scalars().all())
 
     @staticmethod
-    def _published_title_ids_subquery(blog_id_str: Optional[str] = None):
+    def _published_title_ids_subquery(
+        blog_id_str: Optional[str] = None,
+        sibling_blog_ids: Optional[list] = None,
+    ):
         """
         이미 사용된 생성 CrawledPost와 연결된 MainTitle ID 서브쿼리.
 
@@ -250,6 +258,9 @@ class InventoryTrigger:
                          재고 정책은 블로그별이므로 다른 블로그가 사용했다고
                          이 블로그의 생성 후보에서 빼지 않는다.
                          None이면 전 블로그 통합 (하위 호환).
+            sibling_blog_ids: 같은 도메인·같은 모듈에 묶인 형제 블로그 ID.
+                         지정하면 그 블로그들이 쓴 제목도 함께 제외한다
+                         (계획서 N2 조건부 중복 정책). 비우면 기존 동작.
 
         Note:
             기존에는 published_at IS NOT NULL 조건이 있어 발행 완료된 것만
@@ -268,11 +279,19 @@ class InventoryTrigger:
             )
         )
         if blog_id_str is not None:
+            ids = []
             try:
-                blog_id_int = int(blog_id_str)
-                query = query.where(CrawledPost.blog_id == blog_id_int)
+                ids.append(int(blog_id_str))
             except (TypeError, ValueError):
                 pass
+            # 형제 블로그(같은 도메인·같은 모듈)가 쓴 제목도 제외 — N2 조건부 정책
+            for sid in (sibling_blog_ids or []):
+                try:
+                    ids.append(int(sid))
+                except (TypeError, ValueError):
+                    continue
+            if ids:
+                query = query.where(CrawledPost.blog_id.in_(set(ids)))
         return query
 
     async def _get_inventory_count(self, blog_id: int) -> int:
@@ -360,6 +379,57 @@ class InventoryTrigger:
 
         return subtopic_ids, topic_only_ids
 
+    async def _resolve_siblings(
+        self, blog_id: int, module_settings: Optional[dict],
+    ) -> List[int]:
+        """형제 블로그 ID 목록(옵션이 켜진 경우에만).
+
+        `exclude_sibling_titles` 가 켜져 있을 때만 계산한다. 같은 도메인을 쓰는
+        블로그와, 같은 모듈에 연결된 블로그가 이미 사용한 제목을 후보에서 뺀다
+        (계획서 N2). 꺼져 있으면 기존 동작 그대로다.
+        """
+        if not (module_settings or {}).get("exclude_sibling_titles"):
+            return []
+
+        from ...models.blog import Blog
+        from .sibling_blogs import registrable_domain
+
+        row = await self.db.execute(select(Blog).where(Blog.id == blog_id))
+        blog = row.scalar_one_or_none()
+        if not blog:
+            return []
+
+        siblings: set = set()
+
+        # (1) 같은 등록 도메인
+        domain = registrable_domain(blog.url)
+        if domain:
+            others = await self.db.execute(
+                select(Blog.id, Blog.url).where(
+                    Blog.id != blog_id, Blog.is_deleted == False  # noqa: E712
+                )
+            )
+            for oid, ourl in others.all():
+                if registrable_domain(ourl) == domain:
+                    siblings.add(oid)
+
+        # (2) 같은 모듈에 연결된 블로그
+        for item in (module_settings or {}).get("blogs") or []:
+            bid = item if isinstance(item, int) else (item or {}).get("id")
+            if isinstance(bid, int) and bid != blog_id:
+                siblings.add(bid)
+        for row_map in (module_settings or {}).get("blog_category_map") or []:
+            bid = (row_map or {}).get("blog_id")
+            if isinstance(bid, int) and bid != blog_id:
+                siblings.add(bid)
+
+        if siblings:
+            logger.info(
+                "[INVENTORY] 형제 블로그 제목 제외 | blog_id=%s | 형제=%s",
+                blog_id, sorted(siblings),
+            )
+        return sorted(siblings)
+
     def _apply_niche(self, module_settings, subtopic_ids, topic_only_ids, source):
         """니치 강제 활성 시 카테고리 필터를 니치 topic으로 대체(모듈 단위).
 
@@ -407,6 +477,7 @@ class InventoryTrigger:
         )
 
         has_category = bool(subtopic_ids or topic_only_ids)
+        sibling_ids = await self._resolve_siblings(blog_id, module_settings)
 
         # 카테고리 OR 조건 빌드
         category_conditions = []
@@ -428,7 +499,8 @@ class InventoryTrigger:
 
         # 1차: 매칭 + 카테고리(subtopic) 일치 제목
         title = await self._query_title_with_filters(
-            blog_id_str, category_conditions, matched_only=True
+            blog_id_str, category_conditions, matched_only=True,
+            sibling_blog_ids=sibling_ids,
         )
         if title:
             logger.info(f"[INVENTORY] 제목 선택: 1차(매칭+카테고리) | id={title.id}")
@@ -436,7 +508,8 @@ class InventoryTrigger:
 
         # 2차: 카테고리(subtopic) 일치 available 제목 (매칭 무관)
         title = await self._query_title_with_filters(
-            blog_id_str, category_conditions, matched_only=False
+            blog_id_str, category_conditions, matched_only=False,
+            sibling_blog_ids=sibling_ids,
         )
         if title:
             logger.info(f"[INVENTORY] 제목 선택: 2차(카테고리만) | id={title.id}")
@@ -448,7 +521,8 @@ class InventoryTrigger:
             if topic_ids_all:
                 topic_cond = [MainTitle.topic_id.in_(list(topic_ids_all))]
                 title = await self._query_title_with_filters(
-                    blog_id_str, topic_cond, matched_only=False
+                    blog_id_str, topic_cond, matched_only=False,
+                    sibling_blog_ids=sibling_ids,
                 )
                 if title:
                     logger.info(
@@ -466,7 +540,8 @@ class InventoryTrigger:
 
         # 카테고리 미설정 블로그 → 전체 available 폴백
         title = await self._query_title_with_filters(
-            blog_id_str, [], matched_only=False
+            blog_id_str, [], matched_only=False,
+            sibling_blog_ids=sibling_ids,
         )
         if not title:
             logger.warning(f"[INVENTORY] 전체폴백 실패 | blog_id={blog_id}")
@@ -477,6 +552,7 @@ class InventoryTrigger:
         blog_id_str: str,
         category_conditions: list,
         matched_only: bool,
+        sibling_blog_ids: Optional[List[int]] = None,
     ) -> Optional[MainTitle]:
         """
         필터 조건 조합으로 후보 제목 조회 후 랜덤 1개 선택
@@ -500,7 +576,7 @@ class InventoryTrigger:
         # 이 블로그가 이미 글을 만든 제목은 제외 (블로그별 중복 방지)
         conditions.append(
             MainTitle.id.notin_(
-                self._published_title_ids_subquery(blog_id_str)
+                self._published_title_ids_subquery(blog_id_str, sibling_blog_ids)
             )
         )
 
