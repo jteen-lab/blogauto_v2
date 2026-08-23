@@ -99,10 +99,69 @@ class AdsenseAccountService:
         account.last_sync_error = None
         await self.db.commit()
 
+        # 실제 상태를 블로그의 adsense_status 에 반영(승인 감지 → 전용 설정 해제)
+        applied = await self.apply_statuses_to_blogs(account.user_id)
+
         logger.info(
-            "[ADSENSE_ACCOUNT] 동기화 완료 | id=%s | 사이트=%d건", account.id, len(sites)
+            "[ADSENSE_ACCOUNT] 동기화 완료 | id=%s | 사이트=%d건 | 상태변경=%d건",
+            account.id, len(sites), applied,
         )
-        return {"success": True, "account_id": account.id, "site_count": len(sites)}
+        return {
+            "success": True, "account_id": account.id,
+            "site_count": len(sites), "status_updated": applied,
+        }
+
+    async def apply_statuses_to_blogs(self, user_id: int) -> int:
+        """동기화된 사이트 상태를 블로그의 `adsense_status` 에 반영한다.
+
+        표시는 조회 때마다 계산하지만, **모듈 실행 판정**(adsense_role)은 블로그의
+        저장된 상태를 보므로 실제 값도 맞춰 둬야 한다. 그래야 승인된 블로그에서
+        애드센스 전용 모듈이 자동으로 빠진다.
+
+        사용자가 직접 '심사중'으로 표시해 둔 것은 덮지 않는다(애드센스가 아직
+        '준비 중'으로 보고할 때 신청 사실은 사용자만 알기 때문).
+
+        Returns:
+            변경된 블로그 수
+        """
+        from ...models.blog import Blog
+        from .adsense_status_resolver import (
+            ST_APPLIED, ST_ATTENTION, ST_PREPARING, resolve_display_status,
+        )
+
+        index = await self.sites_index(user_id)
+        if not index:
+            return 0
+
+        rows = await self.db.execute(
+            select(Blog).where(
+                Blog.user_id == user_id,
+                Blog.is_deleted == False,  # noqa: E712
+            )
+        )
+        changed = 0
+        for blog in rows.scalars().all():
+            verdict = resolve_display_status(blog, index)
+            new_status = verdict["status"]
+
+            # 사용자가 신청했다고 표시한 상태는 유지
+            if new_status == ST_PREPARING and blog.adsense_status == ST_APPLIED:
+                continue
+            # '확인 필요'는 표시 전용 — 저장 상태는 건드리지 않는다
+            if new_status == ST_ATTENTION:
+                continue
+
+            if blog.adsense_status != new_status:
+                logger.info(
+                    "[ADSENSE_ACCOUNT] 블로그 상태 갱신 | %s | %s → %s",
+                    blog.name, blog.adsense_status, new_status,
+                )
+                blog.adsense_status = new_status
+                changed += 1
+
+        if changed:
+            await self.db.commit()
+        return changed
 
     async def sync_all(self, user_id: int) -> Dict[str, Any]:
         """활성 계정 전체 동기화. 한 계정이 실패해도 나머지는 진행한다."""
