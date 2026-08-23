@@ -79,6 +79,7 @@ from .blog_growth_setting import BlogGrowthSetting
 
 # Phase MATCH-040: 블로그 × 정식제목 검토 카드
 from .blog_main_title_scan import BlogMainTitleScan
+from .adsense_account import AdsenseAccount, AdsenseSite
 
 __all__ = [
     # Core models
@@ -147,4 +148,7 @@ __all__ = [
     "BlogGrowthSetting",
     # Phase MATCH-040: 검토 카드
     "BlogMainTitleScan",
+    # 애드센스 계정·사이트 상태(다중 계정)
+    "AdsenseAccount",
+    "AdsenseSite",
 ]
