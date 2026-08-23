@@ -117,10 +117,18 @@ AdSense는 2023-03-20부터 **도메인 단위**로 사이트를 관리하며, �
 - `adsense_auto: false`(기본) 이면 지금처럼 사용자가 켠 값 그대로
 
 ### 3.3 성장 프로파일 프리셋 전환
-- 현재 GP settings에 **`profile_key`가 저장되지 않는다**(운영 11개 전부 빈 값)
-  → 승인 후 "원래대로" 되돌릴 기준이 없다.
-- 선행 작업: `profile_key` 저장 + **승인 전 원본 프리셋 보관**(`base_profile` 스냅샷)
-- 승인 전 → adsense 프리셋 적용, 승인 후 → 보관해 둔 원본 복원
+> **정정(2026-08-23)**: 프리셋 식별자는 이미 저장되고 있다. 키 이름이 `profile_key`가
+> 아니라 **`selectedPreset`** 이라 앞선 조회에서 빈 값으로 보였을 뿐이다.
+> 실측: aggressive(군타) · adsense(수작남) · conservative(머니조아 외 3) · custom_1(5개).
+- 따라서 남은 작업은 **원본 스냅샷 보관·복원**뿐이다.
+- 구현: `app/services/generation/growth_profile_adsense.py`
+  - `apply_adsense_preset()` — 원본을 `settings.adsense_base_profile` 로 보관 후 adsense 적용.
+    **이미 애드센스면 스냅샷을 덮어쓰지 않는다**(두 번 호출해도 원본 보존)
+  - `restore_base_profile()` — 스냅샷으로 복원. **스냅샷이 없으면 아무것도 하지 않는다**
+    (임의 기본값으로 덮으면 사용자가 손으로 맞춘 설정이 사라진다)
+  - 보관 대상: selectedPreset · schedule_matrix · jitter · stages · warmup · custom_profiles
+- 자동 호출은 상태 동기화(9단계)·모듈 통합형 전환(10단계)에서 연결하며,
+  `settings.adsense_auto` 로 **옵트인**한 프로파일에만 적용한다.
 
 ### 3.4 상태 전환 자동화
 
