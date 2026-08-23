@@ -10,7 +10,7 @@ from typing import Optional
 
 from ...models.blog import Blog
 from ..ai.ai_service import AIService
-from ..prompt_builder.blocks import adsense_gain_directive
+from ..prompt_builder.blocks import adsense_gain_directive, aeo_directive
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +88,15 @@ async def generate_content_with_meta(
         if directive and directive[:20] not in full_prompt:
             full_prompt = f"{full_prompt}\n\n{directive}"
             logger.info("[GENERATOR] F7 정보이득 지시문 주입 | blog=%s", blog.name)
+
+    # AEO/GEO: 'AI 답변 인용 대비' 토글 시 지시문 주입(옵트인·중복 가드).
+    # 정보이득과 축이 달라 함께 켜도 충돌하지 않는다
+    # (정보이득=무엇을 쓸지, AEO=어떤 형태로 쓸지).
+    if settings.get("aeo_enabled"):
+        aeo = aeo_directive()
+        if aeo and aeo[:20] not in full_prompt:
+            full_prompt = f"{full_prompt}\n\n{aeo}"
+            logger.info("[GENERATOR] AEO 지시문 주입 | blog=%s", blog.name)
 
     # AI 제공자: 블로그 ai_config.writing_ai 설정만 사용
     provider = writing_ai.get("provider")

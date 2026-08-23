@@ -378,15 +378,48 @@ QUALITY: List[StyleBlock] = [
             "실행 가능한 다음 행동 하나로 마무리"
         ),
     },
+    {
+        "code": "Q-AEO",
+        "label": "AI 답변 인용 대비 (AEO/GEO)",
+        "cluster": "",
+        "body": (
+            "✦ AI 답변에 인용되도록 쓰기 (AEO/GEO)\n"
+            "- **즉답 먼저**: 도입 첫 2~3문장 안에 제목이 묻는 것의 답을 결론부터 제시. "
+            "배경 설명·인사말로 시작하지 말 것\n"
+            "- **소제목은 질문형 또는 명사구로**: 검색창에 실제로 칠 법한 표현을 쓰고, "
+            "각 소제목 바로 아래 첫 문장에서 그 질문에 답할 것\n"
+            "- **비교 표 1개 이상**: 단순 나열이 아니라 \"어떤 경우에 무엇을 고르는가\"가 "
+            "드러나는 표. 열은 조건/대상/선택 근거 형태로 구성\n"
+            "- **마지막에 자주 묻는 질문 3~5개**: 각 질문은 이 글 주제에서 실제로 갈리는 "
+            "지점이어야 하며(형식적 질문 금지), 답변은 2~4문장으로 그 자체만 읽어도 "
+            "완결되게 작성\n"
+            "- **한 문단 한 주장**: 문단을 3~5문장으로 끊고 첫 문장에 요지를 둘 것. "
+            "AI가 문단 단위로 인용하기 쉬워진다\n"
+            "- 같은 사실을 글 안에서 서로 다르게 서술하지 말 것(수치·조건 일관성)"
+        ),
+    },
 ]
 
 # 애드센스 정보이득 지시문 — 자동 주입(content_generator)이 참조하는 SoT.
 ADSENSE_GAIN_CODE: str = "Q-AdsenseGain"
+# AEO/GEO 지시문 코드
+AEO_CODE: str = "Q-AEO"
 
 
 def adsense_gain_directive() -> str:
     """애드센스 정보이득 지시문 본문 반환(SoT). 없으면 빈 문자열."""
     block = _find(QUALITY, ADSENSE_GAIN_CODE)
+    return block["body"] if block else ""
+
+
+def aeo_directive() -> str:
+    """AEO/GEO 지시문 본문 반환(SoT). 없으면 빈 문자열.
+
+    정보이득(Q-AdsenseGain)과 축이 다르다. 정보이득은 **무엇을 쓸지**(고유 관점·
+    검증 가능한 정보)를, 이쪽은 **어떤 형태로 쓸지**(즉답·질문형 소제목·표·FAQ)를
+    다룬다. 둘을 함께 켜도 지시가 충돌하지 않는다.
+    """
+    block = _find(QUALITY, AEO_CODE)
     return block["body"] if block else ""
 
 
