@@ -772,30 +772,42 @@ function blogListApp() {
             return this.blogs
                 .filter(b => b.platform === platform)
                 .filter(b => !this.adsenseFilter
-                    || (b.adsense_status || 'none') === this.adsenseFilter);
+                    || this.blogAdsenseStatus(b) === this.adsenseFilter);
         },
 
         // ── 애드센스 상태 표시 ──────────────────────────────
-        // 상태별 뱃지 정의. 승인=초록 / 나머지=비초록으로 한눈에 구분되게 한다.
+        // 표시 기준은 **애드센스 사이트 목록의 실제 상태**(adsense_display_status)다.
+        // 계정을 등록하지 않았으면 서버가 판정할 근거가 없어 전부 '미신청'으로 온다.
+        blogAdsenseStatus(blog) {
+            return blog.adsense_display_status || blog.adsense_status || 'none';
+        },
+
         adsenseBadge(blog) {
             const map = {
                 approved:  { label: '애드센스 승인',   cls: 'bg-emerald-100 text-emerald-800', dot: 'bg-emerald-500',
-                             tip: '애드센스 승인 완료 — 승인용 설정이 해제됩니다' },
+                             tip: '애드센스에서 승인(준비됨) 상태입니다' },
                 applied:   { label: '애드센스 심사중', cls: 'bg-blue-100 text-blue-800',       dot: 'bg-blue-500',
                              tip: '애드센스 심사 대기 중' },
                 preparing: { label: '애드센스 준비중', cls: 'bg-amber-100 text-amber-800',     dot: 'bg-amber-500',
-                             tip: '필수 페이지 생성 완료 — 신청 전 단계' },
+                             tip: '애드센스에 등록됐으나 아직 준비 중입니다' },
+                attention: { label: '확인 필요',       cls: 'bg-red-100 text-red-700',         dot: 'bg-red-500',
+                             tip: '애드센스에서 조치가 필요한 상태입니다(주의 필요)' },
                 none:      { label: '애드센스 미신청', cls: 'bg-gray-100 text-gray-600',       dot: 'bg-gray-400',
-                             tip: '아직 신청하지 않았습니다. 필수 페이지 생성부터 진행하세요' },
+                             tip: '애드센스 사이트 목록에 없습니다' },
             };
-            return map[blog.adsense_status] || map.none;
+            const badge = { ...(map[this.blogAdsenseStatus(blog)] || map.none) };
+            if (blog.adsense_inherited_from) {
+                badge.label += ' (도메인 기준)';
+                badge.tip += ` — 상위 도메인 ${blog.adsense_inherited_from}의 상태를 따릅니다`;
+            }
+            return badge;
         },
 
         // 상태별 개수(요약 칩)
         adsenseCounts() {
-            const c = { none: 0, preparing: 0, applied: 0, approved: 0 };
+            const c = { none: 0, preparing: 0, applied: 0, approved: 0, attention: 0 };
             this.blogs.forEach(b => {
-                const k = b.adsense_status || 'none';
+                const k = this.blogAdsenseStatus(b);
                 if (k in c) c[k] += 1;
             });
             return c;
@@ -804,10 +816,11 @@ function blogListApp() {
         adsenseChips() {
             const c = this.adsenseCounts();
             return [
-                { key: 'approved',  label: '승인',   count: c.approved,  cls: 'bg-emerald-100 text-emerald-800' },
-                { key: 'applied',   label: '심사중', count: c.applied,   cls: 'bg-blue-100 text-blue-800' },
-                { key: 'preparing', label: '준비중', count: c.preparing, cls: 'bg-amber-100 text-amber-800' },
-                { key: 'none',      label: '미신청', count: c.none,      cls: 'bg-gray-100 text-gray-600' },
+                { key: 'approved',  label: '승인',      count: c.approved,  cls: 'bg-emerald-100 text-emerald-800' },
+                { key: 'applied',   label: '심사중',    count: c.applied,   cls: 'bg-blue-100 text-blue-800' },
+                { key: 'preparing', label: '준비중',    count: c.preparing, cls: 'bg-amber-100 text-amber-800' },
+                { key: 'attention', label: '확인 필요', count: c.attention, cls: 'bg-red-100 text-red-700' },
+                { key: 'none',      label: '미신청',    count: c.none,      cls: 'bg-gray-100 text-gray-600' },
             ];
         },
 

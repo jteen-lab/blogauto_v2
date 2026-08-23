@@ -256,12 +256,28 @@ class BlogService:
 
         logger.info(f"블로그 목록 조회 (인증정보 포함) | 사용자={user.id} | 개수={len(blogs)}")
 
+        # 애드센스 실제 상태(사이트 목록 기준) 판정용 인덱스
+        # 계정이 등록돼 있지 않으면 빈 인덱스 → 전부 '미신청'으로 나온다.
+        from .publishing.adsense_account_service import AdsenseAccountService
+        from .publishing.adsense_status_resolver import resolve_display_status
+        try:
+            sites_index = await AdsenseAccountService(self.db).sites_index(user.id)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"애드센스 사이트 인덱스 조회 실패: {exc}")
+            sites_index = {}
+
         items = []
         for blog in blogs:
             d = blog.to_dict_with_credentials(decrypt_data)
             c = counts.get(blog.id) or {"published_total": 0, "matched_published": 0}
             d["crawled_count"] = c["published_total"]
             d["matched_count"] = c["matched_published"]
+
+            verdict = resolve_display_status(blog, sites_index)
+            d["adsense_display_status"] = verdict["status"]
+            d["adsense_site_state"] = verdict["state"]
+            d["adsense_status_source"] = verdict["source"]
+            d["adsense_inherited_from"] = verdict["inherited_from"]
             items.append(d)
         return items
 

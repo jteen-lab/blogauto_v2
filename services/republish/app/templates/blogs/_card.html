@@ -93,7 +93,7 @@
                   :class="adsenseBadge(blog).cls"
                   :title="adsenseBadge(blog).tip">
                 <span class="w-1.5 h-1.5 rounded-full mr-1"
-                      :class="[adsenseBadge(blog).dot, blog.adsense_status === 'applied' ? 'animate-pulse' : '']"></span>
+                      :class="[adsenseBadge(blog).dot, blogAdsenseStatus(blog) === 'applied' ? 'animate-pulse' : '']"></span>
                 <span x-text="adsenseBadge(blog).label"></span>
             </span>
 
