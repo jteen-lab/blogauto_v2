@@ -463,6 +463,73 @@ async def get_required_page_presets(
     return {"presets": list_presets(), "page_types": list(REQUIRED_PAGE_TYPES)}
 
 
+# ============================================================
+# 애드센스 계정 (다중 등록 · 사이트 상태 동기화)
+# ============================================================
+
+class AdsenseAccountRequest(BaseModel):
+    """애드센스 계정 등록 요청."""
+    label: str = Field(..., description="계정 별칭")
+    refresh_token: str = Field(..., description="adsense.readonly 범위 refresh token")
+    google_email: Optional[str] = Field(None, description="계정 이메일(참고용)")
+
+
+@router.get("/adsense-accounts")
+async def list_adsense_accounts(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """등록된 애드센스 계정 목록(토큰은 반환하지 않는다)."""
+    from ..services.publishing.adsense_account_service import AdsenseAccountService
+    accounts = await AdsenseAccountService(db).list_accounts(current_user.id)
+    return {"accounts": [a.to_dict() for a in accounts]}
+
+
+@router.post("/adsense-accounts")
+async def add_adsense_account(
+    request: AdsenseAccountRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """애드센스 계정을 등록하고 곧바로 사이트 목록을 동기화한다."""
+    from ..services.publishing.adsense_account_service import AdsenseAccountService
+    token = (request.refresh_token or "").strip()
+    if not token:
+        raise HTTPException(status_code=422, detail="refresh token을 입력하세요")
+
+    service = AdsenseAccountService(db)
+    account = await service.add_account(
+        current_user.id, request.label, token, request.google_email,
+    )
+    sync = await service.sync_account(current_user.id, account.id)
+    await db.refresh(account)
+    return {"success": True, "account": account.to_dict(), "sync": sync}
+
+
+@router.delete("/adsense-accounts/{account_id}")
+async def delete_adsense_account(
+    account_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """애드센스 계정 삭제(사이트 캐시도 함께 삭제)."""
+    from ..services.publishing.adsense_account_service import AdsenseAccountService
+    ok = await AdsenseAccountService(db).delete_account(current_user.id, account_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="계정을 찾을 수 없습니다")
+    return {"success": True}
+
+
+@router.post("/adsense-accounts/sync")
+async def sync_adsense_accounts(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """모든 활성 계정의 사이트 상태를 지금 동기화한다."""
+    from ..services.publishing.adsense_account_service import AdsenseAccountService
+    return await AdsenseAccountService(db).sync_all(current_user.id)
+
+
 @router.get("/tally-account")
 async def get_tally_account(
     current_user: User = Depends(get_current_user),
