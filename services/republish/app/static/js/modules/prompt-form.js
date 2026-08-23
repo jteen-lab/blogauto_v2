@@ -107,7 +107,11 @@ function createPromptModuleState() {
             // always | adsense_only | post_approval
             role: 'always',
             // 형제 블로그(같은 도메인·같은 모듈)가 쓴 제목을 후보에서 제외
-            excludeSiblingTitles: false
+            excludeSiblingTitles: false,
+            // AI 답변 인용 대비(AEO/GEO) 지시문 주입
+            aeoEnabled: false,
+            // 블로그의 애드센스 상태에 따라 니치·정보이득을 자동 전환
+            autoSwitch: false
         }
     };
 }
@@ -257,6 +261,8 @@ const promptModuleMethods = {
         this.promptModule.adsense = {
             role: settings.adsense_role || 'always',
             excludeSiblingTitles: settings.exclude_sibling_titles ?? false,
+            aeoEnabled: settings.aeo_enabled ?? false,
+            autoSwitch: settings.adsense_auto ?? false,
             nicheEnabled: settings.niche_enabled ?? false,
             nicheTopicIds: Array.isArray(settings.niche_topic_ids) ? settings.niche_topic_ids.slice() : [],
             infoGainEnabled: settings.info_gain_enabled ?? false
@@ -426,6 +432,8 @@ const promptModuleMethods = {
             // 애드센스 승인용 (F4 니치 강제 + F7 정보이득)
             adsense_role: this.promptModule.adsense.role || 'always',
             exclude_sibling_titles: !!this.promptModule.adsense.excludeSiblingTitles,
+            aeo_enabled: !!this.promptModule.adsense.aeoEnabled,
+            adsense_auto: !!this.promptModule.adsense.autoSwitch,
             niche_enabled: this.promptModule.adsense.nicheEnabled,
             niche_topic_ids: this.promptModule.adsense.nicheTopicIds,
             info_gain_enabled: this.promptModule.adsense.infoGainEnabled,

@@ -121,6 +121,21 @@ function getPromptAdsenseSection() {
                                     <span class="text-xs font-normal text-gray-500">(선택 · 이 모듈에만 적용)</span>
                                 </h3>
 
+                                <!-- 애드센스 상태에 따른 자동 전환 -->
+                                <div class="space-y-2 pb-3 border-b border-amber-200">
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox" x-model="promptModule.adsense.autoSwitch"
+                                               class="w-4 h-4 text-amber-600 rounded focus:ring-amber-500">
+                                        <span class="text-sm font-medium text-gray-800">애드센스 상태에 맞춰 자동 전환</span>
+                                    </label>
+                                    <p class="text-xs text-gray-500 pl-6">
+                                        켜면 <strong>블로그마다</strong> 애드센스 상태를 보고 아래 설정을 자동으로 조절합니다.
+                                        <br>· 승인 전 → 니치 강제·정보이득·AEO <strong>켜짐</strong>
+                                        <br>· 승인 후 → 니치 강제·정보이득 <strong>꺼짐</strong>(원래 카테고리로 복귀), AEO는 유지
+                                        <br><span class="text-amber-700">모듈을 나누지 않고 하나로 쓰고 싶을 때 사용합니다. 끄면 아래에서 직접 지정한 값이 그대로 적용됩니다.</span>
+                                    </p>
+                                </div>
+
                                 <!-- 모듈 실행 조건(애드센스 상태 연동) -->
                                 <div class="space-y-2 pb-3 border-b border-amber-200">
                                     <label class="block text-sm font-medium text-gray-800">이 모듈을 실행할 시점</label>
@@ -157,6 +172,22 @@ function getPromptAdsenseSection() {
                                         </div>
                                         <p x-show="promptModule.adsense.nicheTopicIds.length === 0" class="text-xs text-red-500">⚠️ 주제를 1개 이상 선택해야 니치 강제가 동작합니다(미선택 시 무시).</p>
                                     </div>
+                                </div>
+
+                                <!-- AEO/GEO: AI 답변 인용 대비 -->
+                                <div class="space-y-2 border-t border-amber-200 pt-3">
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox" x-model="promptModule.adsense.aeoEnabled"
+                                               class="w-4 h-4 text-amber-600 rounded focus:ring-amber-500">
+                                        <span class="text-sm font-medium text-gray-800">AI 답변 인용 대비 (AEO/GEO)</span>
+                                    </label>
+                                    <p class="text-xs text-gray-500 pl-6">
+                                        구글 AI 개요·ChatGPT·퍼플렉시티가 <strong>인용하기 좋은 형태</strong>로 쓰게 합니다.
+                                        도입부 즉답, 질문형 소제목, 선택 근거가 드러나는 비교 표,
+                                        마지막 자주 묻는 질문 3~5개.
+                                        <br>정보이득 강화와 <strong>축이 달라 함께 켜도 됩니다</strong>
+                                        (정보이득=무엇을 쓸지, 이쪽=어떤 형태로 쓸지).
+                                    </p>
                                 </div>
 
                                 <!-- 형제 블로그 제목 중복 차단 -->
