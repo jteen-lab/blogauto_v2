@@ -75,6 +75,9 @@ class FlowScheduler:
         # AI API 키 rate_limited 자동 복구 스케줄러 등록
         self._register_rate_limit_recovery()
 
+        # 애드센스 사이트 상태 정기 동기화 등록
+        self._register_adsense_sync()
+
         self._initialized = True
         logger.info("[FLOW_SCHEDULER] Initialized with IntervalTrigger")
 
@@ -96,6 +99,28 @@ class FlowScheduler:
             misfire_grace_time=300,
         )
         logger.info("[FLOW_SCHEDULER] AI 키 rate_limit 자동 복구 Job 등록 (15분 간격)")
+
+    def _register_adsense_sync(self) -> None:
+        """애드센스 사이트 상태 동기화 Job 등록 (12시간 간격).
+
+        승인 여부는 자주 바뀌지 않으므로 하루 두 번이면 충분하다. 즉시 확인이
+        필요하면 설정 화면의 '지금 상태 확인' 버튼을 쓴다.
+        """
+        job_id = "adsense_site_sync"
+
+        existing = self.scheduler.get_job(job_id)
+        if existing:
+            self.scheduler.remove_job(job_id)
+
+        self.scheduler.add_job(
+            _adsense_sync_callback,
+            trigger=IntervalTrigger(hours=12),
+            id=job_id,
+            name="애드센스 사이트 상태 동기화",
+            replace_existing=True,
+            misfire_grace_time=3600,
+        )
+        logger.info("[FLOW_SCHEDULER] 애드센스 상태 동기화 Job 등록 (12시간 간격)")
 
     async def shutdown(self) -> None:
         """스케줄러 종료"""
@@ -3285,6 +3310,44 @@ async def shutdown_flow_scheduler() -> None:
 def get_flow_scheduler() -> Optional[FlowScheduler]:
     """플로우 스케줄러 인스턴스 반환"""
     return _flow_scheduler
+
+
+async def _adsense_sync_callback() -> None:
+    """애드센스 사이트 상태 동기화 콜백.
+
+    등록된 계정이 있는 사용자별로 동기화한다. 한 계정이 실패해도 나머지는
+    계속 진행한다(서비스 내부에서 처리).
+    """
+    try:
+        from sqlalchemy import select as _select
+        from ..core.database import db_manager
+        from ..models.adsense_account import AdsenseAccount
+        from ..services.publishing.adsense_account_service import (
+            AdsenseAccountService,
+        )
+
+        async with db_manager.get_session() as session:
+            user_ids = (
+                await session.execute(
+                    _select(AdsenseAccount.user_id)
+                    .where(AdsenseAccount.is_active == True)  # noqa: E712
+                    .distinct()
+                )
+            ).scalars().all()
+
+            if not user_ids:
+                logger.debug("[ADSENSE_SYNC] 등록된 계정 없음 — 건너뜀")
+                return
+
+            service = AdsenseAccountService(session)
+            for user_id in user_ids:
+                result = await service.sync_all(user_id)
+                logger.info(
+                    "[ADSENSE_SYNC] user=%s | %s/%s 계정 동기화",
+                    user_id, result.get("synced"), result.get("total"),
+                )
+    except Exception as exc:  # noqa: BLE001
+        logger.error("[ADSENSE_SYNC] 동기화 실패: %s", exc)
 
 
 def _rate_limit_recovery_callback() -> None:
