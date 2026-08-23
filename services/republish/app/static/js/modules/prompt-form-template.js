@@ -159,6 +159,21 @@ function getPromptAdsenseSection() {
                                     </div>
                                 </div>
 
+                                <!-- 형제 블로그 제목 중복 차단 -->
+                                <div class="space-y-2 border-t border-amber-200 pt-3">
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox" x-model="promptModule.adsense.excludeSiblingTitles"
+                                               class="w-4 h-4 text-amber-600 rounded focus:ring-amber-500">
+                                        <span class="text-sm font-medium text-gray-800">형제 블로그와 제목 겹치지 않게</span>
+                                    </label>
+                                    <p class="text-xs text-gray-500 pl-6">
+                                        <strong>같은 도메인을 쓰는 블로그</strong>(예: a.com / info.a.com)와
+                                        <strong>이 모듈에 함께 연결된 블로그</strong>가 이미 쓴 제목을 후보에서 제외합니다.
+                                        서로 다른 도메인·다른 모듈의 블로그는 영향받지 않습니다.
+                                        <br><span class="text-amber-700">후보가 줄어드니 제목 재고가 부족하면 생성이 건너뛰어질 수 있습니다.</span>
+                                    </p>
+                                </div>
+
                                 <!-- F7 정보이득 강화 -->
                                 <div class="space-y-2 border-t border-amber-200 pt-3">
                                     <label class="flex items-center gap-2 cursor-pointer">

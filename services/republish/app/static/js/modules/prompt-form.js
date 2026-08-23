@@ -105,7 +105,9 @@ function createPromptModuleState() {
             infoGainEnabled: false,
             // 블로그의 애드센스 상태에 따라 이 모듈을 실행할지 결정
             // always | adsense_only | post_approval
-            role: 'always'
+            role: 'always',
+            // 형제 블로그(같은 도메인·같은 모듈)가 쓴 제목을 후보에서 제외
+            excludeSiblingTitles: false
         }
     };
 }
@@ -254,6 +256,7 @@ const promptModuleMethods = {
         // 애드센스 승인용 설정 복원 (F4 니치 + F7 정보이득)
         this.promptModule.adsense = {
             role: settings.adsense_role || 'always',
+            excludeSiblingTitles: settings.exclude_sibling_titles ?? false,
             nicheEnabled: settings.niche_enabled ?? false,
             nicheTopicIds: Array.isArray(settings.niche_topic_ids) ? settings.niche_topic_ids.slice() : [],
             infoGainEnabled: settings.info_gain_enabled ?? false
@@ -422,6 +425,7 @@ const promptModuleMethods = {
             ...linkingData,
             // 애드센스 승인용 (F4 니치 강제 + F7 정보이득)
             adsense_role: this.promptModule.adsense.role || 'always',
+            exclude_sibling_titles: !!this.promptModule.adsense.excludeSiblingTitles,
             niche_enabled: this.promptModule.adsense.nicheEnabled,
             niche_topic_ids: this.promptModule.adsense.nicheTopicIds,
             info_gain_enabled: this.promptModule.adsense.infoGainEnabled,
