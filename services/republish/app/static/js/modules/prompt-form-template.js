@@ -121,6 +121,23 @@ function getPromptAdsenseSection() {
                                     <span class="text-xs font-normal text-gray-500">(선택 · 이 모듈에만 적용)</span>
                                 </h3>
 
+                                <!-- 모듈 실행 조건(애드센스 상태 연동) -->
+                                <div class="space-y-2 pb-3 border-b border-amber-200">
+                                    <label class="block text-sm font-medium text-gray-800">이 모듈을 실행할 시점</label>
+                                    <select x-model="promptModule.adsense.role"
+                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500">
+                                        <option value="always">항상 실행 (기본)</option>
+                                        <option value="adsense_only">애드센스 승인 전에만 실행</option>
+                                        <option value="post_approval">애드센스 승인 후에만 실행</option>
+                                    </select>
+                                    <p class="text-xs text-gray-500">
+                                        블로그마다 애드센스 상태가 다르면 <strong>블로그별로</strong> 판정합니다.
+                                        예를 들어 '승인 전에만'으로 두면, 이 모듈에 연결된 블로그 중
+                                        <strong>아직 승인되지 않은 블로그에만</strong> 글이 생성됩니다.
+                                        승인된 블로그는 자동으로 빠지므로 설정을 바꿀 필요가 없습니다.
+                                    </p>
+                                </div>
+
                                 <!-- F4 니치(주제) 강제 -->
                                 <div class="space-y-3">
                                     <label class="flex items-center gap-2 cursor-pointer">
