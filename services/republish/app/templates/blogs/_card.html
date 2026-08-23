@@ -88,6 +88,15 @@
                 자동 발행
             </span>
 
+            <!-- 애드센스 승인 상태 뱃지 -->
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+                  :class="adsenseBadge(blog).cls"
+                  :title="adsenseBadge(blog).tip">
+                <span class="w-1.5 h-1.5 rounded-full mr-1"
+                      :class="[adsenseBadge(blog).dot, blog.adsense_status === 'applied' ? 'animate-pulse' : '']"></span>
+                <span x-text="adsenseBadge(blog).label"></span>
+            </span>
+
             <!-- 크롤링/매칭 상태 뱃지 (Phase M-1) -->
             <template x-if="blog.crawl_status === 'never'">
                 <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">

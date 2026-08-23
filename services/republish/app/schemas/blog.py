@@ -146,6 +146,14 @@ class BlogResponse(BaseModel):
 
     # 발행 설정
     auto_publish: bool = Field(..., description="자동 발행 여부")
+
+    # 애드센스 상태(블로그 카드 뱃지·요약 칩용)
+    adsense_status: Optional[str] = Field(
+        default="none", description="애드센스 승인 상태 none/preparing/applied/approved"
+    )
+    required_pages_status: Optional[str] = Field(
+        default="none", description="필수 페이지 생성 상태 none/partial/complete"
+    )
     republish_interval_hours: int = Field(..., description="재발행 간격(시간)")
     daily_limit: int = Field(..., description="일일 발행 제한")
 

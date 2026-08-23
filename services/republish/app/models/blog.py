@@ -301,6 +301,7 @@ class Blog(Base):
             "renewal_config": self.renewal_config or {},
             # 애드센스 승인 지원 Sprint 1
             "required_pages_status": self.required_pages_status,
+            "adsense_status": self.adsense_status,
             "required_page_ids": self.required_page_ids or {},
             "author_profile": self.author_profile or {},
             # 크롤링/매칭 상태 (Phase M-1)
