@@ -206,6 +206,83 @@ Google은 "invalid, misleading, incentivized traffic"을 애드센스 광고로 
 
 ---
 
+## 6. A(애드센스 글) → B(CPA 랜딩) 동일주제 링크 구조 검토
+
+### 6.1 제안된 구조
+
+```
+A 워드프레스: 보험 정보글 + 애드센스 광고
+                    │ 본문 내 링크
+                    ↓
+B 랜딩페이지: 같은 주제의 더 전문적인 보험 정보글 + CPA 상담 링크
+```
+질문: A→B 이동 시 전면광고(Vignette)가 떠서 수익이 나는가? 그리고 그것이 정책 위반인가?
+
+### 6.2 기술적 답: 수익은 발생한다 (단 제한적)
+
+- 전면광고는 **아웃바운드 링크 클릭에서 트리거된다.** 새 창으로 열리는 경우에는 B를 먼저 보여준 뒤, 사용자가 A 탭으로 **돌아왔을 때** 광고가 뜬다.
+- 2026-02-09 구글이 추가 트리거 6종(스크롤 종료, 비활성 후 상호작용, 탭 전환, 같은 사이트 새 탭, 주소창 클릭, 뒤로가기)을 도입. 단 **뒤로가기 트리거는 2026-06-15부로 제거**됨.
+- **빈도 제한: 기본 유니크 사용자당 1시간 1회.** 클릭 수를 늘려도 노출이 비례하지 않는다.
+- 업계 보고 수치는 세션 RPM **15~35% 증분** 수준. 새 수익원이 아니라 기존 수익의 증분이다.
+
+### 6.3 정책적 답: 층위를 나눠야 정확하다
+
+| 층위 | 판정 | 근거 |
+|------|------|------|
+| ① 전면광고가 아웃바운드 링크에서 뜨는 것 **자체** | ✅ 위반 아님 | 구글이 공식적으로 `data-google-vignette="false"`로 끄는 방법을 제공 = 기본 동작으로 인정 |
+| ② A와 B에 **동일 주제 유사 콘텐츠**를 두는 것 | ❌ 위반 소지 큼 | AdSense 정책: "검색엔진만을 위해 만든 doorway 페이지, 독창적 콘텐츠가 거의 없는 제휴 프로그램식 cookie cutter 접근" 금지. A가 B로 가기 위한 중간 단계면 **브리지 페이지** |
+| ③ 유입이 아니라 **노출 증가를 목적으로 링크를 배치**하는 것 | ❌ 명백한 위반 | "artificially inflate the impressions or clicks... either through automated **or manual** means" — 수동 설계도 포함 |
+
+**②가 특히 문제인 이유**: 현재 guntamoney가 `가치 없는 콘텐츠`로 2개월째 반려 중이다. 같은 주제 글을 두 곳에 나눠 쓰는 구조는 그 반려 사유를 정면으로 강화한다. B가 더 전문적일수록 "A는 왜 존재하는가"라는 질문이 강해진다.
+
+**판정 기준은 결국 사용자 가치**다.
+- A 글이 그 자체로 완결되고, B가 **다른 종류의** 추가 가치(상담/견적)를 주면 → 정상 동선
+- A가 B로 보내기 위해서만 존재하면 → 브리지 페이지
+
+### 6.4 수익 대비 리스크가 맞지 않는 이유
+
+전면광고 수익을 노려도:
+1. **빈도 제한 1시간 1회** — 클릭을 많이 유도해도 노출이 안 늘어난다
+2. **A에서 이탈시키는 구조** — A의 페이지뷰·체류시간이 줄어 **애드센스 본체 수익과 SEO 신호가 함께 나빠진다**
+3. 걸리면 광고 게재 제한(30일+ 수익 0) 또는 계정 영구 정지
+
+즉 **얻는 것은 기존 수익의 15~35% 증분, 잃는 것은 계정 전체**다.
+
+### 6.5 안전한 대안 구조
+
+```
+A 워드프레스: 보험 "정보" (종류/비교/조건/주의점) — 그 자체로 완결
+                    │ rel="sponsored nofollow", 글당 1개, 문맥상 자연스러운 위치
+                    ↓
+B 랜딩페이지: 보험 "상담/견적 신청" — 정보 재서술 없음, 순수 전환 페이지
+```
+
+원칙 4가지:
+1. **A와 B의 콘텐츠를 겹치지 않게 한다.** A=정보, B=전환. 같은 정보를 두 번 쓰지 않는다
+2. B에 정보성 본문을 두지 않는다 (doorway 판정 회피)
+3. A→B 링크는 `rel="sponsored nofollow"` + 글당 1개
+4. **의도 방어**: A→B 링크에 `data-google-vignette="false"`를 붙여 전면광고 노출을 노린 배치가 아님을 구조적으로 명시한다
+
+4번은 수익을 포기하는 대신, 나중에 심사·감사에서 "노출 증가 목적이 아니었다"는 증거가 된다.
+
+### 6.6 작업 항목 반영
+
+**X1 확장** — 외부/제휴 링크 삽입 시:
+- `rel="sponsored nofollow"` 자동 부착
+- `data-google-vignette="false"` 부착 옵션 (기본 ON 권장)
+- 글당 외부링크 개수 상한
+- A/B 콘텐츠 중복 검사 — 기존 유사도 판정 로직 재사용해 A 본문과 B 랜딩 본문의 유사도가 임계치를 넘으면 경고
+
+### 참고
+- [Prevent a link from triggering vignette ads](https://support.google.com/adsense/answer/17016693?hl=en-GB)
+- [Additional triggers for vignette ads](https://support.google.com/adsense/answer/16853623?hl=en)
+- [Choose the frequency for your vignette ads](https://support.google.com/adsense/answer/13956167?hl=en)
+- [AdSense Program policies](https://support.google.com/adsense/answer/48182?hl=en)
+- [Top invalid traffic and policy violations that lead to account closure](https://support.google.com/adsense/answer/2660562?hl=en)
+- [Google drops AdSense vignette back button trigger](https://ppc.land/google-drops-adsense-vignette-back-button-trigger-ahead-of-spam-deadline/)
+
+---
+
 ## 참고
 
 - [Invalid traffic - Google AdSense Help](https://support.google.com/adsense/answer/16737?hl=en-GB)
