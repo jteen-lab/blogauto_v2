@@ -1,0 +1,600 @@
+<title>블로그오토 수익화 전략</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+:root{
+  --paper:#EEF1F4; --surface:#FFFFFF; --surface-2:#F7F9FB;
+  --ink:#141C26; --ink-2:#4A5866; --ink-3:#7D8B99;
+  --rule:#D6DEE6; --rule-strong:#B9C5D1;
+  --accent:#2B4A7D; --accent-soft:#E3EAF4;
+  --ok:#1F6F4A; --ok-soft:#E2F0E8;
+  --warn:#8E5D0C; --warn-soft:#F7EDD8;
+  --bad:#A32820; --bad-soft:#F8E4E1;
+  --shadow:0 1px 2px rgba(20,28,38,.05), 0 8px 24px -16px rgba(20,28,38,.25);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0F141A; --surface:#171E26; --surface-2:#1D2530;
+    --ink:#E5EBF1; --ink-2:#A2B0BF; --ink-3:#71818F;
+    --rule:#2A3542; --rule-strong:#3B4855;
+    --accent:#89AEE2; --accent-soft:#1B2A3D;
+    --ok:#63C08E; --ok-soft:#13291F;
+    --warn:#DCA44A; --warn-soft:#2A2313;
+    --bad:#E2776C; --bad-soft:#2C1A18;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0F141A; --surface:#171E26; --surface-2:#1D2530;
+  --ink:#E5EBF1; --ink-2:#A2B0BF; --ink-3:#71818F;
+  --rule:#2A3542; --rule-strong:#3B4855;
+  --accent:#89AEE2; --accent-soft:#1B2A3D;
+  --ok:#63C08E; --ok-soft:#13291F;
+  --warn:#DCA44A; --warn-soft:#2A2313;
+  --bad:#E2776C; --bad-soft:#2C1A18;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:"IBM Plex Sans KR", system-ui, -apple-system, sans-serif;
+  font-size:16px; line-height:1.75; letter-spacing:-.005em;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:980px; margin:0 auto; padding:0 24px 96px}
+
+/* ---------- header ---------- */
+.masthead{
+  padding:72px 0 40px; border-bottom:1px solid var(--rule);
+  display:flex; flex-direction:column; gap:20px;
+}
+.eyebrow{
+  font-family:"IBM Plex Mono", ui-monospace, monospace;
+  font-size:11.5px; font-weight:500; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--ink-3);
+  display:flex; gap:14px; flex-wrap:wrap; align-items:center;
+}
+.eyebrow span:not(:last-child)::after{content:" ／"; color:var(--rule-strong); margin-left:14px}
+h1{
+  font-family:"Gowun Batang", Georgia, serif; font-weight:700;
+  font-size:clamp(34px, 5.4vw, 52px); line-height:1.18; letter-spacing:-.02em;
+  margin:0; text-wrap:balance;
+}
+.thesis{
+  font-size:17.5px; color:var(--ink-2); max-width:62ch; margin:0;
+  line-height:1.7;
+}
+.thesis b{color:var(--ink); font-weight:600}
+
+/* ---------- sections ---------- */
+section{padding-top:56px}
+.sec-head{display:flex; align-items:baseline; gap:14px; margin-bottom:22px; flex-wrap:wrap}
+.sec-num{
+  font-family:"IBM Plex Mono", monospace; font-size:12px; font-weight:600;
+  color:var(--accent); letter-spacing:.08em; padding-top:6px;
+}
+h2{
+  font-family:"Gowun Batang", Georgia, serif; font-weight:700;
+  font-size:clamp(23px, 3vw, 29px); line-height:1.3; margin:0; letter-spacing:-.015em;
+}
+.sec-sub{color:var(--ink-2); font-size:15px; margin:0 0 24px; max-width:64ch}
+
+/* ---------- diagnosis stats ---------- */
+.stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(168px,1fr)); gap:1px;
+  background:var(--rule); border:1px solid var(--rule); border-radius:3px; overflow:hidden}
+.stat{background:var(--surface); padding:20px 18px; display:flex; flex-direction:column; gap:5px}
+.stat .n{font-family:"IBM Plex Mono", monospace; font-size:27px; font-weight:600;
+  letter-spacing:-.02em; font-variant-numeric:tabular-nums; line-height:1.1}
+.stat .l{font-size:12.5px; color:var(--ink-2); line-height:1.5}
+.stat .note{font-size:11.5px; color:var(--ink-3)}
+.stat.is-bad .n{color:var(--bad)} .stat.is-warn .n{color:var(--warn)} .stat.is-ok .n{color:var(--ok)}
+
+/* ---------- pillars ---------- */
+.pillars{display:grid; grid-template-columns:repeat(auto-fit,minmax(258px,1fr)); gap:16px}
+.pillar{
+  background:var(--surface); border:1px solid var(--rule); border-radius:3px;
+  padding:22px 20px; display:flex; flex-direction:column; gap:9px; box-shadow:var(--shadow);
+}
+.pillar .k{
+  font-family:"IBM Plex Mono", monospace; font-size:11px; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--accent); font-weight:600;
+}
+.pillar h3{font-family:"Gowun Batang",Georgia,serif; font-size:19px; margin:0; font-weight:700}
+.pillar p{margin:0; font-size:14px; color:var(--ink-2); line-height:1.68}
+
+/* ---------- lane diagram ---------- */
+.lanes{display:flex; flex-direction:column; gap:14px; margin:6px 0 20px}
+.lane{
+  border:1px solid var(--rule); border-radius:3px; background:var(--surface);
+  padding:18px 20px; display:flex; flex-direction:column; gap:12px;
+}
+.lane-tag{
+  font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.11em;
+  text-transform:uppercase; font-weight:600;
+}
+.lane.a{border-left:3px solid var(--accent)} .lane.a .lane-tag{color:var(--accent)}
+.lane.b{border-left:3px solid var(--ok)} .lane.b .lane-tag{color:var(--ok)}
+.flow{display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:13.5px}
+.node{
+  background:var(--surface-2); border:1px solid var(--rule); border-radius:3px;
+  padding:7px 13px; white-space:nowrap;
+}
+.node.term{background:var(--accent-soft); border-color:transparent; font-weight:600}
+.lane.b .node.term{background:var(--ok-soft)}
+.arr{color:var(--ink-3); font-family:"IBM Plex Mono",monospace; font-size:13px}
+.arr small{display:block; font-size:10px; letter-spacing:.04em; text-align:center; margin-top:-4px}
+.bridge{
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  font-size:13px; color:var(--ink-2); padding:12px 20px;
+  border:1px dashed var(--rule-strong); border-radius:3px; background:var(--surface-2);
+}
+.bridge code{font-family:"IBM Plex Mono",monospace; font-size:12px; background:var(--accent-soft);
+  color:var(--accent); padding:2px 7px; border-radius:2px}
+.blocked{
+  display:flex; align-items:flex-start; gap:12px; padding:14px 18px; border-radius:3px;
+  background:var(--bad-soft); border:1px solid transparent; font-size:13.5px; color:var(--ink);
+}
+.blocked .x{font-family:"IBM Plex Mono",monospace; font-weight:600; color:var(--bad); flex:none}
+
+/* ---------- tables ---------- */
+.scroller{overflow-x:auto; border:1px solid var(--rule); border-radius:3px; background:var(--surface)}
+table{border-collapse:collapse; width:100%; font-size:14px; min-width:520px}
+th,td{text-align:left; padding:12px 16px; border-bottom:1px solid var(--rule); vertical-align:top}
+thead th{
+  font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--ink-3); font-weight:600; background:var(--surface-2); white-space:nowrap;
+}
+tbody tr:last-child td{border-bottom:none}
+td.tight{white-space:nowrap}
+
+/* ---------- verdict ledger ---------- */
+.ledger{display:flex; flex-direction:column; gap:1px; background:var(--rule);
+  border:1px solid var(--rule); border-radius:3px; overflow:hidden}
+.row{
+  background:var(--surface); display:grid; grid-template-columns:104px 1fr;
+  gap:0; align-items:stretch;
+}
+.verdict{
+  display:flex; align-items:flex-start; justify-content:flex-start; gap:6px;
+  padding:16px 14px; font-family:"IBM Plex Mono",monospace; font-size:11px;
+  font-weight:600; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap;
+}
+.v-ok{background:var(--ok-soft); color:var(--ok)}
+.v-warn{background:var(--warn-soft); color:var(--warn)}
+.v-bad{background:var(--bad-soft); color:var(--bad)}
+.row-body{padding:15px 18px; display:flex; flex-direction:column; gap:5px}
+.row-body .claim{font-weight:600; font-size:14.5px; line-height:1.55}
+.row-body .why{font-size:13.5px; color:var(--ink-2); line-height:1.65}
+.row-body .why b{color:var(--ink); font-weight:600}
+.src{font-family:"IBM Plex Mono",monospace; font-size:10.5px; color:var(--ink-3); letter-spacing:.03em}
+
+/* ---------- sequence track ---------- */
+.track{display:flex; flex-direction:column; gap:0}
+.step{display:grid; grid-template-columns:56px 1fr; gap:0}
+.step-mark{position:relative; display:flex; flex-direction:column; align-items:center}
+.step-mark .dot{
+  width:28px; height:28px; border-radius:50%; flex:none; margin-top:14px;
+  display:grid; place-items:center; background:var(--accent); color:var(--surface);
+  font-family:"IBM Plex Mono",monospace; font-size:12px; font-weight:600; z-index:1;
+}
+.step-mark .line{width:1px; flex:1; background:var(--rule-strong)}
+.step:last-child .step-mark .line{display:none}
+.step-body{padding:12px 0 26px 14px}
+.step-body h3{
+  font-family:"Gowun Batang",Georgia,serif; font-size:19px; margin:0 0 4px; font-weight:700;
+}
+.step-body > p{margin:0 0 12px; color:var(--ink-2); font-size:14px; max-width:60ch}
+.items{display:flex; flex-direction:column; gap:8px}
+.item{
+  display:grid; grid-template-columns:52px 1fr auto; gap:14px; align-items:baseline;
+  background:var(--surface); border:1px solid var(--rule); border-radius:3px; padding:11px 14px;
+  font-size:14px;
+}
+.item .id{font-family:"IBM Plex Mono",monospace; font-weight:600; font-size:12px; color:var(--accent)}
+.item .size{font-family:"IBM Plex Mono",monospace; font-size:10.5px; color:var(--ink-3);
+  letter-spacing:.06em; text-transform:uppercase; white-space:nowrap}
+.item .txt{line-height:1.6}
+.item .txt em{font-style:normal; color:var(--ink-2); font-size:13px; display:block; margin-top:2px}
+
+/* ---------- never list ---------- */
+.never{display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:12px}
+.never-item{
+  border:1px solid var(--rule); border-left:3px solid var(--bad); border-radius:3px;
+  background:var(--surface); padding:16px 18px; display:flex; flex-direction:column; gap:5px;
+}
+.never-item .t{font-weight:600; font-size:14.5px}
+.never-item .r{font-size:13px; color:var(--ink-2); line-height:1.6}
+
+/* ---------- callout ---------- */
+.callout{
+  background:var(--surface); border:1px solid var(--rule); border-top:3px solid var(--accent);
+  border-radius:3px; padding:24px 26px; display:flex; flex-direction:column; gap:10px;
+  box-shadow:var(--shadow);
+}
+.callout h3{font-family:"Gowun Batang",Georgia,serif; font-size:21px; margin:0; font-weight:700}
+.callout p{margin:0; color:var(--ink-2); font-size:14.5px; line-height:1.72; max-width:66ch}
+.callout p b{color:var(--ink); font-weight:600}
+.eq{
+  font-family:"IBM Plex Mono",monospace; font-size:13px; background:var(--surface-2);
+  border:1px solid var(--rule); border-radius:3px; padding:14px 16px; color:var(--ink-2);
+  overflow-x:auto; white-space:pre; line-height:1.7;
+}
+
+footer{
+  margin-top:72px; padding-top:24px; border-top:1px solid var(--rule);
+  font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--ink-3);
+  letter-spacing:.05em; display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap;
+}
+a{color:var(--accent)}
+a:focus-visible, .item:focus-visible{outline:2px solid var(--accent); outline-offset:3px}
+@media (prefers-reduced-motion:no-preference){
+  .pillar,.item{transition:border-color .15s ease}
+}
+.pillar:hover,.item:hover{border-color:var(--rule-strong)}
+
+@media (max-width:640px){
+  .masthead{padding:48px 0 32px}
+  .row{grid-template-columns:1fr}
+  .verdict{padding:10px 16px 8px}
+  .step{grid-template-columns:38px 1fr}
+  .item{grid-template-columns:46px 1fr; }
+  .item .size{grid-column:2; }
+}
+</style>
+
+<div class="wrap">
+
+<header class="masthead">
+  <div class="eyebrow">
+    <span>blogauto</span><span>수익화 전략 통합본</span><span>2026.08.24</span>
+  </div>
+  <h1>블로그오토 수익화 전략</h1>
+  <p class="thesis">
+    양산으로 승인과 유입을 동시에 뚫으려던 구조는 더 이상 작동하지 않는다.
+    전략을 셋으로 나눈다 — <b>수익 모델을 도메인 단위로 분리</b>하고,
+    <b>승인 레시피를 먼저 확정한 뒤 복제</b>하며,
+    <b>검색이 아닌 디스커버·소셜로 첫 유입을 만든다</b>.
+  </p>
+</header>
+
+<!-- 1 ─────────────────────────────── -->
+<section>
+  <div class="sec-head"><div class="sec-num">01</div><h2>현재 좌표</h2></div>
+  <p class="sec-sub">전략의 출발점은 희망이 아니라 측정된 숫자다. 아래는 실측값이다.</p>
+  <div class="stats">
+    <div class="stat is-ok"><div class="n">1</div><div class="l">애드센스 승인 사이트</div><div class="note">워드프레스 1 / 준비중 4 / 주의 필요 1</div></div>
+    <div class="stat is-bad"><div class="n">2<span style="font-size:15px">개월</span></div><div class="l">guntamoney 연속 반려</div><div class="note">사유: 가치 없는 콘텐츠</div></div>
+    <div class="stat is-warn"><div class="n">1–9</div><div class="l">블로그당 니치 수</div><div class="note">권장 2–4 · 11개 중 대부분 초과</div></div>
+    <div class="stat"><div class="n">3,090</div><div class="l">재분류 완료 제목</div><div class="note">매칭 2,811 · 미분류 0</div></div>
+    <div class="stat"><div class="n">896</div><div class="l">분류 키워드</div><div class="note">18 주제 / 123 하위주제</div></div>
+    <div class="stat is-warn"><div class="n">639</div><div class="l">중복 제목</div><div class="note">유사 제목 양산의 흔적</div></div>
+  </div>
+</section>
+
+<!-- 2 ─────────────────────────────── -->
+<section>
+  <div class="sec-head"><div class="sec-num">02</div><h2>세 개의 축</h2></div>
+  <div class="pillars">
+    <div class="pillar">
+      <div class="k">축 1 · 분리</div>
+      <h3>수익 모델을 섞지 않는다</h3>
+      <p>애드센스 자산과 CPA 자산을 도메인 단위로 분리한다. 특히 <b>유료 광고 트래픽은 애드센스 페이지를 통과하지 않는다</b> — 아비트라지는 계정 영구 정지 사유다.</p>
+    </div>
+    <div class="pillar">
+      <div class="k">축 2 · 순서</div>
+      <h3>레시피를 먼저 확정한다</h3>
+      <p>블로그 수를 줄이자는 게 아니다. 개선 실험을 1–2개로 좁혀 <b>승인되는 조합을 특정한 뒤</b> 나머지에 일괄 복제한다. 동시 재신청 반복은 학습을 만들지 못한다.</p>
+    </div>
+    <div class="pillar">
+      <div class="k">축 3 · 유입</div>
+      <h3>검색 순위 밖에서 시작한다</h3>
+      <p>오가닉 검색은 당장 어렵고 제로클릭까지 겹쳤다. <b>구글 디스커버와 핀터레스트</b>는 순위 경쟁 없이 유입이 발생하며, 둘 다 약관 위반 없이 자동화 가능하다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 3 ─────────────────────────────── -->
+<section>
+  <div class="sec-head"><div class="sec-num">03</div><h2>수익 구조 분리도</h2></div>
+  <p class="sec-sub">두 레인은 도메인이 다르고, 유입 성격도 다르다. 레인 사이를 잇는 것은 표시된 링크 하나뿐이다.</p>
+
+  <div class="lanes">
+    <div class="lane a">
+      <div class="lane-tag">Lane A · 애드센스</div>
+      <div class="flow">
+        <span class="node">검색 오가닉</span>
+        <span class="node">디스커버</span>
+        <span class="node">핀터레스트</span>
+        <span class="arr">──▶</span>
+        <span class="node term">애드센스 블로그</span>
+        <span class="arr">──▶</span>
+        <span class="node">애드센스 광고</span>
+      </div>
+    </div>
+
+    <div class="bridge">
+      <span>레인 간 연결은 이것 하나 —</span>
+      <code>rel="sponsored nofollow"</code>
+      <code>data-google-vignette="false"</code>
+      <span>· 글당 1개 · A는 정보, B는 전환 (내용 중복 금지)</span>
+    </div>
+
+    <div class="lane b">
+      <div class="lane-tag">Lane B · CPA</div>
+      <div class="flow">
+        <span class="node">유료 광고</span>
+        <span class="node">SNS</span>
+        <span class="arr">──▶</span>
+        <span class="node term">CPA 랜딩 (별도 도메인)</span>
+        <span class="arr">──▶</span>
+        <span class="node">제휴 전환</span>
+      </div>
+    </div>
+
+    <div class="blocked">
+      <span class="x">✕ 금지</span>
+      <span><b>유료 광고 → 애드센스 블로그.</b> 트래픽 아비트라지로 판정되면 광고 게재 제한(30일+ 수익 0) 또는 계정 영구 정지. CPA 랜딩은 애드센스 사이트 목록에 <b>등록하지 않는다</b> — 등록하지 않으면 심사 대상이 아니다.</span>
+    </div>
+  </div>
+
+  <div class="scroller">
+    <table>
+      <thead><tr><th>유입 종류</th><th>애드센스 사이트</th><th>CPA 랜딩</th></tr></thead>
+      <tbody>
+        <tr><td>검색 오가닉 · 디스커버</td><td>허용 — 유일하게 안전</td><td>허용</td></tr>
+        <tr><td>SNS 자연 유입 (본인 계정)</td><td>허용</td><td>허용</td></tr>
+        <tr><td><b>유료 광고</b></td><td style="color:var(--bad)"><b>금지 — 영구 정지 위험</b></td><td>허용 — 문제 없음</td></tr>
+        <tr><td>매크로 · 클릭 품앗이</td><td style="color:var(--bad)">금지</td><td style="color:var(--bad)">금지</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 4 ─────────────────────────────── -->
+<section>
+  <div class="sec-head"><div class="sec-num">04</div><h2>판정 대장</h2></div>
+  <p class="sec-sub">현장에서 도는 방법들을 정책 원문과 대조한 결과. 채택 여부는 여기서 갈린다.</p>
+
+  <div class="ledger">
+
+    <div class="row">
+      <div class="verdict v-ok">채택</div>
+      <div class="row-body">
+        <div class="claim">구글 디스커버 공략</div>
+        <div class="why">공식적으로 <b>최소 사이트 규모·도메인 권위 요건이 없다</b>. 주제 단위 평가라 소규모 전문 사이트도 노출된다. 검색 순위 경쟁과 제로클릭을 동시에 우회하는 유일한 구글 채널.</div>
+        <div class="src">Google Discover · 2026.02 코어 업데이트로 E-E-A-T 요건 강화</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="verdict v-ok">채택</div>
+      <div class="row-body">
+        <div class="claim">니치를 좁고 뾰족하게 + 고CPC 교집합</div>
+        <div class="why">"도메인 연차 대비 주제가 너무 넓고 글이 얕다"는 현장 진단이 <b>우리 실측과 정확히 일치</b>한다. 블로그당 니치 1–9개, 반려 사유는 가치 없는 콘텐츠. 치매보험·간병인보험처럼 좁힐수록 CPC도 오른다.</div>
+        <div class="src">니치 재설계 완료 → 블로그별 축소는 제목 수집 후</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="verdict v-ok">채택</div>
+      <div class="row-body">
+        <div class="claim">핀터레스트 자동 배포</div>
+        <div class="why">공식 Posting API 존재. "글 1편 = 핀 1개" 자동화의 레버리지가 가장 크고, 우리 이미지 생성 기능을 세로 2:3 핀으로 재사용하면 된다. <b>신규 계정은 2주 워밍업 필수.</b></div>
+        <div class="src">약관 위반 없음 · 무효 트래픽 대상 아님</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="verdict v-ok">채택</div>
+      <div class="row-body">
+        <div class="claim">홈페이지형 · 로컬 SEO 구조가 승인에 유리</div>
+        <div class="why">니치가 좁고 운영 주체가 명확해 <b>E-E-A-T 신호가 강해지기 때문</b>으로 해석된다. 승인 파일럿 블로그의 기본 골격으로 채택.</div>
+        <div class="src">현장 증언 · 기전은 추정이나 방향은 정책과 정합</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="verdict v-warn">조건부</div>
+      <div class="row-body">
+        <div class="claim">네이버 블로그 · 카페를 통한 외부 유입</div>
+        <div class="why">방향은 타당하나 <b>글쓰기 API가 2020년 종료</b>돼 자동 발행 수단이 없다. blogauto는 원고·이미지·태그를 "발행 팩"으로 만들고 <b>발행은 사람이</b> — 이건 위반이 아니다. 단 외부 링크가 많으면 저품질 위험이 있어 글당 1개 이하.</div>
+        <div class="src">티스토리 Open API도 2024.02 종료</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="verdict v-warn">조건부</div>
+      <div class="row-body">
+        <div class="claim">경량 CSS 테마가 JS 테마보다 유리</div>
+        <div class="why">"승인은 코드 구조화"는 <b>과장</b>이다 — 공식 기준은 콘텐츠 가치이고 우리 반려 사유도 그것이었다. 다만 렌더 지연·모바일 CWV에서 경량 테마가 유리한 건 사실. 보조 요인으로만 반영.</div>
+        <div class="src">GeneratePress · Astra · Kadence · Neve</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="verdict v-warn">조건부</div>
+      <div class="row-body">
+        <div class="claim">트래픽이 있으면 승인이 빠르다</div>
+        <div class="why">공식 트래픽 요구사항은 <b>없고</b> 무트래픽 승인도 가능하다. 다만 "참여도 높은 오가닉 50명이 트래픽 익스체인지 5,000명보다 낫다" — 양이 아니라 <b>품질 신호</b>로 작동한다.</div>
+        <div class="src">유료 트래픽으로 만든 신호는 역효과</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="verdict v-bad">배제</div>
+      <div class="row-body">
+        <div class="claim">웹뷰 앱 제작 → 플레이스토어 노출 → 무한 푸시</div>
+        <div class="why"><b>이중 위반.</b> ① 정책 원문이 "Google ads may not be integrated into a software application of any kind (AdMob 제외)" — 웹뷰 앱 내 애드센스는 금지이며 공식 경로는 AdMob SDK 등록뿐이다. ② Play 최소기능 정책 4.3에 따라 사이트 미러링 wrapper 앱은 거부 대상. ③ 무한 푸시는 스팸 정책. <b>강사가 안 알려주는 게 아니라 가르치면 안 되는 것이다.</b></div>
+        <div class="src">AdSense Program policies · Google Play 4.3</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="verdict v-bad">배제</div>
+      <div class="row-body">
+        <div class="claim">유료 광고로 차익거래 · 유광으로 승인 통과</div>
+        <div class="why">유료 트래픽을 애드센스로 보내는 아비트라지는 <b>광고 게재 제한 또는 영구 정지</b>. 소액 부스팅도 트래픽 패턴으로 감지된다. 원 작성자도 "안 되지 싶다"고 적었다.</div>
+        <div class="src">Invalid traffic policy</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="verdict v-bad">배제</div>
+      <div class="row-body">
+        <div class="claim">낙장(만료) 도메인 확보</div>
+        <div class="why"><code style="font-family:'IBM Plex Mono',monospace;font-size:12px">expired domain abuse</code>는 2024년 3월 명문화된 스팸 정책이고 2026 업데이트로 집행이 정밀해졌다. <b>단 이전 용도와 주제 정합성이 있으면 방어 가능</b> — 정합성이 판정 기준이다. 아무 낙장이나 사서 쓰는 건 제재 대상.</div>
+        <div class="src">Google Search spam policies</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="verdict v-bad">배제</div>
+      <div class="row-body">
+        <div class="claim">지식iN · 카페 자동 게시, 승인 후 콘텐츠 교체</div>
+        <div class="why">지식iN 스팸 적발은 <b>주민등록번호 단위 영구정지</b>라 복구 방법이 없다. 승인 후 콘텐츠 전면 교체는 심사 우회·사이트 평판 남용에 해당해 사후 정지 사유가 된다. 손실이 비대칭적이다.</div>
+        <div class="src">계정 하나가 애드센스까지 끌고 내려간다</div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- 5 ─────────────────────────────── -->
+<section>
+  <div class="sec-head"><div class="sec-num">05</div><h2>승인 실험을 좁히는 이유</h2></div>
+
+  <div class="callout">
+    <h3>10개는 확률을 10배로 만들지 않는다</h3>
+    <p>
+      AI가 쓰므로 11번째 블로그의 한계비용은 API 요금뿐이다. <b>비용은 반대 사유가 아니다.</b>
+      그러나 승인은 추첨이 아니다. 지금 반려는 2개월간 일관되게 <b>가치 없는 콘텐츠</b>로 나오고 있다 — 무작위가 아니라 체계적 판정이다.
+    </p>
+    <div class="eq">같은 생성 방식 × 10개  =  승인 10개가 아니라  반려 10개</div>
+    <p>
+      실제 논거는 개수가 아니라 <b>순서</b>다. 10개를 동시에 같은 방식으로 바꾸면 승인돼도 원인을 특정할 수 없고, 반려돼도 다음에 뭘 바꿀지 알 수 없다.
+      지난 2개월이 정확히 그 상태였다.
+    </p>
+  </div>
+
+  <div class="scroller" style="margin-top:18px">
+    <table>
+      <thead><tr><th>자원</th><th>11개로 분산할 때</th></tr></thead>
+      <tbody>
+        <tr><td class="tight">AI 글 생산</td><td>영향 없음 — 지적하신 대로 한계비용 ≈ 0</td></tr>
+        <tr><td class="tight">제목 풀 3,090개</td><td>블로그당 약 280개 → 니치별 깊이 저하 = <b>반려 사유와 직결</b></td></tr>
+        <tr><td class="tight">외부 유입</td><td>각 1/11로 희석 → 트래픽 품질 신호 약화</td></tr>
+        <tr><td class="tight">저자성 (E-E-A-T)</td><td>1인 명의가 11곳에 분산 → 사이트별 신뢰도 <b>하락</b>. 늘릴수록 역효과</td></tr>
+        <tr><td class="tight">계정 리스크</td><td>사이트 수 제한은 없으나 <b>한 곳의 위반이 계정 전체를 정지</b>시킬 수 있음</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="sec-sub" style="margin-top:18px">
+    따라서 나머지 블로그를 폐기하지 않는다. 발행은 계속해 도메인 연차와 콘텐츠를 쌓되, <b>심사 신청만 유예</b>하고 개선 실험은 1–2개에서 수행한다.
+  </p>
+</section>
+
+<!-- 6 ─────────────────────────────── -->
+<section>
+  <div class="sec-head"><div class="sec-num">06</div><h2>실행 순서</h2></div>
+  <p class="sec-sub">단계는 실제 의존 관계다. 앞 단계 없이 뒤 단계를 하면 결과를 해석할 수 없다.</p>
+
+  <div class="track">
+
+    <div class="step">
+      <div class="step-mark"><div class="dot">1</div><div class="line"></div></div>
+      <div class="step-body">
+        <h3>측정 기반을 먼저 깐다</h3>
+        <p>무엇이 효과 있는지 모르는 채로 채널을 늘리면 2개월 뒤에도 같은 자리다.</p>
+        <div class="items">
+          <div class="item"><span class="id">X0</span><span class="txt">유입 추적 기반<em>발행 URL에 UTM 자동 부착 · GA4 + 애드센스 리포트 API 수집 → 채널별 유입·수익 대시보드</em></span><span class="size">중</span></div>
+          <div class="item"><span class="id">X1</span><span class="txt">외부링크 정책 자동화<em>rel="sponsored nofollow" · data-google-vignette="false" · 글당 개수 상한 · A/B 본문 유사도 경고</em></span><span class="size">소</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-mark"><div class="dot">2</div><div class="line"></div></div>
+      <div class="step-body">
+        <h3>승인 레시피를 확정한다</h3>
+        <p>1–2개 블로그에 개선을 집중해 승인되는 조합을 특정한다. 승인이 급하면 이 단계를 3단계보다 앞에 둔다.</p>
+        <div class="items">
+          <div class="item"><span class="id">N5</span><span class="txt">승인 레시피 검증 파일럿<em>홈페이지형·로컬 SEO 구조 프리셋 — 좁은 니치 + 운영 주체 명시 + 소개·연혁·연락처</em></span><span class="size">중</span></div>
+          <div class="item"><span class="id">N2</span><span class="txt">YMYL 신뢰 신호 강화<em>저자 프로필 페이지 ↔ 글 바이라인 상호 링크 · 출처 표기 섹션</em></span><span class="size">소–중</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-mark"><div class="dot">3</div><div class="line"></div></div>
+      <div class="step-body">
+        <h3>순위 밖에서 유입을 만든다</h3>
+        <p>디스커버는 우리가 이미 가진 기능으로 요건의 절반 이상을 자동 충족시킬 수 있다.</p>
+        <div class="items">
+          <div class="item"><span class="id">X5</span><span class="txt">구글 디스커버 대응 세트<em>대표이미지 1,200px+ 강제 · max-image-preview:large 메타 · 글 단위 저자 바이라인 · 클릭베이트 제목 필터 · 준비도 체크리스트</em></span><span class="size">중–대</span></div>
+          <div class="item"><span class="id">X2</span><span class="txt">핀터레스트 배포 모듈<em>발행 훅 → 세로 2:3 핀 자동 생성·발행 · 계정 워밍업 상태 관리 → 스레드·X 확장</em></span><span class="size">대</span></div>
+          <div class="item"><span class="id">X3</span><span class="txt">네이버 발행 팩 생성기<em>네이버 톤 리라이팅 + 이미지 + 태그 → 복사·다운로드, 발행은 수동</em></span><span class="size">중</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-mark"><div class="dot">4</div></div>
+      <div class="step-body">
+        <h3>확정된 레시피를 복제한다</h3>
+        <p>여기서부터 블로그 수 제한은 없다. 니치 축소는 새 니치 기준 제목이 쌓인 뒤 진행한다.</p>
+        <div class="items">
+          <div class="item"><span class="id">N1</span><span class="txt">블로그별 니치 2–4개로 축소<em>제목 수집 누적 후 일괄 정리</em></span><span class="size">—</span></div>
+          <div class="item"><span class="id">N6</span><span class="txt">고CPC 니치 태깅<em>카테고리에 예상 CPC 등급 메타 부여 → 생성 우선순위 제어</em></span><span class="size">소</span></div>
+          <div class="item"><span class="id">X4</span><span class="txt">광고 손익 대시보드 <em>비용만 읽어와 X0에 합류. 입찰 자동 조정은 넣지 않는다 — CPA 전환추적 이후</em></span><span class="size">보류</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- 7 ─────────────────────────────── -->
+<section>
+  <div class="sec-head"><div class="sec-num">07</div><h2>광고비 자동 관리에 대한 판단</h2></div>
+  <div class="callout">
+    <h3>가능하지만, 문제를 풀지 못한다</h3>
+    <p>
+      네이버는 공식 검색광고 API로 입찰가 변경이 되고 상용 자동입찰 솔루션도 여럿 있다. 구글은 스마트 비딩이 내장이라 개발할 것도 없다.
+      <b>기술적 가능성은 쟁점이 아니다.</b>
+    </p>
+    <div class="eq">광고 클릭당 지출  (수백~수천원)
+애드센스 클릭당 수익 (수십~수백원)
+────────────────────────────────
+구조적 적자 — 게다가 애드센스行은 정책 위반</div>
+    <p>
+      중도 포기한 이유는 입찰 관리가 아니라 <b>단위경제</b>였다. 자동입찰은 같은 순위를 더 싸게 만들 뿐 이 부등호를 뒤집지 못한다.
+      부등호가 뒤집히는 곳은 <b>전환당 단가가 수천~수만원인 CPA</b>뿐이고, 그것도 전환 추적이 붙어 손익을 볼 수 있어야 판단이 선다.
+      그래서 X4는 4단계 보류이며, 만들더라도 자동 조정이 아니라 <b>손익 가시화</b>가 먼저다.
+    </p>
+  </div>
+</section>
+
+<!-- 8 ─────────────────────────────── -->
+<section>
+  <div class="sec-head"><div class="sec-num">08</div><h2>구현하지 않을 것</h2></div>
+  <p class="sec-sub">배제는 기록해 둔다. 반년 뒤 같은 유혹이 다시 올라올 때 근거를 다시 찾지 않기 위해서다.</p>
+  <div class="never">
+    <div class="never-item"><div class="t">웹뷰 앱 + 푸시알림</div><div class="r">AdSense 앱 통합 금지 + Play 최소기능 정책. 계정 전체 리스크</div></div>
+    <div class="never-item"><div class="t">유료광고 차익거래</div><div class="r">아비트라지 — 광고 게재 제한 또는 영구 정지</div></div>
+    <div class="never-item"><div class="t">낙장 도메인 확보 기능</div><div class="r">expired domain abuse. 주제 정합성 없는 재사용은 제재 대상</div></div>
+    <div class="never-item"><div class="t">승인 후 콘텐츠 교체</div><div class="r">심사 우회 · 사이트 평판 남용</div></div>
+    <div class="never-item"><div class="t">지식iN · 카페 자동 게시</div><div class="r">주민번호 단위 영구정지. 복구 불가</div></div>
+    <div class="never-item"><div class="t">카톡 채널 대량 발송</div><div class="r">비용 대비 불확실 + 유입 패턴 리스크. X0 이후 재검토</div></div>
+  </div>
+</section>
+
+<footer>
+  <span>docs/plans · external_traffic_strategy · adsense_field_claims_review · monetization_strategy_2026</span>
+  <span>2026.08.24</span>
+</footer>
+
+</div>
