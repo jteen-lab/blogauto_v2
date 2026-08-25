@@ -1,0 +1,492 @@
+<!--
+  BlogAuto V2: 블로그 설정 - 검색 노출 탭 (S1 IndexNow / S2 사이트맵 / S6 색인 점검)
+  File: app/templates/blogs/settings/_tab_search.html
+
+  기능:
+  - S6 색인 점검: Search Console URL Inspection 으로 색인율 측정
+  - S2 사이트맵 신선도: 발행 URL이 사이트맵에 들어갔는지 확인
+  - S1 IndexNow: 키 발급 → 루트 파일 업로드 안내 → 검증 → 제출 활성화
+
+  API:
+  - GET  /api/v1/blogs/{id}/search-visibility
+  - PUT  /api/v1/blogs/{id}/search-visibility/config
+  - POST /api/v1/blogs/{id}/search-visibility/indexnow/key
+  - POST /api/v1/blogs/{id}/search-visibility/indexnow/verify
+  - POST /api/v1/blogs/{id}/search-visibility/check/sitemap
+  - POST /api/v1/blogs/{id}/search-visibility/check/index
+  - GET  /api/v1/blogs/{id}/search-visibility/urls
+
+  설계 문서: docs/flowcharts/search_visibility.md
+-->
+
+<div x-data="searchVisibilityApp()"
+     x-init="$nextTick(() => {
+         const parent = $el.closest('#blogSettings');
+         if (parent && parent._x_dataStack && parent._x_dataStack[0] && parent._x_dataStack[0].selectedBlog) {
+             blogId = parent._x_dataStack[0].selectedBlog.id;
+         }
+         init();
+     })"
+     x-effect="(() => {
+         const parent = $el.closest('#blogSettings');
+         if (parent && parent._x_dataStack && parent._x_dataStack[0] && parent._x_dataStack[0].selectedBlog) {
+             const newBlog = parent._x_dataStack[0].selectedBlog;
+             if (newBlog.id && newBlog.id !== blogId) {
+                 blogId = newBlog.id;
+                 loaded = false;
+                 if (!loading) init();
+             }
+         }
+     })()"
+     class="space-y-6">
+
+    <!-- 안내 -->
+    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <p class="text-sm text-blue-800 font-medium">검색 노출 점검</p>
+        <p class="text-xs text-blue-600 mt-1">
+            먼저 <strong>색인율(S6)</strong>로 기준선을 잡고, 그 다음 IndexNow를 켜서 변화를 비교하세요.
+            측정 없이 켜면 효과가 있었는지 알 수 없습니다. 그래서 IndexNow는 기본이 꺼짐입니다.
+        </p>
+    </div>
+
+    <!-- 현황 요약 -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="border border-gray-200 rounded-lg p-3">
+            <p class="text-xs text-gray-500">색인율</p>
+            <p class="text-xl font-semibold text-gray-800 mt-1">
+                <span x-text="summary.index_rate !== null ? summary.index_rate + '%' : '—'"></span>
+            </p>
+            <p class="text-[11px] text-gray-400 mt-0.5"
+               x-text="`확인 ${summary.index_checked || 0} / 전체 ${summary.total || 0}`"></p>
+        </div>
+        <div class="border border-gray-200 rounded-lg p-3">
+            <p class="text-xs text-gray-500">색인됨</p>
+            <p class="text-xl font-semibold text-emerald-600 mt-1" x-text="summary.indexed || 0"></p>
+        </div>
+        <div class="border border-gray-200 rounded-lg p-3">
+            <p class="text-xs text-gray-500">사이트맵 누락</p>
+            <p class="text-xl font-semibold mt-1"
+               :class="(summary.sitemap_missing || 0) > 0 ? 'text-amber-600' : 'text-gray-800'"
+               x-text="summary.sitemap_missing || 0"></p>
+        </div>
+        <div class="border border-gray-200 rounded-lg p-3">
+            <p class="text-xs text-gray-500">IndexNow 성공</p>
+            <p class="text-xl font-semibold text-gray-800 mt-1" x-text="summary.indexnow_ok || 0"></p>
+            <p class="text-[11px] text-red-400 mt-0.5" x-show="(summary.indexnow_failed || 0) > 0"
+               x-text="`실패 ${summary.indexnow_failed}`"></p>
+        </div>
+    </div>
+
+    <!-- S6 색인 점검 -->
+    <div class="border border-gray-200 rounded-lg p-4 space-y-3">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm font-medium text-gray-800">색인 상태 점검 (S6)</p>
+                <p class="text-xs text-gray-500 mt-0.5">Search Console에서 실제 색인 여부를 확인합니다</p>
+            </div>
+            <label class="inline-flex items-center gap-2">
+                <input type="checkbox" x-model="config.index_check_enabled" @change="saveConfig()"
+                       class="rounded border-gray-300 text-accent focus:ring-accent">
+                <span class="text-xs text-gray-600">사용</span>
+            </label>
+        </div>
+
+        <div class="flex items-end gap-3">
+            <div class="flex-1">
+                <label class="block text-xs text-gray-500 mb-1">하루 점검 건수 상한</label>
+                <input type="number" min="1" max="200" x-model.number="config.index_check_daily_cap"
+                       @change="saveConfig()"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+            </div>
+            <button type="button" @click="runIndexCheck()" :disabled="checkingIndex"
+                    class="px-4 py-2 bg-accent text-white rounded-lg text-sm disabled:opacity-50">
+                <span x-show="!checkingIndex">지금 점검</span>
+                <span x-show="checkingIndex">점검 중…</span>
+            </button>
+        </div>
+
+        <div x-show="indexResult" class="text-xs rounded-lg p-3"
+             :class="indexResult && indexResult.skipped ? 'bg-amber-50 text-amber-700' : 'bg-gray-50 text-gray-600'">
+            <template x-if="indexResult && indexResult.skipped === 'gsc_not_connected'">
+                <span>Search Console이 연결되지 않았습니다. 설정 화면에서 refresh token을 등록하세요.</span>
+            </template>
+            <template x-if="indexResult && !indexResult.skipped">
+                <span x-text="`점검 ${indexResult.checked || 0}건 · 색인 ${indexResult.indexed || 0} · 미색인 ${indexResult.not_indexed || 0} · 오류 ${indexResult.errors || 0}`"></span>
+            </template>
+        </div>
+    </div>
+
+    <!-- S2 사이트맵 -->
+    <div class="border border-gray-200 rounded-lg p-4 space-y-3">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm font-medium text-gray-800">사이트맵 신선도 (S2)</p>
+                <p class="text-xs text-gray-500 mt-0.5">발행한 글이 사이트맵에 들어갔는지 확인합니다</p>
+            </div>
+            <label class="inline-flex items-center gap-2">
+                <input type="checkbox" x-model="config.sitemap_check_enabled" @change="saveConfig()"
+                       class="rounded border-gray-300 text-accent focus:ring-accent">
+                <span class="text-xs text-gray-600">사용</span>
+            </label>
+        </div>
+
+        <div class="flex items-end gap-3">
+            <div class="flex-1">
+                <label class="block text-xs text-gray-500 mb-1">사이트맵 주소 (비우면 자동 탐색)</label>
+                <input type="text" x-model="config.sitemap_url" @change="saveConfig()"
+                       placeholder="https://example.com/wp-sitemap.xml"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+            </div>
+            <button type="button" @click="runSitemapCheck()" :disabled="checkingSitemap"
+                    class="px-4 py-2 bg-accent text-white rounded-lg text-sm disabled:opacity-50">
+                <span x-show="!checkingSitemap">지금 점검</span>
+                <span x-show="checkingSitemap">점검 중…</span>
+            </button>
+        </div>
+
+        <div x-show="sitemapResult" class="text-xs rounded-lg p-3"
+             :class="sitemapResult && sitemapResult.error ? 'bg-red-50 text-red-700' : 'bg-gray-50 text-gray-600'">
+            <template x-if="sitemapResult && sitemapResult.error">
+                <span x-text="sitemapResult.error"></span>
+            </template>
+            <template x-if="sitemapResult && !sitemapResult.error">
+                <div class="space-y-1">
+                    <p x-text="`확인 ${sitemapResult.checked || 0}건 · 포함 ${sitemapResult.present || 0} · 누락 ${sitemapResult.missing || 0}`"></p>
+                    <p x-show="sitemapResult.latest_lastmod"
+                       x-text="`사이트맵 최종 수정: ${sitemapResult.latest_lastmod} (${sitemapResult.stale_days}일 전)`"
+                       :class="sitemapResult.stale_days > 2 ? 'text-amber-600 font-medium' : ''"></p>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- S1 IndexNow -->
+    <div class="border border-gray-200 rounded-lg p-4 space-y-3">
+        <div>
+            <p class="text-sm font-medium text-gray-800">IndexNow (S1)</p>
+            <p class="text-xs text-gray-500 mt-0.5">네이버·빙에 발행 즉시 알립니다. 구글은 참여하지 않습니다.</p>
+        </div>
+
+        <!-- 플랫폼 미지원 -->
+        <div x-show="!config.indexnow_supported"
+             class="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-600">
+            <span x-text="config.indexnow_unsupported_reason"></span>
+        </div>
+
+        <template x-if="config.indexnow_supported">
+            <div class="space-y-3">
+                <!-- 1단계: 키 -->
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-medium text-gray-500 w-12">1단계</span>
+                    <button type="button" @click="issueKey()" :disabled="issuing"
+                            class="px-3 py-1.5 border border-gray-300 rounded-lg text-xs hover:bg-gray-50 disabled:opacity-50">
+                        <span x-text="config.indexnow_key ? '키 재발급' : '키 발급'"></span>
+                    </button>
+                    <span class="text-xs text-gray-400" x-show="config.indexnow_key"
+                          x-text="config.indexnow_key"></span>
+                </div>
+
+                <!-- 2단계: 파일 업로드 안내 -->
+                <div x-show="config.indexnow_key" class="flex items-start gap-2">
+                    <span class="text-xs font-medium text-gray-500 w-12 mt-1.5">2단계</span>
+                    <div class="flex-1 bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-2">
+                        <p class="text-xs text-amber-800">
+                            아래 주소에 <strong>내용이 키와 동일한 텍스트 파일</strong>을 올려주세요.
+                            호스트 루트여야 하며, 하위 폴더에 두면 그 폴더 하위 글만 제출되어 쓸 수 없습니다.
+                        </p>
+                        <div class="flex items-center gap-2">
+                            <code class="flex-1 text-[11px] bg-white px-2 py-1.5 rounded border border-amber-200 break-all"
+                                  x-text="config.key_file_url"></code>
+                            <button type="button" @click="copy(config.key_file_url)"
+                                    class="text-xs px-2 py-1.5 border border-amber-300 rounded hover:bg-amber-100">복사</button>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[11px] text-amber-700">파일 내용:</span>
+                            <code class="flex-1 text-[11px] bg-white px-2 py-1.5 rounded border border-amber-200 break-all"
+                                  x-text="config.key_file_content"></code>
+                            <button type="button" @click="copy(config.key_file_content)"
+                                    class="text-xs px-2 py-1.5 border border-amber-300 rounded hover:bg-amber-100">복사</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3단계: 검증 -->
+                <div x-show="config.indexnow_key" class="flex items-center gap-2 flex-wrap">
+                    <span class="text-xs font-medium text-gray-500 w-12">3단계</span>
+                    <button type="button" @click="verifyKey()" :disabled="verifying"
+                            class="px-3 py-1.5 border border-gray-300 rounded-lg text-xs hover:bg-gray-50 disabled:opacity-50">
+                        <span x-show="!verifying">키 파일 검증</span>
+                        <span x-show="verifying">확인 중…</span>
+                    </button>
+                    <span x-show="config.indexnow_key_verified"
+                          class="text-xs px-2 py-1 rounded-full bg-emerald-100 text-emerald-700">검증됨</span>
+                    <span x-show="!config.indexnow_key_verified && config.indexnow_key_error"
+                          class="text-xs text-red-600" x-text="config.indexnow_key_error"></span>
+                </div>
+
+                <!-- 4단계: 켜기 -->
+                <div x-show="config.indexnow_key_verified" class="flex items-center gap-2">
+                    <span class="text-xs font-medium text-gray-500 w-12">4단계</span>
+                    <label class="inline-flex items-center gap-2">
+                        <input type="checkbox" x-model="config.indexnow_enabled" @change="saveConfig()"
+                               class="rounded border-gray-300 text-accent focus:ring-accent">
+                        <span class="text-xs text-gray-600">발행 시 자동 제출</span>
+                    </label>
+                </div>
+            </div>
+        </template>
+    </div>
+
+    <!-- 최근 URL -->
+    <div class="border border-gray-200 rounded-lg p-4 space-y-3">
+        <div class="flex items-center justify-between">
+            <p class="text-sm font-medium text-gray-800">최근 발행 URL</p>
+            <button type="button" @click="loadUrls()" class="text-xs text-accent hover:underline">새로고침</button>
+        </div>
+
+        <p x-show="urls.length === 0" class="text-xs text-gray-400 py-4 text-center">
+            기록된 URL이 없습니다. 발행하면 자동으로 쌓입니다.
+        </p>
+
+        <div x-show="urls.length > 0" class="overflow-x-auto">
+            <table class="w-full text-xs">
+                <thead>
+                    <tr class="text-gray-400 border-b border-gray-200">
+                        <th class="text-left py-2 font-medium">제목</th>
+                        <th class="text-left py-2 font-medium whitespace-nowrap">색인</th>
+                        <th class="text-left py-2 font-medium whitespace-nowrap">사이트맵</th>
+                        <th class="text-left py-2 font-medium whitespace-nowrap">IndexNow</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="row in urls" :key="row.id">
+                        <tr class="border-b border-gray-100">
+                            <td class="py-2 pr-3">
+                                <a :href="row.url" target="_blank" rel="noopener"
+                                   class="text-gray-700 hover:text-accent hover:underline"
+                                   x-text="row.title || row.url"></a>
+                            </td>
+                            <td class="py-2 pr-3">
+                                <span class="px-1.5 py-0.5 rounded"
+                                      :class="{
+                                          'bg-emerald-100 text-emerald-700': row.index_state === 'indexed',
+                                          'bg-red-100 text-red-700': row.index_state === 'not_indexed',
+                                          'bg-gray-100 text-gray-500': row.index_state === 'unknown',
+                                          'bg-amber-100 text-amber-700': row.index_state === 'error',
+                                      }"
+                                      x-text="indexLabel(row.index_state)"></span>
+                            </td>
+                            <td class="py-2 pr-3">
+                                <span class="px-1.5 py-0.5 rounded"
+                                      :class="{
+                                          'bg-emerald-100 text-emerald-700': row.sitemap_state === 'present',
+                                          'bg-amber-100 text-amber-700': row.sitemap_state === 'missing',
+                                          'bg-gray-100 text-gray-500': row.sitemap_state === 'unknown',
+                                      }"
+                                      x-text="sitemapLabel(row.sitemap_state)"></span>
+                            </td>
+                            <td class="py-2 text-gray-500">
+                                <span x-text="indexnowLabel(row)"></span>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+function searchVisibilityApp() {
+    return {
+        blogId: null,
+        loading: false,
+        loaded: false,
+        issuing: false,
+        verifying: false,
+        checkingIndex: false,
+        checkingSitemap: false,
+        config: {
+            indexnow_enabled: false,
+            indexnow_key: null,
+            indexnow_key_verified: false,
+            indexnow_key_error: null,
+            indexnow_supported: true,
+            indexnow_unsupported_reason: null,
+            key_file_url: null,
+            key_file_content: null,
+            sitemap_check_enabled: true,
+            sitemap_url: '',
+            index_check_enabled: true,
+            index_check_daily_cap: 20,
+        },
+        summary: {},
+        urls: [],
+        indexResult: null,
+        sitemapResult: null,
+
+        get apiBase() {
+            return typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
+        },
+
+        init() {
+            if (this.blogId) {
+                this.loadStatus();
+                this.loadUrls();
+            }
+        },
+
+        async loadStatus() {
+            this.loading = true;
+            try {
+                const resp = await fetch(
+                    `${this.apiBase}/blogs/${this.blogId}/search-visibility`,
+                    { credentials: 'include' },
+                );
+                if (resp.ok) {
+                    const data = await resp.json();
+                    this.config = { ...this.config, ...data.config };
+                    if (this.config.sitemap_url === null) this.config.sitemap_url = '';
+                    this.summary = data.summary || {};
+                    this.loaded = true;
+                }
+            } catch (e) {
+                console.error('[SEARCH_VIS] 상태 조회 실패', e);
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async loadUrls() {
+            if (!this.blogId) return;
+            try {
+                const resp = await fetch(
+                    `${this.apiBase}/blogs/${this.blogId}/search-visibility/urls?limit=50`,
+                    { credentials: 'include' },
+                );
+                if (resp.ok) {
+                    this.urls = (await resp.json()).urls || [];
+                }
+            } catch (e) {
+                console.error('[SEARCH_VIS] URL 목록 실패', e);
+            }
+        },
+
+        async saveConfig() {
+            try {
+                const resp = await fetch(
+                    `${this.apiBase}/blogs/${this.blogId}/search-visibility/config`,
+                    {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({
+                            indexnow_enabled: this.config.indexnow_enabled,
+                            sitemap_check_enabled: this.config.sitemap_check_enabled,
+                            sitemap_url: this.config.sitemap_url || null,
+                            index_check_enabled: this.config.index_check_enabled,
+                            index_check_daily_cap: this.config.index_check_daily_cap,
+                        }),
+                    },
+                );
+                const data = await resp.json();
+                if (!resp.ok) {
+                    alert(data.detail || '설정을 저장하지 못했습니다');
+                    await this.loadStatus();
+                    return;
+                }
+                this.config = { ...this.config, ...data.config };
+                if (this.config.sitemap_url === null) this.config.sitemap_url = '';
+            } catch (e) {
+                console.error('[SEARCH_VIS] 설정 저장 실패', e);
+            }
+        },
+
+        async issueKey() {
+            if (this.config.indexnow_key &&
+                !confirm('키를 재발급하면 기존 키 파일은 무효가 됩니다. 계속할까요?')) return;
+            this.issuing = true;
+            try {
+                const resp = await fetch(
+                    `${this.apiBase}/blogs/${this.blogId}/search-visibility/indexnow/key`,
+                    { method: 'POST', credentials: 'include' },
+                );
+                const data = await resp.json();
+                if (resp.ok) this.config = { ...this.config, ...data.config };
+                else alert(data.detail || '키 발급에 실패했습니다');
+            } finally {
+                this.issuing = false;
+            }
+        },
+
+        async verifyKey() {
+            this.verifying = true;
+            try {
+                const resp = await fetch(
+                    `${this.apiBase}/blogs/${this.blogId}/search-visibility/indexnow/verify`,
+                    { method: 'POST', credentials: 'include' },
+                );
+                const data = await resp.json();
+                if (resp.ok) this.config = { ...this.config, ...data.config };
+                else alert(data.detail || '검증에 실패했습니다');
+            } finally {
+                this.verifying = false;
+            }
+        },
+
+        async runSitemapCheck() {
+            this.checkingSitemap = true;
+            this.sitemapResult = null;
+            try {
+                const resp = await fetch(
+                    `${this.apiBase}/blogs/${this.blogId}/search-visibility/check/sitemap`,
+                    { method: 'POST', credentials: 'include' },
+                );
+                this.sitemapResult = await resp.json();
+                await this.loadStatus();
+                await this.loadUrls();
+            } finally {
+                this.checkingSitemap = false;
+            }
+        },
+
+        async runIndexCheck() {
+            this.checkingIndex = true;
+            this.indexResult = null;
+            try {
+                const resp = await fetch(
+                    `${this.apiBase}/blogs/${this.blogId}/search-visibility/check/index`,
+                    { method: 'POST', credentials: 'include' },
+                );
+                this.indexResult = await resp.json();
+                await this.loadStatus();
+                await this.loadUrls();
+            } finally {
+                this.checkingIndex = false;
+            }
+        },
+
+        copy(text) {
+            if (!text) return;
+            navigator.clipboard.writeText(text);
+        },
+
+        indexLabel(state) {
+            return { indexed: '색인됨', not_indexed: '미색인', error: '오류' }[state] || '미확인';
+        },
+
+        sitemapLabel(state) {
+            return { present: '포함', missing: '누락' }[state] || '미확인';
+        },
+
+        indexnowLabel(row) {
+            if (row.indexnow_status === 'ok') return '제출됨';
+            if (row.indexnow_status === 'skipped') return '건너뜀';
+            if (row.indexnow_status === 'failed') {
+                return `실패 ${row.indexnow_status_code || ''}`.trim();
+            }
+            return '대기';
+        },
+    };
+}
+</script>
