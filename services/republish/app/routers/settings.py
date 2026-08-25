@@ -420,6 +420,12 @@ class TallyAccountRequest(BaseModel):
     api_key: Optional[str] = None
 
 
+class GscAccountRequest(BaseModel):
+    """Search Console refresh token 저장 요청(S6 색인 점검용)."""
+
+    refresh_token: Optional[str] = None
+
+
 def _mask_secret(value: str) -> str:
     """비밀값 마스킹(앞4****뒤4). 다른 API 키 항목과 동일 포맷."""
     if not value:
@@ -583,6 +589,64 @@ async def save_tally_account(
             masked = "****"
     logger.info("[SETTINGS] Tally API 키 저장")
     return {"success": True, "configured": bool(stored), "api_key": masked}
+
+
+# ============================================================
+# Search Console (S6 색인 점검)
+# ============================================================
+
+
+@router.get("/gsc-account")
+async def get_gsc_account(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Search Console 연동 상태 조회. 토큰은 마스킹값만 반환."""
+    from ..core.encryption import decrypt_api_key
+    from ..services.system_settings_service import SystemSettingsService
+    from ..services.search_visibility.index_check_service import (
+        SETTING_GSC_REFRESH_TOKEN,
+    )
+    enc = await SystemSettingsService.get(SETTING_GSC_REFRESH_TOKEN, db)
+    masked = ""
+    if enc:
+        try:
+            masked = _mask_secret(decrypt_api_key(enc))
+        except Exception:  # noqa: BLE001
+            masked = "****"
+    return {"configured": bool(enc), "refresh_token": masked}
+
+
+@router.post("/gsc-account")
+async def save_gsc_account(
+    request: GscAccountRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Search Console refresh token을 암호화 저장한다(S6).
+
+    필요 범위: https://www.googleapis.com/auth/webmasters.readonly
+    해당 사이트가 Search Console에 속성으로 등록·소유 확인되어 있어야 한다.
+    """
+    from ..core.encryption import encrypt_api_key
+    from ..services.system_settings_service import SystemSettingsService
+    from ..services.search_visibility.index_check_service import (
+        SETTING_GSC_REFRESH_TOKEN,
+    )
+    token = (request.refresh_token or "").strip()
+    existing = await SystemSettingsService.get(SETTING_GSC_REFRESH_TOKEN, db)
+
+    if token and "****" not in token:
+        await SystemSettingsService.set(
+            SETTING_GSC_REFRESH_TOKEN, encrypt_api_key(token), db,
+        )
+    elif not existing:
+        raise HTTPException(status_code=422, detail="refresh token을 입력하세요")
+    await db.commit()
+
+    logger.info("[SETTINGS] Search Console refresh token 저장")
+    stored = await SystemSettingsService.get(SETTING_GSC_REFRESH_TOKEN, db)
+    return {"success": True, "configured": bool(stored)}
 
 
 # ============================================================

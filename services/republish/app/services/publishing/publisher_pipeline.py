@@ -212,6 +212,11 @@ class PublisherPipeline:
             publish_result.platform_post_id
         )
 
+        # 검색 노출 원장 기록 + IndexNow 제출(S1). 실패해도 발행 결과는 그대로다.
+        await self._track_search_visibility(
+            blog, crawled_post, result.published_url,
+        )
+
         logger.info(
             "[PIPELINE] 발행 완료 | blog=%s | post_id=%d | "
             "url=%s | image=%s",
@@ -220,6 +225,37 @@ class PublisherPipeline:
             "업로드됨" if result.image_uploaded else "없음",
         )
         return result
+
+    async def _track_search_visibility(
+        self,
+        blog: Blog,
+        crawled_post: CrawledPost,
+        published_url: Optional[str],
+    ) -> None:
+        """발행 URL을 검색 노출 원장에 남긴다(부가 작업, 실패 무시).
+
+        Args:
+            blog: 발행 대상 블로그
+            crawled_post: 발행된 글
+            published_url: 발행 결과 URL
+        """
+        if not published_url:
+            return
+        try:
+            from .. import search_visibility as _sv  # noqa: F401  (패키지 로드)
+            from ..search_visibility.tracker import track_published_url
+
+            await track_published_url(
+                self.db, blog, published_url,
+                crawled_post_id=crawled_post.id,
+                title=crawled_post.title,
+            )
+            await self.db.commit()
+        except Exception as e:  # noqa: BLE001 — 발행 결과에 영향 없음
+            logger.warning(
+                "[PIPELINE] 검색 노출 기록 실패(무시) | post_id=%d | %s",
+                crawled_post.id, e,
+            )
 
     async def _reject_pre_publish(
         self,

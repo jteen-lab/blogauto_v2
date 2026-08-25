@@ -22,6 +22,7 @@ from .core.database import get_db_session, init_database, close_database, db_man
 from .core.logger import get_logger
 from .middleware.logging_middleware import LoggingMiddleware
 from .scheduler import get_scheduler, republish_job, setup_flow_scheduler, shutdown_flow_scheduler
+from .scheduler.search_visibility_job import index_check_job, sitemap_check_job  # 검색 노출 S2/S6
 from .routers.auth import router as auth_router
 from .routers.blogs import router as blogs_router, page_router as blogs_page_router
 from .routers.categories import router as categories_router, page_router as categories_page_router
@@ -53,6 +54,7 @@ from .routers.blog_settings_seo import router as blog_settings_seo_router  # 블
 from .routers.blog_settings_renewal import router as blog_settings_renewal_router  # 블로그 재발행 리뉴얼 설정 API
 from .routers.blog_settings_adsense import router as blog_settings_adsense_router  # 블로그 애드센스 승인 지원 설정 API
 from .routers.contact_submissions import router as contact_submissions_router  # 문의 수신함 API (F10)
+from .routers.search_visibility import router as search_visibility_router  # 검색 노출 3종 API (S1/S2/S6)
 from .routers.ai_api_keys import router as ai_api_keys_router  # AI API 키 다계정 관리
 from .routers.reference_collection import router as reference_collection_router  # 참조자료 수집
 from .api.growth_profile import router as growth_profile_router  # Growth Profile API
@@ -189,6 +191,25 @@ async def lifespan(app: FastAPI):
         )
         logger.info("재발행 Job 등록됨")
 
+        # 검색 노출 점검 Job (S2 사이트맵 30분, S6 색인 6시간)
+        scheduler.add_job(
+            sitemap_check_job,
+            "interval",
+            minutes=30,
+            id="sitemap_check_job",
+            name="사이트맵 신선도 점검",
+            replace_existing=True,
+        )
+        scheduler.add_job(
+            index_check_job,
+            "interval",
+            hours=6,
+            id="index_check_job",
+            name="색인 상태 점검",
+            replace_existing=True,
+        )
+        logger.info("검색 노출 점검 Job 등록됨 (사이트맵 30분 / 색인 6시간)")
+
         # 플로우 스케줄러 시작
         await setup_flow_scheduler()
         logger.info("플로우 스케줄러 시작됨")
@@ -274,6 +295,7 @@ app.include_router(blog_settings_seo_router, prefix=settings.api_v1_prefix)  # �
 app.include_router(blog_settings_renewal_router, prefix=settings.api_v1_prefix)  # 블로그 재발행 리뉴얼 설정
 app.include_router(blog_settings_adsense_router, prefix=settings.api_v1_prefix)  # 블로그 애드센스 승인 지원 설정
 app.include_router(contact_submissions_router, prefix=settings.api_v1_prefix)  # 문의 수신함 (F10)
+app.include_router(search_visibility_router, prefix=settings.api_v1_prefix)  # 검색 노출 3종 (S1/S2/S6)
 app.include_router(ai_api_keys_router)  # AI API 키 다계정 관리 (prefix 포함)
 app.include_router(reference_collection_router, prefix=settings.api_v1_prefix)  # 참조자료 수집
 app.include_router(growth_profile_router, prefix=settings.api_v1_prefix)  # Growth Profile

@@ -118,6 +118,17 @@ class Blog(Base):
         comment="SEO 플러그인 설정: detected_plugin, auto_seo_enabled, focus_keyphrase_method, slug_method, meta_description_method"
     )
 
+    # 검색 노출 3종(S1 IndexNow · S2 사이트맵 · S6 색인 점검) 설정
+    # {"indexnow_enabled": bool, "indexnow_key": str, "indexnow_key_verified": bool,
+    #  "indexnow_key_checked_at": iso, "sitemap_check_enabled": bool, "sitemap_url": str|None,
+    #  "index_check_enabled": bool, "index_check_daily_cap": int}
+    search_index_config = Column(
+        JSON,
+        default=dict,
+        nullable=True,
+        comment="검색 노출 설정: IndexNow 키/활성, 사이트맵 점검, 색인 점검",
+    )
+
     # 재발행 리뉴얼 정책 (P1)
     renewal_config = Column(
         JSON,

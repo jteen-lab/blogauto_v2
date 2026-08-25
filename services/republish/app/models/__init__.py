@@ -81,6 +81,9 @@ from .blog_growth_setting import BlogGrowthSetting
 from .blog_main_title_scan import BlogMainTitleScan
 from .adsense_account import AdsenseAccount, AdsenseSite
 
+# 검색 노출 3종(S1 IndexNow · S2 사이트맵 · S6 색인 점검) 원장
+from .search_visibility import SearchVisibilityUrl
+
 __all__ = [
     # Core models
     "User",
@@ -151,4 +154,5 @@ __all__ = [
     # 애드센스 계정·사이트 상태(다중 계정)
     "AdsenseAccount",
     "AdsenseSite",
+    "SearchVisibilityUrl",
 ]
