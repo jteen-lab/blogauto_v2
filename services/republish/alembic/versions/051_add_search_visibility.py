@@ -12,9 +12,12 @@ Create Date: 2026-08-25
     1. search_visibility_urls 테이블 신설.
     2. blogs.search_index_config JSON 컬럼 추가(기본 NULL → 서비스에서 기본값 병합).
 
-주의:
-    앱 시작 시 SQLAlchemy create_all 이 테이블을 먼저 만들 수 있다. 그 경우
-    upgrade 는 DuplicateTable 로 실패하므로 `alembic stamp 051` 로 버전만 정렬한다.
+주의(중요):
+    앱 시작 시 SQLAlchemy create_all 이 **테이블은** 먼저 만들 수 있다. 하지만
+    create_all 은 기존 테이블에 **컬럼을 추가하지 않는다** — blogs.search_index_config
+    는 이 마이그레이션이 반드시 실행돼야 생긴다.
+    그래서 upgrade 를 멱등하게 작성한다(있으면 건너뛴다). stamp 로 넘기면 컬럼이
+    누락돼 블로그 조회가 전부 실패한다.
 """
 import sqlalchemy as sa
 from alembic import op
@@ -27,7 +30,27 @@ branch_labels = None
 depends_on = None
 
 
+def _has_table(name: str) -> bool:
+    """대상 테이블이 이미 있는지 확인한다(create_all 선행 대비)."""
+    bind = op.get_bind()
+    return sa.inspect(bind).has_table(name)
+
+
+def _has_column(table: str, column: str) -> bool:
+    """대상 컬럼이 이미 있는지 확인한다."""
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    if not inspector.has_table(table):
+        return False
+    return any(col["name"] == column for col in inspector.get_columns(table))
+
+
 def upgrade() -> None:
+    if _has_table("search_visibility_urls"):
+        # create_all 이 이미 만든 경우 — 인덱스까지 동일 모델 기반이라 건너뛴다.
+        _add_blog_column()
+        return
+
     op.create_table(
         "search_visibility_urls",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -100,13 +123,21 @@ def upgrade() -> None:
         ["blog_id", "sitemap_state"],
     )
 
+    _add_blog_column()
+
+
+def _add_blog_column() -> None:
+    """blogs.search_index_config 를 없을 때만 추가한다."""
+    if _has_column("blogs", "search_index_config"):
+        return
     op.add_column(
         "blogs", sa.Column("search_index_config", sa.JSON(), nullable=True),
     )
 
 
 def downgrade() -> None:
-    op.drop_column("blogs", "search_index_config")
+    if _has_column("blogs", "search_index_config"):
+        op.drop_column("blogs", "search_index_config")
     op.drop_index("ix_svu_blog_sitemap", table_name="search_visibility_urls")
     op.drop_index("ix_svu_blog_index_state", table_name="search_visibility_urls")
     op.drop_index("ix_svu_blog_indexnow", table_name="search_visibility_urls")
