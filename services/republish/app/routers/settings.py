@@ -649,6 +649,51 @@ async def save_gsc_account(
     return {"success": True, "configured": bool(stored)}
 
 
+@router.get("/gsc-account/sites")
+async def list_gsc_sites(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """연결된 Search Console 속성 목록과 블로그 매칭 결과.
+
+    등록만 하고 끝내면 어떤 블로그가 실제로 커버되는지 알 수 없다.
+    저장 직후 바로 확인할 수 있도록 매칭까지 함께 돌려준다.
+    """
+    from sqlalchemy import select as _select
+
+    from ..models.blog import Blog
+    from ..services.search_visibility import index_check_service as ics
+    from ..services.search_visibility.runner import resolve_gsc_token
+
+    token = await resolve_gsc_token(db)
+    if not token:
+        return {"connected": False, "error": "refresh token이 저장되지 않았거나 만료되었습니다"}
+
+    try:
+        sites = await ics.list_sites(token)
+    except ics.IndexCheckError as exc:
+        return {"connected": False, "error": exc.message}
+
+    blogs = (
+        await db.execute(
+            _select(Blog).where(Blog.is_active.is_(True)).order_by(Blog.name),
+        )
+    ).scalars().all()
+
+    return {
+        "connected": True,
+        "sites": sites,
+        "matches": [
+            {
+                "blog": blog.name,
+                "url": blog.url,
+                "property": ics.resolve_property(sites, blog),
+            }
+            for blog in blogs
+        ],
+    }
+
+
 # ============================================================
 # 네이버 검색 API (블로그 검색)
 # ============================================================
