@@ -672,7 +672,14 @@ async def list_gsc_sites(
     try:
         sites = await ics.list_sites(token)
     except ics.IndexCheckError as exc:
-        return {"connected": False, "error": exc.message}
+        result = {"connected": False, "error": exc.message}
+        if exc.status_code == 403:
+            # 권한 부족은 대개 다른 용도의 토큰을 넣은 경우다 — 실제 범위를 보여준다.
+            scopes = await ics.granted_scopes(token)
+            result["granted_scopes"] = scopes
+            result["required_scope"] = ics.REQUIRED_SCOPE
+            result["scope_missing"] = ics.REQUIRED_SCOPE not in scopes
+        return result
 
     blogs = (
         await db.execute(

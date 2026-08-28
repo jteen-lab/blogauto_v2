@@ -60,6 +60,29 @@ def property_url(blog: Any) -> Optional[str]:
     return _origin(blog)
 
 
+TOKENINFO_URL = "https://www.googleapis.com/oauth2/v1/tokeninfo"
+REQUIRED_SCOPE = "https://www.googleapis.com/auth/webmasters.readonly"
+
+
+async def granted_scopes(access_token: str) -> List[str]:
+    """토큰에 실제로 부여된 권한 범위를 조회한다.
+
+    403 "insufficient authentication scopes" 는 원인을 알려주지 않는다.
+    다른 용도(애드센스 등)의 토큰을 잘못 넣은 경우가 흔해, 무엇이 들어 있는지
+    직접 보여줘야 사용자가 스스로 고칠 수 있다.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+            response = await client.get(
+                TOKENINFO_URL, params={"access_token": access_token},
+            )
+        if response.status_code >= 400:
+            return []
+        return ((response.json() or {}).get("scope") or "").split()
+    except Exception:  # noqa: BLE001 — 진단용이므로 실패해도 조용히 넘어간다
+        return []
+
+
 async def list_sites(access_token: str) -> List[str]:
     """이 토큰으로 접근 가능한 Search Console 속성 목록.
 

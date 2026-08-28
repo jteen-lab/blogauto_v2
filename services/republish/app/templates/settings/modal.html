@@ -545,7 +545,26 @@
                             <div x-show="result" class="text-xs rounded-lg p-3"
                                  :class="result && result.connected ? 'bg-gray-50' : 'bg-red-50 text-red-700'">
                                 <template x-if="result && !result.connected">
-                                    <span x-text="result.error"></span>
+                                    <div class="space-y-2">
+                                        <p x-text="result.error"></p>
+                                        <template x-if="result.scope_missing">
+                                            <div class="bg-white rounded p-2 space-y-1 border border-red-200">
+                                                <p class="font-medium">이 토큰에는 Search Console 권한이 없습니다.</p>
+                                                <p class="text-gray-600">현재 부여된 권한:</p>
+                                                <template x-for="sc in (result.granted_scopes || [])" :key="sc">
+                                                    <p class="text-gray-500 pl-2" x-text="'· ' + sc"></p>
+                                                </template>
+                                                <p x-show="!(result.granted_scopes || []).length" class="text-gray-500 pl-2">
+                                                    (조회 불가)
+                                                </p>
+                                                <p class="text-gray-600 pt-1">필요한 권한:</p>
+                                                <p class="text-gray-500 pl-2" x-text="'· ' + result.required_scope"></p>
+                                                <p class="text-gray-600 pt-1">
+                                                    OAuth Playground에서 위 권한으로 다시 승인해 <strong>새 refresh token</strong>을 받아 저장하세요.
+                                                </p>
+                                            </div>
+                                        </template>
+                                    </div>
                                 </template>
                                 <template x-if="result && result.connected">
                                     <div class="space-y-2">
