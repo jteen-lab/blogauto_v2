@@ -157,3 +157,86 @@ async def test_track_published_url_skips_when_disabled(db, blog):
 @pytest.mark.asyncio
 async def test_track_published_url_ignores_empty_url(db, blog):
     assert await tracker.track_published_url(db, blog, "") is None
+
+
+# ---------- 백필 ----------
+
+@pytest_asyncio.fixture
+async def posts(db, blog):
+    """발행 완료 글 5건 + 미발행 1건 + URL 없는 1건."""
+    from datetime import datetime, timedelta
+
+    from app.models.crawled_post import CrawledPost
+
+    items = []
+    for i in range(5):
+        items.append(CrawledPost(
+            blog_id=blog.id, title=f"글{i}", url=f"https://example.com/{i}/",
+            published_at=datetime.now() - timedelta(days=i),
+        ))
+    items.append(CrawledPost(blog_id=blog.id, title="미발행", url=None))
+    items.append(CrawledPost(
+        blog_id=blog.id, title="URL없음", url=None,
+        published_at=datetime.now(),
+    ))
+    for item in items:
+        db.add(item)
+    await db.flush()
+    return items
+
+
+@pytest.mark.asyncio
+async def test_backfill_creates_rows_for_published_only(db, blog, posts):
+    from app.services.search_visibility import backfill
+
+    result = await backfill.backfill_blog(db, blog.id, limit=100)
+    assert result["scanned"] == 5  # 미발행·URL없음 제외
+    assert result["created"] == 5
+
+
+@pytest.mark.asyncio
+async def test_backfill_is_idempotent(db, blog, posts):
+    """두 번 돌려도 중복 행이 생기지 않는다."""
+    from app.services.search_visibility import backfill
+
+    await backfill.backfill_blog(db, blog.id, limit=100)
+    second = await backfill.backfill_blog(db, blog.id, limit=100)
+    assert second["created"] == 0
+    assert second["existing"] == 5
+
+
+@pytest.mark.asyncio
+async def test_backfill_does_not_submit_indexnow(db, blog, posts):
+    """기존 발행분을 IndexNow 로 재제출하면 스팸이 된다 — skipped 로 표시."""
+    import sqlalchemy
+
+    from app.services.search_visibility import backfill
+
+    await backfill.backfill_blog(db, blog.id, limit=100)
+    rows = (await db.execute(
+        sqlalchemy.select(SearchVisibilityUrl),
+    )).scalars().all()
+    assert all(r.indexnow_status == IN_SKIPPED for r in rows)
+    assert all(r.indexnow_error == backfill.REASON for r in rows)
+
+
+@pytest.mark.asyncio
+async def test_backfill_respects_limit_newest_first(db, blog, posts):
+    from app.services.search_visibility import backfill
+
+    result = await backfill.backfill_blog(db, blog.id, limit=2)
+    assert result["created"] == 2
+    import sqlalchemy
+    urls = set((await db.execute(
+        sqlalchemy.select(SearchVisibilityUrl.url),
+    )).scalars().all())
+    # 최근 2건 = 글0(오늘), 글1(어제)
+    assert urls == {"https://example.com/0/", "https://example.com/1/"}
+
+
+@pytest.mark.asyncio
+async def test_backfill_caps_absurd_limit(db, blog, posts):
+    from app.services.search_visibility import backfill
+
+    result = await backfill.backfill_blog(db, blog.id, limit=999999)
+    assert result["scanned"] == 5

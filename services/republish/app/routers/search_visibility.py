@@ -18,6 +18,7 @@ from ..models.search_visibility import SearchVisibilityUrl
 from ..models.user import User
 from ..routers.auth import get_current_user
 from ..services.blog_settings_service import get_blog_or_404
+from ..services.search_visibility import backfill as sv_backfill
 from ..services.search_visibility import indexnow_service, runner
 from ..services.search_visibility.config import (
     generate_indexnow_key, indexnow_supported, key_file_url, load_config,
@@ -175,6 +176,20 @@ async def check_index(
     """색인 상태 점검을 즉시 1회 실행한다(S6)."""
     blog = await get_blog_or_404(db, blog_id, current_user.id)
     result = await runner.run_index_check(db, blog)
+    await db.commit()
+    return result
+
+
+@router.post("/backfill")
+async def backfill(
+    blog_id: int,
+    limit: int = 100,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> Dict[str, Any]:
+    """기존 발행 글을 원장에 채운다(색인율 기준선 확보용)."""
+    await get_blog_or_404(db, blog_id, current_user.id)
+    result = await sv_backfill.backfill_blog(db, blog_id, limit)
     await db.commit()
     return result
 

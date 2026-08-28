@@ -248,6 +248,24 @@
             <button type="button" @click="loadUrls()" class="text-xs text-accent hover:underline">새로고침</button>
         </div>
 
+        <div class="bg-gray-50 rounded-lg p-3 flex items-center gap-3 flex-wrap">
+            <div class="flex-1 min-w-[200px]">
+                <p class="text-xs text-gray-600">기존 발행 글 불러오기</p>
+                <p class="text-[11px] text-gray-400 mt-0.5">
+                    원장은 배포 이후 발행분만 쌓입니다. 색인율 기준선을 잡으려면 과거 글을 불러오세요.
+                </p>
+            </div>
+            <input type="number" min="1" max="1000" x-model.number="backfillLimit"
+                   class="w-24 px-2 py-1.5 border border-gray-300 rounded text-xs">
+            <button type="button" @click="runBackfill()" :disabled="backfilling"
+                    class="px-3 py-1.5 border border-gray-300 rounded-lg text-xs hover:bg-white disabled:opacity-50">
+                <span x-show="!backfilling">불러오기</span>
+                <span x-show="backfilling">불러오는 중…</span>
+            </button>
+        </div>
+        <p x-show="backfillResult" class="text-xs text-gray-500"
+           x-text="backfillResult ? `조회 ${backfillResult.scanned}건 · 신규 ${backfillResult.created}건 · 기존 ${backfillResult.existing}건` : ''"></p>
+
         <p x-show="urls.length === 0" class="text-xs text-gray-400 py-4 text-center">
             기록된 URL이 없습니다. 발행하면 자동으로 쌓입니다.
         </p>
@@ -326,6 +344,9 @@ function searchVisibilityApp() {
         },
         summary: {},
         urls: [],
+        backfilling: false,
+        backfillLimit: 100,
+        backfillResult: null,
         indexResult: null,
         sitemapResult: null,
 
@@ -467,6 +488,22 @@ function searchVisibilityApp() {
                 await this.loadUrls();
             } finally {
                 this.checkingIndex = false;
+            }
+        },
+
+        async runBackfill() {
+            this.backfilling = true;
+            this.backfillResult = null;
+            try {
+                const resp = await fetch(
+                    `${this.apiBase}/blogs/${this.blogId}/search-visibility/backfill?limit=${this.backfillLimit}`,
+                    { method: 'POST', credentials: 'include' },
+                );
+                this.backfillResult = await resp.json();
+                await this.loadStatus();
+                await this.loadUrls();
+            } finally {
+                this.backfilling = false;
             }
         },
 
