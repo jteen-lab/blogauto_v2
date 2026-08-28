@@ -16,17 +16,32 @@ window.getPromptBuilderEmbeddedHTML = function () {
              onApply: (text) => { promptModule.contentGeneration.userPromptTemplate = text; },
              onApplyPreset: (p) => { if (p.full_prompt) promptModule.adsense.infoGainEnabled = false; },
              getSelectedCategoryNames: () => {
-                 // 선택한 카테고리(주제/하위주제) 이름을 프리셋 추천에 넘긴다.
+                 // 프리셋 추천에 넘길 카테고리 이름.
+                 // 연결 방식이 두 가지라 둘 다 본다.
+                 //   · 카테고리 기준 모드 → promptModule.selectedCategories (id만 있음)
+                 //   · 블로그 기준 모드   → linking.blogCategories[blogId] (이름 포함)
                  const topics = [], subs = [];
+                 const addTopic = (n) => { if (n && !topics.includes(n)) topics.push(n); };
+                 const addSub = (n) => { if (n && !subs.includes(n)) subs.push(n); };
+
                  (promptModule.selectedCategories || []).forEach((c) => {
                      const t = (promptModule.topics || []).find((x) => x.id === c.topic_id);
                      if (!t) return;
-                     if (!topics.includes(t.name)) topics.push(t.name);
+                     addTopic(t.name);
                      if (c.subtopic_id) {
                          const st = (t.subtopics || []).find((x) => x.id === c.subtopic_id);
-                         if (st && !subs.includes(st.name)) subs.push(st.name);
+                         if (st) addSub(st.name);
                      }
                  });
+
+                 const byBlog = (promptModule.linking && promptModule.linking.blogCategories) || {};
+                 (promptModule.selectedBlogs || []).forEach((blogId) => {
+                     (byBlog[blogId] || []).forEach((c) => {
+                         addTopic(c.topic_name);
+                         addSub(c.subtopic_name);
+                     });
+                 });
+
                  return { topics, subtopics: subs };
              }
          })"
