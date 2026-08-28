@@ -28,6 +28,8 @@ DEFAULT_SEARCH_INDEX_CONFIG: Dict[str, Any] = {
     "discover_enabled": False,
     "discover_min_image_width": 1200,
     "discover_block_on_fail": False,
+    # X1 외부 링크 — 0이면 상한 없음(rel 표시는 항상 적용)
+    "max_external_links": 0,
 }
 
 # IndexNow 키 파일을 호스트 루트에 올릴 수 있는 플랫폼만 지원한다.

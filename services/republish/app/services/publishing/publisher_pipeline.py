@@ -24,7 +24,7 @@ from .publish_result import PublishResult, ImageUploadResult
 from .thin_content_gate import check_thin_content
 from .topic_dedup_gate import check_topic_duplicate
 from .image_path_utils import resolve_image_path, strip_local_image_url
-from . import faq_schema
+from . import external_link_policy, faq_schema
 
 logger = get_logger("publisher_pipeline", "app.log")
 
@@ -405,6 +405,16 @@ class PublisherPipeline:
                 media_id=image_result.media_id,
                 platform=platform,
             )
+
+        # X1: 외부 링크에 rel="sponsored nofollow" 와 전면광고 억제를 적용한다.
+        # 자기 호스트 링크는 건드리지 않는다.
+        policy = external_link_policy.apply(
+            final_html, blog.url or "",
+            max_external=int(
+                (blog.search_index_config or {}).get("max_external_links") or 0,
+            ),
+        )
+        final_html = policy.html
 
         # A5: 본문에 FAQ 블록이 있으면 FAQPage JSON-LD 를 덧붙인다.
         # 가시 텍스트에서만 만들며, 없으면 아무것도 하지 않는다.

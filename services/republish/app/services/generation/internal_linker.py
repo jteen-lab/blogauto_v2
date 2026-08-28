@@ -32,6 +32,8 @@ for _path in _shared_paths:
 
 from services.similarity_service import SimilarityService, KOREAN_STOPWORDS
 
+from .index_priority import prioritize as prioritize_by_index
+
 logger = logging.getLogger(__name__)
 
 # 내부링크 기본 설정
@@ -146,9 +148,13 @@ class InternalLinker:
             button_class=button_class,
         )
 
-        # 3. 결론 뒤 링크 삽입 (랜덤 포스트)
+        # 3. 결론 뒤 링크 삽입
+        # 원래 순수 랜덤이었다. 여기는 유사도가 기준이 아니므로, 무작위성을 유지한
+        # 채 **미색인 글을 앞으로 당긴다**(S7). 구글이 "발견됨-미색인" 으로 둔 글에
+        # 대한 표준 처방이 내부링크다. 서론·본문은 유사도가 1차 기준이라 건드리지 않는다.
         remaining = [p for p in all_posts if p.url not in used_urls]
         random.shuffle(remaining)
+        remaining = await prioritize_by_index(self.db, blog_id, remaining)
         conclusion_posts = remaining[:conclusion_count]
         content = self._insert_conclusion_links(
             content, conclusion_posts, used_urls, conclusion_list_style
