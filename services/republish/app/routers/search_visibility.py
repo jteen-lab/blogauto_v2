@@ -19,7 +19,7 @@ from ..models.user import User
 from ..routers.auth import get_current_user
 from ..services.blog_settings_service import get_blog_or_404
 from ..services.search_visibility import backfill as sv_backfill
-from ..services.search_visibility import indexnow_service, runner
+from ..services.search_visibility import indexnow_service, naver_check, runner
 from ..services.search_visibility.config import (
     generate_indexnow_key, indexnow_supported, key_file_url, load_config,
 )
@@ -192,6 +192,25 @@ async def backfill(
     result = await sv_backfill.backfill_blog(db, blog_id, limit)
     await db.commit()
     return result
+
+
+@router.post("/check/naver")
+async def check_naver(
+    blog_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> Dict[str, Any]:
+    """네이버 노출 전제조건 점검(NEO) — Yeti robots + 소유확인 메타."""
+    blog = await get_blog_or_404(blog_id, current_user, db)
+    result = await naver_check.check_blog(blog)
+    return {
+        "ok": result.ok,
+        "robots_found": result.robots_found,
+        "yeti_blocked": result.yeti_blocked,
+        "yeti_rule_source": result.yeti_rule_source,
+        "verification_meta": result.verification_meta,
+        "error": result.error,
+    }
 
 
 @router.get("/urls")

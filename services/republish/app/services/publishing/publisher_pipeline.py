@@ -24,6 +24,7 @@ from .publish_result import PublishResult, ImageUploadResult
 from .thin_content_gate import check_thin_content
 from .topic_dedup_gate import check_topic_duplicate
 from .image_path_utils import resolve_image_path, strip_local_image_url
+from . import faq_schema
 
 logger = get_logger("publisher_pipeline", "app.log")
 
@@ -404,6 +405,10 @@ class PublisherPipeline:
                 media_id=image_result.media_id,
                 platform=platform,
             )
+
+        # A5: 본문에 FAQ 블록이 있으면 FAQPage JSON-LD 를 덧붙인다.
+        # 가시 텍스트에서만 만들며, 없으면 아무것도 하지 않는다.
+        final_html = faq_schema.inject(final_html)
 
         return final_html
 
