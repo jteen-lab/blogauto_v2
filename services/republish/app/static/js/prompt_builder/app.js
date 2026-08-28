@@ -25,6 +25,10 @@ function createPromptBuilderState(opts = {}) {
         onApply: typeof opts.onApply === 'function' ? opts.onApply : null,
         // F11: 전용 프롬프트 프리셋(애드센스 승인용) 적용 시 호출(모듈 토글 연동용)
         onApplyPreset: typeof opts.onApplyPreset === 'function' ? opts.onApplyPreset : null,
+        // 프리셋 추천: 모듈 폼이 현재 선택한 카테고리 이름을 알려준다(없으면 추천 비활성).
+        getSelectedCategoryNames:
+            typeof opts.getSelectedCategoryNames === 'function'
+                ? opts.getSelectedCategoryNames : null,
         blocksDataElementId: opts.blocksDataElementId || null,
         expanded: false, // embedded 모드에서 폼 안 접기/펼치기
         // F11: 전용 프롬프트(full_prompt) 프리셋 적용 시 이 텍스트를 그대로 사용.
@@ -111,6 +115,44 @@ function createPromptBuilderState(opts = {}) {
         get presets() {
             // 기본 + 커스텀 합쳐서 노출 (커스텀이 뒤에 옴)
             return [...this.builtinPresets, ...this.customPresets];
+        },
+
+        // ── 프리셋 추천 ────────────────────────────────────
+        // 선택한 블로그·카테고리에 맞는 프리셋을 위로 올리고 표시한다.
+        // 프리셋이 31개라 목록만 보고 고르기 어렵다.
+        // 외부(모듈 폼)에서 getSelectedCategoryNames 콜백을 주입한다.
+        get selectedCategoryNames() {
+            if (typeof this.getSelectedCategoryNames !== 'function') {
+                return { topics: [], subtopics: [] };
+            }
+            try {
+                return this.getSelectedCategoryNames() || { topics: [], subtopics: [] };
+            } catch (e) {
+                return { topics: [], subtopics: [] };
+            }
+        },
+
+        // 0 = 해당 없음, 1 = 주제 일치, 2 = 하위 주제까지 일치
+        presetMatchScore(p) {
+            const sel = this.selectedCategoryNames;
+            if (!sel.topics.length && !sel.subtopics.length) return 0;
+            const subs = p.match_subtopics || [];
+            if (subs.some((s) => sel.subtopics.includes(s))) return 2;
+            const tops = p.match_topics || [];
+            if (tops.some((t) => sel.topics.includes(t))) return 1;
+            return 0;
+        },
+
+        get hasRecommendation() {
+            return this.presets.some((p) => this.presetMatchScore(p) > 0);
+        },
+
+        get sortedPresets() {
+            // 추천을 앞으로. 같은 점수면 원래 순서 유지(정렬 안정성).
+            return [...this.presets]
+                .map((p, i) => ({ p, i, score: this.presetMatchScore(p) }))
+                .sort((a, b) => (b.score - a.score) || (a.i - b.i))
+                .map((x) => x.p);
         },
 
         applyPreset(code) {

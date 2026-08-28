@@ -14,7 +14,21 @@ window.getPromptBuilderEmbeddedHTML = function () {
          x-data="createPromptBuilderState({
              mode: 'embedded',
              onApply: (text) => { promptModule.contentGeneration.userPromptTemplate = text; },
-             onApplyPreset: (p) => { if (p.full_prompt) promptModule.adsense.infoGainEnabled = false; }
+             onApplyPreset: (p) => { if (p.full_prompt) promptModule.adsense.infoGainEnabled = false; },
+             getSelectedCategoryNames: () => {
+                 // 선택한 카테고리(주제/하위주제) 이름을 프리셋 추천에 넘긴다.
+                 const topics = [], subs = [];
+                 (promptModule.selectedCategories || []).forEach((c) => {
+                     const t = (promptModule.topics || []).find((x) => x.id === c.topic_id);
+                     if (!t) return;
+                     if (!topics.includes(t.name)) topics.push(t.name);
+                     if (c.subtopic_id) {
+                         const st = (t.subtopics || []).find((x) => x.id === c.subtopic_id);
+                         if (st && !subs.includes(st.name)) subs.push(st.name);
+                     }
+                 });
+                 return { topics, subtopics: subs };
+             }
          })"
          x-init="init()">
 
@@ -49,14 +63,23 @@ window.getPromptBuilderEmbeddedHTML = function () {
                     <button type="button" @click="clearAll()"
                             class="text-xs px-2 py-0.5 border border-red-300 text-red-600 rounded hover:bg-red-50">전체 초기화</button>
                 </div>
+                <p x-show="hasRecommendation" class="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 mb-2">
+                    선택한 카테고리에 맞는 프리셋을 위로 올렸습니다. ★ 표시가 하위 주제까지 맞는 것입니다.
+                </p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    <template x-for="p in presets" :key="p.code">
+                    <template x-for="p in sortedPresets" :key="p.code">
                         <div class="relative group">
                             <button type="button" @click="applyPreset(p.code)"
                                     class="w-full text-left p-2 border-2 rounded transition-colors text-xs"
-                                    :class="isActivePreset(p) ? 'border-purple-500 bg-purple-50 ring-1 ring-purple-400' : 'border-gray-200 hover:bg-white'">
+                                    :class="isActivePreset(p) ? 'border-purple-500 bg-purple-50 ring-1 ring-purple-400'
+                                            : (presetMatchScore(p) === 2 ? 'border-amber-400 bg-amber-50'
+                                            : (presetMatchScore(p) === 1 ? 'border-amber-200 bg-amber-50/40' : 'border-gray-200 hover:bg-white'))">
                                 <div class="flex items-center justify-between gap-2">
-                                    <span class="font-medium text-gray-800" x-text="p.label"></span>
+                                    <span class="font-medium text-gray-800">
+                                        <span x-show="presetMatchScore(p) === 2" class="text-amber-600">★</span>
+                                        <span x-show="presetMatchScore(p) === 1" class="text-amber-500">☆</span>
+                                        <span x-text="p.label"></span>
+                                    </span>
                                     <span class="px-1 py-0.5 text-[10px] bg-gray-100 rounded"
                                           x-text="p._custom ? 'CUSTOM' : p.code.toUpperCase()"></span>
                                 </div>

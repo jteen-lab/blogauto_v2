@@ -211,3 +211,40 @@ async def test_seed_is_idempotent(db):
     await ensure_seeded(db)
     second = (await db.execute(select(func.count(PromptBlock.id)))).scalar()
     assert first == second
+
+
+# ---------- 프리셋 추천용 매핑 (2026-08-28) ----------
+
+def test_every_preset_has_machine_readable_match():
+    """UI 추천은 표시 문자열이 아니라 match_topics/match_subtopics 로 판정한다."""
+    for preset in PRESETS:
+        if preset.get("full_prompt"):
+            continue
+        assert preset.get("match_topics"), preset["code"]
+        assert preset.get("match_subtopics"), preset["code"]
+
+
+def test_match_topics_are_real_topic_names():
+    """존재하지 않는 주제명을 넣으면 추천이 영원히 안 뜬다."""
+    real = {
+        "금융/대출", "생활 정보", "여행/관광", "건강/의학", "재테크/돈관리",
+        "음식/레시피", "취업/자격증", "정부지원금/복지", "컴퓨터/IT",
+        "AI/인공지능", "보험", "출산/육아", "쇼핑/리뷰", "자동차",
+        "지역/업체정보", "세금/절세", "시니어/노후", "부동산", "의료",
+    }
+    for preset in PRESETS:
+        for topic in preset.get("match_topics") or []:
+            assert topic in real, f"{preset['code']}: {topic}"
+
+
+def test_match_topics_do_not_leak_from_substring():
+    """'자동차보험' 이 '자동차' 주제로 잡히면 엉뚱한 추천이 뜬다(초기 구현 버그)."""
+    auto = next(p for p in PRESETS if p["code"] == "n-ins-auto")
+    assert auto["match_topics"] == ["보험"]
+
+
+def test_match_subtopics_have_no_inventory_counts():
+    """표시용 '(255)' 같은 숫자가 남으면 이름 비교가 실패한다."""
+    for preset in PRESETS:
+        for sub in preset.get("match_subtopics") or []:
+            assert "(" not in sub and ")" not in sub, f"{preset['code']}: {sub}"
