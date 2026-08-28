@@ -436,10 +436,19 @@ from .blocks_niche import (  # noqa: E402
     NICHE_COMMONS, NICHE_PATTERNS, NICHE_PERSONAS, NICHE_READERS, NICHE_TONES,
 )
 
+# 목소리 확장(2026-08-28). 프리셋을 하위 주제 단위로 세분화하면서, 조합만 바꿔서는
+# 글의 분위기가 갈리지 않아 화자·시작톤·구조 자체를 늘렸다.
+from .blocks_voice import (  # noqa: E402
+    VOICE_PATTERNS, VOICE_PERSONAS, VOICE_TONES,
+)
+
 PERSONAS.extend(NICHE_PERSONAS)
+PERSONAS.extend(VOICE_PERSONAS)
 READERS.extend(NICHE_READERS)
 PATTERNS.extend(NICHE_PATTERNS)
+PATTERNS.extend(VOICE_PATTERNS)
 TONES.extend(NICHE_TONES)
+TONES.extend(VOICE_TONES)
 COMMONS.extend(NICHE_COMMONS)
 
 

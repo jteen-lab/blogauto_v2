@@ -47,10 +47,45 @@ def test_preset_codes_are_unique():
 
 def test_ymyl_presets_carry_ymyl_principle():
     """돈·건강 주제는 더 엄격한 기준을 받으므로 YMYL 원칙이 붙어야 한다."""
-    ymyl = {"n-loan", "n-wealth", "n-welfare", "n-health", "n-parenting"}
+    ymyl_prefixes = ("n-loan", "n-ins", "n-tax", "n-invest", "n-saving",
+                     "n-senior", "n-realestate", "n-welfare", "n-health",
+                     "n-parenting", "n-food-effect")
     for preset in PRESETS:
-        if preset["code"] in ymyl:
-            assert preset.get("common") == "C-YMYL", preset["code"]
+        code = str(preset["code"])
+        if code.startswith(ymyl_prefixes):
+            assert preset.get("common") == "C-YMYL", code
+
+
+def test_every_preset_has_a_distinct_voice():
+    """세분화의 목적은 '다른 사람이 쓴 것처럼' 이다.
+
+    조합이 겹치면 프리셋을 나눠도 결과물이 비슷해져 세분화가 무의미해진다.
+    """
+    seen = {}
+    for preset in PRESETS:
+        if preset.get("full_prompt"):
+            continue
+        combo = (
+            preset["persona"], preset["reader"],
+            preset["pattern"], preset["tone"],
+        )
+        assert combo not in seen, (
+            f"{preset['code']} 와 {seen[combo]} 의 조합이 동일: {combo}"
+        )
+        seen[combo] = preset["code"]
+
+
+def test_voice_axes_are_actually_varied():
+    """화자·시작톤이 몇 종류만 돌려쓰이면 세분화 효과가 없다."""
+    axis_used = {"persona": set(), "tone": set(), "pattern": set()}
+    for preset in PRESETS:
+        if preset.get("full_prompt"):
+            continue
+        for axis in axis_used:
+            axis_used[axis].add(preset[axis])
+    assert len(axis_used["persona"]) >= 10, axis_used["persona"]
+    assert len(axis_used["tone"]) >= 9, axis_used["tone"]
+    assert len(axis_used["pattern"]) >= 7, axis_used["pattern"]
 
 
 def test_no_stale_niche_names_remain():
@@ -60,6 +95,21 @@ def test_no_stale_niche_names_remain():
         text = str(preset.get("categories", ""))
         for word in stale:
             assert word not in text, f"{preset['code']}에 옛 니치 '{word}'"
+
+
+def test_presets_cover_high_inventory_subtopics():
+    """재고가 쌓인 하위 주제가 어느 프리셋에도 없으면 그 글은 기본값으로 생성된다."""
+    joined = " ".join(str(p.get("categories", "")) for p in PRESETS)
+    for subtopic in (
+        "대출 정보", "신용대출", "주택담보대출", "전세자금대출", "정책금융",
+        "카드·리볼빙", "고객센터·연락처", "노하우/꿀팁", "매장·시설 정보",
+        "여행 날씨·시기", "숙소·호텔", "질병 및 증상", "치료·처방",
+        "비만·다이어트", "토큰 증권", "적금/예금", "요리 레시피",
+        "식재료 효능", "구인구직 사이트", "자격증", "정부 정책·제도",
+        "PC·윈도우", "생성형AI", "자동차보험", "보험금 청구", "연말정산",
+        "육아팁", "가격 비교", "꽃배달", "연금",
+    ):
+        assert subtopic in joined, subtopic
 
 
 def test_presets_cover_top_inventory_niches():

@@ -1,11 +1,12 @@
 """프롬프트 빌더 빠른 적용 프리셋 카탈로그.
 
 blocks.py 500줄 제한 준수를 위해 프리셋 데이터를 분리했다.
-각 프리셋은 (페르소나·독자수준·섹션패턴·시작톤) 코드와 어울리는 니치 표기를
-함께 갖는다. 2026-08-28 재구성: 운영 방침이 **니치 특화 블로그**로 바뀌면서,
-프리셋을 실제 니치 체계(주제 18개)에 1:1로 대응시켰다.
-이전 프리셋의 추천 니치("패션·뷰티", "영화·드라마" 등)는 현재 카테고리에
-존재하지 않는 옛 분류라 전부 교체했다.
+각 프리셋은 (페르소나·독자수준·섹션패턴·시작톤) 코드와 어울리는 니치 표기를 갖는다.
+
+2026-08-28 1차 재구성: 운영 방침이 **니치 특화 블로그**로 바뀌어 주제 18개에 대응.
+2026-08-28 2차 세분화: 주제가 아니라 **하위 주제 재고 기준**으로 나누고, 프리셋마다
+화자·시작톤·구조를 달리 걸어 **다른 사람이 쓴 것처럼** 되게 했다.
+카탈로그 본문은 presets_niche.py 로 분리(파일 길이 제한).
 blocks.py 가 `from .presets import PRESETS` 로 재-export 하므로 공개 API 불변.
 """
 from __future__ import annotations
@@ -70,109 +71,17 @@ ADSENSE_APPROVAL_PROMPT: str = (
     "- 해시태그 금지. 처음부터 끝까지 멈추지 않고 한 번에 완성하세요."
 )
 
-# 니치별 프리셋 — 제목 재고가 있는 주제만 다룬다(2026-08-28 실측 기준).
-# 재고 절반 이상이 YMYL(금융/대출 951 · 건강/의학 260 · 재테크 167 ·
-# 정부지원금 54 · 보험 36 · 세금 15)이라 해당 프리셋은 C-YMYL 원칙을 함께 건다.
+from .presets_niche import NICHE_PRESETS
+
+# F11 애드센스 승인용 전용 프리셋은 니치와 무관하므로 맨 앞에 둔다.
+# 4축 조합이 아니라 완성 프롬프트(full_prompt)를 user_prompt_template 에 그대로 채우며,
+# 정보이득 지시가 내장돼 있어 적용 시 F7 토글은 꺼진다(이중 지시 방지).
 PRESETS: List[Dict[str, object]] = [
-    # F11 애드센스 승인용 전용 프롬프트(2026-08-17). 4축 조합이 아니라
-    # 완성 프롬프트(full_prompt)를 user_prompt_template에 그대로 채운다.
-    # 적용 시 정보이득 지시가 프롬프트에 내장돼 있으므로 F7 토글은 끈다(이중 지시 방지).
     {
         "code": "adsense-approval",
         "label": "🔒 애드센스 승인용 (전용 프롬프트)",
         "categories": "승인 심사 대비 — 니치 무관, 정보이득·E-E-A-T 중심",
         "full_prompt": ADSENSE_APPROVAL_PROMPT,
     },
-
-    # ── YMYL 군 ────────────────────────────────────────────
-    {
-        "code": "n-loan",
-        "label": "💳 대출·보험·세금 · 분석가/결정·P4·수치",
-        "categories": "금융/대출 · 보험 · 세금/절세",
-        "persona": "P-Analyst",
-        "reader": "R-Decision",
-        "pattern": "P4",
-        "tone": "T-Numbers",
-        "common": "C-YMYL",
-    },
-    {
-        "code": "n-wealth",
-        "label": "📈 재테크·부동산·노후 · 분석가/중급·P1·수치",
-        "categories": "재테크/돈관리 · 부동산 · 시니어/노후",
-        "persona": "P-Analyst",
-        "reader": "R-Intermediate",
-        "pattern": "P1",
-        "tone": "T-Numbers",
-        "common": "C-YMYL",
-    },
-    {
-        "code": "n-welfare",
-        "label": "🏛 정부지원금·복지 · 안내자/신청자·P6·자격확인",
-        "categories": "정부지원금/복지",
-        "persona": "P-Guide",
-        "reader": "R-Applicant",
-        "pattern": "P6",
-        "tone": "T-Eligibility",
-        "common": "C-YMYL",
-    },
-    {
-        "code": "n-health",
-        "label": "🩺 건강·의학 · 전문가/입문·P2·정의",
-        "categories": "건강/의학 · 의료",
-        "persona": "P-Expert",
-        "reader": "R-Beginner",
-        "pattern": "P2",
-        "tone": "T-Definition",
-        "common": "C-YMYL",
-    },
-    {
-        "code": "n-parenting",
-        "label": "👶 출산·육아 · 친구/입문·P5·공감",
-        "categories": "출산/육아",
-        "persona": "P-Friend",
-        "reader": "R-Beginner",
-        "pattern": "P5",
-        "tone": "T-Empathy",
-        "common": "C-YMYL",
-    },
-
-    # ── 절차·실행 군 ───────────────────────────────────────
-    {
-        "code": "n-career",
-        "label": "🎓 취업·자격증 · 안내자/신청자·P6·자격확인",
-        "categories": "취업/자격증",
-        "persona": "P-Guide",
-        "reader": "R-Applicant",
-        "pattern": "P6",
-        "tone": "T-Eligibility",
-    },
-    {
-        "code": "n-life",
-        "label": "🏠 생활정보·지역 · 중립/입문·P3·장면",
-        "categories": "생활 정보 · 지역/업체정보",
-        "persona": "P-Neutral",
-        "reader": "R-Beginner",
-        "pattern": "P3",
-        "tone": "T-Scene",
-    },
-
-    # ── 경험·비교 군 ───────────────────────────────────────
-    {
-        "code": "n-travel",
-        "label": "✈️ 여행·음식 · 에세이/중급·P5·장면",
-        "categories": "여행/관광 · 음식/레시피",
-        "persona": "P-Essayist",
-        "reader": "R-Intermediate",
-        "pattern": "P5",
-        "tone": "T-Scene",
-    },
-    {
-        "code": "n-tech",
-        "label": "💻 IT·AI·자동차·리뷰 · 전문가/중급·P1·정의",
-        "categories": "컴퓨터/IT · AI/인공지능 · 자동차 · 쇼핑/리뷰",
-        "persona": "P-Expert",
-        "reader": "R-Intermediate",
-        "pattern": "P1",
-        "tone": "T-Definition",
-    },
+    *NICHE_PRESETS,
 ]
