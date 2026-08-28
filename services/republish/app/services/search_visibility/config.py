@@ -24,6 +24,10 @@ DEFAULT_SEARCH_INDEX_CONFIG: Dict[str, Any] = {
     "sitemap_url": None,
     "index_check_enabled": True,
     "index_check_daily_cap": 20,
+    # X5 디스커버 — 켜지 않으면 어떤 동작도 바뀌지 않는다(진단은 항상 가능).
+    "discover_enabled": False,
+    "discover_min_image_width": 1200,
+    "discover_block_on_fail": False,
 }
 
 # IndexNow 키 파일을 호스트 루트에 올릴 수 있는 플랫폼만 지원한다.

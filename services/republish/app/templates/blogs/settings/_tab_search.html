@@ -166,6 +166,73 @@
         </div>
     </div>
 
+    <!-- X5 디스커버 준비도 -->
+    <div class="border border-gray-200 rounded-lg p-4 space-y-3">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+            <div>
+                <p class="text-sm font-medium text-gray-800">구글 디스커버 준비도</p>
+                <p class="text-xs text-gray-500 mt-0.5">
+                    검색 순위와 별개로 구글 앱 피드에 노출되는 채널입니다. 큰 이미지가 필수입니다.
+                </p>
+            </div>
+            <div class="flex items-center gap-3">
+                <label class="inline-flex items-center gap-2">
+                    <input type="checkbox" x-model="config.discover_enabled" @change="saveConfig()"
+                           class="rounded border-gray-300 text-accent focus:ring-accent">
+                    <span class="text-xs text-gray-600">사용</span>
+                </label>
+                <button type="button" @click="runDiscoverCheck()" :disabled="checkingDiscover"
+                        class="px-4 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-50">
+                    <span x-show="!checkingDiscover">점검</span>
+                    <span x-show="checkingDiscover">점검 중…</span>
+                </button>
+            </div>
+        </div>
+
+        <p class="text-[11px] text-gray-400">
+            끄면 아무 동작도 바뀌지 않습니다. 점검은 켜지 않아도 가능합니다.
+        </p>
+
+        <div x-show="discoverResult" class="text-xs rounded-lg p-3 bg-gray-50 space-y-2">
+            <div class="flex items-center gap-2">
+                <span class="px-1.5 py-0.5 rounded font-medium"
+                      :class="discoverResult && discoverResult.ready
+                          ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'"
+                      x-text="discoverResult && discoverResult.ready ? '준비됨' : '요건 미충족'"></span>
+                <span class="text-gray-500"
+                      x-text="`가로 ${discoverResult ? discoverResult.min_width : 1200}px 기준`"></span>
+            </div>
+
+            <div class="space-y-1">
+                <template x-for="item in (discoverResult ? discoverResult.items : [])" :key="item.key">
+                    <div class="flex items-start gap-2">
+                        <span class="px-1.5 py-0.5 rounded flex-none"
+                              :class="{
+                                  'bg-emerald-100 text-emerald-700': item.passed === true,
+                                  'bg-red-100 text-red-700': item.passed === false,
+                                  'bg-gray-100 text-gray-500': item.passed === null,
+                              }"
+                              x-text="item.passed === true ? '통과' : (item.passed === false ? '미충족' : '해당없음')"></span>
+                        <div class="flex-1">
+                            <p class="text-gray-700">
+                                <span x-text="item.label"></span>
+                                <span class="text-[10px] px-1 py-0.5 rounded ml-1"
+                                      :class="item.owner === 'user' ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-700'"
+                                      x-text="item.owner === 'user' ? '사용자 조치' : '앱 처리'"></span>
+                            </p>
+                            <p class="text-gray-500" x-show="item.detail" x-text="item.detail"></p>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <p x-show="discoverResult && discoverResult.error" class="text-amber-600"
+               x-text="discoverResult ? discoverResult.error : ''"></p>
+            <p x-show="discoverResult && discoverResult.checked_url" class="text-gray-400 truncate"
+               x-text="discoverResult ? `점검 대상: ${discoverResult.checked_url}` : ''"></p>
+        </div>
+    </div>
+
     <!-- NEO 네이버 점검 -->
     <div class="border border-gray-200 rounded-lg p-4 space-y-3">
         <div class="flex items-center justify-between">
@@ -387,6 +454,8 @@ function searchVisibilityApp() {
             sitemap_url: '',
             index_check_enabled: true,
             index_check_daily_cap: 20,
+            discover_enabled: false,
+            discover_min_image_width: 1200,
         },
         summary: {},
         urls: [],
@@ -395,6 +464,8 @@ function searchVisibilityApp() {
         backfillResult: null,
         checkingNaver: false,
         naverResult: null,
+        checkingDiscover: false,
+        discoverResult: null,
         indexResult: null,
         sitemapResult: null,
 
@@ -459,6 +530,7 @@ function searchVisibilityApp() {
                             sitemap_url: this.config.sitemap_url || null,
                             index_check_enabled: this.config.index_check_enabled,
                             index_check_daily_cap: this.config.index_check_daily_cap,
+                            discover_enabled: this.config.discover_enabled,
                         }),
                     },
                 );
@@ -536,6 +608,20 @@ function searchVisibilityApp() {
                 await this.loadUrls();
             } finally {
                 this.checkingIndex = false;
+            }
+        },
+
+        async runDiscoverCheck() {
+            this.checkingDiscover = true;
+            this.discoverResult = null;
+            try {
+                const resp = await fetch(
+                    `${this.apiBase}/blogs/${this.blogId}/search-visibility/check/discover`,
+                    { method: 'POST', credentials: 'include' },
+                );
+                this.discoverResult = await resp.json();
+            } finally {
+                this.checkingDiscover = false;
             }
         },
 

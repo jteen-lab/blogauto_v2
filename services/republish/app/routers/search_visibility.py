@@ -19,7 +19,9 @@ from ..models.user import User
 from ..routers.auth import get_current_user
 from ..services.blog_settings_service import get_blog_or_404
 from ..services.search_visibility import backfill as sv_backfill
-from ..services.search_visibility import indexnow_service, naver_check, runner
+from ..services.search_visibility import (
+    discover_service, indexnow_service, naver_check, runner,
+)
 from ..services.search_visibility.config import (
     generate_indexnow_key, indexnow_supported, key_file_url, load_config,
 )
@@ -39,6 +41,9 @@ class ConfigRequest(BaseModel):
     sitemap_url: Optional[str] = None
     index_check_enabled: Optional[bool] = None
     index_check_daily_cap: Optional[int] = None
+    discover_enabled: Optional[bool] = None
+    discover_min_image_width: Optional[int] = None
+    discover_block_on_fail: Optional[bool] = None
 
 
 def _save_config(blog: Any, config: Dict[str, Any]) -> None:
@@ -211,6 +216,27 @@ async def check_naver(
         "verification_meta": result.verification_meta,
         "error": result.error,
     }
+
+
+@router.post("/check/discover")
+async def check_discover(
+    blog_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> Dict[str, Any]:
+    """디스커버 준비도 점검(X5) — 템플릿 원본 + 발행 실물 신호."""
+    blog = await get_blog_or_404(blog_id, current_user, db)
+
+    stmt = (
+        select(SearchVisibilityUrl.url)
+        .where(SearchVisibilityUrl.blog_id == blog_id)
+        .order_by(SearchVisibilityUrl.published_at.desc())
+        .limit(1)
+    )
+    published_url = (await db.execute(stmt)).scalar_one_or_none()
+
+    result = await discover_service.check_blog(blog, published_url)
+    return result.to_dict()
 
 
 @router.get("/urls")
