@@ -2764,10 +2764,16 @@ class FlowScheduler:
                         skip_count += 1
                     else:
                         # 후속 실행 + 재고 OFF: 보류, 간격 소비
+                        # 재고가 없는 것과 카테고리 불일치로 걸러진 것은 조치가
+                        # 다르므로 사유를 구분해 남긴다.
+                        block_reason = await inv_mgr.describe_publish_block(blog.id)
                         pub_result = {
                             "success": True,
                             "hold": True,
-                            "message": "보류 (발행 가능 글 없음)"
+                            "message": (
+                                f"보류 ({block_reason})" if block_reason
+                                else "보류 (발행 가능 글 없음)"
+                            ),
                         }
                         hold_count += 1
 

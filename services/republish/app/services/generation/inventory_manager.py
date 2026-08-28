@@ -17,7 +17,7 @@ from datetime import datetime
 from typing import Optional
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...models.crawled_post import CrawledPost
@@ -50,6 +50,52 @@ class InventoryManager:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.inventory_trigger = InventoryTrigger(db)
+
+    async def describe_publish_block(self, blog_id: int) -> Optional[str]:
+        """발행 대상이 없을 때 그 이유를 사람이 읽을 문장으로 만든다.
+
+        재고가 아예 없는 것과, 재고는 있는데 블로그 카테고리에 안 맞아 걸러지는 것은
+        조치가 완전히 다르다. 그런데 로그에는 둘 다 "발행 가능 글 없음" 으로만 남아
+        원인을 알 수 없었다(수작남이 사흘간 보류된 사례).
+
+        Args:
+            blog_id: 블로그 ID
+
+        Returns:
+            차단 사유 문장. 재고 자체가 없으면 None.
+        """
+        from ...models.category import SubTopic
+        from ...models.title import MainTitle
+
+        stmt = (
+            select(SubTopic.name, func.count(CrawledPost.id))
+            .select_from(CrawledPost)
+            .join(MainTitle, MainTitle.id == CrawledPost.matched_main_title_id)
+            .join(SubTopic, SubTopic.id == MainTitle.subtopic_id)
+            .where(
+                CrawledPost.blog_id == blog_id,
+                CrawledPost.source == "generated",
+                CrawledPost.published_at.is_(None),
+            )
+            .group_by(SubTopic.name)
+            .order_by(func.count(CrawledPost.id).desc())
+            .limit(5)
+        )
+        try:
+            rows = (await self.db.execute(stmt)).all()
+        except Exception as exc:  # noqa: BLE001 — 진단이므로 실패해도 무시
+            logger.debug("[INVENTORY_MGR] 차단 사유 조회 실패: %s", exc)
+            return None
+
+        if not rows:
+            return None
+
+        total = sum(count for _, count in rows)
+        names = ", ".join(f"{name}({count})" for name, count in rows)
+        return (
+            f"재고 {total}건이 블로그 카테고리에 없는 하위주제라 제외됨 — {names}. "
+            f"블로그 설정에서 해당 카테고리를 추가하면 발행됩니다"
+        )
 
     async def get_post_for_publish(
         self,
