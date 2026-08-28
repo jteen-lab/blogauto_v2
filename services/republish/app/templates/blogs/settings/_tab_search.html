@@ -50,7 +50,7 @@
     </div>
 
     <!-- 현황 요약 -->
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <div class="border border-gray-200 rounded-lg p-3">
             <p class="text-xs text-gray-500">색인율</p>
             <p class="text-xl font-semibold text-gray-800 mt-1">
@@ -68,6 +68,15 @@
             <p class="text-xl font-semibold mt-1"
                :class="(summary.sitemap_missing || 0) > 0 ? 'text-amber-600' : 'text-gray-800'"
                x-text="summary.sitemap_missing || 0"></p>
+        </div>
+        <div class="border border-gray-200 rounded-lg p-3">
+            <p class="text-xs text-gray-500">네이버 노출률</p>
+            <p class="text-xl font-semibold text-gray-800 mt-1">
+                <span x-text="summary.naver_rate !== null && summary.naver_rate !== undefined
+                    ? summary.naver_rate + '%' : '—'"></span>
+            </p>
+            <p class="text-[11px] text-gray-400 mt-0.5"
+               x-text="`확인 ${summary.naver_checked || 0} · 노출 ${summary.naver_found || 0}`"></p>
         </div>
         <div class="border border-gray-200 rounded-lg p-3">
             <p class="text-xs text-gray-500">IndexNow 성공</p>
@@ -240,11 +249,18 @@
                 <p class="text-sm font-medium text-gray-800">네이버 노출 점검</p>
                 <p class="text-xs text-gray-500 mt-0.5">크롤러 허용 여부와 서치어드바이저 등록 정황을 봅니다</p>
             </div>
-            <button type="button" @click="runNaverCheck()" :disabled="checkingNaver"
-                    class="px-4 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-50">
-                <span x-show="!checkingNaver">점검</span>
-                <span x-show="checkingNaver">점검 중…</span>
-            </button>
+            <div class="flex items-center gap-2">
+                <button type="button" @click="runNaverCheck()" :disabled="checkingNaver"
+                        class="px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-50">
+                    <span x-show="!checkingNaver">크롤러 점검</span>
+                    <span x-show="checkingNaver">점검 중…</span>
+                </button>
+                <button type="button" @click="runNaverIndexCheck()" :disabled="checkingNaverIndex"
+                        class="px-3 py-2 bg-accent text-white rounded-lg text-sm disabled:opacity-50">
+                    <span x-show="!checkingNaverIndex">노출 점검</span>
+                    <span x-show="checkingNaverIndex">점검 중…</span>
+                </button>
+            </div>
         </div>
 
         <div x-show="naverResult" class="text-xs rounded-lg p-3"
@@ -271,6 +287,24 @@
                     <p x-show="!naverResult.verification_meta" class="text-gray-400 pt-1">
                         소유 확인은 HTML 파일·DNS 로도 가능하므로 메타가 없다고 미등록은 아닙니다.
                         서치어드바이저에서 사이트맵 제출 여부를 직접 확인하세요.
+                    </p>
+                </div>
+            </template>
+        </div>
+        <div x-show="naverIndexResult" class="text-xs rounded-lg p-3 bg-gray-50 text-gray-600">
+            <template x-if="naverIndexResult && naverIndexResult.skipped">
+                <span x-text="naverIndexResult.skipped === 'naver_api_not_configured'
+                    ? '네이버 검색 API가 설정되지 않았습니다 (설정 → API 설정)'
+                    : (naverIndexResult.skipped === 'disabled' ? '네이버 노출 점검이 꺼져 있습니다' : naverIndexResult.skipped)"></span>
+            </template>
+            <template x-if="naverIndexResult && !naverIndexResult.skipped">
+                <div class="space-y-1">
+                    <p x-text="`점검 ${naverIndexResult.checked || 0}건 · 노출 ${naverIndexResult.found || 0} · 미노출 ${naverIndexResult.not_found || 0} · 오류 ${naverIndexResult.errors || 0}`"></p>
+                    <p x-show="naverIndexResult.remaining > 0" class="text-amber-600"
+                       x-text="`남은 ${naverIndexResult.remaining}건은 다시 누르거나 8시간마다 도는 자동 점검이 처리합니다`"></p>
+                    <p class="text-gray-400">
+                        제목으로 웹문서를 검색해 우리 글이 상위 30위 안에 잡히는지 봅니다.
+                        안 잡혀도 색인 자체가 없다는 뜻은 아닙니다(제목이 일반적이면 밀립니다).
                     </p>
                 </div>
             </template>
@@ -466,6 +500,8 @@ function searchVisibilityApp() {
         naverResult: null,
         checkingDiscover: false,
         discoverResult: null,
+        checkingNaverIndex: false,
+        naverIndexResult: null,
         indexResult: null,
         sitemapResult: null,
 
@@ -622,6 +658,22 @@ function searchVisibilityApp() {
                 this.discoverResult = await resp.json();
             } finally {
                 this.checkingDiscover = false;
+            }
+        },
+
+        async runNaverIndexCheck() {
+            this.checkingNaverIndex = true;
+            this.naverIndexResult = null;
+            try {
+                const resp = await fetch(
+                    `${this.apiBase}/blogs/${this.blogId}/search-visibility/check/naver-index`,
+                    { method: 'POST', credentials: 'include' },
+                );
+                this.naverIndexResult = await resp.json();
+                await this.loadStatus();
+                await this.loadUrls();
+            } finally {
+                this.checkingNaverIndex = false;
             }
         },
 

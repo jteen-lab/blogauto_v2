@@ -30,6 +30,9 @@ DEFAULT_SEARCH_INDEX_CONFIG: Dict[str, Any] = {
     "discover_block_on_fail": False,
     # X1 외부 링크 — 0이면 상한 없음(rel 표시는 항상 적용)
     "max_external_links": 0,
+    # S6-N 네이버 색인 점검 — 웹문서 검색 API 사용
+    "naver_check_enabled": True,
+    "naver_check_daily_cap": 20,
 }
 
 # IndexNow 키 파일을 호스트 루트에 올릴 수 있는 플랫폼만 지원한다.

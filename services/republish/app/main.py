@@ -22,7 +22,9 @@ from .core.database import get_db_session, init_database, close_database, db_man
 from .core.logger import get_logger
 from .middleware.logging_middleware import LoggingMiddleware
 from .scheduler import get_scheduler, republish_job, setup_flow_scheduler, shutdown_flow_scheduler
-from .scheduler.search_visibility_job import index_check_job, sitemap_check_job  # 검색 노출 S2/S6
+from .scheduler.search_visibility_job import (  # 검색 노출 S2/S6/S6-N
+    index_check_job, naver_index_check_job, sitemap_check_job,
+)
 from .routers.auth import router as auth_router
 from .routers.blogs import router as blogs_router, page_router as blogs_page_router
 from .routers.categories import router as categories_router, page_router as categories_page_router
@@ -208,7 +210,17 @@ async def lifespan(app: FastAPI):
             name="색인 상태 점검",
             replace_existing=True,
         )
-        logger.info("검색 노출 점검 Job 등록됨 (사이트맵 30분 / 색인 6시간)")
+        scheduler.add_job(
+            naver_index_check_job,
+            "interval",
+            hours=8,
+            id="naver_index_check_job",
+            name="네이버 색인 점검",
+            replace_existing=True,
+        )
+        logger.info(
+            "검색 노출 점검 Job 등록됨 (사이트맵 30분 / 구글색인 6시간 / 네이버 8시간)"
+        )
 
         # 플로우 스케줄러 시작
         await setup_flow_scheduler()

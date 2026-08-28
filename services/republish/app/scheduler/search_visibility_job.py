@@ -48,6 +48,28 @@ async def sitemap_check_job() -> None:
         logger.error("[SEARCH_VIS_JOB] 사이트맵 Job 오류: %s", exc)
 
 
+async def naver_index_check_job() -> None:
+    """S6-N — 네이버 웹문서 검색으로 노출 여부 점검."""
+    try:
+        async with db_manager.get_session() as db:
+            for blog in await _active_blogs(db):
+                try:
+                    result = await runner.run_naver_index_check(db, blog)
+                    if result.get("checked"):
+                        logger.info(
+                            "[SEARCH_VIS_JOB] 네이버 점검 | blog=%s | %s",
+                            blog.name, result,
+                        )
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(
+                        "[SEARCH_VIS_JOB] 네이버 점검 실패 | blog=%s | %s",
+                        blog.name, exc,
+                    )
+            await db.commit()
+    except Exception as exc:  # noqa: BLE001
+        logger.error("[SEARCH_VIS_JOB] 네이버 Job 오류: %s", exc)
+
+
 async def index_check_job() -> None:
     """S6 — 블로그별 색인 상태 점검."""
     try:

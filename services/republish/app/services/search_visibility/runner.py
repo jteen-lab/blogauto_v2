@@ -14,9 +14,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...core.logger import get_logger
 from ...models.search_visibility import (
     IX_ERROR, IX_INDEXED, IX_NOT_INDEXED, IX_UNKNOWN,
+    NV_ERROR, NV_FOUND, NV_NOT_FOUND, NV_UNKNOWN,
     SM_MISSING, SM_PRESENT, SM_UNKNOWN, SearchVisibilityUrl, utcnow,
 )
-from . import index_check_service, sitemap_service
+from . import index_check_service, naver_index_service, sitemap_service
 from .config import load_config
 
 logger = get_logger("search_visibility", "app.log")
@@ -208,6 +209,94 @@ async def run_index_check(
     }
 
 
+async def _pending_naver_rows(
+    db: AsyncSession, blog_id: int, limit: int,
+) -> List[SearchVisibilityUrl]:
+    """네이버 확인이 필요한 행(미확인 우선, 오래된 확인 순)."""
+    cutoff = utcnow() - timedelta(days=INDEX_GRACE_DAYS)
+    stmt = (
+        select(SearchVisibilityUrl)
+        .where(
+            SearchVisibilityUrl.blog_id == blog_id,
+            SearchVisibilityUrl.naver_index_state.in_(
+                [NV_UNKNOWN, NV_NOT_FOUND, NV_ERROR],
+            ),
+            SearchVisibilityUrl.published_at <= cutoff,
+            SearchVisibilityUrl.title.isnot(None),
+        )
+        .order_by(
+            SearchVisibilityUrl.naver_checked_at.asc().nullsfirst(),
+            SearchVisibilityUrl.published_at.desc(),
+        )
+        .limit(limit)
+    )
+    return list((await db.execute(stmt)).scalars().all())
+
+
+async def run_naver_index_check(
+    db: AsyncSession, blog: Any, service: Optional[Any] = None,
+) -> Dict[str, Any]:
+    """네이버 웹문서 검색으로 노출 여부를 갱신한다(S6-N).
+
+    Args:
+        db: 세션
+        blog: 대상 블로그
+        service: 미리 만들어둔 NaverWebdocService(없으면 여기서 만든다)
+    """
+    config = load_config(blog)
+    if not config.get("naver_check_enabled"):
+        return {"skipped": "disabled"}
+
+    svc = service or await build_naver_service(db, blog)
+    if svc is None or not svc.is_configured():
+        return {"skipped": "naver_api_not_configured"}
+
+    cap = int(config.get("naver_check_daily_cap") or 20)
+    rows = await _pending_naver_rows(db, blog.id, cap)
+    if not rows:
+        return {"checked": 0}
+
+    now = utcnow()
+    deadline = time.monotonic() + INDEX_TIME_BUDGET_SECONDS
+    found = missing = errors = 0
+    for row in rows:
+        if time.monotonic() > deadline:
+            break
+        result = await naver_index_service.check_url(svc, row.url, row.title or "")
+        row.naver_checked_at = now
+        row.naver_detail = result.to_detail()
+        if result.error:
+            row.naver_index_state = NV_ERROR
+            errors += 1
+        elif result.found:
+            row.naver_index_state = NV_FOUND
+            found += 1
+        else:
+            row.naver_index_state = NV_NOT_FOUND
+            missing += 1
+
+    await db.flush()
+    processed = found + missing + errors
+    return {
+        "checked": processed, "found": found,
+        "not_found": missing, "errors": errors,
+        "remaining": max(0, len(rows) - processed),
+    }
+
+
+async def build_naver_service(db: AsyncSession, blog: Any) -> Optional[Any]:
+    """블로그 소유자의 네이버 API 설정으로 검색 서비스를 만든다."""
+    from ...models.user_settings import UserSettings
+    from ..naver_webdoc_service import NaverWebdocService
+
+    user_id = getattr(blog, "user_id", None)
+    if not user_id:
+        return None
+    stmt = select(UserSettings).where(UserSettings.user_id == user_id)
+    settings = (await db.execute(stmt)).scalar_one_or_none()
+    return NaverWebdocService(settings) if settings else None
+
+
 async def blog_summary(db: AsyncSession, blog_id: int) -> Dict[str, Any]:
     """블로그 1개의 노출 현황 집계(화면용)."""
     total = (
@@ -227,6 +316,10 @@ async def blog_summary(db: AsyncSession, blog_id: int) -> Dict[str, Any]:
     indexed = await _count(SearchVisibilityUrl.index_state, IX_INDEXED)
     checked = total - await _count(SearchVisibilityUrl.index_state, IX_UNKNOWN)
     missing = await _count(SearchVisibilityUrl.sitemap_state, SM_MISSING)
+    naver_found = await _count(SearchVisibilityUrl.naver_index_state, NV_FOUND)
+    naver_checked = total - await _count(
+        SearchVisibilityUrl.naver_index_state, NV_UNKNOWN,
+    )
 
     return {
         "total": total,
@@ -236,4 +329,9 @@ async def blog_summary(db: AsyncSession, blog_id: int) -> Dict[str, Any]:
         "sitemap_missing": missing,
         "indexnow_ok": await _count(SearchVisibilityUrl.indexnow_status, "ok"),
         "indexnow_failed": await _count(SearchVisibilityUrl.indexnow_status, "failed"),
+        "naver_found": naver_found,
+        "naver_checked": naver_checked,
+        "naver_rate": (
+            round(naver_found / naver_checked * 100, 1) if naver_checked else None
+        ),
     }

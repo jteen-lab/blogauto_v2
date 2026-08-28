@@ -44,6 +44,8 @@ class ConfigRequest(BaseModel):
     discover_enabled: Optional[bool] = None
     discover_min_image_width: Optional[int] = None
     discover_block_on_fail: Optional[bool] = None
+    naver_check_enabled: Optional[bool] = None
+    naver_check_daily_cap: Optional[int] = None
 
 
 def _save_config(blog: Any, config: Dict[str, Any]) -> None:
@@ -199,6 +201,19 @@ async def backfill(
     return result
 
 
+@router.post("/check/naver-index")
+async def check_naver_index(
+    blog_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> Dict[str, Any]:
+    """네이버 색인(검색 노출) 점검을 즉시 1회 실행한다(S6-N)."""
+    blog = await get_blog_or_404(blog_id, current_user, db)
+    result = await runner.run_naver_index_check(db, blog)
+    await db.commit()
+    return result
+
+
 @router.post("/check/naver")
 async def check_naver(
     blog_id: int,
@@ -271,6 +286,8 @@ async def list_urls(
                 "sitemap_miss_streak": row.sitemap_miss_streak,
                 "index_state": row.index_state,
                 "index_detail": row.index_detail,
+                "naver_index_state": row.naver_index_state,
+                "naver_detail": row.naver_detail,
             }
             for row in rows
         ],

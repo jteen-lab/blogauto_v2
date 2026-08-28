@@ -28,6 +28,14 @@ SM_UNKNOWN = "unknown"
 SM_PRESENT = "present"
 SM_MISSING = "missing"
 
+# --- naver_index_state ---
+# 검색 결과에 없다고 미색인이 확정되는 것은 아니다(제목이 일반적이거나 순위가 낮으면
+# 안 잡힌다). 그래서 indexed/not_indexed 가 아니라 found/not_found 로 부른다.
+NV_UNKNOWN = "unknown"
+NV_FOUND = "found"
+NV_NOT_FOUND = "not_found"
+NV_ERROR = "error"
+
 # --- index_state ---
 IX_UNKNOWN = "unknown"
 IX_INDEXED = "indexed"
@@ -99,6 +107,16 @@ class SearchVisibilityUrl(Base):
         comment="coverageState·lastCrawlTime·verdict 등 원본 판정",
     )
 
+    # --- S6-N 네이버 ---
+    naver_index_state = Column(
+        String(20), default=NV_UNKNOWN, nullable=False, index=True,
+        comment="unknown/found/not_found/error",
+    )
+    naver_checked_at = Column(DateTime(timezone=True), nullable=True)
+    naver_detail = Column(
+        JSONB, nullable=True, comment="검색 질의·순위 등 판정 근거",
+    )
+
     created_at = Column(
         DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at = Column(
@@ -112,6 +130,7 @@ class SearchVisibilityUrl(Base):
         Index("ix_svu_blog_indexnow", "blog_id", "indexnow_status"),
         Index("ix_svu_blog_index_state", "blog_id", "index_state"),
         Index("ix_svu_blog_sitemap", "blog_id", "sitemap_state"),
+        Index("ix_svu_blog_naver", "blog_id", "naver_index_state"),
     )
 
     def __repr__(self) -> str:
