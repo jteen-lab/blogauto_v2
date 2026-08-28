@@ -430,6 +430,19 @@ def aeo_directive() -> str:
     return block["body"] if block else ""
 
 
+# 니치 특화 블록 병합(2026-08-28). blocks.py 500줄 제한 때문에 별도 파일로 분리했다.
+# 운영 방침이 다니치 → 니치 특화 블로그로 바뀌면서 절차·신청형과 YMYL 서술이 필요해졌다.
+from .blocks_niche import (  # noqa: E402
+    NICHE_COMMONS, NICHE_PATTERNS, NICHE_PERSONAS, NICHE_READERS, NICHE_TONES,
+)
+
+PERSONAS.extend(NICHE_PERSONAS)
+READERS.extend(NICHE_READERS)
+PATTERNS.extend(NICHE_PATTERNS)
+TONES.extend(NICHE_TONES)
+COMMONS.extend(NICHE_COMMONS)
+
+
 # 하위호환 별칭 — build_prompt()·blocks_for_template()·__init__ export 가 참조.
 COMMON_RULES: str = COMMONS[0]["body"]
 

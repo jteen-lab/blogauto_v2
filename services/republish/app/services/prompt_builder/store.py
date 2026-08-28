@@ -30,24 +30,38 @@ _DEFAULT_SOURCES = {
 
 
 async def ensure_seeded(db: AsyncSession) -> None:
-    """기본 블록을 **축(block_type)별로** 시드한다(멱등).
+    """기본 블록을 **코드 단위로** 시드한다(멱등, 추가만).
 
-    각 축은 해당 타입 행이 하나도 없을 때만 시드한다. 전체가 아닌 타입별로
-    검사하므로, 이미 시드된 DB에 새 축(예: common)을 추가해도 안전하게 채워지고
-    운영자가 편집한 기존 축은 건드리지 않는다.
+    이전에는 "해당 타입 행이 하나도 없을 때만" 시드했다. 그래서 이미 시드된 DB에
+    **새 블록을 추가하면 영원히 들어가지 않았다** — 프리셋이 존재하지 않는 코드를
+    가리켜 조용히 깨진다(2026-08-28 니치 블록 추가 시 발견).
+
+    지금은 타입별로 **없는 코드만** 넣는다. 운영자가 편집한 기존 행은 코드가
+    이미 있으므로 건드리지 않는다.
     """
     rows: List[PromptBlock] = []
     for block_type, items in _DEFAULT_SOURCES.items():
-        existing = (
+        existing_codes = set(
+            (
+                await db.execute(
+                    select(PromptBlock.code).where(
+                        PromptBlock.block_type == block_type
+                    )
+                )
+            ).scalars().all()
+        )
+        max_order = (
             await db.execute(
-                select(func.count(PromptBlock.id)).where(
+                select(func.max(PromptBlock.sort_order)).where(
                     PromptBlock.block_type == block_type
                 )
             )
-        ).scalar() or 0
-        if existing > 0:
-            continue
+        ).scalar()
+        next_order = (max_order or 0) + 1 if existing_codes else 0
+
         for idx, item in enumerate(items):
+            if item["code"] in existing_codes:
+                continue
             rows.append(
                 PromptBlock(
                     block_type=block_type,
@@ -55,7 +69,7 @@ async def ensure_seeded(db: AsyncSession) -> None:
                     label=item["label"],
                     body=item["body"],
                     cluster=item.get("cluster") or None,
-                    sort_order=idx,
+                    sort_order=(next_order + idx) if existing_codes else idx,
                     is_active=True,
                     is_builtin=True,
                 )
@@ -64,7 +78,8 @@ async def ensure_seeded(db: AsyncSession) -> None:
         return
     db.add_all(rows)
     await db.commit()
-    logger.info("[PROMPT_BUILDER] 기본 블록 %d개 시드 완료", len(rows))
+    logger.info("[PROMPT_BUILDER] 기본 블록 %d개 시드 완료 | %s", len(rows),
+                ", ".join(sorted({r.code for r in rows})))
 
 
 async def _load_by_type(db: AsyncSession, block_type: str) -> List[dict]:
