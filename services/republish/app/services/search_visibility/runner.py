@@ -130,9 +130,19 @@ async def _pending_index_rows(
 
 
 async def run_index_check(
-    db: AsyncSession, blog: Any, token: Optional[str] = None,
+    db: AsyncSession,
+    blog: Any,
+    token: Optional[str] = None,
+    sites: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
-    """URL Inspection API로 색인 상태를 갱신한다."""
+    """URL Inspection API로 색인 상태를 갱신한다.
+
+    Args:
+        db: 세션
+        blog: 대상 블로그
+        token: 미리 받아둔 access token(없으면 새로 발급)
+        sites: 미리 조회한 Search Console 속성 목록(없으면 여기서 조회)
+    """
     config = load_config(blog)
     if not config.get("index_check_enabled"):
         return {"skipped": "disabled"}
@@ -141,9 +151,16 @@ async def run_index_check(
     if not access_token:
         return {"skipped": "gsc_not_connected"}
 
-    site_url = index_check_service.property_url(blog)
+    if sites is None:
+        try:
+            sites = await index_check_service.list_sites(access_token)
+        except index_check_service.IndexCheckError as exc:
+            return {"skipped": "sites_list_failed", "error": exc.message}
+
+    site_url = index_check_service.resolve_property(sites, blog)
     if not site_url:
-        return {"skipped": "no_property_url"}
+        # 속성이 없으면 URL Inspection 은 403 만 반환한다 — 시도하지 않고 사유를 알린다.
+        return {"skipped": "property_not_found", "owned_properties": len(sites)}
 
     cap = int(config.get("index_check_daily_cap") or 20)
     rows = await _pending_index_rows(db, blog.id, cap)
@@ -174,7 +191,7 @@ async def run_index_check(
     await db.flush()
     return {
         "checked": len(rows), "indexed": indexed,
-        "not_indexed": not_indexed, "errors": errors,
+        "not_indexed": not_indexed, "errors": errors, "property": site_url,
     }
 
 

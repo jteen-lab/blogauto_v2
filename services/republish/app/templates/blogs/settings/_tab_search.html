@@ -107,11 +107,15 @@
 
         <div x-show="indexResult" class="text-xs rounded-lg p-3"
              :class="indexResult && indexResult.skipped ? 'bg-amber-50 text-amber-700' : 'bg-gray-50 text-gray-600'">
-            <template x-if="indexResult && indexResult.skipped === 'gsc_not_connected'">
-                <span>Search Console이 연결되지 않았습니다. 설정 화면에서 refresh token을 등록하세요.</span>
+            <template x-if="indexResult && indexResult.skipped">
+                <span x-text="skipMessage(indexResult)"></span>
             </template>
             <template x-if="indexResult && !indexResult.skipped">
-                <span x-text="`점검 ${indexResult.checked || 0}건 · 색인 ${indexResult.indexed || 0} · 미색인 ${indexResult.not_indexed || 0} · 오류 ${indexResult.errors || 0}`"></span>
+                <div class="space-y-1">
+                    <p x-text="`점검 ${indexResult.checked || 0}건 · 색인 ${indexResult.indexed || 0} · 미색인 ${indexResult.not_indexed || 0} · 오류 ${indexResult.errors || 0}`"></p>
+                    <p x-show="indexResult.property" class="text-gray-400"
+                       x-text="`속성: ${indexResult.property}`"></p>
+                </div>
             </template>
         </div>
     </div>
@@ -469,6 +473,21 @@ function searchVisibilityApp() {
         copy(text) {
             if (!text) return;
             navigator.clipboard.writeText(text);
+        },
+
+        skipMessage(result) {
+            const map = {
+                gsc_not_connected:
+                    'Search Console이 연결되지 않았습니다. 설정 화면에서 refresh token을 등록하세요.',
+                property_not_found:
+                    `이 블로그가 Search Console 속성으로 등록되어 있지 않습니다 ` +
+                    `(연결된 속성 ${result.owned_properties || 0}개). ` +
+                    `Search Console에서 사이트를 추가하고 소유권을 확인하세요.`,
+                sites_list_failed:
+                    `속성 목록을 가져오지 못했습니다: ${result.error || ''}`,
+                disabled: '색인 점검이 꺼져 있습니다.',
+            };
+            return map[result.skipped] || `건너뜀: ${result.skipped}`;
         },
 
         indexLabel(state) {

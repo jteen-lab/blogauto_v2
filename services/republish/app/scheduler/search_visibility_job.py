@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.database import db_manager
 from ..core.logger import get_logger
 from ..models.blog import Blog
-from ..services.search_visibility import runner
+from ..services.search_visibility import index_check_service, runner
 
 logger = get_logger("search_visibility_job", "app.log")
 
@@ -59,9 +59,18 @@ async def index_check_job() -> None:
                 )
                 return
 
+            try:
+                sites = await index_check_service.list_sites(token)
+            except index_check_service.IndexCheckError as exc:
+                logger.error("[SEARCH_VIS_JOB] 속성 목록 조회 실패: %s", exc.message)
+                return
+            logger.info("[SEARCH_VIS_JOB] Search Console 속성 %d개", len(sites))
+
             for blog in await _active_blogs(db):
                 try:
-                    result = await runner.run_index_check(db, blog, token=token)
+                    result = await runner.run_index_check(
+                        db, blog, token=token, sites=sites,
+                    )
                     if result.get("checked"):
                         logger.info(
                             "[SEARCH_VIS_JOB] 색인 점검 | blog=%s | %s",

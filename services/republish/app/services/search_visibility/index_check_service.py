@@ -13,7 +13,8 @@ IndexNow 도입 전후를 비교할 측정 수단이 없으면 "효과가 없어
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlparse
 
 import httpx
 
@@ -22,6 +23,7 @@ from ...core.logger import get_logger
 logger = get_logger("index_check", "app.log")
 
 INSPECT_URL = "https://searchconsole.googleapis.com/v1/urlInspection/index:inspect"
+SITES_URL = "https://searchconsole.googleapis.com/webmasters/v3/sites"
 TIMEOUT = 30.0
 
 # system_settings 키 — Tally·Blogger 자격증명과 같은 자리에 보관한다.
@@ -40,24 +42,76 @@ class IndexCheckError(Exception):
         self.status_code = status_code
 
 
-def property_url(blog: Any) -> Optional[str]:
-    """Search Console 속성 주소를 만든다.
-
-    도메인 속성(`sc-domain:`)이 아니라 URL 접두어 속성을 가정한다. 사용자가
-    도메인 속성으로 등록했다면 설정에서 직접 지정할 수 있어야 하지만, 우선은
-    블로그 URL의 origin 을 그대로 쓴다.
-    """
+def _origin(blog: Any) -> Optional[str]:
+    """블로그 URL의 origin(https://host/)을 만든다."""
     raw = (getattr(blog, "url", "") or "").strip()
     if not raw:
         return None
     if "://" not in raw:
         raw = f"https://{raw}"
-    from urllib.parse import urlparse
-
     parsed = urlparse(raw)
     if not parsed.hostname:
         return None
     return f"{parsed.scheme}://{parsed.hostname}/"
+
+
+def property_url(blog: Any) -> Optional[str]:
+    """속성 목록을 모를 때 쓰는 기본 추정값(URL 접두어 속성)."""
+    return _origin(blog)
+
+
+async def list_sites(access_token: str) -> List[str]:
+    """이 토큰으로 접근 가능한 Search Console 속성 목록.
+
+    반환 예: ["https://example.com/", "sc-domain:example.com"]
+    """
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+        response = await client.get(
+            SITES_URL, headers={"Authorization": f"Bearer {access_token}"},
+        )
+    if response.status_code >= 400:
+        raise IndexCheckError(
+            f"속성 목록 조회 실패 {response.status_code}: {response.text[:200]}",
+            response.status_code,
+        )
+    entries = (response.json() or {}).get("siteEntry") or []
+    return [item.get("siteUrl") for item in entries if item.get("siteUrl")]
+
+
+def resolve_property(sites: List[str], blog: Any) -> Optional[str]:
+    """블로그를 담고 있는 속성을 고른다.
+
+    URL 접두어 속성(`https://host/`)과 도메인 속성(`sc-domain:host`) 둘 다 지원하며,
+    도메인 속성은 상위 도메인까지 거슬러 올라가며 찾는다(서브도메인을 포함하므로).
+    더 구체적인 쪽을 우선한다.
+
+    Args:
+        sites: list_sites() 결과
+        blog: 대상 블로그
+
+    Returns:
+        siteUrl 문자열. 소유한 속성이 없으면 None.
+    """
+    origin = _origin(blog)
+    if not origin:
+        return None
+    host = urlparse(origin).hostname or ""
+    owned = set(sites)
+
+    # 1) URL 접두어 속성이 정확히 있으면 그걸 쓴다(가장 구체적).
+    if origin in owned:
+        return origin
+    if origin.replace("https://", "http://") in owned:
+        return origin.replace("https://", "http://")
+
+    # 2) 도메인 속성 — 자기 호스트부터 상위 도메인 순으로.
+    labels = host.split(".")
+    for idx in range(len(labels) - 1):
+        candidate = f"sc-domain:{'.'.join(labels[idx:])}"
+        if candidate in owned:
+            return candidate
+
+    return None
 
 
 async def inspect_url(

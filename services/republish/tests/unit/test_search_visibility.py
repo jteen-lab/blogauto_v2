@@ -193,3 +193,47 @@ def test_property_url_is_origin():
     assert ics.property_url(_blog(url="https://a.example.com/blog/x")) == (
         "https://a.example.com/"
     )
+
+
+# ---------- S6 속성(property) 해석 ----------
+
+def test_resolve_property_prefers_exact_url_prefix():
+    sites = ["https://blog01.doooit082.com/", "sc-domain:doooit082.com"]
+    got = ics.resolve_property(sites, _blog(url="https://blog01.doooit082.com/"))
+    assert got == "https://blog01.doooit082.com/"
+
+
+def test_resolve_property_falls_back_to_domain_property():
+    """서브도메인은 상위 도메인 속성에 포함된다."""
+    sites = ["sc-domain:doooit082.com"]
+    got = ics.resolve_property(sites, _blog(url="https://info.doooit082.com/"))
+    assert got == "sc-domain:doooit082.com"
+
+
+def test_resolve_property_picks_most_specific_domain():
+    sites = ["sc-domain:doooit082.com", "sc-domain:info.doooit082.com"]
+    got = ics.resolve_property(sites, _blog(url="https://info.doooit082.com/"))
+    assert got == "sc-domain:info.doooit082.com"
+
+
+def test_resolve_property_matches_blogspot():
+    sites = ["https://guntamoney.blogspot.com/"]
+    got = ics.resolve_property(sites, _blog(url="https://guntamoney.blogspot.com/"))
+    assert got == "https://guntamoney.blogspot.com/"
+
+
+def test_resolve_property_does_not_match_unrelated_host():
+    """blogspot.com 도메인 속성이 남의 blogspot 을 삼키면 안 된다."""
+    sites = ["sc-domain:example.com"]
+    assert ics.resolve_property(sites, _blog(url="https://other.com/")) is None
+
+
+def test_resolve_property_none_when_not_owned():
+    assert ics.resolve_property([], _blog(url="https://lifein4.com/")) is None
+
+
+def test_resolve_property_accepts_http_prefix_property():
+    sites = ["http://lifein4.com/"]
+    assert ics.resolve_property(sites, _blog(url="https://lifein4.com/")) == (
+        "http://lifein4.com/"
+    )
