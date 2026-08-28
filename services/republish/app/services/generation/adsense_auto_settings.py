@@ -4,13 +4,19 @@
 켜지고 꺼지게 한다. `adsense_auto` 를 켠 모듈만 대상이며, 끄면 사용자가 지정한
 값이 그대로 쓰인다(기본값·하위호환).
 
-| 블로그 상태 | 니치 강제 | 정보이득 | AEO |
-|---|---|---|---|
-| 승인 전(none/preparing/applied) | ON | ON | ON |
-| 승인(approved) | **OFF** | **OFF** | 사용자 설정 유지 |
+| 블로그 상태 | 니치 강제 | 정보이득 | AEO | 프롬프트 |
+|---|---|---|---|---|
+| 승인 전(none/preparing/applied) | ON | ON | ON | 모듈에 저장된 것 |
+| 승인(approved) | **OFF** | **OFF** | 사용자 설정 유지 | `post_approval_prompt` 가 있으면 그것 |
 
 AEO는 승인 후에도 유지한다 — 검색 노출에 계속 유효하고 애드센스 심사와 무관하다.
 니치 강제는 승인 후 꺼져야 원래 카테고리 기준으로 돌아간다.
+
+2026-08-28: **프롬프트 본문 전환 추가.** 이전에는 토글만 바꿔서, 애드센스 승인용
+전용 프롬프트를 걸어두면 승인 후에도 그 프롬프트가 계속 쓰였다. 승인용 프롬프트는
+심사 통과에 맞춰진 것이라 승인 후에는 니치에 맞는 프롬프트로 돌아가야 한다.
+`post_approval_prompt` 에 승인 후 쓸 프롬프트를 저장해 두면 승인 시 교체된다.
+비워두면 기존처럼 같은 프롬프트를 계속 쓴다(하위호환).
 """
 from typing import Any, Dict, Optional
 
@@ -20,6 +26,8 @@ logger = get_logger("adsense_auto_settings", "app.log")
 
 AUTO_KEY = "adsense_auto"
 APPROVED_STATUS = "approved"
+# 승인 후 사용할 프롬프트 본문(비어 있으면 전환하지 않는다)
+POST_APPROVAL_PROMPT_KEY = "post_approval_prompt"
 
 
 def is_auto_enabled(module_settings: Optional[Dict[str, Any]]) -> bool:
@@ -51,6 +59,7 @@ def resolve_for_blog(
         # 승인 완료 → 애드센스 승인용 제약 해제, 원래 카테고리 기준으로 복귀
         settings["niche_enabled"] = False
         settings["info_gain_enabled"] = False
+        _swap_prompt(settings, getattr(blog, "name", "?"))
     else:
         # 승인 전 → 승인에 유리한 설정 강제
         settings["niche_enabled"] = True
@@ -63,3 +72,21 @@ def resolve_for_blog(
         settings.get("niche_enabled"), settings.get("info_gain_enabled"),
     )
     return settings
+
+
+def _swap_prompt(settings: Dict[str, Any], blog_name: str) -> None:
+    """승인 후 프롬프트가 지정돼 있으면 본문을 교체한다.
+
+    원본 settings 는 이미 복사본이므로 여기서 변형해도 모듈 설정은 그대로다.
+    """
+    replacement = (settings.get(POST_APPROVAL_PROMPT_KEY) or "").strip()
+    if not replacement:
+        return
+
+    generation = dict(settings.get("content_generation") or {})
+    generation["user_prompt_template"] = replacement
+    settings["content_generation"] = generation
+    logger.info(
+        "[ADSENSE_AUTO] 승인 후 프롬프트로 교체 | blog=%s | %d자",
+        blog_name, len(replacement),
+    )

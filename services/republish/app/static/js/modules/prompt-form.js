@@ -101,6 +101,9 @@ function createPromptModuleState() {
         // 애드센스 승인용 (F4 니치 강제 + F7 정보이득) — 이 모듈에만 적용
         adsense: {
             nicheEnabled: false,
+            // 승인 후 사용할 프롬프트 본문. adsense_auto 가 켜진 모듈에서만 의미가 있다.
+            // 비어 있으면 승인 후에도 같은 프롬프트를 계속 쓴다(하위호환).
+            postApprovalPrompt: '',
             nicheTopicIds: [],   // 허용 topic_id 배열
             infoGainEnabled: false,
             // 블로그의 애드센스 상태에 따라 이 모듈을 실행할지 결정
@@ -263,6 +266,7 @@ const promptModuleMethods = {
             excludeSiblingTitles: settings.exclude_sibling_titles ?? false,
             aeoEnabled: settings.aeo_enabled ?? false,
             autoSwitch: settings.adsense_auto ?? false,
+            postApprovalPrompt: settings.post_approval_prompt ?? '',
             nicheEnabled: settings.niche_enabled ?? false,
             nicheTopicIds: Array.isArray(settings.niche_topic_ids) ? settings.niche_topic_ids.slice() : [],
             infoGainEnabled: settings.info_gain_enabled ?? false
@@ -434,6 +438,7 @@ const promptModuleMethods = {
             exclude_sibling_titles: !!this.promptModule.adsense.excludeSiblingTitles,
             aeo_enabled: !!this.promptModule.adsense.aeoEnabled,
             adsense_auto: !!this.promptModule.adsense.autoSwitch,
+            post_approval_prompt: this.promptModule.adsense.postApprovalPrompt || '',
             niche_enabled: this.promptModule.adsense.nicheEnabled,
             niche_topic_ids: this.promptModule.adsense.nicheTopicIds,
             info_gain_enabled: this.promptModule.adsense.infoGainEnabled,

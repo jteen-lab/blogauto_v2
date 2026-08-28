@@ -134,6 +134,37 @@ function getPromptAdsenseSection() {
                                         <br>· 승인 후 → 니치 강제·정보이득 <strong>꺼짐</strong>(원래 카테고리로 복귀), AEO는 유지
                                         <br><span class="text-amber-700">모듈을 나누지 않고 하나로 쓰고 싶을 때 사용합니다. 끄면 아래에서 직접 지정한 값이 그대로 적용됩니다.</span>
                                     </p>
+
+                                    <!-- 승인 후 사용할 프롬프트 -->
+                                    <div x-show="promptModule.adsense.autoSwitch" x-transition
+                                         class="pl-6 pt-2 space-y-1">
+                                        <div class="flex items-center justify-between gap-2">
+                                            <label class="text-xs font-medium text-gray-700">승인 후 사용할 프롬프트</label>
+                                            <div class="flex items-center gap-1">
+                                                <button type="button"
+                                                        @click="promptModule.adsense.postApprovalPrompt = promptModule.contentGeneration.userPromptTemplate"
+                                                        class="text-[11px] px-2 py-0.5 border border-amber-300 rounded hover:bg-amber-100">
+                                                    현재 프롬프트 복사
+                                                </button>
+                                                <button type="button" x-show="promptModule.adsense.postApprovalPrompt"
+                                                        @click="promptModule.adsense.postApprovalPrompt = ''"
+                                                        class="text-[11px] px-2 py-0.5 border border-gray-300 rounded hover:bg-gray-100">비우기</button>
+                                            </div>
+                                        </div>
+                                        <p class="text-[11px] text-gray-500">
+                                            승인용 전용 프롬프트를 쓰는 경우, 승인된 뒤에는 이 프롬프트로 바뀝니다.
+                                            <strong>비워두면 승인 후에도 위 프롬프트를 그대로 씁니다.</strong>
+                                            <br>니치에 맞는 프리셋을 프롬프트 빌더에서 만든 뒤 "현재 프롬프트 복사"를 누르면 편합니다.
+                                        </p>
+                                        <textarea x-model="promptModule.adsense.postApprovalPrompt" rows="3"
+                                                  placeholder="비워두면 전환하지 않습니다"
+                                                  class="w-full px-2 py-1 border border-gray-300 rounded text-[11px] font-mono"></textarea>
+                                        <p class="text-[11px]"
+                                           :class="promptModule.adsense.postApprovalPrompt ? 'text-emerald-600' : 'text-gray-400'"
+                                           x-text="promptModule.adsense.postApprovalPrompt
+                                               ? '승인 후 이 프롬프트로 전환됩니다 (' + promptModule.adsense.postApprovalPrompt.length + '자)'
+                                               : '승인 후에도 위 프롬프트를 계속 사용합니다'"></p>
+                                    </div>
                                 </div>
 
                                 <!-- 모듈 실행 조건(애드센스 상태 연동) -->
