@@ -4,7 +4,7 @@
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import func, select
@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...core.logger import get_logger
 from ...models.search_visibility import (
     IX_ERROR, IX_INDEXED, IX_NOT_INDEXED, IX_UNKNOWN,
-    SM_MISSING, SM_PRESENT, SM_UNKNOWN, SearchVisibilityUrl,
+    SM_MISSING, SM_PRESENT, SM_UNKNOWN, SearchVisibilityUrl, utcnow,
 )
 from . import index_check_service, sitemap_service
 from .config import load_config
@@ -32,7 +32,7 @@ async def _pending_sitemap_rows(
     db: AsyncSession, blog_id: int, limit: int = SITEMAP_BATCH,
 ) -> List[SearchVisibilityUrl]:
     """사이트맵 확인이 필요한 행을 고른다."""
-    cutoff = datetime.now() - timedelta(minutes=SITEMAP_GRACE_MINUTES)
+    cutoff = utcnow() - timedelta(minutes=SITEMAP_GRACE_MINUTES)
     stmt = (
         select(SearchVisibilityUrl)
         .where(
@@ -63,7 +63,7 @@ async def run_sitemap_check(db: AsyncSession, blog: Any) -> Dict[str, Any]:
         )
         return {"error": snapshot.error, "checked": 0}
 
-    now = datetime.now()
+    now = utcnow()
     present = missing = 0
     for row in rows:
         row.sitemap_checked_at = now
@@ -110,7 +110,7 @@ async def _pending_index_rows(
     db: AsyncSession, blog_id: int, limit: int,
 ) -> List[SearchVisibilityUrl]:
     """색인 점검이 필요한 행을 고른다(미확인 우선, 오래된 확인 순)."""
-    cutoff = datetime.now() - timedelta(days=INDEX_GRACE_DAYS)
+    cutoff = utcnow() - timedelta(days=INDEX_GRACE_DAYS)
     stmt = (
         select(SearchVisibilityUrl)
         .where(
@@ -167,7 +167,7 @@ async def run_index_check(
     if not rows:
         return {"checked": 0}
 
-    now = datetime.now()
+    now = utcnow()
     indexed = not_indexed = errors = 0
     for row in rows:
         row.index_checked_at = now

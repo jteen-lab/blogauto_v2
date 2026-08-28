@@ -237,3 +237,43 @@ def test_resolve_property_accepts_http_prefix_property():
     assert ics.resolve_property(sites, _blog(url="https://lifein4.com/")) == (
         "http://lifein4.com/"
     )
+
+
+# ---------- 시간대 (2026-08-28 회귀) ----------
+
+def test_utcnow_is_timezone_aware():
+    """naive 시각을 쓰면 aware 인 crawled_posts.published_at 과 섞여 INSERT 가 깨진다."""
+    from app.models.search_visibility import utcnow
+
+    assert utcnow().tzinfo is not None
+
+
+def test_ledger_datetime_columns_are_timezone_aware():
+    """PostgreSQL 에서 timestamptz 여야 aware 값을 그대로 저장할 수 있다."""
+    from app.models.search_visibility import SearchVisibilityUrl
+
+    names = (
+        "published_at", "indexnow_submitted_at", "sitemap_checked_at",
+        "index_checked_at", "created_at", "updated_at",
+    )
+    table = SearchVisibilityUrl.__table__
+    naive = [n for n in names if not table.c[n].type.timezone]
+    assert not naive, f"timezone-naive 컬럼이 남아 있음: {naive}"
+
+
+def test_stale_days_handles_aware_lastmod():
+    """사이트맵 lastmod 는 Z 표기(aware)로 오는 경우가 흔하다."""
+    from datetime import datetime, timedelta, timezone
+
+    aware = (datetime.now(timezone.utc) - timedelta(days=2)).strftime(
+        "%Y-%m-%dT%H:%M:%SZ",
+    )
+    snap = sms.SitemapSnapshot(ok=True, latest_lastmod=aware)
+    assert sms.stale_days(snap) == 2
+
+
+def test_stale_days_handles_naive_lastmod():
+    from datetime import datetime, timedelta, timezone
+
+    naive = (datetime.now(timezone.utc) - timedelta(days=2)).strftime("%Y-%m-%d")
+    assert sms.stale_days(sms.SitemapSnapshot(ok=True, latest_lastmod=naive)) == 2

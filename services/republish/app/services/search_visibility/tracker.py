@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.logger import get_logger
 from ...models.search_visibility import (
-    IN_FAILED, IN_OK, IN_SKIPPED, SearchVisibilityUrl,
+    IN_FAILED, IN_OK, IN_SKIPPED, SearchVisibilityUrl, utcnow,
 )
 from . import indexnow_service
 from .config import load_config
@@ -28,6 +28,7 @@ async def get_or_create_row(
     *,
     crawled_post_id: Optional[int] = None,
     title: Optional[str] = None,
+    published_at: Optional[datetime] = None,
 ) -> SearchVisibilityUrl:
     """(blog_id, url) 원장 행을 가져오거나 만든다(멱등)."""
     stmt = select(SearchVisibilityUrl).where(
@@ -47,7 +48,7 @@ async def get_or_create_row(
         crawled_post_id=crawled_post_id,
         url=url[:1000],
         title=(title or "")[:500] or None,
-        published_at=datetime.now(),
+        published_at=published_at or utcnow(),
     )
     db.add(row)
     await db.flush()
@@ -58,7 +59,7 @@ def _apply_outcome(
     row: SearchVisibilityUrl, outcome: indexnow_service.SubmitOutcome,
 ) -> None:
     """IndexNow 결과를 원장 행에 반영한다."""
-    row.indexnow_submitted_at = datetime.now()
+    row.indexnow_submitted_at = utcnow()
     row.indexnow_status_code = outcome.status_code
     row.indexnow_error = outcome.error
 
@@ -116,5 +117,5 @@ def invalidate_key_verification(blog: Any, reason: Optional[str]) -> None:
     config = load_config(blog)
     config["indexnow_key_verified"] = False
     config["indexnow_key_error"] = reason or "키 파일 검증이 해제되었습니다"
-    config["indexnow_key_checked_at"] = datetime.now().isoformat()
+    config["indexnow_key_checked_at"] = utcnow().isoformat()
     blog.search_index_config = config

@@ -7,7 +7,7 @@
 
 근거: docs/plans/search_visibility_plan.md §4.1, docs/flowcharts/search_visibility.md
 """
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import (
     Column, DateTime, ForeignKey, Integer, String, Text, Index, UniqueConstraint,
@@ -38,6 +38,15 @@ IX_ERROR = "error"
 MISS_STREAK_WARN = 3
 
 
+def utcnow() -> datetime:
+    """timezone-aware 현재 시각.
+
+    crawled_posts.published_at 이 aware 라서 여기도 aware 로 통일한다.
+    naive 와 섞으면 asyncpg 가 INSERT 를 거부하고, 기간 비교도 어긋난다.
+    """
+    return datetime.now(timezone.utc)
+
+
 class SearchVisibilityUrl(Base):
     """발행된 URL 1건의 검색 노출 상태."""
 
@@ -54,7 +63,7 @@ class SearchVisibilityUrl(Base):
     )
     url = Column(String(1000), nullable=False, comment="발행된 정식 URL")
     title = Column(String(500), nullable=True)
-    published_at = Column(DateTime, nullable=True, index=True)
+    published_at = Column(DateTime(timezone=True), nullable=True, index=True)
 
     # --- S1 IndexNow ---
     indexnow_status = Column(
@@ -64,14 +73,16 @@ class SearchVisibilityUrl(Base):
     indexnow_status_code = Column(Integer, nullable=True, comment="HTTP 응답 코드")
     indexnow_error = Column(Text, nullable=True, comment="실패/스킵 사유")
     indexnow_attempts = Column(Integer, default=0, nullable=False)
-    indexnow_submitted_at = Column(DateTime, nullable=True)
+    indexnow_submitted_at = Column(
+        DateTime(timezone=True), nullable=True)
 
     # --- S2 사이트맵 ---
     sitemap_state = Column(
         String(20), default=SM_UNKNOWN, nullable=False, index=True,
         comment="unknown/present/missing",
     )
-    sitemap_checked_at = Column(DateTime, nullable=True)
+    sitemap_checked_at = Column(
+        DateTime(timezone=True), nullable=True)
     sitemap_miss_streak = Column(
         Integer, default=0, nullable=False, comment="연속 누락 횟수",
     )
@@ -81,15 +92,17 @@ class SearchVisibilityUrl(Base):
         String(20), default=IX_UNKNOWN, nullable=False, index=True,
         comment="unknown/indexed/not_indexed/error",
     )
-    index_checked_at = Column(DateTime, nullable=True)
+    index_checked_at = Column(
+        DateTime(timezone=True), nullable=True)
     index_detail = Column(
         JSONB, nullable=True,
         comment="coverageState·lastCrawlTime·verdict 등 원본 판정",
     )
 
-    created_at = Column(DateTime, default=datetime.now, nullable=False)
+    created_at = Column(
+        DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at = Column(
-        DateTime, default=datetime.now, onupdate=datetime.now, nullable=False,
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False,
     )
 
     blog = relationship("Blog", backref="search_visibility_urls")

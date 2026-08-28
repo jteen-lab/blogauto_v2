@@ -10,7 +10,7 @@ from __future__ import annotations
 import gzip
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, List, Optional, Set
 from xml.etree import ElementTree
 
@@ -172,6 +172,6 @@ def stale_days(snapshot: SitemapSnapshot) -> Optional[int]:
             parsed = datetime.strptime(raw[:10], "%Y-%m-%d")
         except ValueError:
             return None
-    if parsed.tzinfo is not None:
-        parsed = parsed.replace(tzinfo=None)
-    return max(0, (datetime.now() - parsed).days)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return max(0, (datetime.now(timezone.utc) - parsed).days)

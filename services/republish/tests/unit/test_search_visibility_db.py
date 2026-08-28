@@ -240,3 +240,36 @@ async def test_backfill_caps_absurd_limit(db, blog, posts):
 
     result = await backfill.backfill_blog(db, blog.id, limit=999999)
     assert result["scanned"] == 5
+
+
+@pytest.mark.asyncio
+async def test_backfill_preserves_aware_published_at(db, blog):
+    """운영 DB의 published_at 은 aware 다 — 그대로 복사돼야 한다."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.models.crawled_post import CrawledPost
+    from app.services.search_visibility import backfill
+
+    when = datetime.now(timezone.utc) - timedelta(days=1)
+    db.add(CrawledPost(
+        blog_id=blog.id, title="aware 글", url="https://example.com/aware/",
+        published_at=when,
+    ))
+    await db.flush()
+
+    result = await backfill.backfill_blog(db, blog.id, limit=10)
+    assert result["created"] == 1
+
+    import sqlalchemy
+    row = (await db.execute(
+        sqlalchemy.select(SearchVisibilityUrl).where(
+            SearchVisibilityUrl.url == "https://example.com/aware/",
+        ),
+    )).scalar_one()
+    assert row.published_at is not None
+
+
+@pytest.mark.asyncio
+async def test_track_published_url_sets_aware_timestamp(db, blog):
+    row = await tracker.track_published_url(db, blog, "https://example.com/tz/")
+    assert row.published_at.tzinfo is not None
