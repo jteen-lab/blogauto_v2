@@ -113,6 +113,8 @@
             <template x-if="indexResult && !indexResult.skipped">
                 <div class="space-y-1">
                     <p x-text="`점검 ${indexResult.checked || 0}건 · 색인 ${indexResult.indexed || 0} · 미색인 ${indexResult.not_indexed || 0} · 오류 ${indexResult.errors || 0}`"></p>
+                    <p x-show="indexResult.remaining > 0" class="text-amber-600"
+                       x-text="`남은 ${indexResult.remaining}건은 '지금 점검'을 다시 누르거나 6시간마다 도는 자동 점검이 처리합니다`"></p>
                     <p x-show="indexResult.property" class="text-gray-400"
                        x-text="`속성: ${indexResult.property}`"></p>
                 </div>

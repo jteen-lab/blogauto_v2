@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+import time
 from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
@@ -26,6 +27,9 @@ SITEMAP_GRACE_MINUTES = 30
 INDEX_GRACE_DAYS = 3
 # 한 번에 처리할 최대 행 수(사이트맵은 1회 fetch로 여러 건을 처리한다)
 SITEMAP_BATCH = 200
+# 색인 점검은 URL 1건당 1~3초 걸린다. 화면에서 눌렀을 때 브라우저가 무한정 기다리지
+# 않도록 시간 예산을 두고, 남은 건은 다음 실행(재클릭 또는 스케줄러)이 이어받는다.
+INDEX_TIME_BUDGET_SECONDS = 45.0
 
 
 async def _pending_sitemap_rows(
@@ -168,8 +172,12 @@ async def run_index_check(
         return {"checked": 0}
 
     now = utcnow()
+    deadline = time.monotonic() + INDEX_TIME_BUDGET_SECONDS
     indexed = not_indexed = errors = 0
     for row in rows:
+        if time.monotonic() > deadline:
+            # 시간 예산 초과 — 여기까지 결과를 저장하고 나머지는 다음 실행에 맡긴다.
+            break
         row.index_checked_at = now
         try:
             result = await index_check_service.inspect_url(
@@ -189,9 +197,14 @@ async def run_index_check(
                 break
 
     await db.flush()
+    processed = indexed + not_indexed + errors
     return {
-        "checked": len(rows), "indexed": indexed,
-        "not_indexed": not_indexed, "errors": errors, "property": site_url,
+        "checked": processed,
+        "indexed": indexed,
+        "not_indexed": not_indexed,
+        "errors": errors,
+        "property": site_url,
+        "remaining": max(0, len(rows) - processed),
     }
 
 

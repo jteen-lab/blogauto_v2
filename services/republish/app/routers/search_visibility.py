@@ -71,7 +71,7 @@ async def get_status(
     db: AsyncSession = Depends(get_db_session),
 ) -> Dict[str, Any]:
     """설정 + 집계 현황 조회."""
-    blog = await get_blog_or_404(db, blog_id, current_user.id)
+    blog = await get_blog_or_404(blog_id, current_user, db)
     summary = await runner.blog_summary(db, blog_id)
     return {"config": _config_view(blog), "summary": summary}
 
@@ -84,7 +84,7 @@ async def save_config(
     db: AsyncSession = Depends(get_db_session),
 ) -> Dict[str, Any]:
     """설정 저장. IndexNow는 키 검증 전에는 켤 수 없다."""
-    blog = await get_blog_or_404(db, blog_id, current_user.id)
+    blog = await get_blog_or_404(blog_id, current_user, db)
     config = load_config(blog)
 
     for field, value in request.model_dump(exclude_unset=True).items():
@@ -115,7 +115,7 @@ async def issue_key(
     db: AsyncSession = Depends(get_db_session),
 ) -> Dict[str, Any]:
     """IndexNow 키를 새로 발급한다(기존 키는 무효가 된다)."""
-    blog = await get_blog_or_404(db, blog_id, current_user.id)
+    blog = await get_blog_or_404(blog_id, current_user, db)
     if not indexnow_supported(blog):
         raise HTTPException(
             status_code=422, detail="이 플랫폼에서는 IndexNow를 쓸 수 없습니다",
@@ -139,7 +139,7 @@ async def verify_key(
     db: AsyncSession = Depends(get_db_session),
 ) -> Dict[str, Any]:
     """호스트 루트의 키 파일을 실제로 받아 검증한다."""
-    blog = await get_blog_or_404(db, blog_id, current_user.id)
+    blog = await get_blog_or_404(blog_id, current_user, db)
     config = load_config(blog)
     key = config.get("indexnow_key")
     if not key:
@@ -161,7 +161,7 @@ async def check_sitemap(
     db: AsyncSession = Depends(get_db_session),
 ) -> Dict[str, Any]:
     """사이트맵 신선도 점검을 즉시 1회 실행한다(S2)."""
-    blog = await get_blog_or_404(db, blog_id, current_user.id)
+    blog = await get_blog_or_404(blog_id, current_user, db)
     result = await runner.run_sitemap_check(db, blog)
     await db.commit()
     return result
@@ -174,7 +174,7 @@ async def check_index(
     db: AsyncSession = Depends(get_db_session),
 ) -> Dict[str, Any]:
     """색인 상태 점검을 즉시 1회 실행한다(S6)."""
-    blog = await get_blog_or_404(db, blog_id, current_user.id)
+    blog = await get_blog_or_404(blog_id, current_user, db)
     result = await runner.run_index_check(db, blog)
     await db.commit()
     return result
@@ -188,7 +188,7 @@ async def backfill(
     db: AsyncSession = Depends(get_db_session),
 ) -> Dict[str, Any]:
     """기존 발행 글을 원장에 채운다(색인율 기준선 확보용)."""
-    await get_blog_or_404(db, blog_id, current_user.id)
+    await get_blog_or_404(blog_id, current_user, db)
     result = await sv_backfill.backfill_blog(db, blog_id, limit)
     await db.commit()
     return result
@@ -202,7 +202,7 @@ async def list_urls(
     db: AsyncSession = Depends(get_db_session),
 ) -> Dict[str, List[Dict[str, Any]]]:
     """최근 발행 URL의 노출 상태 목록."""
-    await get_blog_or_404(db, blog_id, current_user.id)
+    await get_blog_or_404(blog_id, current_user, db)
     stmt = (
         select(SearchVisibilityUrl)
         .where(SearchVisibilityUrl.blog_id == blog_id)

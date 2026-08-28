@@ -273,3 +273,21 @@ async def test_backfill_preserves_aware_published_at(db, blog):
 async def test_track_published_url_sets_aware_timestamp(db, blog):
     row = await tracker.track_published_url(db, blog, "https://example.com/tz/")
     assert row.published_at.tzinfo is not None
+
+
+@pytest.mark.asyncio
+async def test_index_check_reports_remaining_when_not_connected(db, blog):
+    """미연동이면 조용히 0건 성공으로 위장하지 않는다."""
+    from app.services.search_visibility import runner
+
+    result = await runner.run_index_check(db, blog)
+    assert result["skipped"] == "gsc_not_connected"
+
+
+@pytest.mark.asyncio
+async def test_index_check_skips_when_disabled(db, blog):
+    from app.services.search_visibility import runner
+
+    blog.search_index_config = {"index_check_enabled": False}
+    result = await runner.run_index_check(db, blog)
+    assert result["skipped"] == "disabled"
