@@ -184,3 +184,25 @@ def test_apply_passes_snapshot():
 
     js = Path("app/static/js/prompt_builder/app.js").read_text(encoding="utf-8")
     assert "this.onApply(this.builtPrompt, this.selectionSnapshot())" in js
+
+
+def test_builder_infers_selection_from_saved_template():
+    """스냅샷이 없는 기존 모듈도 저장된 본문에서 선택을 되짚어야 한다.
+
+    빌더 밖에서 만든 프롬프트도 각 블록 본문을 그대로 담고 있어 판정할 수 있다.
+    """
+    from pathlib import Path
+
+    js = Path("app/static/js/prompt_builder/app.js").read_text(encoding="utf-8")
+    assert "inferSelection(template)" in js
+    assert "restoreFrom(snapshot, template)" in js
+
+
+def test_adsense_state_is_merged_not_replaced():
+    """편집 모드에서 adsense 객체를 통째로 바꾸면 별도로 불러온
+    approvalPresetOptions 가 사라져 셀렉트가 빈 채로 뜬다(= 저장이 리셋된 것처럼 보임)."""
+    from pathlib import Path
+
+    js = Path("app/static/js/modules/prompt-form.js").read_text(encoding="utf-8")
+    idx = js.index("this.promptModule.adsense = {")
+    assert "...this.promptModule.adsense," in js[idx:idx + 200]

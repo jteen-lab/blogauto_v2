@@ -279,7 +279,11 @@ const promptModuleMethods = {
         }
 
         // 애드센스 승인용 설정 복원 (F4 니치 + F7 정보이득)
+        // ⚠️ 객체를 통째로 바꾸면 별도로 불러온 approvalPresetOptions 가 사라져
+        //    승인용 프리셋 셀렉트가 빈 채로 뜬다(= 저장했는데 리셋된 것처럼 보임).
+        //    기존 값을 펼쳐 유지한 뒤 저장값만 덮는다.
         this.promptModule.adsense = {
+            ...this.promptModule.adsense,
             role: settings.adsense_role || 'always',
             excludeSiblingTitles: settings.exclude_sibling_titles ?? false,
             aeoEnabled: settings.aeo_enabled ?? false,

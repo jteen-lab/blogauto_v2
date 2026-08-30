@@ -50,7 +50,23 @@ window.getPromptBuilderEmbeddedHTML = function () {
                  return { topics, subtopics: subs };
              }
          })"
-         x-init="init(); $nextTick(() => restoreSelection(promptModule.contentGeneration.builderSelection))">
+         x-init="init();
+                 $watch('promptModule.contentGeneration.userPromptTemplate', () => {
+                     // 편집 모드는 모듈 데이터가 늦게 로드된다. 템플릿이 채워지는
+                     // 시점에 한 번만 복원한다(사용자가 고른 뒤에는 덮지 않는다).
+                     if (!selectionRestored) {
+                         selectionRestored = true;
+                         restoreFrom(promptModule.contentGeneration.builderSelection,
+                                     promptModule.contentGeneration.userPromptTemplate);
+                     }
+                 });
+                 $nextTick(() => {
+                     if (promptModule.contentGeneration.userPromptTemplate) {
+                         selectionRestored = true;
+                         restoreFrom(promptModule.contentGeneration.builderSelection,
+                                     promptModule.contentGeneration.userPromptTemplate);
+                     }
+                 })">
 
         <button type="button"
                 @click="expanded = !expanded"

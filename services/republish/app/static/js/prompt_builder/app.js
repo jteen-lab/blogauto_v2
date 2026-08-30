@@ -35,6 +35,8 @@ function createPromptBuilderState(opts = {}) {
                 ? opts.getAppliedTemplate : null,
         blocksDataElementId: opts.blocksDataElementId || null,
         expanded: false, // embedded 모드에서 폼 안 접기/펼치기
+        // 편집 모드 복원을 한 번만 하기 위한 플래그(사용자 선택을 덮지 않는다)
+        selectionRestored: false,
         // F11: 전용 프롬프트(full_prompt) 프리셋 적용 시 이 텍스트를 그대로 사용.
         // 비어있으면 4축 조합으로 프롬프트를 만든다.
         fullPromptOverride: '',
@@ -141,6 +143,34 @@ function createPromptBuilderState(opts = {}) {
                 sectionChars: this.sectionChars,
                 outroChars: this.outroChars,
             };
+        },
+
+        // 저장된 프롬프트 본문에서 어떤 항목을 골랐는지 되짚는다.
+        // 스냅샷이 없는 기존 모듈(빌더 밖에서 만든 프롬프트 포함)도 강조가 살아난다.
+        // 각 블록 본문이 템플릿에 통째로 들어가므로 포함 여부로 판정할 수 있다.
+        inferSelection(template) {
+            const text = String(template || '');
+            if (!text.trim()) return null;
+            const hit = (list) => {
+                const found = list.find(
+                    (o) => o.body && text.includes(String(o.body).trim()),
+                );
+                return found ? found.code : '';
+            };
+            return {
+                persona: hit(this.personas),
+                reader: hit(this.readers),
+                pattern: hit(this.patterns),
+                tone: hit(this.tones),
+                common: hit(this.commons),
+            };
+        },
+
+        // 스냅샷이 있으면 그것을, 없으면 본문에서 되짚어 복원한다.
+        restoreFrom(snapshot, template) {
+            const hasSnap = snapshot && typeof snapshot === 'object'
+                && Object.values(snapshot).some(Boolean);
+            this.restoreSelection(hasSnap ? snapshot : this.inferSelection(template));
         },
 
         restoreSelection(snap) {
