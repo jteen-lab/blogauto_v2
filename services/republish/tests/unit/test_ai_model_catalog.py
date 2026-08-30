@@ -289,3 +289,45 @@ async def test_api_filters_by_capability(db):
     out = await list_models(provider=None, capability="text",
                             include_unavailable=False, db=db, _user=None)
     assert {i["model_id"] for i in out["items"]} == {"글"}
+
+
+# ── 마이그레이션 안전장치 (2026-08-30) ────────────────────
+# 054 는 테이블 '이름' 만 보고 존재하면 건너뛰었다. 구조가 다른 옛 ai_models
+# 가 남아 있어 조회가 UndefinedColumnError 로 실패했다. 이름이 같아도 구조가
+# 다를 수 있다.
+
+def test_migration_checks_columns_not_just_table_name():
+    """이름만 확인하는 마이그레이션은 구조가 다른 테이블을 지나친다."""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    src = (root / "alembic/versions/055_replace_legacy_ai_models.py").read_text(
+        encoding="utf-8")
+    assert "_has_column" in src
+    assert "MARKER_COLUMN" in src
+
+
+def test_migration_preserves_legacy_rows():
+    """옛 데이터는 사용자가 수동 입력한 것이라 지우지 않고 옮긴다."""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    src = (root / "alembic/versions/055_replace_legacy_ai_models.py").read_text(
+        encoding="utf-8")
+    assert "rename_table" in src
+    assert "ai_models_legacy" in src
+    # 옛 테이블을 통째로 지우는 코드가 있으면 안 된다
+    assert 'op.drop_table(TABLE)' not in src.split("def downgrade")[0]
+
+
+def test_model_columns_match_migration():
+    """모델 클래스와 마이그레이션 컬럼이 어긋나면 조회가 깨진다."""
+    from pathlib import Path
+
+    from app.models.ai_model import AIModel
+
+    root = Path(__file__).resolve().parents[2]
+    src = (root / "alembic/versions/055_replace_legacy_ai_models.py").read_text(
+        encoding="utf-8")
+    for col in AIModel.__table__.columns:
+        assert f'"{col.name}"' in src, f"마이그레이션에 {col.name} 누락"
