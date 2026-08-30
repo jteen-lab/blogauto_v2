@@ -7,6 +7,8 @@
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, List, Any
 
+from .ai_api_key import AIProvider
+
 
 # =============================================================================
 # 이미지 설정 관련 스키마
@@ -278,13 +280,18 @@ class StyleSettingsResponse(BaseModel):
 # AI 설정 관련 스키마
 # =============================================================================
 
+# 제공자 목록을 여기 다시 적지 않는다 — AIProvider 에 항목을 추가하고 이 패턴을
+# 잊으면 저장이 422 로 막힌다(딥시크 추가 때 실제로 그랬다).
+_PROVIDER_PATTERN = "^(" + "|".join(p.value for p in AIProvider) + ")?$"
+
+
 class AIServiceConfig(BaseModel):
     """AI 서비스 설정."""
 
     provider: Optional[str] = Field(
         default=None,
-        pattern="^(openai|anthropic|google|nanobanana)?$",
-        description="AI 제공자 (openai, anthropic, google, nanobanana)"
+        pattern=_PROVIDER_PATTERN,
+        description="AI 제공자 (AIProvider 에 등록된 값)"
     )
     model: Optional[str] = Field(
         default=None,
