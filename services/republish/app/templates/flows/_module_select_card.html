@@ -34,7 +34,9 @@ x-for="module in getModulesByType(activeModuleTab)" 루프 내에서 사용
             <template x-for="info in getModuleCardInfo(module)" :key="info.label">
                 <div class="flex items-center gap-1.5">
                     <span class="text-gray-400 font-medium flex-shrink-0" x-text="info.label + ':'"></span>
-                    <span class="text-gray-600 truncate" x-text="info.value"></span>
+                    <!-- 프리셋 이름은 길어서 잘린다. 잘린 채로 두면 어떤 프리셋인지
+                         알 수 없으므로 title 로 전체를 볼 수 있게 한다. -->
+                    <span class="text-gray-600 truncate" :title="info.value" x-text="info.value"></span>
                 </div>
             </template>
             <!-- 개별 실행 버튼 (GP가 아닌 모듈, 선택 시 항상 표시) -->

@@ -464,10 +464,12 @@ function flowFormData() {
                 // 카테고리 수
                 const catCount = bcm.length;
                 if (catCount > 0) info.push({ label: '카테고리', value: `${catCount}개` });
+                this.pushPresetInfo(info, module);
             } else if (typeCode === 'generate') {
                 const cg = settings.content_generation || {};
                 if (cg.provider) info.push({ label: 'AI', value: cg.provider });
                 if (settings.image_generation?.enabled) info.push({ label: '이미지', value: settings.image_generation.provider || 'ON' });
+                this.pushPresetInfo(info, module);
             } else if (typeCode === 'collect') {
                 info.push({ label: '수집 대상', value: this.getCollectSourcesText(module) });
                 info.push({ label: '수집 타입', value: this.getCollectTypeText(module) });
@@ -478,6 +480,24 @@ function flowFormData() {
                 if (stages.length > 0) info.push({ label: '단계', value: `${stages.length}개` });
             }
 
+            return info;
+        },
+
+        // 어떤 프롬프트로 생성되는지 카드에 표시한다.
+        // 서버(schemas/module.py)가 판정한 값을 그대로 쓴다 — 여기서 다시
+        // 추론하면 프롬프트 빌더 화면과 다른 답이 나올 수 있다.
+        pushPresetInfo(info, module) {
+            if (module.prompt_preset) {
+                info.push({ label: '프리셋', value: module.prompt_preset });
+            }
+            // 승인 전에만 쓰이는 프롬프트는 별도로 알려준다. 위 프리셋과
+            // 다른 글이 나가므로 같은 칩으로 묶으면 오해한다.
+            if (module.adsense_approval_preset_label) {
+                info.push({
+                    label: '승인 전',
+                    value: module.adsense_approval_preset_label,
+                });
+            }
             return info;
         },
 
