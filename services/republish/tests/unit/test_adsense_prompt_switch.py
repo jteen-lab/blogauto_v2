@@ -141,3 +141,15 @@ def test_builder_excludes_approval_presets():
 
     src = Path("app/static/js/prompt_builder/app.js").read_text(encoding="utf-8")
     assert "filter((p) => !p.full_prompt)" in src
+
+
+def test_approval_preset_endpoint_path_matches_router():
+    """JS 가 부르는 경로와 실제 라우터 prefix 가 어긋나면 셀렉트가 빈 채로 뜬다.
+    실제로 /api/v1/prompt-blocks 로 잘못 적어 404 가 났다(2026-08-30)."""
+    from pathlib import Path
+
+    from app.routers.prompt_blocks import router
+
+    js = Path("app/static/js/modules/prompt-form.js").read_text(encoding="utf-8")
+    expected = f"{router.prefix}/approval-presets"
+    assert expected in js, f"JS 경로 불일치 — 기대: {expected}"

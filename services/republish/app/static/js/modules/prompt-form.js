@@ -138,7 +138,7 @@ const promptModuleMethods = {
     // 애드센스 승인 전에만 쓸 프리셋 목록(빌더 목록에는 없다)
     async loadApprovalPresets() {
         try {
-            const resp = await fetch('/api/v1/prompt-blocks/approval-presets', {
+            const resp = await fetch('/api/v1/prompt-builder/blocks/approval-presets', {
                 credentials: 'include',
             });
             if (resp.ok) {
