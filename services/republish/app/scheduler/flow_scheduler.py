@@ -77,6 +77,7 @@ class FlowScheduler:
 
         # 애드센스 사이트 상태 정기 동기화 등록
         self._register_adsense_sync()
+        self._register_model_catalog_sync()
 
         self._initialized = True
         logger.info("[FLOW_SCHEDULER] Initialized with IntervalTrigger")
@@ -123,6 +124,35 @@ class FlowScheduler:
         logger.info(
             "[FLOW_SCHEDULER] 애드센스 상태 동기화 Job 등록 (%d시간 간격)",
             _adsense_sync_hours(),
+        )
+
+    def _register_model_catalog_sync(self) -> None:
+        """AI 모델 목록 동기화 Job 등록.
+
+        주기는 사용자가 설정 화면에서 바꾼다(기본 24시간). 0 을 저장하면
+        등록하지 않고 '지금 갱신' 버튼으로만 돌린다.
+        """
+        job_id = "ai_model_catalog_sync"
+
+        existing = self.scheduler.get_job(job_id)
+        if existing:
+            self.scheduler.remove_job(job_id)
+
+        hours = _model_sync_hours()
+        if hours <= 0:
+            logger.info("[FLOW_SCHEDULER] AI 모델 목록 자동 동기화 사용 안 함")
+            return
+
+        self.scheduler.add_job(
+            _model_catalog_sync_callback,
+            trigger=IntervalTrigger(hours=hours),
+            id=job_id,
+            name="AI 모델 목록 동기화",
+            replace_existing=True,
+            misfire_grace_time=3600,
+        )
+        logger.info(
+            "[FLOW_SCHEDULER] AI 모델 목록 동기화 Job 등록 (%d시간 간격)", hours,
         )
 
     async def shutdown(self) -> None:
@@ -3380,6 +3410,51 @@ async def _adsense_sync_callback() -> None:
                 )
     except Exception as exc:  # noqa: BLE001
         logger.error("[ADSENSE_SYNC] 동기화 실패: %s", exc)
+
+
+# AI 모델 목록 동기화 주기(시간). 사용자가 설정 화면에서 바꿀 수 있다.
+# 0 이면 자동 동기화를 하지 않는다('지금 갱신' 버튼만 사용).
+SETTING_MODEL_SYNC_HOURS = "ai_model_sync_interval_hours"
+DEFAULT_MODEL_SYNC_HOURS = 24
+MAX_MODEL_SYNC_HOURS = 168
+
+
+def _model_sync_hours() -> int:
+    """저장된 동기화 주기. 없으면 하루."""
+    from ..services.system_settings_service import SystemSettingsService
+
+    try:
+        raw = SystemSettingsService.get_cached(SETTING_MODEL_SYNC_HOURS)
+        hours = int(raw) if raw is not None and raw != "" else DEFAULT_MODEL_SYNC_HOURS
+    except Exception:  # noqa: BLE001
+        hours = DEFAULT_MODEL_SYNC_HOURS
+    if hours <= 0:
+        return 0
+    return min(hours, MAX_MODEL_SYNC_HOURS)
+
+
+async def _model_catalog_sync_callback() -> None:
+    """AI 모델 목록 동기화 콜백.
+
+    목록을 갱신하고, 사라진 모델을 쓰는 블로그가 있으면 경고를 남긴다.
+    자동으로 다른 모델로 바꾸지는 않는다 — 모델이 바뀌면 글 품질과 요금이
+    달라지므로 사람이 골라야 한다.
+    """
+    try:
+        from ..core.database import db_manager
+        from ..services.ai.model_catalog import ModelCatalogService
+        from ..services.ai.model_warnings import warn_unavailable_models
+
+        async with db_manager.get_session() as session:
+            out = await ModelCatalogService(session).sync_all()
+            t = out["total"]
+            logger.info(
+                "[MODEL_SYNC] 신규 %d / 사라짐 %d / 유지 %d",
+                t["added"], t["gone"], t["kept"],
+            )
+            await warn_unavailable_models(session)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("[MODEL_SYNC] 동기화 실패: %s", exc)
 
 
 def _rate_limit_recovery_callback() -> None:

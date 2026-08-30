@@ -652,6 +652,66 @@ async def save_adsense_sync_interval(
     return {"success": True, "hours": hours, "rescheduled": reregistered}
 
 
+@router.post("/ai-model-sync-interval")
+async def save_model_sync_interval(
+    hours: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """AI 모델 목록 동기화 주기를 저장하고 Job 을 다시 등록한다.
+
+    0 을 주면 자동 동기화를 끄고 '지금 갱신' 버튼으로만 돌린다.
+    """
+    from ..scheduler.flow_scheduler import (
+        MAX_MODEL_SYNC_HOURS, SETTING_MODEL_SYNC_HOURS,
+    )
+    from ..services.system_settings_service import SystemSettingsService
+
+    if hours < 0 or hours > MAX_MODEL_SYNC_HOURS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"주기는 0~{MAX_MODEL_SYNC_HOURS}시간 사이여야 합니다"
+                   " (0 = 자동 동기화 안 함)",
+        )
+
+    await SystemSettingsService.set(SETTING_MODEL_SYNC_HOURS, str(hours), db)
+    await db.commit()
+    SystemSettingsService.invalidate_cache()
+
+    rescheduled = False
+    try:
+        from ..scheduler.flow_scheduler import get_flow_scheduler
+
+        scheduler = get_flow_scheduler()
+        if scheduler is not None:
+            scheduler._register_model_catalog_sync()
+            rescheduled = True
+    except Exception as exc:  # noqa: BLE001 — 저장은 성공했으므로 진행
+        logger.warning("[SETTINGS] 모델 동기화 Job 재등록 실패: %s", exc)
+
+    logger.info("[SETTINGS] AI 모델 동기화 주기 저장 | %d시간", hours)
+    return {"success": True, "hours": hours, "rescheduled": rescheduled}
+
+
+@router.get("/ai-model-sync-interval")
+async def get_model_sync_interval(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """저장된 동기화 주기(없으면 기본 24시간)."""
+    from ..scheduler.flow_scheduler import (
+        DEFAULT_MODEL_SYNC_HOURS, SETTING_MODEL_SYNC_HOURS,
+    )
+    from ..services.system_settings_service import SystemSettingsService
+
+    raw = await SystemSettingsService.get(SETTING_MODEL_SYNC_HOURS, db)
+    try:
+        hours = int(raw) if raw not in (None, "") else DEFAULT_MODEL_SYNC_HOURS
+    except ValueError:
+        hours = DEFAULT_MODEL_SYNC_HOURS
+    return {"hours": hours, "default": DEFAULT_MODEL_SYNC_HOURS}
+
+
 # ============================================================
 # Search Console (S6 색인 점검)
 # ============================================================
