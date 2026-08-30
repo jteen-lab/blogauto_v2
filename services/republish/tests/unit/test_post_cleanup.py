@@ -190,3 +190,94 @@ def test_categories_exposed_for_ui():
     """화면이 유형 목록을 하드코딩하지 않도록 API 가 내려준다."""
     assert len(CATEGORIES) == 4
     assert all(len(c) == 3 for c in CATEGORIES)
+
+
+# ── 화면에서 고른 글 삭제 (2026-08-30) ────────────────────
+# 데이터 관리 > 정식제목 탭에서 발행완료 목록을 보고 직접 골라 지운다.
+# 대상 선정을 사람이 하므로 유형 분류는 쓰지 않지만 하한은 지킨다.
+
+@pytest.mark.parametrize("url,expected", [
+    ("https://doooit082.com/1998/", "1998"),
+    ("https://doooit082.com/1998", "1998"),
+    ("https://info.doooit082.com/253/", "253"),
+    ("https://x.com/hello-world/", None),
+    ("", None),
+])
+def test_wordpress_post_id_from_url(url, expected):
+    """doooit082 계열은 글 번호를 URL 로 쓴다. 슬러그형이면 검색으로 찾는다."""
+    from app.services.publishing.post_cleanup_service import (
+        wordpress_post_id_from_url,
+    )
+
+    assert wordpress_post_id_from_url(url) == expected
+
+
+def test_by_titles_endpoint_keeps_floor():
+    """화면 경로도 승인 사이트 하한을 지켜야 한다."""
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parents[2]
+           / "app/routers/post_cleanup.py").read_text(encoding="utf-8")
+    assert "by-titles" in src
+    assert "최소" in src and "유지해야" in src
+
+
+def test_by_titles_cleans_local_record():
+    """블로그에서 지웠으면 우리 기록도 지워야 한다.
+
+    남겨 두면 다음 크롤링까지 발행완료로 보이고, 내부링크가 사라진 글을
+    가리킨다.
+    """
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parents[2]
+           / "app/routers/post_cleanup.py").read_text(encoding="utf-8")
+    assert "db.delete(r)" in src
+    # 실패한 것은 지우지 않는다
+    assert "failed_urls" in src
+
+
+def test_blogger_deletion_resolves_post_id_by_path():
+    """블로거는 URL 로 바로 못 지운다 — path 로 postId 를 찾는다."""
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parents[2]
+           / "app/services/publishing/post_cleanup_service.py").read_text(
+        encoding="utf-8")
+    assert "posts/bypath" in src
+
+
+def test_delete_button_only_in_published_view():
+    """발행완료 목록에서만 뜨게 한다 — 다른 상태에는 지울 글이 없다."""
+    from pathlib import Path
+
+    html = (Path(__file__).resolve().parents[2]
+            / "app/templates/collection/_titles_main.html").read_text(
+        encoding="utf-8")
+    assert "블로그에서 삭제" in html
+    assert "stateFilter === 'published' && selectedBlogId" in html
+
+
+def test_cleanup_flags_shown_in_list():
+    """정리 권장 표시가 목록에 붙는지."""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2]
+    html = (root / "app/templates/collection/_titles_main.html").read_text(
+        encoding="utf-8")
+    assert "cleanupFlags[row.id]" in html
+
+    js = (root / "app/templates/collection/index.html").read_text(
+        encoding="utf-8")
+    assert "loadCleanupFlags" in js
+    assert "cleanup/flags" in js
+
+
+def test_delete_confirms_irreversible():
+    """되돌릴 수 없다는 것을 눌리기 전에 알려야 한다."""
+    from pathlib import Path
+
+    js = (Path(__file__).resolve().parents[2]
+          / "app/templates/collection/index.html").read_text(encoding="utf-8")
+    assert "deleteFromBlog" in js
+    assert "되돌릴 수 없습니다" in js
