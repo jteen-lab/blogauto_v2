@@ -108,15 +108,19 @@
                     <h3 class="text-base font-semibold text-gray-900">글 생성용 AI</h3>
                     <p class="text-sm text-gray-500 mt-0.5">블로그 본문 작성에 사용할 AI</p>
                 </div>
-                <!-- 제공자가 모델을 내리면 선택지가 죽는다. 여기서 바로 갱신한다. -->
+                <!-- 제공자가 모델을 내리면 선택지가 죽는다. 여기서 바로 갱신한다.
+                     목록은 블로그별이 아니라 전체 공통이라 한 번만 누르면 된다. -->
                 <div class="text-right">
                     <button type="button" @click="syncCatalog()" :disabled="syncingCatalog"
+                            title="모든 블로그가 함께 쓰는 공통 목록입니다"
                             class="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
                         <span x-show="!syncingCatalog">모델 목록 갱신</span>
                         <span x-show="syncingCatalog">갱신 중...</span>
                     </button>
-                    <div x-show="catalogSyncedAt" class="text-[11px] text-gray-400 mt-1">
-                        갱신 <span x-text="(catalogSyncedAt || '').slice(0, 10)"></span>
+                    <div class="text-[11px] text-gray-400 mt-1">
+                        전체 블로그 공통<template x-if="catalogSyncedAt"><span>
+                            · 갱신 <span x-text="(catalogSyncedAt || '').slice(0, 10)"></span>
+                        </span></template>
                     </div>
                 </div>
             </div>

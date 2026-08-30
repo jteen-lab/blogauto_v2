@@ -792,6 +792,96 @@
 
                     <hr class="border-gray-200">
 
+                    <!-- AI 모델 목록 (전체 블로그 공통) -->
+                    <div class="space-y-4" x-data="{
+                            syncing: false, msg: '',
+                            hours: 24, intervalMsg: '',
+                            lastSyncedAt: null, modelCount: 0,
+                            async loadStatus() {
+                                try {
+                                    const r = await fetch('/api/v1/ai-models?capability=text',
+                                                          {credentials:'include'});
+                                    if (r.ok) {
+                                        const d = await r.json();
+                                        this.modelCount = d.total || 0;
+                                        this.lastSyncedAt = d.last_synced_at;
+                                    }
+                                } catch(e){}
+                                try {
+                                    const r = await fetch('/api/v1/settings/ai-model-sync-interval',
+                                                          {credentials:'include'});
+                                    if (r.ok) { const d = await r.json(); this.hours = d.hours; }
+                                } catch(e){}
+                            },
+                            async syncNow() {
+                                this.syncing = true; this.msg = '';
+                                try {
+                                    const r = await fetch('/api/v1/ai-models/sync',
+                                                          {method:'POST', credentials:'include'});
+                                    const d = await r.json();
+                                    const t = (d && d.total) || {};
+                                    this.msg = r.ok
+                                        ? `갱신 완료 — 신규 ${t.added||0} / 사라짐 ${t.gone||0} / 유지 ${t.kept||0}`
+                                        : (d.detail || '갱신 실패');
+                                    await this.loadStatus();
+                                } catch(e){ this.msg = '오류가 발생했습니다'; }
+                                finally { this.syncing = false; }
+                            },
+                            async saveInterval() {
+                                this.intervalMsg = '';
+                                try {
+                                    const r = await fetch(
+                                        `/api/v1/settings/ai-model-sync-interval?hours=${this.hours}`,
+                                        {method:'POST', credentials:'include'});
+                                    const d = await r.json();
+                                    this.intervalMsg = r.ok
+                                        ? (d.rescheduled ? '저장됨 (즉시 반영)' : '저장됨 (재시작 후 반영)')
+                                        : (d.detail || '저장 실패');
+                                } catch(e){ this.intervalMsg = '오류'; }
+                            }
+                         }" x-init="loadStatus()">
+                        <h4 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                            <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                      d="M4 7v10l8 4 8-4V7l-8-4-8 4zm8 4v10"/>
+                            </svg>
+                            AI 모델 목록
+                            <span x-show="modelCount" class="text-xs text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded-full"
+                                  x-text="modelCount + '개'"></span>
+                        </h4>
+                        <p class="text-xs text-gray-500 -mt-2">
+                            제공자에서 모델 목록을 받아옵니다. <strong>모든 블로그가 함께 쓰는 공통 목록</strong>이라
+                            한 번만 갱신하면 전체에 반영됩니다.
+                        </p>
+
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <button type="button" @click="syncNow()" :disabled="syncing"
+                                    class="px-3 py-1.5 text-xs bg-accent text-white rounded-lg disabled:opacity-50">
+                                <span x-text="syncing ? '갱신 중...' : '지금 갱신'"></span>
+                            </button>
+                            <span class="text-xs text-gray-500">자동 갱신</span>
+                            <input type="number" min="0" max="168" x-model.number="hours"
+                                   @change="saveInterval()"
+                                   class="w-16 px-2 py-1 border border-gray-300 rounded text-xs">
+                            <span class="text-xs text-gray-500">시간마다 (0 = 사용 안 함)</span>
+                            <span class="text-xs" :class="intervalMsg.startsWith('저장') ? 'text-emerald-600' : 'text-gray-400'"
+                                  x-text="intervalMsg"></span>
+                        </div>
+
+                        <div class="text-[11px] text-gray-400" x-show="lastSyncedAt">
+                            마지막 갱신 <span x-text="(lastSyncedAt || '').slice(0, 16).replace('T', ' ')"></span>
+                        </div>
+                        <p x-show="msg" class="text-xs"
+                           :class="msg.includes('실패') || msg.includes('오류') ? 'text-red-600' : 'text-emerald-700'"
+                           x-text="msg"></p>
+                        <p class="text-[11px] text-gray-400">
+                            제공자가 모델을 내리면 블로그 설정 화면에 '지원 종료'로 표시되고,
+                            그 모델을 쓰는 블로그에 경고가 나타납니다. 자동으로 바꾸지는 않습니다.
+                        </p>
+                    </div>
+
+                    <hr class="border-gray-200">
+
                     <!-- 네이버 검색광고 API 설정 -->
                     <div class="space-y-4">
                         <h4 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
@@ -1392,4 +1482,4 @@
 </div>
 
 <script src="/static/js/ai_keys.js?v=20260423e"></script>
-<script src="/static/js/settings.js?v=20260830_catalog"></script>
+<script src="/static/js/settings.js?v=20260830_catalog2"></script>

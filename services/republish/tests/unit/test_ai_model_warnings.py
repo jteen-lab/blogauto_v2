@@ -190,3 +190,48 @@ def test_interval_api_exists():
     src = (ROOT / "app/routers/settings.py").read_text(encoding="utf-8")
     assert "ai-model-sync-interval" in src
     assert "0 = 자동 동기화 안 함" in src
+
+
+# ── 갱신 범위 (2026-08-30) ───────────────────────────────
+# 갱신 버튼이 블로그 설정 화면 안에 있어 "블로그마다 따로 갱신해야 하나"
+# 라는 오해를 샀다. 카탈로그는 전역이라 한 번만 누르면 전체에 반영된다.
+# 그 사실이 코드와 화면 양쪽에서 유지되는지 지킨다.
+
+def test_catalog_is_global_not_per_blog():
+    """모델 카탈로그에 blog_id 가 생기면 블로그마다 갱신해야 한다."""
+    from app.models.ai_model import AIModel, AIModelPrice
+
+    for table in (AIModel.__table__, AIModelPrice.__table__):
+        assert "blog_id" not in table.c, f"{table.name} 은 전역이어야 한다"
+
+
+def test_sync_endpoint_takes_no_blog_scope():
+    """sync 가 blog_id 를 받기 시작하면 갱신이 블로그별로 갈라진다."""
+    import inspect
+
+    from app.routers.ai_models import sync_models
+
+    params = set(inspect.signature(sync_models).parameters)
+    assert "blog_id" not in params
+
+
+def test_screen_says_shared_across_blogs():
+    """화면에 공통이라고 적혀 있지 않으면 같은 오해가 반복된다."""
+    tab = (ROOT / "app/templates/blogs/settings/_tab_ai.html").read_text(
+        encoding="utf-8")
+    assert "전체 블로그 공통" in tab
+
+
+def test_global_settings_has_model_section():
+    """전역 설정에서도 갱신·주기를 다룰 수 있어야 한다.
+
+    블로그 설정 안에만 있으면 '어느 블로그에서 눌러야 하나' 를 매번 고민한다.
+    """
+    modal = (ROOT / "app/templates/settings/modal.html").read_text(
+        encoding="utf-8")
+    assert "AI 모델 목록" in modal
+    assert "/api/v1/ai-models/sync" in modal
+    assert "/api/v1/settings/ai-model-sync-interval" in modal
+    assert "모든 블로그가 함께 쓰는 공통 목록" in modal
+    # 자동 갱신을 끌 수 있어야 한다(0 = 사용 안 함)
+    assert "0 = 사용 안 함" in modal
