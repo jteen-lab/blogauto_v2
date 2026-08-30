@@ -8,7 +8,7 @@ Features:
 """
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ModuleTypeResponse(BaseModel):
@@ -75,6 +75,17 @@ class ModuleResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    # 프롬프트 모듈에 적용된 프리셋 이름(플로우 화면·1회 생성 버튼 표시용).
+    # 서버가 한 번에 정한다 — 화면마다 각자 추론하면 답이 달라진다.
+    prompt_preset: Optional[str] = Field(
+        default=None,
+        description="적용된 프롬프트 프리셋 이름. 판정 불가 시 None",
+    )
+    adsense_approval_preset_label: Optional[str] = Field(
+        default=None,
+        description="승인 전에만 사용하는 프리셋 이름. 지정 없으면 None",
+    )
+
     # Phase E: 레거시 대량 수집 옵션 사용 중인지 표시
     legacy_bulk_warning: Optional[bool] = Field(
         default=False,
@@ -83,6 +94,30 @@ class ModuleResponse(BaseModel):
             "True 이면 사용자 마이그레이션 안내 필요."
         ),
     )
+
+    @model_validator(mode="after")
+    def _fill_prompt_preset(self) -> "ModuleResponse":
+        """settings 에서 적용된 프리셋 이름을 채운다.
+
+        서비스 계층이 아니라 스키마에서 채우는 이유: 모듈 응답은 목록·상세·
+        플로우 상세 세 경로로 나가는데, 세 곳에서 각자 대입하면 한 곳이
+        빠졌을 때 화면마다 다르게 보인다. 여기서 채우면 경로와 무관하게
+        같은 값이 나간다. settings 는 이미 로딩돼 있어 추가 쿼리가 없다.
+        """
+        code = getattr(self.module_type, "code", "")
+        if code not in ("prompt", "generate"):
+            return self
+        try:
+            from ..services.prompt_builder.describe import (
+                describe, describe_approval,
+            )
+            self.prompt_preset = describe(self.settings) or None
+            self.adsense_approval_preset_label = (
+                describe_approval(self.settings) or None
+            )
+        except Exception:  # pragma: no cover - 표시용이라 실패해도 응답은 나가야 한다
+            pass
+        return self
 
     class Config:
         from_attributes = True
