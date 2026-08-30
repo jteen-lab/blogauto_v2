@@ -114,7 +114,7 @@ function createPromptModuleState() {
             // always | adsense_only | post_approval
             role: 'always',
             // 형제 블로그(같은 도메인·같은 모듈)가 쓴 제목을 후보에서 제외
-            excludeSiblingTitles: false,
+            excludeSiblingTitles: true,   // 새 모듈 기본값 — 형제 사이트 주제 중복 방지
             // AI 답변 인용 대비(AEO/GEO) 지시문 주입
             aeoEnabled: false,
             // 블로그의 애드센스 상태에 따라 니치·정보이득을 자동 전환
@@ -285,7 +285,7 @@ const promptModuleMethods = {
         this.promptModule.adsense = {
             ...this.promptModule.adsense,
             role: settings.adsense_role || 'always',
-            excludeSiblingTitles: settings.exclude_sibling_titles ?? false,
+            excludeSiblingTitles: settings.exclude_sibling_titles ?? true,  // 기본 켜짐 — 형제 사이트 주제 중복 방지
             aeoEnabled: settings.aeo_enabled ?? false,
             autoSwitch: settings.adsense_auto ?? false,
             approvalPreset: settings.adsense_approval_preset ?? '',

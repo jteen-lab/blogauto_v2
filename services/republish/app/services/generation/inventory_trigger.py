@@ -382,53 +382,26 @@ class InventoryTrigger:
     async def _resolve_siblings(
         self, blog_id: int, module_settings: Optional[dict],
     ) -> List[int]:
-        """형제 블로그 ID 목록(옵션이 켜진 경우에만).
+        """형제 블로그 ID 목록.
 
-        `exclude_sibling_titles` 가 켜져 있을 때만 계산한다. 같은 도메인을 쓰는
-        블로그와, 같은 모듈에 연결된 블로그가 이미 사용한 제목을 후보에서 뺀다
-        (계획서 N2). 꺼져 있으면 기존 동작 그대로다.
+        같은 도메인·같은 모듈에 붙은 블로그가 이미 쓴 제목을 후보에서 뺀다
+        (계획서 N2). 한 소유자의 여러 사이트가 같은 주제를 다루면 검색엔진이
+        대량 생산으로 읽는다 — doooit082 계열 4개에 105종 제목이 중복
+        게재됐다.
+
+        2026-08-30: **DB 조회를 여기서 하지 않는다.** 호출자가 미리 계산해
+        `_sibling_ids` 로 넘긴다. 재고 조회 한복판에서 블로그를 다시 읽으면
+        책임이 섞이고, 쿼리 순서에 의존하는 코드가 생긴다.
+        명시적으로 false 를 넣은 경우에만 끈다.
         """
-        if not (module_settings or {}).get("exclude_sibling_titles"):
+        settings = module_settings or {}
+        if settings.get("exclude_sibling_titles") is False:
             return []
 
-        from ...models.blog import Blog
-        from .sibling_blogs import registrable_domain
-
-        row = await self.db.execute(select(Blog).where(Blog.id == blog_id))
-        blog = row.scalar_one_or_none()
-        if not blog:
+        ids = settings.get("_sibling_ids")
+        if not isinstance(ids, (list, tuple, set)):
             return []
-
-        siblings: set = set()
-
-        # (1) 같은 등록 도메인
-        domain = registrable_domain(blog.url)
-        if domain:
-            others = await self.db.execute(
-                select(Blog.id, Blog.url).where(
-                    Blog.id != blog_id, Blog.is_deleted == False  # noqa: E712
-                )
-            )
-            for oid, ourl in others.all():
-                if registrable_domain(ourl) == domain:
-                    siblings.add(oid)
-
-        # (2) 같은 모듈에 연결된 블로그
-        for item in (module_settings or {}).get("blogs") or []:
-            bid = item if isinstance(item, int) else (item or {}).get("id")
-            if isinstance(bid, int) and bid != blog_id:
-                siblings.add(bid)
-        for row_map in (module_settings or {}).get("blog_category_map") or []:
-            bid = (row_map or {}).get("blog_id")
-            if isinstance(bid, int) and bid != blog_id:
-                siblings.add(bid)
-
-        if siblings:
-            logger.info(
-                "[INVENTORY] 형제 블로그 제목 제외 | blog_id=%s | 형제=%s",
-                blog_id, sorted(siblings),
-            )
-        return sorted(siblings)
+        return sorted({i for i in ids if isinstance(i, int) and i != blog_id})
 
     def _apply_niche(self, module_settings, subtopic_ids, topic_only_ids, source):
         """니치 강제 활성 시 카테고리 필터를 니치 topic으로 대체(모듈 단위).
