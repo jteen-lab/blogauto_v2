@@ -331,3 +331,37 @@ def test_model_columns_match_migration():
         encoding="utf-8")
     for col in AIModel.__table__.columns:
         assert f'"{col.name}"' in src, f"마이그레이션에 {col.name} 누락"
+
+
+@pytest.mark.asyncio
+async def test_tier_badge_applied_from_price_seed(db):
+    """배지와 요금을 따로 관리하면 '가성비' 인데 비싼 조합이 생긴다."""
+    await _key(db, AIProvider.DEEPSEEK)
+    svc = ModelCatalogService(db)
+    fetched = _fetched("deepseek-v4-flash", "deepseek-v4-pro")
+    with patch.object(svc, "fetch_provider", new=AsyncMock(return_value=fetched)):
+        await svc.sync_provider(AIProvider.DEEPSEEK)
+
+    rows = {r.model_id: r for r in
+            (await db.execute(select(AIModel))).scalars().all()}
+    assert rows["deepseek-v4-flash"].tier == "value"
+    assert rows["deepseek-v4-pro"].tier == "flagship"
+
+
+@pytest.mark.asyncio
+async def test_user_tier_choice_is_not_overwritten(db):
+    """사용자가 바꾼 배지를 동기화가 되돌리면 설정이 소용없다."""
+    await _key(db, AIProvider.DEEPSEEK)
+    svc = ModelCatalogService(db)
+    fetched = _fetched("deepseek-v4-flash")
+    with patch.object(svc, "fetch_provider", new=AsyncMock(return_value=fetched)):
+        await svc.sync_provider(AIProvider.DEEPSEEK)
+
+    row = (await db.execute(select(AIModel))).scalars().one()
+    row.tier = "flagship"          # 사용자가 바꿈
+    await db.commit()
+
+    with patch.object(svc, "fetch_provider", new=AsyncMock(return_value=fetched)):
+        await svc.sync_provider(AIProvider.DEEPSEEK)
+    row = (await db.execute(select(AIModel))).scalars().one()
+    assert row.tier == "flagship", "사용자 선택이 유지돼야 한다"

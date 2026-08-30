@@ -165,6 +165,15 @@ class ModelCatalogService:
                     "added": 0, "gone": 0, "kept": 0}
 
         now = datetime.now(timezone.utc)
+        # 추천 배지는 요금표에서 가져온다. 배지와 요금을 따로 관리하면
+        # '가성비' 라는데 요금은 비싼 조합이 생긴다.
+        from .model_prices import SEED
+
+        seed_tier = {
+            s["model_id"]: s["tier"] for s in SEED
+            if s["provider"] == name and s.get("tier")
+        }
+
         rows = (await self.db.execute(
             select(AIModel).where(AIModel.provider == name)
         )).scalars().all()
@@ -182,7 +191,7 @@ class ModelCatalogService:
                     display_name=item["display_name"],
                     capability=item["capability"],
                     shutdown_date=item.get("shutdown_date"),
-                    is_available=True,
+                    is_available=True, tier=seed_tier.get(mid),
                     first_seen_at=now, last_seen_at=now, synced_at=now,
                 ))
                 added += 1
@@ -193,6 +202,10 @@ class ModelCatalogService:
             row.is_available = True
             row.last_seen_at = now
             row.synced_at = now
+            # 배지가 없던 모델에만 시드를 적용한다. 사용자가 바꾼 값을
+            # 동기화 때마다 되돌리면 설정이 소용없어진다.
+            if row.tier is None and mid in seed_tier:
+                row.tier = seed_tier[mid]
             kept += 1
 
         gone = 0
