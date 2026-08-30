@@ -37,7 +37,9 @@ from .index_priority import prioritize as prioritize_by_index
 logger = logging.getLogger(__name__)
 
 # 내부링크 기본 설정
-DEFAULT_INTRO_LINK_COUNT = 3
+# 도입부 링크는 적을수록 낫다. 5개씩 박히던 것이 색인 실패의
+# 한 원인이었다(진단: search_visibility_all_blogs.md).
+DEFAULT_INTRO_LINK_COUNT = 2
 DEFAULT_CONCLUSION_LINK_COUNT = 3
 DEFAULT_SIMILARITY_THRESHOLD = 75
 MAX_INTRO_LINKS = 5
@@ -273,22 +275,15 @@ class InternalLinker:
 
         matched = [post for post, _ in scored[:count]]
 
-        # 2. 부족분 fallback (최신 발행순 → 발행일 없는 것 뒤로)
+        # 2026-08-30: 부족분을 최신순으로 채우던 fallback 을 없앴다.
+        # 홈트 글 도입부에 '레몬디톡스·일본여행 환전' 링크가 붙는 원인이었다.
+        # 개수를 채우려고 관련 없는 글을 끌어오면 독자에게도 검색엔진에도
+        # 손해다. 매칭된 만큼만 넣고, 없으면 넣지 않는다.
         if len(matched) < count:
-            chosen_urls = {p.url for p in matched} | used_urls
-            remaining = [
-                p for p in posts
-                if p.url and p.url not in chosen_urls
-            ]
-            with_date = [p for p in remaining if p.published_at]
-            without_date = [p for p in remaining if not p.published_at]
-            with_date.sort(key=lambda p: p.published_at, reverse=True)
-            ordered = with_date + without_date
-            need = count - len(matched)
-            matched.extend(ordered[:need])
-            logger.debug(
-                f"[INTERNAL_LINK] 서론 키워드매칭={len(scored)} "
-                f"| fallback 보충={min(need, len(ordered))}"
+            logger.info(
+                "[INTERNAL_LINK] 서론 링크 %d/%d — 관련 글이 부족해 "
+                "채우지 않음(무관한 링크 방지)",
+                len(matched), count,
             )
         else:
             logger.debug(

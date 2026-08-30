@@ -285,6 +285,33 @@ class ContentGenerator:
         ai_content_model = content_result.get("model")
         ai_content_provider = content_result.get("provider")
 
+        # 4-1. 품질 게이트 — 내보내기 전에 잡는다.
+        # 사후 청소(라이프인포 146건)로는 생성 속도를 따라잡을 수 없다.
+        from .quality_gate import (
+            evaluate as _gate_eval, resolve_settings as _gate_cfg,
+            strip_duplicate_h1 as _strip_h1,
+        )
+
+        # 테마가 제목을 <h1> 으로 출력하는데 본문에도 같은 제목이 들어가
+        # 두 번 보인다. 게이트를 껐어도 이건 정리한다(순수 표시 문제).
+        content_markdown = _strip_h1(content_markdown, working_title)
+
+        gate_cfg = _gate_cfg(settings)
+        if gate_cfg["enabled"]:
+            gate = _gate_eval(
+                working_title, content_markdown, gate_cfg["min_chars"])
+            for w in gate.warnings:
+                logger.warning(
+                    "[GENERATOR] 품질 경고 | blog=%s | %s | %s",
+                    blog.name, working_title[:30], w,
+                )
+            if gate.blocked:
+                logger.warning(
+                    "[GENERATOR] 품질 게이트 차단 | blog=%s | %s | %s",
+                    blog.name, working_title[:30], gate.message,
+                )
+                raise RuntimeError(f"품질 기준 미달: {gate.message}")
+
         # 5. 내부링크 삽입
         logger.debug("[GENERATOR] 5단계 시작: 내부링크 삽입")
         content_with_links = await self.internal_linker.insert_links(
