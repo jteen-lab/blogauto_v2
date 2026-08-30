@@ -95,6 +95,69 @@ class FlowGenerateExecutor:
                 }
             module_settings = _aps.resolve(module_settings, blog)
 
+            # 형제 사이트가 이미 쓴 제목을 후보에서 뺀다. 재고 조회 안에서
+            # 블로그를 다시 읽지 않도록 여기서 계산해 넘긴다.
+            try:
+                from .sibling_blogs import resolve_sibling_ids
+
+                module_settings = {
+                    **module_settings,
+                    "_sibling_ids": await resolve_sibling_ids(
+                        self.db, blog_id, module_settings),
+                }
+            except Exception as e:  # noqa: BLE001
+                logger.warning(
+                    "[FLOW_GEN] 형제 계산 실패(무시) | blog=%s | %s",
+                    blog.name, e,
+                )
+
+            # 색인 되먹임 — 검색 노출이 죽은 상태에서 계속 발행하면 신호가
+            # 더 나빠진다. 색인률이 낮으면 발행량을 줄이고, 오래 0이면 멈춘다.
+            # 표본이 적으면(새 블로그) 막지 않는다.
+            from .index_feedback import IndexFeedback, is_enabled as _idx_on
+
+            verdict = None
+            try:
+                if await _idx_on(self.db):
+                    base_daily = None
+                    if stage_params:
+                        base_daily = getattr(
+                            stage_params.generate, "daily_count", None)
+                    verdict = await IndexFeedback(self.db).evaluate(
+                        blog_id, base_daily)
+            except Exception as e:  # noqa: BLE001
+                # 색인 조회가 실패했다고 생성을 막으면 안 된다.
+                # 되먹임은 보조 장치이지 통과 조건이 아니다.
+                logger.warning(
+                    "[FLOW_GEN] 색인 되먹임 조회 실패(무시) | blog=%s | %s",
+                    blog.name, e,
+                )
+
+            if verdict is not None:
+                if verdict.stop:
+                    logger.warning(
+                        "[FLOW_GEN] 색인 되먹임으로 생성 정지 | blog=%s | %s",
+                        blog.name, verdict.reason,
+                    )
+                    return {
+                        "success": True, "skipped": True, "blocked": True,
+                        "message": f"생성 정지 ({verdict.reason})",
+                        "index_feedback": verdict.to_dict(),
+                    }
+                if verdict.cap is not None:
+                    try:
+                        made = await self._today_generated_count(blog_id)
+                    except Exception:  # noqa: BLE001
+                        made = 0
+                    if made >= verdict.cap:
+                        msg = f"오늘 {made}개 생성 — {verdict.reason}"
+                        logger.info("[FLOW_GEN] %s | blog=%s", msg, blog.name)
+                        return {
+                            "success": True, "skipped": True,
+                            "message": msg,
+                            "index_feedback": verdict.to_dict(),
+                        }
+
             # 디스패치 시점에 결정된 title_id가 있으면 그것을 강제 사용.
             # 재고 정책은 블로그별이므로 글로벌 status='used'는 차단하지 않고
             # archived(의도적 보관)와 이 블로그가 이미 만든 제목만 차단한다.
@@ -266,6 +329,22 @@ class FlowGenerateExecutor:
                 "message": msg,
                 "error": str(e),
             }
+
+    async def _today_generated_count(self, blog_id: int) -> int:
+        """오늘 이 블로그로 생성한 글 수(색인 되먹임 상한 판정용)."""
+        from datetime import datetime, timedelta, timezone
+
+        from sqlalchemy import func as _func, select as _select
+
+        from ...models.generation_history import GenerationHistory
+
+        start = datetime.now(timezone.utc) - timedelta(hours=24)
+        return (await self.db.execute(
+            _select(_func.count(GenerationHistory.id)).where(
+                GenerationHistory.blog_id == blog_id,
+                GenerationHistory.created_at >= start,
+            )
+        )).scalar() or 0
 
     def _filter_categories_for_blog(
         self, module_settings: dict, blog_id: int
