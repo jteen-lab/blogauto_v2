@@ -79,14 +79,23 @@ def upgrade() -> None:
         return  # 이미 새 구조
 
     if _has_table(TABLE):
-        # 옛 테이블 — 인덱스 이름이 새 테이블과 부딪히므로 먼저 정리한다
-        for idx in _inspector().get_indexes(TABLE):
-            name = idx.get("name")
-            if name:
-                op.drop_index(name, table_name=TABLE)
         if _has_table(LEGACY):
             op.drop_table(LEGACY)
         op.rename_table(TABLE, LEGACY)
+        # 인덱스는 테이블을 따라오지만 '이름' 은 그대로라 새 테이블과
+        # 부딪힌다. 지우지 않고 이름만 바꾼다 — UNIQUE 제약이 뒤에 붙은
+        # 인덱스는 DROP INDEX 로 지울 수 없다(제약을 지워야 한다).
+        bind = op.get_bind()
+        rows = bind.execute(sa.text(
+            "SELECT indexname FROM pg_indexes "
+            "WHERE tablename = :t AND schemaname = current_schema()"
+        ), {"t": LEGACY}).scalars().all()
+        for name in rows:
+            if name.endswith("_legacy"):
+                continue
+            bind.execute(sa.text(
+                f'ALTER INDEX "{name}" RENAME TO "{name}_legacy"'
+            ))
 
     _create_catalog_table()
 
