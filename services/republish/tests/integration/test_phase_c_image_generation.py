@@ -24,7 +24,7 @@ from tests.fixtures.generation_pipeline_fixtures import (
 )
 
 
-SAMPLE_MARKDOWN = "## 서론\n테스트 내용입니다.\n## 본론\n본문 내용"
+SAMPLE_MARKDOWN = "## 서론\n테스트 내용입니다.\n## 본론\n본문 내용" + "테스트 문장입니다. " * 200  # 품질 게이트 통과용 채움
 SAMPLE_HTML = "<h2>서론</h2><p>테스트 내용입니다.</p>"
 DEFAULT_AI_RESPONSE = {
     "content": SAMPLE_MARKDOWN,
