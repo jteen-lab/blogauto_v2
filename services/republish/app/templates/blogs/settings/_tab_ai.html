@@ -441,6 +441,12 @@ function aiSettingsApp() {
                 { model_id: 'claude-3-opus-latest', display_name: 'Claude 3 Opus' },
                 { model_id: 'claude-3-haiku-20240307', display_name: 'Claude 3 Haiku' }
             ]},
+            { id: 'deepseek', name: 'DeepSeek', models: [
+                // 비피크(피크 외 시간)는 요금이 절반. 피크는 KST 10~12시, 15~18시(평일)
+                { model_id: 'deepseek-v4-flash', display_name: 'DeepSeek V4 Flash (저가)', is_recommended: true },
+                { model_id: 'deepseek-v4-pro', display_name: 'DeepSeek V4 Pro (고성능)' },
+                { model_id: 'deepseek-v4-flash-vision-exp', display_name: 'DeepSeek V4 Flash Vision (실험)' }
+            ]},
             { id: 'google', name: 'Google (Gemini)', models: [
                 // Gemini 3 모델 (최신)
                 { model_id: 'gemini-3-pro-preview', display_name: 'Gemini 3 Pro (Preview)', is_recommended: true },

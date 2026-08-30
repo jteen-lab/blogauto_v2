@@ -284,6 +284,63 @@
                                 <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-accent hover:underline">Google AI Studio</a>에서 API 키를 발급받을 수 있습니다
                             </p>
                         </div>
+
+                        <!-- DeepSeek 섹션 -->
+                        <div class="p-4 border border-gray-200 rounded-lg">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="flex items-center gap-2">
+                                    <svg class="w-5 h-5 text-primary" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M12 2 4 7v10l8 5 8-5V7l-8-5zm0 2.3 6 3.75v7.9l-6 3.75-6-3.75v-7.9l6-3.75zM12 8a4 4 0 100 8 4 4 0 000-8z"/>
+                                    </svg>
+                                    <span class="font-medium text-gray-900">DeepSeek</span>
+                                    <span x-show="getKeysByProvider('deepseek').length > 0" class="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full" x-text="getKeysByProvider('deepseek').length + '개 등록됨'"></span>
+                                </div>
+                                <button @click="openAddKeyModal('deepseek')"
+                                        class="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-accent bg-accent-lt rounded-lg hover:opacity-80 transition-colors">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                                    </svg>
+                                    키 추가
+                                </button>
+                            </div>
+                            <!-- 키 목록 -->
+                            <div x-show="getKeysByProvider('deepseek').length === 0" class="text-sm text-gray-500 text-center py-4">
+                                등록된 API 키가 없습니다
+                            </div>
+                            <div x-show="getKeysByProvider('deepseek').length > 0" class="space-y-2">
+                                <template x-for="key in getKeysByProvider('deepseek')" :key="key.id">
+                                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                        <div class="flex items-center gap-3">
+                                            <span class="text-xs font-medium text-gray-400 w-6" x-text="'#' + (key.priority + 1)"></span>
+                                            <div>
+                                                <div class="flex items-center gap-2">
+                                                    <span class="font-medium text-gray-900 text-sm" x-text="key.label"></span>
+                                                    <span :class="key.status === 'active' ? 'bg-green-100 text-green-700' : key.status === 'rate_limited' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'"
+                                                          class="text-xs px-2 py-0.5 rounded-full" x-text="getStatusText(key.status)"></span>
+                                                </div>
+                                                <span class="text-xs text-gray-500" x-text="key.api_key"></span>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <button @click="editKey(key)" class="p-1.5 text-gray-400 hover:text-accent hover:bg-accent-lt rounded transition-colors">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                                </svg>
+                                            </button>
+                                            <button @click="deleteKey(key)" class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                            <p class="mt-2 text-xs text-gray-500">
+                                <a href="https://platform.deepseek.com/api_keys" target="_blank" class="text-accent hover:underline">DeepSeek 플랫폼</a>에서 API 키를 발급받을 수 있습니다
+                                &middot; 피크(평일 KST 10~12시, 15~18시) 외 시간은 요금이 절반입니다
+                            </p>
+                        </div>
                     </div>
                 </div>
 
