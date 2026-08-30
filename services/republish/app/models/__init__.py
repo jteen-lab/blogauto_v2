@@ -38,6 +38,7 @@ from .user_settings import UserSettings
 
 # Phase S-2: AI API Key Multi-Account models
 from .ai_api_key import AIApiKey
+from .ai_model import AIModel, AIModelPrice
 
 # Phase D-1-1: Keyword models
 from .keyword import KeywordCategory, SeedKeyword, CollectedKeyword
@@ -118,6 +119,8 @@ __all__ = [
     "UserSettings",
     # Phase S-2: AI API Key Multi-Account models
     "AIApiKey",
+    "AIModel",
+    "AIModelPrice",
     # Phase D-1-1: Keyword models
     "KeywordCategory",
     "SeedKeyword",
