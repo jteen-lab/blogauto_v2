@@ -29,6 +29,10 @@ function createPromptBuilderState(opts = {}) {
         getSelectedCategoryNames:
             typeof opts.getSelectedCategoryNames === 'function'
                 ? opts.getSelectedCategoryNames : null,
+        // 모듈에 실제로 저장된 프롬프트를 읽어온다(반영 여부 표시용)
+        getAppliedTemplate:
+            typeof opts.getAppliedTemplate === 'function'
+                ? opts.getAppliedTemplate : null,
         blocksDataElementId: opts.blocksDataElementId || null,
         expanded: false, // embedded 모드에서 폼 안 접기/펼치기
         // F11: 전용 프롬프트(full_prompt) 프리셋 적용 시 이 텍스트를 그대로 사용.
@@ -121,6 +125,60 @@ function createPromptBuilderState(opts = {}) {
                 ...this.builtinPresets.filter((p) => !p.full_prompt),
                 ...this.customPresets,
             ];
+        },
+
+        // ── 선택 상태 스냅샷/복원 ──────────────────────────
+        // 모듈 저장 시 함께 보관해, 다시 열었을 때 "어떤 프리셋·항목을 골랐는지"를
+        // 화면에 그대로 되살린다. 저장되는 것이 텍스트뿐이면 복원할 근거가 없다.
+        selectionSnapshot() {
+            return {
+                persona: this.persona,
+                reader: this.reader,
+                pattern: this.pattern,
+                tone: this.tone,
+                common: this.common,
+                introChars: this.introChars,
+                sectionChars: this.sectionChars,
+                outroChars: this.outroChars,
+            };
+        },
+
+        restoreSelection(snap) {
+            if (!snap || typeof snap !== 'object') return;
+            const pick = (list, code) => list.some((x) => x.code === code) ? code : '';
+            this.persona = pick(this.personas, snap.persona) || this.persona;
+            this.reader = pick(this.readers, snap.reader) || this.reader;
+            this.pattern = pick(this.patterns, snap.pattern) || this.pattern;
+            this.tone = pick(this.tones, snap.tone) || this.tone;
+            const common = pick(this.commons, snap.common);
+            if (common) this.common = common;
+            if (Number.isFinite(snap.introChars)) this.introChars = snap.introChars;
+            if (Number.isFinite(snap.sectionChars)) this.sectionChars = snap.sectionChars;
+            if (Number.isFinite(snap.outroChars)) this.outroChars = snap.outroChars;
+        },
+
+        // 지금 고른 조합과 같은 프리셋의 라벨(없으면 빈 문자열)
+        get activePresetLabel() {
+            const hit = this.presets.find((p) => this.isActivePreset(p));
+            return hit ? hit.label : '';
+        },
+
+        // 지금 화면 선택이 모듈에 반영돼 있는지. 반영을 안 누르면 저장된 것은 옛 텍스트다.
+        get isAppliedToModule() {
+            if (typeof this.getAppliedTemplate !== 'function') return true;
+            try {
+                return (this.getAppliedTemplate() || '') === this.builtPrompt;
+            } catch (e) {
+                return true;
+            }
+        },
+
+        // 화면에 보여줄 현재 선택 요약
+        get selectionSummary() {
+            if (this.fullPromptOverride) return '전용 프롬프트 적용 중';
+            if (this.activePresetLabel) return this.activePresetLabel;
+            if (this.isComplete()) return '직접 조합';
+            return '';
         },
 
         // ── 프리셋 추천 ────────────────────────────────────
@@ -508,7 +566,7 @@ function createPromptBuilderState(opts = {}) {
         applyToTemplate() {
             if (!this.isComplete()) return;
             if (typeof this.onApply === 'function') {
-                this.onApply(this.builtPrompt);
+                this.onApply(this.builtPrompt, this.selectionSnapshot());
                 this.justApplied = true;
                 setTimeout(() => { this.justApplied = false; }, 1500);
             }

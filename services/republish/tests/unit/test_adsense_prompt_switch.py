@@ -153,3 +153,34 @@ def test_approval_preset_endpoint_path_matches_router():
     js = Path("app/static/js/modules/prompt-form.js").read_text(encoding="utf-8")
     expected = f"{router.prefix}/approval-presets"
     assert expected in js, f"JS 경로 불일치 — 기대: {expected}"
+
+
+# ---------- 빌더 선택 저장/복원 (2026-08-30) ----------
+
+def test_builder_selection_is_saved_and_loaded():
+    """텍스트만 저장하면 다시 열었을 때 무엇을 골랐는지 알 수 없다.
+
+    축 코드를 함께 저장·복원해야 프리셋·항목 강조가 살아난다.
+    """
+    from pathlib import Path
+
+    js = Path("app/static/js/modules/prompt-form.js").read_text(encoding="utf-8")
+    assert "builder_selection: this.promptModule.contentGeneration.builderSelection" in js
+    assert "builderSelection: cg.builder_selection" in js
+
+
+def test_builder_exposes_snapshot_and_restore():
+    from pathlib import Path
+
+    js = Path("app/static/js/prompt_builder/app.js").read_text(encoding="utf-8")
+    for fn in ("selectionSnapshot()", "restoreSelection(snap)",
+               "get activePresetLabel()", "get isAppliedToModule()"):
+        assert fn in js, fn
+
+
+def test_apply_passes_snapshot():
+    """반영 시 텍스트와 함께 선택 스냅샷을 넘겨야 저장된다."""
+    from pathlib import Path
+
+    js = Path("app/static/js/prompt_builder/app.js").read_text(encoding="utf-8")
+    assert "this.onApply(this.builtPrompt, this.selectionSnapshot())" in js

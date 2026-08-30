@@ -42,6 +42,8 @@ function createPromptModuleState() {
         ],
 
         contentGeneration: {
+            // 빌더에서 고른 축 코드(복원·강조용). 텍스트만으론 무엇을 골랐는지 알 수 없다.
+            builderSelection: null,
             enabled: false,
             provider: 'openai',
             temperature: 0.7,
@@ -195,6 +197,7 @@ const promptModuleMethods = {
                 topK: cg.top_k ?? 40,
                 systemPrompt: cg.system_prompt || '',
                 userPromptTemplate: cg.user_prompt_template || '',
+                builderSelection: cg.builder_selection || null,
                 renewalMode: (cg.renewal_prompt && cg.renewal_prompt.mode) || 'inherit',
                 renewalText: (cg.renewal_prompt && cg.renewal_prompt.text) || '',
                 showAdvanced: false
@@ -496,6 +499,8 @@ const promptModuleMethods = {
                 top_k: this.promptModule.contentGeneration.topK,
                 system_prompt: this.promptModule.contentGeneration.systemPrompt,
                 user_prompt_template: this.promptModule.contentGeneration.userPromptTemplate,
+                // 어떤 프리셋·항목을 골랐는지 함께 저장한다(다시 열었을 때 강조 복원).
+                builder_selection: this.promptModule.contentGeneration.builderSelection || null,
                 // 재발행 리뉴얼 프롬프트 (mode: inherit|new|additional)
                 renewal_prompt: {
                     mode: this.promptModule.contentGeneration.renewalMode || 'inherit',

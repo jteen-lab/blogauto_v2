@@ -13,8 +13,13 @@ window.getPromptBuilderEmbeddedHTML = function () {
     <div class="border-t border-purple-200 pt-4"
          x-data="createPromptBuilderState({
              mode: 'embedded',
-             onApply: (text) => { promptModule.contentGeneration.userPromptTemplate = text; },
+             onApply: (text, snapshot) => {
+                 promptModule.contentGeneration.userPromptTemplate = text;
+                 // 어떤 프리셋·항목을 골랐는지 함께 보관한다(복원·강조용).
+                 promptModule.contentGeneration.builderSelection = snapshot || null;
+             },
              onApplyPreset: (p) => { if (p.full_prompt) promptModule.adsense.infoGainEnabled = false; },
+             getAppliedTemplate: () => promptModule.contentGeneration.userPromptTemplate,
              getSelectedCategoryNames: () => {
                  // 프리셋 추천에 넘길 카테고리 이름.
                  // 연결 방식이 두 가지라 둘 다 본다.
@@ -45,7 +50,7 @@ window.getPromptBuilderEmbeddedHTML = function () {
                  return { topics, subtopics: subs };
              }
          })"
-         x-init="init()">
+         x-init="init(); $nextTick(() => restoreSelection(promptModule.contentGeneration.builderSelection))">
 
         <button type="button"
                 @click="expanded = !expanded"
@@ -78,6 +83,17 @@ window.getPromptBuilderEmbeddedHTML = function () {
                     <button type="button" @click="clearAll()"
                             class="text-xs px-2 py-0.5 border border-red-300 text-red-600 rounded hover:bg-red-50">전체 초기화</button>
                 </div>
+                <div x-show="selectionSummary"
+                     class="flex items-center gap-2 flex-wrap text-xs rounded px-2 py-1.5 mb-2 border"
+                     :class="isAppliedToModule ? 'bg-purple-50 border-purple-200 text-purple-800'
+                                               : 'bg-orange-50 border-orange-300 text-orange-800'">
+                    <span class="font-semibold">현재 선택</span>
+                    <span x-text="selectionSummary"></span>
+                    <span x-show="isAppliedToModule" class="text-purple-600">· 반영됨</span>
+                    <span x-show="!isAppliedToModule" class="font-semibold">
+                        · 아직 반영되지 않았습니다 — 아래 "반영"을 눌러야 저장됩니다
+                    </span>
+                </div>
                 <p x-show="hasRecommendation" class="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 mb-2">
                     선택한 카테고리에 맞는 프리셋을 위로 올렸습니다. ★ 표시가 하위 주제까지 맞는 것입니다.
                 </p>
@@ -91,6 +107,7 @@ window.getPromptBuilderEmbeddedHTML = function () {
                                             : (presetMatchScore(p) === 1 ? 'border-amber-200 bg-amber-50/40' : 'border-gray-200 hover:bg-white'))">
                                 <div class="flex items-center justify-between gap-2">
                                     <span class="font-medium text-gray-800">
+                                        <span x-show="isActivePreset(p)" class="text-purple-600 font-bold">✔</span>
                                         <span x-show="presetMatchScore(p) === 2" class="text-amber-600">★</span>
                                         <span x-show="presetMatchScore(p) === 1" class="text-amber-500">☆</span>
                                         <span x-text="p.label"></span>
