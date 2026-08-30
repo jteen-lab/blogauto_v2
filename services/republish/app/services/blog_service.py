@@ -625,6 +625,19 @@ class BlogService:
                     "matching_started": False
                 }
 
+            # 검색 노출 기본 조건 점검(막지 않고 알리기만).
+            # 레시피노트의 robots.txt 가 남의 사이트맵을 가리키는 것을
+            # 몇 주 뒤에야 발견했다. 등록 시점에 드러나야 한다.
+            site_health = {"checked": False, "issues": []}
+            try:
+                from .publishing.site_health_check import check_site
+
+                site_health = (await check_site(blog.url)).to_dict()
+            except Exception as e:
+                logger.warning(
+                    "검색 노출 점검 실패 (무시) | blog_id=%s | %s", blog.id, e,
+                )
+
             # SEO 플러그인 감지 (WordPress만, 실패해도 무시)
             if blog.platform == BlogPlatform.WORDPRESS:
                 try:
@@ -666,7 +679,8 @@ class BlogService:
                     "details": {
                         "platform": blog.platform.value,
                         "url": blog.url,
-                        "is_new_blog": True
+                        "is_new_blog": True,
+                        "site_health": site_health,
                     },
                     "crawled_count": 0,
                     "is_new_blog": True,
@@ -697,7 +711,8 @@ class BlogService:
                     "platform": blog.platform.value,
                     "url": blog.url,
                     "crawled_count": crawl_result.crawled_count,
-                    "new_posts": crawl_result.new_count
+                    "new_posts": crawl_result.new_count,
+                    "site_health": site_health,
                 },
                 "crawled_count": crawl_result.crawled_count,
                 "is_new_blog": False,
