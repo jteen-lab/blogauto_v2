@@ -333,16 +333,19 @@ class CrawlService:
         new_count = 0
 
         for post_data in posts:
-            # 중복 확인
+            # 중복 확인 — 있는지만 보면 되므로 한 건만 가져온다.
+            # scalar_one_or_none() 을 쓰면 같은 제목이 둘 이상일 때 예외가 나서
+            # 크롤링 전체가 실패했다. 제목이 같고 URL이 다른 글은 실제로 존재한다
+            # (예: "소고기 미역국 레시피"를 두 번 발행한 블로그).
             existing = await self.db.execute(
-                select(CrawledPost).where(
+                select(CrawledPost.id).where(
                     and_(
                         CrawledPost.blog_id == blog_id,
                         CrawledPost.title == post_data.title
                     )
-                )
+                ).limit(1)
             )
-            if existing.scalar_one_or_none():
+            if existing.first():
                 continue
 
             # 신규 포스트 저장
