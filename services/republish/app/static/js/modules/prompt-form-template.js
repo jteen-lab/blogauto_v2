@@ -143,13 +143,31 @@ function getPromptAdsenseSection() {
                                             <strong>승인되면 자동으로 위의 사용자 프롬프트 템플릿(평소 프롬프트)으로 돌아갑니다.</strong>
                                             <br>비워두면 항상 평소 프롬프트를 씁니다.
                                         </p>
-                                        <select x-model="promptModule.adsense.approvalPreset"
-                                                class="w-full px-2 py-1.5 border border-gray-300 rounded text-xs">
-                                            <option value="">사용 안 함 (평소 프롬프트만)</option>
+                                        <!-- select + 비동기 x-for 옵션 조합은 값이 비어 보인다
+                                             (옵션이 붙기 전에 x-model 이 적용됨). 버튼 목록으로 대체. -->
+                                        <div class="space-y-1">
+                                            <button type="button"
+                                                    @click="promptModule.adsense.approvalPreset = ''"
+                                                    class="w-full text-left px-2 py-1.5 border rounded text-xs transition-colors"
+                                                    :class="!promptModule.adsense.approvalPreset
+                                                        ? 'border-amber-500 bg-amber-100 font-medium'
+                                                        : 'border-gray-200 hover:bg-white'">
+                                                사용 안 함 (평소 프롬프트만)
+                                            </button>
                                             <template x-for="opt in promptModule.adsense.approvalPresetOptions" :key="opt.code">
-                                                <option :value="opt.code" x-text="opt.label"></option>
+                                                <button type="button"
+                                                        @click="promptModule.adsense.approvalPreset = opt.code"
+                                                        class="w-full text-left px-2 py-1.5 border rounded text-xs transition-colors"
+                                                        :class="promptModule.adsense.approvalPreset === opt.code
+                                                            ? 'border-amber-500 bg-amber-100 font-medium'
+                                                            : 'border-gray-200 hover:bg-white'">
+                                                    <span x-text="opt.label"></span>
+                                                    <span class="block text-[10px] text-gray-500" x-text="opt.categories"></span>
+                                                </button>
                                             </template>
-                                        </select>
+                                            <p x-show="!promptModule.adsense.approvalPresetOptions.length"
+                                               class="text-[11px] text-gray-400">승인용 프리셋을 불러오는 중…</p>
+                                        </div>
                                         <p class="text-[11px]"
                                            :class="promptModule.adsense.approvalPreset ? 'text-emerald-600' : 'text-gray-400'"
                                            x-text="promptModule.adsense.approvalPreset

@@ -206,3 +206,19 @@ def test_adsense_state_is_merged_not_replaced():
     js = Path("app/static/js/modules/prompt-form.js").read_text(encoding="utf-8")
     idx = js.index("this.promptModule.adsense = {")
     assert "...this.promptModule.adsense," in js[idx:idx + 200]
+
+
+def test_approval_preset_uses_button_list_not_select():
+    """<select> + 비동기 x-for 옵션 조합은 값이 비어 보인다.
+
+    옵션이 DOM 에 붙기 전에 x-model 이 적용돼 선택값이 표시되지 않는다
+    (= 저장했는데 리셋된 것처럼 보임). 이 코드베이스에서 이미 한 번 겪은 함정이라
+    버튼 목록으로 고정한다.
+    """
+    from pathlib import Path
+
+    js = Path("app/static/js/modules/prompt-form-template.js").read_text(
+        encoding="utf-8",
+    )
+    assert '<select x-model="promptModule.adsense.approvalPreset"' not in js
+    assert "promptModule.adsense.approvalPreset = opt.code" in js
