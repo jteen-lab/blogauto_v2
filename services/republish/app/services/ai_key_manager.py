@@ -62,8 +62,12 @@ class AIKeyManager:
         if exclude_ids:
             query = query.where(AIApiKey.id.notin_(exclude_ids))
 
-        result = await self.db.execute(query)
-        return result.scalar_one_or_none()
+        # 우선순위로 정렬해 **첫 번째**를 쓴다.
+        # scalar_one_or_none() 을 쓰면 키를 2개 이상 등록한 순간
+        # MultipleResultsFound 가 나서 그 제공자를 아예 못 쓰게 된다.
+        # 키를 여러 개 두는 것은 rate limit 대비 설계라 정상 상황이다.
+        result = await self.db.execute(query.limit(1))
+        return result.scalars().first()
 
     async def get_next_available_key(
         self,
