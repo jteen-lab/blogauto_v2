@@ -183,7 +183,7 @@ class ReferenceSummaryService:
             return result
 
         # 선택 provider 실패 시 다른 provider 시도
-        fallback_order = ["openai", "anthropic", "google"]
+        fallback_order = ["openai", "anthropic", "google", "deepseek"]
         for provider in fallback_order:
             if provider == self.ai_provider:
                 continue
@@ -199,6 +199,8 @@ class ReferenceSummaryService:
             "openai": (HAS_OPENAI, AIProvider.OPENAI, self._call_openai),
             "anthropic": (HAS_ANTHROPIC, AIProvider.ANTHROPIC, self._call_anthropic),
             "google": (HAS_GOOGLE, AIProvider.GOOGLE, self._call_google),
+            # 딥시크는 OpenAI 호환이라 openai 라이브러리를 그대로 쓴다
+            "deepseek": (HAS_OPENAI, AIProvider.DEEPSEEK, self._call_deepseek),
         }
 
         config = provider_map.get(provider)
@@ -224,6 +226,7 @@ class ReferenceSummaryService:
             "openai": "gpt-4.1-mini",
             "anthropic": "claude-haiku-4-5-20251001",
             "google": "gemini-2.5-flash",
+            "deepseek": "deepseek-v4-flash",
         }
         valid = {
             "openai": {
@@ -244,6 +247,10 @@ class ReferenceSummaryService:
                 "gemini-2.5-pro",
                 "gemini-3-flash-preview", "gemini-3-pro-preview",
             },
+            "deepseek": {
+                "deepseek-v4-flash", "deepseek-v4-pro",
+                "deepseek-v4-flash-vision-exp",
+            },
         }
         if provider == self.ai_provider and self.ai_model in valid.get(provider, set()):
             return self.ai_model
@@ -263,6 +270,24 @@ class ReferenceSummaryService:
             return response.choices[0].message.content.strip()
         except Exception as e:
             logger.warning(f"[SUMMARY] OpenAI 실패: {e}")
+            return None
+
+    async def _call_deepseek(self, api_key: str, prompt: str) -> Optional[str]:
+        """딥시크 API 호출 (OpenAI 호환 — base_url 만 다르다)"""
+        from .ai.deepseek_pricing import BASE_URL
+
+        try:
+            model_name = self._get_model_for_provider("deepseek")
+            client = openai.AsyncOpenAI(api_key=api_key, base_url=BASE_URL)
+            response = await client.chat.completions.create(
+                model=model_name,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=800,
+                temperature=0.3
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            logger.warning(f"[SUMMARY] DeepSeek 실패: {e}")
             return None
 
     async def _call_anthropic(self, api_key: str, prompt: str) -> Optional[str]:
