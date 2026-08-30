@@ -171,3 +171,108 @@ def test_deepseek_selectable_in_settings_ui():
     tab = (ROOT / "app/templates/blogs/settings/_tab_ai.html").read_text(
         encoding="utf-8")
     assert "deepseek-v4-flash" in tab
+
+
+# ── 사고 모드로 답이 비던 문제 (2026-08-30) ──────────────────────────────
+# 딥시크 v4 는 기본으로 사고(reasoning)를 하고 그 토큰이 max_tokens 예산을
+# 함께 쓴다. 제목 재조합(max_tokens=200)에서 사고에 484자를 쓰고 본문이 0자로
+# 돌아와 생성이 통째로 실패했다. 로그에는 "API 키 상태 확인 필요" 라고만 떠서
+# 원인을 가렸다.
+
+def test_reasoning_disabled_for_deepseek():
+    """사고 모드를 끄지 않으면 짧은 작업에서 본문이 빈다."""
+    from app.services.ai.deepseek_pricing import EXTRA_PARAMS
+
+    assert EXTRA_PARAMS.get("reasoning_effort") == "none"
+
+
+@pytest.mark.asyncio
+async def test_deepseek_call_passes_extra_params():
+    """옵션이 실제 호출까지 전달되는지 — 빠지면 사고 모드가 되살아난다."""
+    from app.services.ai.deepseek_pricing import EXTRA_PARAMS
+
+    svc = AIService(MagicMock(), user_id=1)
+    svc.key_manager = MagicMock()
+    svc.key_manager.get_available_key = AsyncMock(
+        return_value=MagicMock(id=1, api_key="k"))
+    svc.key_manager.mark_key_used = AsyncMock()
+
+    with patch.object(svc, "_call_openai", new=AsyncMock(return_value="본문")) as m:
+        await svc._try_provider(AIProvider.DEEPSEEK, "p", None, 200, 0.7)
+
+    assert m.call_args.kwargs["extra_params"] == EXTRA_PARAMS
+
+
+@pytest.mark.asyncio
+async def test_openai_gets_no_extra_params():
+    """OpenAI 에는 reasoning_effort 가 다른 의미라 넘기면 안 된다."""
+    svc = AIService(MagicMock(), user_id=1)
+    svc.key_manager = MagicMock()
+    svc.key_manager.get_available_key = AsyncMock(
+        return_value=MagicMock(id=1, api_key="k"))
+    svc.key_manager.mark_key_used = AsyncMock()
+
+    with patch.object(svc, "_call_openai", new=AsyncMock(return_value="본문")) as m:
+        await svc._try_provider(AIProvider.OPENAI, "p", None, 200, 0.7)
+
+    assert not m.call_args.kwargs.get("extra_params")
+
+
+@pytest.mark.asyncio
+async def test_extra_params_reach_the_api_call():
+    """SDK 호출 인자에 실제로 실리는지 (중간에서 버려지면 소용없다)."""
+    svc = AIService(MagicMock(), user_id=1)
+    captured = {}
+
+    class _Resp:
+        class _Choice:
+            finish_reason = "stop"
+            message = MagicMock(content="응답", reasoning_content=None)
+        choices = [_Choice()]
+
+    async def _create(**kw):
+        captured.update(kw)
+        return _Resp()
+
+    client = MagicMock()
+    client.chat.completions.create = _create
+    with patch("openai.AsyncOpenAI", return_value=client):
+        out = await svc._call_openai(
+            "k", "프롬프트", "deepseek-v4-flash", 200, 0.7,
+            base_url="https://api.deepseek.com",
+            extra_params={"reasoning_effort": "none"},
+        )
+
+    assert out == "응답"
+    assert captured["reasoning_effort"] == "none"
+
+
+@pytest.mark.asyncio
+async def test_empty_response_is_logged_with_cause(caplog):
+    """본문이 비면 원인을 남긴다 — 키 문제로 오해하지 않도록."""
+    svc = AIService(MagicMock(), user_id=1)
+
+    class _Resp:
+        class _Choice:
+            finish_reason = "length"
+            message = MagicMock(content="", reasoning_content="사" * 484)
+        choices = [_Choice()]
+
+    client = MagicMock()
+    client.chat.completions.create = AsyncMock(return_value=_Resp())
+    with patch("openai.AsyncOpenAI", return_value=client):
+        with caplog.at_level("WARNING"):
+            out = await svc._call_openai("k", "p", "deepseek-v4-flash", 200, 0.7)
+
+    assert out == ""
+    joined = " ".join(r.getMessage() for r in caplog.records)
+    assert "빈 응답" in joined
+    assert "length" in joined      # finish_reason
+    assert "484" in joined         # 사고에 쓴 분량
+
+
+def test_reference_summary_also_disables_reasoning():
+    """참조자료 요약(max_tokens=800)도 같은 함정에 빠진다."""
+    src = (ROOT / "app/services/reference_summary_service.py").read_text(
+        encoding="utf-8")
+    assert "EXTRA_PARAMS" in src
