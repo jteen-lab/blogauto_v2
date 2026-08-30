@@ -661,6 +661,9 @@ function dataManagementApp() {
         selectedBlogId: '',
         matchingSummary: null,
         stateFilter: 'all',  // 'all' | 'published' | 'pending' | 'independent' | 'unmatched'
+        // 정리 권장 표시 {정식제목id: 사유}. 저품질 재고를 한 번 걷어내기 위한
+        // 것이라 정리가 끝나면 쓰지 않게 된다.
+        cleanupFlags: {},
         // MATCH-040: 매칭 진행 표시 상태
         isMatching: false,
         matchProgressText: '',
@@ -1197,6 +1200,7 @@ function dataManagementApp() {
             // 제목 목록 다시 로드 (기본: 전체 상태)
             this.mainTitlePage = 1;
             this.stateFilter = 'all';
+            this.loadCleanupFlags();
             this.loadMainTitlesWithCrawled();
         },
 
@@ -1457,6 +1461,59 @@ function dataManagementApp() {
         },
 
         // 선택한 정식 제목 삭제
+        /** 정리 권장 목록 조회(블로그 선택 시) */
+        async loadCleanupFlags() {
+            this.cleanupFlags = {};
+            if (!this.selectedBlogId) return;
+            try {
+                const r = await fetch(
+                    `${API_BASE}/blogs/${this.selectedBlogId}/cleanup/flags`,
+                    { credentials: 'include' });
+                if (r.ok) this.cleanupFlags = (await r.json()).flags || {};
+            } catch (e) {
+                console.warn('[cleanup] 정리 권장 조회 실패', e);
+            }
+        },
+
+        /** 선택한 정식제목의 발행글을 블로그에서 삭제 */
+        async deleteFromBlog() {
+            const ids = [...this.selectedMainTitles];
+            if (!ids.length || !this.selectedBlogId) return;
+
+            const blog = (this.blogs || []).find(
+                b => String(b.id) === String(this.selectedBlogId));
+            const name = blog ? blog.name : '이 블로그';
+            // 되돌릴 수 없으므로 무엇이 사라지는지 분명히 말한다.
+            if (!confirm(
+                `${name}에서 발행글 ${ids.length}개를 완전히 삭제합니다.\n\n`
+                + '되돌릴 수 없습니다. 정식제목은 남고 블로그의 글만 지워집니다.\n'
+                + '계속할까요?')) return;
+
+            try {
+                const r = await fetch(
+                    `${API_BASE}/blogs/${this.selectedBlogId}/cleanup/by-titles?mode=delete`,
+                    {
+                        method: 'POST', credentials: 'include',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ main_title_ids: ids }),
+                    });
+                const d = await r.json();
+                if (!r.ok) {
+                    showErrorMessage(d.detail || '삭제 실패');
+                    return;
+                }
+                const failed = (d.failed || []).length;
+                showSuccessMessage(
+                    `${d.done}건 삭제 완료`
+                    + (failed ? ` / 실패 ${failed}건` : ''));
+                this.selectedMainTitles = [];
+                await this.loadCleanupFlags();
+                await this.loadMainTitlesWithCrawled();
+            } catch (e) {
+                showErrorMessage('삭제 중 오류가 발생했습니다');
+            }
+        },
+
         async deleteSelectedMainTitles() {
             if (this.selectedMainTitles.length === 0) return;
             if (!confirm(`선택된 ${this.selectedMainTitles.length}개 제목을 삭제하시겠습니까?`)) return;
