@@ -113,8 +113,14 @@ function createPromptBuilderState(opts = {}) {
 
         // ── 프리셋 ─────────────────────────────────────────
         get presets() {
-            // 기본 + 커스텀 합쳐서 노출 (커스텀이 뒤에 옴)
-            return [...this.builtinPresets, ...this.customPresets];
+            // 기본 + 커스텀 합쳐서 노출 (커스텀이 뒤에 옴).
+            // 애드센스 승인용(full_prompt) 프리셋은 여기서 제외한다 —
+            // 승인 전에만 쓰는 것이라 '애드센스 승인용 설정'에서 고른다(2026-08-30).
+            // 빌더 프리셋은 '평소 사용할 프롬프트'만 다룬다.
+            return [
+                ...this.builtinPresets.filter((p) => !p.full_prompt),
+                ...this.customPresets,
+            ];
         },
 
         // ── 프리셋 추천 ────────────────────────────────────

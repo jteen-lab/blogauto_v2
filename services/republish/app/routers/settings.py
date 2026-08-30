@@ -591,6 +591,67 @@ async def save_tally_account(
     return {"success": True, "configured": bool(stored), "api_key": masked}
 
 
+@router.get("/adsense-sync-interval")
+async def get_adsense_sync_interval(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """애드센스 승인 상태 자동 확인 주기(시간)."""
+    from ..scheduler.flow_scheduler import (
+        DEFAULT_ADSENSE_SYNC_HOURS, SETTING_ADSENSE_SYNC_HOURS,
+    )
+    from ..services.system_settings_service import SystemSettingsService
+
+    raw = await SystemSettingsService.get(SETTING_ADSENSE_SYNC_HOURS, db)
+    try:
+        hours = int(raw) if raw else DEFAULT_ADSENSE_SYNC_HOURS
+    except (TypeError, ValueError):
+        hours = DEFAULT_ADSENSE_SYNC_HOURS
+    return {"hours": hours, "default": DEFAULT_ADSENSE_SYNC_HOURS}
+
+
+@router.post("/adsense-sync-interval")
+async def save_adsense_sync_interval(
+    hours: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """확인 주기를 저장하고 스케줄러 Job 을 즉시 다시 등록한다."""
+    from ..scheduler.flow_scheduler import (
+        MAX_ADSENSE_SYNC_HOURS, MIN_ADSENSE_SYNC_HOURS,
+        SETTING_ADSENSE_SYNC_HOURS,
+    )
+    from ..services.system_settings_service import SystemSettingsService
+
+    if not MIN_ADSENSE_SYNC_HOURS <= hours <= MAX_ADSENSE_SYNC_HOURS:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"확인 주기는 {MIN_ADSENSE_SYNC_HOURS}~{MAX_ADSENSE_SYNC_HOURS}시간 "
+                f"사이여야 합니다"
+            ),
+        )
+
+    await SystemSettingsService.set(SETTING_ADSENSE_SYNC_HOURS, str(hours), db)
+    await db.commit()
+    SystemSettingsService.invalidate_cache()
+
+    # 저장 즉시 반영 — 앱 재시작을 기다리지 않는다.
+    reregistered = False
+    try:
+        from ..scheduler.flow_scheduler import get_flow_scheduler
+
+        scheduler = get_flow_scheduler()
+        if scheduler is not None:
+            scheduler._register_adsense_sync()
+            reregistered = True
+    except Exception as exc:  # noqa: BLE001 — 저장은 성공했으므로 실패해도 진행
+        logger.warning("[SETTINGS] 애드센스 Job 재등록 실패: %s", exc)
+
+    logger.info("[SETTINGS] 애드센스 확인 주기 저장 | %d시간", hours)
+    return {"success": True, "hours": hours, "rescheduled": reregistered}
+
+
 # ============================================================
 # Search Console (S6 색인 점검)
 # ============================================================

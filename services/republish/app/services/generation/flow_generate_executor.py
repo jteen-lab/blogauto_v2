@@ -78,26 +78,22 @@ class FlowGenerateExecutor:
             from .adsense_auto_settings import resolve_for_blog
             module_settings = resolve_for_blog(module_settings, blog)
 
-            # 애드센스 승인 후 프롬프트 전환(2026-08-30).
-            # 승인됐는데 승인용 프롬프트를 계속 쓰고 돌아갈 프롬프트도 없으면
-            # 생성을 멈춘다 — 조용히 부적절한 글을 쌓는 것보다 낫다.
+            # 애드센스 승인용 프롬프트(2026-08-30 재설계).
+            # 승인 전이고 승인용 프리셋이 지정돼 있으면 그 프롬프트로 생성한다.
+            # 승인되면 지정이 있어도 무시되어 평소 프롬프트로 자동 복귀한다.
             from . import adsense_prompt_switch as _aps
-            _block = _aps.block_reason(module_settings, blog)
-            if _block:
+            _bad_preset = _aps.invalid_preset_reason(module_settings)
+            if _bad_preset:
                 logger.warning(
-                    "[FLOW_GEN] 생성 정지 | blog=%s | %s", blog.name, _block,
+                    "[FLOW_GEN] 생성 정지 | blog=%s | %s", blog.name, _bad_preset,
                 )
                 return {
                     "success": True,
                     "skipped": True,
                     "blocked": True,
-                    "message": f"생성 정지 ({_block})",
+                    "message": f"생성 정지 ({_bad_preset})",
                 }
-            if _aps.needs_switch(module_settings, blog):
-                module_settings = _aps.switched_settings(module_settings)
-                logger.info(
-                    "[FLOW_GEN] 승인 후 프롬프트로 전환 | blog=%s", blog.name,
-                )
+            module_settings = _aps.resolve(module_settings, blog)
 
             # 디스패치 시점에 결정된 title_id가 있으면 그것을 강제 사용.
             # 재고 정책은 블로그별이므로 글로벌 status='used'는 차단하지 않고

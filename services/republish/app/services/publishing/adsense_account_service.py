@@ -157,10 +157,6 @@ class AdsenseAccountService:
                     blog.name, blog.adsense_status, new_status,
                 )
                 blog.adsense_status = new_status
-                # 승인으로 올라가면 모듈 프롬프트를 니치용으로 교체한다(S2).
-                if new_status == "approved":
-                    from ..generation.adsense_prompt_sync import sync_for_blog
-                    await sync_for_blog(self.db, blog)
                 changed += 1
 
         if changed:

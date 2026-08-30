@@ -101,9 +101,11 @@ function createPromptModuleState() {
         // 애드센스 승인용 (F4 니치 강제 + F7 정보이득) — 이 모듈에만 적용
         adsense: {
             nicheEnabled: false,
-            // 승인 후 사용할 프롬프트 본문. adsense_auto 가 켜진 모듈에서만 의미가 있다.
-            // 비어 있으면 승인 후에도 같은 프롬프트를 계속 쓴다(하위호환).
-            postApprovalPrompt: '',
+            // 승인 전에만 사용할 프리셋 코드(2026-08-30 재설계).
+            // 비어 있으면 항상 '사용자 프롬프트 템플릿'(평소 프롬프트)을 쓴다.
+            // 승인되면 지정이 있어도 무시되어 평소 프롬프트로 자동 복귀한다.
+            approvalPreset: '',
+            approvalPresetOptions: [],
             nicheTopicIds: [],   // 허용 topic_id 배열
             infoGainEnabled: false,
             // 블로그의 애드센스 상태에 따라 이 모듈을 실행할지 결정
@@ -131,6 +133,19 @@ const promptModuleMethods = {
             }
         } catch (e) { console.error('카테고리 로드 실패:', e); }
         finally { this.promptModule.categoriesLoading = false; }
+    },
+
+    // 애드센스 승인 전에만 쓸 프리셋 목록(빌더 목록에는 없다)
+    async loadApprovalPresets() {
+        try {
+            const resp = await fetch('/api/v1/prompt-blocks/approval-presets', {
+                credentials: 'include',
+            });
+            if (resp.ok) {
+                const data = await resp.json();
+                this.promptModule.adsense.approvalPresetOptions = data.presets || [];
+            }
+        } catch (e) { console.error('승인용 프리셋 로드 실패:', e); }
     },
 
     // 편집 모드일 때 기존 데이터로 프롬프트 모듈 초기화
@@ -266,7 +281,7 @@ const promptModuleMethods = {
             excludeSiblingTitles: settings.exclude_sibling_titles ?? false,
             aeoEnabled: settings.aeo_enabled ?? false,
             autoSwitch: settings.adsense_auto ?? false,
-            postApprovalPrompt: settings.post_approval_prompt ?? '',
+            approvalPreset: settings.adsense_approval_preset ?? '',
             nicheEnabled: settings.niche_enabled ?? false,
             nicheTopicIds: Array.isArray(settings.niche_topic_ids) ? settings.niche_topic_ids.slice() : [],
             infoGainEnabled: settings.info_gain_enabled ?? false
@@ -438,7 +453,7 @@ const promptModuleMethods = {
             exclude_sibling_titles: !!this.promptModule.adsense.excludeSiblingTitles,
             aeo_enabled: !!this.promptModule.adsense.aeoEnabled,
             adsense_auto: !!this.promptModule.adsense.autoSwitch,
-            post_approval_prompt: this.promptModule.adsense.postApprovalPrompt || '',
+            adsense_approval_preset: this.promptModule.adsense.approvalPreset || '',
             niche_enabled: this.promptModule.adsense.nicheEnabled,
             niche_topic_ids: this.promptModule.adsense.nicheTopicIds,
             info_gain_enabled: this.promptModule.adsense.infoGainEnabled,

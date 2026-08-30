@@ -26,6 +26,27 @@ router = APIRouter(
 )
 
 
+@router.get("/approval-presets")
+async def list_approval_presets() -> dict:
+    """애드센스 승인 전에만 쓸 수 있는 프리셋 목록.
+
+    빌더 프리셋 목록에서는 제외되고(평소 프롬프트 전용), 프롬프트/생성 모듈의
+    애드센스 설정에서 고른다. 설계: prompt_switch_on_approval_plan.md §7
+    """
+    from ..services.generation.adsense_prompt_switch import approval_presets
+
+    return {
+        "presets": [
+            {
+                "code": p["code"],
+                "label": p["label"],
+                "categories": p.get("categories", ""),
+            }
+            for p in approval_presets()
+        ],
+    }
+
+
 @router.get("", response_model=List[PromptBlockResponse])
 async def list_prompt_blocks(
     block_type: Optional[str] = Query(default=None),

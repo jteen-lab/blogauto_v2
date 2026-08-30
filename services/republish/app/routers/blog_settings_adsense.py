@@ -192,11 +192,6 @@ async def save_publish_cadence(
         )
     blog = await get_blog_or_404(blog_id, current_user, db)
     blog.adsense_status = request.adsense_status
-
-    # 승인으로 바뀌면 모듈 프롬프트를 니치용으로 교체한다(S2).
-    # 지정된 프롬프트가 없으면 교체하지 않고, 생성 게이트가 막는다.
-    from ..services.generation.adsense_prompt_sync import sync_for_blog
-    prompt_sync = await sync_for_blog(db, blog)
     await db.commit()
     logger.info(
         "애드센스 상태 저장 | blog_id=%s | adsense_status=%s",
@@ -205,7 +200,6 @@ async def save_publish_cadence(
     return {
         "success": True,
         "adsense_status": blog.adsense_status,
-        "prompt_sync": prompt_sync,
     }
 
 

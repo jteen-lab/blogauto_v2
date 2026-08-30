@@ -114,13 +114,16 @@ class FlowScheduler:
 
         self.scheduler.add_job(
             _adsense_sync_callback,
-            trigger=IntervalTrigger(hours=12),
+            trigger=IntervalTrigger(hours=_adsense_sync_hours()),
             id=job_id,
             name="애드센스 사이트 상태 동기화",
             replace_existing=True,
             misfire_grace_time=3600,
         )
-        logger.info("[FLOW_SCHEDULER] 애드센스 상태 동기화 Job 등록 (12시간 간격)")
+        logger.info(
+            "[FLOW_SCHEDULER] 애드센스 상태 동기화 Job 등록 (%d시간 간격)",
+            _adsense_sync_hours(),
+        )
 
     async def shutdown(self) -> None:
         """스케줄러 종료"""
@@ -3316,6 +3319,29 @@ async def shutdown_flow_scheduler() -> None:
 def get_flow_scheduler() -> Optional[FlowScheduler]:
     """플로우 스케줄러 인스턴스 반환"""
     return _flow_scheduler
+
+
+# 애드센스 상태 확인 주기(시간). 사용자가 설정 화면에서 바꿀 수 있다.
+SETTING_ADSENSE_SYNC_HOURS = "adsense_sync_interval_hours"
+DEFAULT_ADSENSE_SYNC_HOURS = 12
+MIN_ADSENSE_SYNC_HOURS = 1
+MAX_ADSENSE_SYNC_HOURS = 168
+
+
+def _adsense_sync_hours() -> int:
+    """저장된 확인 주기를 읽는다. 없으면 기본값.
+
+    스케줄러 등록은 동기 문맥이라 DB 를 조회하지 않고 캐시된 설정을 쓴다.
+    변경은 앱 재시작 또는 설정 저장 시 Job 재등록으로 반영된다.
+    """
+    from ..services.system_settings_service import SystemSettingsService
+
+    try:
+        raw = SystemSettingsService.get_cached(SETTING_ADSENSE_SYNC_HOURS)
+        hours = int(raw) if raw else DEFAULT_ADSENSE_SYNC_HOURS
+    except Exception:  # noqa: BLE001
+        hours = DEFAULT_ADSENSE_SYNC_HOURS
+    return max(MIN_ADSENSE_SYNC_HOURS, min(hours, MAX_ADSENSE_SYNC_HOURS))
 
 
 async def _adsense_sync_callback() -> None:

@@ -106,8 +106,8 @@
                     </svg>
                     생성 정지
                     <span class="text-xs font-normal opacity-90"
-                          x-text="'· ' + (flow.generation_blocked || []).map(b => b.blog_name).join(', ')
-                                  + ' — 승인 후 프롬프트 미지정'"></span>
+                          x-text="'· ' + (flow.generation_blocked || []).map(b => b.module_name).join(', ')
+                                  + ' — 승인용 프리셋을 찾을 수 없음'"></span>
                 </span>
             </template>
             <template x-if="flow.status === 'paused' && flow.auto_paused">

@@ -620,6 +620,25 @@
                                     } else { this.msg = d.detail || '등록 실패'; }
                                 } catch(e){ this.msg = '오류가 발생했습니다'; } finally { this.adding = false; }
                             },
+                            syncHours: 12,
+                            intervalMsg: '',
+                            async loadInterval() {
+                                try {
+                                    const r = await fetch('/api/v1/settings/adsense-sync-interval', {credentials:'include'});
+                                    if (r.ok) { const d = await r.json(); this.syncHours = d.hours; }
+                                } catch(e){}
+                            },
+                            async saveInterval() {
+                                this.intervalMsg = '';
+                                try {
+                                    const r = await fetch(`/api/v1/settings/adsense-sync-interval?hours=${this.syncHours}`,
+                                        {method:'POST', credentials:'include'});
+                                    const d = await r.json();
+                                    this.intervalMsg = r.ok
+                                        ? (d.rescheduled ? '저장됨 (즉시 반영)' : '저장됨 (재시작 후 반영)')
+                                        : (d.detail || '저장 실패');
+                                } catch(e){ this.intervalMsg = '오류'; }
+                            },
                             async syncAll() {
                                 this.syncing = true; this.msg = '';
                                 try {
@@ -637,7 +656,7 @@
                             },
                             fmt(v) { return v ? new Date(v).toLocaleString('ko-KR') : '동기화 안 됨'; }
                          }"
-                         x-init="loadAccounts()">
+                         x-init="loadAccounts(); loadInterval()">
                         <h4 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
                             💰 애드센스 계정 (승인 상태 자동 확인)
                             <span x-show="accounts.length > 0" class="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full"
@@ -669,10 +688,22 @@
                                             class="px-2 py-1 text-xs border border-red-300 text-red-600 rounded hover:bg-red-50 flex-shrink-0">해제</button>
                                 </div>
                             </template>
-                            <button type="button" @click="syncAll()" :disabled="syncing"
-                                    class="px-3 py-1.5 text-xs bg-accent text-white rounded-lg disabled:opacity-50">
-                                <span x-text="syncing ? '확인 중...' : '지금 상태 확인'"></span>
-                            </button>
+                            <div class="flex items-center gap-2 flex-wrap pt-1">
+                                <button type="button" @click="syncAll()" :disabled="syncing"
+                                        class="px-3 py-1.5 text-xs bg-accent text-white rounded-lg disabled:opacity-50">
+                                    <span x-text="syncing ? '확인 중...' : '지금 전체 상태 확인'"></span>
+                                </button>
+                                <span class="text-xs text-gray-500">자동 확인</span>
+                                <input type="number" min="1" max="168" x-model.number="syncHours"
+                                       @change="saveInterval()"
+                                       class="w-16 px-2 py-1 border border-gray-300 rounded text-xs">
+                                <span class="text-xs text-gray-500">시간마다</span>
+                                <span class="text-xs" :class="intervalMsg.startsWith('저장') ? 'text-emerald-600' : 'text-gray-400'"
+                                      x-text="intervalMsg"></span>
+                            </div>
+                            <p class="text-[11px] text-gray-400">
+                                승인 상태가 바뀌면 승인 전용 프롬프트가 자동으로 해제되고 평소 프롬프트로 돌아갑니다.
+                            </p>
                         </div>
 
                         <!-- 계정 추가 -->

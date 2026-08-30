@@ -59,6 +59,15 @@ class SystemSettingsService:
     _cache_ttl: int = 60
 
     @classmethod
+    def get_cached(cls, key: str, default: Any = None) -> Any:
+        """DB 조회 없이 캐시에서만 읽는다.
+
+        스케줄러 등록처럼 동기 문맥에서 설정이 필요할 때 쓴다.
+        캐시에 없으면 default 를 돌려준다(앱이 한 번이라도 설정을 읽었으면 채워져 있다).
+        """
+        return cls._cache.get(key, default)
+
+    @classmethod
     def invalidate_cache(cls) -> None:
         """캐시 즉시 무효화."""
         cls._cache.clear()

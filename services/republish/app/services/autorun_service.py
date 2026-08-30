@@ -183,40 +183,26 @@ class AutorunService:
 
     @staticmethod
     def _collect_generation_blocks(flow: Flow) -> List[Dict[str, Any]]:
-        """애드센스 승인 후 프롬프트가 없어 생성이 막힌 (블로그, 모듈) 목록.
+        """지정된 애드센스 승인용 프리셋을 찾을 수 없어 생성이 막힌 모듈 목록.
 
-        이미 로드된 관계만 사용해 추가 질의를 하지 않는다(카드 목록은 자주 갱신된다).
-        연속 실패로 인한 auto_paused 와 성격이 다르다 — 플로우는 살아 있고
-        해당 블로그의 **생성만** 멈춘다.
+        프리셋 카탈로그가 바뀌어 코드가 사라지면 조용히 평소 프롬프트로
+        생성된다. 승인용을 쓰고 있다고 착각하게 되므로 카드에 드러낸다.
+        연속 실패로 인한 auto_paused 와 다르다 — 플로우는 살아 있다.
+
+        이미 로드된 관계만 사용해 추가 질의를 하지 않는다(카드는 자주 갱신된다).
         """
         from .generation import adsense_prompt_switch as switch
-
-        blogs = [
-            link.blog for link in (flow.blog_links or []) if link.blog
-        ]
-        approved = [b for b in blogs if switch.is_approved(b)]
-        if not approved:
-            return []
 
         blocked: List[Dict[str, Any]] = []
         for link in (flow.module_links or []):
             module = link.module
             if not module:
                 continue
-            settings = module.settings or {}
-            if not switch.uses_approval_prompt(settings):
-                continue
-            if switch.replacement_prompt(settings):
-                continue
-            owned = set(switch.module_blog_ids(settings))
-            for blog in approved:
-                if owned and blog.id not in owned:
-                    continue
+            reason = switch.invalid_preset_reason(module.settings or {})
+            if reason:
                 blocked.append({
-                    "blog_id": blog.id,
-                    "blog_name": blog.name,
                     "module_name": module.name,
-                    "reason": switch.BLOCK_REASON,
+                    "reason": reason,
                 })
         return blocked
 
