@@ -78,6 +78,27 @@ class FlowGenerateExecutor:
             from .adsense_auto_settings import resolve_for_blog
             module_settings = resolve_for_blog(module_settings, blog)
 
+            # 애드센스 승인 후 프롬프트 전환(2026-08-30).
+            # 승인됐는데 승인용 프롬프트를 계속 쓰고 돌아갈 프롬프트도 없으면
+            # 생성을 멈춘다 — 조용히 부적절한 글을 쌓는 것보다 낫다.
+            from . import adsense_prompt_switch as _aps
+            _block = _aps.block_reason(module_settings, blog)
+            if _block:
+                logger.warning(
+                    "[FLOW_GEN] 생성 정지 | blog=%s | %s", blog.name, _block,
+                )
+                return {
+                    "success": True,
+                    "skipped": True,
+                    "blocked": True,
+                    "message": f"생성 정지 ({_block})",
+                }
+            if _aps.needs_switch(module_settings, blog):
+                module_settings = _aps.switched_settings(module_settings)
+                logger.info(
+                    "[FLOW_GEN] 승인 후 프롬프트로 전환 | blog=%s", blog.name,
+                )
+
             # 디스패치 시점에 결정된 title_id가 있으면 그것을 강제 사용.
             # 재고 정책은 블로그별이므로 글로벌 status='used'는 차단하지 않고
             # archived(의도적 보관)와 이 블로그가 이미 만든 제목만 차단한다.
@@ -206,6 +227,9 @@ class FlowGenerateExecutor:
                 prompt_module_id=module_id,
                 source_title_id=title_id,
                 text_replace_enabled=text_replace_enabled,
+                # 블로그 상태에 맞춰 해석한 설정을 넘긴다. 넘기지 않으면
+                # generator 가 DB 원본을 다시 읽어 전환이 무시된다.
+                module_settings=module_settings,
             )
 
             if gen_result.success:

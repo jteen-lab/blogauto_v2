@@ -78,6 +78,7 @@ class ContentGenerator:
         prompt_module_id: int,
         source_title_id: int,
         text_replace_enabled: bool = True,
+        module_settings: Optional[dict] = None,
     ) -> GenerationResult:
         """
         전체 생성 파이프라인 실행
@@ -102,6 +103,7 @@ class ContentGenerator:
             return await self._execute_pipeline(
                 blog_id, prompt_module_id, source_title_id, start_time,
                 text_replace_enabled=text_replace_enabled,
+                module_settings=module_settings,
             )
         except Exception as e:
             elapsed = int(time.time() - start_time)
@@ -119,8 +121,14 @@ class ContentGenerator:
         source_title_id: int,
         start_time: float,
         text_replace_enabled: bool = True,
+        module_settings: Optional[dict] = None,
     ) -> GenerationResult:
-        """파이프라인 실행 로직"""
+        """파이프라인 실행 로직
+
+        module_settings 를 받으면 그것을 쓴다. 호출자가 블로그 상태에 맞춰
+        해석한 설정(애드센스 자동 전환 등)을 반영하기 위함이다.
+        넘어오지 않으면 기존처럼 DB 원본을 읽는다(하위호환).
+        """
         # 1. 원본 제목 로드
         source_title = await self.db.get(MainTitle, source_title_id)
         if not source_title:
@@ -134,7 +142,11 @@ class ContentGenerator:
         if not module:
             raise ValueError(f"모듈을 찾을 수 없습니다: id={prompt_module_id}")
 
-        settings = module.settings or {}
+        # 호출자가 해석한 설정이 있으면 그것을 쓴다.
+        # DB 원본을 다시 읽으면 애드센스 상태별 전환이 무시된다(2026-08-30 수정).
+        settings = module_settings if module_settings is not None else (
+            module.settings or {}
+        )
         logger.debug(
             f"[GENERATOR] 1단계 완료: 데이터 로드 | "
             f"title='{source_title.title[:30]}' | blog={blog.name}"

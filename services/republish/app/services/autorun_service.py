@@ -181,6 +181,45 @@ class AutorunService:
                     entry["last_paused_at"] = r.paused_at
         return out
 
+    @staticmethod
+    def _collect_generation_blocks(flow: Flow) -> List[Dict[str, Any]]:
+        """애드센스 승인 후 프롬프트가 없어 생성이 막힌 (블로그, 모듈) 목록.
+
+        이미 로드된 관계만 사용해 추가 질의를 하지 않는다(카드 목록은 자주 갱신된다).
+        연속 실패로 인한 auto_paused 와 성격이 다르다 — 플로우는 살아 있고
+        해당 블로그의 **생성만** 멈춘다.
+        """
+        from .generation import adsense_prompt_switch as switch
+
+        blogs = [
+            link.blog for link in (flow.blog_links or []) if link.blog
+        ]
+        approved = [b for b in blogs if switch.is_approved(b)]
+        if not approved:
+            return []
+
+        blocked: List[Dict[str, Any]] = []
+        for link in (flow.module_links or []):
+            module = link.module
+            if not module:
+                continue
+            settings = module.settings or {}
+            if not switch.uses_approval_prompt(settings):
+                continue
+            if switch.replacement_prompt(settings):
+                continue
+            owned = set(switch.module_blog_ids(settings))
+            for blog in approved:
+                if owned and blog.id not in owned:
+                    continue
+                blocked.append({
+                    "blog_id": blog.id,
+                    "blog_name": blog.name,
+                    "module_name": module.name,
+                    "reason": switch.BLOCK_REASON,
+                })
+        return blocked
+
     def _flow_to_execution_info(
         self,
         flow: Flow,
@@ -224,6 +263,9 @@ class AutorunService:
                     } if link.blog else None
                 })
 
+        # 애드센스 승인 후 프롬프트 미지정으로 생성이 막힌 블로그 목록
+        generation_blocked = self._collect_generation_blocks(flow)
+
         # FES 기반 자동 paused 사유 노출
         auto_paused = bool(fes_summary and fes_summary.get("auto_paused"))
         consecutive_failures = (fes_summary or {}).get("max_failures", 0)
@@ -248,6 +290,10 @@ class AutorunService:
             "auto_paused": auto_paused,
             "consecutive_failures": consecutive_failures,
             "paused_actions": paused_actions,
+            # 애드센스 승인 후 프롬프트 미지정으로 생성만 막힌 블로그(2026-08-30).
+            # 연속 실패로 인한 auto_paused 와 성격이 다르다 — 플로우는 살아 있고
+            # 해당 블로그의 생성만 멈춘다.
+            "generation_blocked": generation_blocked,
         }
 
     # ===========================================
