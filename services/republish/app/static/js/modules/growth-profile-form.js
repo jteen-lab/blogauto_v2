@@ -42,6 +42,59 @@ function createGrowthProfileState() {
         schedule_matrix: null,
         days: ['월', '화', '수', '목', '금', '토', '일'],
 
+        // --- 딥시크 요금 시간대 ---
+        // 피크는 비피크의 2배 요금이라 어느 시간에 발행하느냐가 곧 비용이다.
+        // 막지 않고 보여주기만 한다 — 애드센스 심사에는 사람이 활동하는
+        // 시간대 발행이 자연스러워, 비용만으로 정할 문제가 아니다.
+        showDeepseekPeak: false,
+        peakInfo: null,   // { hours_kst, weekdays, multiplier }
+
+        async loadPeakInfo() {
+            if (this.peakInfo) return;
+            try {
+                const r = await fetch('/api/v1/ai-keys/deepseek/peak-hours');
+                if (r.ok) this.peakInfo = await r.json();
+            } catch (e) {
+                // 표시용 부가 정보 — 실패해도 스케줄 편집은 그대로 된다
+                console.warn('[GP] 피크 시간 정보를 불러오지 못했습니다', e);
+            }
+        },
+
+        /** 해당 요일·시각이 딥시크 피크인지 */
+        isPeakCell(dayIdx, hour) {
+            if (!this.showDeepseekPeak || !this.peakInfo) return false;
+            return this.peakInfo.weekdays.includes(dayIdx)
+                && this.peakInfo.hours_kst.includes(hour);
+        },
+
+        /** 활성 시간 중 피크에 걸린 시간 수 */
+        get peakActiveHours() {
+            if (!this.schedule_matrix || !this.peakInfo) return 0;
+            let n = 0;
+            this.schedule_matrix.forEach((row, d) => {
+                row.forEach((on, h) => {
+                    if (on && this.peakInfo.weekdays.includes(d)
+                        && this.peakInfo.hours_kst.includes(h)) n++;
+                });
+            });
+            return n;
+        },
+
+        /** 피크 시간대만 골라 해제 (비피크 발행으로 요금 절반) */
+        clearPeakHours() {
+            if (!this.schedule_matrix || !this.peakInfo) return;
+            this.schedule_matrix = this.schedule_matrix.map((row, d) =>
+                row.map((on, h) => (
+                    this.peakInfo.weekdays.includes(d)
+                        && this.peakInfo.hours_kst.includes(h) ? false : on
+                )));
+        },
+
+        async toggleDeepseekPeak() {
+            this.showDeepseekPeak = !this.showDeepseekPeak;
+            if (this.showDeepseekPeak) await this.loadPeakInfo();
+        },
+
         // --- 지터 ---
         jitter: { enabled: true, min_percent: -20, max_percent: 30 },
 

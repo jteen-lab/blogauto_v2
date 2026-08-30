@@ -208,8 +208,28 @@ function getGPScheduleSection() {
                             class="px-3 py-1 text-xs bg-purple-100 text-purple-800 rounded-full hover:bg-purple-200">
                         주말 7~20시
                     </button>
+                    <button type="button" @click="gpModule.toggleDeepseekPeak()"
+                            :class="gpModule.showDeepseekPeak
+                                ? 'bg-orange-500 text-white hover:bg-orange-600'
+                                : 'bg-orange-100 text-orange-800 hover:bg-orange-200'"
+                            class="px-3 py-1 text-xs rounded-full">
+                        딥시크 요금 시간대
+                    </button>
+                    <button type="button" x-show="gpModule.showDeepseekPeak && gpModule.peakInfo"
+                            @click="gpModule.clearPeakHours()"
+                            class="px-3 py-1 text-xs bg-orange-100 text-orange-800 rounded-full hover:bg-orange-200">
+                        피크 시간 해제
+                    </button>
                 </div>
                 <p class="text-xs text-gray-500 mb-3">파란색 = 활성, 회색 = 비활성 | 요일 헤더 클릭으로 전체 선택/해제</p>
+                <!-- 딥시크를 쓸 때만 의미가 있어 켤 때만 노출한다 -->
+                <div x-show="gpModule.showDeepseekPeak && gpModule.peakInfo"
+                     class="mb-3 p-3 bg-orange-50 border border-orange-200 rounded-lg text-xs text-orange-900">
+                    <div class="font-medium mb-1">주황색 = 딥시크 피크 시간 (요금 2배)</div>
+                    <div>평일 <span x-text="gpModule.peakInfo && gpModule.peakInfo.hours_kst.join(', ')"></span>시 (KST).
+                    이 시간을 피하면 요금이 절반입니다. 다만 사람이 활동하는 시간대에
+                    글이 올라가는 편이 자연스러워, 비용만으로 정할 문제는 아닙니다.</div>
+                </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-xs border-collapse">
                         <thead>
@@ -231,8 +251,14 @@ function getGPScheduleSection() {
                                             <button type="button"
                                                     class="w-full h-7 border-none cursor-pointer transition-colors duration-150"
                                                     :class="gpModule.schedule_matrix && gpModule.schedule_matrix[dayIdx][hour-1]
-                                                        ? 'bg-blue-500 hover:bg-blue-600'
-                                                        : 'bg-gray-100 hover:bg-gray-200'"
+                                                        ? (gpModule.isPeakCell(dayIdx, hour-1)
+                                                            ? 'bg-orange-500 hover:bg-orange-600'
+                                                            : 'bg-blue-500 hover:bg-blue-600')
+                                                        : (gpModule.isPeakCell(dayIdx, hour-1)
+                                                            ? 'bg-orange-100 hover:bg-orange-200'
+                                                            : 'bg-gray-100 hover:bg-gray-200')"
+                                                    :title="gpModule.isPeakCell(dayIdx, hour-1)
+                                                        ? '딥시크 피크 — 요금 2배' : ''"
                                                     @click="gpModule.toggleHour(dayIdx, hour-1)"></button>
                                         </td>
                                     </template>
@@ -245,6 +271,10 @@ function getGPScheduleSection() {
                     <div class="flex items-center justify-between text-sm">
                         <span class="text-blue-800 font-medium">
                             활성 시간: <span x-text="gpModule.activeHoursCount"></span>시간/주
+                            <span x-show="gpModule.showDeepseekPeak && gpModule.peakInfo"
+                                  class="ml-2 text-orange-700">
+                                (피크 <span x-text="gpModule.peakActiveHours"></span>시간)
+                            </span>
                         </span>
                         <span class="text-blue-600" x-show="gpModule.todayActiveHours > 0">
                             오늘: <span x-text="gpModule.todayActiveHours"></span>시간
