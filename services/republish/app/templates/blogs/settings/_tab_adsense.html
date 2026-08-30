@@ -178,13 +178,31 @@
             </p>
         </div>
 
+        <!-- 애드센스가 실제로 보고한 상태. 이게 안 보이면 왜 어떤 블로그만
+             '준비 중'에 머무는지 알 수 없다. -->
+        <div x-show="remoteStatus" class="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+            <div class="text-xs text-gray-500 mb-1">애드센스가 보고한 상태</div>
+            <div class="text-sm font-medium text-gray-800"
+                 x-text="remoteStateText(remoteStatus && remoteStatus.state)"></div>
+            <div x-show="remoteStatus && remoteStatus.inherited_from"
+                 class="text-xs text-gray-500 mt-1">
+                상위 도메인 <span x-text="remoteStatus && remoteStatus.inherited_from"></span>
+                의 상태를 따릅니다
+            </div>
+            <div class="text-xs text-gray-500 mt-2">
+                애드센스는 <strong>신청 여부를 알려주지 않습니다</strong>.
+                신청을 마치셨다면 아래에서 <strong>심사 중</strong>으로 바꿔 주세요.
+                바꾸지 않으면 신청한 블로그도 계속 '준비 중'으로 표시됩니다.
+            </div>
+        </div>
+
         <div>
             <label class="block text-xs font-medium text-gray-700 mb-1">애드센스 승인 상태</label>
             <select x-model="cadence.adsense_status"
                     class="w-full max-w-xs px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
                 <option value="none">미신청</option>
                 <option value="preparing">준비 중</option>
-                <option value="applied">신청 완료</option>
+                <option value="applied">심사 중 (신청 완료)</option>
                 <option value="approved">승인됨</option>
             </select>
         </div>
@@ -241,6 +259,16 @@ function adsenseSettingsApp() {
         pageIds: {},
         profile: { name: '', bio: '', expertise: '', contact_email: '', contact_form_url: '' },
         cadence: { adsense_status: 'none' },
+        // 애드센스가 보고한 원문 상태(신청 여부는 알려주지 않는다)
+        remoteStatus: null,
+        remoteStateText(state) {
+            return ({
+                READY: '준비됨 — 승인 상태입니다',
+                GETTING_READY: '준비 중 — 아직 게재 준비 단계입니다',
+                REQUIRES_REVIEW: '검토 필요',
+                NEEDS_ATTENTION: '주의 필요 — 애드센스에서 조치를 요구합니다',
+            })[state] || (state ? state : '사이트 목록에 없음(미신청)');
+        },
         savingCadence: false,
         readiness: null,
 
@@ -302,6 +330,7 @@ function adsenseSettingsApp() {
                     this.cadence = {
                         adsense_status: data.adsense_status || 'none',
                     };
+                    this.remoteStatus = data.remote || null;
                 }
             } catch (e) {
                 console.warn('[adsense] 발행 케이던스 조회 실패', e);

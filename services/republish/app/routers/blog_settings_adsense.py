@@ -166,10 +166,40 @@ async def get_publish_cadence(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    """애드센스 계정 신청 상태를 조회한다."""
+    """애드센스 계정 신청 상태를 조회한다.
+
+    애드센스가 보고한 원문 상태도 함께 돌려준다. 애드센스 API 는 '신청했는지'
+    를 알려주지 않고 준비 중(GETTING_READY)까지만 말해 준다. 그래서 '심사 중'
+    표시는 사용자가 직접 기록해야 하는데, 화면에 그 사정이 안 보이면 왜 어떤
+    블로그만 '준비 중'에 머무는지 알 수 없다.
+    """
+    from ..services.publishing.adsense_account_service import (
+        AdsenseAccountService,
+    )
+    from ..services.publishing.adsense_status_resolver import (
+        resolve_display_status,
+    )
+
     blog = await get_blog_or_404(blog_id, current_user, db)
+
+    remote = {"state": None, "display": None, "inherited_from": None}
+    try:
+        index = await AdsenseAccountService(db).sites_index(current_user.id)
+        if index:
+            verdict = resolve_display_status(blog, index)
+            remote = {
+                "state": verdict.get("state"),
+                "display": verdict.get("status"),
+                "inherited_from": verdict.get("inherited_from"),
+            }
+    except Exception as e:  # 부가 정보 — 실패해도 설정 화면은 열려야 한다
+        logger.warning(
+            "애드센스 원문 상태 조회 실패 | blog_id=%s | %s", blog_id, e,
+        )
+
     return {
         "adsense_status": blog.adsense_status,
+        "remote": remote,
     }
 
 
