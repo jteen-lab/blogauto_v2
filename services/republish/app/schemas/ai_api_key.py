@@ -17,6 +17,7 @@ class AIProvider(str, Enum):
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
     GOOGLE = "google"
+    DEEPSEEK = "deepseek"  # OpenAI 호환 엔드포인트를 쓴다
     NANOBANANA = "nanobanana"  # Nano Banana (이미지 생성 - Gemini 기반)
 
 

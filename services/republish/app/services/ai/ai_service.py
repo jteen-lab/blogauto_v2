@@ -131,6 +131,7 @@ class AIService:
             "openai": AIProvider.OPENAI,
             "anthropic": AIProvider.ANTHROPIC,
             "google": AIProvider.GOOGLE,
+            "deepseek": AIProvider.DEEPSEEK,
         }
 
         if not preferred:
@@ -196,6 +197,20 @@ class AIService:
                     top_p=top_p, top_k=top_k,
                 )
                 used_model = model or "claude-3-haiku-20240307"
+            elif provider == AIProvider.DEEPSEEK:
+                # OpenAI 호환 엔드포인트라 호출부를 그대로 쓴다.
+                # base_url 만 바꾸면 파라미터 처리가 두 갈래로 갈라지지 않는다.
+                from .deepseek_pricing import BASE_URL, DEFAULT_MODEL
+
+                used_model = model or DEFAULT_MODEL
+                content = await self._call_openai(
+                    key.api_key, prompt, used_model,
+                    max_tokens, temperature, system_prompt,
+                    top_p=top_p,
+                    frequency_penalty=frequency_penalty,
+                    presence_penalty=presence_penalty,
+                    base_url=BASE_URL,
+                )
             elif provider == AIProvider.GOOGLE:
                 # Google: top_p, top_k 지원 (frequency/presence_penalty 미지원)
                 content = await self._call_google(
@@ -244,8 +259,13 @@ class AIService:
         top_p: Optional[float] = None,
         frequency_penalty: Optional[float] = None,
         presence_penalty: Optional[float] = None,
+        base_url: Optional[str] = None,
     ) -> Optional[str]:
-        """OpenAI API 호출 (top_k는 미지원)"""
+        """OpenAI 및 호환 API 호출 (top_k는 미지원).
+
+        base_url 을 주면 그쪽으로 보낸다(딥시크 등 OpenAI 호환 서비스).
+        비워 두면 OpenAI 기본 엔드포인트를 쓴다.
+        """
         import openai
 
         messages = []
@@ -269,7 +289,10 @@ class AIService:
 
         # 자체 타임아웃: Celery soft_time_limit(300s) 전에 끊어 mapper 깨짐 방지.
         # hang 시 task 전체가 느려지는 대신 명확한 타임아웃 에러로 빠르게 실패.
-        client = openai.AsyncOpenAI(api_key=api_key, timeout=AI_CALL_TIMEOUT)
+        client_kwargs = {"api_key": api_key, "timeout": AI_CALL_TIMEOUT}
+        if base_url:
+            client_kwargs["base_url"] = base_url
+        client = openai.AsyncOpenAI(**client_kwargs)
         resp = await client.chat.completions.create(**kwargs)
         return resp.choices[0].message.content.strip()
 
