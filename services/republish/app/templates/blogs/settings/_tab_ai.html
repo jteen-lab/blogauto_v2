@@ -81,6 +81,21 @@
     <!-- 메인 컨텐츠 -->
     <div x-show="!loading && availableKeys.length > 0" class="space-y-6">
 
+        <!-- 쓰던 모델이 없어졌을 때. 자동으로 바꾸지 않고 알리기만 한다 —
+             모델이 바뀌면 글 품질과 요금이 달라지므로 사람이 골라야 한다. -->
+        <template x-if="modelWarnings.length">
+            <div class="mb-4 p-4 bg-amber-50 border border-amber-300 rounded-lg">
+                <div class="text-sm font-semibold text-amber-900 mb-1">
+                    확인이 필요한 모델 설정
+                </div>
+                <ul class="text-sm text-amber-800 list-disc pl-5 space-y-0.5">
+                    <template x-for="w in modelWarnings" :key="w.slot + w.model">
+                        <li x-text="w.message"></li>
+                    </template>
+                </ul>
+            </div>
+        </template>
+
         <!-- 1. 글 생성용 AI -->
         <div class="bg-white border border-gray-200 rounded-lg p-5">
             <div class="flex items-start gap-3 mb-4">
@@ -89,9 +104,20 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                     </svg>
                 </div>
-                <div>
+                <div class="flex-1">
                     <h3 class="text-base font-semibold text-gray-900">글 생성용 AI</h3>
                     <p class="text-sm text-gray-500 mt-0.5">블로그 본문 작성에 사용할 AI</p>
+                </div>
+                <!-- 제공자가 모델을 내리면 선택지가 죽는다. 여기서 바로 갱신한다. -->
+                <div class="text-right">
+                    <button type="button" @click="syncCatalog()" :disabled="syncingCatalog"
+                            class="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50">
+                        <span x-show="!syncingCatalog">모델 목록 갱신</span>
+                        <span x-show="syncingCatalog">갱신 중...</span>
+                    </button>
+                    <div x-show="catalogSyncedAt" class="text-[11px] text-gray-400 mt-1">
+                        갱신 <span x-text="(catalogSyncedAt || '').slice(0, 10)"></span>
+                    </div>
                 </div>
             </div>
 
@@ -479,10 +505,81 @@ function aiSettingsApp() {
         /**
          * 컴포넌트 초기화
          */
+        // 서버 카탈로그(ai_models)에서 받아온 목록. 실패하면 null 로 두고
+        // 하드코딩 목록으로 물러난다 — 목록을 못 받았다고 화면이 막히면 안 된다.
+        catalog: null,
+        catalogSyncedAt: null,
+        syncingCatalog: false,
+        modelWarnings: [],
+
+        async loadModelWarnings() {
+            if (!this.blogId) return;
+            try {
+                const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
+                const r = await fetch(
+                    `${apiBase}/ai-models/warnings?blog_id=${this.blogId}`,
+                    { credentials: 'include' });
+                if (r.ok) this.modelWarnings = (await r.json()).items || [];
+            } catch (e) {
+                console.warn('[ai] 모델 경고 조회 실패', e);
+            }
+        },
+
+        async loadCatalog() {
+            try {
+                const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
+                // 사라진 모델도 함께 받는다. 저장된 설정이 이미 없어진 모델을
+                // 가리킬 때 선택을 비우지 않고 '지원 종료' 로 보여주기 위함이다.
+                const r = await fetch(
+                    `${apiBase}/ai-models?capability=text&include_unavailable=true`,
+                    { credentials: 'include' });
+                if (!r.ok) return;
+                const data = await r.json();
+                if (!data.items || !data.items.length) return;
+                const byProvider = {};
+                data.items.forEach((m) => {
+                    (byProvider[m.provider] = byProvider[m.provider] || []).push(m);
+                });
+                this.catalog = byProvider;
+                this.catalogSyncedAt = data.last_synced_at;
+            } catch (e) {
+                console.warn('[ai] 모델 카탈로그 조회 실패 — 기본 목록 사용', e);
+            }
+        },
+
+        async syncCatalog() {
+            this.syncingCatalog = true;
+            try {
+                const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : '/api/v1';
+                const r = await fetch(`${apiBase}/ai-models/sync`, {
+                    method: 'POST', credentials: 'include' });
+                const out = await r.json();
+                await this.loadCatalog();
+                await this.loadModelWarnings();
+                const t = (out && out.total) || {};
+                const msg = `모델 목록 갱신: 신규 ${t.added || 0} / `
+                    + `사라짐 ${t.gone || 0} / 유지 ${t.kept || 0}`;
+                if (typeof showSuccessMessage === 'function') showSuccessMessage(msg);
+                else alert(msg);
+            } catch (e) {
+                const msg = '모델 목록 갱신 실패: ' + e;
+                if (typeof showErrorMessage === 'function') showErrorMessage(msg);
+                else alert(msg);
+            } finally {
+                this.syncingCatalog = false;
+            }
+        },
+
         async init() {
+            // 목록을 먼저 받아 둔다. 설정을 먼저 읽으면 select 옵션이 아직
+            // 없어서 값이 저장돼 있어도 화면에 빈칸으로 보인다(이 프로젝트에서
+            // 두 번 겪은 함정).
+            await this.loadCatalog();
+
             // blogId가 이미 설정되어 있으면 바로 로드
             if (this.blogId) {
                 await this.loadConfig(this.blogId);
+                await this.loadModelWarnings();
                 return;
             }
 
@@ -491,6 +588,7 @@ function aiSettingsApp() {
             if (parent && parent._x_dataStack && parent._x_dataStack[0] && parent._x_dataStack[0].selectedBlog) {
                 this.blogId = parent._x_dataStack[0].selectedBlog.id;
                 await this.loadConfig(this.blogId);
+                await this.loadModelWarnings();
             }
         },
 
@@ -572,6 +670,20 @@ function aiSettingsApp() {
                 return provider ? provider.models : [];
             }
 
+            // 카탈로그가 있으면 그것을 쓴다(하드코딩은 예비용).
+            if (this.catalog && this.catalog[providerId]) {
+                const saved = (this.aiConfig[configKey] || {}).model;
+                const list = this.catalog[providerId].filter(
+                    (m) => m.is_available || m.model_id === saved);
+                // 저장된 모델이 카탈로그에 아예 없어도 선택을 비우지 않는다.
+                // 비우면 사용자가 모르는 사이 다른 모델로 글이 나간다.
+                if (saved && !list.some((m) => m.model_id === saved)) {
+                    list.unshift({ model_id: saved, display_name: saved,
+                                   is_available: false, price: null });
+                }
+                return list;
+            }
+
             // 텍스트 AI는 textProviders에서 찾기
             const provider = this.textProviders.find(p => p.id === providerId);
             return provider ? provider.models : [];
@@ -585,10 +697,21 @@ function aiSettingsApp() {
 
             let name = model.display_name || model.model_id;
 
-            // 추천 모델 표시
-            if (model.is_recommended) {
-                name = '⭐ ' + name;
+            // 추천 배지 — 제공자별로 각 1개씩만 붙는다
+            if (model.tier === 'flagship') name = '★ 최고 성능 · ' + name;
+            else if (model.tier === 'value') name = '◆ 가성비 · ' + name;
+            else if (model.is_recommended) name = '⭐ ' + name;
+
+            // 요금 — 선택하는 자리에서 비용이 보여야 판단할 수 있다
+            const p = model.price;
+            if (p && p.input_per_1m != null && p.output_per_1m != null) {
+                name += `  (입력 $${p.input_per_1m} / 출력 $${p.output_per_1m}`
+                    + ` per 1M · 글 1편 약 $${p.per_post_estimate})`;
             }
+
+            // 카탈로그에서 사라진 모델은 그 사실을 알려야 한다
+            if (model.is_available === false) name += '  ⚠ 지원 종료';
+            else if (model.shutdown_date) name += `  ⚠ ${model.shutdown_date} 종료 예정`;
 
             return name;
         },
