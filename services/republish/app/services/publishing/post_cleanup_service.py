@@ -296,3 +296,122 @@ class PostCleanupService:
             self.blog.name, mode, done, len(failed),
         )
         return {"done": done, "failed": failed}
+
+
+def wordpress_post_id_from_url(url: str) -> Optional[str]:
+    """워드프레스 글 URL 에서 숫자 ID 를 뽑는다.
+
+    doooit082 계열은 /1998/ 처럼 글 번호를 URL 로 쓴다. 슬러그형 URL 이면
+    None 을 돌려주고 호출자가 REST 검색으로 찾는다.
+    """
+    m = re.search(r"/(\d+)/?$", (url or "").rstrip("/") + "/")
+    return m.group(1) if m else None
+
+
+class PostDeleter:
+    """정식제목에 매칭된 발행글을 URL 로 찾아 지운다.
+
+    정리 서비스(PostCleanupService)는 플랫폼 전체를 훑어 대상을 고르지만,
+    여기서는 사용자가 화면에서 고른 글만 지운다. 대상 선정은 사람이 한다.
+    """
+
+    def __init__(self, blog: Blog):
+        self.blog = blog
+        self._svc = PostCleanupService(blog)
+
+    async def delete_by_urls(
+        self, urls: List[str], mode: str = MODE_DELETE,
+    ) -> Dict[str, Any]:
+        """URL 목록으로 삭제한다. 실패한 것은 이유와 함께 돌려준다."""
+        if self.blog.platform == BlogPlatform.WORDPRESS:
+            return await self._delete_wordpress(urls, mode)
+        return await self._delete_blogger(urls, mode)
+
+    async def _delete_wordpress(self, urls, mode) -> Dict[str, Any]:
+        auth = self._svc._wp_auth()
+        if not auth:
+            return {"done": 0, "failed": [{"url": u, "error": "인증 실패"}
+                                          for u in urls]}
+        base = self.blog.url.rstrip("/") + "/wp-json/wp/v2/posts"
+        headers = {"Authorization": f"Basic {auth}",
+                   "Content-Type": "application/json"}
+        done, failed = 0, []
+        async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+            for url in urls:
+                pid = wordpress_post_id_from_url(url)
+                if not pid:
+                    # 슬러그형 URL — 슬러그로 찾는다
+                    slug = (url or "").rstrip("/").rsplit("/", 1)[-1]
+                    try:
+                        r = await client.get(base, params={
+                            "slug": slug, "_fields": "id"}, headers=headers)
+                        rows = r.json() if r.status_code == 200 else []
+                        pid = str(rows[0]["id"]) if rows else None
+                    except Exception:  # noqa: BLE001
+                        pid = None
+                if not pid:
+                    failed.append({"url": url, "error": "글 ID를 찾지 못함"})
+                    continue
+                try:
+                    if mode == MODE_DELETE:
+                        r = await client.delete(
+                            f"{base}/{pid}", params={"force": "true"},
+                            headers=headers)
+                    else:
+                        r = await client.post(
+                            f"{base}/{pid}", headers=headers,
+                            json={"status": "private"})
+                    if r.status_code in (200, 201):
+                        done += 1
+                    else:
+                        failed.append({"url": url,
+                                       "error": f"HTTP {r.status_code}"})
+                except Exception as e:  # noqa: BLE001
+                    failed.append({"url": url, "error": str(e)[:60]})
+        return {"done": done, "failed": failed}
+
+    async def _delete_blogger(self, urls, mode) -> Dict[str, Any]:
+        from .blogger_publisher import BloggerPublisher
+
+        pub = BloggerPublisher()
+        token = await pub._get_access_token(self.blog, None)
+        blog_id = await pub._extract_blog_id(self.blog, token) if token else None
+        if not blog_id:
+            return {"done": 0, "failed": [{"url": u, "error": "인증 실패"}
+                                          for u in urls]}
+
+        api = f"https://www.googleapis.com/blogger/v3/blogs/{blog_id}"
+        headers = {"Authorization": f"Bearer {token}"}
+        done, failed = 0, []
+        async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+            for url in urls:
+                # 블로거는 URL 로 바로 지울 수 없어 path 로 postId 를 찾는다
+                path = re.sub(r"^https?://[^/]+", "", url or "")
+                try:
+                    r = await client.get(
+                        f"{api}/posts/bypath", params={"path": path},
+                        headers=headers)
+                    if r.status_code != 200:
+                        failed.append({"url": url,
+                                       "error": f"조회 실패 {r.status_code}"})
+                        continue
+                    pid = r.json().get("id")
+                except Exception as e:  # noqa: BLE001
+                    failed.append({"url": url, "error": str(e)[:60]})
+                    continue
+
+                try:
+                    if mode == MODE_DELETE:
+                        r = await client.delete(
+                            f"{api}/posts/{pid}", headers=headers)
+                    else:
+                        r = await client.post(
+                            f"{api}/posts/{pid}/revert", headers=headers)
+                    if r.status_code in (200, 204, 404):
+                        done += 1
+                    else:
+                        failed.append({"url": url,
+                                       "error": f"HTTP {r.status_code}"})
+                except Exception as e:  # noqa: BLE001
+                    failed.append({"url": url, "error": str(e)[:60]})
+        return {"done": done, "failed": failed}
