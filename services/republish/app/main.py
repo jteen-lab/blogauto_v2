@@ -58,6 +58,7 @@ from .routers.blog_settings_adsense import router as blog_settings_adsense_route
 from .routers.contact_submissions import router as contact_submissions_router  # 문의 수신함 API (F10)
 from .routers.search_visibility import router as search_visibility_router  # 검색 노출 3종 API (S1/S2/S6)
 from .routers.ai_api_keys import router as ai_api_keys_router  # AI API 키 다계정 관리
+from .routers.ai_models import router as ai_models_router  # AI 모델 카탈로그
 from .routers.reference_collection import router as reference_collection_router  # 참조자료 수집
 from .api.growth_profile import router as growth_profile_router  # Growth Profile API
 from .routers.generation_test import router as generation_test_router  # Phase D: 파이프라인 테스트
@@ -309,6 +310,7 @@ app.include_router(blog_settings_adsense_router, prefix=settings.api_v1_prefix) 
 app.include_router(contact_submissions_router, prefix=settings.api_v1_prefix)  # 문의 수신함 (F10)
 app.include_router(search_visibility_router, prefix=settings.api_v1_prefix)  # 검색 노출 3종 (S1/S2/S6)
 app.include_router(ai_api_keys_router)  # AI API 키 다계정 관리 (prefix 포함)
+app.include_router(ai_models_router)  # AI 모델 카탈로그 (prefix 포함)
 app.include_router(reference_collection_router, prefix=settings.api_v1_prefix)  # 참조자료 수집
 app.include_router(growth_profile_router, prefix=settings.api_v1_prefix)  # Growth Profile
 app.include_router(generation_test_router, prefix=settings.api_v1_prefix)  # Phase D: 파이프라인 테스트
