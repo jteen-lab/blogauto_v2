@@ -124,7 +124,27 @@ function settingsApp() {
             {name: 'google', label: 'Google (Gemini)', rpm_key: 'ratelimit_google_rpm', tpm_key: 'ratelimit_google_tpm'},
             {name: 'deepseek', label: 'DeepSeek', rpm_key: 'ratelimit_deepseek_rpm', tpm_key: 'ratelimit_deepseek_tpm'},
         ],
-        // 유사도 회색지대 AI 판정용 텍스트 모델(제공자별, 저렴 모델 우선)
+        // 유사도 회색지대 AI 판정용 텍스트 모델.
+        // 카탈로그(ai_models)를 받아 덮어쓴다. 아래 값은 카탈로그를 못 받았을
+        // 때의 예비용이며, 여기 적힌 모델이 사라져도 화면은 열려야 한다.
+        async loadSimilarityModels() {
+            try {
+                const r = await fetch('/api/v1/ai-models?capability=text',
+                                      { credentials: 'include' });
+                if (!r.ok) return;
+                const data = await r.json();
+                if (!data.items || !data.items.length) return;
+                const byProvider = {};
+                data.items.forEach((m) => {
+                    (byProvider[m.provider] = byProvider[m.provider] || [])
+                        .push(m.model_id);
+                });
+                this.similarityModels = byProvider;
+            } catch (e) {
+                console.warn('[settings] 모델 카탈로그 조회 실패 — 기본 목록 사용', e);
+            }
+        },
+
         similarityModels: {
             openai: ['gpt-4o-mini', 'gpt-3.5-turbo', 'gpt-4o', 'gpt-4-turbo', 'gpt-4'],
             google: ['gemini-2.5-flash-lite-preview-06-17', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-flash-preview-04-17', 'gemini-1.5-pro', 'gemini-2.5-pro-preview-05-06'],
@@ -207,6 +227,7 @@ function settingsApp() {
                 this.loadSettings();
                 this.loadAiKeys();
                 this.loadSystemSettings();
+                this.loadSimilarityModels();
             });
         },
 
