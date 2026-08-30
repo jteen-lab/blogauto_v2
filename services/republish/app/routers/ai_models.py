@@ -109,3 +109,23 @@ async def sync_models(
         category="ai_models",
     )
     return out
+
+
+@router.get("/warnings")
+async def model_warnings(
+    blog_id: Optional[int] = Query(default=None),
+    db: AsyncSession = Depends(get_db_session),
+    _user: User = Depends(get_current_user),
+) -> dict:
+    """쓰고 있는 모델이 사라졌거나 종료 예정인지 알려준다.
+
+    자동으로 바꾸지 않고 알리기만 한다 — 모델이 바뀌면 글 품질과 요금이
+    달라지므로 대체 선택은 사람이 해야 한다.
+    """
+    from ..services.ai.model_warnings import collect_warnings, message_for
+
+    items = await collect_warnings(db, blog_id)
+    return {
+        "items": [{**it, "message": message_for(it)} for it in items],
+        "total": len(items),
+    }
