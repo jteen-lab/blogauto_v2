@@ -274,16 +274,18 @@ class ReferenceSummaryService:
 
     async def _call_deepseek(self, api_key: str, prompt: str) -> Optional[str]:
         """딥시크 API 호출 (OpenAI 호환 — base_url 만 다르다)"""
-        from .ai.deepseek_pricing import BASE_URL
+        from .ai.deepseek_pricing import BASE_URL, EXTRA_PARAMS
 
         try:
             model_name = self._get_model_for_provider("deepseek")
             client = openai.AsyncOpenAI(api_key=api_key, base_url=BASE_URL)
+            # 사고 모드를 끈다 — max_tokens=800 을 사고가 먹으면 요약이 빈다
             response = await client.chat.completions.create(
                 model=model_name,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=800,
-                temperature=0.3
+                temperature=0.3,
+                **EXTRA_PARAMS,
             )
             return response.choices[0].message.content.strip()
         except Exception as e:

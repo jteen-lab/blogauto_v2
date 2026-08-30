@@ -18,6 +18,14 @@ from typing import Dict, List
 BASE_URL = "https://api.deepseek.com"
 DEFAULT_MODEL = "deepseek-v4-flash"
 
+# 사고 모드를 끈다.
+# 딥시크 v4 는 기본으로 사고(reasoning)를 하는데, 그 토큰이 max_tokens 예산을
+# 같이 쓴다. 제목 재조합처럼 max_tokens=200 인 짧은 작업에서는 사고에 다 쓰고
+# 본문이 빈 채로 돌아와 "호출 실패" 가 됐다(실측: 200 → content 0자/사고 484자).
+# 앱의 max_tokens 는 '본문 길이' 를 의도한 값이므로 사고가 먹으면 안 된다.
+# 사고 토큰도 출력으로 과금되므로 요금 면에서도 끄는 편이 낫다.
+EXTRA_PARAMS = {"reasoning_effort": "none"}
+
 MODELS: List[Dict[str, str]] = [
     {
         "id": "deepseek-v4-flash",

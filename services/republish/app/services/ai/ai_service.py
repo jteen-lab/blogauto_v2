@@ -200,7 +200,9 @@ class AIService:
             elif provider == AIProvider.DEEPSEEK:
                 # OpenAI 호환 엔드포인트라 호출부를 그대로 쓴다.
                 # base_url 만 바꾸면 파라미터 처리가 두 갈래로 갈라지지 않는다.
-                from .deepseek_pricing import BASE_URL, DEFAULT_MODEL
+                from .deepseek_pricing import (
+                    BASE_URL, DEFAULT_MODEL, EXTRA_PARAMS,
+                )
 
                 used_model = model or DEFAULT_MODEL
                 content = await self._call_openai(
@@ -210,6 +212,7 @@ class AIService:
                     frequency_penalty=frequency_penalty,
                     presence_penalty=presence_penalty,
                     base_url=BASE_URL,
+                    extra_params=EXTRA_PARAMS,
                 )
             elif provider == AIProvider.GOOGLE:
                 # Google: top_p, top_k 지원 (frequency/presence_penalty 미지원)
@@ -260,6 +263,7 @@ class AIService:
         frequency_penalty: Optional[float] = None,
         presence_penalty: Optional[float] = None,
         base_url: Optional[str] = None,
+        extra_params: Optional[dict] = None,
     ) -> Optional[str]:
         """OpenAI 및 호환 API 호출 (top_k는 미지원).
 
@@ -286,6 +290,8 @@ class AIService:
             kwargs["frequency_penalty"] = frequency_penalty
         if presence_penalty is not None:
             kwargs["presence_penalty"] = presence_penalty
+        if extra_params:
+            kwargs.update(extra_params)
 
         # 자체 타임아웃: Celery soft_time_limit(300s) 전에 끊어 mapper 깨짐 방지.
         # hang 시 task 전체가 느려지는 대신 명확한 타임아웃 에러로 빠르게 실패.
@@ -294,7 +300,18 @@ class AIService:
             client_kwargs["base_url"] = base_url
         client = openai.AsyncOpenAI(**client_kwargs)
         resp = await client.chat.completions.create(**kwargs)
-        return resp.choices[0].message.content.strip()
+        choice = resp.choices[0]
+        content = (choice.message.content or "").strip()
+        if not content:
+            # 여기서 조용히 빈 값을 돌려주면 상위에서 "API 키 상태 확인 필요" 로
+            # 잘못 안내된다. 실제로는 토큰이 모자라 답을 못 낸 경우가 많다.
+            reasoning = getattr(choice.message, "reasoning_content", None) or ""
+            logger.warning(
+                "[AI_SERVICE] 빈 응답 | model=%s | finish=%s | "
+                "max_tokens=%s | 사고 %d자 — 토큰 부족일 수 있음",
+                model, choice.finish_reason, max_tokens, len(reasoning),
+            )
+        return content
 
     async def _call_anthropic(
         self,
