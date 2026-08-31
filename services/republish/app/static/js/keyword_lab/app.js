@@ -31,6 +31,10 @@ function keywordLabApp() {
         busy: '',
         message: '',
         messageType: 'success',
+        // 실패 사유는 토스트가 아니라 화면에 남긴다 — 토스트는 5초 뒤
+        // 사라져서 무엇을 고쳐야 하는지 다시 볼 수 없다.
+        failure: '',
+        connTest: null,
 
         async init() {
             await Promise.all([
@@ -96,7 +100,12 @@ function keywordLabApp() {
                     }),
                 });
                 const d = await r.json();
-                if (!r.ok) { this.show(d.detail || '수집 실패', 'error'); return; }
+                if (!r.ok) {
+                    this.failure = d.detail || '수집 실패';
+                    this.show('수집하지 못했습니다', 'error');
+                    return;
+                }
+                this.failure = '';
                 this.show(
                     `${d.saved}개 수집 (중복 ${d.skipped} 제외, API ${d.api_calls}회)`);
                 await this.loadCandidates();
@@ -166,6 +175,35 @@ function keywordLabApp() {
                 this.show(`${d.deleted}개 삭제`);
                 await this.loadCandidates();
             } catch (e) { this.show('삭제 실패', 'error'); }
+        },
+
+        async testConnection() {
+            this.busy = 'conn';
+            this.connTest = null;
+            try {
+                const r = await fetch('/api/v1/keyword-lab/test-connection', {
+                    method: 'POST', credentials: 'include',
+                });
+                const d = await r.json();
+                if (!r.ok) { this.failure = d.detail || '연결 테스트 실패'; return; }
+                this.connTest = d;
+                this.failure = '';
+            } catch (e) {
+                this.failure = '연결 테스트 중 오류가 발생했습니다';
+            } finally { this.busy = ''; }
+        },
+
+        connRows() {
+            if (!this.connTest) return [];
+            const t = this.connTest;
+            return [
+                { name: '검색광고 (연관키워드·검색량)',
+                  ok: t.naver_ads?.ok,
+                  message: t.naver_ads?.ok ? '정상' : (t.naver_ads?.error || '') },
+                { name: '검색 API (문서수)',
+                  ok: t.naver_search?.ok,
+                  message: t.naver_search?.ok ? '정상' : (t.naver_search?.error || '') },
+            ];
         },
 
         // ── 표 ────────────────────────────────────────────

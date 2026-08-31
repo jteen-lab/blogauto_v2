@@ -27,6 +27,25 @@
         <a href="/settings" class="underline">설정에서 등록</a>
     </div>
 
+    <!-- 실패 사유 — 조용히 0건으로 끝내지 않는다 -->
+    <div x-show="failure" x-transition
+         class="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
+        <div class="font-medium mb-0.5">실행하지 못했습니다</div>
+        <div x-text="failure"></div>
+    </div>
+
+    <!-- 연결 테스트 결과 -->
+    <div x-show="connTest" x-transition
+         class="mb-4 px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-sm">
+        <template x-for="row in connRows()" :key="row.name">
+            <div class="flex items-start gap-2 py-0.5">
+                <span x-text="row.ok ? '✅' : '❌'"></span>
+                <span class="font-medium" x-text="row.name"></span>
+                <span class="text-gray-600" x-text="row.message"></span>
+            </div>
+        </template>
+    </div>
+
     <!-- 실행 -->
     <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
         <div class="flex flex-wrap items-end gap-3">
@@ -52,6 +71,10 @@
             <button type="button" @click="measure()" :disabled="!!busy"
                     class="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium disabled:opacity-40">
                 <span x-text="busy === 'measure' ? '측정 중…' : '② 문서수 측정'"></span>
+            </button>
+            <button type="button" @click="testConnection()" :disabled="!!busy"
+                    class="px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-40">
+                <span x-text="busy === 'conn' ? '확인 중…' : 'API 연결 테스트'"></span>
             </button>
         </div>
 
@@ -151,5 +174,5 @@
 </div>
 
 <script src="/static/js/components/list_selection.js?v=20260831sub"></script>
-<script src="/static/js/keyword_lab/app.js?v=20260831fix"></script>
+<script src="/static/js/keyword_lab/app.js?v=20260831err"></script>
 {% endblock %}
