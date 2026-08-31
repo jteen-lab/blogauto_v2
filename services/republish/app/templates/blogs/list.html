@@ -143,9 +143,11 @@
         </button>
     </div>
 
-    <!-- PC: 플랫폼별 섹션 (md 이상) -->
-    <div x-show="blogs.length > 0" class="desktop-sections">
-        <!-- WordPress 섹션 -->
+    <!-- 플랫폼별 섹션 — 표(데스크톱) / 2줄 목록(모바일).
+         컴포넌트가 두 형태를 함께 그리므로 화면을 따로 만들지 않는다.
+         플랫폼 구분이 사라지면 안 되므로 섹션 헤더는 유지한다. -->
+    <div x-show="blogs.length > 0">
+        <!-- WordPress -->
         <div class="blog-section" x-show="getBlogsByPlatform('wordpress').length > 0">
             <div class="section-header">
                 <div class="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
@@ -154,14 +156,16 @@
                 <h3 class="section-title">WordPress</h3>
                 <span class="section-count" x-text="getBlogsByPlatform('wordpress').length"></span>
             </div>
-            <div class="blog-grid">
-                <template x-for="blog in getBlogsByPlatform('wordpress')" :key="blog.id">
-                    {% include "blogs/_card.html" %}
-                </template>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 px-2 md:px-0 overflow-hidden">
+                {% set table_id = 'blogs-wordpress' %}
+                {% set rows_expr = "getBlogsByPlatform('wordpress')" %}
+                {% set row_key = 'blog' %}
+                {% set empty_text = '등록된 WordPress 블로그가 없습니다' %}
+                {% include "components/list_table.html" %}
             </div>
         </div>
 
-        <!-- Blogger 섹션 -->
+        <!-- Google Blogger -->
         <div class="blog-section" x-show="getBlogsByPlatform('blogger').length > 0">
             <div class="section-header">
                 <div class="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center">
@@ -170,16 +174,18 @@
                 <h3 class="section-title">Google Blogger</h3>
                 <span class="section-count" x-text="getBlogsByPlatform('blogger').length"></span>
             </div>
-            <div class="blog-grid">
-                <template x-for="blog in getBlogsByPlatform('blogger')" :key="blog.id">
-                    {% include "blogs/_card.html" %}
-                </template>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 px-2 md:px-0 overflow-hidden">
+                {% set table_id = 'blogs-blogger' %}
+                {% set rows_expr = "getBlogsByPlatform('blogger')" %}
+                {% set row_key = 'blog' %}
+                {% set empty_text = '등록된 Google Blogger가 없습니다' %}
+                {% include "components/list_table.html" %}
             </div>
         </div>
     </div>
 
     <!-- 애드센스 상태 요약 (클릭 시 해당 상태만 필터) -->
-    <div x-show="blogs.length > 0" class="mb-3 flex flex-wrap items-center gap-2">
+    <div x-show="blogs.length > 0" class="mt-3 mb-3 flex flex-wrap items-center gap-2">
         <span class="text-xs text-gray-500">애드센스</span>
         <template x-for="chip in adsenseChips()" :key="chip.key">
             <button type="button" @click="toggleAdsenseFilter(chip.key)"
@@ -191,55 +197,6 @@
         </template>
         <button type="button" x-show="adsenseFilter" @click="adsenseFilter = ''"
                 class="px-2 py-1 text-xs text-gray-500 underline hover:text-gray-700">필터 해제</button>
-    </div>
-
-    <!-- 모바일: 탭 UI (md 미만) -->
-    <div x-show="blogs.length > 0" class="mobile-tabs" x-data="{ activeTab: 'wordpress' }">
-        <div class="border border-gray-200 rounded-lg bg-white">
-            <div class="flex border-b border-gray-200">
-                <button type="button"
-                        @click="activeTab = 'wordpress'"
-                        :class="activeTab === 'wordpress' ? 'tab-active' : 'bg-white text-gray-500 hover:text-gray-700'"
-                        class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap">
-                    WordPress
-                    <span class="ml-1 text-xs" x-text="'(' + getBlogsByPlatform('wordpress').length + ')'"></span>
-                </button>
-                <button type="button"
-                        @click="activeTab = 'blogger'"
-                        :class="activeTab === 'blogger' ? 'tab-active' : 'bg-white text-gray-500 hover:text-gray-700'"
-                        class="flex-1 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap">
-                    Google Blogger
-                    <span class="ml-1 text-xs" x-text="'(' + getBlogsByPlatform('blogger').length + ')'"></span>
-                </button>
-            </div>
-
-            <!-- 탭 콘텐츠 -->
-            <div class="p-4">
-                <!-- WordPress 탭 -->
-                <div x-show="activeTab === 'wordpress'">
-                    <div x-show="getBlogsByPlatform('wordpress').length === 0" class="text-center py-8 text-gray-500">
-                        <p>등록된 WordPress 블로그가 없습니다</p>
-                    </div>
-                    <div class="blog-grid">
-                        <template x-for="blog in getBlogsByPlatform('wordpress')" :key="blog.id">
-                            {% include "blogs/_card.html" %}
-                        </template>
-                    </div>
-                </div>
-
-                <!-- Blogger 탭 -->
-                <div x-show="activeTab === 'blogger'">
-                    <div x-show="getBlogsByPlatform('blogger').length === 0" class="text-center py-8 text-gray-500">
-                        <p>등록된 Google Blogger가 없습니다</p>
-                    </div>
-                    <div class="blog-grid">
-                        <template x-for="blog in getBlogsByPlatform('blogger')" :key="blog.id">
-                            {% include "blogs/_card.html" %}
-                        </template>
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
 
     <!-- 알림 메시지 -->
@@ -777,6 +734,105 @@ function blogListApp() {
             } catch (error) {
                 console.error('블로그 목록 로드 실패:', error);
             }
+        },
+
+        // ── 공용 표 어댑터 ────────────────────────────────
+        // components/list_table.html 이 요구하는 규약. 컴포넌트가 블로그
+        // 필드를 직접 알면 다른 화면에서 재사용할 수 없어, 화면이 번역해 준다.
+        // 카드가 보여주던 정보와 동작을 하나도 빠뜨리지 않는다.
+        listColumns() {
+            return [
+                { key: 'name',    label: '이름',   strong: true, width: '18%' },
+                { key: 'url',     label: '주소',   link: true,   width: '26%' },
+                { key: '_badges', label: '상태' },
+                { key: 'matched', label: '매칭',   align: 'right', width: '10%' },
+                { key: 'created', label: '등록일', align: 'right', width: '13%' },
+            ];
+        },
+
+        listCell(blog, key) {
+            switch (key) {
+                case 'name': return blog.name;
+                case 'url': return blog.url;
+                case 'matched':
+                    // 카드의 "매칭 완료 (n/m)" 을 열로 옮긴 것
+                    return `${blog.matched_count ?? 0}/${blog.crawled_count ?? 0}`;
+                case 'created': return this.formatDate(blog.created_at);
+                default: return '';
+            }
+        },
+
+        listBadges(blog) {
+            const out = [];
+            // 플랫폼 — 표에서는 섹션으로 나뉘지만 모바일 목록에서는 섞이므로 남긴다
+            out.push(blog.platform === 'wordpress'
+                ? { label: 'WP', cls: 'bg-blue-100 text-blue-800' }
+                : { label: 'BL', cls: 'bg-orange-100 text-orange-800' });
+
+            if (blog.auto_publish) {
+                out.push({ label: '자동 발행', cls: 'bg-green-100 text-green-800' });
+            }
+
+            const ad = this.adsenseBadge(blog);
+            out.push({
+                label: ad.label, cls: ad.cls, dot: ad.dot, tip: ad.tip,
+                pulse: this.blogAdsenseStatus(blog) === 'applied',
+            });
+
+            // 크롤 상태 6종 — 카드에 있던 것을 그대로 옮긴다
+            const st = blog.crawl_status;
+            if (st === 'never') {
+                out.push({ label: '연결 필요', cls: 'bg-gray-100 text-gray-600', dot: 'bg-gray-400' });
+            } else if (st === 'crawling') {
+                out.push({ label: '크롤링 중', cls: 'bg-accent-lt text-accent', dot: 'bg-blue-500', pulse: true });
+            } else if (st === 'matching') {
+                out.push({ label: '매칭 진행 중', cls: 'bg-yellow-100 text-yellow-700', dot: 'bg-yellow-500', pulse: true });
+            } else if (st === 'synced' && blog.is_new_blog) {
+                out.push({ label: '연결됨 (신규)', cls: 'bg-teal-100 text-teal-700', dot: 'bg-teal-500' });
+            } else if (st === 'synced') {
+                out.push({ label: '매칭 완료', cls: 'bg-emerald-100 text-emerald-700', dot: 'bg-emerald-500' });
+            } else if (st === 'error') {
+                out.push({ label: '연결 오류', cls: 'bg-red-100 text-red-700', dot: 'bg-red-500' });
+            }
+
+            const seo = blog.seo_config?.detected_plugin;
+            if (seo) {
+                out.push({ label: 'SEO: ' + String(seo).toUpperCase(),
+                           cls: 'bg-purple-100 text-purple-800' });
+            }
+            return out;
+        },
+
+        listActions(blog) {
+            // 카드 헤더에 있던 5개를 그대로. 하나도 빼지 않는다.
+            return [
+                { key: 'edit', title: '수정',
+                  icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z',
+                  onClick: () => this.openEditSheet(blog) },
+                { key: 'settings', title: '설정',
+                  cls: 'text-gray-500 hover:text-purple-700 hover:bg-purple-100',
+                  icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z',
+                  onClick: () => this.openSettingsSheet(blog) },
+                { key: 'sync', title: '발행 동기화', busy: this.syncing === blog.id,
+                  icon: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15',
+                  onClick: () => this.syncPublishedPosts(blog.id) },
+                { key: 'test', title: '연결 테스트', busy: this.testing === blog.id,
+                  cls: 'text-gray-500 hover:text-green-700 hover:bg-green-100',
+                  icon: 'M13 10V3L4 14h7v7l9-11h-7z',
+                  onClick: () => this.testConnection(blog.id) },
+                { key: 'delete', title: '삭제',
+                  cls: 'text-gray-500 hover:text-red-600 hover:bg-red-50',
+                  icon: 'M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16',
+                  onClick: () => this.deleteBlog(blog.id, blog.name) },
+            ];
+        },
+
+        listTitle(blog) { return blog.name; },
+
+        listSub(blog) {
+            // 모바일 2줄째 — 표의 주요 열을 한 줄로 압축한다
+            const m = `${blog.matched_count ?? 0}/${blog.crawled_count ?? 0}`;
+            return `${blog.url} · 매칭 ${m}`;
         },
 
         getBlogsByPlatform(platform) {
