@@ -49,7 +49,7 @@ function flowListTableMixin() {
         },
 
         // ── 셀 값 ─────────────────────────────────────────────
-        /** 모듈 아이콘 + 이름. 카드가 아이콘과 이름을 함께 보여줬다. */
+        /** 모듈 아이콘 + 이름. 검색·모바일 요약에 쓴다. */
         flowModuleNames(flow) {
             const modules = this.getFlowModules(flow) || [];
             if (!modules.length) return '-';
@@ -60,6 +60,34 @@ function flowListTableMixin() {
                     return `${this.getModuleIcon(code)} ${m.name || ''}`.trim();
                 })
                 .join(' · ');
+        },
+
+        /**
+         * 모듈 아이콘 + 이름 + 설정값.
+         *
+         * 카드는 좁은 폭에 설정값을 담으려고 이 부분을 흘렸다. 표에서
+         * 이름만 남기면 카드가 전달하던 정보가 통째로 사라진다.
+         * 이 값이 slide 열에서 흐른다.
+         */
+        flowModuleDetail(flow) {
+            const modules = this.getFlowModules(flow) || [];
+            if (!modules.length) return '연결된 모듈이 없습니다';
+            return modules
+                .map(fm => {
+                    const m = fm.module || {};
+                    const code = m.module_type?.code || '';
+                    const head = `${this.getModuleIcon(code)} ${m.name || ''}`.trim();
+                    // 전역 getModuleInfoItems 는 window.flowListApp 에 위임한다.
+                    // 그 값이 아직 없을 때가 있어 앱 메서드를 직접 부른다.
+                    let items = [];
+                    try {
+                        items = (this.getModuleInfoItems(m) || [])
+                            .filter(i => i && i.value)
+                            .map(i => `${i.label} ${i.value}`);
+                    } catch (e) { items = []; }
+                    return items.length ? `${head} — ${items.join(' · ')}` : head;
+                })
+                .join('   ◆   ');
         },
 
         /** WP/BL 접두 + 블로그명. 카드의 플랫폼 배지를 글자로 옮긴 것. */
@@ -87,7 +115,7 @@ function flowListTableMixin() {
         listColumns() {
             return [
                 { key: 'name',    label: '이름',   width: '22%', strong: true, sortable: true },
-                { key: 'modules', label: '모듈',   width: '30%', sortable: true },
+                { key: 'modules', label: '모듈',   width: '30%', sortable: true, slide: true },
                 { key: 'blogs',   label: '블로그', width: '20%', sortable: true },
                 { key: '_badges', label: '상태',   width: '16%' },
                 { key: 'updated', label: '수정',   width: '12%', sortable: true },
@@ -97,7 +125,7 @@ function flowListTableMixin() {
         listCell(flow, key) {
             switch (key) {
                 case 'name': return flow.name || '';
-                case 'modules': return this.flowModuleNames(flow);
+                case 'modules': return this.flowModuleDetail(flow);
                 case 'blogs': return this.flowBlogNames(flow);
                 case 'updated': return this.formatFlowDate(flow.updated_at || flow.created_at);
                 default: return '';
