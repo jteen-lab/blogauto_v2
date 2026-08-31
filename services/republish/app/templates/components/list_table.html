@@ -28,7 +28,7 @@
     listSort(key) / listSortIcon(key)   정렬 토글·표시
     listTitle(row)/listSub(row)         모바일 1·2줄
     (selectable 일 때)
-    listSelection            {scope: [id,…]} — 화면이 들고 있는 선택 상태
+    listSelectedRows(scope, rows)        선택된 행들
     listToggleAll(scope, rows)           전체 선택/해제
     listAllChecked(scope, rows)          머리글 체크 상태
   순서도: docs/flowcharts/list_table_component.md
@@ -127,8 +127,11 @@
            :checked="listAllChecked('{{ table_id }}', {{ rows_expr }})"
            @click="listToggleAll('{{ table_id }}', {{ rows_expr }})">
     <span class="text-xs text-gray-500">전체 선택</span>
+    {# listSelection 을 직접 읽지 않는다 — 오토런은 선택을 selectedIds 로
+       들고 있어 그 이름이 없다. 모든 화면이 주는 함수만 쓴다. #}
     <span class="ml-auto text-xs text-gray-400"
-          x-text="(listSelection['{{ table_id }}'] || []).length + '/' + ({{ rows_expr }} || []).length"></span>
+          x-text="listSelectedRows('{{ table_id }}', {{ rows_expr }}).length
+                  + '/' + ({{ rows_expr }} || []).length"></span>
   </div>
   {% endif %}
   <div class="md:hidden overflow-y-auto divide-y divide-gray-100"
