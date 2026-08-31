@@ -221,3 +221,44 @@ call('listToggleOne', 'x', 2);
 console.log(call('listAllChecked', 'x', visible));
 """)
     assert out == "true"
+
+
+def test_connected_blogs_sort_actually_reorders() -> None:
+    """연결 블로그 정렬이 순서를 실제로 바꾸는지 확인한다.
+
+    sortable 플래그만 붙고 비교값이 없으면 화살표만 바뀌고 순서는 그대로다.
+    """
+    import subprocess
+
+    program = """
+global.document = {addEventListener(){}, querySelector(){return null}, getElementById(){return null}};
+global.window = {addEventListener(){}};
+const fs = require('fs');
+eval(fs.readFileSync(SEL, 'utf8'));
+// _blogsCache 는 파일 안에서 let 으로 선언돼 밖에서 못 넣는다. 같은 스코프에 붙인다.
+eval(fs.readFileSync(LIST, 'utf8') + `
+_blogsCache = [{id: 11, name: '인생꿀팁'}, {id: 12, name: '군타'}];
+globalThis.__app = moduleListApp();
+`);
+const app = globalThis.__app;
+window.moduleListAppInstance = app;
+const mod = (id, name, blogIds) => ({
+  id, name, module_type: {code: 'prompt'}, settings: {blogs: blogIds},
+});
+app.modules = [mod(1, '가', [11]), mod(2, '나', [12])];
+const order = () => app.visibleModules('prompt').map(m => m.name).join('');
+app.listSort('blogs');
+const asc = order();
+app.listSort('blogs');
+console.log(JSON.stringify([asc, order(), app.listCell(app.modules[0], 'blogs')]));
+"""
+    program = (
+        f"const SEL = {str(STATIC / 'js' / 'components' / 'list_selection.js')!r};\n"
+        f"const LIST = {str(STATIC / 'js' / 'modules' / 'list.js')!r};\n"
+        + program
+    )
+    result = subprocess.run(["node", "-e", program], capture_output=True, text=True, timeout=60)
+    assert result.returncode == 0, result.stderr
+    ascending, descending, cell = __import__("json").loads(result.stdout)
+    assert cell == "인생꿀팁", "연결 블로그 셀이 비어 있으면 정렬해도 의미가 없다"
+    assert ascending != descending, "오름/내림 결과가 같다 — 정렬이 동작하지 않는다"
