@@ -276,3 +276,42 @@ console.log(JSON.stringify([asc, order(), app.listCell(app.modules[0], 'blogs')]
     ascending, descending, cell = __import__("json").loads(result.stdout)
     assert cell == "인생꿀팁", "연결 블로그 셀이 비어 있으면 정렬해도 의미가 없다"
     assert ascending != descending, "오름/내림 결과가 같다 — 정렬이 동작하지 않는다"
+
+
+def test_blog_app_constructs_with_page_script_order() -> None:
+    """템플릿의 <script> 순서를 그대로 재현해 앱이 실제로 만들어지는지 본다.
+
+    Jinja 렌더 결과만 보면 표 마크업은 멀쩡한데 브라우저에서 앱 함수가
+    예외로 죽어 화면이 비는 경우를 놓친다(실제로 놓쳤다). 페이지가 싣는
+    스크립트를 순서대로 실행한 뒤 앱을 만들어 본다.
+    """
+    import json
+    import subprocess
+
+    html = (TEMPLATES / "blogs/list.html").read_text(encoding="utf-8")
+
+    # 페이지가 싣는 로컬 스크립트를 등장 순서대로 모은다
+    srcs = [
+        STATIC / m.group(1)
+        for m in re.finditer(r'<script src="/static/([^"?]+)', html)
+    ]
+    existing = [str(p) for p in srcs if p.exists()]
+    assert any("list_selection.js" in p for p in existing), "mixin 이 목록에 없다"
+
+    inline = html[html.index("function blogListApp()"):html.index("// ========== 전역 참조 저장용")]
+    program = f"""
+global.document = {{addEventListener(){{}}, querySelector(){{return null}}, getElementById(){{return null}}}};
+global.window = {{addEventListener(){{}}}};
+const fs = require('fs');
+for (const f of {json.dumps(existing)}) {{
+  try {{ eval(fs.readFileSync(f, 'utf8')); }} catch (e) {{ /* 무관한 화면 스크립트 */ }}
+}}
+{inline}
+const app = blogListApp();
+if (typeof app.listSelectedCount !== 'function') throw new Error('mixin 미적용');
+app.blogs = [{{id: 1, name: 'a', platform: 'wordpress', url: 'https://a.com'}}];
+console.log(JSON.stringify([app.visibleBlogs('wordpress').length, app.listSelectedCount('blogs-wordpress')]));
+"""
+    result = subprocess.run(["node", "-e", program], capture_output=True, text=True, timeout=60)
+    assert result.returncode == 0, f"블로그 앱 생성 실패 — 화면이 빈다:\n{result.stderr}"
+    assert json.loads(result.stdout) == [1, 0]
