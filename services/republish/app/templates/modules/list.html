@@ -355,10 +355,33 @@
 
             {% for t in module_type_tabs %}
             <div x-show="typeTab === '{{ t.code }}'" class="px-2 md:px-0">
-                {% set table_id = 'modules-' ~ t.code %}
+                {# 선택 범위를 탭마다 나눈다. 프롬프트 탭에서 전체선택해도
+                   수집 탭은 그대로여야 한다. #}
+                {% set scope = 'modules-' ~ t.code %}
+                <div x-show="listSelectedCount('{{ scope }}') > 0"
+                     class="flex items-center justify-between gap-2 px-3 py-2 bg-accent-lt/60 border-b border-gray-200">
+                    <span class="text-sm text-gray-700">
+                        <span class="font-medium" x-text="listSelectedCount('{{ scope }}')"></span>개 선택
+                        <span class="text-xs text-gray-500 ml-1">({{ t.label }})</span>
+                    </span>
+                    <div class="flex items-center gap-2">
+                        <button type="button"
+                                @click="deleteSelectedModules('{{ scope }}', visibleModules('{{ t.code }}'))"
+                                class="px-3 py-1.5 text-xs font-medium bg-red-600 text-white rounded-lg hover:bg-red-700">
+                            선택 삭제
+                        </button>
+                        <button type="button" @click="listClearSelection('{{ scope }}')"
+                                class="px-2 py-1.5 text-xs text-gray-500 hover:text-gray-700">
+                            선택 해제
+                        </button>
+                    </div>
+                </div>
+
+                {% set table_id = scope %}
                 {% set rows_expr = "visibleModules('" ~ t.code ~ "')" %}
                 {% set row_key = 'module' %}
                 {% set max_height = '30rem' %}
+                {% set selectable = true %}
                 {% set actions_include = 'modules/_row_actions.html' %}
                 {% set empty_text = '조건에 맞는 모듈이 없습니다' %}
                 {% include "components/list_table.html" %}
@@ -520,5 +543,6 @@
 <script src="/static/js/modules/contact-form-pages.js?v=20260820d"></script>
 <script src="/static/js/modules/contact-form-template.js?v=20260820c"></script>
 <script src="/static/js/modules/form.js?v=20260830ap"></script>
-<script src="/static/js/modules/list.js?v=20260820all"></script>
+<script src="/static/js/components/list_selection.js?v=20260831"></script>
+<script src="/static/js/modules/list.js?v=20260831sel"></script>
 {% endblock %}
