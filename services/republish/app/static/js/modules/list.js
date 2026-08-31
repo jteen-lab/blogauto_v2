@@ -173,7 +173,7 @@ function moduleListApp() {
                 { key: 'name',   label: '이름',   strong: true, width: '22%', sortable: true },
                 { key: 'type',   label: '종류',   width: '12%', sortable: true },
                 { key: 'blogs',  label: '연결 블로그', width: '24%', sortable: true },
-                { key: 'detail', label: '설정', slide: true },
+                { key: 'detail', label: '설정', width: '29%', slide: true },
                 { key: 'updated', label: '수정일', align: 'right', width: '13%', sortable: true },
             ];
         },
