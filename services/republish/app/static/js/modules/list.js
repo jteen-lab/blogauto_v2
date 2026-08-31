@@ -157,6 +157,146 @@ function moduleListApp() {
             return this.getSortedModules(filtered);
         },
 
+        // ── 공용 표 어댑터 ────────────────────────────────
+        // components/list_table.html 규약. 블로그 화면과 같은 로직·스타일을
+        // 쓴다. 액션은 화면이 마크업으로 준다(modules/_row_actions.html) —
+        // 컴포넌트가 대신 그리면 클릭이 끊기는 사고가 있었다.
+        moduleSearch: '',
+        listSortKey: 'name',
+        listSortDir: 'asc',
+
+        listColumns() {
+            return [
+                { key: 'name',   label: '이름',   strong: true, width: '22%', sortable: true },
+                { key: 'type',   label: '종류',   width: '12%', sortable: true },
+                { key: 'blogs',  label: '연결 블로그', width: '24%' },
+                { key: 'detail', label: '설정' },
+                { key: 'updated', label: '수정일', align: 'right', width: '13%', sortable: true },
+            ];
+        },
+
+        listCell(module, key) {
+            switch (key) {
+                case 'name': return module.name;
+                case 'type':
+                    return typeof getModuleTypeName === 'function'
+                        ? getModuleTypeName(module.module_type?.code)
+                        : (module.module_type?.code || '');
+                case 'blogs': return this.moduleBlogNames(module);
+                case 'detail': return this.moduleDetailText(module);
+                case 'updated': return this.formatModuleDate(module.updated_at || module.created_at);
+                default: return '';
+            }
+        },
+
+        // 카드가 슬라이드로 보여주던 정보를 한 줄로 압축한다.
+        // 표에서는 훑기가 목적이라 움직이는 텍스트가 오히려 방해된다.
+        moduleDetailText(module) {
+            if (typeof getModuleInfoRows !== 'function') return '';
+            try {
+                return (getModuleInfoRows(module) || [])
+                    .filter(r => r && r.type !== 'blog' && r.value)
+                    .map(r => `${r.label} ${r.value}`)
+                    .join(' · ');
+            } catch (e) {
+                return '';
+            }
+        },
+
+        moduleBlogNames(module) {
+            if (typeof getModuleInfoRows !== 'function') return '';
+            try {
+                const row = (getModuleInfoRows(module) || []).find(r => r && r.type === 'blog');
+                if (!row || !row.blogs || !row.blogs.length) return '-';
+                return row.blogs.map(b => b.name).join(', ');
+            } catch (e) {
+                return '';
+            }
+        },
+
+        formatModuleDate(v) {
+            if (!v) return '';
+            try {
+                return new Date(v).toLocaleDateString('ko-KR',
+                    { year: '2-digit', month: '2-digit', day: '2-digit' });
+            } catch (e) { return ''; }
+        },
+
+        listBadges(module) {
+            const out = [];
+            const code = module.module_type?.code || '';
+            if (typeof getModuleIcon === 'function') {
+                out.push({ label: getModuleIcon(code) + ' '
+                    + (typeof getModuleTypeName === 'function'
+                        ? getModuleTypeName(code) : code),
+                    cls: 'bg-gray-100 text-gray-700' });
+            }
+            // 레거시 대량 수집 경고는 카드에 있던 것을 그대로 옮긴다
+            if (module.legacy_bulk_warning) {
+                out.push({ label: '레거시 설정', cls: 'bg-amber-100 text-amber-800',
+                           tip: '대량 수집 옵션이 남아 있습니다' });
+            }
+            if (module.prompt_preset) {
+                out.push({ label: module.prompt_preset,
+                           cls: 'bg-indigo-50 text-indigo-700' });
+            }
+            if (module.adsense_approval_preset_label) {
+                out.push({ label: '승인 전: ' + module.adsense_approval_preset_label,
+                           cls: 'bg-purple-50 text-purple-700' });
+            }
+            return out;
+        },
+
+        // 정렬 — 값의 성격에 맞게 비교한다
+        listSortValue(module, key) {
+            switch (key) {
+                case 'name': return (module.name || '').toLowerCase();
+                case 'type': return (module.module_type?.code || '');
+                case 'updated': return module.updated_at || module.created_at || '';
+                default: return '';
+            }
+        },
+
+        listSort(key) {
+            if (this.listSortKey === key) {
+                this.listSortDir = this.listSortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.listSortKey = key;
+                this.listSortDir = 'asc';
+            }
+        },
+
+        listSortIcon(key) {
+            if (this.listSortKey !== key) return '↕';
+            return this.listSortDir === 'asc' ? '▲' : '▼';
+        },
+
+        listTitle(module) { return module.name; },
+
+        listSub(module) {
+            const blogs = this.moduleBlogNames(module);
+            const detail = this.moduleDetailText(module);
+            return [blogs !== '-' ? blogs : '', detail].filter(Boolean).join(' · ');
+        },
+
+        // 검색·정렬을 거친 최종 목록
+        visibleModules(typeCode) {
+            const q = (this.moduleSearch || '').trim().toLowerCase();
+            const rows = this.getModulesByType(typeCode).filter(m => {
+                if (!q) return true;
+                return (m.name || '').toLowerCase().includes(q)
+                    || (m.description || '').toLowerCase().includes(q)
+                    || this.moduleBlogNames(m).toLowerCase().includes(q);
+            });
+            const dir = this.listSortDir === 'asc' ? 1 : -1;
+            return [...rows].sort((a, b) => {
+                const va = this.listSortValue(a, this.listSortKey);
+                const vb = this.listSortValue(b, this.listSortKey);
+                if (va === vb) return 0;
+                return va > vb ? dir : -dir;
+            });
+        },
+
         // 타입별 모듈 개수 계산
         getModuleCountByType(typeCode) {
             return this.modules.filter(module => module.module_type.code === typeCode).length;
