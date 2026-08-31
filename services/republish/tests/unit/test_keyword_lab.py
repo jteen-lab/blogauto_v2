@@ -219,3 +219,60 @@ def test_collect_and_measure_are_separate_actions() -> None:
 def test_menu_entry_exists() -> None:
     base = (TEMPLATES / "base.html").read_text(encoding="utf-8")
     assert base.count('href="/keyword-lab"') == 2, "PC·모바일 메뉴 모두 필요"
+
+
+# ── 불리언 속성 바인딩 ───────────────────────────────────
+def test_boolean_attribute_bindings_are_real_booleans() -> None:
+    """Alpine 은 **빈 문자열을 속성 제거 대상으로 보지 않는다.**
+
+    3.13.3 실제 코드:
+        [null, undefined, false].includes(value) ? removeAttribute : setAttribute
+    그리고 disabled 는 불리언 속성이라 setAttribute 시 값이 'disabled' 가 된다.
+
+    busy 를 ''(빈 문자열)로 두고 :disabled="busy" 로 묶었더니 버튼이 처음부터
+    영구 비활성이었다. 초기 상태에서 어떤 불리언 속성도 켜지면 안 된다.
+    """
+    import json
+    import subprocess
+
+    src = (TEMPLATES / "keyword_lab/index.html").read_text(encoding="utf-8")
+    body = re.search(r"{% block content %}(.*?){% endblock %}", src, re.S)
+    assert body
+
+    # Alpine 이 불리언으로 다루는 속성들
+    bool_attrs = ("disabled", "checked", "required", "readonly", "hidden",
+                  "open", "selected", "multiple")
+    bindings = [
+        (attr, expr) for attr, expr in
+        re.findall(r':([a-z]+)\s*=\s*"([^"]*)"', body.group(1))
+        if attr in bool_attrs
+    ]
+    assert bindings, "검사할 불리언 바인딩이 없다"
+
+    program = f"""
+global.document = {{addEventListener(){{}}, querySelector(){{return null}},
+                    getElementById(){{return null}}, querySelectorAll(){{return []}}}};
+global.window = {{addEventListener(){{}}}};
+const fs = require('fs');
+eval(fs.readFileSync({str(ROOT / 'app/static/js/components/list_selection.js')!r}, 'utf8'));
+eval(fs.readFileSync({str(ROOT / 'app/static/js/keyword_lab/app.js')!r}, 'utf8'));
+const app = keywordLabApp();
+
+// Alpine 3.13.3 의 규칙 그대로
+const removes = v => [null, undefined, false].includes(v);
+
+const bad = [];
+for (const [attr, expr] of {json.dumps(bindings)}) {{
+  let v;
+  try {{ v = new Function('s', `with (s) {{ return (${{expr}}) }}`)(app); }}
+  catch (e) {{ bad.push([attr, expr, '평가 실패: ' + e.message]); continue; }}
+  if (!removes(v)) bad.push([attr, expr, `초기값 ${{JSON.stringify(v)}} → 속성이 켜진다`]);
+}}
+console.log(JSON.stringify(bad));
+"""
+    result = subprocess.run(["node", "-e", program], capture_output=True,
+                            text=True, timeout=60)
+    assert result.returncode == 0, result.stderr
+    bad = json.loads(result.stdout.strip())
+    assert not bad, "초기 상태에서 켜지는 불리언 속성:\n" + "\n".join(
+        f"  :{a}=\"{e}\" — {why}" for a, e, why in bad)
