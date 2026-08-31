@@ -276,3 +276,105 @@ console.log(JSON.stringify(bad));
     bad = json.loads(result.stdout.strip())
     assert not bad, "초기 상태에서 켜지는 불리언 속성:\n" + "\n".join(
         f"  :{a}=\"{e}\" — {why}" for a, e, why in bad)
+
+
+# ── 실패를 숨기지 않는다 ─────────────────────────────────
+@pytest.mark.asyncio
+async def test_collect_reports_api_failure_instead_of_zero() -> None:
+    """403 을 로그에만 남기고 '0개 수집' 으로 끝내면 안 된다.
+
+    실제로 고객 ID 가 한 글자('e')로 저장돼 인증이 계속 실패했는데,
+    화면에는 '0개 수집' 만 보여 원인을 알 수 없었다.
+    """
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, patch
+
+    from app.services.keyword_lab.service import KeywordLabService
+
+    db = SimpleNamespace(add=lambda *a: None, commit=AsyncMock())
+    svc = KeywordLabService(db=db, settings=SimpleNamespace(), user_id=1)
+    svc.seeds_for_blog = AsyncMock(return_value=[
+        {"seed": "자격증", "topic_id": 13, "subtopic_id": 56}])
+    svc._existing_keywords = AsyncMock(return_value=set())
+
+    fake_ads = SimpleNamespace(
+        is_configured=lambda: True,
+        get_keyword_stats=AsyncMock(return_value={
+            "success": False,
+            "error": "네이버 검색광고 인증 실패 — 고객 ID(CUSTOMER_ID) 확인",
+        }),
+    )
+    with patch("app.services.keyword_lab.service.NaverAdsService",
+               return_value=fake_ads):
+        result = await svc.collect(blog_id=19)
+
+    assert result["success"] is False, "성공으로 돌려주면 화면이 '0개' 라고만 말한다"
+    assert "고객 ID" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_partial_failure_still_saves_what_it_got() -> None:
+    """일부 시드만 실패하면 받은 것은 저장하고 오류는 함께 알린다."""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, patch
+
+    from app.services.keyword_lab.service import KeywordLabService
+
+    added = []
+    db = SimpleNamespace(add=added.append, commit=AsyncMock())
+    svc = KeywordLabService(db=db, settings=SimpleNamespace(), user_id=1)
+    svc._existing_keywords = AsyncMock(return_value=set())
+
+    calls = {"n": 0}
+
+    async def _stats(keywords, include_related=True):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return {"success": True,
+                    "keywords": [{"keyword": "전기기사", "total_search_volume": 900}],
+                    "related_keywords": []}
+        return {"success": False, "error": "호출 한도 초과"}
+
+    fake_ads = SimpleNamespace(is_configured=lambda: True,
+                               get_keyword_stats=_stats)
+    with patch("app.services.keyword_lab.service.NaverAdsService",
+               return_value=fake_ads):
+        result = await svc.collect(seeds=[f"시드{i}" for i in range(1, 8)])
+
+    assert result["success"] is True
+    assert result["saved"] == 1
+    assert "호출 한도 초과" in result["errors"]
+
+
+def test_naver_ads_error_explains_what_to_fix() -> None:
+    """상태 코드만 남기면 '403' 만 보이고 무엇을 고칠지 알 수 없다."""
+    from types import SimpleNamespace
+
+    from app.services.naver_ads_service import NaverAdsService
+
+    svc = NaverAdsService(SimpleNamespace())
+    resp = SimpleNamespace(
+        status_code=403,
+        json=lambda: {"detail": "Auth failed with api-key: 010..., customer-id: -1"},
+        text="",
+    )
+    msg = svc._explain(resp)
+    assert "고객 ID" in msg or "CUSTOMER_ID" in msg
+    assert "customer-id: -1" in msg, "네이버가 준 사유를 그대로 올려야 한다"
+
+    resp429 = SimpleNamespace(status_code=429, json=lambda: {}, text="")
+    assert "한도" in svc._explain(resp429)
+
+
+def test_connection_test_actually_calls_the_api() -> None:
+    """키가 '채워져 있는지' 만 보면 잘못된 값도 통과한다."""
+    src = (ROOT / "app/routers/keyword_lab.py").read_text(encoding="utf-8")
+    assert "get_keyword_stats" in src
+    assert "search_blog" in src
+
+
+def test_failure_is_shown_on_screen_not_only_toast() -> None:
+    """토스트는 5초 뒤 사라져 무엇을 고칠지 다시 볼 수 없다."""
+    page = (TEMPLATES / "keyword_lab/index.html").read_text(encoding="utf-8")
+    assert 'x-show="failure"' in page
+    assert "testConnection()" in page
