@@ -44,6 +44,24 @@ def test_every_card_action_survives(page, call):
     assert call in page, f"동작 누락: {call}"
 
 
+def test_actions_dispatch_by_key_not_closure(page, table):
+    """객체에 함수를 담아 a.onClick() 으로 부르면 Alpine 프록시를 거치며
+    호출이 끊긴다 — 실제로 하단시트가 열리지 않는 사고가 있었다.
+    컴포넌트는 키만 넘기고 화면이 실행한다."""
+    assert "listAction(" in table, "컴포넌트가 디스패처를 부르지 않는다"
+    # 사고 경위가 주석에 적혀 있으므로 주석을 뺀 실제 마크업만 본다
+    markup = re.sub(r"{#.*?#}", "", table, flags=re.S)
+    assert "onClick" not in markup, "컴포넌트에 클로저 호출이 남아 있다"
+    assert "listAction(blog, key) {" in page, "화면에 디스패처가 없다"
+
+
+def test_bottom_sheet_targets_exist(page):
+    """하단시트를 여는 대상 요소가 페이지에 있어야 실제로 열린다."""
+    assert "openBottomSheet('blogEditForm')" in page
+    assert "openBottomSheet('blogSettings')" in page
+    assert 'id="blogSettings"' in page or "blogSettings" in page
+
+
 def test_busy_state_kept_for_long_actions(page):
     """동기화·테스트는 진행 중 표시가 있었다. 없으면 두 번 누르게 된다."""
     assert "busy: this.syncing === blog.id" in page
@@ -152,3 +170,54 @@ def test_actions_have_distinct_keys(page):
     block = block[:block.index("listTitle")]
     keys = re.findall(r"key:\s*'([^']+)'", block)
     assert len(keys) == 5 and len(set(keys)) == 5, keys
+
+
+# ── 2026-08-31 지적 반영 ─────────────────────────────────
+def test_platform_uses_tabs_not_stacked(page):
+    """워드프레스 아래에 블로거를 쌓으면 개수가 늘수록 아래로 밀려난다.
+    같은 자리에서 탭으로 전환한다."""
+    assert "platformTab" in page
+    assert "platformTab === 'wordpress'" in page
+    assert "platformTab === 'blogger'" in page
+    # 두 표가 동시에 보이면 탭이 아니다
+    assert page.count("x-show=\"platformTab ===") == 2
+
+
+def test_search_by_name(page):
+    """블로그명·주소로 걸러진다."""
+    assert 'x-model="blogSearch"' in page
+    assert "blogSearch" in page
+    assert ".includes(q)" in page
+
+
+def test_column_sorting(page, table):
+    """열 머리글을 눌러 오름/내림 정렬."""
+    assert "listSort(col.key)" in table
+    assert "listSortIcon(col.key)" in table
+    assert "this.sortDir === 'asc' ? 'desc' : 'asc'" in page
+    # 숫자를 문자열로 비교하면 10 < 9 가 된다
+    assert "sortValue(blog, key)" in page
+    assert "blog.matched_count ?? 0" in page
+
+
+def test_sortable_columns_marked(page):
+    """정렬 가능한 열이 지정돼 있어야 머리글이 눌린다."""
+    block = page[page.index("listColumns() {"):]
+    block = block[:block.index("listCell")]
+    assert block.count("sortable: true") == 4
+
+
+def test_table_scrolls_internally(table):
+    """화면 전체가 늘어나면 훑는 동안 머리글이 사라진다."""
+    assert "max-height" in table
+    assert "overflow-y-auto" in table
+    assert "sticky top-0" in table
+
+
+def test_max_height_passed_by_screen(page):
+    assert "max_height = '30rem'" in page
+
+
+def test_adsense_chips_above_table(page):
+    """표 아래에 있으면 표를 다 지나야 보인다."""
+    assert page.index("adsenseChips()") < page.index("components/list_table.html")
