@@ -31,6 +31,22 @@ def table() -> str:
     return TABLE.read_text(encoding="utf-8")
 
 
+@pytest.fixture(scope="module")
+def rendered() -> str:
+    """Jinja 로 그린 결과.
+
+    플랫폼별 표가 {% for %} 로 묶여 있어 원본에는 한 번만 나온다.
+    실제로 두 벌이 그려지는지는 렌더 결과로만 확인할 수 있다.
+    """
+    from jinja2 import Environment, FileSystemLoader
+
+    env = Environment(loader=FileSystemLoader(str(ROOT / "app/templates")))
+    source = LIST.read_text(encoding="utf-8")
+    body = re.search(r"{% block content %}(.*?){% endblock %}", source, re.S)
+    assert body, "content 블록이 없다"
+    return env.from_string(body.group(1)).render()
+
+
 # ── 동작 5가지 (카드 헤더 버튼) ───────────────────────────
 @pytest.mark.parametrize("call", [
     "this.openEditSheet(blog)",
@@ -69,9 +85,12 @@ def test_actions_use_direct_calls(page, table):
         assert call in actions, f"직접 호출 누락: {call}"
 
 
-def test_screen_supplies_actions_markup(page):
+def test_screen_supplies_actions_markup(page, rendered):
     """두 표 모두 액션 마크업을 지정해야 버튼이 나온다."""
-    assert page.count("actions_include") == 2
+    assert "actions_include" in page
+    # 행 액션 5가지가 두 플랫폼 표에 모두 그려졌는지 결과로 확인한다
+    assert rendered.count("openEditSheet(blog)") >= 2
+    assert rendered.count("openSettingsSheet(blog)") >= 2
 
 
 def test_bottom_sheet_targets_exist(page):
@@ -191,14 +210,14 @@ def test_busy_state_in_actions_markup():
 
 
 # ── 2026-08-31 지적 반영 ─────────────────────────────────
-def test_platform_uses_tabs_not_stacked(page):
+def test_platform_uses_tabs_not_stacked(page, rendered):
     """워드프레스 아래에 블로거를 쌓으면 개수가 늘수록 아래로 밀려난다.
     같은 자리에서 탭으로 전환한다."""
     assert "platformTab" in page
-    assert "platformTab === 'wordpress'" in page
-    assert "platformTab === 'blogger'" in page
+    assert "platformTab === 'wordpress'" in rendered
+    assert "platformTab === 'blogger'" in rendered
     # 두 표가 동시에 보이면 탭이 아니다
-    assert page.count("x-show=\"platformTab ===") == 2
+    assert rendered.count('x-show="platformTab ===') == 2
 
 
 def test_search_by_name(page):
