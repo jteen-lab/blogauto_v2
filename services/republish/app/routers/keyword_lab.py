@@ -66,6 +66,44 @@ async def api_status(
     }
 
 
+@router.post("/test-connection", summary="네이버 API 연결 테스트")
+async def test_connection(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """실제로 호출해 본다.
+
+    키가 '채워져 있는지' 만 보면 잘못된 값도 통과한다. 실제로 고객 ID 가
+    한 글자('e')로 저장돼 있었는데 status 는 정상으로 보였다.
+    """
+    from ..services.naver_ads_service import NaverAdsService
+    from ..services.naver_search_service import NaverSearchService
+
+    settings = await _settings(db, current_user)
+
+    ads = {"configured": False, "ok": False, "error": None}
+    svc = NaverAdsService(settings)
+    ads["configured"] = svc.is_configured()
+    if ads["configured"]:
+        r = await svc.get_keyword_stats(["테스트"], include_related=False)
+        ads["ok"] = bool(r.get("success"))
+        ads["error"] = None if ads["ok"] else r.get("error")
+    else:
+        ads["error"] = "검색광고 API 키가 설정에 없습니다"
+
+    search = {"configured": False, "ok": False, "error": None}
+    ssvc = NaverSearchService(settings)
+    search["configured"] = ssvc.is_configured()
+    if search["configured"]:
+        r = await ssvc.search_blog("테스트", display=1)
+        search["ok"] = bool(r.get("success"))
+        search["error"] = None if search["ok"] else r.get("error")
+    else:
+        search["error"] = "검색 API 키가 설정에 없습니다"
+
+    return {"naver_ads": ads, "naver_search": search}
+
+
 @router.get("/candidates", summary="후보 목록")
 async def list_candidates(
     blog_id: Optional[int] = Query(None),
