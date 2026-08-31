@@ -1,0 +1,103 @@
+/**
+ * 표 셀 슬라이드 — 카드가 전달하던 내부 정보를 좁은 셀에서 흘려 보여준다.
+ *
+ * 카드의 .module-slide-* 와 같은 원리(원본 + 복제 를 -50% 까지 이동)지만,
+ * 셀 안에 들어가야 해서 라벨 고정 영역이 없다.
+ * 순서도: docs/flowcharts/list_table_cell_slide.md
+ */
+
+.cell-slide {
+    position: relative;
+    overflow: hidden;
+    max-width: 100%;
+}
+
+.cell-slide-track {
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+    -webkit-animation: slideInfo var(--slide-duration, 26s) linear infinite;
+    animation: slideInfo var(--slide-duration, 26s) linear infinite;
+}
+
+.cell-slide-item {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.75rem;
+    color: #4b5563;
+}
+
+/* 넘치지 않으면 흐르지 않는다. 복제본과 구분자도 감춰 한 벌만 보인다. */
+.cell-slide-track.no-slide {
+    -webkit-animation: none;
+    animation: none;
+    max-width: 100%;
+}
+
+.cell-slide-track.no-slide .slide-cycle-separator,
+.cell-slide-track.no-slide [aria-hidden="true"] {
+    display: none;
+}
+
+/* 넘칠 때만 한 줄로 자른다(정지 상태에서 말줄임). */
+.cell-slide-track.no-slide .cell-slide-item {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* PC: 올려두면 멈춘다 */
+.cell-slide:hover .cell-slide-track {
+    -webkit-animation-play-state: paused;
+    animation-play-state: paused;
+}
+
+/* 모바일: 탭하면 멈춘다 */
+.cell-slide-track.paused {
+    -webkit-animation-play-state: paused !important;
+    animation-play-state: paused !important;
+}
+
+.cell-slide .slide-pause-hint {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    opacity: 0;
+    font-size: 0.7rem;
+    color: #9ca3af;
+    background: linear-gradient(to right, transparent, #fff 40%);
+    padding-left: 0.75rem;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+}
+
+.cell-slide:hover .slide-pause-hint,
+.cell-slide.touch-paused .slide-pause-hint {
+    opacity: 1;
+}
+
+/* 흐르지 않는 셀에는 힌트를 띄우지 않는다 — 멈출 것이 없다. */
+.cell-slide:has(.cell-slide-track.no-slide) .slide-pause-hint {
+    display: none;
+}
+
+/* 모바일 목록의 슬라이드 줄 */
+.cell-slide--mobile {
+    margin-top: 0.125rem;
+}
+
+.cell-slide--mobile .cell-slide-item {
+    font-size: 0.6875rem;
+    color: #6b7280;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cell-slide-track {
+        -webkit-animation: none !important;
+        animation: none !important;
+    }
+    .cell-slide-track .slide-cycle-separator,
+    .cell-slide-track [aria-hidden="true"] {
+        display: none;
+    }
+}
