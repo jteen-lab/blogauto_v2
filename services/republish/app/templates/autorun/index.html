@@ -181,11 +181,103 @@
         {% include "autorun/_empty.html" %}
     </div>
 
-    <!-- 오토런 플로우 목록 -->
-    <div x-show="!loading && autorunFlows.length > 0" class="autorun-grid">
-        <template x-for="flow in autorunFlows" :key="flow.id">
-            {% include "autorun/_card.html" %}
-        </template>
+    {#- 탭 축은 플로우 관리와 같다(연결 블로그의 플랫폼). 오토런 항목이
+        곧 플로우라 두 화면이 다른 축으로 나뉘면 오히려 헷갈린다.
+        판정은 components/platform_tabs.js 한 곳에만 있다.
+        순서도: docs/flowcharts/autorun_list_table.md -#}
+    {% set autorun_tabs = [
+        {'key': 'wordpress', 'icon': '🟦', 'label': '워드프레스'},
+        {'key': 'blogger',   'icon': '🟧', 'label': '구글 블로거'},
+        {'key': 'mixed',     'icon': '🔀', 'label': '혼합'},
+        {'key': 'none',      'icon': '🔍', 'label': '블로그 미연결'}
+    ] %}
+
+    <!-- 오토런 목록 — 탭 + 표(데스크톱)/2줄 목록(모바일).
+         블로그·모듈·플로우와 같은 공용 컴포넌트를 쓴다. -->
+    <div x-show="!loading && autorunFlows.length > 0"
+         x-effect="
+             // 지금 탭이 비면 항목이 있는 첫 탭으로 옮긴다. 오토런 목록을
+             // 비동기로 받으므로 x-init 한 번으로는 늦다.
+             if (autorunFlows.length && getAutorunByTab(autorunTab).length === 0) {
+                 const first = ['wordpress', 'blogger', 'mixed', 'none']
+                     .find(k => getAutorunByTab(k).length > 0);
+                 if (first) autorunTab = first;
+             }
+         ">
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <!-- 탭 — 같은 자리에서 표가 바뀐다 -->
+            <div class="flex items-center gap-1 border-b border-gray-200 px-3 pt-2 overflow-x-auto">
+                {% for t in autorun_tabs %}
+                <button type="button" @click="autorunTab = '{{ t.key }}'"
+                        x-show="getAutorunByTab('{{ t.key }}').length > 0"
+                        class="px-3 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-colors"
+                        :class="autorunTab === '{{ t.key }}'
+                            ? 'border-accent text-accent'
+                            : 'border-transparent text-gray-500 hover:text-gray-700'">
+                    {{ t.icon }} {{ t.label }}
+                    <span class="ml-1 text-xs text-gray-400"
+                          x-text="'(' + getAutorunByTab('{{ t.key }}').length + ')'"></span>
+                </button>
+                {% endfor %}
+
+                <!-- 검색 -->
+                <div class="ml-auto relative py-1 flex-shrink-0">
+                    <input type="text" x-model="autorunSearch" placeholder="플로우·모듈·블로그 검색"
+                           class="w-40 md:w-56 pl-8 pr-7 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent">
+                    <svg class="w-4 h-4 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z"/>
+                    </svg>
+                    <button type="button" x-show="autorunSearch" @click="autorunSearch = ''"
+                            class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">×</button>
+                </div>
+            </div>
+
+            {% for t in autorun_tabs %}
+            <div x-show="autorunTab === '{{ t.key }}'" class="px-2 md:px-0">
+                {# 선택 상태는 selectedIds 하나뿐이다. 상단 바의 일괄 동작이
+                   같은 값을 읽으므로 저장소를 둘로 만들지 않는다.
+                   대상은 '지금 탭에서 보이는 행' 으로 좁힌다. #}
+                {% set scope = 'autorun-' ~ t.key %}
+                <div x-show="listSelectedCount('{{ scope }}') > 0"
+                     class="flex items-center justify-between gap-2 px-3 py-2 bg-accent-lt/60 border-b border-gray-200">
+                    <span class="text-sm text-gray-700">
+                        <span class="font-medium" x-text="listSelectedCount('{{ scope }}')"></span>개 선택
+                        <span class="text-xs text-gray-500 ml-1">({{ t.label }})</span>
+                    </span>
+                    <div class="flex items-center gap-2">
+                        <button type="button" @click="bulkPause()" :disabled="!hasActiveSelected"
+                                class="px-3 py-1.5 text-xs font-medium bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 disabled:opacity-40 disabled:cursor-not-allowed">
+                            ⏸ 일시정지
+                        </button>
+                        <button type="button" @click="bulkResume()" :disabled="!hasPausedSelected"
+                                class="px-3 py-1.5 text-xs font-medium bg-green-100 text-green-700 rounded-lg hover:bg-green-200 disabled:opacity-40 disabled:cursor-not-allowed">
+                            ▶ 재개
+                        </button>
+                        <button type="button" @click="bulkRemove()"
+                                class="px-3 py-1.5 text-xs font-medium bg-red-600 text-white rounded-lg hover:bg-red-700">
+                            선택 제외
+                        </button>
+                        <button type="button" @click="listClearSelection('{{ scope }}')"
+                                class="px-2 py-1.5 text-xs text-gray-500 hover:text-gray-700">
+                            선택 해제
+                        </button>
+                    </div>
+                </div>
+
+                {% set table_id = scope %}
+                {% set rows_expr = "visibleAutorun('" ~ t.key ~ "')" %}
+                {% set row_key = 'flow' %}
+                {% set max_height = '30rem' %}
+                {% set selectable = true %}
+                {% set actions_include = 'autorun/_row_actions.html' %}
+                {% set empty_text = '조건에 맞는 오토런 플로우가 없습니다' %}
+                {% include "components/list_table.html" %}
+            </div>
+            {% endfor %}
+        </div>
     </div>
 </div>
 
@@ -278,5 +370,7 @@
     </div>
 </div>
 
-<script src="/static/js/autorun/main.js?v=20260513_gp"></script>
+<script src="/static/js/components/platform_tabs.js?v=20260831"></script>
+<script src="/static/js/autorun/list_table.js?v=20260831"></script>
+<script src="/static/js/autorun/main.js?v=20260831table"></script>
 {% endblock %}
