@@ -196,27 +196,42 @@
                 </div>
             </div>
 
-            <!-- WordPress -->
-            <div x-show="platformTab === 'wordpress'" class="px-2 md:px-0">
-                {% set table_id = 'blogs-wordpress' %}
-                {% set rows_expr = "visibleBlogs('wordpress')" %}
-                {% set row_key = 'blog' %}
-                {% set max_height = '30rem' %}
-                {% set actions_include = 'blogs/_row_actions.html' %}
-                {% set empty_text = '조건에 맞는 WordPress 블로그가 없습니다' %}
-                {% include "components/list_table.html" %}
-            </div>
+            {% for tab in [
+                {'key': 'wordpress', 'label': 'WordPress'},
+                {'key': 'blogger',   'label': 'Google Blogger'}
+            ] %}
+            <div x-show="platformTab === '{{ tab.key }}'" class="px-2 md:px-0">
+                {# 선택 범위를 탭마다 나눈다. 워드프레스에서 전체선택해도
+                   블로거 탭은 그대로여야 한다. #}
+                {% set scope = 'blogs-' ~ tab.key %}
+                <div x-show="listSelectedCount('{{ scope }}') > 0"
+                     class="flex items-center justify-between gap-2 px-3 py-2 bg-accent-lt/60 border-b border-gray-200">
+                    <span class="text-sm text-gray-700">
+                        <span class="font-medium" x-text="listSelectedCount('{{ scope }}')"></span>개 선택
+                    </span>
+                    <div class="flex items-center gap-2">
+                        <button type="button"
+                                @click="deleteSelectedBlogs('{{ scope }}', visibleBlogs('{{ tab.key }}'))"
+                                class="px-3 py-1.5 text-xs font-medium bg-red-600 text-white rounded-lg hover:bg-red-700">
+                            선택 삭제
+                        </button>
+                        <button type="button" @click="listClearSelection('{{ scope }}')"
+                                class="px-2 py-1.5 text-xs text-gray-500 hover:text-gray-700">
+                            선택 해제
+                        </button>
+                    </div>
+                </div>
 
-            <!-- Google Blogger -->
-            <div x-show="platformTab === 'blogger'" class="px-2 md:px-0">
-                {% set table_id = 'blogs-blogger' %}
-                {% set rows_expr = "visibleBlogs('blogger')" %}
+                {% set table_id = scope %}
+                {% set rows_expr = "visibleBlogs('" ~ tab.key ~ "')" %}
                 {% set row_key = 'blog' %}
                 {% set max_height = '30rem' %}
+                {% set selectable = true %}
                 {% set actions_include = 'blogs/_row_actions.html' %}
-                {% set empty_text = '조건에 맞는 Google Blogger가 없습니다' %}
+                {% set empty_text = '조건에 맞는 ' ~ tab.label ~ ' 블로그가 없습니다' %}
                 {% include "components/list_table.html" %}
             </div>
+            {% endfor %}
         </div>
     </div>
 
@@ -730,6 +745,9 @@
 // ========== 메인 블로그 목록 앱 ==========
 function blogListApp() {
     return {
+        // 목록 선택 상태(탭별 독립) — components/list_selection.js
+        ...listSelectionMixin(),
+
         blogs: [],
         testing: null,
         syncing: null,
@@ -1056,6 +1074,37 @@ function blogListApp() {
 
             // 5분 후 자동 중단 (안전장치)
             setTimeout(() => clearInterval(pollInterval), 300000);
+        },
+
+        /** 선택한 블로그 일괄 삭제. 탭마다 선택이 따로라 지금 탭의 것만 지운다. */
+        async deleteSelectedBlogs(scope, rows) {
+            const targets = this.listSelectedRows(scope, rows);
+            if (!targets.length) return;
+
+            const names = targets.slice(0, 5).map(b => b.name).join(', ');
+            const more = targets.length > 5 ? ` 외 ${targets.length - 5}개` : '';
+            if (!confirm(
+                `블로그 ${targets.length}개를 삭제합니다.\n\n${names}${more}\n\n`
+                + '되돌릴 수 없습니다. 계속할까요?')) return;
+
+            let done = 0;
+            const failed = [];
+            for (const b of targets) {
+                try {
+                    const r = await fetch(`/api/v1/blogs/${b.id}`, {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                    });
+                    if (r.ok) done += 1; else failed.push(b.name);
+                } catch (e) { failed.push(b.name); }
+            }
+            this.listClearSelection(scope);
+            this.showMessage(
+                `${done}개 삭제 완료` + (failed.length ? ` / 실패 ${failed.length}개` : ''),
+                failed.length ? 'error' : 'success');
+            await this.loadBlogs();
+            this.refreshGlobalSummary();
         },
 
         deleteBlog(blogId, blogName) {
