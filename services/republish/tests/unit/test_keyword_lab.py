@@ -378,3 +378,82 @@ def test_failure_is_shown_on_screen_not_only_toast() -> None:
     page = (TEMPLATES / "keyword_lab/index.html").read_text(encoding="utf-8")
     assert 'x-show="failure"' in page
     assert "testConnection()" in page
+
+
+# ── 네이버 hintKeywords 제약 ─────────────────────────────
+def test_hint_keywords_drop_spaces() -> None:
+    """네이버 keywordstool 은 공백이 든 키워드를 거부한다.
+
+    실측:
+        '음식 효능'      → 400 code 11001
+        '음식효능'       → 200
+        '레시피/조리법'   → 200   (슬래시는 괜찮다)
+
+    **하나라도 섞이면 요청 전체가 실패한다.** 레시피노트의 카테고리
+    이름에 공백이 있어 수집이 통째로 400 이었다.
+    """
+    from app.services.naver_ads_service import NaverAdsService
+
+    out = NaverAdsService.normalize_hints(
+        ["음식 효능", "조리법·손질", "자격증", "직업 정보"])
+    # 가운뎃점은 두 개념이 붙은 것이라 나눈다 — 통째로 지우면
+    # '조리법손질' 이라는 뜻 없는 합성어가 되어 연관어가 자기 자신뿐이다.
+    assert out == ["음식효능", "조리법", "손질", "자격증", "직업정보"]
+    assert all(" " not in k for k in out)
+    assert all("·" not in k for k in out)
+
+
+def test_hint_keywords_drop_empties_and_duplicates() -> None:
+    """공백을 없애면 서로 같아지는 키워드가 생긴다."""
+    from app.services.naver_ads_service import NaverAdsService
+
+    out = NaverAdsService.normalize_hints(
+        ["음식 효능", "음식효능", "  ", "", None, "음 식 효 능"])
+    assert out == ["음식효능"]
+
+
+def test_real_category_names_all_pass() -> None:
+    """레시피노트 실제 카테고리 — 이 조합이 400 을 냈다.
+
+    실제 API 로 확인: 정규화 후 9개 시드로 1,214건이 들어온다.
+    """
+    from app.services.naver_ads_service import NaverAdsService
+
+    out = NaverAdsService.normalize_hints([
+        "음식 효능", "요리 레시피", "조리법·손질",
+        "보관·저장", "식재료 효능", "부작용·주의",
+    ])
+    assert out == ["음식효능", "요리레시피", "조리법", "손질",
+                   "보관", "저장", "식재료효능", "부작용", "주의"]
+    for kw in out:
+        assert re.fullmatch(r"[0-9A-Za-z가-힣]+", kw), kw
+
+
+@pytest.mark.asyncio
+async def test_empty_after_normalize_is_reported() -> None:
+    """전부 공백이면 조회할 것이 없다. 400 을 받으러 가지 않는다."""
+    from types import SimpleNamespace
+
+    from app.services.naver_ads_service import NaverAdsService
+
+    svc = NaverAdsService(SimpleNamespace(has_naver_ads_api=True))
+    result = await svc.get_keyword_stats(["   ", ""])
+    assert result["success"] is False
+    assert "키워드가 없습니다" in result["error"]
+
+
+def test_400_error_explains_the_cause() -> None:
+    from types import SimpleNamespace
+
+    from app.services.naver_ads_service import NaverAdsService
+
+    svc = NaverAdsService(SimpleNamespace())
+    resp = SimpleNamespace(
+        status_code=400,
+        json=lambda: {"code": 11001,
+                      "message": "hintKeywords 파라미터가 유효하지 않습니다."},
+        text="",
+    )
+    msg = svc._explain(resp)
+    assert "400" in msg
+    assert "hintKeywords" in msg, "네이버가 준 사유가 담겨야 한다"
