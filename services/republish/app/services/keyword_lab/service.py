@@ -95,6 +95,18 @@ class KeywordLabService:
         if not seed_rows:
             return {"success": False, "error": "시드가 비어 있습니다"}
 
+        return await self._collect_rows(seed_rows, blog_id, limit)
+
+    async def _collect_rows(
+        self, seed_rows: List[Dict[str, Any]], blog_id: Optional[int],
+        limit: int,
+    ) -> Dict[str, Any]:
+        """시드 목록으로 실제 조회·저장을 수행한다."""
+        ads = NaverAdsService(self.settings)
+        if not ads.is_configured():
+            return {"success": False,
+                    "error": "네이버 검색광고 API 키가 설정에 없습니다"}
+
         existing = await self._existing_keywords()
         saved, skipped, api_calls = 0, 0, 0
         # 실패를 삼키지 않는다. 로그에만 남기면 화면에는 '0개 수집' 만
@@ -151,6 +163,38 @@ class KeywordLabService:
         return {"success": True, "saved": saved, "skipped": skipped,
                 "seeds": [s["seed"] for s in seed_rows],
                 "api_calls": api_calls, "errors": errors}
+
+    async def collect_with_config(
+        self, cfg, blog_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """모듈 설정으로 수집한다 — 수동 화면과 스케줄러가 같이 쓴다.
+
+        시드 선정(직접 입력 → 채택 키워드 재귀 → 블로그 카테고리)과
+        수식어 결합을 거쳐 collect() 에 넘긴다. 카테고리만 쓰면 매번 같은
+        결과가 나와 소재가 고갈된다.
+        """
+        from .expander import expand, pick_seeds
+
+        category_seeds = (
+            await self.seeds_for_blog(blog_id)
+            if blog_id and cfg.use_blog_categories else []
+        )
+        picked = await pick_seeds(
+            self.db, self.user_id, cfg, category_seeds, blog_id)
+        if not picked:
+            return {"success": False, "error": "쓸 수 있는 시드가 없습니다"}
+
+        expanded = expand(picked, cfg)
+        logger.info(
+            "[KEYWORD_LAB] 시드 %d개 → 수식어 결합 %d개 | blog=%s",
+            len(picked), len(expanded), blog_id,
+        )
+        result = await self._collect_rows(expanded, blog_id, cfg.collect_limit)
+        # 재귀로 promoted 를 켠 것을 저장한다.
+        await self.db.commit()
+        result["seed_count"] = len(picked)
+        result["expanded_count"] = len(expanded)
+        return result
 
     def _build(self, keyword: str, item: dict, niche: dict,
                blog_id: Optional[int]) -> KeywordCandidate:
