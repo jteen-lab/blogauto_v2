@@ -166,18 +166,25 @@ class ClassList {
   remove(c) { this.s.delete(c); }
   toggle(c) { this.s.has(c) ? this.s.delete(c) : this.s.add(c); }
 }
+let LAYOUT_READS = [];
 class FakeEl {
-  constructor(width, half) {
-    this.clientWidth = width; this._half = half;
+  // width: 셀에 주어진 폭, content: 내용 한 벌의 폭
+  constructor(width, content) {
+    this.clientWidth = width; this._content = content;
     this.classList = new ClassList();
     const self = this;
-    this.track = {
-      classList: new ClassList(['no-slide']),
-      get scrollWidth() { return self._half * 2; },
+    this.track = { classList: new ClassList(['no-slide']) };
+    this.first = {
+      get scrollWidth() { LAYOUT_READS.push(self.track.classList.contains('no-slide')); return self._content; },
     };
   }
-  querySelector(sel) { return sel === '.cell-slide-track' ? this.track : null; }
+  querySelector(sel) {
+    if (sel === '.cell-slide-track') return this.track;
+    if (sel === '.cell-slide-item') return this.first;
+    return null;
+  }
 }
+global.requestAnimationFrame = fn => fn();
 let OBSERVERS = [];
 global.ResizeObserver = class {
   constructor(cb) { this.cb = cb; OBSERVERS.push(this); }
@@ -267,3 +274,80 @@ console.log(JSON.stringify([cellSlideDuration('짧다'),
 def test_reduced_motion_is_respected() -> None:
     css = (STATIC / "css" / "list-table-slide.css").read_text(encoding="utf-8")
     assert "prefers-reduced-motion" in css
+
+
+# ── 폭이 늘어나 스크롤이 깜빡이던 문제 ───────────────────
+def test_measure_never_expands_the_track() -> None:
+    """복제본을 펼쳐 재면 트랙이 두 배가 되고 열이 넓어진다.
+
+    넓어진 것을 ResizeObserver 가 다시 잡아 재고… 스크롤바가 깜빡이는
+    고리가 된다. 항상 보이는 첫 항목만 재야 한다.
+    """
+    out = _slide("""
+LAYOUT_READS = [];
+const el = new FakeEl(200, 500);
+initCellSlide(el);
+// 측정 중 단 한 번이라도 no-slide 를 떼고 읽었다면 트랙이 넓어졌다는 뜻
+console.log(JSON.stringify({expanded: LAYOUT_READS.some(noSlide => noSlide === false),
+                            reads: LAYOUT_READS.length, flows: flows(el)}));
+""")
+    d = json.loads(out)
+    assert d["reads"] > 0, "측정을 아예 안 했다"
+    assert d["expanded"] is False, "복제본을 펼쳐 재고 있다 — 열이 넓어진다"
+    assert d["flows"] is True
+
+
+def test_repeated_observer_calls_settle() -> None:
+    """같은 폭으로 여러 번 불려도 상태가 계속 바뀌면 안 된다."""
+    out = _slide("""
+const el = new FakeEl(200, 500);
+initCellSlide(el);
+const states = [flows(el)];
+for (let i = 0; i < 5; i++) { OBSERVERS[0].cb(); states.push(flows(el)); }
+console.log(JSON.stringify(states));
+""")
+    states = json.loads(out)
+    assert len(set(states)) == 1, f"상태가 계속 흔들린다: {states}"
+    assert states[0] is True
+
+
+def test_table_is_fixed_layout_when_a_column_slides() -> None:
+    """자동 레이아웃에서는 nowrap 셀이 글자 길이만큼 열을 늘린다."""
+    env = Environment(loader=FileSystemLoader(str(TEMPLATES)))
+    html = env.get_template("components/list_table.html").render(
+        table_id="t", rows_expr="rows", row_key="row", empty_text="없음",
+    )
+    assert "list-table--fixed" in html
+    assert "listColumns().some(c => c.slide)" in html
+    css = (STATIC / "css" / "list-table-slide.css").read_text(encoding="utf-8")
+    assert "table-layout: fixed" in css
+
+
+@pytest.mark.parametrize("screen,_col", SLIDE_SCREENS)
+def test_every_column_has_a_width(screen: str, _col: str) -> None:
+    """고정 레이아웃에서 폭 없는 열은 남는 공간을 임의로 나눠 갖는다."""
+    adapter = {
+        "modules/list.html": STATIC / "js" / "modules" / "list.js",
+        "flows/list.html": STATIC / "js" / "flows" / "list_table.js",
+        "autorun/index.html": STATIC / "js" / "autorun" / "list_table.js",
+    }[screen].read_text(encoding="utf-8")
+    block = re.search(r"listColumns\(\) \{\s*return \[(.*?)\];", adapter, re.S)
+    assert block
+    for line in block.group(1).strip().splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        assert "width:" in line, f"{screen} 폭 없는 열: {line}"
+
+
+def test_cache_version_bumped_for_changed_assets() -> None:
+    """내용이 바뀐 파일의 ?v= 를 그대로 두면 브라우저가 옛 것을 쓴다.
+
+    실제로 모듈·플로우에서 슬라이드가 적용되지 않은 원인이었다.
+    """
+    for screen, _ in SLIDE_SCREENS:
+        page = (TEMPLATES / screen).read_text(encoding="utf-8")
+        for asset in ("cell_slide.js", "list-table-slide.css"):
+            m = re.search(rf'{re.escape(asset)}\?v=([^"]+)"', page)
+            assert m, f"{screen} 의 {asset} 에 ?v= 가 없다"
+            assert m.group(1) == "20260831slide", f"{screen} {asset} 버전이 낡았다"
