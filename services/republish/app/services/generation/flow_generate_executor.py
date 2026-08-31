@@ -295,6 +295,9 @@ class FlowGenerateExecutor:
                 msg = (
                     f"글 생성 완료 | 제목: {gen_result.recombined_title[:30]}... | "
                     f"참조: {gen_result.reference_count}건 | "
+                    # 게이트 기준 본문 길이를 함께 남긴다. HTML 길이만
+                    # 남기면 "1,689자로 막혔다" 와 비교가 안 된다.
+                    f"본문: {gen_result.body_chars}자 | "
                     f"길이: {gen_result.content_length}자 | "
                     f"소요: {gen_result.generation_time_seconds}초"
                 )
@@ -308,6 +311,7 @@ class FlowGenerateExecutor:
                     "generation_history_id": gen_result.generation_history_id,
                     "reference_count": gen_result.reference_count,
                     "content_length": gen_result.content_length,
+                    "body_chars": gen_result.body_chars,
                     "generation_time_seconds": gen_result.generation_time_seconds,
                     "ai_model": gen_result.ai_model_content,
                 }
