@@ -5,6 +5,10 @@
 
 function autorunApp() {
     return {
+        // 표 어댑터(열·셀·탭·검색·선택) — autorun/list_table.js
+        // 선택은 여기 selectedIds 를 그대로 쓴다(저장소를 둘로 만들지 않는다).
+        ...autorunListTableMixin(),
+
         // 상태 데이터
         loading: false,
         autorunFlows: [],
@@ -23,19 +27,22 @@ function autorunApp() {
             return this.autorunFlows.filter(f => f.status === 'paused').length;
         },
 
+        // 아래 셋은 '지금 탭에서 보이는 것' 을 기준으로 한다. 탭으로 나뉜
+        // 뒤에도 전체 기준으로 두면 안 보이는 항목이 선택·정지·제외된다.
         get isAllSelected() {
-            return this.autorunFlows.length > 0 &&
-                   this.selectedIds.length === this.autorunFlows.length;
+            const visible = this.visibleAutorun(this.autorunTab);
+            return visible.length > 0 &&
+                   visible.every(f => this.selectedIds.includes(f.id));
         },
 
         get hasActiveSelected() {
-            return this.selectedIds.some(id =>
+            return this.scopedSelectedIds().some(id =>
                 this.autorunFlows.find(f => f.id === id)?.status === 'active'
             );
         },
 
         get hasPausedSelected() {
-            return this.selectedIds.some(id =>
+            return this.scopedSelectedIds().some(id =>
                 this.autorunFlows.find(f => f.id === id)?.status === 'paused'
             );
         },
@@ -88,11 +95,8 @@ function autorunApp() {
         },
 
         selectAll() {
-            if (this.isAllSelected) {
-                this.selectedIds = [];
-            } else {
-                this.selectedIds = this.autorunFlows.map(f => f.id);
-            }
+            // 표 머리글 체크박스와 같은 동작 — 지금 탭에서 보이는 행만.
+            this.listToggleAll(this.autorunTab, this.visibleAutorun(this.autorunTab));
         },
 
         // 개별 플로우 액션
@@ -167,7 +171,7 @@ function autorunApp() {
 
         // 일괄 액션
         async bulkPause() {
-            const activeIds = this.selectedIds.filter(id =>
+            const activeIds = this.scopedSelectedIds().filter(id =>
                 this.autorunFlows.find(f => f.id === id)?.status === 'active'
             );
 
@@ -192,7 +196,7 @@ function autorunApp() {
                 }
 
                 showSuccessMessage(`${activeIds.length}개 플로우가 일시정지되었습니다`);
-                this.selectedIds = [];
+                this.clearScopedSelection();
                 await this.loadAutorunFlows();
             } catch (error) {
                 showErrorMessage('일괄 일시정지 중 오류가 발생했습니다');
@@ -201,7 +205,7 @@ function autorunApp() {
         },
 
         async bulkResume() {
-            const pausedIds = this.selectedIds.filter(id =>
+            const pausedIds = this.scopedSelectedIds().filter(id =>
                 this.autorunFlows.find(f => f.id === id)?.status === 'paused'
             );
 
@@ -226,7 +230,7 @@ function autorunApp() {
                 }
 
                 showSuccessMessage(`${pausedIds.length}개 플로우가 재개되었습니다`);
-                this.selectedIds = [];
+                this.clearScopedSelection();
                 await this.loadAutorunFlows();
             } catch (error) {
                 showErrorMessage('일괄 재개 중 오류가 발생했습니다');
@@ -235,9 +239,10 @@ function autorunApp() {
         },
 
         async bulkRemove() {
-            if (this.selectedIds.length === 0) return;
+            const targetIds = this.scopedSelectedIds();
+            if (targetIds.length === 0) return;
 
-            const names = this.selectedIds.map(id =>
+            const names = targetIds.map(id =>
                 this.autorunFlows.find(f => f.id === id)?.name || ''
             ).filter(Boolean);
 
@@ -253,7 +258,7 @@ function autorunApp() {
             try {
                 // 각 플로우에 대해 DELETE 호출
                 let successCount = 0;
-                for (const flowId of this.selectedIds) {
+                for (const flowId of targetIds) {
                     const response = await fetch(`/api/v1/autorun/flows/${flowId}`, {
                         method: 'DELETE',
                         credentials: 'include'
@@ -262,7 +267,7 @@ function autorunApp() {
                 }
 
                 showSuccessMessage(`${successCount}개 플로우가 제외되었습니다`);
-                this.selectedIds = [];
+                this.clearScopedSelection();
                 await this.loadAutorunFlows();
             } catch (error) {
                 showErrorMessage('일괄 제외 중 오류가 발생했습니다');
