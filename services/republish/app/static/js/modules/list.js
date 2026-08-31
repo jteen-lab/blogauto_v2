@@ -181,10 +181,11 @@ function moduleListApp() {
         listCell(module, key) {
             switch (key) {
                 case 'name': return module.name;
+                // getModuleTypeName 은 전역이 아니라 앱 메서드다. 전역으로
+                // 부르면 언제나 폴백을 타서 'collect' 같은 코드가 그대로 나온다.
                 case 'type':
-                    return typeof getModuleTypeName === 'function'
-                        ? getModuleTypeName(module.module_type?.code)
-                        : (module.module_type?.code || '');
+                    return this.getModuleTypeName(module.module_type?.code)
+                        || (module.module_type?.code || '');
                 case 'blogs': return this.moduleBlogNames(module);
                 case 'detail': return this.moduleDetailText(module);
                 case 'updated': return this.formatModuleDate(module.updated_at || module.created_at);
@@ -228,11 +229,11 @@ function moduleListApp() {
         listBadges(module) {
             const out = [];
             const code = module.module_type?.code || '';
-            if (typeof getModuleIcon === 'function') {
-                out.push({ label: getModuleIcon(code) + ' '
-                    + (typeof getModuleTypeName === 'function'
-                        ? getModuleTypeName(code) : code),
-                    cls: 'bg-gray-100 text-gray-700' });
+            // 아이콘·이름 모두 앱 메서드다. 전역으로 검사하면 조건이 늘
+            // 거짓이라 배지가 통째로 사라진다.
+            if (code) {
+                out.push({ label: `${this.getModuleIcon(code)} ${this.getModuleTypeName(code) || code}`,
+                           cls: 'bg-gray-100 text-gray-700' });
             }
             // 레거시 대량 수집 경고는 카드에 있던 것을 그대로 옮긴다
             if (module.legacy_bulk_warning) {
@@ -277,10 +278,15 @@ function moduleListApp() {
 
         listTitle(module) { return module.name; },
 
+        /**
+         * 모바일 2줄째. 설정은 넣지 않는다 — 바로 아래 슬라이드 줄이
+         * 같은 내용을 보여주므로 두 번 나오고, 이 줄은 흐르지도 않아
+         * 잘린 채 중복만 된다.
+         */
         listSub(module) {
             const blogs = this.moduleBlogNames(module);
-            const detail = this.moduleDetailText(module);
-            return [blogs !== '-' ? blogs : '', detail].filter(Boolean).join(' · ');
+            const type = this.listCell(module, 'type');
+            return [type, blogs !== '-' ? blogs : ''].filter(Boolean).join(' · ');
         },
 
         // 검색·정렬을 거친 최종 목록
