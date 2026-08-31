@@ -17,38 +17,45 @@ function cellSlideDuration(text) {
 
 /**
  * 넘치는지 재서 흐를지 정한다.
+ *
+ * 복제본을 펼쳐 재지 않는다. 펼치면 트랙이 두 배가 되고, 표가 자동
+ * 레이아웃이면 그 순간 열이 넓어진다. 넓어진 것을 ResizeObserver 가
+ * 다시 잡아 재고… 스크롤바가 깜빡이는 고리가 된다.
+ * 대신 **항상 보이는 첫 항목**의 폭만 잰다.
+ *
  * @param {HTMLElement} el .cell-slide 요소
  */
 function initCellSlide(el) {
     if (!el) return;
     const track = el.querySelector('.cell-slide-track');
-    if (!track) return;
+    const first = el.querySelector('.cell-slide-item');
+    if (!track || !first) return;
 
     const measure = () => {
         const width = el.clientWidth;
-        if (width === 0) return false;   // 아직 숨어 있다
+        if (width === 0) return false;          // 아직 탭 뒤에 숨어 있다
+        if (el._cellSlideWidth === width) return true;   // 같은 폭이면 다시 잴 것이 없다
+        el._cellSlideWidth = width;
 
-        // 복제본이 숨어 있으면 폭을 잴 수 없다. 잠시 풀고 잰다.
-        const wasStatic = track.classList.contains('no-slide');
-        track.classList.remove('no-slide');
-        const half = track.scrollWidth / 2;
-        if (half <= width) track.classList.add('no-slide');
-        else if (wasStatic) { /* 넘친다 — no-slide 를 뗀 상태 유지 */ }
+        // 첫 항목은 no-slide 여부와 무관하게 늘 보인다 → 클래스를 건드리지 않고 잰다.
+        if (first.scrollWidth > width + 1) track.classList.remove('no-slide');
+        else track.classList.add('no-slide');
         return true;
     };
 
-    if (measure()) {
-        // 창 크기가 바뀌면 넘침 여부도 바뀐다. 관찰은 계속 둔다.
-        observeCellSlide(el, measure);
-        return;
-    }
+    measure();
+    // 폭이 0이었다가 탭이 열리는 경우, 창 크기가 바뀌는 경우 모두 여기서 잡는다.
     observeCellSlide(el, measure);
 }
 
 /** 폭 변화를 계속 지켜본다. 탭 열림·창 크기 변경 모두 여기서 잡힌다. */
 function observeCellSlide(el, measure) {
     if (el._cellSlideObserver || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(() => measure());
+    const observer = new ResizeObserver(() => {
+        // 콜백 안에서 레이아웃을 바꾸면 같은 프레임에 다시 불릴 수 있다.
+        // 다음 프레임으로 미뤄 되먹임을 끊는다.
+        requestAnimationFrame(() => measure());
+    });
     observer.observe(el);
     el._cellSlideObserver = observer;
 }
