@@ -10,6 +10,7 @@ API Docs:
 - https://naver.github.io/searchad-apidoc/
 """
 import hashlib
+import re
 import hmac
 import base64
 import time
@@ -58,6 +59,37 @@ class NaverAdsService:
         if not self.settings:
             return False
         return self.settings.has_naver_ads_api
+
+    # 카테고리 이름은 '조리법·손질' 처럼 두 개념을 붙여 쓴다. 통째로 보내면
+    # 뜻 없는 합성어가 되어 연관어가 자기 자신 하나만 돌아온다.
+    # 나눠 보내면 각각이 제대로 된 시드가 된다.
+    _SPLIT = re.compile(r"[·/,|~\-]+")
+    # 남는 특수문자는 지운다. 네이버는 공백과 가운뎃점을 거부한다(400, 11001).
+    _KEEP = re.compile(r"[^0-9A-Za-z가-힣]")
+
+    @staticmethod
+    def normalize_hints(keywords: List[str]) -> List[str]:
+        """hintKeywords 로 보낼 수 있는 형태로 다듬는다.
+
+        실측한 제약(네이버 keywordstool):
+            '음식 효능'    → 400 code 11001   (공백)
+            '조리법·손질'  → 400 code 11001   (가운뎃점)
+            '음식효능'     → 200
+            '조리법/손질'  → 200
+
+        **하나라도 걸리면 요청 전체가 실패한다.** 레시피노트 카테고리에
+        공백과 가운뎃점이 있어 수집이 통째로 400 이었다.
+        """
+        out: List[str] = []
+        seen = set()
+        for raw in keywords or []:
+            for part in NaverAdsService._SPLIT.split(str(raw or "")):
+                kw = NaverAdsService._KEEP.sub("", part)
+                if not kw or kw in seen:
+                    continue
+                seen.add(kw)
+                out.append(kw)
+        return out
 
     def _generate_signature(
         self,
@@ -138,6 +170,14 @@ class NaverAdsService:
                 "keywords": []
             }
 
+        # 공백이 든 키워드는 네이버가 거부한다(400, code 11001).
+        # '음식 효능' → 400, '음식효능' → 200. 슬래시 등 다른 문자는 괜찮다.
+        # 한 개라도 섞이면 요청 전체가 실패하므로 여기서 정리한다.
+        keywords = self.normalize_hints(keywords)
+        if not keywords:
+            return {"success": False, "error": "조회할 키워드가 없습니다",
+                    "keywords": []}
+
         # 키워드 개수 제한
         if len(keywords) > 5:
             keywords = keywords[:5]
@@ -195,13 +235,20 @@ class NaverAdsService:
         detail = ""
         try:
             body = response.json()
-            detail = body.get("detail") or body.get("title") or ""
+            # 네이버는 상황마다 다른 필드를 쓴다 — 403 은 detail,
+            # 400 은 message 다. 하나만 보면 사유가 비어 나온다.
+            detail = (body.get("detail") or body.get("message")
+                      or body.get("title") or "")
         except Exception:  # noqa: BLE001
             detail = (response.text or "")[:160]
 
         if response.status_code == 403:
             hint = ("네이버 검색광고 인증 실패 — API 키·시크릿·고객 ID(CUSTOMER_ID) 중 "
                     "하나가 잘못되었습니다. 검색광고 > 도구 > API 사용 관리에서 확인하세요")
+            return f"{hint}. (네이버 응답: {detail})" if detail else hint
+        if response.status_code == 400:
+            hint = ("검색광고가 요청을 거부했습니다 (400). 키워드에 공백이 들어가면 "
+                    "거부합니다 — 앱이 공백을 지워 보내는지 확인하세요")
             return f"{hint}. (네이버 응답: {detail})" if detail else hint
         if response.status_code == 429:
             return "네이버 검색광고 호출 한도를 넘었습니다. 잠시 뒤 다시 시도하세요"
