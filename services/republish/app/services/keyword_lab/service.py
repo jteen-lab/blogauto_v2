@@ -116,8 +116,6 @@ class KeywordLabService:
             # 시드 자신도 후보다. 연관만 보면 시드가 좋은 키워드일 때 놓친다.
             rows = list(result.get("keywords") or []) \
                 + list(result.get("related_keywords") or [])
-            # 카테고리는 첫 시드 것을 붙인다 — 연관키워드가 어느 시드에서
-            # 나왔는지 API 가 알려주지 않는다.
             meta = chunk[0]
 
             for item in rows:
@@ -128,7 +126,11 @@ class KeywordLabService:
                     skipped += 1
                     continue
                 existing.add(kw.lower())
-                self.db.add(self._build(kw, item, meta, blog_id))
+                # 니치는 **키워드 자체를 분류해서** 정한다. 시드를 그대로
+                # 물려주면 '마라탕' 으로 모은 것이 전부 '음식 효능' 이 되어
+                # 나중에 카테고리별로 넘길 수가 없다.
+                niche = await self._classify(kw, meta)
+                self.db.add(self._build(kw, item, niche, blog_id))
                 saved += 1
             if saved >= limit:
                 break
@@ -150,17 +152,17 @@ class KeywordLabService:
                 "seeds": [s["seed"] for s in seed_rows],
                 "api_calls": api_calls, "errors": errors}
 
-    def _build(self, keyword: str, item: dict, meta: dict,
+    def _build(self, keyword: str, item: dict, niche: dict,
                blog_id: Optional[int]) -> KeywordCandidate:
         volume = item.get("total_search_volume")
         verdict, reason, risk = judge(keyword, volume, None)
         return KeywordCandidate(
             user_id=self.user_id,
             keyword=keyword,
-            seed=meta.get("seed"),
+            seed=niche.get("seed"),          # 어느 시드에서 나왔는지(추적용)
             blog_id=blog_id,
-            topic_id=meta.get("topic_id"),
-            subtopic_id=meta.get("subtopic_id"),
+            topic_id=niche.get("topic_id"),
+            subtopic_id=niche.get("subtopic_id"),
             search_volume_pc=item.get("pc_search_volume"),
             search_volume_mobile=item.get("mobile_search_volume"),
             search_volume=volume,
@@ -170,6 +172,39 @@ class KeywordLabService:
             risk_label=risk,
             source="naver_ads",
         )
+
+    async def _classify(self, keyword: str, fallback: dict) -> Dict[str, Any]:
+        """키워드를 블로그오토 카테고리에 붙인다.
+
+        분류가 안 되면 시드의 카테고리를 물려준다 — 아무 데도 안 붙는
+        것보다 낫다. 다만 그 경우 '추정' 임을 알 수 있게 seed 를 남긴다.
+        """
+        matcher = await self._matcher()
+        if matcher:
+            try:
+                topic_id, subtopic_id, _ = \
+                    await matcher.match_and_apply_to_keyword(keyword)
+                if topic_id or subtopic_id:
+                    return {"topic_id": topic_id, "subtopic_id": subtopic_id,
+                            "seed": fallback.get("seed")}
+            except Exception as e:  # noqa: BLE001
+                logger.warning("[KEYWORD_LAB] 카테고리 매칭 실패 | %s | %s",
+                               keyword, e)
+        return {"topic_id": fallback.get("topic_id"),
+                "subtopic_id": fallback.get("subtopic_id"),
+                "seed": fallback.get("seed")}
+
+    async def _matcher(self):
+        """카테고리 매칭기. 한 번만 만든다."""
+        if getattr(self, "_matcher_cache", "unset") == "unset":
+            try:
+                from ..category_matcher_service import CategoryMatcherService
+
+                self._matcher_cache = CategoryMatcherService(self.db)
+            except Exception as e:  # noqa: BLE001
+                logger.warning("[KEYWORD_LAB] 카테고리 매칭기 초기화 실패 | %s", e)
+                self._matcher_cache = None
+        return self._matcher_cache
 
     async def _existing_keywords(self) -> set:
         rows = (await self.db.execute(
