@@ -53,6 +53,7 @@ def test_module_table_has_checkbox_for_every_tab(modules_html: str) -> None:
         "modules-data",
         "modules-growth_profile",
         "modules-contact_form",
+        "modules-keyword",      # 키워드 모듈 추가(057)
     }
 
 
@@ -73,7 +74,7 @@ def test_selection_scope_is_per_tab(modules_html: str) -> None:
         r"deleteSelectedModules\('(modules-[a-z_]+)', visibleModules\('([a-z_]+)'\)\)",
         modules_html,
     )
-    assert len(calls) == 6
+    assert len(calls) == 7      # 프롬프트·수집·대량수집·데이터·성장·문의폼·키워드
     for scope, type_code in calls:
         assert scope == f"modules-{type_code}", (scope, type_code)
 
