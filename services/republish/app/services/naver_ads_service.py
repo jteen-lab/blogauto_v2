@@ -162,9 +162,13 @@ class NaverAdsService:
                         f"[NAVER_ADS] API 오류: {response.status_code} - "
                         f"{response.text}"
                     )
+                    # 네이버가 알려 주는 사유를 그대로 올린다. 상태 코드만
+                    # 남기면 "403" 만 보이고 무엇을 고쳐야 할지 알 수 없다
+                    # (실제로 고객 ID 오류를 찾는 데 이 본문이 결정적이었다).
                     return {
                         "success": False,
-                        "error": f"API 오류: {response.status_code}",
+                        "error": self._explain(response),
+                        "status_code": response.status_code,
                         "keywords": []
                     }
 
@@ -185,6 +189,23 @@ class NaverAdsService:
                 "error": str(e),
                 "keywords": []
             }
+
+    def _explain(self, response) -> str:
+        """네이버 응답에서 사람이 고칠 수 있는 문장을 만든다."""
+        detail = ""
+        try:
+            body = response.json()
+            detail = body.get("detail") or body.get("title") or ""
+        except Exception:  # noqa: BLE001
+            detail = (response.text or "")[:160]
+
+        if response.status_code == 403:
+            hint = ("네이버 검색광고 인증 실패 — API 키·시크릿·고객 ID(CUSTOMER_ID) 중 "
+                    "하나가 잘못되었습니다. 검색광고 > 도구 > API 사용 관리에서 확인하세요")
+            return f"{hint}. (네이버 응답: {detail})" if detail else hint
+        if response.status_code == 429:
+            return "네이버 검색광고 호출 한도를 넘었습니다. 잠시 뒤 다시 시도하세요"
+        return f"API 오류 {response.status_code}" + (f" — {detail}" if detail else "")
 
     def _parse_keyword_response(
         self,
