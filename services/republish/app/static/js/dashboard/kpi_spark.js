@@ -61,6 +61,34 @@ function compactDashboard() {
                 if (r.ok) { const d = await r.json(); this.inboxItems = d.items || []; this.stats.unread_contacts = d.unread_count ?? this.stats.unread_contacts; }
             } catch (e) { console.error('[inbox]', e); }
         },
+
+        /** 펼쳐서 내용을 본 문의는 읽은 것으로 친다.
+         *  버튼을 따로 눌러야만 읽음이 되니, 다 읽고도 '2 미읽음'이 남았다.
+         *  '미읽음만' 필터를 켠 상태에서는 자동 처리하지 않는다 —
+         *  일부러 미읽음을 보고 있는데 눈앞에서 사라지면 곤란하다. */
+        async autoMarkVisibleRead() {
+            if (this.inboxUnreadOnly) return;
+            const unread = (this.inboxItems || []).filter(s => !s.is_read);
+            if (!unread.length) return;
+            try {
+                const r = await fetch('/api/v1/contact-submissions/read-all',
+                                      { method: 'POST', credentials: 'include' });
+                if (!r.ok) return;
+                unread.forEach(s => { s.is_read = true; });
+                this.stats.unread_contacts = 0;
+            } catch (e) { console.error('[inbox]', e); }
+        },
+
+        async markAllInboxRead() {
+            try {
+                const r = await fetch('/api/v1/contact-submissions/read-all',
+                                      { method: 'POST', credentials: 'include' });
+                if (!r.ok) return;
+                const d = await r.json();
+                this.inboxMsg = `${d.updated || 0}건을 읽음으로 표시했습니다`;
+                await this.loadInbox();
+            } catch (e) { this.inboxMsg = '처리 중 오류가 발생했습니다'; }
+        },
         async syncInbox() {
             this.inboxSyncing = true; this.inboxMsg = '';
             try {

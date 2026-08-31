@@ -77,6 +77,31 @@ async def sync_submissions(
     return await sync_all(db)
 
 
+@router.post("/read-all")
+async def mark_all_read(
+    blog_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """미읽음 문의를 한 번에 읽음 처리한다.
+
+    건별 호출만 있으면 문의가 쌓일수록 그 수만큼 요청이 나간다.
+    """
+    from sqlalchemy import update
+
+    stmt = update(ContactSubmission).where(
+        ContactSubmission.is_read.is_(False)
+    )
+    if blog_id is not None:
+        stmt = stmt.where(ContactSubmission.blog_id == blog_id)
+    result = await db.execute(stmt.values(is_read=True))
+    await db.commit()
+
+    changed = result.rowcount or 0
+    logger.info("[CONTACT] 일괄 읽음 처리 | %d건", changed)
+    return {"success": True, "updated": changed}
+
+
 @router.post("/{submission_id}/read")
 async def mark_read(
     submission_id: int,

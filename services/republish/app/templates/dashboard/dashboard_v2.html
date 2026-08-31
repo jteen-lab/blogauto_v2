@@ -107,7 +107,7 @@
 
         <!-- 문의 수신함 요약탭 (클릭 시 대시보드 내 확장) -->
         <div class="section-card">
-            <div @click="inboxExpanded = !inboxExpanded; if(inboxExpanded) loadInbox()"
+            <div @click="inboxExpanded = !inboxExpanded; if(inboxExpanded) loadInbox().then(() => autoMarkVisibleRead())"
                  class="cursor-pointer flex items-center justify-between">
                 <div class="flex items-center gap-2">
                     <span class="text-lg">📨</span>
@@ -128,11 +128,18 @@
                     <label class="text-xs text-gray-500 flex items-center gap-1">
                         <input type="checkbox" x-model="inboxUnreadOnly" @change="loadInbox()"> 미읽음만
                     </label>
-                    <button @click="syncInbox()" :disabled="inboxSyncing"
-                            class="px-3 py-1.5 text-xs bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50">
-                        <span x-show="!inboxSyncing">🔄 새 문의 가져오기</span>
-                        <span x-show="inboxSyncing">가져오는 중...</span>
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <button @click="markAllInboxRead()"
+                                x-show="(stats.unread_contacts || 0) > 0"
+                                class="px-3 py-1.5 text-xs bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
+                            모두 읽음
+                        </button>
+                        <button @click="syncInbox()" :disabled="inboxSyncing"
+                                class="px-3 py-1.5 text-xs bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50">
+                            <span x-show="!inboxSyncing">🔄 새 문의 가져오기</span>
+                            <span x-show="inboxSyncing">가져오는 중...</span>
+                        </button>
+                    </div>
                 </div>
                 <p class="text-[11px] text-gray-400 mb-2" x-show="inboxMsg" x-text="inboxMsg"></p>
                 <div x-show="inboxItems.length === 0" class="text-center text-gray-400 text-sm py-6">
@@ -335,7 +342,7 @@
 <script>window.__DASHBOARD_INITIAL__ = {{ initial_data | safe }};</script>
 {% endif %}
 <!-- 대시보드 V2 JS 모듈 (순서 중요: kpi_spark이 메인 컴포넌트 정의) -->
-<script src="/static/js/dashboard/kpi_spark.js?v=20260819inbox"></script>
+<script src="/static/js/dashboard/kpi_spark.js?v=20260831read"></script>
 <script src="/static/js/dashboard/main_charts.js?v=1"></script>
 <script src="/static/js/dashboard/perf_panel.js?v=1"></script>
 <script src="/static/js/dashboard/content_table.js?v=1"></script>
