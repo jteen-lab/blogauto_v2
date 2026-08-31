@@ -83,8 +83,11 @@ function keywordLabApp() {
 
         // ── 실행 ──────────────────────────────────────────
         async collect() {
-            const manual = this.seedText.split(',')
-                .map(s => s.trim()).filter(Boolean);
+            // 네이버는 공백·가운뎃점이 든 키워드를 거부한다(400, 11001).
+            // 서버에서도 다듬지만, 입력 단계에서 정리해 두면 사용자가
+            // 무엇이 실제로 나가는지 보고 고칠 수 있다.
+            const manual = this.normalizeSeeds(this.seedText);
+            if (manual.length) this.seedText = manual.join(', ');
             if (!this.blogId && !manual.length) {
                 this.show('블로그를 고르거나 시드를 입력하세요', 'error');
                 return;
@@ -177,6 +180,18 @@ function keywordLabApp() {
             } catch (e) { this.show('삭제 실패', 'error'); }
         },
 
+        /** 서버와 같은 규칙으로 시드를 다듬는다(naver_ads_service.normalize_hints). */
+        normalizeSeeds(text) {
+            const out = [], seen = new Set();
+            for (const raw of (text || '').split(',')) {
+                for (const part of raw.split(/[·/|~\-]+/)) {
+                    const kw = part.replace(/[^0-9A-Za-z가-힣]/g, '');
+                    if (kw && !seen.has(kw)) { seen.add(kw); out.push(kw); }
+                }
+            }
+            return out;
+        },
+
         async testConnection() {
             this.busy = 'conn';
             this.connTest = null;
@@ -213,8 +228,9 @@ function keywordLabApp() {
 
         visibleCandidates(v) {
             const q = (this.search || '').trim().toLowerCase();
-            const rows = this.byVerdict(v).filter(c =>
-                !q || (c.keyword || '').toLowerCase().includes(q));
+            const rows = this.byVerdict(v).filter(c => !q
+                || (c.keyword || '').toLowerCase().includes(q)
+                || (c.niche || '').toLowerCase().includes(q));
             const dir = this.listSortDir === 'asc' ? 1 : -1;
             return [...rows].sort((a, b) => {
                 const va = this.sortValue(a), vb = this.sortValue(b);
@@ -225,20 +241,25 @@ function keywordLabApp() {
 
         sortValue(row) {
             const k = this.listSortKey;
-            if (k === 'keyword') return (row.keyword || '').toLowerCase();
+            // 문자 열은 문자로, 수치 열은 수치로 비교한다. 섞으면
+            // '10' 이 '9' 보다 앞에 온다.
+            if (k === 'keyword' || k === 'niche' || k === 'competition') {
+                return (this.listCell(row, k) || '').toLowerCase();
+            }
             const v = row[k];
             return v === null || v === undefined ? -1 : v;
         },
 
         listColumns() {
             return [
-                { key: 'keyword',      label: '키워드',   width: '26%', strong: true, sortable: true },
-                { key: 'search_volume', label: '검색량',  width: '12%', align: 'right', sortable: true },
-                { key: 'doc_count',    label: '문서수',   width: '12%', align: 'right', sortable: true },
-                { key: 'saturation',   label: '포화도',   width: '10%', align: 'right', sortable: true },
-                { key: 'competition',  label: '경쟁',     width: '8%' },
-                { key: '_badges',      label: '판정',     width: '20%' },
-                { key: 'seed',         label: '시드',     width: '12%' },
+                { key: 'keyword',       label: '키워드', width: '24%', strong: true, sortable: true },
+                { key: 'search_volume', label: '검색량', width: '11%', align: 'right', sortable: true },
+                { key: 'doc_count',     label: '문서수', width: '11%', align: 'right', sortable: true },
+                { key: 'saturation',    label: '포화도', width: '10%', align: 'right', sortable: true },
+                { key: 'competition',   label: '경쟁',   width: '8%',  sortable: true },
+                { key: '_badges',       label: '판정',   width: '18%' },
+                // 입력한 시드가 아니라 이 키워드가 분류된 카테고리다.
+                { key: 'niche',         label: '니치',   width: '18%', sortable: true },
             ];
         },
 
@@ -255,7 +276,7 @@ function keywordLabApp() {
                     return row.saturation === null || row.saturation === undefined
                         ? '-' : row.saturation.toFixed(2);
                 case 'competition': return row.competition || '-';
-                case 'seed': return row.seed || '-';
+                case 'niche': return row.niche || '미분류';
                 default: return '';
             }
         },
@@ -287,6 +308,7 @@ function keywordLabApp() {
             parts.push(`검색 ${row.search_volume ?? '-'}`);
             parts.push(`문서 ${row.doc_count === null || row.doc_count === undefined
                 ? '미측정' : row.doc_count.toLocaleString()}`);
+            if (row.niche) parts.push(row.niche);
             if (row.verdict_reason) parts.push(row.verdict_reason);
             return parts.join(' · ');
         },
@@ -297,7 +319,8 @@ function keywordLabApp() {
             } else {
                 this.listSortKey = key;
                 // 수치는 큰 것부터 보는 편이 쓸모 있다.
-                this.listSortDir = key === 'keyword' ? 'asc' : 'desc';
+                const textual = ['keyword', 'niche', 'competition'];
+                this.listSortDir = textual.includes(key) ? 'asc' : 'desc';
             }
         },
 
