@@ -741,6 +741,9 @@
     <div class="h-safe-area-inset-bottom"></div>
 </div>
 
+<!-- 선택 mixin — blogListApp() 이 펼쳐 쓰므로 반드시 먼저 로드돼야 한다.
+     없으면 blogListApp() 이 예외로 죽어 표 전체가 사라진다. -->
+<script src="/static/js/components/list_selection.js?v=20260831"></script>
 <script>
 // ========== 메인 블로그 목록 앱 ==========
 function blogListApp() {
