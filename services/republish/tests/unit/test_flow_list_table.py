@@ -131,6 +131,17 @@ def test_card_template_is_kept() -> None:
 
 
 # ── 실동작 ───────────────────────────────────────────────
+def page_scripts() -> list[str]:
+    """템플릿이 싣는 로컬 스크립트를 등장 순서대로.
+
+    목록을 테스트에 고정하면 화면에 스크립트를 하나 더 추가했을 때
+    테스트만 옛 조합으로 돌아 실제와 어긋난다.
+    """
+    html = LIST.read_text(encoding="utf-8")
+    srcs = [STATIC / m.group(1) for m in re.finditer(r'<script src="/static/([^"?]+)', html)]
+    return [str(p) for p in srcs if p.exists()]
+
+
 def _run(script: str) -> str:
     program = f"""
 global.document = {{addEventListener(){{}}, querySelector(){{return null}},
@@ -138,9 +149,9 @@ global.document = {{addEventListener(){{}}, querySelector(){{return null}},
 global.window = {{addEventListener(){{}}}};
 global.localStorage = {{getItem(){{return null}}, setItem(){{}}}};
 const fs = require('fs');
-eval(fs.readFileSync({str(STATIC / 'js' / 'components' / 'list_selection.js')!r}, 'utf8'));
-eval(fs.readFileSync({str(ADAPTER)!r}, 'utf8'));
-eval(fs.readFileSync({str(STATIC / 'js' / 'flows' / 'list.js')!r}, 'utf8'));
+for (const f of {json.dumps(page_scripts())}) {{
+  try {{ eval(fs.readFileSync(f, 'utf8')); }} catch (e) {{ /* 무관한 화면 스크립트 */ }}
+}}
 const app = flowListApp();
 const mod = (id, name, code) => ({{id, module: {{id, name, module_type: {{code}}}}}});
 const blg = (id, name, pf) => ({{id, blog: {{id, name, platform: pf}}}});
@@ -256,9 +267,7 @@ def test_flow_app_constructs_with_page_script_order() -> None:
     렌더 결과만 보면 마크업은 멀쩡한데 브라우저에서 앱 함수가 예외로 죽어
     화면이 비는 경우를 놓친다 — 블로그 화면에서 실제로 겪었다.
     """
-    html = LIST.read_text(encoding="utf-8")
-    srcs = [STATIC / m.group(1) for m in re.finditer(r'<script src="/static/([^"?]+)', html)]
-    existing = [str(p) for p in srcs if p.exists()]
+    existing = page_scripts()
     assert any("list_selection.js" in p for p in existing), "mixin 이 목록에 없다"
     assert any("list_table.js" in p for p in existing), "표 어댑터가 목록에 없다"
 
