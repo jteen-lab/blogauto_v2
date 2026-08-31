@@ -97,6 +97,9 @@ class KeywordLabService:
 
         existing = await self._existing_keywords()
         saved, skipped, api_calls = 0, 0, 0
+        # 실패를 삼키지 않는다. 로그에만 남기면 화면에는 '0개 수집' 만
+        # 보이고 사용자는 무엇을 고쳐야 할지 알 수 없다.
+        errors: List[str] = []
 
         for i in range(0, len(seed_rows), SEED_CHUNK):
             chunk = seed_rows[i:i + SEED_CHUNK]
@@ -104,8 +107,10 @@ class KeywordLabService:
                 [c["seed"] for c in chunk], include_related=True)
             api_calls += 1
             if not result.get("success"):
-                logger.warning("[KEYWORD_LAB] 검색광고 조회 실패 | %s",
-                               result.get("error"))
+                reason = result.get("error") or "알 수 없는 오류"
+                logger.warning("[KEYWORD_LAB] 검색광고 조회 실패 | %s", reason)
+                if reason not in errors:
+                    errors.append(reason)
                 continue
 
             # 시드 자신도 후보다. 연관만 보면 시드가 좋은 키워드일 때 놓친다.
@@ -131,11 +136,19 @@ class KeywordLabService:
         await self.db.commit()
         logger.info(
             "[KEYWORD_LAB] 수집 완료 | blog=%s | 시드 %d개 | 저장 %d | "
-            "중복 %d | API %d회",
-            blog_id, len(seed_rows), saved, skipped, api_calls,
+            "중복 %d | API %d회 | 오류 %d",
+            blog_id, len(seed_rows), saved, skipped, api_calls, len(errors),
         )
+
+        # 한 건도 못 받았고 오류가 있으면 실패다. 성공으로 돌려주면
+        # 화면이 '0개 수집' 이라고만 말한다.
+        if saved == 0 and errors:
+            return {"success": False, "error": errors[0], "errors": errors,
+                    "api_calls": api_calls}
+
         return {"success": True, "saved": saved, "skipped": skipped,
-                "seeds": [s["seed"] for s in seed_rows], "api_calls": api_calls}
+                "seeds": [s["seed"] for s in seed_rows],
+                "api_calls": api_calls, "errors": errors}
 
     def _build(self, keyword: str, item: dict, meta: dict,
                blog_id: Optional[int]) -> KeywordCandidate:
