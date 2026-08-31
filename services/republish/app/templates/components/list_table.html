@@ -17,6 +17,8 @@
     row_key   : 행 변수명 (예: "blog")
     empty_text: 비었을 때 문구
     actions_include: 행 액션 마크업 템플릿 경로
+    selectable: true 면 체크박스 열을 붙인다. 선택 범위는 table_id 로 나뉘어
+                탭마다 독립이다 — 한 탭에서 전체선택해도 다른 탭은 그대로.
     max_height: 표 본문 최대 높이 (예: "26rem"). 없으면 제한 없음
 
   화면이 제공할 Alpine 함수
@@ -25,6 +27,10 @@
     listBadges(row)          [{label,cls,dot,pulse,tip}]
     listSort(key) / listSortIcon(key)   정렬 토글·표시
     listTitle(row)/listSub(row)         모바일 1·2줄
+    (selectable 일 때)
+    listSelection            {scope: [id,…]} — 화면이 들고 있는 선택 상태
+    listToggleAll(scope, rows)           전체 선택/해제
+    listAllChecked(scope, rows)          머리글 체크 상태
   순서도: docs/flowcharts/list_table_component.md
 #}
 <div class="list-table" :data-table="'{{ table_id }}'">
@@ -38,6 +44,13 @@
       <table class="w-full text-sm">
         <thead class="sticky top-0 z-10 bg-gray-50">
           <tr class="border-b border-gray-200">
+            {% if selectable %}
+            <th class="px-3 py-2 w-10">
+              <input type="checkbox" class="rounded border-gray-300"
+                     :checked="listAllChecked('{{ table_id }}', {{ rows_expr }})"
+                     @click="listToggleAll('{{ table_id }}', {{ rows_expr }})">
+            </th>
+            {% endif %}
             <template x-for="col in listColumns()" :key="col.key">
               <th class="px-3 py-2 font-medium text-gray-600 whitespace-nowrap select-none"
                   :class="[
@@ -56,7 +69,15 @@
         </thead>
         <tbody>
           <template x-for="{{ row_key }} in {{ rows_expr }}" :key="{{ row_key }}.id">
-            <tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+            <tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                :class="listIsSelected('{{ table_id }}', {{ row_key }}.id) ? 'bg-accent-lt/40' : ''">
+              {% if selectable %}
+              <td class="px-3 py-2">
+                <input type="checkbox" class="rounded border-gray-300"
+                       :checked="listIsSelected('{{ table_id }}', {{ row_key }}.id)"
+                       @change="listToggleOne('{{ table_id }}', {{ row_key }}.id)">
+              </td>
+              {% endif %}
               <template x-for="col in listColumns()" :key="col.key">
                 <td class="px-3 py-2"
                     :class="col.align === 'right' ? 'text-right'
@@ -87,7 +108,7 @@
               <td class="px-3 py-2 text-right whitespace-nowrap">
                 {# 액션은 화면이 준 마크업을 그대로 쓴다. 컴포넌트가 대신
                    그리게 했더니 하단시트가 열리지 않았다. #}
-                {% include actions_include %}
+                {% if actions_include %}{% include actions_include %}{% endif %}
               </td>
             </tr>
           </template>
@@ -100,11 +121,26 @@
   </div>
 
   {# ── 모바일: 2줄 목록 (같은 배열) ───────────────────── #}
+  {% if selectable %}
+  <div class="md:hidden flex items-center gap-2 px-1 py-2 border-b border-gray-100">
+    <input type="checkbox" class="rounded border-gray-300"
+           :checked="listAllChecked('{{ table_id }}', {{ rows_expr }})"
+           @click="listToggleAll('{{ table_id }}', {{ rows_expr }})">
+    <span class="text-xs text-gray-500">전체 선택</span>
+    <span class="ml-auto text-xs text-gray-400"
+          x-text="(listSelection['{{ table_id }}'] || []).length + '/' + ({{ rows_expr }} || []).length"></span>
+  </div>
+  {% endif %}
   <div class="md:hidden overflow-y-auto divide-y divide-gray-100"
        {% if max_height %}style="max-height: {{ max_height }}"{% endif %}>
     <template x-for="{{ row_key }} in {{ rows_expr }}" :key="{{ row_key }}.id">
       <div class="py-2.5 px-1">
         <div class="flex items-start justify-between gap-2">
+          {% if selectable %}
+          <input type="checkbox" class="rounded border-gray-300 mt-1 flex-shrink-0"
+                 :checked="listIsSelected('{{ table_id }}', {{ row_key }}.id)"
+                 @change="listToggleOne('{{ table_id }}', {{ row_key }}.id)">
+          {% endif %}
           <div class="min-w-0 flex-1">
             <div class="font-medium text-gray-900 truncate"
                  x-text="listTitle({{ row_key }})"></div>
@@ -112,7 +148,7 @@
                  x-text="listSub({{ row_key }})"></div>
           </div>
           <div class="flex-shrink-0">
-            {% include actions_include %}
+            {% if actions_include %}{% include actions_include %}{% endif %}
           </div>
         </div>
         <div class="mt-1 flex flex-wrap items-center gap-1">
