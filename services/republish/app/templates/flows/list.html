@@ -206,11 +206,98 @@
         <p class="text-sm text-gray-500 mb-6">첫 번째 플로우를 생성해보세요</p>
     </div>
 
-    <!-- 플로우 목록 -->
-    <div x-show="!loading && flows.length > 0" class="flow-grid">
-        <template x-for="flow in sortedFlows" :key="flow.id">
-            {% include "flows/_card.html" %}
-        </template>
+    {#- 탭 축은 연결된 블로그의 플랫폼. 지금 화면은 워프·블로거·수집용이
+        한 그리드에 섞여 있다. 혼합 탭은 비어 있어도 만들어 둔다 —
+        두 플랫폼을 함께 붙인 플로우가 어느 탭에도 없으면 사라진다.
+        빈 탭은 숨기므로 평소에는 3개만 보인다.
+        순서도: docs/flowcharts/flow_list_table.md -#}
+    {% set flow_tabs = [
+        {'key': 'wordpress', 'icon': '🟦', 'label': '워드프레스'},
+        {'key': 'blogger',   'icon': '🟧', 'label': '구글 블로거'},
+        {'key': 'mixed',     'icon': '🔀', 'label': '혼합'},
+        {'key': 'none',      'icon': '🔍', 'label': '블로그 미연결'}
+    ] %}
+
+    <!-- 플로우 목록 — 탭 + 표(데스크톱)/2줄 목록(모바일).
+         블로그·모듈 관리와 같은 공용 컴포넌트를 쓴다. -->
+    <div x-show="!loading && flows.length > 0"
+         x-data="{ flowTabKey: 'wordpress' }"
+         x-effect="
+             // 지금 탭이 비면 항목이 있는 첫 탭으로 옮긴다. x-init 으로 하면
+             // 플로우를 비동기로 받기 전에 한 번 돌고 끝나, 워드프레스
+             // 플로우가 없을 때 빈 표만 남는다.
+             if (flows.length && getFlowsByTab(flowTabKey).length === 0) {
+                 const first = ['wordpress', 'blogger', 'mixed', 'none']
+                     .find(k => getFlowsByTab(k).length > 0);
+                 if (first) flowTabKey = first;
+             }
+         ">
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <!-- 탭 — 같은 자리에서 표가 바뀐다 -->
+            <div class="flex items-center gap-1 border-b border-gray-200 px-3 pt-2 overflow-x-auto">
+                {% for t in flow_tabs %}
+                <button type="button" @click="flowTabKey = '{{ t.key }}'"
+                        x-show="getFlowsByTab('{{ t.key }}').length > 0"
+                        class="px-3 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-colors"
+                        :class="flowTabKey === '{{ t.key }}'
+                            ? 'border-accent text-accent'
+                            : 'border-transparent text-gray-500 hover:text-gray-700'">
+                    {{ t.icon }} {{ t.label }}
+                    <span class="ml-1 text-xs text-gray-400"
+                          x-text="'(' + getFlowsByTab('{{ t.key }}').length + ')'"></span>
+                </button>
+                {% endfor %}
+
+                <!-- 플로우명 검색 -->
+                <div class="ml-auto relative py-1 flex-shrink-0">
+                    <input type="text" x-model="flowSearch" placeholder="플로우·모듈·블로그 검색"
+                           class="w-40 md:w-56 pl-8 pr-7 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent">
+                    <svg class="w-4 h-4 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z"/>
+                    </svg>
+                    <button type="button" x-show="flowSearch" @click="flowSearch = ''"
+                            class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">×</button>
+                </div>
+            </div>
+
+            {% for t in flow_tabs %}
+            <div x-show="flowTabKey === '{{ t.key }}'" class="px-2 md:px-0">
+                {# 선택 범위를 탭마다 나눈다. 워드프레스에서 전체선택해도
+                   블로거 탭은 그대로여야 한다. #}
+                {% set scope = 'flows-' ~ t.key %}
+                <div x-show="listSelectedCount('{{ scope }}') > 0"
+                     class="flex items-center justify-between gap-2 px-3 py-2 bg-accent-lt/60 border-b border-gray-200">
+                    <span class="text-sm text-gray-700">
+                        <span class="font-medium" x-text="listSelectedCount('{{ scope }}')"></span>개 선택
+                        <span class="text-xs text-gray-500 ml-1">({{ t.label }})</span>
+                    </span>
+                    <div class="flex items-center gap-2">
+                        <button type="button"
+                                @click="deleteSelectedFlows('{{ scope }}', visibleFlows('{{ t.key }}'))"
+                                class="px-3 py-1.5 text-xs font-medium bg-red-600 text-white rounded-lg hover:bg-red-700">
+                            선택 삭제
+                        </button>
+                        <button type="button" @click="listClearSelection('{{ scope }}')"
+                                class="px-2 py-1.5 text-xs text-gray-500 hover:text-gray-700">
+                            선택 해제
+                        </button>
+                    </div>
+                </div>
+
+                {% set table_id = scope %}
+                {% set rows_expr = "visibleFlows('" ~ t.key ~ "')" %}
+                {% set row_key = 'flow' %}
+                {% set max_height = '30rem' %}
+                {% set selectable = true %}
+                {% set actions_include = 'flows/_row_actions.html' %}
+                {% set empty_text = '조건에 맞는 플로우가 없습니다' %}
+                {% include "components/list_table.html" %}
+            </div>
+            {% endfor %}
+        </div>
     </div>
 </div>
 
@@ -470,6 +557,8 @@
 
 <!-- 스크립트 로드 순서: 공통 헬퍼 → form.js → list.js -->
 <script src="/static/js/common/modules-api.js?v=20260821scope"></script>
+<script src="/static/js/components/list_selection.js?v=20260831"></script>
+<script src="/static/js/flows/list_table.js?v=20260831"></script>
 <script src="/static/js/flows/form.js?v=20260830preset"></script>
-<script src="/static/js/flows/list.js?v=20260821scope"></script>
+<script src="/static/js/flows/list.js?v=20260831table"></script>
 {% endblock %}
