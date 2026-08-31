@@ -110,6 +110,24 @@ function moduleFormApp(module = null, moduleType = null) {
             keyword_extraction_limit: initialModule?.settings?.keyword_extraction_limit || 50,
             // 수집 유형 선택 (일반/대량)
             enable_normal_collect: initialModule?.settings?.enable_normal_collect ?? true,
+            // 키워드 모듈 설정. 화면은 문자열로 다루고 저장할 때 배열로 바꾼다
+            // (사용자가 쉼표로 입력하는 편이 자연스럽다).
+            keyword: {
+                seeds_text: (initialModule?.settings?.keyword?.seeds || []).join(', '),
+                modifiers_text: (initialModule?.settings?.keyword?.modifiers
+                    || ['방법', '추천', '후기', '비교', '초보']).join(', '),
+                use_blog_categories: initialModule?.settings?.keyword?.use_blog_categories ?? true,
+                recurse_adopted: initialModule?.settings?.keyword?.recurse_adopted ?? true,
+                min_volume: initialModule?.settings?.keyword?.min_volume ?? 100,
+                min_saturation: initialModule?.settings?.keyword?.min_saturation ?? 0.2,
+                seed_limit: initialModule?.settings?.keyword?.seed_limit ?? 10,
+                measure_limit: initialModule?.settings?.keyword?.measure_limit ?? 50,
+                make_titles: initialModule?.settings?.keyword?.make_titles ?? true,
+                titles_per_keyword: initialModule?.settings?.keyword?.titles_per_keyword ?? 3,
+                min_inventory: initialModule?.settings?.keyword?.min_inventory ?? 30,
+                interval_minutes: initialModule?.settings?.schedule?.interval_minutes ?? 360,
+            },
+
             // DEPRECATED (Phase E): 기존 collect 모듈 호환용 — 신규 모듈은 bulk_collect 타입 사용
             enable_bulk_collect: initialModule?.settings?.enable_bulk_collect ?? false,
             // 일반 수집 수량 설정 (키워드/제목 각각)
@@ -860,6 +878,26 @@ function moduleFormApp(module = null, moduleType = null) {
                 data.settings = this.bcModule?.toSettings
                     ? this.bcModule.toSettings()
                     : (this.formData.settings || {});
+            } else if (this.formData.type_code === 'keyword') {
+                const k = this.formData.keyword || {};
+                const split = (t) => (t || '').split(',')
+                    .map(x => x.trim()).filter(Boolean);
+                settings.keyword = {
+                    enabled: true,
+                    seeds: split(k.seeds_text),
+                    modifiers: split(k.modifiers_text),
+                    use_blog_categories: !!k.use_blog_categories,
+                    recurse_adopted: !!k.recurse_adopted,
+                    min_volume: k.min_volume,
+                    min_saturation: k.min_saturation,
+                    seed_limit: k.seed_limit,
+                    measure_limit: k.measure_limit,
+                    make_titles: !!k.make_titles,
+                    titles_per_keyword: k.titles_per_keyword,
+                    min_inventory: k.min_inventory,
+                };
+                // 주기는 bulk_collect 와 같은 자리에 둔다(스케줄러가 그 경로를 본다)
+                settings.schedule = { interval_minutes: k.interval_minutes };
             } else if (this.formData.type_code === 'contact_form') {
                 // 애드센스 필수구성 모듈: 문의폼(템플릿/디자인) + 필수페이지(프리셋/편집본)
                 // 프리셋 기본과 다른 페이지만 override로 저장(프리셋 변경이 자동 반영되도록).
