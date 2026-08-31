@@ -125,6 +125,25 @@ async def list_candidates(
         KeywordCandidate.search_volume.desc().nullslast()).limit(limit)
     rows = (await db.execute(stmt)).scalars().all()
 
+    # 니치 이름을 붙인다. id 만 주면 화면에서 정렬도 검색도 할 수 없다.
+    from ..models.category import SubTopic, Topic
+
+    topic_ids = {r.topic_id for r in rows if r.topic_id} or {0}
+    sub_ids = {r.subtopic_id for r in rows if r.subtopic_id} or {0}
+    topics = dict((await db.execute(
+        select(Topic.id, Topic.name).where(Topic.id.in_(topic_ids))
+    )).all())
+    subs = dict((await db.execute(
+        select(SubTopic.id, SubTopic.name).where(SubTopic.id.in_(sub_ids))
+    )).all())
+
+    def _niche(row) -> str:
+        sub = subs.get(row.subtopic_id)
+        top = topics.get(row.topic_id)
+        if sub and top:
+            return f"{top} > {sub}"
+        return sub or top or "미분류"
+
     counts = dict((await db.execute(
         select(KeywordCandidate.verdict, func.count(KeywordCandidate.id))
         .where(KeywordCandidate.user_id == current_user.id)
@@ -133,7 +152,13 @@ async def list_candidates(
 
     return {
         "candidates": [{
-            "id": r.id, "keyword": r.keyword, "seed": r.seed,
+            "id": r.id, "keyword": r.keyword,
+            # 니치 = 이 키워드가 분류된 블로그오토 카테고리.
+            # 입력한 시드가 아니다 — 시드를 그대로 물려주면 '마라탕' 으로
+            # 모은 것이 전부 '음식 효능' 이 되어 카테고리별로 못 넘긴다.
+            "niche": _niche(r),
+            "seed": r.seed,
+            "topic_id": r.topic_id, "subtopic_id": r.subtopic_id,
             "blog_id": r.blog_id,
             "search_volume": r.search_volume,
             "search_volume_pc": r.search_volume_pc,
