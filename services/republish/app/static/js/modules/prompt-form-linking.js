@@ -489,11 +489,26 @@ const promptModuleLinkingMethods = {
 
         if (this.promptModule.linking.linkMode === 'blog') {
             await this._loadBlogsForBlogMode();
-            const blogIds = [...new Set(
-                this.promptModule.linking.blogCategoryMap.map(m => m.blog_id)
-            )];
-            const loadPromises = blogIds.map(id => this.loadBlogCategories(id));
-            await Promise.all(loadPromises);
+
+            // 불러올 블로그는 **선택된 블로그**와 저장된 매핑을 합쳐서 정한다.
+            // 매핑에서만 뽑으면 매핑이 빈 모듈은 카테고리를 영영 불러오지
+            // 못한다 — 카테고리가 안 보이니 다시 만들 수도 없다(수작남).
+            const blogIds = [...new Set([
+                ...(this.promptModule.selectedBlogs || []),
+                ...this.promptModule.linking.blogCategoryMap.map(m => m.blog_id),
+            ])];
+            await Promise.all(blogIds.map(id => this.loadBlogCategories(id)));
+
+            // 선택된 블로그가 있는데 매핑이 비어 있으면 망가진 상태다.
+            // 제외 목록은 저장되지 않으므로 지금 다시 만드는 것이 맞다.
+            const hasBlogs = (this.promptModule.selectedBlogs || []).length > 0;
+            if (hasBlogs && this.promptModule.linking.blogCategoryMap.length === 0) {
+                this.buildBlogCategoryMap();
+                console.info(
+                    '[연동] 비어 있던 블로그-카테고리 매핑을 다시 만들었습니다',
+                    this.promptModule.linking.blogCategoryMap.length + '건'
+                );
+            }
         }
 
         await this.loadUsedBlogCategories();
