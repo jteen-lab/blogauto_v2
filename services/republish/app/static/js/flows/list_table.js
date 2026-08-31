@@ -20,13 +20,11 @@ function flowListTableMixin() {
          * 어느 탭에도 못 들어가면 화면에서 사라지므로 네 갈래가 전부다.
          */
         flowTab(flow) {
-            const blogs = this.getFlowBlogs(flow) || [];
-            if (!blogs.length) return 'none';
-            const platforms = new Set(
-                blogs.map(fb => fb.blog?.platform).filter(Boolean)
+            // 판정은 components/platform_tabs.js 한 곳에만 둔다 — 오토런과
+            // 규칙이 갈리면 같은 플로우가 화면마다 다른 탭에 들어간다.
+            return platformTabOf(
+                (this.getFlowBlogs(flow) || []).map(fb => fb.blog?.platform)
             );
-            if (platforms.size > 1) return 'mixed';
-            return platforms.has('wordpress') ? 'wordpress' : 'blogger';
         },
 
         getFlowsByTab(tab) {
