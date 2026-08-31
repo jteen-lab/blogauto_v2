@@ -176,8 +176,12 @@ class KeywordLabService:
     async def _classify(self, keyword: str, fallback: dict) -> Dict[str, Any]:
         """키워드를 블로그오토 카테고리에 붙인다.
 
-        분류가 안 되면 시드의 카테고리를 물려준다 — 아무 데도 안 붙는
-        것보다 낫다. 다만 그 경우 '추정' 임을 알 수 있게 seed 를 남긴다.
+        **분류가 안 되면 비워 둔다(미분류).** 시드 카테고리를 물려주면
+        「물류창고」와 「프랑스디저트」가 둘 다 '음식 효능' 이 된다 —
+        실제로 그렇게 나왔다. 틀린 분류는 미분류보다 나쁘다.
+
+        미분류 목록은 그 자체로 쓸모가 있다: 분류표에 무엇이 빠져 있는지
+        알려 준다(현재 896개 분류 키워드로는 18%만 붙는다).
         """
         matcher = await self._matcher()
         if matcher:
@@ -190,8 +194,7 @@ class KeywordLabService:
             except Exception as e:  # noqa: BLE001
                 logger.warning("[KEYWORD_LAB] 카테고리 매칭 실패 | %s | %s",
                                keyword, e)
-        return {"topic_id": fallback.get("topic_id"),
-                "subtopic_id": fallback.get("subtopic_id"),
+        return {"topic_id": None, "subtopic_id": None,
                 "seed": fallback.get("seed")}
 
     async def _matcher(self):

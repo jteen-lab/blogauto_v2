@@ -511,8 +511,12 @@ async def test_niche_comes_from_classifying_each_keyword() -> None:
 
 
 @pytest.mark.asyncio
-async def test_unclassified_keyword_falls_back_to_seed_category() -> None:
-    """분류가 안 되면 시드 카테고리를 물려준다 — 아무 데도 안 붙는 것보다 낫다."""
+async def test_unclassified_keyword_stays_unclassified() -> None:
+    """분류가 안 되면 비워 둔다.
+
+    시드 카테고리를 물려줬더니 「물류창고」와 「프랑스디저트」가 둘 다
+    '음식 효능' 이 됐다. 틀린 분류는 미분류보다 나쁘다.
+    """
     from types import SimpleNamespace
     from unittest.mock import AsyncMock, patch
 
@@ -539,7 +543,7 @@ async def test_unclassified_keyword_falls_back_to_seed_category() -> None:
                return_value=fake_ads):
         await svc.collect(blog_id=19)
 
-    assert added[0].topic_id == 12 and added[0].subtopic_id == 53
+    assert added[0].topic_id is None and added[0].subtopic_id is None
 
 
 def test_matcher_failure_does_not_stop_collection() -> None:
