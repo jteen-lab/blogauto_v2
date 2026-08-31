@@ -5,6 +5,9 @@
 
 function moduleListApp() {
     return {
+        // 목록 선택 상태(탭별 독립) — components/list_selection.js
+        ...listSelectionMixin(),
+
         // 상태 데이터
         loading: false,
         modules: [],
@@ -169,7 +172,7 @@ function moduleListApp() {
             return [
                 { key: 'name',   label: '이름',   strong: true, width: '22%', sortable: true },
                 { key: 'type',   label: '종류',   width: '12%', sortable: true },
-                { key: 'blogs',  label: '연결 블로그', width: '24%' },
+                { key: 'blogs',  label: '연결 블로그', width: '24%', sortable: true },
                 { key: 'detail', label: '설정' },
                 { key: 'updated', label: '수정일', align: 'right', width: '13%', sortable: true },
             ];
@@ -252,6 +255,7 @@ function moduleListApp() {
             switch (key) {
                 case 'name': return (module.name || '').toLowerCase();
                 case 'type': return (module.module_type?.code || '');
+                case 'blogs': return this.moduleBlogNames(module).toLowerCase();
                 case 'updated': return module.updated_at || module.created_at || '';
                 default: return '';
             }
@@ -1590,6 +1594,75 @@ function moduleListApp() {
         },
 
         // 모듈 삭제
+        /** 선택한 모듈 일괄 삭제. 탭마다 선택이 따로라 지금 탭의 것만 지운다. */
+        async deleteSelectedModules(scope, rows) {
+            const targets = this.listSelectedRows(scope, rows);
+            if (!targets.length) return;
+
+            const names = targets.slice(0, 5).map(m => m.name).join(', ');
+            const more = targets.length > 5 ? ` 외 ${targets.length - 5}개` : '';
+            if (!confirm(
+                `모듈 ${targets.length}개를 삭제합니다.\n\n${names}${more}\n\n`
+                + '이 작업은 되돌릴 수 없습니다. 계속하시겠습니까?')) return;
+
+            // 플로우에서 사용 중인 모듈은 409로 막힌다. 개별 삭제와 동일하게
+            // 강제 삭제 여부를 되묻되, 항목마다 묻지 않고 마지막에 한 번만 묻는다.
+            const blocked = [];
+            const failed = [];
+            let deleted = 0;
+
+            const removeOne = async (module, force) => {
+                const url = `/api/v1/modules/${module.id}` + (force ? '?force=true' : '');
+                return fetch(url, { method: 'DELETE', credentials: 'include' });
+            };
+
+            for (const module of targets) {
+                try {
+                    const response = await removeOne(module, false);
+                    if (response.ok) deleted += 1;
+                    else if (response.status === 409) blocked.push(module);
+                    else failed.push(module.name);
+                } catch (error) {
+                    failed.push(module.name);
+                }
+            }
+
+            if (blocked.length) {
+                const blockedNames = blocked.map(m => m.name).join(', ');
+                if (confirm(
+                    `플로우에서 사용 중인 모듈 ${blocked.length}개가 있습니다.\n\n`
+                    + `${blockedNames}\n\n플로우에서 제거하고 삭제하시겠습니까?`)) {
+                    for (const module of blocked) {
+                        try {
+                            const response = await removeOne(module, true);
+                            if (response.ok) deleted += 1;
+                            else failed.push(module.name);
+                        } catch (error) {
+                            failed.push(module.name);
+                        }
+                    }
+                    blocked.length = 0;
+                }
+            }
+
+            const deletedIds = new Set(
+                targets.filter(m => !blocked.includes(m) && !failed.includes(m.name))
+                       .map(m => m.id)
+            );
+            this.modules = this.modules.filter(m => !deletedIds.has(m.id));
+            this.listClearSelection(scope);
+            this.refreshGlobalSummary();
+
+            if (failed.length || blocked.length) {
+                const skipped = [];
+                if (blocked.length) skipped.push(`사용 중 ${blocked.length}개 건너뜀`);
+                if (failed.length) skipped.push(`실패 ${failed.length}개`);
+                this.showError(`${deleted}개 삭제 · ${skipped.join(' · ')}`);
+            } else {
+                this.showSuccess(`모듈 ${deleted}개가 삭제되었습니다`);
+            }
+        },
+
         async deleteModule(moduleId) {
             const module = this.modules.find(m => m.id === moduleId);
             if (!module) return;
