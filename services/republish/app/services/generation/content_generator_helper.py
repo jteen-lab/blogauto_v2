@@ -38,6 +38,7 @@ async def generate_content_with_meta(
     prompt_override: str = "",
     extra_instruction: str = "",
     existing_content: str = "",
+    skip_length_directive: bool = False,
 ) -> dict:
     """AI로 글 생성 (블로그 AI 설정 기준)
 
@@ -52,6 +53,8 @@ async def generate_content_with_meta(
         prompt_override: 비어있지 않으면 모듈 프롬프트 대신 사용(리뉴얼 새 프롬프트)
         extra_instruction: 프롬프트 말미에 덧붙일 추가 지침(리뉴얼 추가 프롬프트)
         existing_content: {existing_content} 치환용 기존 글 본문(리뉴얼 확장)
+        skip_length_directive: True 면 분량 지시문을 붙이지 않는다
+            (이어쓰기는 자체 지시문을 쓰므로 중복 주입을 막는다)
 
     Returns:
         dict: {"content": str, "model": str, "provider": str}
@@ -98,6 +101,24 @@ async def generate_content_with_meta(
             full_prompt = f"{full_prompt}\n\n{aeo}"
             logger.info("[GENERATOR] AEO 지시문 주입 | blog=%s", blog.name)
 
+    # 분량 지시문 — 게이트 임계값에서 유도해 주입한다.
+    # 이 지시가 없으면 모델은 모듈 프롬프트의 목표치를 소프트하게 받아
+    # 중앙 1,883자·하위10% 1,484자로 흩어진다(400편 실측). 게이트가 보는
+    # 숫자와 모델이 듣는 숫자를 한 곳에서 묶는다.
+    if not skip_length_directive:
+        from .quality_gate import resolve_settings as _gate_cfg
+        from .length_directive import build as _length_directive
+
+        gate_cfg = _gate_cfg(settings)
+        if gate_cfg["enabled"]:
+            directive = _length_directive(gate_cfg["min_chars"], settings)
+            if directive and "■ 분량 기준" not in full_prompt:
+                full_prompt = f"{full_prompt}\n\n{directive}"
+                logger.info(
+                    "[GENERATOR] 분량 지시문 주입 | blog=%s | 최소=%s",
+                    blog.name, gate_cfg["min_chars"],
+                )
+
     # AI 제공자: 블로그 ai_config.writing_ai 설정만 사용
     provider = writing_ai.get("provider")
     model = writing_ai.get("model")
@@ -134,3 +155,61 @@ async def generate_content_with_meta(
         raise RuntimeError("AI 글 생성 실패: 모든 제공자 호출 실패")
 
     return result
+
+
+async def extend_content(
+    ai_service: AIService,
+    title: str,
+    draft: str,
+    current_chars: int,
+    min_chars: int,
+    settings: dict,
+    blog: Blog,
+) -> str:
+    """짧은 초안에 이어쓰기 1회. 실패하면 초안을 그대로 돌려준다.
+
+    버리고 다시 만들지 않는 이유: 재생성은 참조 수집(검색 30·크롤 10)과
+    제목 재조합까지 되풀이하면서도 모델에게 "짧았다" 는 사실을 전하지
+    않는다. 같은 분포에서 다시 뽑을 뿐이다.
+
+    한 번만 한다. 두 번 세 번 이어 붙이면 글이 늘어지고 비용도 는다.
+    """
+    from .length_directive import continuation_prompt
+
+    cg = settings.get("content_generation", {})
+    writing_ai = (blog.ai_config or {}).get("writing_ai", {})
+
+    prompt = continuation_prompt(
+        title, draft, current_chars, min_chars, settings)
+
+    logger.info(
+        "[GENERATOR] 이어쓰기 시도 | blog=%s | %s | 현재 %d자",
+        blog.name, title[:30], current_chars,
+    )
+
+    try:
+        result = await ai_service.generate(
+            prompt=prompt,
+            provider=writing_ai.get("provider"),
+            model=writing_ai.get("model"),
+            max_tokens=cg.get("max_tokens", 4000),
+            temperature=cg.get("temperature", 0.7),
+            system_prompt=cg.get("system_prompt") or None,
+        )
+    except Exception as e:  # noqa: BLE001
+        # 이어쓰기 실패로 생성을 죽이지 않는다. 초안은 그대로 두고
+        # 게이트가 최종 판단한다.
+        logger.warning("[GENERATOR] 이어쓰기 호출 실패(무시) | %s", e)
+        return draft
+
+    addition = ((result or {}).get("content") or "").strip()
+    if not addition:
+        logger.warning("[GENERATOR] 이어쓰기 결과 비어 있음 | %s", title[:30])
+        return draft
+
+    # 모델이 안내 문구를 붙이는 경우가 있어 첫 줄만 걸러낸다.
+    lines = addition.split("\n")
+    if lines and lines[0].strip().startswith(("이어서", "다음은", "추가로")):
+        addition = "\n".join(lines[1:]).lstrip()
+
+    return f"{draft.rstrip()}\n\n{addition}"
