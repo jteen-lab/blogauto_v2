@@ -212,6 +212,41 @@ console.log(JSON.stringify({
     assert d["blogs"] == "WP 인생꿀팁"
 
 
+def test_inactive_is_not_shown_as_paused() -> None:
+    """오토런 목록에는 inactive 플로우도 섞여 있다.
+
+    상단 바의 🟢+🟡 합이 총 개수보다 작은 이유가 이것이다. 상태가 정렬
+    가능한 열이 된 이상 일시정지와 뭉뚱그리면 오해를 키운다.
+    """
+    out = _run("""
+console.log(JSON.stringify({
+  inactive: app.listCell({status: 'inactive'}, 'status'),
+  paused: app.listCell({status: 'paused', auto_paused: false}, 'status'),
+  title: app.listTitle({status: 'inactive', name: 'x'}),
+}));
+""")
+    d = json.loads(out)
+    assert d["inactive"] == "⚪ 비활성"
+    assert d["paused"] == "🟡 일시정지"
+    assert d["inactive"] != d["paused"]
+    assert d["title"].startswith("⚪")
+
+
+def test_status_sort_orders_by_urgency() -> None:
+    """오름차순 한 번으로 손봐야 할 것이 뒤에 모여야 한다."""
+    out = _run("""
+app.autorunFlows = [
+  {id: 9, name: '자동정지', status: 'paused', auto_paused: true, module_links: [], blog_links: [bl(1, 'b', 'wordpress')]},
+  {id: 8, name: '실행중', status: 'active', module_links: [], blog_links: [bl(2, 'b', 'wordpress')]},
+  {id: 7, name: '비활성', status: 'inactive', module_links: [], blog_links: [bl(3, 'b', 'wordpress')]},
+  {id: 6, name: '일시정지', status: 'paused', module_links: [], blog_links: [bl(4, 'b', 'wordpress')]},
+];
+app.listSort('status');
+console.log(app.visibleAutorun('wordpress').map(f => f.name).join(','));
+""")
+    assert out == "실행중,비활성,일시정지,자동정지"
+
+
 def test_status_sort_puts_problems_last() -> None:
     out = _run("""
 app.listSort('status');
