@@ -308,6 +308,11 @@ def wordpress_post_id_from_url(url: str) -> Optional[str]:
     return m.group(1) if m else None
 
 
+def slug_of(url: Optional[str]) -> str:
+    """URL 마지막 조각(슬러그). 워드프레스 슬러그 조회에 쓴다."""
+    return (url or "").rstrip("/").rsplit("/", 1)[-1]
+
+
 class PostDeleter:
     """정식제목에 매칭된 발행글을 URL 로 찾아 지운다.
 
@@ -328,30 +333,43 @@ class PostDeleter:
         return await self._delete_blogger(urls, mode)
 
     async def _delete_wordpress(self, urls, mode) -> Dict[str, Any]:
+        """워드프레스 삭제.
+
+        **이미 없는 글은 실패가 아니다.** 원하는 상태(글이 블로그에 없음)가
+        이미 이루어진 것이므로 done 으로 센다. 실패로 두면 우리 기록만 영영
+        남아 내부링크가 사라진 글을 가리킨다.
+        """
         auth = self._svc._wp_auth()
         if not auth:
             return {"done": 0, "failed": [{"url": u, "error": "인증 실패"}
-                                          for u in urls]}
+                                          for u in urls], "already_gone": 0}
         base = self.blog.url.rstrip("/") + "/wp-json/wp/v2/posts"
         headers = {"Authorization": f"Basic {auth}",
                    "Content-Type": "application/json"}
-        done, failed = 0, []
+        done, failed, gone = 0, [], 0
         async with httpx.AsyncClient(timeout=TIMEOUT) as client:
             for url in urls:
                 pid = wordpress_post_id_from_url(url)
                 if not pid:
-                    # 슬러그형 URL — 슬러그로 찾는다
-                    slug = (url or "").rstrip("/").rsplit("/", 1)[-1]
+                    # 슬러그형 URL — 슬러그로 찾는다.
+                    # 조회 자체가 실패한 것과, 조회는 됐는데 글이 없는 것을
+                    # 구분한다. 뭉뚱그리면 이미 지운 글이 영영 안 지워진다.
                     try:
                         r = await client.get(base, params={
-                            "slug": slug, "_fields": "id"}, headers=headers)
-                        rows = r.json() if r.status_code == 200 else []
-                        pid = str(rows[0]["id"]) if rows else None
-                    except Exception:  # noqa: BLE001
-                        pid = None
-                if not pid:
-                    failed.append({"url": url, "error": "글 ID를 찾지 못함"})
-                    continue
+                            "slug": slug_of(url), "_fields": "id"},
+                            headers=headers)
+                    except Exception as e:  # noqa: BLE001
+                        failed.append({"url": url, "error": str(e)[:60]})
+                        continue
+                    if r.status_code != 200:
+                        failed.append({"url": url,
+                                       "error": f"조회 실패 {r.status_code}"})
+                        continue
+                    rows = r.json() or []
+                    if not rows:
+                        gone += 1          # 이미 없다
+                        continue
+                    pid = str(rows[0]["id"])
                 try:
                     if mode == MODE_DELETE:
                         r = await client.delete(
@@ -363,14 +381,23 @@ class PostDeleter:
                             json={"status": "private"})
                     if r.status_code in (200, 201):
                         done += 1
+                    elif r.status_code in (404, 410):
+                        gone += 1          # 이미 없다
                     else:
                         failed.append({"url": url,
                                        "error": f"HTTP {r.status_code}"})
                 except Exception as e:  # noqa: BLE001
                     failed.append({"url": url, "error": str(e)[:60]})
-        return {"done": done, "failed": failed}
+        return {"done": done + gone, "failed": failed, "already_gone": gone}
 
     async def _delete_blogger(self, urls, mode) -> Dict[str, Any]:
+        """블로거 삭제.
+
+        블로거는 URL 로 바로 지울 수 없어 path 로 postId 를 먼저 찾는다.
+        **이미 지운 글은 이 조회가 404 라 삭제 단계에 닿지도 못한다.**
+        그것을 실패로 두면 우리 기록만 남아 다음 크롤링까지 발행완료로
+        보이고, 내부링크가 사라진 글을 가리킨다.
+        """
         from .blogger_publisher import BloggerPublisher
 
         pub = BloggerPublisher()
@@ -378,26 +405,31 @@ class PostDeleter:
         blog_id = await pub._extract_blog_id(self.blog, token) if token else None
         if not blog_id:
             return {"done": 0, "failed": [{"url": u, "error": "인증 실패"}
-                                          for u in urls]}
+                                          for u in urls], "already_gone": 0}
 
         api = f"https://www.googleapis.com/blogger/v3/blogs/{blog_id}"
         headers = {"Authorization": f"Bearer {token}"}
-        done, failed = 0, []
+        done, failed, gone = 0, [], 0
         async with httpx.AsyncClient(timeout=TIMEOUT) as client:
             for url in urls:
-                # 블로거는 URL 로 바로 지울 수 없어 path 로 postId 를 찾는다
                 path = re.sub(r"^https?://[^/]+", "", url or "")
                 try:
                     r = await client.get(
                         f"{api}/posts/bypath", params={"path": path},
                         headers=headers)
-                    if r.status_code != 200:
-                        failed.append({"url": url,
-                                       "error": f"조회 실패 {r.status_code}"})
-                        continue
-                    pid = r.json().get("id")
                 except Exception as e:  # noqa: BLE001
                     failed.append({"url": url, "error": str(e)[:60]})
+                    continue
+                if r.status_code == 404:
+                    gone += 1              # 이미 없다
+                    continue
+                if r.status_code != 200:
+                    failed.append({"url": url,
+                                   "error": f"조회 실패 {r.status_code}"})
+                    continue
+                pid = (r.json() or {}).get("id")
+                if not pid:
+                    gone += 1
                     continue
 
                 try:
@@ -407,11 +439,13 @@ class PostDeleter:
                     else:
                         r = await client.post(
                             f"{api}/posts/{pid}/revert", headers=headers)
-                    if r.status_code in (200, 204, 404):
+                    if r.status_code in (200, 204):
                         done += 1
+                    elif r.status_code == 404:
+                        gone += 1
                     else:
                         failed.append({"url": url,
                                        "error": f"HTTP {r.status_code}"})
                 except Exception as e:  # noqa: BLE001
                     failed.append({"url": url, "error": str(e)[:60]})
-        return {"done": done, "failed": failed}
+        return {"done": done + gone, "failed": failed, "already_gone": gone}
