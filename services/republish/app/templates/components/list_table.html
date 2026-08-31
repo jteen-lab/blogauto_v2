@@ -35,7 +35,11 @@
     listAllChecked(scope, rows)          머리글 체크 상태
   순서도: docs/flowcharts/list_table_component.md
 #}
-<div class="list-table" :data-table="'{{ table_id }}'">
+{# 슬라이드 열이 있으면 표를 고정 레이아웃으로 둔다. 자동 레이아웃에서는
+   nowrap 셀이 글자 길이만큼 열을 늘려 가로 스크롤이 생기고, 그 폭 변화가
+   되먹임되어 스크롤바가 깜빡인다. #}
+<div class="list-table" :data-table="'{{ table_id }}'"
+     :class="listColumns().some(c => c.slide) ? 'list-table--fixed' : ''">
 
   {# ── 데스크톱: 표 ─────────────────────────────────── #}
   <div class="hidden md:block">
@@ -118,7 +122,8 @@
                     </div>
                   </template>
                   <template x-if="col.key !== '_badges' && !col.link && !col.slide">
-                    <span :class="col.strong ? 'font-medium text-gray-900' : 'text-gray-600'"
+                    <span class="block truncate"
+                          :class="col.strong ? 'font-medium text-gray-900' : 'text-gray-600'"
                           x-text="listCell({{ row_key }}, col.key)"></span>
                   </template>
                 </td>
