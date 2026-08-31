@@ -202,6 +202,7 @@
                 {% set rows_expr = "visibleBlogs('wordpress')" %}
                 {% set row_key = 'blog' %}
                 {% set max_height = '30rem' %}
+                {% set actions_include = 'blogs/_row_actions.html' %}
                 {% set empty_text = '조건에 맞는 WordPress 블로그가 없습니다' %}
                 {% include "components/list_table.html" %}
             </div>
@@ -212,6 +213,7 @@
                 {% set rows_expr = "visibleBlogs('blogger')" %}
                 {% set row_key = 'blog' %}
                 {% set max_height = '30rem' %}
+                {% set actions_include = 'blogs/_row_actions.html' %}
                 {% set empty_text = '조건에 맞는 Google Blogger가 없습니다' %}
                 {% include "components/list_table.html" %}
             </div>
@@ -850,38 +852,6 @@ function blogListApp() {
                            cls: 'bg-purple-100 text-purple-800' });
             }
             return out;
-        },
-
-        listActions(blog) {
-            // 카드 헤더에 있던 5개를 그대로. 하나도 빼지 않는다.
-            // 함수를 담지 않고 키만 준다 — 객체에 함수를 넣어 a.onClick() 으로
-            // 부르면 Alpine 프록시를 거치며 호출이 끊길 수 있다.
-            return [
-                { key: 'edit', title: '수정',
-                  icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z' },
-                { key: 'settings', title: '설정',
-                  cls: 'text-gray-500 hover:text-purple-700 hover:bg-purple-100',
-                  icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' },
-                { key: 'sync', title: '발행 동기화', busy: this.syncing === blog.id,
-                  icon: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15' },
-                { key: 'test', title: '연결 테스트', busy: this.testing === blog.id,
-                  cls: 'text-gray-500 hover:text-green-700 hover:bg-green-100',
-                  icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
-                { key: 'delete', title: '삭제',
-                  cls: 'text-gray-500 hover:text-red-600 hover:bg-red-50',
-                  icon: 'M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16' },
-            ];
-        },
-
-        // 액션 실행 — 컴포넌트는 키만 넘긴다
-        listAction(blog, key) {
-            switch (key) {
-                case 'edit': return this.openEditSheet(blog);
-                case 'settings': return this.openSettingsSheet(blog);
-                case 'sync': return this.syncPublishedPosts(blog.id);
-                case 'test': return this.testConnection(blog.id);
-                case 'delete': return this.deleteBlog(blog.id, blog.name);
-            }
         },
 
         listTitle(blog) { return blog.name; },

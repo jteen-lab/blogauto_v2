@@ -8,22 +8,21 @@
   데스크톱은 표, 모바일은 2줄 목록. **같은 배열을 그린다** — 모바일 전용
   데이터를 따로 만들면 정렬·필터 결과가 갈린다.
 
-  액션은 **키만 넘기고 화면이 실행한다**(`listAction(row, key)`).
-  객체에 함수를 담아 `a.onClick()` 으로 부르면 Alpine 프록시를 거치면서
-  호출이 끊길 수 있다 — 실제로 하단시트가 열리지 않는 사고가 있었다.
+  액션은 **화면이 마크업으로 준다**(`actions_include`). 컴포넌트가 액션을
+  대신 그리게 했더니 하단시트가 열리지 않았다. 카드에서 검증된 직접 호출
+  (`@click="openEditSheet(blog)"`)을 그대로 쓰는 것이 안전하다.
 
   필요한 변수
     rows_expr : 행 배열 Alpine 식 (예: "sortedBlogs('wordpress')")
     row_key   : 행 변수명 (예: "blog")
     empty_text: 비었을 때 문구
+    actions_include: 행 액션 마크업 템플릿 경로
     max_height: 표 본문 최대 높이 (예: "26rem"). 없으면 제한 없음
 
   화면이 제공할 Alpine 함수
     listColumns()            [{key,label,align,width,strong,link,sortable}]
     listCell(row, key)       셀 텍스트
     listBadges(row)          [{label,cls,dot,pulse,tip}]
-    listActions(row)         [{key,title,icon,cls,busy}]
-    listAction(row, key)     액션 실행
     listSort(key) / listSortIcon(key)   정렬 토글·표시
     listTitle(row)/listSub(row)         모바일 1·2줄
   순서도: docs/flowcharts/list_table_component.md
@@ -86,27 +85,9 @@
                 </td>
               </template>
               <td class="px-3 py-2 text-right whitespace-nowrap">
-                <div class="inline-flex items-center gap-0.5">
-                  <template x-for="a in listActions({{ row_key }})" :key="a.key">
-                    <button type="button" @click="listAction({{ row_key }}, a.key)"
-                            :disabled="a.busy" :title="a.title"
-                            class="p-1.5 rounded-lg transition-colors disabled:opacity-50"
-                            :class="a.cls || 'text-gray-500 hover:text-accent hover:bg-accent-lt'">
-                      <svg x-show="!a.busy" class="w-4 h-4" fill="none"
-                           stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round"
-                              stroke-width="2" :d="a.icon"/>
-                      </svg>
-                      <svg x-show="a.busy" class="w-4 h-4 animate-spin" fill="none"
-                           viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10"
-                                stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor"
-                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                      </svg>
-                    </button>
-                  </template>
-                </div>
+                {# 액션은 화면이 준 마크업을 그대로 쓴다. 컴포넌트가 대신
+                   그리게 했더니 하단시트가 열리지 않았다. #}
+                {% include actions_include %}
               </td>
             </tr>
           </template>
@@ -130,26 +111,8 @@
             <div class="mt-0.5 text-xs text-gray-500 truncate"
                  x-text="listSub({{ row_key }})"></div>
           </div>
-          <div class="flex items-center gap-0.5 flex-shrink-0">
-            <template x-for="a in listActions({{ row_key }})" :key="a.key">
-              <button type="button" @click="listAction({{ row_key }}, a.key)"
-                      :disabled="a.busy" :title="a.title"
-                      class="p-1.5 rounded-lg transition-colors disabled:opacity-50"
-                      :class="a.cls || 'text-gray-500 hover:text-accent'">
-                <svg x-show="!a.busy" class="w-4 h-4" fill="none"
-                     stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round"
-                        stroke-width="2" :d="a.icon"/>
-                </svg>
-                <svg x-show="a.busy" class="w-4 h-4 animate-spin" fill="none"
-                     viewBox="0 0 24 24">
-                  <circle class="opacity-25" cx="12" cy="12" r="10"
-                          stroke="currentColor" stroke-width="4"></circle>
-                  <path class="opacity-75" fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                </svg>
-              </button>
-            </template>
+          <div class="flex-shrink-0">
+            {% include actions_include %}
           </div>
         </div>
         <div class="mt-1 flex flex-wrap items-center gap-1">

@@ -41,18 +41,37 @@ def table() -> str:
 ])
 def test_every_card_action_survives(page, call):
     """카드에 있던 동작이 하나라도 빠지면 기능 손실이다."""
-    assert call in page, f"동작 누락: {call}"
+    actions = (ROOT / "app/templates/blogs/_row_actions.html").read_text(
+        encoding="utf-8")
+    bare = call.replace("this.", "")
+    assert bare in actions or call in page, f"동작 누락: {call}"
 
 
-def test_actions_dispatch_by_key_not_closure(page, table):
-    """객체에 함수를 담아 a.onClick() 으로 부르면 Alpine 프록시를 거치며
-    호출이 끊긴다 — 실제로 하단시트가 열리지 않는 사고가 있었다.
-    컴포넌트는 키만 넘기고 화면이 실행한다."""
-    assert "listAction(" in table, "컴포넌트가 디스패처를 부르지 않는다"
-    # 사고 경위가 주석에 적혀 있으므로 주석을 뺀 실제 마크업만 본다
+def test_actions_use_direct_calls(page, table):
+    """컴포넌트가 액션을 대신 그리면 하단시트가 열리지 않았다.
+
+    카드에서 검증된 직접 호출(@click="openEditSheet(blog)")을 화면이
+    마크업으로 주고, 컴포넌트는 include 만 한다.
+    """
     markup = re.sub(r"{#.*?#}", "", table, flags=re.S)
-    assert "onClick" not in markup, "컴포넌트에 클로저 호출이 남아 있다"
-    assert "listAction(blog, key) {" in page, "화면에 디스패처가 없다"
+    assert "{% include actions_include %}" in markup
+    # 컴포넌트가 액션을 직접 그리면 안 된다
+    assert "listActions(" not in markup
+    assert "onClick" not in markup
+
+    actions = (ROOT / "app/templates/blogs/_row_actions.html").read_text(
+        encoding="utf-8")
+    for call in ('@click="openEditSheet(blog)"',
+                 '@click="openSettingsSheet(blog)"',
+                 '@click="syncPublishedPosts(blog.id)"',
+                 '@click="testConnection(blog.id)"',
+                 '@click="deleteBlog(blog.id, blog.name)"'):
+        assert call in actions, f"직접 호출 누락: {call}"
+
+
+def test_screen_supplies_actions_markup(page):
+    """두 표 모두 액션 마크업을 지정해야 버튼이 나온다."""
+    assert page.count("actions_include") == 2
 
 
 def test_bottom_sheet_targets_exist(page):
@@ -62,10 +81,7 @@ def test_bottom_sheet_targets_exist(page):
     assert 'id="blogSettings"' in page or "blogSettings" in page
 
 
-def test_busy_state_kept_for_long_actions(page):
-    """동기화·테스트는 진행 중 표시가 있었다. 없으면 두 번 누르게 된다."""
-    assert "busy: this.syncing === blog.id" in page
-    assert "busy: this.testing === blog.id" in page
+
 
 
 # ── 표시 정보 ────────────────────────────────────────────
@@ -157,19 +173,21 @@ def test_component_contract_is_documented():
         assert fn in text, f"규약 문서에 {fn} 누락"
 
 
-def test_adapter_implements_full_contract(page):
-    """블로그 화면이 규약 6개를 모두 구현했는지."""
+def test_adapter_implements_contract(page):
+    """블로그 화면이 규약을 구현했는지(액션은 마크업으로 준다)."""
     for fn in ("listColumns()", "listCell(blog, key)", "listBadges(blog)",
-               "listActions(blog)", "listTitle(blog)", "listSub(blog)"):
+               "listTitle(blog)", "listSub(blog)"):
         assert fn in page, f"어댑터 누락: {fn}"
 
 
-def test_actions_have_distinct_keys(page):
-    """키가 겹치면 Alpine x-for 가 버튼을 잘못 그린다."""
-    block = page[page.index("listActions(blog) {"):]
-    block = block[:block.index("listTitle")]
-    keys = re.findall(r"key:\s*'([^']+)'", block)
-    assert len(keys) == 5 and len(set(keys)) == 5, keys
+def test_busy_state_in_actions_markup():
+    """동기화·테스트는 진행 중 표시가 있어야 두 번 누르지 않는다."""
+    actions = (ROOT / "app/templates/blogs/_row_actions.html").read_text(
+        encoding="utf-8")
+    assert 'x-show="syncing === blog.id"' in actions
+    assert 'x-show="testing === blog.id"' in actions
+    assert ':disabled="syncing === blog.id"' in actions
+    assert ':disabled="testing === blog.id"' in actions
 
 
 # ── 2026-08-31 지적 반영 ─────────────────────────────────
