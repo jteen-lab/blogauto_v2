@@ -350,4 +350,99 @@ def test_cache_version_bumped_for_changed_assets() -> None:
         for asset in ("cell_slide.js", "list-table-slide.css"):
             m = re.search(rf'{re.escape(asset)}\?v=([^"]+)"', page)
             assert m, f"{screen} 의 {asset} 에 ?v= 가 없다"
-            assert m.group(1) == "20260831slide", f"{screen} {asset} 버전이 낡았다"
+            assert m.group(1) == "20260831sub", f"{screen} {asset} 버전이 낡았다"
+
+
+# ── 모바일 2줄째와 슬라이드 줄의 중복 ────────────────────
+MOBILE_CASES = [
+    (
+        "modules",
+        [
+            str(STATIC / "js" / "components" / "list_selection.js"),
+            str(STATIC / "js" / "modules" / "list.js"),
+        ],
+        """
+const app = moduleListApp();
+window.moduleListAppInstance = app;
+const row = {id: 1, name: '군타_프로파일', module_type: {code: 'growth_profile'},
+             settings: {stages: [{}, {}], warmup: {days: 7}}};
+""",
+    ),
+    (
+        "flows",
+        [
+            str(STATIC / "js" / "components" / "platform_tabs.js"),
+            str(STATIC / "js" / "components" / "list_selection.js"),
+            str(STATIC / "js" / "flows" / "list_table.js"),
+            str(STATIC / "js" / "flows" / "list.js"),
+        ],
+        """
+const app = flowListApp();
+window.flowListApp = app;
+const row = {id: 1, name: 't', description: '설명',
+             flow_modules: [{id: 1, module: MODULE}], flow_blogs: []};
+""",
+    ),
+    (
+        "autorun",
+        [
+            str(STATIC / "js" / "components" / "platform_tabs.js"),
+            str(STATIC / "js" / "autorun" / "list_table.js"),
+            str(STATIC / "js" / "autorun" / "main.js"),
+        ],
+        """
+const app = autorunApp();
+const row = {id: 1, name: 't', status: 'active',
+             module_links: [{id: 1, module: MODULE}], blog_links: []};
+""",
+    ),
+]
+
+
+@pytest.mark.parametrize("name,scripts,setup", MOBILE_CASES)
+def test_mobile_sub_line_does_not_repeat_the_sliding_text(
+    name: str, scripts: list[str], setup: str,
+) -> None:
+    """모바일 2줄째가 슬라이드 줄과 같은 내용을 담으면 두 번 나온다.
+
+    게다가 2줄째는 흐르지도 않아 잘린 채 중복만 된다.
+    """
+    slide_col = "detail" if name == "modules" else "modules"
+    out = _run(
+        f"const MODULE = {json.dumps(COLLECT_MODULE, ensure_ascii=False)};\n"
+        + setup
+        + f"""
+const sub = app.listSub(row);
+const slid = app.listCell(row, '{slide_col}');
+console.log(JSON.stringify({{sub, slid}}));
+""",
+        scripts,
+    )
+    data = json.loads(out)
+    slid = data["slid"]
+    sub = data["sub"]
+    assert slid and slid != "-", "슬라이드 값이 비어 검사가 무의미하다"
+    head = slid[:20]
+    assert head not in sub, f"{name}: 2줄째가 슬라이드 내용을 되풀이한다\n  2줄: {sub}\n  슬라이드: {slid}"
+
+
+def test_module_type_name_uses_the_app_method() -> None:
+    """getModuleTypeName·getModuleIcon 은 전역이 아니라 앱 메서드다.
+
+    전역으로 검사하면 조건이 늘 거짓이라 종류가 코드 원문으로 나오거나
+    배지가 통째로 사라진다.
+    """
+    out = _run("""
+const app = moduleListApp();
+window.moduleListAppInstance = app;
+const row = {id: 1, name: 'x', module_type: {code: 'growth_profile'}, settings: {}};
+console.log(JSON.stringify({type: app.listCell(row, 'type'),
+                            badges: app.listBadges(row).map(b => b.label)}));
+""", [
+        str(STATIC / "js" / "components" / "list_selection.js"),
+        str(STATIC / "js" / "modules" / "list.js"),
+    ])
+    d = json.loads(out)
+    assert d["type"] == "성장 프로파일", f"코드 원문이 그대로 나온다: {d['type']}"
+    assert d["badges"], "종류 배지가 사라졌다"
+    assert "성장 프로파일" in d["badges"][0]
