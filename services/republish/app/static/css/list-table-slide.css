@@ -6,6 +6,24 @@
  * 순서도: docs/flowcharts/list_table_cell_slide.md
  */
 
+/**
+ * 슬라이드 열이 있는 표는 고정 레이아웃으로 둔다.
+ *
+ * 기본(auto) 레이아웃에서는 white-space:nowrap 인 셀의 최소 폭이 글자
+ * 전체 길이가 되어 열이 정보 길이만큼 늘어나고 표에 가로 스크롤이 생긴다.
+ * 그 상태에서 복제본을 펼쳐 재면 표가 또 넓어지고, 그 변화를
+ * ResizeObserver 가 다시 잡아 스크롤바가 깜빡인다.
+ */
+.list-table--fixed table {
+    table-layout: fixed;
+}
+
+/* 고정 레이아웃에서는 넘치는 내용을 셀이 잘라야 옆 칸을 침범하지 않는다. */
+.list-table--fixed td,
+.list-table--fixed th {
+    overflow: hidden;
+}
+
 .cell-slide {
     position: relative;
     overflow: hidden;
@@ -39,10 +57,13 @@
     display: none;
 }
 
-/* 넘칠 때만 한 줄로 자른다(정지 상태에서 말줄임). */
+/* 정지 상태에서는 한 줄로 자르고 말줄임을 붙인다. */
 .cell-slide-track.no-slide .cell-slide-item {
+    display: block;
+    max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* PC: 올려두면 멈춘다 */
