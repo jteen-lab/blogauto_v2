@@ -143,60 +143,79 @@
         </button>
     </div>
 
-    <!-- 플랫폼별 섹션 — 표(데스크톱) / 2줄 목록(모바일).
-         컴포넌트가 두 형태를 함께 그리므로 화면을 따로 만들지 않는다.
-         플랫폼 구분이 사라지면 안 되므로 섹션 헤더는 유지한다. -->
     <div x-show="blogs.length > 0">
-        <!-- WordPress -->
-        <div class="blog-section" x-show="getBlogsByPlatform('wordpress').length > 0">
-            <div class="section-header">
-                <div class="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-                    <span class="text-white font-medium text-xs">WP</span>
+        <!-- 애드센스 상태 요약 — 표 위에 둔다. 아래에 있으면 표를 다 지나야 보인다. -->
+        <div class="mb-3 flex flex-wrap items-center gap-2">
+            <span class="text-xs text-gray-500">애드센스</span>
+            <template x-for="chip in adsenseChips()" :key="chip.key">
+                <button type="button" @click="toggleAdsenseFilter(chip.key)"
+                        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors"
+                        :class="[chip.cls, adsenseFilter === chip.key ? 'ring-2 ring-offset-1 ring-gray-400 border-transparent' : 'border-transparent hover:opacity-80']">
+                    <span x-text="chip.label"></span>
+                    <span class="font-bold" x-text="chip.count"></span>
+                </button>
+            </template>
+            <button type="button" x-show="adsenseFilter" @click="adsenseFilter = ''"
+                    class="px-2 py-1 text-xs text-gray-500 underline hover:text-gray-700">필터 해제</button>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <!-- 플랫폼 탭 — 같은 자리에서 표가 바뀐다.
+                 위아래로 쌓으면 워드프레스가 늘어날수록 블로거가 밀려난다. -->
+            <div class="flex items-center gap-2 border-b border-gray-200 px-3 pt-2">
+                <button type="button" @click="platformTab = 'wordpress'"
+                        class="px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors"
+                        :class="platformTab === 'wordpress'
+                            ? 'border-primary text-primary'
+                            : 'border-transparent text-gray-500 hover:text-gray-700'">
+                    WordPress
+                    <span class="ml-1 text-xs text-gray-400"
+                          x-text="'(' + getBlogsByPlatform('wordpress').length + ')'"></span>
+                </button>
+                <button type="button" @click="platformTab = 'blogger'"
+                        class="px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors"
+                        :class="platformTab === 'blogger'
+                            ? 'border-orange-500 text-orange-600'
+                            : 'border-transparent text-gray-500 hover:text-gray-700'">
+                    Google Blogger
+                    <span class="ml-1 text-xs text-gray-400"
+                          x-text="'(' + getBlogsByPlatform('blogger').length + ')'"></span>
+                </button>
+
+                <!-- 블로그명 검색 -->
+                <div class="ml-auto relative py-1">
+                    <input type="text" x-model="blogSearch" placeholder="블로그명·주소 검색"
+                           class="w-40 md:w-56 pl-8 pr-7 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent">
+                    <svg class="w-4 h-4 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z"/>
+                    </svg>
+                    <button type="button" x-show="blogSearch" @click="blogSearch = ''"
+                            class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">×</button>
                 </div>
-                <h3 class="section-title">WordPress</h3>
-                <span class="section-count" x-text="getBlogsByPlatform('wordpress').length"></span>
             </div>
-            <div class="bg-white rounded-xl shadow-sm border border-gray-200 px-2 md:px-0 overflow-hidden">
+
+            <!-- WordPress -->
+            <div x-show="platformTab === 'wordpress'" class="px-2 md:px-0">
                 {% set table_id = 'blogs-wordpress' %}
-                {% set rows_expr = "getBlogsByPlatform('wordpress')" %}
+                {% set rows_expr = "visibleBlogs('wordpress')" %}
                 {% set row_key = 'blog' %}
-                {% set empty_text = '등록된 WordPress 블로그가 없습니다' %}
+                {% set max_height = '30rem' %}
+                {% set empty_text = '조건에 맞는 WordPress 블로그가 없습니다' %}
                 {% include "components/list_table.html" %}
             </div>
-        </div>
 
-        <!-- Google Blogger -->
-        <div class="blog-section" x-show="getBlogsByPlatform('blogger').length > 0">
-            <div class="section-header">
-                <div class="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center">
-                    <span class="text-white font-medium text-xs">BL</span>
-                </div>
-                <h3 class="section-title">Google Blogger</h3>
-                <span class="section-count" x-text="getBlogsByPlatform('blogger').length"></span>
-            </div>
-            <div class="bg-white rounded-xl shadow-sm border border-gray-200 px-2 md:px-0 overflow-hidden">
+            <!-- Google Blogger -->
+            <div x-show="platformTab === 'blogger'" class="px-2 md:px-0">
                 {% set table_id = 'blogs-blogger' %}
-                {% set rows_expr = "getBlogsByPlatform('blogger')" %}
+                {% set rows_expr = "visibleBlogs('blogger')" %}
                 {% set row_key = 'blog' %}
-                {% set empty_text = '등록된 Google Blogger가 없습니다' %}
+                {% set max_height = '30rem' %}
+                {% set empty_text = '조건에 맞는 Google Blogger가 없습니다' %}
                 {% include "components/list_table.html" %}
             </div>
         </div>
-    </div>
-
-    <!-- 애드센스 상태 요약 (클릭 시 해당 상태만 필터) -->
-    <div x-show="blogs.length > 0" class="mt-3 mb-3 flex flex-wrap items-center gap-2">
-        <span class="text-xs text-gray-500">애드센스</span>
-        <template x-for="chip in adsenseChips()" :key="chip.key">
-            <button type="button" @click="toggleAdsenseFilter(chip.key)"
-                    class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors"
-                    :class="[chip.cls, adsenseFilter === chip.key ? 'ring-2 ring-offset-1 ring-gray-400 border-transparent' : 'border-transparent hover:opacity-80']">
-                <span x-text="chip.label"></span>
-                <span class="font-bold" x-text="chip.count"></span>
-            </button>
-        </template>
-        <button type="button" x-show="adsenseFilter" @click="adsenseFilter = ''"
-                class="px-2 py-1 text-xs text-gray-500 underline hover:text-gray-700">필터 해제</button>
     </div>
 
     <!-- 알림 메시지 -->
@@ -737,16 +756,21 @@ function blogListApp() {
         },
 
         // ── 공용 표 어댑터 ────────────────────────────────
-        // components/list_table.html 이 요구하는 규약. 컴포넌트가 블로그
-        // 필드를 직접 알면 다른 화면에서 재사용할 수 없어, 화면이 번역해 준다.
+        // components/list_table.html 규약. 컴포넌트가 블로그 필드를 직접 알면
+        // 다른 화면에서 재사용할 수 없어, 화면이 번역해 준다.
         // 카드가 보여주던 정보와 동작을 하나도 빠뜨리지 않는다.
+        platformTab: 'wordpress',   // 워프/블로거를 같은 자리에서 전환
+        blogSearch: '',
+        sortKey: 'name',
+        sortDir: 'asc',
+
         listColumns() {
             return [
-                { key: 'name',    label: '이름',   strong: true, width: '18%' },
-                { key: 'url',     label: '주소',   link: true,   width: '26%' },
+                { key: 'name',    label: '이름',   strong: true, width: '18%', sortable: true },
+                { key: 'url',     label: '주소',   link: true,   width: '24%', sortable: true },
                 { key: '_badges', label: '상태' },
-                { key: 'matched', label: '매칭',   align: 'right', width: '10%' },
-                { key: 'created', label: '등록일', align: 'right', width: '13%' },
+                { key: 'matched', label: '매칭',   align: 'right', width: '10%', sortable: true },
+                { key: 'created', label: '등록일', align: 'right', width: '13%', sortable: true },
             ];
         },
 
@@ -762,9 +786,34 @@ function blogListApp() {
             }
         },
 
+        // 정렬 — 값의 성격에 맞게 비교한다(숫자를 문자열로 비교하면 10<9)
+        sortValue(blog, key) {
+            switch (key) {
+                case 'name': return (blog.name || '').toLowerCase();
+                case 'url': return (blog.url || '').toLowerCase();
+                case 'matched': return blog.matched_count ?? 0;
+                case 'created': return blog.created_at || '';
+                default: return '';
+            }
+        },
+
+        listSort(key) {
+            if (this.sortKey === key) {
+                this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.sortKey = key;
+                this.sortDir = 'asc';
+            }
+        },
+
+        listSortIcon(key) {
+            if (this.sortKey !== key) return '↕';
+            return this.sortDir === 'asc' ? '▲' : '▼';
+        },
+
         listBadges(blog) {
             const out = [];
-            // 플랫폼 — 표에서는 섹션으로 나뉘지만 모바일 목록에서는 섞이므로 남긴다
+            // 플랫폼 — 표는 탭으로 나뉘지만 배지로도 남긴다
             out.push(blog.platform === 'wordpress'
                 ? { label: 'WP', cls: 'bg-blue-100 text-blue-800' }
                 : { label: 'BL', cls: 'bg-orange-100 text-orange-800' });
@@ -805,26 +854,34 @@ function blogListApp() {
 
         listActions(blog) {
             // 카드 헤더에 있던 5개를 그대로. 하나도 빼지 않는다.
+            // 함수를 담지 않고 키만 준다 — 객체에 함수를 넣어 a.onClick() 으로
+            // 부르면 Alpine 프록시를 거치며 호출이 끊길 수 있다.
             return [
                 { key: 'edit', title: '수정',
-                  icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z',
-                  onClick: () => this.openEditSheet(blog) },
+                  icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z' },
                 { key: 'settings', title: '설정',
                   cls: 'text-gray-500 hover:text-purple-700 hover:bg-purple-100',
-                  icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z',
-                  onClick: () => this.openSettingsSheet(blog) },
+                  icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' },
                 { key: 'sync', title: '발행 동기화', busy: this.syncing === blog.id,
-                  icon: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15',
-                  onClick: () => this.syncPublishedPosts(blog.id) },
+                  icon: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15' },
                 { key: 'test', title: '연결 테스트', busy: this.testing === blog.id,
                   cls: 'text-gray-500 hover:text-green-700 hover:bg-green-100',
-                  icon: 'M13 10V3L4 14h7v7l9-11h-7z',
-                  onClick: () => this.testConnection(blog.id) },
+                  icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
                 { key: 'delete', title: '삭제',
                   cls: 'text-gray-500 hover:text-red-600 hover:bg-red-50',
-                  icon: 'M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16',
-                  onClick: () => this.deleteBlog(blog.id, blog.name) },
+                  icon: 'M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16' },
             ];
+        },
+
+        // 액션 실행 — 컴포넌트는 키만 넘긴다
+        listAction(blog, key) {
+            switch (key) {
+                case 'edit': return this.openEditSheet(blog);
+                case 'settings': return this.openSettingsSheet(blog);
+                case 'sync': return this.syncPublishedPosts(blog.id);
+                case 'test': return this.testConnection(blog.id);
+                case 'delete': return this.deleteBlog(blog.id, blog.name);
+            }
         },
 
         listTitle(blog) { return blog.name; },
@@ -833,6 +890,23 @@ function blogListApp() {
             // 모바일 2줄째 — 표의 주요 열을 한 줄로 압축한다
             const m = `${blog.matched_count ?? 0}/${blog.crawled_count ?? 0}`;
             return `${blog.url} · 매칭 ${m}`;
+        },
+
+        // 탭 + 검색 + 정렬을 거친 최종 목록
+        visibleBlogs(platform) {
+            const q = (this.blogSearch || '').trim().toLowerCase();
+            const rows = this.getBlogsByPlatform(platform).filter(b => {
+                if (!q) return true;
+                return (b.name || '').toLowerCase().includes(q)
+                    || (b.url || '').toLowerCase().includes(q);
+            });
+            const dir = this.sortDir === 'asc' ? 1 : -1;
+            return [...rows].sort((a, b) => {
+                const va = this.sortValue(a, this.sortKey);
+                const vb = this.sortValue(b, this.sortKey);
+                if (va === vb) return 0;
+                return va > vb ? dir : -dir;
+            });
         },
 
         getBlogsByPlatform(platform) {
