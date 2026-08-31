@@ -130,11 +130,25 @@ def test_selection_mixin_exposes_required_api() -> None:
 
 
 def test_screens_load_selection_mixin() -> None:
-    """mixin 스크립트를 로드하지 않으면 화면 전체가 Alpine 오류로 죽는다."""
+    """mixin 스크립트를 <script src> 로 실제 로드해야 한다.
+
+    로드하지 않으면 listSelectionMixin 이 undefined 라 화면 앱 함수가
+    예외로 죽고 표가 통째로 사라진다. 주석에 파일명만 적혀 있어도
+    통과하던 검사를 태그 자체를 찾도록 좁혔다.
+    """
     for name in ("blogs/list.html", "modules/list.html"):
         html = (TEMPLATES / name).read_text(encoding="utf-8")
-        assert "components/list_selection.js" in html, name
-        assert "listSelectionMixin()" in html or name == "modules/list.html", name
+        assert re.search(
+            r'<script\s+src="/static/js/components/list_selection\.js[^"]*"\s*>', html
+        ), f"{name} 에 list_selection.js 스크립트 태그가 없다"
+
+
+def test_mixin_loads_before_the_app_that_spreads_it() -> None:
+    """mixin 태그가 앱 정의보다 뒤에 있으면 안 된다."""
+    html = (TEMPLATES / "blogs/list.html").read_text(encoding="utf-8")
+    tag = html.index('<script src="/static/js/components/list_selection.js')
+    app = html.index("function blogListApp()")
+    assert tag < app, "mixin 을 blogListApp 정의보다 먼저 로드해야 한다"
 
 
 def test_module_app_spreads_mixin() -> None:
