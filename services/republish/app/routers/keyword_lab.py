@@ -66,6 +66,68 @@ async def api_status(
     }
 
 
+@router.get("/modules", summary="키워드 모듈 목록")
+async def list_modules(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """수동 실행 대상으로 고를 키워드 모듈들."""
+    from ..models.module import Module, ModuleType
+
+    rows = (await db.execute(
+        select(Module, ModuleType)
+        .join(ModuleType, ModuleType.id == Module.module_type_id)
+        .where(Module.user_id == current_user.id,
+               ModuleType.code == "keyword",
+               Module.is_deleted.is_(False))
+        .order_by(Module.name)
+    )).all()
+    return {"modules": [{
+        "id": m.id, "name": m.name,
+        "settings": (m.settings or {}).get("keyword") or {},
+        "blogs": ((m.settings or {}).get("blogs") or []),
+    } for m, _ in rows]}
+
+
+@router.post("/run", summary="모듈 한 회차 수동 실행")
+async def run_module(
+    module_id: Optional[int] = Body(None),
+    blog_id: Optional[int] = Body(None),
+    steps: Optional[List[str]] = Body(None),
+    force: bool = Body(True),
+    settings_override: Optional[dict] = Body(None),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """자동 실행과 **같은 실행기**를 부른다.
+
+    다른 코드를 타면 화면에서는 되는데 자동에서만 안 되는 일이 생긴다.
+    수동이므로 재고가 충분해도 돌린다(force 기본 true).
+    """
+    from ..models.module import Module
+    from ..services.keyword_lab.runner import KeywordModuleRunner
+
+    settings = settings_override
+    if module_id and settings is None:
+        module = (await db.execute(
+            select(Module).where(Module.id == module_id,
+                                 Module.user_id == current_user.id)
+        )).scalar_one_or_none()
+        if not module:
+            raise HTTPException(404, "모듈을 찾을 수 없습니다")
+        settings = module.settings or {}
+        if blog_id is None:
+            blogs = (settings.get("blogs") or [])
+            blog_id = blogs[0] if blogs else None
+
+    runner = KeywordModuleRunner(db, current_user.id)
+    result = await runner.run(settings, blog_id=blog_id,
+                              force=force, steps=steps)
+    if not result.get("success"):
+        raise HTTPException(400, result.get("error") or "실행 실패")
+    return result
+
+
 @router.post("/test-connection", summary="네이버 API 연결 테스트")
 async def test_connection(
     current_user: User = Depends(get_current_user),

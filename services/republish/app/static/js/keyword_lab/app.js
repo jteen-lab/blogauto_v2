@@ -14,6 +14,8 @@ function keywordLabApp() {
 
         blogs: [],
         blogId: '',
+        modules: [],
+        moduleId: '',
         seeds: [],
         seedText: '',
         candidates: [],
@@ -39,6 +41,7 @@ function keywordLabApp() {
         async init() {
             await Promise.all([
                 this.loadBlogs(), this.loadStatus(), this.loadCandidates(),
+                this.loadModules(),
             ]);
         },
 
@@ -50,6 +53,58 @@ function keywordLabApp() {
                 const d = await r.json();
                 this.blogs = d.blogs || d || [];
             } catch (e) { this.blogs = []; }
+        },
+
+        async loadModules() {
+            try {
+                const r = await fetch('/api/v1/keyword-lab/modules',
+                    { credentials: 'include' });
+                if (r.ok) this.modules = (await r.json()).modules || [];
+            } catch (e) { this.modules = []; }
+        },
+
+        /** 자동 실행과 **같은 실행기**를 부른다 — 수집·측정·제목을 한 번에. */
+        async runModule() {
+            this.busy = 'run';
+            this.failure = '';
+            try {
+                const body = {
+                    module_id: this.moduleId ? Number(this.moduleId) : null,
+                    blog_id: this.blogId ? Number(this.blogId) : null,
+                    force: true,
+                };
+                // 모듈을 안 고르면 화면 값으로 임시 설정을 만들어 돌린다.
+                if (!this.moduleId) {
+                    body.settings_override = {
+                        keyword: {
+                            enabled: true,
+                            seeds: this.normalizeSeeds(this.seedText),
+                            use_blog_categories: !!this.blogId,
+                            min_volume: this.minVolume,
+                            min_saturation: this.minSaturation,
+                        },
+                    };
+                }
+                const r = await fetch('/api/v1/keyword-lab/run', {
+                    method: 'POST', credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                const d = await r.json();
+                if (!r.ok) {
+                    this.failure = d.detail || '실행 실패';
+                    this.show('실행하지 못했습니다', 'error');
+                    return;
+                }
+                if (d.skipped) { this.show(d.message || '건너뜀'); return; }
+                const c = d.collect || {}, m = d.measure || {}, t = d.titles || {};
+                this.show(
+                    `수집 ${c.saved || 0} · 측정 ${m.measured || 0} · 제목 ${t.made || 0}편`);
+                await this.loadCandidates();
+                this.verdictTab = 'adopt';
+            } catch (e) {
+                this.failure = '실행 중 오류가 발생했습니다';
+            } finally { this.busy = ''; }
         },
 
         async loadStatus() {
