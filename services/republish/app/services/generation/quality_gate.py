@@ -59,6 +59,15 @@ def _plain_len(markdown: str) -> int:
     return len(text.strip())
 
 
+def plain_len(markdown: str) -> int:
+    """게이트가 세는 것과 같은 기준의 본문 길이.
+
+    호출자가 같은 숫자를 로그·판단에 쓸 수 있게 공개한다. 각자 따로 세면
+    "1,689자로 막혔다" 와 "3,336자 생성" 이 다른 기준이 되어 비교가 안 된다.
+    """
+    return _plain_len(markdown)
+
+
 def check_length(markdown: str, minimum: int = MIN_BODY_CHARS) -> Optional[str]:
     """본문이 너무 짧으면 사유를 돌려준다."""
     n = _plain_len(markdown)
