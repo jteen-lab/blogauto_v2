@@ -199,9 +199,13 @@ async def delete_by_titles(
     from ..services.blog_service import add_action_log
 
     label = "완전삭제" if mode == MODE_DELETE else "비공개"
+    # 이미 블로그에 없던 건수를 따로 밝힌다. 합쳐 버리면 "24건 처리" 만
+    # 보여, 실제로 무엇이 일어났는지 사용자가 알 수 없다.
+    gone = result.get("already_gone") or 0
     await add_action_log(
         db, "SUCCESS" if not result.get("failed") else "WARNING",
         f"발행글 {label}: {blog.name} — {result['done']}건"
+        + (f"(이미 없던 글 {gone}건 포함)" if gone else "")
         + (f" / 실패 {len(result['failed'])}건" if result.get("failed") else ""),
         category="cleanup", resource_type="blog", resource_id=blog.id,
     )
