@@ -282,7 +282,12 @@ class FlowScheduler:
                         )
 
                     # 간격 계산: GP 있으면 GP 기반, 없으면 모듈 설정 또는 기본값
-                    if gp_settings:
+                    #
+                    # keyword 는 예외다. 성장 프로파일은 '얼마나 자주
+                    # 발행할까' 를 정하는데, 키워드 생산은 '재고가 부족한가'
+                    # 로 돌아야 한다. 축이 다르므로 GP 가 있어도 모듈 설정을
+                    # 쓴다(실제 실행 시점에 재고를 다시 본다).
+                    if gp_settings and module_type_code != "keyword":
                         interval_minutes = self._get_gp_interval(
                             gp_settings, blogs, module_type_code
                         )
@@ -291,12 +296,14 @@ class FlowScheduler:
                         # bulk_collect 는 nested 경로(settings.schedule.interval_minutes)
                         # 에 저장한다(UI: _bulk_collect_form.html). 4-3 핫픽스로
                         # 모듈 타입별 폴백 경로 분기.
-                        if module_type_code == "bulk_collect":
+                        if module_type_code in ("bulk_collect", "keyword"):
+                            # 둘 다 settings.schedule.interval_minutes 를 쓴다
                             schedule_cfg = (
                                 module_settings.get("schedule") or {}
                             )
                             interval_minutes = schedule_cfg.get(
-                                "interval_minutes", 60
+                                "interval_minutes",
+                                360 if module_type_code == "keyword" else 60,
                             )
                         else:
                             interval_minutes = module_settings.get(
@@ -737,6 +744,11 @@ class FlowScheduler:
                         flow, target_module, blogs, db,
                         gp_settings=gp_settings,
                     )
+                elif action_type == "keyword":
+                    result = await self._execute_keyword_module(
+                        target_module, db, flow
+                    )
+
                 elif action_type == "contact_form":
                     result = await self._execute_contact_form_module(
                         target_module, blogs, db,
@@ -1389,6 +1401,15 @@ class FlowScheduler:
                         f"[FLOW_SCHEDULER] 생성 모듈 실행 완료 | FlowID={flow_id} | "
                         f"Success={result.get('success', False)} | Duration={duration_ms}ms"
                     )
+                elif action_type == "keyword":
+                    result = await self._execute_keyword_module(
+                        module, db, flow
+                    )
+                    duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
+                    logger.info(
+                        f"[FLOW_SCHEDULER] 키워드 모듈 실행 완료 | FlowID={flow_id} | "
+                        f"Success={result.get('success', False)} | Duration={duration_ms}ms"
+                    )
                 elif action_type == "contact_form":
                     result = await self._execute_contact_form_module(
                         module, blogs, db,
@@ -1995,6 +2016,51 @@ class FlowScheduler:
     # ===========================================
     # 모듈 방식 실행 메서드 (flows_execute.py와 동일)
     # ===========================================
+
+    async def _execute_keyword_module(
+        self,
+        module: Module,
+        db: AsyncSession,
+        flow: Flow
+    ) -> Dict[str, Any]:
+        """키워드 모듈 — 수집 → 측정 → 제목 생성 한 회차.
+
+        재고가 충분하면 스스로 건너뛴다. 매번 도는 것은 API 낭비다.
+        수동 화면(`/keyword-lab`)과 **같은 실행기**를 부른다 — 다른 코드를
+        타면 한쪽에서만 나는 버그가 생긴다.
+        """
+        from app.services.keyword_lab.runner import KeywordModuleRunner
+
+        try:
+            blog_ids = [fb.blog_id for fb in (flow.flow_blogs or [])]
+            blog_id = blog_ids[0] if blog_ids else None
+            runner = KeywordModuleRunner(db, module.user_id)
+            result = await runner.run(module.settings or {}, blog_id=blog_id)
+
+            if result.get("skipped"):
+                return {"success": True, "skipped": True,
+                        "message": result.get("message", "건너뜀")}
+            if not result.get("success"):
+                return {"success": False,
+                        "error": result.get("error", "키워드 모듈 실행 실패")}
+
+            collect = result.get("collect") or {}
+            measure = result.get("measure") or {}
+            titles = result.get("titles") or {}
+            return {
+                "success": True,
+                "message": (
+                    f"키워드 {collect.get('saved', 0)}개 수집 · "
+                    f"{measure.get('measured', 0)}건 측정 · "
+                    f"제목 {titles.get('made', 0)}편"
+                ),
+                "collected": collect.get("saved", 0),
+                "measured": measure.get("measured", 0),
+                "titles_made": titles.get("made", 0),
+            }
+        except Exception as e:
+            logger.error(f"[FLOW_SCHEDULER] 키워드 모듈 실행 오류: {e}")
+            return {"success": False, "error": str(e)}
 
     async def _execute_collect_module(
         self,
