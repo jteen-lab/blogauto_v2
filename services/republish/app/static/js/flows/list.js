@@ -5,6 +5,11 @@
 
 function flowListApp() {
     return {
+        // 표 어댑터(열·셀·탭·검색·일괄삭제) — flows/list_table.js
+        ...flowListTableMixin(),
+        // 목록 선택 상태(탭별 독립) — components/list_selection.js
+        ...listSelectionMixin(),
+
         // 상태 데이터
         loading: false,
         flows: [],
