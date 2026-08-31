@@ -1,0 +1,157 @@
+{#
+  공용 목록 표 — 블로그·모듈·플로우·오토런이 같은 로직과 스타일을 쓴다.
+
+  화면마다 따로 만들면 동작이 갈라지고 고칠 곳이 네 배가 된다. 컴포넌트는
+  그리기만 하고, 무엇을 그릴지(열·배지·액션)는 화면이 Alpine 함수로 준다.
+  컴포넌트가 특정 화면의 필드를 알면 재사용이 안 된다.
+
+  데스크톱은 표, 모바일은 2줄 목록. **같은 배열을 그린다** — 모바일 전용
+  데이터를 따로 만들면 정렬·필터 결과가 갈린다.
+
+  필요한 변수
+    rows_expr : 행 배열 Alpine 식 (예: "filteredBlogs")
+    row_key   : 행 변수명 (예: "blog")
+    empty_text: 비었을 때 문구
+
+  화면이 제공할 Alpine 함수
+    listColumns()        [{key,label,align,width,hideMobile}]
+    listCell(row, key)   셀 텍스트
+    listBadges(row)      [{label,cls,dot,pulse,tip}]
+    listActions(row)     [{key,title,icon,cls,busy,onClick}]
+    listTitle(row)/listSub(row)  모바일 1·2줄
+  순서도: docs/flowcharts/list_table_component.md
+#}
+<div class="list-table" :data-table="'{{ table_id }}'">
+
+  {# ── 데스크톱: 표 ─────────────────────────────────── #}
+  <div class="hidden md:block overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-gray-200 bg-gray-50">
+          <template x-for="col in listColumns()" :key="col.key">
+            <th class="px-3 py-2 font-medium text-gray-600 whitespace-nowrap"
+                :class="col.align === 'right' ? 'text-right'
+                        : col.align === 'center' ? 'text-center' : 'text-left'"
+                :style="col.width ? `width:${col.width}` : ''"
+                x-text="col.label"></th>
+          </template>
+          <th class="px-3 py-2 text-right font-medium text-gray-600 w-32">동작</th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="{{ row_key }} in {{ rows_expr }}" :key="{{ row_key }}.id">
+          <tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+            <template x-for="col in listColumns()" :key="col.key">
+              <td class="px-3 py-2"
+                  :class="col.align === 'right' ? 'text-right'
+                          : col.align === 'center' ? 'text-center' : 'text-left'">
+                {# 배지 열은 배열을 그린다 #}
+                <template x-if="col.key === '_badges'">
+                  <div class="flex flex-wrap items-center gap-1">
+                    <template x-for="b in listBadges({{ row_key }})" :key="b.label">
+                      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap"
+                            :class="b.cls" :title="b.tip || ''">
+                        <span x-show="b.dot" class="w-1.5 h-1.5 rounded-full mr-1"
+                              :class="[b.dot, b.pulse ? 'animate-pulse' : '']"></span>
+                        <span x-text="b.label"></span>
+                      </span>
+                    </template>
+                  </div>
+                </template>
+                {# 링크 열 #}
+                <template x-if="col.key !== '_badges' && col.link">
+                  <a :href="listCell({{ row_key }}, col.key)" target="_blank"
+                     rel="noopener"
+                     class="text-gray-600 hover:text-accent truncate inline-block max-w-[22rem] align-middle"
+                     x-text="listCell({{ row_key }}, col.key)"></a>
+                </template>
+                {# 일반 열 #}
+                <template x-if="col.key !== '_badges' && !col.link">
+                  <span :class="col.strong ? 'font-medium text-gray-900' : 'text-gray-600'"
+                        x-text="listCell({{ row_key }}, col.key)"></span>
+                </template>
+              </td>
+            </template>
+            <td class="px-3 py-2 text-right whitespace-nowrap">
+              <div class="inline-flex items-center gap-0.5">
+                <template x-for="a in listActions({{ row_key }})" :key="a.key">
+                  <button type="button" @click="a.onClick()" :disabled="a.busy"
+                          :title="a.title"
+                          class="p-1.5 rounded-lg transition-colors disabled:opacity-50"
+                          :class="a.cls || 'text-gray-500 hover:text-accent hover:bg-accent-lt'">
+                    <svg x-show="!a.busy" class="w-4 h-4" fill="none"
+                         stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round"
+                            stroke-width="2" :d="a.icon"/>
+                    </svg>
+                    <svg x-show="a.busy" class="w-4 h-4 animate-spin" fill="none"
+                         viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10"
+                              stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                  </button>
+                </template>
+              </div>
+            </td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+    <template x-if="({{ rows_expr }} || []).length === 0">
+      <div class="py-10 text-center text-sm text-gray-500">{{ empty_text }}</div>
+    </template>
+  </div>
+
+  {# ── 모바일: 2줄 목록 (같은 배열) ───────────────────── #}
+  <div class="md:hidden divide-y divide-gray-100">
+    <template x-for="{{ row_key }} in {{ rows_expr }}" :key="{{ row_key }}.id">
+      <div class="py-2.5 px-1">
+        <div class="flex items-start justify-between gap-2">
+          <div class="min-w-0 flex-1">
+            <div class="font-medium text-gray-900 truncate"
+                 x-text="listTitle({{ row_key }})"></div>
+            <div class="mt-0.5 text-xs text-gray-500 truncate"
+                 x-text="listSub({{ row_key }})"></div>
+          </div>
+          <div class="flex items-center gap-0.5 flex-shrink-0">
+            <template x-for="a in listActions({{ row_key }})" :key="a.key">
+              <button type="button" @click="a.onClick()" :disabled="a.busy"
+                      :title="a.title"
+                      class="p-1.5 rounded-lg transition-colors disabled:opacity-50"
+                      :class="a.cls || 'text-gray-500 hover:text-accent'">
+                <svg x-show="!a.busy" class="w-4 h-4" fill="none"
+                     stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round"
+                        stroke-width="2" :d="a.icon"/>
+                </svg>
+                <svg x-show="a.busy" class="w-4 h-4 animate-spin" fill="none"
+                     viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10"
+                          stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+              </button>
+            </template>
+          </div>
+        </div>
+        {# 배지는 줄바꿈해 붙인다. 상태를 잃으면 안 된다. #}
+        <div class="mt-1 flex flex-wrap items-center gap-1">
+          <template x-for="b in listBadges({{ row_key }})" :key="b.label">
+            <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[11px] font-medium"
+                  :class="b.cls" :title="b.tip || ''">
+              <span x-show="b.dot" class="w-1 h-1 rounded-full mr-1"
+                    :class="[b.dot, b.pulse ? 'animate-pulse' : '']"></span>
+              <span x-text="b.label"></span>
+            </span>
+          </template>
+        </div>
+      </div>
+    </template>
+    <template x-if="({{ rows_expr }} || []).length === 0">
+      <div class="py-8 text-center text-sm text-gray-500">{{ empty_text }}</div>
+    </template>
+  </div>
+</div>
