@@ -22,7 +22,9 @@
     max_height: 표 본문 최대 높이 (예: "26rem"). 없으면 제한 없음
 
   화면이 제공할 Alpine 함수
-    listColumns()            [{key,label,align,width,strong,link,sortable}]
+    listColumns()            [{key,label,align,width,strong,link,sortable,slide}]
+                             slide: true 면 넘칠 때 가로로 흐른다
+                             (cell_slide.js 를 함께 실어야 한다)
     listCell(row, key)       셀 텍스트
     listBadges(row)          [{label,cls,dot,pulse,tip}]
     listSort(key) / listSortIcon(key)   정렬 토글·표시
@@ -99,7 +101,23 @@
                        class="text-gray-600 hover:text-accent truncate inline-block max-w-[20rem] align-middle"
                        x-text="listCell({{ row_key }}, col.key)"></a>
                   </template>
-                  <template x-if="col.key !== '_badges' && !col.link">
+                  {# 좁은 셀에 카드가 전달하던 내부 정보를 담기 위해 흘린다.
+                     원본 + ◆ + 복제 를 -50% 까지 옮겨야 끊김 없이 순환한다. #}
+                  <template x-if="col.key !== '_badges' && !col.link && col.slide">
+                    <div class="cell-slide"
+                         @touchstart="toggleCellSlideTouch($event, $el)"
+                         x-init="$nextTick(() => initCellSlide($el))">
+                      <div class="cell-slide-track no-slide"
+                           :style="`--slide-duration:${cellSlideDuration(listCell({{ row_key }}, col.key))}s`">
+                        <span class="cell-slide-item" x-text="listCell({{ row_key }}, col.key)"></span>
+                        <span class="slide-cycle-separator">◆</span>
+                        <span class="cell-slide-item" aria-hidden="true"
+                              x-text="listCell({{ row_key }}, col.key)"></span>
+                      </div>
+                      <span class="slide-pause-hint">⏸</span>
+                    </div>
+                  </template>
+                  <template x-if="col.key !== '_badges' && !col.link && !col.slide">
                     <span :class="col.strong ? 'font-medium text-gray-900' : 'text-gray-600'"
                           x-text="listCell({{ row_key }}, col.key)"></span>
                   </template>
@@ -149,6 +167,20 @@
                  x-text="listTitle({{ row_key }})"></div>
             <div class="mt-0.5 text-xs text-gray-500 truncate"
                  x-text="listSub({{ row_key }})"></div>
+            {# 데스크톱에만 넣으면 두 화면이 다른 정보를 보여주게 된다. #}
+            <template x-for="col in listColumns().filter(c => c.slide)" :key="col.key">
+              <div class="cell-slide cell-slide--mobile"
+                   @touchstart="toggleCellSlideTouch($event, $el)"
+                   x-init="$nextTick(() => initCellSlide($el))">
+                <div class="cell-slide-track no-slide"
+                     :style="`--slide-duration:${cellSlideDuration(listCell({{ row_key }}, col.key))}s`">
+                  <span class="cell-slide-item" x-text="listCell({{ row_key }}, col.key)"></span>
+                  <span class="slide-cycle-separator">◆</span>
+                  <span class="cell-slide-item" aria-hidden="true"
+                        x-text="listCell({{ row_key }}, col.key)"></span>
+                </div>
+              </div>
+            </template>
           </div>
           <div class="flex-shrink-0">
             {% if actions_include %}{% include actions_include %}{% endif %}
