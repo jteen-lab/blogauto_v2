@@ -56,9 +56,21 @@ function autorunListTableMixin() {
         },
 
         // ── 셀 값 ─────────────────────────────────────────────
+        /**
+         * 카드는 실행중이 아니면 전부 🟡 로 뭉뚱그렸다. 오토런 목록에는
+         * status='inactive' 인 플로우도 섞여 있어(상단 바의 🟢·🟡 합이
+         * 총 개수보다 작은 이유가 이것이다) 일시정지와 구분해 보여준다.
+         * 상태가 정렬 가능한 열이 된 이상 뭉뚱그리면 오해를 키운다.
+         */
         autorunStatusText(flow) {
             if (flow.status === 'active') return '🟢 실행중';
-            return flow.auto_paused ? '🔴 자동정지' : '🟡 일시정지';
+            if (flow.auto_paused) return '🔴 자동정지';
+            if (flow.status === 'paused') return '🟡 일시정지';
+            return '⚪ 비활성';
+        },
+
+        autorunStatusIcon(flow) {
+            return this.autorunStatusText(flow).slice(0, 2).trim();
         },
 
         autorunModuleNames(flow) {
@@ -143,7 +155,7 @@ function autorunListTableMixin() {
         },
 
         listTitle(flow) {
-            return `${flow.status === 'active' ? '🟢' : (flow.auto_paused ? '🔴' : '🟡')} ${flow.name || ''}`;
+            return `${this.autorunStatusIcon(flow)} ${flow.name || ''}`;
         },
 
         listSub(flow) {
@@ -166,7 +178,8 @@ function autorunListTableMixin() {
                 // 오름차순 한 번으로 문제 있는 플로우가 모인다.
                 case 'status':
                     if (flow.status === 'active') return '1';
-                    return flow.auto_paused ? '3' : '2';
+                    if (flow.status !== 'paused') return '2';   // 비활성
+                    return flow.auto_paused ? '4' : '3';
                 // 예정 없는 것은 뒤로. 빈 값이 앞에 오면 훑기가 나빠진다.
                 case 'next': return flow.next_execution || '9999';
                 default: return '';
