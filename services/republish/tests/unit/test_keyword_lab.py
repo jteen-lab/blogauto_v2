@@ -457,3 +457,127 @@ def test_400_error_explains_the_cause() -> None:
     msg = svc._explain(resp)
     assert "400" in msg
     assert "hintKeywords" in msg, "네이버가 준 사유가 담겨야 한다"
+
+
+# ── 니치는 시드가 아니라 분류 결과 ───────────────────────
+@pytest.mark.asyncio
+async def test_niche_comes_from_classifying_each_keyword() -> None:
+    """시드를 그대로 물려주면 안 된다.
+
+    레시피노트를 고르고 시드에 '마라탕' 을 넣었더니 수집된 키워드가
+    전부 '음식 효능'(첫 카테고리)으로 붙었다. 그러면 나중에 카테고리별로
+    넘길 수가 없다. 키워드 하나하나를 분류해야 한다.
+    """
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, patch
+
+    from app.services.keyword_lab.service import KeywordLabService
+
+    added = []
+    db = SimpleNamespace(add=added.append, commit=AsyncMock())
+    svc = KeywordLabService(db=db, settings=SimpleNamespace(), user_id=1)
+    svc._existing_keywords = AsyncMock(return_value=set())
+
+    # 키워드마다 다른 카테고리를 돌려주는 매칭기
+    table = {"마라탕": (12, 53), "마라탕 재료": (12, 54), "저금리대출": (9, 90)}
+
+    async def _match(kw):
+        t, s = table.get(kw, (None, None))
+        return (t, s, None)
+
+    svc._matcher = AsyncMock(return_value=SimpleNamespace(
+        match_and_apply_to_keyword=_match))
+
+    fake_ads = SimpleNamespace(
+        is_configured=lambda: True,
+        get_keyword_stats=AsyncMock(return_value={
+            "success": True,
+            "keywords": [{"keyword": "마라탕", "total_search_volume": 5000}],
+            "related_keywords": [
+                {"keyword": "마라탕 재료", "total_search_volume": 900},
+                {"keyword": "저금리대출", "total_search_volume": 700},
+            ],
+        }),
+    )
+    with patch("app.services.keyword_lab.service.NaverAdsService",
+               return_value=fake_ads):
+        await svc.collect(seeds=["마라탕"])
+
+    by_kw = {c.keyword: (c.topic_id, c.subtopic_id) for c in added}
+    assert by_kw["마라탕"] == (12, 53)
+    assert by_kw["마라탕 재료"] == (12, 54)
+    assert by_kw["저금리대출"] == (9, 90), "시드 카테고리를 물려주면 안 된다"
+    assert len({v for v in by_kw.values()}) == 3, "전부 같은 카테고리로 붙었다"
+
+
+@pytest.mark.asyncio
+async def test_unclassified_keyword_falls_back_to_seed_category() -> None:
+    """분류가 안 되면 시드 카테고리를 물려준다 — 아무 데도 안 붙는 것보다 낫다."""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, patch
+
+    from app.services.keyword_lab.service import KeywordLabService
+
+    added = []
+    db = SimpleNamespace(add=added.append, commit=AsyncMock())
+    svc = KeywordLabService(db=db, settings=SimpleNamespace(), user_id=1)
+    svc._existing_keywords = AsyncMock(return_value=set())
+    svc.seeds_for_blog = AsyncMock(return_value=[
+        {"seed": "음식효능", "topic_id": 12, "subtopic_id": 53}])
+    svc._matcher = AsyncMock(return_value=SimpleNamespace(
+        match_and_apply_to_keyword=AsyncMock(return_value=(None, None, None))))
+
+    fake_ads = SimpleNamespace(
+        is_configured=lambda: True,
+        get_keyword_stats=AsyncMock(return_value={
+            "success": True,
+            "keywords": [{"keyword": "듣도보도못한말", "total_search_volume": 300}],
+            "related_keywords": [],
+        }),
+    )
+    with patch("app.services.keyword_lab.service.NaverAdsService",
+               return_value=fake_ads):
+        await svc.collect(blog_id=19)
+
+    assert added[0].topic_id == 12 and added[0].subtopic_id == 53
+
+
+def test_matcher_failure_does_not_stop_collection() -> None:
+    """분류가 실패했다고 수집을 멈추면 안 된다. 니치는 보조 정보다."""
+    src = (ROOT / "app/services/keyword_lab/service.py").read_text(
+        encoding="utf-8")
+    start = src.index("async def _classify(")
+    end = src.index("async def _matcher(")
+    assert "except Exception" in src[start:end], "분류 실패가 수집을 죽인다"
+    assert "_matcher_cache" in src[end:], "매칭기 초기화 실패도 견뎌야 한다"
+
+
+# ── 화면: 니치 열과 정렬 ─────────────────────────────────
+def test_niche_column_replaces_seed_and_sorts() -> None:
+    src = (ROOT / "app/static/js/keyword_lab/app.js").read_text(encoding="utf-8")
+    block = re.search(r"listColumns\(\) \{\s*return \[(.*?)\];", src, re.S)
+    assert block
+    body = block.group(1)
+    assert "'niche'" in body and "label: '니치'" in body
+    assert "label: '시드'" not in body, "시드 열이 남아 있다"
+
+    # 배지 열을 뺀 모든 열이 정렬 가능해야 한다
+    for line in body.strip().splitlines():
+        line = line.strip()
+        if not line.startswith("{") or "_badges" in line:
+            continue
+        assert "sortable: true" in line, line
+
+
+def test_seed_input_is_normalized_before_sending() -> None:
+    """오류가 나기 전에 막는다. 서버와 같은 규칙을 쓴다."""
+    src = (ROOT / "app/static/js/keyword_lab/app.js").read_text(encoding="utf-8")
+    assert "normalizeSeeds(" in src
+    assert "[^0-9A-Za-z가-힣]" in src
+
+
+def test_api_returns_niche_name() -> None:
+    """id 만 주면 화면에서 정렬도 검색도 할 수 없다."""
+    src = (ROOT / "app/routers/keyword_lab.py").read_text(encoding="utf-8")
+    assert '"niche": _niche(r)' in src
+    assert "미분류" in src
