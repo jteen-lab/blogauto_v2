@@ -26,6 +26,7 @@ from .internal_linker import InternalLinker
 from .substitution_processor import SubstitutionProcessor
 from .image_generator import ImageGenerator, ImageResult
 from .content_generator_helper import (
+    extend_content,
     generate_content_with_meta,
     DEFAULT_CONTENT_PROMPT,
 )
@@ -45,6 +46,9 @@ class GenerationResult:
     reference_count: int = 0
     generation_time_seconds: int = 0
     content_length: int = 0
+    # 게이트가 세는 것과 같은 기준의 본문 길이. content_length 는 HTML
+    # 길이라 기준이 달라, 두 값을 섞으면 임계값을 비교할 수 없다.
+    body_chars: int = 0
     ai_model_title: Optional[str] = None
     ai_model_content: Optional[str] = None
     ai_model_image: Optional[str] = None
@@ -296,10 +300,41 @@ class ContentGenerator:
         # 두 번 보인다. 게이트를 껐어도 이건 정리한다(순수 표시 문제).
         content_markdown = _strip_h1(content_markdown, working_title)
 
+        from .quality_gate import plain_len as _plain_len
+
         gate_cfg = _gate_cfg(settings)
         if gate_cfg["enabled"]:
             gate = _gate_eval(
                 working_title, content_markdown, gate_cfg["min_chars"])
+
+            # 분량이 모자라면 버리지 않고 이어쓰기를 한 번 한다.
+            # 재생성은 참조 수집(검색 30·크롤 10)까지 되풀이하면서도
+            # 모델에게 "짧았다" 는 사실을 전하지 않는다.
+            if gate.blocked:
+                measured = _plain_len(content_markdown)
+                if measured < gate_cfg["min_chars"]:
+                    extended = await extend_content(
+                        ai_service=self.ai_service,
+                        title=working_title,
+                        draft=content_markdown,
+                        current_chars=measured,
+                        min_chars=gate_cfg["min_chars"],
+                        settings=settings,
+                        blog=blog,
+                    )
+                    if extended != content_markdown:
+                        content_markdown = _strip_h1(extended, working_title)
+                        gate = _gate_eval(
+                            working_title, content_markdown,
+                            gate_cfg["min_chars"])
+                        logger.info(
+                            "[GENERATOR] 이어쓰기 결과 | blog=%s | %s | "
+                            "%d자 → %d자 | %s",
+                            blog.name, working_title[:30], measured,
+                            _plain_len(content_markdown),
+                            "통과" if not gate.blocked else "여전히 미달",
+                        )
+
             for w in gate.warnings:
                 logger.warning(
                     "[GENERATOR] 품질 경고 | blog=%s | %s | %s",
@@ -311,6 +346,15 @@ class ContentGenerator:
                     blog.name, working_title[:30], gate.message,
                 )
                 raise RuntimeError(f"품질 기준 미달: {gate.message}")
+
+        # 측정값은 통과했을 때도 남긴다. 실패 때만 남기면 임계값을
+        # 데이터가 아니라 짐작으로 조정하게 된다.
+        body_chars = _plain_len(content_markdown)
+        logger.info(
+            "[GENERATOR] 본문 분량 | blog=%s | %s | %d자 (기준 %d자)",
+            blog.name, working_title[:30], body_chars,
+            gate_cfg["min_chars"],
+        )
 
         # 5. 내부링크 삽입
         logger.debug("[GENERATOR] 5단계 시작: 내부링크 삽입")
@@ -459,6 +503,7 @@ class ContentGenerator:
             reference_count=ref_result.count,
             generation_time_seconds=elapsed,
             content_length=len(final_html),
+            body_chars=body_chars,
             ai_model_title=recombine_result.ai_model,
             ai_model_content=ai_content_model,
             ai_model_image=ai_model_image,
