@@ -307,225 +307,63 @@
 
     <!-- 데스크탑: 모듈 목록 (타입별 섹션으로 구분) -->
     <!-- sortBy, sortOrder를 참조하여 반응성 보장 -->
-    <div x-show="!loading && modules.length > 0" class="desktop-sections" :data-sort-key="sortBy + '-' + sortOrder">
-        <!-- 프롬프트/생성 섹션 (prompt + generate 통합) -->
-        <div x-show="getModulesByType('prompt').length > 0" class="module-section" x-data="{ sectionExpanded: false }">
-            <div class="section-header">
-                <span class="text-2xl">📝</span>
-                <h3 class="section-title">프롬프트/생성 모듈</h3>
-                <span class="section-count" x-text="getModulesByType('prompt').length"></span>
-            </div>
-            <div class="module-grid">
-                <template x-for="(module, idx) in getModulesByType('prompt')" :key="module.id + '-' + sortBy + '-' + sortOrder">
-                    <div x-show="sectionExpanded || idx < 1" x-transition>
-                        {% include "modules/_card.html" %}
-                    </div>
-                </template>
-            </div>
-            <button x-show="getModulesByType('prompt').length > 1"
-                    @click="sectionExpanded = !sectionExpanded; if(sectionExpanded) { $nextTick(() => reinitModuleSlides($el.previousElementSibling)) }"
-                    class="card-expand-btn mt-2">
-                <span x-text="sectionExpanded ? '접기 ▲' : `더보기 (${getModulesByType('prompt').length - 1}개 더) ▼`"></span>
-            </button>
-        </div>
+    {#- 타입 탭 정의. 섹션이 6개라 마크업을 여섯 벌 쓰면 고칠 곳도 여섯이다. -#}
+    {% set module_type_tabs = [
+        {'code': 'prompt',         'icon': '📝', 'label': '프롬프트/생성'},
+        {'code': 'collect',        'icon': '🔍', 'label': '수집'},
+        {'code': 'bulk_collect',   'icon': '📦', 'label': '대량 수집'},
+        {'code': 'data',           'icon': '🗂', 'label': '데이터'},
+        {'code': 'growth_profile', 'icon': '📈', 'label': '성장 프로파일'},
+        {'code': 'contact_form',   'icon': '✉️', 'label': '애드센스 필수구성'}
+    ] %}
 
-        <!-- 수집 섹션 -->
-        <div x-show="getModulesByType('collect').length > 0" class="module-section" x-data="{ sectionExpanded: false }">
-            <div class="section-header">
-                <span class="text-2xl">🔍</span>
-                <h3 class="section-title">수집 모듈</h3>
-                <span class="section-count" x-text="getModulesByType('collect').length"></span>
-            </div>
-            <div class="module-grid">
-                <template x-for="(module, idx) in getModulesByType('collect')" :key="module.id + '-' + sortBy + '-' + sortOrder">
-                    <div x-show="sectionExpanded || idx < 1" x-transition>
-                        {% include "modules/_card.html" %}
-                    </div>
-                </template>
-            </div>
-            <button x-show="getModulesByType('collect').length > 1"
-                    @click="sectionExpanded = !sectionExpanded; if(sectionExpanded) { $nextTick(() => reinitModuleSlides($el.previousElementSibling)) }"
-                    class="card-expand-btn mt-2">
-                <span x-text="sectionExpanded ? '접기 ▲' : `더보기 (${getModulesByType('collect').length - 1}개 더) ▼`"></span>
-            </button>
-        </div>
+    <!-- 모듈 목록 — 타입 탭 + 표(데스크톱)/2줄 목록(모바일).
+         블로그 관리와 같은 공용 컴포넌트를 쓴다.
+         타입별로 1개만 보이던 "더보기" 를 없앤다 — 32개 중 6개만 보였다. -->
+    <div x-show="!loading && modules.length > 0"
+         x-data="{ typeTab: 'prompt' }">
 
-        <!-- 데이터 섹션 -->
-        <div x-show="getModulesByType('data').length > 0" class="module-section" x-data="{ sectionExpanded: false }">
-            <div class="section-header">
-                <span class="text-2xl">📊</span>
-                <h3 class="section-title">데이터 모듈</h3>
-                <span class="section-count" x-text="getModulesByType('data').length"></span>
-            </div>
-            <div class="module-grid">
-                <template x-for="(module, idx) in getModulesByType('data')" :key="module.id + '-' + sortBy + '-' + sortOrder">
-                    <div x-show="sectionExpanded || idx < 1" x-transition>
-                        {% include "modules/_card.html" %}
-                    </div>
-                </template>
-            </div>
-            <button x-show="getModulesByType('data').length > 1"
-                    @click="sectionExpanded = !sectionExpanded; if(sectionExpanded) { $nextTick(() => reinitModuleSlides($el.previousElementSibling)) }"
-                    class="card-expand-btn mt-2">
-                <span x-text="sectionExpanded ? '접기 ▲' : `더보기 (${getModulesByType('data').length - 1}개 더) ▼`"></span>
-            </button>
-        </div>
-
-        <!-- 애드센스 필수구성 섹션 (F10) -->
-        <div x-show="getModulesByType('contact_form').length > 0" class="module-section" x-data="{ sectionExpanded: false }">
-            <div class="section-header">
-                <span class="text-2xl">📋</span>
-                <h3 class="section-title">애드센스 필수구성 모듈</h3>
-                <span class="section-count" x-text="getModulesByType('contact_form').length"></span>
-            </div>
-            <div class="module-grid">
-                <template x-for="(module, idx) in getModulesByType('contact_form')" :key="module.id + '-' + sortBy + '-' + sortOrder">
-                    <div x-show="sectionExpanded || idx < 1" x-transition>
-                        {% include "modules/_card.html" %}
-                    </div>
-                </template>
-            </div>
-            <button x-show="getModulesByType('contact_form').length > 1"
-                    @click="sectionExpanded = !sectionExpanded; if(sectionExpanded) { $nextTick(() => reinitModuleSlides($el.previousElementSibling)) }"
-                    class="card-expand-btn mt-2">
-                <span x-text="sectionExpanded ? '접기 ▲' : `더보기 (${getModulesByType('contact_form').length - 1}개 더) ▼`"></span>
-            </button>
-        </div>
-
-        <!-- 성장 프로파일 섹션 -->
-        <div x-show="getModulesByType('growth_profile').length > 0" class="module-section" x-data="{ sectionExpanded: false }">
-            <div class="section-header">
-                <span class="text-2xl">📈</span>
-                <h3 class="section-title">성장 프로파일 모듈</h3>
-                <span class="section-count" x-text="getModulesByType('growth_profile').length"></span>
-            </div>
-            <div class="module-grid">
-                <template x-for="(module, idx) in getModulesByType('growth_profile')" :key="module.id + '-' + sortBy + '-' + sortOrder">
-                    <div x-show="sectionExpanded || idx < 1" x-transition>
-                        {% include "modules/_card.html" %}
-                    </div>
-                </template>
-            </div>
-            <button x-show="getModulesByType('growth_profile').length > 1"
-                    @click="sectionExpanded = !sectionExpanded; if(sectionExpanded) { $nextTick(() => reinitModuleSlides($el.previousElementSibling)) }"
-                    class="card-expand-btn mt-2">
-                <span x-text="sectionExpanded ? '접기 ▲' : `더보기 (${getModulesByType('growth_profile').length - 1}개 더) ▼`"></span>
-            </button>
-        </div>
-
-        {# 대량 수집 섹션 - Phase D #}
-        <div x-show="getModulesByType('bulk_collect').length > 0" class="module-section" x-data="{ sectionExpanded: false }">
-            <div class="section-header">
-                <span class="text-2xl">🚀</span>
-                <h3 class="section-title">대량 수집 모듈</h3>
-                <span class="section-count" x-text="getModulesByType('bulk_collect').length"></span>
-            </div>
-            <div class="module-grid">
-                <template x-for="(module, idx) in getModulesByType('bulk_collect')" :key="module.id + '-' + sortBy + '-' + sortOrder">
-                    <div x-show="sectionExpanded || idx < 1" x-transition>
-                        {% include "modules/_card.html" %}
-                    </div>
-                </template>
-            </div>
-            <button x-show="getModulesByType('bulk_collect').length > 1"
-                    @click="sectionExpanded = !sectionExpanded; if(sectionExpanded) { $nextTick(() => reinitModuleSlides($el.previousElementSibling)) }"
-                    class="card-expand-btn mt-2">
-                <span x-text="sectionExpanded ? '접기 ▲' : `더보기 (${getModulesByType('bulk_collect').length - 1}개 더) ▼`"></span>
-            </button>
-        </div>
-    </div>
-
-    <!-- 모바일: 탭 레이아웃 -->
-    <div x-show="!loading && modules.length > 0" class="mobile-tabs" x-data="{ activeTab: 'prompt' }" :data-sort-key="sortBy + '-' + sortOrder">
-        <!-- 탭 컨테이너 (플로우 폼과 동일한 스타일) -->
-        <div class="border border-gray-200 rounded-lg">
-            <div class="flex border-b border-gray-200 overflow-x-auto">
-                <button type="button"
-                        @click="activeTab = 'prompt'"
-                        :class="activeTab === 'prompt' ? 'tab-active' : 'bg-white text-gray-500 hover:text-gray-700'"
-                        class="flex-1 min-w-max px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap"
-                        x-show="getModulesByType('prompt').length > 0">
-                    프롬프트/생성
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <!-- 타입 탭 — 같은 자리에서 표가 바뀐다 -->
+            <div class="flex items-center gap-1 border-b border-gray-200 px-3 pt-2 overflow-x-auto">
+                {% for t in module_type_tabs %}
+                <button type="button" @click="typeTab = '{{ t.code }}'"
+                        x-show="getModulesByType('{{ t.code }}').length > 0"
+                        class="px-3 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-colors"
+                        :class="typeTab === '{{ t.code }}'
+                            ? 'border-accent text-accent'
+                            : 'border-transparent text-gray-500 hover:text-gray-700'">
+                    {{ t.icon }} {{ t.label }}
+                    <span class="ml-1 text-xs text-gray-400"
+                          x-text="'(' + getModulesByType('{{ t.code }}').length + ')'"></span>
                 </button>
-                <button type="button"
-                        @click="activeTab = 'collect'"
-                        :class="activeTab === 'collect' ? 'tab-active' : 'bg-white text-gray-500 hover:text-gray-700'"
-                        class="flex-1 min-w-max px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap"
-                        x-show="getModulesByType('collect').length > 0">
-                    수집
-                </button>
-                <button type="button"
-                        @click="activeTab = 'data'"
-                        :class="activeTab === 'data' ? 'bg-teal-50 text-teal-700 border-teal-500' : 'bg-white text-gray-500 hover:text-gray-700'"
-                        class="flex-1 min-w-max px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap"
-                        x-show="getModulesByType('data').length > 0">
-                    데이터
-                </button>
-                <button type="button"
-                        @click="activeTab = 'growth_profile'"
-                        :class="activeTab === 'growth_profile' ? 'bg-green-50 text-green-700 border-green-500' : 'bg-white text-gray-500 hover:text-gray-700'"
-                        class="flex-1 min-w-max px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap"
-                        x-show="getModulesByType('growth_profile').length > 0">
-                    성장 프로파일
-                </button>
-                {# 대량 수집 탭 - Phase D #}
-                <button type="button"
-                        @click="activeTab = 'bulk_collect'"
-                        :class="activeTab === 'bulk_collect' ? 'bg-sky-50 text-sky-700 border-sky-500' : 'bg-white text-gray-500 hover:text-gray-700'"
-                        class="flex-1 min-w-max px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap"
-                        x-show="getModulesByType('bulk_collect').length > 0">
-                    대량 수집
-                </button>
-            </div>
+                {% endfor %}
 
-            <!-- 탭 콘텐츠 영역 -->
-            <div class="p-4">
-                <div x-show="activeTab === 'prompt'"
-                     x-effect="if (activeTab === 'prompt') $nextTick(() => reinitMobileTabSlides($el))">
-                    <div class="module-grid">
-                        <template x-for="module in getModulesByType('prompt')" :key="module.id + '-' + sortBy + '-' + sortOrder">
-                            {% include "modules/_card.html" %}
-                        </template>
-                    </div>
-                </div>
-
-                <div x-show="activeTab === 'collect'"
-                     x-effect="if (activeTab === 'collect') $nextTick(() => reinitMobileTabSlides($el))">
-                    <div class="module-grid">
-                        <template x-for="module in getModulesByType('collect')" :key="module.id + '-' + sortBy + '-' + sortOrder">
-                            {% include "modules/_card.html" %}
-                        </template>
-                    </div>
-                </div>
-
-                <div x-show="activeTab === 'data'"
-                     x-effect="if (activeTab === 'data') $nextTick(() => reinitMobileTabSlides($el))">
-                    <div class="module-grid">
-                        <template x-for="module in getModulesByType('data')" :key="module.id + '-' + sortBy + '-' + sortOrder">
-                            {% include "modules/_card.html" %}
-                        </template>
-                    </div>
-                </div>
-
-                <div x-show="activeTab === 'growth_profile'"
-                     x-effect="if (activeTab === 'growth_profile') $nextTick(() => reinitMobileTabSlides($el))">
-                    <div class="module-grid">
-                        <template x-for="module in getModulesByType('growth_profile')" :key="module.id + '-' + sortBy + '-' + sortOrder">
-                            {% include "modules/_card.html" %}
-                        </template>
-                    </div>
-                </div>
-
-                {# 대량 수집 탭 콘텐츠 - Phase D #}
-                <div x-show="activeTab === 'bulk_collect'"
-                     x-effect="if (activeTab === 'bulk_collect') $nextTick(() => reinitMobileTabSlides($el))">
-                    <div class="module-grid">
-                        <template x-for="module in getModulesByType('bulk_collect')" :key="module.id + '-' + sortBy + '-' + sortOrder">
-                            {% include "modules/_card.html" %}
-                        </template>
-                    </div>
+                <!-- 모듈명 검색 -->
+                <div class="ml-auto relative py-1 flex-shrink-0">
+                    <input type="text" x-model="moduleSearch" placeholder="모듈명·블로그 검색"
+                           class="w-40 md:w-56 pl-8 pr-7 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent">
+                    <svg class="w-4 h-4 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z"/>
+                    </svg>
+                    <button type="button" x-show="moduleSearch" @click="moduleSearch = ''"
+                            class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">×</button>
                 </div>
             </div>
+
+            {% for t in module_type_tabs %}
+            <div x-show="typeTab === '{{ t.code }}'" class="px-2 md:px-0">
+                {% set table_id = 'modules-' ~ t.code %}
+                {% set rows_expr = "visibleModules('" ~ t.code ~ "')" %}
+                {% set row_key = 'module' %}
+                {% set max_height = '30rem' %}
+                {% set actions_include = 'modules/_row_actions.html' %}
+                {% set empty_text = '조건에 맞는 모듈이 없습니다' %}
+                {% include "components/list_table.html" %}
+            </div>
+            {% endfor %}
         </div>
     </div>
 </div>
