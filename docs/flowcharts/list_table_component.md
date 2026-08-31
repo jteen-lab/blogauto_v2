@@ -82,3 +82,49 @@ flowchart TD
 - **행 높이를 고정한다.** 훑기가 목적이라 항목마다 높이가 다르면 안 된다.
 - **액션은 아이콘으로 행 끝에.** 카드에 있던 5개를 그대로 옮긴다.
 - **섹션 헤더는 유지한다.** 플랫폼 구분이 사라지면 안 된다.
+
+## 선택 · 일괄 삭제 (2026-08-31 추가)
+
+`selectable` 을 넘긴 화면만 체크박스가 생긴다. 안 넘기면 컴포넌트는
+지금까지와 똑같이 그린다 — 플로우·오토런이 아직 안 바뀌었기 때문이다.
+
+```mermaid
+flowchart TD
+    A[머리글 체크박스] -->|보이는 행만| B[listToggleAll scope, rows]
+    C[행 체크박스] --> D[listToggleOne scope, id]
+    B --> E[listSelection scope]
+    D --> E
+    E --> F{선택 > 0?}
+    F -->|아니오| G[삭제 바 숨김]
+    F -->|예| H[삭제 바 표시 — n개 선택]
+    H --> I[선택 삭제]
+    I --> J[listSelectedRows scope, rows]
+    J --> K[확인 후 항목별 DELETE]
+    K --> L[선택 해제 + 목록 갱신]
+```
+
+### 범위(scope)는 탭이다
+
+`scope = table_id` 로 두어 **탭마다 선택 배열이 따로** 있다.
+프롬프트 탭에서 전체선택하고 삭제해도 수집 탭 모듈은 건드리지 않는다.
+하나의 배열을 공유하면 사용자가 보지 않는 탭의 항목이 지워진다.
+
+### 전체선택은 '보이는 것'만
+
+검색으로 걸러진 행만 대상으로 한다. 화면에 없는 항목이 선택되면
+삭제 결과를 예측할 수 없다.
+
+### x-model 을 쓰지 않는 이유
+
+아직 만들어지지 않은 범위 키에 `x-model` 을 걸면 Alpine 이 배열이 아닌
+불리언으로 다뤄 선택이 통째로 깨진다. `:checked` + `@change` 로 명시한다.
+
+### 화면이 제공할 것
+
+| 함수 | 용도 |
+|---|---|
+| `deleteSelectedBlogs(scope, rows)` | 블로그 일괄 삭제 |
+| `deleteSelectedModules(scope, rows)` | 모듈 일괄 삭제 — 플로우 사용 중(409)은 한 번만 되물어 강제 삭제 |
+
+선택 상태 자체는 `static/js/components/list_selection.js` 의
+`listSelectionMixin()` 한 벌을 두 화면이 함께 쓴다.
