@@ -872,17 +872,82 @@ class FlowScheduler:
         result = await db.execute(query)
         return result.scalar_one_or_none()
 
+    # 즉시 실행 시 액션마다 시작 시각을 벌린다.
+    #
+    # 오토런에 처음 등록하면 generate 와 publish 가 모두 '3초 뒤' 로 잡혀
+    # 사실상 동시에 돈다. 그러면 발행이 아직 만들어지지도 않은 글을 찾다가
+    # "발행 가능 글 없음" 으로 건너뛴다 — 최초 등록에서 거의 항상 그랬다.
+    #
+    # 생성이 먼저 자리를 잡도록 순서를 준다. 생성은 즉시, 발행·재발행은
+    # 뒤로 물린다.
+    # 생성이 끝나 재고에 반영되기까지 두는 여유(초).
+    PUBLISH_AFTER_GENERATE_SEC = 120
+
+    IMMEDIATE_DELAYS = {
+        "generate": 3,
+        "prompt": 3,
+        "collect": 5,
+        "bulk_collect": 5,
+        "keyword": 5,
+        "data": 5,
+        "contact_form": 5,
+        "publish": 180,      # 생성이 한 편 끝나기까지 통상 20~40초
+        "republish": 240,
+    }
+
+    async def _next_publish_attempt(
+        self,
+        flow: Flow,
+        action_type: str,
+        gp_settings: Optional[dict],
+        blogs: List[Blog],
+        db: AsyncSession = None,
+    ):
+        """발행할 글이 없을 때 다음 시도 시각.
+
+        **다음 생성 직후**가 기본이다. 생성 전에는 되물어도 결과가 같다.
+        다만 발행 주기보다 오래 기다리지는 않는다 — 수동 생성 등 다른
+        경로로 글이 생길 수 있고, 그때까지 손 놓고 있으면 안 된다.
+
+        생성 액션이 등록돼 있지 않으면(생성 모듈 없음) 발행 주기를 쓴다.
+        """
+        now = datetime.now(KST)
+
+        # 발행 주기 상한
+        pub_interval = self._get_gp_interval(gp_settings, blogs, action_type) \
+            if gp_settings else 60
+        ceiling = now + timedelta(minutes=max(10, int(pub_interval or 60)))
+
+        gen_state = await self._get_execution_state(db, flow.id, "generate") \
+            if db is not None else None
+        gen_next = getattr(gen_state, "next_execution_at", None)
+        if not gen_next:
+            return ceiling
+
+        if gen_next.tzinfo is None:
+            gen_next = KST.localize(gen_next)
+
+        # 생성이 끝나고 저장될 시간을 조금 준다.
+        candidate = gen_next + timedelta(seconds=self.PUBLISH_AFTER_GENERATE_SEC)
+        if candidate <= now:
+            # 생성 예정이 이미 지났다(밀렸다). 짧게 다시 본다.
+            candidate = now + timedelta(minutes=5)
+        return min(candidate, ceiling)
+
     async def _schedule_immediate_execution(
         self,
         flow: Flow,
         action_type: str,
         state: FlowExecutionState
     ) -> None:
-        """즉시 실행 스케줄 등록 (action_type 기반)"""
+        """즉시 실행 스케줄 등록 (action_type 기반).
+
+        액션마다 지연을 달리해 **생성이 발행보다 먼저** 돌게 한다.
+        """
         job_id = self._get_job_id(flow.id, action_type)
 
-        # 즉시 실행 (3초 후) - timezone aware datetime 사용
-        run_time = datetime.now(KST) + timedelta(seconds=3)
+        delay = self.IMMEDIATE_DELAYS.get(action_type, 3)
+        run_time = datetime.now(KST) + timedelta(seconds=delay)
 
         self.scheduler.add_job(
             self._execute_module_callback,  # AsyncIOExecutor가 async 함수 직접 지원
@@ -1435,7 +1500,28 @@ class FlowScheduler:
 
                 # === 공통 후처리 (Celery/직접 실행 무관하게 동일 패턴) ===
                 if state:
-                    if result.get("skip_interval"):
+                    if result.get("await_generation"):
+                        # 발행할 글이 없다. 10분마다 되묻지 않고 **다음 생성
+                        # 직후**로 미룬다. 생성 전에는 아무리 되물어도 결과가
+                        # 같다.
+                        #
+                        # 다만 발행 주기보다 더 오래 기다리지는 않는다.
+                        # 수동 생성 등 다른 경로로 글이 생길 수 있어서다.
+                        state.record_execution(True)
+                        state.release_execution_lock()
+                        run_time = await self._next_publish_attempt(
+                            flow, action_type, gp_settings, blogs, db=db
+                        )
+                        await self._schedule_at_time(
+                            flow, action_type=action_type,
+                            state=state, run_time=run_time,
+                        )
+                        logger.info(
+                            f"[FLOW_SCHEDULER] 생성 대기 | FlowID={flow_id} | "
+                            f"ActionType={action_type} | "
+                            f"Next={run_time.strftime('%m-%d %H:%M:%S')}"
+                        )
+                    elif result.get("skip_interval"):
                         # 간격 미소비 (최초 재고 대기 등): MIN_CHECK_INTERVAL 후 재체크
                         from ..models.flow_execution_state import MIN_CHECK_INTERVAL
                         state.release_execution_lock()
@@ -2777,6 +2863,33 @@ class FlowScheduler:
         from ..services.publishing.publisher_pipeline import PublisherPipeline
         from ..services.generation.flow_execution_context import FlowExecutionContext
         from ..services.generation.growth_profile_resolver import GrowthProfileResolver
+
+        # 재고 선확인 — 무거운 준비(GP 컨텍스트·발행 파이프라인) 전에 본다.
+        # 발행할 글이 하나도 없으면 준비할 이유가 없다.
+        from ..services.generation.inventory_manager import InventoryManager as _IM
+
+        _pre = _IM(db)
+        _has_any = False
+        for _blog in blogs:
+            if await _pre.get_post_for_publish(_blog.id):
+                _has_any = True
+                break
+
+        if not _has_any:
+            reasons = []
+            for _blog in blogs:
+                _why = await _pre.describe_publish_block(_blog.id)
+                reasons.append(f"{_blog.name}: {_why}" if _why else _blog.name)
+            # 사유를 남긴다. 지금까지는 "발행 가능 글 없음" 만 보여
+            # 카테고리 불일치인지 재고가 없는 것인지 알 수 없었다.
+            msg = "발행할 글 없음 — " + " / ".join(reasons[:3])
+            logger.info("[SCHED:PUBLISH] %s | FlowID=%s", msg, flow.id)
+            return {
+                "success": True,
+                "skipped": True,
+                "await_generation": True,   # 다음 생성 시각 뒤로 미룬다
+                "message": msg,
+            }
 
         gp_context = None
         if gp_settings:
