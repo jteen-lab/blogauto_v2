@@ -198,3 +198,49 @@ def test_await_generation_records_execution() -> None:
     body = src[start:end]
     assert "record_execution(True)" in body
     assert "_next_publish_attempt" in body
+
+
+# ── 5. Celery 위임 발행이 실패로 집계되던 문제 ────────────
+def test_celery_dispatch_is_not_counted_as_failure() -> None:
+    """디스패치 성공을 실패로 세면 연속 실패가 쌓인다.
+
+    인포노트가 08-30 정상 발행하고도 consecutive_failures=2 였다.
+    Celery 결과 dict 는 crawled_post 도 skipped 도 없어서 else 로 떨어졌다.
+    """
+    src = (ROOT / "app/scheduler/flow_scheduler.py").read_text(encoding="utf-8")
+    start = src.index("async def _execute_publish_action")
+    end = src.index("async def _execute_republish_action")
+    body = src[start:end]
+
+    tail = body[body.index('elif pub_result.get("skipped"):'):]
+    branch = tail[:tail.index("blog_duration = int(")]
+    # skipped 다음, else 앞에 success 가지가 있어야 한다
+    assert 'elif pub_result.get("success"):' in branch
+    assert branch.index('elif pub_result.get("success"):') < branch.index("else:")
+
+
+def test_publisher_always_marks_direct_results() -> None:
+    """직접 발행 경로는 위 가지로 새지 않는다.
+
+    publish_for_blog 는 skipped 이거나 crawled_post 를 달고 온다.
+    이 성질이 깨지면 실패한 발행이 성공으로 집계된다.
+    """
+    src = (ROOT / "app/services/generation/publisher.py").read_text(
+        encoding="utf-8")
+    start = src.index("async def publish_for_blog")
+    end = src.index("async def complete_publish")
+    returns = re.findall(r"return \{(.*?)\n\s*\}", src[start:end], re.S)
+    assert len(returns) == 3
+    for r in returns:
+        assert '"skipped": True' in r or '"crawled_post"' in r, r[:80]
+
+
+def test_first_run_recheck_no_longer_polls_every_ten_minutes() -> None:
+    """최초 실행 재고 대기도 생성 시각을 본다."""
+    src = (ROOT / "app/scheduler/flow_scheduler.py").read_text(encoding="utf-8")
+    start = src.index('elif result.get("skip_interval"):')
+    end = src.index('elif (\n                        "일일"')
+    body = src[start:end]
+    assert "MIN_CHECK_INTERVAL" not in body, "10분 고정 폴링이 남아 있다"
+    assert "_next_publish_attempt" in body
+    assert "record_execution" not in body, "간격 미소비 성질을 지켜야 한다"
