@@ -53,7 +53,11 @@ class KeywordCandidate(Base):
     competition = Column(String(10), nullable=True)              # 낮음/중간/높음
 
     # ── 공급 지표 ────────────────────────────────────────
-    doc_count = Column(Integer, nullable=True)      # 네이버 블로그 문서수
+    doc_count = Column(Integer, nullable=True)      # 누적 문서수(참고용)
+    # 최근 30일 발행량. 경쟁 판정의 기준은 이쪽이다 — 누적 문서수는 10년치
+    # 총합이라 "지금 경쟁이 붙고 있는지" 를 말해 주지 않는다.
+    # 엔진별 상세는 keyword_metrics 에 있고 여기는 기본 엔진 미러다.
+    monthly_pub_count = Column(Integer, nullable=True)
     # 포화도 = 검색량 ÷ 문서수. 클수록 비집고 들어갈 자리가 있다.
     saturation = Column(Float, nullable=True, index=True)
 
