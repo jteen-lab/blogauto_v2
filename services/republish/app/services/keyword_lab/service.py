@@ -188,7 +188,10 @@ class KeywordLabService:
         picked = await pick_seeds(
             self.db, self.user_id, cfg, category_seeds, blog_id)
         if not picked:
-            return {"success": False, "error": "쓸 수 있는 시드가 없습니다"}
+            return {"success": False, "error": (
+                "쓸 수 있는 시드가 없습니다 — 모듈에 시드 키워드를 입력하거나, "
+                "플로우에 블로그를 연결하고 그 블로그의 카테고리를 활성화하세요"
+            )}
 
         self.thresholds = Thresholds.build(
             cfg.min_volume, cfg.min_saturation, cfg.max_volume)

@@ -55,7 +55,11 @@ class KeywordModuleRunner:
 
         # 재고를 먼저 본다. 충분하면 돌지 않는다 — 매번 도는 것은 API 낭비다.
         # 목표치는 상수가 아니라 **소진 속도**로 정한다(inventory.py).
-        if not force and "collect" in steps:
+        #
+        # 단, 블로그가 없으면 재고를 판단할 수 없다. 니치가 정해지지 않아
+        # 전체 재고와 비교하게 되는데, 그러면 다른 블로그 몫까지 세어
+        # (실제로 2,249/30) 영원히 건너뛴다. 판단 불가는 통과로 본다.
+        if not force and blog is not None and "collect" in steps:
             stock = await available_titles(self.db, blog)
             target = await target_inventory(self.db, blog, cfg)
             if stock >= target:
@@ -133,6 +137,8 @@ class KeywordModuleRunner:
         ok = skipped = failed = 0
         errors: list = []
         details: list = []
+        preview: list = []
+        dry_run = False
 
         for name, result in rows:
             result = result or {}
@@ -150,27 +156,53 @@ class KeywordModuleRunner:
                                 "detail": result.get("message", "건너뜀")})
                 continue
             ok += 1
+            titles = result.get("titles") or {}
             c = (result.get("collect") or {}).get("saved") or 0
             m = (result.get("measure") or {}).get("measured") or 0
-            t = (result.get("titles") or {}).get("made") or 0
+            t = titles.get("made") or 0
+            drafted = len(titles.get("preview") or [])
             collected += c
             measured += m
             made += t
+            if titles.get("dry_run"):
+                dry_run = True
+            preview.extend(titles.get("preview") or [])
+            shaped = (f"제목 {drafted}편(미리보기)" if titles.get("dry_run")
+                      else f"제목 {t}편")
             details.append({
                 "blog_name": name, "status": "success",
-                "detail": f"키워드 {c}개 · 측정 {m}건 · 제목 {t}편",
+                "detail": f"키워드 {c}개 · 측정 {m}건 · {shaped}",
             })
 
         # 전부 실패했을 때만 실패다. 일부 블로그가 건너뛰는 것은 정상 동작이다.
         success = failed < len(rows) or not rows
-        message = (f"블로그 {len(rows)}개 | 성공 {ok} · 건너뜀 {skipped} · "
+
+        # 아무것도 안 돌았으면 그 사실을 **맨 앞에** 적는다. 뒤에 숫자만
+        # 나열하면 화면이 "성공" 으로만 보이고 왜 0건인지 알 수 없다.
+        head = ""
+        if ok == 0 and rows:
+            reasons = [d["detail"] for d in details if d["status"] != "success"]
+            head = f"실행 안 됨 — {reasons[0]} | " if reasons else ""
+        # 검증 모드면 저장하지 않았다는 사실이 요약에 보여야 한다.
+        # "제목 0편" 만 보면 실패로 오해한다.
+        if dry_run:
+            tail = (f"제목 {len(preview)}편 미리보기(검증 모드 — 저장 안 함)")
+        else:
+            tail = f"제목 {made}편"
+        # 제목 샘플을 붙인다. 숫자만 있으면 무엇이 만들어졌는지 알 수 없다.
+        sample = ""
+        picks = [p["title"] for p in preview if p.get("state") == "ready"][:2]
+        if picks:
+            sample = " | 예: " + " / ".join(f'"{t}"' for t in picks)
+        message = (f"{head}블로그 {len(rows)}개 | 성공 {ok} · 건너뜀 {skipped} · "
                    f"실패 {failed} | 키워드 {collected}개 · 측정 {measured}건 · "
-                   f"제목 {made}편")
+                   f"{tail}{sample}")
         out: Dict[str, Any] = {
             "success": success, "message": message, "details": details,
             "collected": collected, "measured": measured, "titles_made": made,
             "blogs": len(rows), "ok": ok, "skipped_count": skipped,
-            "failed": failed,
+            "failed": failed, "dry_run": dry_run,
+            "preview": preview[:60],
         }
         if errors:
             out["errors"] = errors
@@ -209,6 +241,8 @@ class KeywordModuleRunner:
                 cluster_out = await maker.run_clusters(cfg, blog)
 
             single_out = await maker.run(cfg, blog)
+            preview = (list(cluster_out.get("preview") or [])
+                       + list(single_out.get("preview") or []))
             return {
                 "success": True,
                 "made": (cluster_out.get("made", 0)
@@ -220,6 +254,8 @@ class KeywordModuleRunner:
                             + single_out.get("blocked", 0)),
                 "queued": (cluster_out.get("queued", 0)
                            + single_out.get("queued", 0)),
+                "dry_run": cfg.dry_run,
+                "preview": preview,
             }
         except Exception as e:  # noqa: BLE001
             # 제목 생성이 실패해도 수집·측정 결과는 남는다.

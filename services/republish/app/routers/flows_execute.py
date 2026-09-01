@@ -1045,6 +1045,7 @@ async def _execute_keyword_module(
     module: Module,
     blogs: List[Blog],
     db: AsyncSession,
+    force: bool = False,
 ) -> Dict[str, Any]:
     """키워드 모듈 실행 — 수집 → 측정 → 제목 생성 한 회차.
 
@@ -1055,6 +1056,7 @@ async def _execute_keyword_module(
         module: 키워드 타입 모듈
         blogs: 플로우에 연결된 블로그 목록(모듈 스코프로 이미 좁혀진 것)
         db: DB 세션
+        force: 재고가 충분해도 실행(사용자가 직접 누른 단발 실행)
 
     Returns:
         {"success": bool, "message": str, "details": [...]}
@@ -1062,7 +1064,8 @@ async def _execute_keyword_module(
     from app.services.keyword_lab.runner import KeywordModuleRunner
 
     runner = KeywordModuleRunner(db, module.user_id)
-    return await runner.run_for_blogs(module.settings or {}, blogs)
+    return await runner.run_for_blogs(module.settings or {}, blogs,
+                                      force=force)
 
 
 async def _execute_collect_module(
@@ -2259,7 +2262,10 @@ async def execute_single_module(
             kw_blogs = blogs_for_module(
                 target_module, [link.blog for link in flow.blog_links if link.blog]
             )
-            exec_result = await _execute_keyword_module(target_module, kw_blogs, db)
+            # 사용자가 직접 누른 단발 실행이다. 재고가 충분해도 돌려야
+            # 결과를 확인할 수 있다 — 조용히 건너뛰면 테스트가 안 된다.
+            exec_result = await _execute_keyword_module(
+                target_module, kw_blogs, db, force=True)
             results.extend(exec_result.get("details") or [{
                 "blog_name": "-",
                 "status": "success" if exec_result.get("success") else "failed",
