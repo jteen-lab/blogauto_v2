@@ -63,10 +63,13 @@ def test_zero_documents_is_the_best_case() -> None:
 
 
 def test_unmeasured_stays_pending() -> None:
-    """문서수를 안 재고 채택하면 공급을 보지 않고 뽑는 셈이다."""
+    """공급을 안 재고 채택하면 경쟁을 보지 않고 뽑는 셈이다.
+
+    P2 이후 공급 기준은 누적 문서수가 아니라 최근 30일 발행량이다.
+    """
     verdict, reason, _ = judge("측정 전", 900, None)
     assert verdict == VERDICT_PENDING
-    assert "문서수" in reason
+    assert "공급" in reason
 
 
 def test_risky_type_is_held_not_rejected() -> None:
