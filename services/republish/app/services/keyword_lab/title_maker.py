@@ -68,6 +68,8 @@ class TitleMaker:
         self.db = db
         self.ai = ai_service
         self.user_id = user_id
+        # 마지막 생성 실패 사유. 20건이 조용히 실패해도 알 수 없던 자리다.
+        self.last_error: Optional[str] = None
 
     async def run(
         self, cfg: KeywordModuleSettings, blog, limit: int = 20,
@@ -108,7 +110,8 @@ class TitleMaker:
         return {"success": True, "made": made, "keywords": len(rows),
                 "blocked": blocked, "queued": queued,
                 "duplicates": duplicates, "failed": failed,
-                "dry_run": cfg.dry_run, "preview": preview}
+                "dry_run": cfg.dry_run, "preview": preview,
+                "error": self.last_error if failed else None}
 
     async def run_clusters(self, cfg: KeywordModuleSettings, blog,
                            limit: int = 5) -> Dict[str, Any]:
@@ -168,7 +171,8 @@ class TitleMaker:
         return {"success": True, "made": made, "clusters": len(clusters),
                 "blocked": blocked, "queued": queued,
                 "duplicates": duplicates, "failed": failed,
-                "dry_run": cfg.dry_run, "preview": preview}
+                "dry_run": cfg.dry_run, "preview": preview,
+                "error": self.last_error if failed else None}
 
     async def _generate_cluster(self, cluster: KeywordCluster,
                                 members: List[KeywordCandidate],
@@ -187,7 +191,7 @@ class TitleMaker:
             questions=" / ".join(asked),
             subs=subs,
         )
-        text = await self._ask(prompt, blog, max_tokens=900)
+        text = await self._ask(prompt, blog, max_tokens=900, cfg=cfg)
         return self._parse(text, subs + 1)
 
     async def _new_clusters(self, blog, limit: int) -> List[KeywordCluster]:
@@ -228,25 +232,59 @@ class TitleMaker:
         prompt = PROMPT.format(
             keyword=row.keyword, count=cfg.titles_per_keyword,
             volume=row.search_volume or "알 수 없음")
-        text = await self._ask(prompt, blog, max_tokens=600)
+        text = await self._ask(prompt, blog, max_tokens=600, cfg=cfg)
         return self._parse(text, cfg.titles_per_keyword)
 
-    async def _ask(self, prompt: str, blog, max_tokens: int = 600) -> str:
-        """블로그의 글쓰기 AI 로 제목을 받는다. 실패는 빈 문자열."""
+    @staticmethod
+    def resolve_ai(cfg: KeywordModuleSettings, blog) -> Dict[str, Any]:
+        """어떤 AI 로 제목을 만들지 정한다.
+
+        우선순위: **모듈 설정 → 블로그의 글쓰기 AI**.
+        AI 서비스는 제공자를 지정하지 않으면 폴백 없이 거부한다. 블로그 없이
+        시드만으로 도는 테스트에서는 블로그 설정을 쓸 수 없으므로, 모듈이
+        스스로 제공자를 갖고 있어야 한다.
+        """
         writing = (getattr(blog, "ai_config", None) or {}).get("writing_ai", {}) \
             if blog is not None else {}
+        return {
+            "provider": cfg.ai_provider or writing.get("provider"),
+            "model": cfg.ai_model or writing.get("model"),
+        }
+
+    async def _ask(self, prompt: str, blog, max_tokens: int = 600,
+                   cfg: Optional[KeywordModuleSettings] = None) -> str:
+        """제목을 받는다. 실패는 빈 문자열이고 사유는 self.last_error 에."""
+        picked = self.resolve_ai(cfg, blog) if cfg else {"provider": None,
+                                                         "model": None}
+        if not picked["provider"]:
+            # 조용히 전부 실패하던 자리다. 사유를 남겨 화면이 말하게 한다.
+            self.last_error = (
+                "AI 제공자가 지정되지 않았습니다 — 모듈 설정의 '제목 생성 AI' "
+                "를 고르거나, 플로우에 블로그를 연결하세요"
+            )
+            logger.warning("[TITLE_MAKER] %s", self.last_error)
+            return ""
+
         try:
             result = await self.ai.generate(
                 prompt=prompt,
-                provider=writing.get("provider"),
-                model=writing.get("model"),
+                provider=picked["provider"],
+                model=picked["model"],
                 max_tokens=max_tokens,
                 temperature=0.9,   # 제목은 다양해야 한다
             )
         except Exception as e:  # noqa: BLE001
+            self.last_error = f"AI 호출 실패: {str(e)[:120]}"
             logger.warning("[TITLE_MAKER] 생성 실패 | %s", e)
             return ""
-        return ((result or {}).get("content") or "").strip()
+
+        text = ((result or {}).get("content") or "").strip()
+        if not text:
+            self.last_error = (
+                f"AI 응답이 비었습니다 (provider={picked['provider']}) — "
+                "API 키 상태를 확인하세요"
+            )
+        return text
 
     @staticmethod
     def _parse(text: str, count: int) -> List[str]:

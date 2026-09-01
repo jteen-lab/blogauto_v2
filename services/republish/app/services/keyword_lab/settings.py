@@ -94,6 +94,12 @@ class KeywordModuleSettings:
     make_titles: bool = True
     titles_per_keyword: int = DEFAULT_TITLES_PER_KEYWORD
 
+    # 제목을 만들 AI. 블로그가 없으면(=시드만으로 도는 테스트) 블로그의
+    # ai_config 를 쓸 수 없어 제공자가 비고, AI 서비스는 폴백을 하지 않아
+    # 조용히 전부 실패한다. 그래서 모듈이 스스로 갖는다.
+    ai_provider: Optional[str] = None
+    ai_model: Optional[str] = None
+
     # 검증 모드. 켜면 제목을 **데이터 관리(임시제목·정식제목)에 저장하지
     # 않고** 결과만 돌려준다. 수집 품질을 먼저 확인하고, 쓸 만해지면 끈다.
     # 기본 켜짐 — 검증 없이 재고를 오염시키는 쪽이 되돌리기 어렵다.
@@ -160,6 +166,8 @@ class KeywordModuleSettings:
             pub_window_days=max(1, _int("pub_window_days", 30)),
             make_titles=bool(kw.get("make_titles", True)),
             dry_run=bool(kw.get("dry_run", True)),
+            ai_provider=(kw.get("ai_provider") or None),
+            ai_model=(kw.get("ai_model") or None),
             titles_per_keyword=max(1, min(10, _int(
                 "titles_per_keyword", DEFAULT_TITLES_PER_KEYWORD))),
             cluster_enabled=bool(kw.get("cluster_enabled", True)),
@@ -198,6 +206,8 @@ class KeywordModuleSettings:
             "pub_window_days": self.pub_window_days,
             "make_titles": self.make_titles,
             "dry_run": self.dry_run,
+            "ai_provider": self.ai_provider,
+            "ai_model": self.ai_model,
             "titles_per_keyword": self.titles_per_keyword,
             "cluster_enabled": self.cluster_enabled,
             "cluster_threshold": self.cluster_threshold,
