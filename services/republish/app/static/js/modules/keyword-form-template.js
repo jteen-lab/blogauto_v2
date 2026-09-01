@@ -148,6 +148,42 @@ window.getKeywordFormTemplate = function () {
             </div>
         </div>
 
+        <!-- 클러스터 생산 -->
+        <div class="border-t border-gray-100 pt-4 space-y-3">
+            <label class="flex items-center gap-2 text-sm font-medium text-gray-700">
+                <input type="checkbox" x-model="formData.keyword.cluster_enabled" class="rounded">
+                비슷한 키워드를 묶어 <b>대표 글 1편 + 곁가지 글 N편</b>으로 만들기
+            </label>
+            <div class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
+                키워드 1개 = 제목 1개는 대량 발행에 맞지 않습니다. 묶음 하나에서
+                <b>서로 다른 질문</b>에 답하는 제목이 여러 개 나옵니다.
+                묶이지 않은 키워드는 기존 방식으로 처리됩니다.
+            </div>
+            <div x-show="formData.keyword.cluster_enabled" class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">묶음 최소 크기</label>
+                    <input type="number" min="2" max="30" x-model.number="formData.keyword.cluster_min_size"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">묶음 최대 크기</label>
+                    <input type="number" min="2" max="50" x-model.number="formData.keyword.cluster_max_size"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">묶는 기준(0~1)</label>
+                    <input type="number" step="0.02" min="0.05" max="1" x-model.number="formData.keyword.cluster_threshold"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">묶음당 곁가지 수</label>
+                    <input type="number" min="0" max="30" x-model.number="formData.keyword.titles_per_cluster"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                    <p class="mt-1 text-xs text-gray-400">0이면 묶음 크기만큼</p>
+                </div>
+            </div>
+        </div>
+
         <!-- 주기 -->
         <div class="border-t border-gray-100 pt-4">
             <label class="block text-sm font-medium text-gray-700 mb-2">실행 간격 (분)</label>
