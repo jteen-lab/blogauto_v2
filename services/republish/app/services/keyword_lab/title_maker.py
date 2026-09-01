@@ -80,31 +80,35 @@ class TitleMaker:
 
         gate = TitleGate(self.db, self.user_id)
         made = blocked = queued = duplicates = failed = 0
+        preview: List[dict] = []
 
         for row in rows:
             titles = await self._generate(row, cfg, blog)
             if not titles:
                 failed += 1
                 continue
-            # 다시 만들지 않도록 표시. **promoted 와 다른 칸**이다 —
+            # 검증 모드에서는 소비 표시를 남기지 않는다 — 저장을 켰을 때
+            # 같은 키워드로 다시 만들 수 있어야 한다.
             # promoted 는 "시드로 썼다", titled 는 "제목을 만들었다".
-            # 관문이 커밋하므로 그 전에 세워 둔다.
-            row.titled = True
-            outcome = await gate.admit(titles, row)
+            if not cfg.dry_run:
+                row.titled = True
+            outcome = await gate.admit(titles, row, dry_run=cfg.dry_run)
             made += outcome["admitted"]
             blocked += outcome["blocked"]
             queued += outcome["queued"]
             duplicates += outcome["duplicates"]
+            preview.extend(outcome.get("preview") or [])
 
         await self.db.commit()
         logger.info(
             "[TITLE_MAKER] 키워드 %d개 → 재고 %d편 | 차단 %d · 미분류 %d · "
-            "중복 %d · 생성실패 %d",
-            len(rows), made, blocked, queued, duplicates, failed,
+            "중복 %d · 생성실패 %d | 검증모드=%s",
+            len(rows), made, blocked, queued, duplicates, failed, cfg.dry_run,
         )
         return {"success": True, "made": made, "keywords": len(rows),
                 "blocked": blocked, "queued": queued,
-                "duplicates": duplicates, "failed": failed}
+                "duplicates": duplicates, "failed": failed,
+                "dry_run": cfg.dry_run, "preview": preview}
 
     async def run_clusters(self, cfg: KeywordModuleSettings, blog,
                            limit: int = 5) -> Dict[str, Any]:
@@ -128,6 +132,7 @@ class TitleMaker:
 
         gate = TitleGate(self.db, self.user_id)
         made = blocked = queued = duplicates = failed = 0
+        preview: List[dict] = []
 
         for cluster in clusters:
             members = await self._members(cluster)
@@ -138,26 +143,32 @@ class TitleMaker:
                 failed += 1
                 continue
 
-            for row in members:
-                row.titled = True
-            outcome = await gate.admit(titles, members[0])
+            if not cfg.dry_run:
+                for row in members:
+                    row.titled = True
+            outcome = await gate.admit(titles, members[0], dry_run=cfg.dry_run)
             made += outcome["admitted"]
             blocked += outcome["blocked"]
             queued += outcome["queued"]
             duplicates += outcome["duplicates"]
+            for item in outcome.get("preview") or []:
+                preview.append({**item, "cluster": cluster.name})
 
-            cluster.status = CLUSTER_TITLED
-            cluster.titles_made = outcome["admitted"]
+            if not cfg.dry_run:
+                cluster.status = CLUSTER_TITLED
+                cluster.titles_made = outcome["admitted"]
 
         await self.db.commit()
         logger.info(
             "[TITLE_MAKER] 묶음 %d개 → 재고 %d편 | 차단 %d · 미분류 %d · "
-            "중복 %d · 생성실패 %d",
+            "중복 %d · 생성실패 %d | 검증모드=%s",
             len(clusters), made, blocked, queued, duplicates, failed,
+            cfg.dry_run,
         )
         return {"success": True, "made": made, "clusters": len(clusters),
                 "blocked": blocked, "queued": queued,
-                "duplicates": duplicates, "failed": failed}
+                "duplicates": duplicates, "failed": failed,
+                "dry_run": cfg.dry_run, "preview": preview}
 
     async def _generate_cluster(self, cluster: KeywordCluster,
                                 members: List[KeywordCandidate],

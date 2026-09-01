@@ -86,38 +86,63 @@ class TitleGate:
         self._filters: Optional[List[ContentFilter]] = None
         self._matcher: Any = "unset"
 
-    async def admit(self, titles: List[str],
-                    row: KeywordCandidate) -> Dict[str, int]:
+    async def admit(self, titles: List[str], row: KeywordCandidate,
+                    dry_run: bool = False) -> Dict[str, Any]:
         """제목 목록을 관문에 태운다.
 
         Args:
             titles: 생성된 제목 목록
             row: 이 제목들을 만든 키워드 후보(분류 폴백에 쓴다)
+            dry_run: True 면 **아무것도 저장하지 않고** 판정 결과만 돌려준다.
+                검증 단계에서 데이터 관리(임시제목·정식제목)를 더럽히지
+                않기 위한 것이다.
 
         Returns:
             {"admitted": 재고 진입 수, "blocked": 필터 차단 수,
-             "queued": 미분류로 남긴 수, "duplicates": 중복 수}
+             "queued": 미분류로 남긴 수, "duplicates": 중복 수,
+             "preview": [{"title","state","reason"}]}
         """
-        staged, blocked, queued = [], 0, 0
         filters = await self._load_filters()
+        judged = []
 
         for title in titles:
             hit = blocking_filter(filters, title)
             if hit:
-                blocked += 1
+                judged.append((title, None, None, "blocked", hit.filter_value))
                 logger.info("[TITLE_GATE] 필터 차단 | %s | 필터=%s",
                             title[:40], hit.filter_value)
                 continue
-
             topic_id, subtopic_id, kw_id = await self._classify(title, row)
+            state = "ready" if (topic_id or subtopic_id) else "unclassified"
+            judged.append((title, topic_id, subtopic_id, state, kw_id))
+
+        blocked = sum(1 for j in judged if j[3] == "blocked")
+        queued = sum(1 for j in judged if j[3] == "unclassified")
+        preview = [{"title": t, "state": st,
+                    "reason": ("필터 차단" if st == "blocked"
+                               else "미분류" if st == "unclassified"
+                               else "재고 후보")}
+                   for t, _, _, st, _ in judged]
+
+        if dry_run:
+            # 저장하지 않는다. 무엇이 통과하고 무엇이 걸리는지만 보여 준다.
+            logger.info("[TITLE_GATE] 미리보기 | 제목 %d편 | 통과 %d · "
+                        "차단 %d · 미분류 %d",
+                        len(titles), len(judged) - blocked - queued,
+                        blocked, queued)
+            return {"admitted": 0, "blocked": blocked, "queued": queued,
+                    "duplicates": 0, "dry_run": True, "preview": preview}
+
+        staged = []
+        for title, topic_id, subtopic_id, state, kw_id in judged:
+            if state == "blocked":
+                continue
             temp = self._build_temp(title, topic_id, subtopic_id, kw_id)
             self.db.add(temp)
-            staged.append((temp, bool(topic_id or subtopic_id)))
+            staged.append((temp, state == "ready"))
 
         await self.db.flush()
         ready = [t.id for t, ok in staged if ok]
-        queued = sum(1 for _, ok in staged if not ok)
-
         moved = await self._move(ready, row.keyword)
         logger.info(
             "[TITLE_GATE] 제목 %d편 | 재고 %d · 차단 %d · 미분류 %d · 중복 %d",
@@ -129,6 +154,8 @@ class TitleGate:
             "blocked": blocked,
             "queued": queued,
             "duplicates": moved.get("duplicates", 0),
+            "dry_run": False,
+            "preview": preview,
         }
 
     # ── 내부 ─────────────────────────────────────────────

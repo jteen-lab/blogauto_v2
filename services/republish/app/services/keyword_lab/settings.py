@@ -94,6 +94,11 @@ class KeywordModuleSettings:
     make_titles: bool = True
     titles_per_keyword: int = DEFAULT_TITLES_PER_KEYWORD
 
+    # 검증 모드. 켜면 제목을 **데이터 관리(임시제목·정식제목)에 저장하지
+    # 않고** 결과만 돌려준다. 수집 품질을 먼저 확인하고, 쓸 만해지면 끈다.
+    # 기본 켜짐 — 검증 없이 재고를 오염시키는 쪽이 되돌리기 어렵다.
+    dry_run: bool = True
+
     # 클러스터 생산 — 키워드 1개 = 제목 1개는 대량 발행에 맞지 않는다.
     # 묶음 하나에서 대표 글 1편 + 곁가지 글 N편을 만든다.
     cluster_enabled: bool = True
@@ -154,6 +159,7 @@ class KeywordModuleSettings:
             min_saturation=max(0.0, sat),
             pub_window_days=max(1, _int("pub_window_days", 30)),
             make_titles=bool(kw.get("make_titles", True)),
+            dry_run=bool(kw.get("dry_run", True)),
             titles_per_keyword=max(1, min(10, _int(
                 "titles_per_keyword", DEFAULT_TITLES_PER_KEYWORD))),
             cluster_enabled=bool(kw.get("cluster_enabled", True)),
@@ -191,6 +197,7 @@ class KeywordModuleSettings:
             "min_saturation": self.min_saturation,
             "pub_window_days": self.pub_window_days,
             "make_titles": self.make_titles,
+            "dry_run": self.dry_run,
             "titles_per_keyword": self.titles_per_keyword,
             "cluster_enabled": self.cluster_enabled,
             "cluster_threshold": self.cluster_threshold,
