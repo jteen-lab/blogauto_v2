@@ -118,6 +118,16 @@ function settingsApp() {
             {key: 'use_celery_publish', label: '발행 워커', desc: '워드프레스/블로거 발행/재발행'},
             {key: 'use_celery_utility', label: '유틸리티 워커', desc: '제목 수집/데이터 이동'},
         ],
+        // 기본이 '켜짐' 인 시스템 설정. DB 에 값이 없으면 서버는 켜진 것으로
+        // 보는데, 화면이 그걸 모르면 꺼진 것처럼 그린다.
+        systemQualityItems: [
+            {
+                key: 'index_feedback_enabled',
+                label: '색인 되먹임',
+                desc: '색인률이 낮으면 하루 생성량을 줄이고, 30일간 0건이면 멈춤',
+                defaultOn: true,
+            },
+        ],
         ratelimitProviders: [
             {name: 'openai', label: 'OpenAI', rpm_key: 'ratelimit_openai_rpm', tpm_key: 'ratelimit_openai_tpm'},
             {name: 'anthropic', label: 'Anthropic (Claude)', rpm_key: 'ratelimit_anthropic_rpm', tpm_key: 'ratelimit_anthropic_tpm'},
@@ -518,6 +528,10 @@ function settingsApp() {
                     for (const [key, info] of Object.entries(data)) {
                         flat[key] = info.value || '';
                     }
+                    // 미설정 = 켜짐인 항목은 화면에도 켜짐으로 보여야 한다.
+                    this.systemQualityItems.forEach((it) => {
+                        if (it.defaultOn && !flat[it.key]) flat[it.key] = 'true';
+                    });
                     this.systemSettings = flat;
                 }
             } catch (e) {

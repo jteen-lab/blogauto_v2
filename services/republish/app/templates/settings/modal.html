@@ -1304,6 +1304,34 @@
                 <hr class="border-gray-200">
                 <div class="space-y-4">
                     <h4 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                        <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                        </svg>
+                        발행량 자동 조절
+                    </h4>
+                    <p class="text-xs text-gray-500 -mt-2">
+                        성장 프로파일의 일일 생성량보다 <strong>작게</strong> 잡힐 수 있습니다.
+                        색인이 안 되는 상태에서 계속 발행하면 색인 안 되는 URL만 쌓입니다.
+                        끄면 성장 프로파일 설정 그대로 생성합니다.
+                    </p>
+                    <template x-for="item in systemQualityItems" :key="item.key">
+                        <div class="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg">
+                            <div class="pr-3">
+                                <span class="text-sm font-medium text-gray-700" x-text="item.label"></span>
+                                <p class="text-xs text-gray-400" x-text="item.desc"></p>
+                            </div>
+                            <button @click="toggleSystemSetting(item.key)"
+                                    class="relative shrink-0 w-12 h-6 rounded-full transition-colors"
+                                    :class="systemSettings[item.key] === 'true' ? 'bg-emerald-500' : 'bg-gray-300'">
+                                <span class="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform"
+                                      :class="systemSettings[item.key] === 'true' ? 'translate-x-6' : ''"></span>
+                            </button>
+                        </div>
+                    </template>
+                </div>
+                <hr class="border-gray-200">
+                <div class="space-y-4">
+                    <h4 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
                         <svg class="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                         </svg>
@@ -1482,4 +1510,4 @@
 </div>
 
 <script src="/static/js/ai_keys.js?v=20260423e"></script>
-<script src="/static/js/settings.js?v=20260830_catalog2"></script>
+<script src="/static/js/settings.js?v=20260901_indexfb"></script>
