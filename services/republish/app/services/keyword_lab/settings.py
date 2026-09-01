@@ -31,8 +31,22 @@ DEFAULT_ENRICH_LIMIT = 100
 
 DEFAULT_INTERVAL_MINUTES = 360
 DEFAULT_TITLES_PER_KEYWORD = 3
+
+# 클러스터 기본값. 업계 권장은 묶음당 키워드 8~10개다.
+DEFAULT_CLUSTER_THRESHOLD = 0.34
+DEFAULT_CLUSTER_MIN_SIZE = 3
+DEFAULT_CLUSTER_MAX_SIZE = 12
 DEFAULT_COLLECT_LIMIT = 100
 DEFAULT_MEASURE_LIMIT = 50
+
+
+def _ratio(value: Any, default: float) -> float:
+    """0~1 비율값. 잘못된 값은 기본값으로 돌린다."""
+    try:
+        number = float(value) if value is not None else default
+    except (TypeError, ValueError):
+        return default
+    return default if not 0 < number <= 1 else number
 
 
 def _sources(value: Any) -> List[str]:
@@ -79,6 +93,15 @@ class KeywordModuleSettings:
 
     make_titles: bool = True
     titles_per_keyword: int = DEFAULT_TITLES_PER_KEYWORD
+
+    # 클러스터 생산 — 키워드 1개 = 제목 1개는 대량 발행에 맞지 않는다.
+    # 묶음 하나에서 대표 글 1편 + 곁가지 글 N편을 만든다.
+    cluster_enabled: bool = True
+    cluster_threshold: float = DEFAULT_CLUSTER_THRESHOLD
+    cluster_min_size: int = DEFAULT_CLUSTER_MIN_SIZE
+    cluster_max_size: int = DEFAULT_CLUSTER_MAX_SIZE
+    # 0이면 묶음 크기 + 1(대표 글)로 자동 결정한다.
+    titles_per_cluster: int = 0
 
     # 재고가 이보다 많으면 회차를 건너뛴다.
     min_inventory: int = DEFAULT_MIN_INVENTORY
@@ -129,6 +152,14 @@ class KeywordModuleSettings:
             make_titles=bool(kw.get("make_titles", True)),
             titles_per_keyword=max(1, min(10, _int(
                 "titles_per_keyword", DEFAULT_TITLES_PER_KEYWORD))),
+            cluster_enabled=bool(kw.get("cluster_enabled", True)),
+            cluster_threshold=_ratio(kw.get("cluster_threshold"),
+                                     DEFAULT_CLUSTER_THRESHOLD),
+            cluster_min_size=max(2, _int("cluster_min_size",
+                                         DEFAULT_CLUSTER_MIN_SIZE)),
+            cluster_max_size=max(2, _int("cluster_max_size",
+                                         DEFAULT_CLUSTER_MAX_SIZE)),
+            titles_per_cluster=min(30, _int("titles_per_cluster", 0)),
             min_inventory=_int("min_inventory", DEFAULT_MIN_INVENTORY),
             # 주기는 성장 프로파일이 아니라 모듈 자신이 정한다.
             # GP 는 '얼마나 자주 발행할까' 를 정하고, 키워드 생산은
@@ -155,6 +186,11 @@ class KeywordModuleSettings:
             "pub_window_days": self.pub_window_days,
             "make_titles": self.make_titles,
             "titles_per_keyword": self.titles_per_keyword,
+            "cluster_enabled": self.cluster_enabled,
+            "cluster_threshold": self.cluster_threshold,
+            "cluster_min_size": self.cluster_min_size,
+            "cluster_max_size": self.cluster_max_size,
+            "titles_per_cluster": self.titles_per_cluster,
             "min_inventory": self.min_inventory,
             "interval_minutes": self.interval_minutes,
         }

@@ -176,11 +176,35 @@ class KeywordModuleRunner:
 
     async def _make_titles(self, cfg: KeywordModuleSettings,
                            blog) -> Dict[str, Any]:
+        """묶음 제목 → 남은 단독 키워드 제목 순으로 만든다.
+
+        묶음이 먼저다. 묶음에 든 키워드를 단독으로 먼저 쓰면 같은 키워드로
+        두 번 제목을 만들게 된다.
+        """
         from ..ai.ai_service import AIService
+        from .cluster_builder import ClusterBuilder
 
         try:
+            built = await ClusterBuilder(self.db, self.user_id).build(cfg, blog)
             maker = TitleMaker(self.db, AIService(self.db), self.user_id)
-            return await maker.run(cfg, blog)
+
+            cluster_out: Dict[str, Any] = {}
+            if cfg.cluster_enabled:
+                cluster_out = await maker.run_clusters(cfg, blog)
+
+            single_out = await maker.run(cfg, blog)
+            return {
+                "success": True,
+                "made": (cluster_out.get("made", 0)
+                         + single_out.get("made", 0)),
+                "clusters_built": built.get("clusters", 0),
+                "clusters_titled": cluster_out.get("clusters", 0),
+                "keywords": single_out.get("keywords", 0),
+                "blocked": (cluster_out.get("blocked", 0)
+                            + single_out.get("blocked", 0)),
+                "queued": (cluster_out.get("queued", 0)
+                           + single_out.get("queued", 0)),
+            }
         except Exception as e:  # noqa: BLE001
             # 제목 생성이 실패해도 수집·측정 결과는 남는다.
             logger.warning("[KEYWORD_RUNNER] 제목 생성 실패 | %s", e)
