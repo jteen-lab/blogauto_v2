@@ -4,14 +4,14 @@
 건너뛴다(수작남이 3회 연속 그랬다). 미리 만들어 두면 발행 시점에는
 **꺼내 쓰기만** 하므로 시간도 실패도 늘지 않는다.
 
-기존 재고 구조를 그대로 쓴다 — main_titles, status='available'.
-source 로 구분해 기존 수집(transfer)과 성과를 비교할 수 있게 한다.
+기존 재고 구조와 **관문**을 그대로 쓴다. 제목은 금지어 필터 → 카테고리
+분류 → 유사도 그룹핑을 거쳐야 재고가 된다(TitleGate). 분류에 실패한 제목은
+버리지 않고 임시 제목에 남겨 회수 큐로 쓴다.
 
 순서도: docs/flowcharts/keyword_module.md
 """
 from __future__ import annotations
 
-import json
 import re
 from typing import Any, Dict, List, Optional
 
@@ -20,12 +20,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.logger import get_logger
 from ...models.keyword_candidate import KeywordCandidate, VERDICT_ADOPT
-from ...models.title import MainTitle
 from .settings import KeywordModuleSettings
+from .title_gate import TitleGate
 
 logger = get_logger("keyword_title_maker", "app.log")
-
-SOURCE = "keyword_module"
 
 PROMPT = """다음 키워드로 한국어 블로그 글 제목을 {count}개 지어 주세요.
 
@@ -58,22 +56,33 @@ class TitleMaker:
             return {"success": True, "made": 0, "keywords": 0,
                     "message": "제목을 만들 키워드가 없습니다"}
 
-        made, failed = 0, 0
+        gate = TitleGate(self.db, self.user_id)
+        made = blocked = queued = duplicates = failed = 0
+
         for row in rows:
             titles = await self._generate(row, cfg, blog)
             if not titles:
                 failed += 1
                 continue
-            made += await self._save(titles, row)
             # 다시 만들지 않도록 표시. **promoted 와 다른 칸**이다 —
             # promoted 는 "시드로 썼다", titled 는 "제목을 만들었다".
+            # 관문이 커밋하므로 그 전에 세워 둔다.
             row.titled = True
+            outcome = await gate.admit(titles, row)
+            made += outcome["admitted"]
+            blocked += outcome["blocked"]
+            queued += outcome["queued"]
+            duplicates += outcome["duplicates"]
 
         await self.db.commit()
-        logger.info("[TITLE_MAKER] 키워드 %d개 → 제목 %d편 | 실패 %d",
-                    len(rows), made, failed)
+        logger.info(
+            "[TITLE_MAKER] 키워드 %d개 → 재고 %d편 | 차단 %d · 미분류 %d · "
+            "중복 %d · 생성실패 %d",
+            len(rows), made, blocked, queued, duplicates, failed,
+        )
         return {"success": True, "made": made, "keywords": len(rows),
-                "failed": failed}
+                "blocked": blocked, "queued": queued,
+                "duplicates": duplicates, "failed": failed}
 
     async def _targets(self, blog, limit: int) -> List[KeywordCandidate]:
         q = (select(KeywordCandidate)
@@ -126,23 +135,3 @@ class TitleMaker:
             if len(out) >= count:
                 break
         return out
-
-    async def _save(self, titles: List[str], row: KeywordCandidate) -> int:
-        """재고에 넣는다. 이미 있는 제목은 건너뛴다."""
-        saved = 0
-        for title in titles:
-            exists = (await self.db.execute(
-                select(MainTitle.id).where(MainTitle.title == title).limit(1)
-            )).first()
-            if exists:
-                continue
-            self.db.add(MainTitle(
-                title=title,
-                status="available",
-                source=SOURCE,
-                topic_id=row.topic_id,
-                subtopic_id=row.subtopic_id,
-                keywords=json.dumps([row.keyword], ensure_ascii=False),
-            ))
-            saved += 1
-        return saved
