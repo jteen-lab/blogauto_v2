@@ -138,8 +138,11 @@ def test_connection_test_reports_health():
 
 def test_sibling_exclusion_defaults_on():
     """기능이 있는데 꺼져 있어 105종 제목이 중복 게재됐다."""
-    src = (ROOT / "app/services/generation/inventory_trigger.py").read_text(
-        encoding="utf-8")
+    # 조건 해석부는 inventory_category_mixin 으로 분리됐다(파일 500줄 규칙).
+    src = "".join(
+        (ROOT / f"app/services/generation/{name}").read_text(encoding="utf-8")
+        for name in ("inventory_trigger.py", "inventory_category_mixin.py")
+    )
     assert 'get("exclude_sibling_titles") is False' in src, (
         "명시적 false 일 때만 꺼져야 한다(기본 켜짐)"
     )
