@@ -118,15 +118,14 @@ def to_ideas(rows: List[Dict[str, Any]],
     return out
 
 
-async def collect_for_blog(db: Any, blog: Any, days: int = DEFAULT_DAYS,
-                           limit: int = DEFAULT_ROW_LIMIT,
-                           ) -> List[KeywordIdea]:
-    """블로그 하나의 실측 쿼리를 모은다.
+async def fetch_for_blog(db: Any, blog: Any, days: int = DEFAULT_DAYS,
+                         limit: int = DEFAULT_ROW_LIMIT,
+                         ) -> List[Dict[str, Any]]:
+    """블로그 하나의 실측 쿼리 원본 행.
 
     토큰이 없거나 속성이 등록돼 있지 않으면 빈 목록이다. 그것은 오류가
     아니라 "이 블로그는 이 소스를 못 쓴다" 는 사실이다.
     """
-    from ...search_visibility import index_check_service
     from ...search_visibility.runner import resolve_gsc_token
 
     token = await resolve_gsc_token(db)
@@ -140,8 +139,14 @@ async def collect_for_blog(db: Any, blog: Any, days: int = DEFAULT_DAYS,
                     getattr(blog, "id", None))
         return []
 
-    rows = await fetch_queries(token, site_url, days, limit)
-    return to_ideas(rows)
+    return await fetch_queries(token, site_url, days, limit)
+
+
+async def collect_for_blog(db: Any, blog: Any, days: int = DEFAULT_DAYS,
+                           limit: int = DEFAULT_ROW_LIMIT,
+                           ) -> List[KeywordIdea]:
+    """블로그 하나의 실측 쿼리를 키워드 아이디어로."""
+    return to_ideas(await fetch_for_blog(db, blog, days, limit))
 
 
 async def _resolve_site(token: str, blog: Any) -> Optional[str]:

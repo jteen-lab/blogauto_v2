@@ -14,7 +14,7 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.logger import get_logger
@@ -58,6 +58,10 @@ async def pick_seeds(
     우선순위: 직접 입력 → 아직 안 쓴 채택 키워드 → 블로그 카테고리.
     **채택 키워드를 앞에 두는 이유**: 카테고리는 매번 같아서 뒤로 밀어야
     새 가지가 자란다.
+
+    채택 키워드끼리는 **관찰된 성과**로 줄을 세운다. 노출이 붙은 축을 먼저
+    파고, "확인했더니 노출이 없더라"(perf_score=0)는 맨 뒤로 민다.
+    아직 안 재 본 것(NULL)은 그 사이에 둔다 — 실패로 단정할 근거가 없다.
     """
     picked: List[Dict[str, Any]] = []
     seen = set()
@@ -81,7 +85,10 @@ async def pick_seeds(
              .where(KeywordCandidate.user_id == user_id,
                     KeywordCandidate.verdict == VERDICT_ADOPT,
                     KeywordCandidate.promoted.is_(False))
-             .order_by(KeywordCandidate.search_volume.desc().nullslast())
+             .order_by(
+                 case((KeywordCandidate.perf_score.is_(None), 0.5),
+                      else_=KeywordCandidate.perf_score).desc(),
+                 KeywordCandidate.search_volume.desc().nullslast())
              .limit(cfg.seed_limit))
         if blog_id:
             q = q.where(KeywordCandidate.blog_id == blog_id)

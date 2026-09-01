@@ -77,6 +77,12 @@ class KeywordCandidate(Base):
     source = Column(String(30), nullable=False, default="naver_ads")
     note = Column(Text, nullable=True)
 
+    # ── 성과 되먹임 ──────────────────────────────────────
+    # 발행 후 실제로 노출됐는지. 잘 되는 축은 시드 우선순위를 올리고
+    # 계속 노출이 없는 축은 내린다. 아직 안 재면 NULL.
+    perf_score = Column(Float, nullable=True, index=True)
+    perf_checked_at = Column(DateTime(timezone=True), nullable=True)
+
     measured_at = Column(DateTime(timezone=True), nullable=True)
     # promoted 와 titled 는 뜻이 다르다. 한 칸을 겸용하면 시드로 소비된
     # 상위 키워드가 제목 대상에서 빠진다(검토서 D-4).

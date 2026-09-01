@@ -50,7 +50,7 @@ class KeywordModuleRunner:
             return {"success": True, "skipped": True,
                     "message": "모듈이 꺼져 있습니다"}
 
-        steps = steps or ["collect", "measure", "titles"]
+        steps = steps or ["feedback", "collect", "measure", "titles"]
         blog = await self._blog(blog_id) if blog_id else None
 
         # 재고를 먼저 본다. 충분하면 돌지 않는다 — 매번 도는 것은 API 낭비다.
@@ -71,6 +71,10 @@ class KeywordModuleRunner:
 
         svc = KeywordLabService(self.db, user_settings, self.user_id)
         out: Dict[str, Any] = {"success": True, "blog_id": blog_id}
+
+        # 되먹임을 먼저 돌린다. 시드 우선순위가 그 결과를 쓴다.
+        if "feedback" in steps and cfg.feedback_enabled and blog is not None:
+            out["feedback"] = await self._feedback(cfg, blog)
 
         if "collect" in steps:
             out["collect"] = await svc.collect_with_config(cfg, blog_id)
@@ -173,6 +177,18 @@ class KeywordModuleRunner:
             if not success:
                 out["error"] = errors[0]
         return out
+
+    async def _feedback(self, cfg: KeywordModuleSettings,
+                        blog) -> Dict[str, Any]:
+        """실측 성과를 회수한다. 실패해도 회차는 계속 돈다."""
+        from .feedback import FeedbackCollector
+
+        try:
+            collector = FeedbackCollector(self.db, self.user_id)
+            return await collector.apply(blog, days=cfg.feedback_days)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[KEYWORD_RUNNER] 되먹임 실패 | %s", e)
+            return {"success": False, "error": str(e)[:120]}
 
     async def _make_titles(self, cfg: KeywordModuleSettings,
                            blog) -> Dict[str, Any]:

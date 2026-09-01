@@ -103,6 +103,10 @@ class KeywordModuleSettings:
     # 0이면 묶음 크기 + 1(대표 글)로 자동 결정한다.
     titles_per_cluster: int = 0
 
+    # 성과 되먹임 — 내보낸 뒤 실제로 노출됐는지 회수해 시드 순서에 반영한다.
+    feedback_enabled: bool = True
+    feedback_days: int = 28
+
     # 재고가 이보다 많으면 회차를 건너뛴다.
     min_inventory: int = DEFAULT_MIN_INVENTORY
     interval_minutes: int = DEFAULT_INTERVAL_MINUTES
@@ -160,6 +164,8 @@ class KeywordModuleSettings:
             cluster_max_size=max(2, _int("cluster_max_size",
                                          DEFAULT_CLUSTER_MAX_SIZE)),
             titles_per_cluster=min(30, _int("titles_per_cluster", 0)),
+            feedback_enabled=bool(kw.get("feedback_enabled", True)),
+            feedback_days=max(1, _int("feedback_days", 28)),
             min_inventory=_int("min_inventory", DEFAULT_MIN_INVENTORY),
             # 주기는 성장 프로파일이 아니라 모듈 자신이 정한다.
             # GP 는 '얼마나 자주 발행할까' 를 정하고, 키워드 생산은
@@ -191,6 +197,8 @@ class KeywordModuleSettings:
             "cluster_min_size": self.cluster_min_size,
             "cluster_max_size": self.cluster_max_size,
             "titles_per_cluster": self.titles_per_cluster,
+            "feedback_enabled": self.feedback_enabled,
+            "feedback_days": self.feedback_days,
             "min_inventory": self.min_inventory,
             "interval_minutes": self.interval_minutes,
         }
