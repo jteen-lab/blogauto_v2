@@ -150,7 +150,17 @@ class FlowGenerateExecutor:
                     except Exception:  # noqa: BLE001
                         made = 0
                     if made >= verdict.cap:
-                        msg = f"오늘 {made}개 생성 — {verdict.reason}"
+                        # 성장 프로파일 설정과 실제 상한이 다르면 그 사실을
+                        # 밝힌다. 지금까지는 "제한" 이라고만 해 GP 설정이
+                        # 무시된 것처럼 보였다.
+                        gp_note = ""
+                        if base_daily and base_daily != verdict.cap:
+                            gp_note = (
+                                f" · 성장 프로파일 {base_daily}개 → "
+                                f"색인 되먹임으로 {verdict.cap}개"
+                            )
+                        msg = (f"오늘(00시 기준) {made}/{verdict.cap}개 생성 — "
+                               f"{verdict.reason}{gp_note}")
                         logger.info("[FLOW_GEN] %s | blog=%s", msg, blog.name)
                         return {
                             "success": True, "skipped": True,
@@ -335,18 +345,29 @@ class FlowGenerateExecutor:
             }
 
     async def _today_generated_count(self, blog_id: int) -> int:
-        """오늘 이 블로그로 생성한 글 수(색인 되먹임 상한 판정용)."""
-        from datetime import datetime, timedelta, timezone
+        """**오늘(KST 00:00~24:00)** 이 블로그로 생성한 글 수.
 
+        24시간 롤링 창을 쓰면 어제 만든 글이 오늘 몫으로 잡힌다.
+        상한이 1인 블로그는 어제 1건 때문에 오늘 못 만들어 사실상
+        이틀에 한 번이 됐다(굿팁꿀팁 09-01, 인포노트 08-31).
+        """
+        from datetime import datetime, time, timedelta
+
+        import pytz
         from sqlalchemy import func as _func, select as _select
 
         from ...models.generation_history import GenerationHistory
 
-        start = datetime.now(timezone.utc) - timedelta(hours=24)
+        kst = pytz.timezone("Asia/Seoul")
+        now = datetime.now(kst)
+        start = kst.localize(datetime.combine(now.date(), time.min))
+        end = start + timedelta(days=1)
+
         return (await self.db.execute(
             _select(_func.count(GenerationHistory.id)).where(
                 GenerationHistory.blog_id == blog_id,
                 GenerationHistory.created_at >= start,
+                GenerationHistory.created_at < end,
             )
         )).scalar() or 0
 
