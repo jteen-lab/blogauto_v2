@@ -186,3 +186,17 @@ class TestWiring:
     def test_files_under_500_lines(self, path):
         lines = (BASE / path).read_text(encoding="utf-8").count("\n")
         assert lines <= 500, f"{path} = {lines}줄"
+
+
+class TestModuleListQuery:
+    """모듈 드롭다운이 500 으로 죽지 않는다."""
+
+    def test_module_has_no_is_deleted(self):
+        from app.models.module import Module
+
+        # 없는 컬럼을 걸면 AttributeError 로 엔드포인트가 500 이 된다
+        assert not hasattr(Module, "is_deleted")
+
+    def test_router_does_not_filter_by_is_deleted(self):
+        src = (BASE / "app/routers/keyword_lab.py").read_text(encoding="utf-8")
+        assert "Module.is_deleted" not in src

@@ -77,9 +77,11 @@ async def list_modules(
     rows = (await db.execute(
         select(Module, ModuleType)
         .join(ModuleType, ModuleType.id == Module.module_type_id)
+        # Module 에는 is_deleted 컬럼이 없다. 있는 줄 알고 걸었다가
+        # AttributeError 로 이 엔드포인트가 500 을 냈고, 화면의 모듈
+        # 드롭다운이 늘 비어 있었다.
         .where(Module.user_id == current_user.id,
-               ModuleType.code == "keyword",
-               Module.is_deleted.is_(False))
+               ModuleType.code == "keyword")
         .order_by(Module.name)
     )).all()
     return {"modules": [{
