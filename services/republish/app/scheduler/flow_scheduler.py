@@ -1522,10 +1522,12 @@ class FlowScheduler:
                             f"Next={run_time.strftime('%m-%d %H:%M:%S')}"
                         )
                     elif result.get("skip_interval"):
-                        # 간격 미소비 (최초 재고 대기 등): MIN_CHECK_INTERVAL 후 재체크
-                        from ..models.flow_execution_state import MIN_CHECK_INTERVAL
+                        # 최초 실행이라 간격을 소비하지 않는다. 다만 10분
+                        # 고정으로 되묻지는 않는다 — 생성 전에는 결과가 같다.
                         state.release_execution_lock()
-                        recheck_time = datetime.now(KST) + timedelta(seconds=MIN_CHECK_INTERVAL)
+                        recheck_time = await self._next_publish_attempt(
+                            flow, action_type, gp_settings, blogs, db=db
+                        )
                         await self._schedule_at_time(
                             flow, action_type=action_type,
                             state=state, run_time=recheck_time
@@ -3111,6 +3113,13 @@ class FlowScheduler:
                         fail_count += 1
                 elif pub_result.get("skipped"):
                     pass  # 스킵
+                elif pub_result.get("success"):
+                    # Celery 위임. 실제 발행 결과는 워커가 따로 기록한다.
+                    # 여기서 실패로 세면 **성공한 발행이 연속 실패로 쌓인다**
+                    # — 인포노트가 08-30 정상 발행하고도 연속 실패 2가 된 이유.
+                    # 직접 발행 경로는 crawled_post 나 skipped 중 하나를 늘
+                    # 달고 오므로 이 가지로 오지 않는다.
+                    success_count += 1
                 else:
                     fail_count += 1
 
