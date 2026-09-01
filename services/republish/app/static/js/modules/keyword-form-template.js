@@ -231,10 +231,13 @@ window.getKeywordFormTemplate = function () {
             <div class="flex flex-wrap items-center gap-3">
                 <button type="button" @click="runKeywordTest()" :disabled="kwTest.busy"
                         class="px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-medium disabled:opacity-40">
-                    <span x-text="kwTest.busy ? '실행 중… (수집→측정→제목)' : '▶ 이 설정으로 테스트 실행'"></span>
+                    <span x-text="kwTest.busy
+                        ? '실행 중… (수집→측정→제목) ' + (kwTest.elapsed ? kwTest.elapsed + '초' : '')
+                        : '▶ 이 설정으로 테스트 실행'"></span>
                 </button>
                 <span class="text-xs text-gray-500">
                     저장하지 않은 현재 화면 값 그대로 한 회차를 돌려 결과를 아래에 보여 줍니다.
+                    수집·측정에 1~2분이 걸릴 수 있고, 창을 닫지 않고 기다리면 됩니다.
                 </span>
             </div>
 

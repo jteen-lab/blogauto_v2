@@ -5,7 +5,9 @@
 
 순서도: docs/flowcharts/keyword_lab.md
 """
-from typing import List, Optional
+import asyncio
+import uuid
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
@@ -91,6 +93,62 @@ async def list_modules(
     } for m, _ in rows]}
 
 
+# 실행 결과 보관 — 한 회차가 80초를 넘기면 프록시가 응답 헤더 대기 60초에서
+# 끊는다(Caddy response_header_timeout). 요청을 붙잡지 말고 토큰으로 받아 간다.
+RUN_CACHE_PREFIX = "keyword_run:"
+RUN_RESULT_TTL = 1800.0
+
+
+def _run_key(task_id: str) -> str:
+    return f"{RUN_CACHE_PREFIX}{task_id}"
+
+
+async def _run_in_background(task_id: str, user_id: int,
+                             settings: Optional[dict],
+                             blog_ids: List[int], force: bool,
+                             steps: Optional[List[str]]) -> None:
+    """요청과 분리해 한 회차를 돈다.
+
+    요청 세션은 응답과 함께 닫히므로 **자체 세션**을 연다.
+    """
+    from ..core.database import db_manager
+    from ..services.keyword_lab.runner import KeywordModuleRunner
+
+    from ..services.in_memory_ttl_cache import cache_set
+
+    try:
+        async with db_manager.get_session() as db:
+            blogs = []
+            for blog_id in blog_ids:
+                row = (await db.execute(
+                    select(Blog).where(Blog.id == blog_id)
+                )).scalar_one_or_none()
+                if row:
+                    blogs.append(row)
+            runner = KeywordModuleRunner(db, user_id)
+            result = await runner.run_for_blogs(settings, blogs, force=force,
+                                                steps=steps)
+        cache_set(_run_key(task_id), {"status": "done", "result": result})
+    except Exception as e:  # noqa: BLE001
+        logger.error("[KEYWORD_LAB] 백그라운드 실행 오류 | %s | %s", task_id, e)
+        cache_set(_run_key(task_id),
+                  {"status": "failed", "error": str(e)[:300]})
+
+
+@router.get("/run/{task_id}", summary="실행 결과 조회")
+async def run_result(
+    task_id: str,
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """진행 중이면 running, 끝났으면 결과를 준다."""
+    from ..services.in_memory_ttl_cache import cache_get
+
+    row = cache_get(_run_key(task_id), RUN_RESULT_TTL)
+    if row is None:
+        return {"status": "running"}
+    return row
+
+
 @router.post("/run", summary="모듈 한 회차 수동 실행")
 async def run_module(
     module_id: Optional[int] = Body(None),
@@ -98,6 +156,7 @@ async def run_module(
     steps: Optional[List[str]] = Body(None),
     force: bool = Body(True),
     settings_override: Optional[dict] = Body(None),
+    background: bool = Body(False),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
@@ -122,9 +181,23 @@ async def run_module(
             blogs = (settings.get("blogs") or [])
             blog_id = blogs[0] if blogs else None
 
-    blogs = []
+    blog_ids = []
     if blog_id:
-        blogs = [await _blog(db, blog_id, current_user)]
+        await _blog(db, blog_id, current_user)   # 내 블로그인지 확인
+        blog_ids = [blog_id]
+
+    if background:
+        # 한 회차는 80초를 넘기기도 한다. 요청을 붙잡으면 프록시가 끊어
+        # 브라우저는 빈 응답을 받는다("Unexpected end of JSON input").
+        task_id = uuid.uuid4().hex
+        asyncio.create_task(_run_in_background(
+            task_id, current_user.id, settings, blog_ids, force, steps))
+        logger.info("[KEYWORD_LAB] 백그라운드 실행 시작 | %s", task_id)
+        return {"status": "running", "task_id": task_id}
+
+    blogs = []
+    if blog_ids:
+        blogs = [await _blog(db, blog_ids[0], current_user)]
 
     # 플로우/오토런과 **같은 실행기·같은 응답 모양**을 쓴다. 화면이 따로
     # 해석하면 한쪽에서만 맞는 결과가 나온다.

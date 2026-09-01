@@ -63,7 +63,7 @@ function moduleFormApp(module = null, moduleType = null) {
         _pagesPresetPrev: 'standard',
 
         // 키워드 모듈 테스트 패널 상태 (모듈 안에서 바로 결과 확인)
-        kwTest: { busy: false, error: '', result: null, models: [] },
+        kwTest: { busy: false, error: '', result: null, models: [], elapsed: 0 },
 
         // 폼 데이터
         formData: {
@@ -810,27 +810,68 @@ function moduleFormApp(module = null, moduleType = null) {
         async runKeywordTest() {
             // 저장하지 않은 현재 화면 값 그대로 돌린다. 저장 후 확인하면
             // 실패한 설정이 이미 남는다.
+            //
+            // 한 회차는 80초를 넘기기도 하는데 프록시가 60초에서 응답을
+            // 끊는다. 그래서 요청을 붙잡지 않고 토큰을 받아 폴링한다.
             this.kwTest.busy = true;
             this.kwTest.error = '';
             this.kwTest.result = null;
+            this.kwTest.elapsed = 0;
             try {
                 const payload = this.prepareRequestData();
-                const r = await fetch('/api/v1/keyword-lab/run', {
-                    method: 'POST', credentials: 'include',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        settings_override: payload.settings || {},
-                        force: true,
-                    }),
+                const started = await this.kwPost('/api/v1/keyword-lab/run', {
+                    settings_override: payload.settings || {},
+                    force: true,
+                    background: true,
                 });
-                const d = await r.json();
-                if (!r.ok) throw new Error(d.detail || '실행 실패');
-                this.kwTest.result = d;
+                if (!started.task_id) {
+                    this.kwTest.result = started;
+                    return;
+                }
+                this.kwTest.result = await this.kwPoll(started.task_id);
             } catch (e) {
                 this.kwTest.error = e.message;
             } finally {
                 this.kwTest.busy = false;
             }
+        },
+
+        async kwPost(url, body) {
+            const r = await fetch(url, {
+                method: 'POST', credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            const text = await r.text();
+            if (!r.ok) {
+                let detail = `실행 실패 (HTTP ${r.status})`;
+                try { detail = JSON.parse(text).detail || detail; } catch (e) {}
+                throw new Error(detail);
+            }
+            // 빈 본문이면 JSON.parse 가 "Unexpected end of JSON input" 을
+            // 던진다. 무엇이 잘못됐는지 알 수 있는 말로 바꾼다.
+            if (!text) throw new Error('서버가 빈 응답을 돌려줬습니다 (연결이 끊겼을 수 있습니다)');
+            return JSON.parse(text);
+        },
+
+        async kwPoll(taskId, maxSeconds = 900) {
+            const step = 2000;
+            for (let waited = 0; waited < maxSeconds * 1000; waited += step) {
+                await new Promise(res => setTimeout(res, step));
+                this.kwTest.elapsed = Math.round(waited / 1000);
+                let row;
+                try {
+                    const r = await fetch(`/api/v1/keyword-lab/run/${taskId}`,
+                        { credentials: 'include' });
+                    const text = await r.text();
+                    row = text ? JSON.parse(text) : { status: 'running' };
+                } catch (e) {
+                    continue;   // 일시적 실패는 계속 기다린다
+                }
+                if (row.status === 'done') return row.result;
+                if (row.status === 'failed') throw new Error(row.error || '실행 실패');
+            }
+            throw new Error('시간이 너무 오래 걸립니다. 동작 로그에서 결과를 확인하세요');
         },
 
         // 요청 데이터 준비
