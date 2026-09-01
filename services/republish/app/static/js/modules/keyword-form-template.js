@@ -46,10 +46,25 @@ window.getKeywordFormTemplate = function () {
         </div>
 
         <!-- 판정 기준 -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
+            공급은 누적 문서수가 아니라 <b>최근 N일 발행량</b>으로 봅니다.
+            누적은 10년치 총합이라 지금 경쟁이 붙는지 알려 주지 않습니다.
+            검색량 <b>상한</b>도 둡니다 — 대형 키워드는 써도 묻힙니다.
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
             <div>
                 <label class="block text-xs text-gray-500 mb-1">검색량 하한</label>
                 <input type="number" min="0" x-model.number="formData.keyword.min_volume"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">검색량 상한</label>
+                <input type="number" min="0" x-model.number="formData.keyword.max_volume"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">발행량 기간(일)</label>
+                <input type="number" min="1" max="365" x-model.number="formData.keyword.pub_window_days"
                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
             </div>
             <div>

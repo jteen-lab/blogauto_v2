@@ -14,7 +14,8 @@
         <div>
             <h2 class="text-2xl font-bold text-gray-900">키워드 관리</h2>
             <p class="text-sm text-gray-500 mt-0.5">
-                수요(검색량)를 먼저 재고 후보를 만듭니다. 기존 수집과 분리된 실험 데이터입니다.
+                수요(검색량)와 공급(<b>최근 30일 발행량</b>)을 재서 후보를 만듭니다.
+                누적 문서수는 10년치 총합이라 지금 경쟁이 붙는지 알려 주지 않습니다.
             </p>
         </div>
     </div>
@@ -105,7 +106,12 @@
                        class="w-28 text-sm border-gray-300 rounded-md py-1.5">
             </div>
             <div>
-                <label class="block text-xs text-gray-500 mb-1">포화도 하한 (검색량÷문서수)</label>
+                <label class="block text-xs text-gray-500 mb-1">월간 검색량 상한</label>
+                <input type="number" x-model.number="maxVolume" min="0"
+                       class="w-28 text-sm border-gray-300 rounded-md py-1.5">
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">포화도 하한 (검색량÷월 발행량)</label>
                 <input type="number" x-model.number="minSaturation" step="0.05" min="0"
                        class="w-28 text-sm border-gray-300 rounded-md py-1.5">
             </div>
@@ -188,5 +194,5 @@
 </div>
 
 <script src="/static/js/components/list_selection.js?v=20260831sub"></script>
-<script src="/static/js/keyword_lab/app.js?v=20260831module"></script>
+<script src="/static/js/keyword_lab/app.js?v=20260901p2"></script>
 {% endblock %}

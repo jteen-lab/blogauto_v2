@@ -28,6 +28,7 @@ function keywordLabApp() {
         listSortDir: 'desc',
 
         minVolume: 100,
+        maxVolume: 100000,
         minSaturation: 0.2,
 
         busy: '',
@@ -81,6 +82,7 @@ function keywordLabApp() {
                             seeds: this.normalizeSeeds(this.seedText),
                             use_blog_categories: !!this.blogId,
                             min_volume: this.minVolume,
+                            max_volume: this.maxVolume,
                             min_saturation: this.minSaturation,
                         },
                     };
@@ -183,6 +185,7 @@ function keywordLabApp() {
                         blog_id: this.blogId ? Number(this.blogId) : null,
                         limit: 50,
                         min_volume: this.minVolume,
+                        max_volume: this.maxVolume,
                         min_saturation: this.minSaturation,
                     }),
                 });
@@ -207,6 +210,7 @@ function keywordLabApp() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         min_volume: this.minVolume,
+                        max_volume: this.maxVolume,
                         min_saturation: this.minSaturation,
                     }),
                 });
@@ -308,13 +312,15 @@ function keywordLabApp() {
         listColumns() {
             return [
                 { key: 'keyword',       label: '키워드', width: '24%', strong: true, sortable: true },
-                { key: 'search_volume', label: '검색량', width: '11%', align: 'right', sortable: true },
-                { key: 'doc_count',     label: '문서수', width: '11%', align: 'right', sortable: true },
-                { key: 'saturation',    label: '포화도', width: '10%', align: 'right', sortable: true },
-                { key: 'competition',   label: '경쟁',   width: '8%',  sortable: true },
-                { key: '_badges',       label: '판정',   width: '18%' },
+                { key: 'search_volume', label: '검색량', width: '10%', align: 'right', sortable: true },
+                // 경쟁 판정의 기준. 누적 문서수는 참고값이라 뒤로 뺀다.
+                { key: 'monthly_pub_count', label: '월 발행', width: '10%', align: 'right', sortable: true },
+                { key: 'doc_count',     label: '누적문서', width: '10%', align: 'right', sortable: true },
+                { key: 'saturation',    label: '포화도', width: '9%', align: 'right', sortable: true },
+                { key: 'competition',   label: '경쟁',   width: '7%',  sortable: true },
+                { key: '_badges',       label: '판정',   width: '16%' },
                 // 입력한 시드가 아니라 이 키워드가 분류된 카테고리다.
-                { key: 'niche',         label: '니치',   width: '18%', sortable: true },
+                { key: 'niche',         label: '니치',   width: '14%', sortable: true },
             ];
         },
 
@@ -324,6 +330,9 @@ function keywordLabApp() {
                 case 'search_volume':
                     return row.search_volume === null || row.search_volume === undefined
                         ? '-' : row.search_volume.toLocaleString();
+                case 'monthly_pub_count':
+                    return row.monthly_pub_count === null || row.monthly_pub_count === undefined
+                        ? '미측정' : row.monthly_pub_count.toLocaleString();
                 case 'doc_count':
                     return row.doc_count === null || row.doc_count === undefined
                         ? '미측정' : row.doc_count.toLocaleString();
@@ -361,8 +370,8 @@ function keywordLabApp() {
         listSub(row) {
             const parts = [];
             parts.push(`검색 ${row.search_volume ?? '-'}`);
-            parts.push(`문서 ${row.doc_count === null || row.doc_count === undefined
-                ? '미측정' : row.doc_count.toLocaleString()}`);
+            parts.push(`월 발행 ${row.monthly_pub_count === null || row.monthly_pub_count === undefined
+                ? '미측정' : row.monthly_pub_count.toLocaleString()}`);
             if (row.niche) parts.push(row.niche);
             if (row.verdict_reason) parts.push(row.verdict_reason);
             return parts.join(' · ');
