@@ -200,6 +200,92 @@ window.getKeywordFormTemplate = function () {
             </div>
         </div>
 
+        <!-- 제목 생성 AI -->
+        <div class="border-t border-gray-100 pt-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">제목 생성 AI</label>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <select x-model="formData.keyword.ai_provider"
+                        @change="formData.keyword.ai_model = ''"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                    <option value="">선택 안 함 (블로그 설정 사용)</option>
+                    <template x-for="p in kwProviders()" :key="p">
+                        <option :value="p" x-text="p"></option>
+                    </template>
+                </select>
+                <select x-model="formData.keyword.ai_model"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                    <option value="">기본 모델</option>
+                    <template x-for="m in kwModels(formData.keyword.ai_provider)" :key="m">
+                        <option :value="m" x-text="m"></option>
+                    </template>
+                </select>
+            </div>
+            <p class="mt-1 text-xs text-gray-500">
+                블로그 없이 시드만으로 테스트할 때는 <b>여기서 골라야</b> 제목이 만들어집니다.
+                비워 두면 블로그의 글쓰기 AI를 쓰고, 그것도 없으면 제목 생성이 전부 실패합니다.
+            </p>
+        </div>
+
+        <!-- 테스트 실행 -->
+        <div class="border-t border-gray-100 pt-4">
+            <div class="flex flex-wrap items-center gap-3">
+                <button type="button" @click="runKeywordTest()" :disabled="kwTest.busy"
+                        class="px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-medium disabled:opacity-40">
+                    <span x-text="kwTest.busy ? '실행 중… (수집→측정→제목)' : '▶ 이 설정으로 테스트 실행'"></span>
+                </button>
+                <span class="text-xs text-gray-500">
+                    저장하지 않은 현재 화면 값 그대로 한 회차를 돌려 결과를 아래에 보여 줍니다.
+                </span>
+            </div>
+
+            <div x-show="kwTest.error" x-transition
+                 class="mt-3 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
+                <span x-text="kwTest.error"></span>
+            </div>
+
+            <div x-show="kwTest.result" x-transition class="mt-3 space-y-3">
+                <div class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-800"
+                     x-text="kwTest.result?.message"></div>
+
+                <div x-show="Object.keys(kwTest.result?.by_source || {}).length">
+                    <div class="text-xs font-medium text-gray-500 mb-1">소스별 수집</div>
+                    <div class="flex flex-wrap gap-1.5">
+                        <template x-for="[code, n] in Object.entries(kwTest.result?.by_source || {})" :key="code">
+                            <span class="px-2 py-0.5 bg-white border border-gray-200 rounded text-xs"
+                                  x-text="code + ' ' + n"></span>
+                        </template>
+                    </div>
+                </div>
+
+                <div x-show="(kwTest.result?.samples || []).length">
+                    <div class="text-xs font-medium text-gray-500 mb-1">
+                        수집된 키워드 <span x-text="'(' + (kwTest.result?.samples || []).length + '개 표시)'"></span>
+                    </div>
+                    <div class="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
+                        <template x-for="k in (kwTest.result?.samples || [])" :key="k">
+                            <span class="px-2 py-0.5 bg-amber-50 border border-amber-200 rounded text-xs" x-text="k"></span>
+                        </template>
+                    </div>
+                </div>
+
+                <div x-show="(kwTest.result?.preview || []).length">
+                    <div class="text-xs font-medium text-gray-500 mb-1">생성된 제목 (검증 모드면 저장 안 됨)</div>
+                    <div class="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-64 overflow-y-auto">
+                        <template x-for="(t, i) in (kwTest.result?.preview || [])" :key="i">
+                            <div class="flex items-start gap-2 px-3 py-1.5 text-sm">
+                                <span class="text-xs px-1.5 py-0.5 rounded shrink-0"
+                                      :class="t.state === 'ready' ? 'bg-green-100 text-green-700'
+                                            : t.state === 'blocked' ? 'bg-red-100 text-red-700'
+                                            : 'bg-gray-100 text-gray-600'"
+                                      x-text="t.reason"></span>
+                                <span class="text-gray-800" x-text="t.title"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- 주기 -->
         <div class="border-t border-gray-100 pt-4">
             <label class="block text-sm font-medium text-gray-700 mb-2">실행 간격 (분)</label>

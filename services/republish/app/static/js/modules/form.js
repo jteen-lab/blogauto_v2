@@ -62,6 +62,9 @@ function moduleFormApp(module = null, moduleType = null) {
         requiredPagePresets: [],
         _pagesPresetPrev: 'standard',
 
+        // 키워드 모듈 테스트 패널 상태 (모듈 안에서 바로 결과 확인)
+        kwTest: { busy: false, error: '', result: null, models: [] },
+
         // 폼 데이터
         formData: {
             name: initialModule?.name || '',
@@ -133,6 +136,8 @@ function moduleFormApp(module = null, moduleType = null) {
                 measure_limit: initialModule?.settings?.keyword?.measure_limit ?? 50,
                 make_titles: initialModule?.settings?.keyword?.make_titles ?? true,
                 dry_run: initialModule?.settings?.keyword?.dry_run ?? true,
+                ai_provider: initialModule?.settings?.keyword?.ai_provider || '',
+                ai_model: initialModule?.settings?.keyword?.ai_model || '',
                 titles_per_keyword: initialModule?.settings?.keyword?.titles_per_keyword ?? 3,
                 cluster_enabled: initialModule?.settings?.keyword?.cluster_enabled ?? true,
                 cluster_threshold: initialModule?.settings?.keyword?.cluster_threshold ?? 0.34,
@@ -231,6 +236,10 @@ function moduleFormApp(module = null, moduleType = null) {
             // moduleType.code 또는 formData.type_code 둘 다 체크
             const typeCode = this.formData.type_code || this.moduleType?.code;
             console.log('typeCode 확인:', typeCode, 'formData.type_code:', this.formData.type_code, 'moduleType:', this.moduleType);
+            if (typeCode === 'keyword') {
+                // 제목 생성 AI 선택지를 채운다
+                this.loadKeywordModels();
+            }
             if (typeCode === 'contact_form') {
                 this.loadContactFormTemplates();
                 this.loadContactFormDesigns();
@@ -773,6 +782,57 @@ function moduleFormApp(module = null, moduleType = null) {
             return true;
         },
 
+        // ── 키워드 모듈 테스트 ───────────────────────────
+        kwProviders() {
+            const set = new Set((this.kwTest.models || []).map(m => m.provider));
+            return Array.from(set).sort();
+        },
+
+        kwModels(provider) {
+            if (!provider) return [];
+            return (this.kwTest.models || [])
+                .filter(m => m.provider === provider)
+                .map(m => m.model_id);
+        },
+
+        async loadKeywordModels() {
+            if (this.kwTest.models.length) return;
+            try {
+                const r = await fetch('/api/v1/ai-models?capability=text',
+                    { credentials: 'include' });
+                if (!r.ok) return;
+                const d = await r.json();
+                this.kwTest.models = (d.models || d.items || d || [])
+                    .filter(m => m && m.provider && m.model_id);
+            } catch (e) { /* 목록을 못 받아도 직접 저장은 가능하다 */ }
+        },
+
+        async runKeywordTest() {
+            // 저장하지 않은 현재 화면 값 그대로 돌린다. 저장 후 확인하면
+            // 실패한 설정이 이미 남는다.
+            this.kwTest.busy = true;
+            this.kwTest.error = '';
+            this.kwTest.result = null;
+            try {
+                const payload = this.prepareRequestData();
+                const r = await fetch('/api/v1/keyword-lab/run', {
+                    method: 'POST', credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        settings_override: payload.settings || {},
+                        force: true,
+                    }),
+                });
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.detail || '실행 실패');
+                this.kwTest.result = d;
+            } catch (e) {
+                this.kwTest.error = e.message;
+            } finally {
+                this.kwTest.busy = false;
+            }
+        },
+
         // 요청 데이터 준비
         prepareRequestData() {
             // description: 빈 문자열도 명시적으로 전송 (null로 변환하지 않음)
@@ -925,6 +985,8 @@ function moduleFormApp(module = null, moduleType = null) {
                         measure_limit: k.measure_limit,
                         make_titles: !!k.make_titles,
                         dry_run: !!k.dry_run,
+                        ai_provider: k.ai_provider || null,
+                        ai_model: k.ai_model || null,
                         titles_per_keyword: k.titles_per_keyword,
                         cluster_enabled: !!k.cluster_enabled,
                         cluster_threshold: k.cluster_threshold,
