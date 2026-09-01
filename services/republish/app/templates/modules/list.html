@@ -456,6 +456,14 @@
           <span class="text-xs text-gray-500 mt-1">URL 기반 사이트맵 · 제목 대량 추출</span>
         </button>
 
+        {# 키워드 모듈 - 수요를 재고 제목까지 만들어 재고에 넣는다 #}
+        <button onclick="selectOption('moduleTypeSelector', 'keyword', '키워드')"
+                class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-amber-300 hover:bg-amber-50 transition-all duration-200 group">
+          <span class="text-3xl mb-2 group-hover:scale-110 transition-transform duration-200">🔑</span>
+          <span class="font-medium text-gray-900 group-hover:text-amber-700">키워드</span>
+          <span class="text-xs text-gray-500 mt-1">수요·경쟁 측정 → 묶음 제목 생성 → 재고 적재</span>
+        </button>
+
         {# 애드센스 필수구성 모듈 - F10 #}
         <button onclick="selectOption('moduleTypeSelector', 'contact_form', '애드센스 필수구성')"
                 class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-purple-300 hover:bg-purple-50 transition-all duration-200 group">

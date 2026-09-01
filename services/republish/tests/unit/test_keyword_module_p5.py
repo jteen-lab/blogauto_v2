@@ -7,6 +7,7 @@
     블로거는 IndexNow 키 파일을 못 올려 네이버 자동 통보가 불가능하다.
     내보낸 뒤 실제 노출을 회수해 다음 시드 순서에 반영한다.
 """
+import re
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -200,3 +201,30 @@ class TestModuleListQuery:
     def test_router_does_not_filter_by_is_deleted(self):
         src = (BASE / "app/routers/keyword_lab.py").read_text(encoding="utf-8")
         assert "Module.is_deleted" not in src
+
+
+class TestCreateTypeSelector:
+    """모듈 생성 팝업이 목록 타입과 어긋나지 않는다.
+
+    팝업 옵션은 템플릿에 하드코딩돼 있어, 새 타입을 추가하면서 여기를
+    빠뜨리면 **만들 수가 없다.** 실제로 키워드 타입이 그렇게 빠져 있었다.
+    """
+
+    def _popup_codes(self):
+        html = (BASE / "app/templates/modules/list.html").read_text(
+            encoding="utf-8")
+        return set(re.findall(
+            r"selectOption\('moduleTypeSelector',\s*'([a-z_]+)'", html))
+
+    def _list_codes(self):
+        js = (BASE / "app/static/js/modules/list.js").read_text(
+            encoding="utf-8")
+        line = re.search(r"const moduleTypes = \[([^\]]+)\]", js)
+        assert line, "list.js 의 moduleTypes 배열을 찾지 못했다"
+        return set(re.findall(r"'([a-z_]+)'", line.group(1)))
+
+    def test_keyword_is_creatable(self):
+        assert "keyword" in self._popup_codes()
+
+    def test_popup_matches_list_types(self):
+        assert self._popup_codes() == self._list_codes()
