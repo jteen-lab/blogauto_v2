@@ -12,6 +12,22 @@ window.getKeywordFormTemplate = function () {
             <b>재고가 충분하면 돌지 않습니다</b> — 매번 도는 것은 API 낭비입니다.
         </div>
 
+        <!-- 검증 모드 -->
+        <div class="p-3 border-2 rounded-lg"
+             :class="formData.keyword.dry_run ? 'border-amber-300 bg-amber-50' : 'border-gray-200 bg-white'">
+            <label class="flex items-start gap-2 text-sm font-medium text-gray-800">
+                <input type="checkbox" x-model="formData.keyword.dry_run" class="rounded mt-0.5">
+                <span>
+                    검증 모드 — 제목을 <b>데이터 관리에 저장하지 않고</b> 결과만 보기
+                    <span class="block mt-1 font-normal text-xs text-gray-600">
+                        수집·측정·제목 생성은 그대로 하고, 임시제목·정식제목에는 넣지 않습니다.
+                        동작 로그에서 어떤 제목이 나왔고 무엇이 필터에 걸렸는지 확인한 뒤,
+                        쓸 만해지면 이 체크를 풀어 실제 재고에 쌓으세요.
+                    </span>
+                </span>
+            </label>
+        </div>
+
         <!-- 시드 -->
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-2">시드 키워드 (선택)</label>
