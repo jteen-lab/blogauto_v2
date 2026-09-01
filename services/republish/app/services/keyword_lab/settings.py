@@ -22,10 +22,32 @@ DEFAULT_SEED_LIMIT = 10
 # 재고가 이보다 많으면 돌지 않는다. 매번 도는 것은 API 낭비다.
 DEFAULT_MIN_INVENTORY = 30
 
+# 켤 수 있는 수집 소스. 기본은 검색광고만 — 나머지는 사용자가 켠다.
+# 한 소스만 쓰면 그 소스의 한계가 결과의 한계가 된다.
+DEFAULT_SOURCES = ["naver_ads"]
+
+# 검색량 없는 후보를 한 회차에 몇 개까지 보강할지(네이버 검색광고 호출).
+DEFAULT_ENRICH_LIMIT = 100
+
 DEFAULT_INTERVAL_MINUTES = 360
 DEFAULT_TITLES_PER_KEYWORD = 3
 DEFAULT_COLLECT_LIMIT = 100
 DEFAULT_MEASURE_LIMIT = 50
+
+
+def _sources(value: Any) -> List[str]:
+    """켤 소스 목록. 모르는 코드는 버리고, 검색광고는 항상 포함한다.
+
+    검색광고를 빼면 검색량을 아는 소스가 사라져 후보가 전부 pending 이 된다.
+    """
+    from .sources.base import ALL_SOURCES, SRC_NAVER_ADS
+
+    if isinstance(value, str):
+        value = [x.strip() for x in value.split(",")]
+    picked = [x for x in (value or []) if x in ALL_SOURCES]
+    if SRC_NAVER_ADS not in picked:
+        picked.insert(0, SRC_NAVER_ADS)
+    return picked
 
 
 @dataclass
@@ -36,6 +58,9 @@ class KeywordModuleSettings:
     seeds: List[str] = field(default_factory=list)
     modifiers: List[str] = field(default_factory=lambda: list(DEFAULT_MODIFIERS))
     use_blog_categories: bool = True
+    # 검색광고 외에 켤 소스(자동완성·플래너·트렌드·서치콘솔)
+    sources: List[str] = field(default_factory=lambda: list(DEFAULT_SOURCES))
+    enrich_limit: int = DEFAULT_ENRICH_LIMIT
     # 지난 회차 채택 키워드를 다음 시드로 쓴다. 이게 없으면 카테고리만
     # 반복해 소재가 고갈된다.
     recurse_adopted: bool = True
@@ -91,6 +116,8 @@ class KeywordModuleSettings:
             seeds=[x for x in _list("seeds", []) if x],
             modifiers=_list("modifiers", DEFAULT_MODIFIERS),
             use_blog_categories=bool(kw.get("use_blog_categories", True)),
+            sources=_sources(kw.get("sources")),
+            enrich_limit=_int("enrich_limit", DEFAULT_ENRICH_LIMIT),
             recurse_adopted=bool(kw.get("recurse_adopted", True)),
             seed_limit=_int("seed_limit", DEFAULT_SEED_LIMIT),
             collect_limit=_int("collect_limit", DEFAULT_COLLECT_LIMIT),
@@ -116,6 +143,8 @@ class KeywordModuleSettings:
             "seeds": self.seeds,
             "modifiers": self.modifiers,
             "use_blog_categories": self.use_blog_categories,
+            "sources": self.sources,
+            "enrich_limit": self.enrich_limit,
             "recurse_adopted": self.recurse_adopted,
             "seed_limit": self.seed_limit,
             "collect_limit": self.collect_limit,

@@ -200,9 +200,68 @@ class KeywordLabService:
         result = await self._collect_rows(expanded, blog_id, cfg.collect_limit)
         # 재귀로 promoted 를 켠 것을 저장한다.
         await self.db.commit()
+
+        # 검색광고 밖의 소스(자동완성·플래너·트렌드·서치콘솔)
+        remaining = max(0, cfg.collect_limit - (result.get("saved") or 0))
+        extra = await self._collect_sources(
+            cfg, blog_id, [m["seed"] for m in expanded], remaining)
+        result["saved"] = (result.get("saved") or 0) + extra.get("saved", 0)
+        result["by_source"] = extra.get("by_source") or {}
+        result["source_errors"] = extra.get("errors") or []
+        if extra.get("errors"):
+            result.setdefault("errors", []).extend(extra["errors"])
+
         result["seed_count"] = len(picked)
         result["expanded_count"] = len(expanded)
         return result
+
+    async def _collect_sources(self, cfg, blog_id: Optional[int],
+                               seeds: List[str],
+                               limit: int) -> Dict[str, Any]:
+        """검색광고 외 소스에서 모아 저장한다.
+
+        소스 하나가 실패해도 회차를 죽이지 않는다. 검색량이 없는 후보는
+        검색광고로 보강한 뒤 저장한다 — 검색량이 없으면 판정이 영원히
+        pending 이라 재고로 이어지지 않는다.
+        """
+        from .ingest import IdeaIngestor
+        from .sources.base import SRC_NAVER_ADS
+        from .sources import registry
+
+        others = [c for c in cfg.sources if c != SRC_NAVER_ADS]
+        if not others or limit <= 0:
+            return {"saved": 0, "by_source": {}, "errors": []}
+
+        blog = await self._blog(blog_id) if blog_id else None
+        gathered = await registry.gather(
+            self.db, self.settings, blog, seeds, others)
+
+        existing = await self._existing_keywords(blog_id)
+        fresh = [i for i in gathered["ideas"]
+                 if i.keyword.lower() not in existing]
+
+        enriched = await registry.enrich_volumes(
+            self.settings, fresh, cfg.enrich_limit)
+
+        ingestor = IdeaIngestor(self.db, self.user_id, self._classify,
+                                self.thresholds)
+        stored = await ingestor.save(fresh, blog_id, existing, limit)
+        await self.db.commit()
+
+        errors = list(gathered.get("errors") or [])
+        errors.extend(enriched.get("errors") or [])
+        logger.info(
+            "[KEYWORD_LAB] 추가 소스 | 수집 %d · 저장 %d · 검색량 보강 %d",
+            len(gathered["ideas"]), stored["saved"], enriched["filled"],
+        )
+        return {"saved": stored["saved"], "by_source": stored["by_source"],
+                "enriched": enriched["filled"], "errors": errors}
+
+    async def _blog(self, blog_id: int):
+        """대상 블로그. 서치콘솔 속성 해석에 쓴다."""
+        return (await self.db.execute(
+            select(Blog).where(Blog.id == blog_id)
+        )).scalar_one_or_none()
 
     def _build(self, keyword: str, item: dict, niche: dict,
                blog_id: Optional[int]) -> KeywordCandidate:
