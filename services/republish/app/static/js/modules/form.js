@@ -117,6 +117,13 @@ function moduleFormApp(module = null, moduleType = null) {
                 modifiers_text: (initialModule?.settings?.keyword?.modifiers
                     || ['방법', '추천', '후기', '비교', '초보']).join(', '),
                 use_blog_categories: initialModule?.settings?.keyword?.use_blog_categories ?? true,
+                // 수집 소스 — 체크박스별 상태로 펼쳐 두고 저장할 때 배열로 접는다
+                src_naver_suggest: (initialModule?.settings?.keyword?.sources || []).includes('naver_suggest'),
+                src_google_suggest: (initialModule?.settings?.keyword?.sources || []).includes('google_suggest'),
+                src_gsc: (initialModule?.settings?.keyword?.sources || []).includes('gsc'),
+                src_google_planner: (initialModule?.settings?.keyword?.sources || []).includes('google_planner'),
+                src_google_trends: (initialModule?.settings?.keyword?.sources || []).includes('google_trends'),
+                enrich_limit: initialModule?.settings?.keyword?.enrich_limit ?? 100,
                 recurse_adopted: initialModule?.settings?.keyword?.recurse_adopted ?? true,
                 min_volume: initialModule?.settings?.keyword?.min_volume ?? 100,
                 max_volume: initialModule?.settings?.keyword?.max_volume ?? 100000,
@@ -886,12 +893,23 @@ function moduleFormApp(module = null, moduleType = null) {
                 const k = this.formData.keyword || {};
                 const split = (t) => (t || '').split(',')
                     .map(x => x.trim()).filter(Boolean);
+                // 검색광고는 항상 포함한다 — 검색량을 아는 유일한 소스다
+                const sources = ['naver_ads'];
+                [['src_naver_suggest', 'naver_suggest'],
+                 ['src_google_suggest', 'google_suggest'],
+                 ['src_gsc', 'gsc'],
+                 ['src_google_planner', 'google_planner'],
+                 ['src_google_trends', 'google_trends']].forEach(([flag, code]) => {
+                    if (k[flag]) sources.push(code);
+                });
                 data.settings = {
                     keyword: {
                         enabled: true,
                         seeds: split(k.seeds_text),
                         modifiers: split(k.modifiers_text),
                         use_blog_categories: !!k.use_blog_categories,
+                        sources: sources,
+                        enrich_limit: k.enrich_limit,
                         recurse_adopted: !!k.recurse_adopted,
                         min_volume: k.min_volume,
                         max_volume: k.max_volume,

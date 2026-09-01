@@ -45,6 +45,50 @@ window.getKeywordFormTemplate = function () {
             </p>
         </div>
 
+        <!-- 수집 소스 -->
+        <div class="border-t border-gray-100 pt-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">수집 소스</label>
+            <div class="px-3 py-2 mb-3 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
+                한 소스만 쓰면 그 소스의 한계가 결과의 한계가 됩니다.
+                <b>네이버 검색광고는 항상 켜집니다</b> — 검색량을 아는 유일한 소스라
+                끄면 후보가 전부 미측정으로 남습니다.
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <label class="flex items-start gap-2 text-sm text-gray-500">
+                    <input type="checkbox" checked disabled class="rounded mt-0.5">
+                    <span>네이버 검색광고 <span class="text-xs">(연관키워드 + 검색량 · 필수)</span></span>
+                </label>
+                <label class="flex items-start gap-2 text-sm text-gray-700">
+                    <input type="checkbox" x-model="formData.keyword.src_naver_suggest" class="rounded mt-0.5">
+                    <span>네이버 자동완성 <span class="text-xs text-gray-500">(최신성 강함 · 비공식 경로)</span></span>
+                </label>
+                <label class="flex items-start gap-2 text-sm text-gray-700">
+                    <input type="checkbox" x-model="formData.keyword.src_google_suggest" class="rounded mt-0.5">
+                    <span>구글 자동완성 <span class="text-xs text-gray-500">(롱테일·질문형 · 비공식 경로)</span></span>
+                </label>
+                <label class="flex items-start gap-2 text-sm text-gray-700">
+                    <input type="checkbox" x-model="formData.keyword.src_gsc" class="rounded mt-0.5">
+                    <span>서치콘솔 실측 쿼리 <span class="text-xs text-gray-500">(우리 글이 실제 노출된 검색어 · 속성 등록 필요)</span></span>
+                </label>
+                <label class="flex items-start gap-2 text-sm text-gray-700">
+                    <input type="checkbox" x-model="formData.keyword.src_google_planner" class="rounded mt-0.5">
+                    <span>구글 키워드플래너 <span class="text-xs text-gray-500">(검색량은 구간값 · 정렬용)</span></span>
+                </label>
+                <label class="flex items-start gap-2 text-sm text-gray-700">
+                    <input type="checkbox" x-model="formData.keyword.src_google_trends" class="rounded mt-0.5">
+                    <span>구글 트렌드 <span class="text-xs text-gray-500">(연관·급상승 · 절대 검색량 없음)</span></span>
+                </label>
+            </div>
+            <div class="mt-3">
+                <label class="block text-xs text-gray-500 mb-1">회차당 검색량 보강 수</label>
+                <input type="number" min="0" max="500" x-model.number="formData.keyword.enrich_limit"
+                       class="w-40 px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                <p class="mt-1 text-xs text-gray-500">
+                    자동완성·트렌드·서치콘솔은 키워드만 줍니다. 검색광고로 검색량을 채웁니다.
+                </p>
+            </div>
+        </div>
+
         <!-- 판정 기준 -->
         <div class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
             공급은 누적 문서수가 아니라 <b>최근 N일 발행량</b>으로 봅니다.
