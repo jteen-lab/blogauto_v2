@@ -27,6 +27,9 @@ function keywordLabApp() {
         listSortKey: 'search_volume',
         listSortDir: 'desc',
 
+        engines: ['google'],
+        engineWarnings: [],
+        readiness: null,
         minVolume: 100,
         maxVolume: 100000,
         minSaturation: 0.2,
@@ -119,7 +122,9 @@ function keywordLabApp() {
 
         async loadSeeds() {
             this.seeds = [];
+            this.readiness = null;
             if (!this.blogId) return;
+            await this.loadEngines();
             try {
                 const r = await fetch(
                     `/api/v1/keyword-lab/seeds/${this.blogId}`,
@@ -307,6 +312,81 @@ function keywordLabApp() {
             }
             const v = row[k];
             return v === null || v === undefined ? -1 : v;
+        },
+
+        // ── 노출 설정 ────────────────────────────────────
+        engineLabel(code) {
+            return { google: '구글', naver: '네이버', bing: '빙' }[code] || code;
+        },
+
+        stateIcon(state) {
+            return { ok: '✅', warn: '⚠️', fail: '❌' }[state] || '❔';
+        },
+
+        async loadEngines() {
+            if (!this.blogId) return;
+            try {
+                const r = await fetch(`/api/v1/keyword-lab/engines/${this.blogId}`,
+                    { credentials: 'include' });
+                if (!r.ok) return;
+                const d = await r.json();
+                this.engines = d.engines || ['google'];
+                this.engineWarnings = d.warnings || [];
+            } catch (e) { /* 조회 실패는 화면을 막지 않는다 */ }
+        },
+
+        async saveEngines() {
+            if (!this.blogId) return;
+            this.busy = 'engines';
+            try {
+                const r = await fetch(`/api/v1/keyword-lab/engines/${this.blogId}`, {
+                    method: 'PUT', credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ engines: this.engines }),
+                });
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.detail || '저장 실패');
+                this.engines = d.engines || [];
+                this.engineWarnings = d.warnings || [];
+                this.show('노출 목표를 저장했습니다', 'success');
+            } catch (e) {
+                this.show(e.message, 'error');
+            } finally { this.busy = ''; }
+        },
+
+        async loadReadiness() {
+            if (!this.blogId) return;
+            this.busy = 'readiness';
+            this.readiness = null;
+            try {
+                const r = await fetch(`/api/v1/keyword-lab/readiness/${this.blogId}`,
+                    { credentials: 'include' });
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.detail || '확인 실패');
+                this.readiness = d;
+            } catch (e) {
+                this.show(e.message, 'error');
+            } finally { this.busy = ''; }
+        },
+
+        async collectFeedback() {
+            if (!this.blogId) return;
+            this.busy = 'feedback';
+            try {
+                const r = await fetch('/api/v1/keyword-lab/feedback', {
+                    method: 'POST', credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ blog_id: Number(this.blogId) }),
+                });
+                const d = await r.json();
+                if (!r.ok) throw new Error(d.detail || '회수 실패');
+                this.show(d.message
+                    || `실측 ${d.rows}행 · 매칭 ${d.matched} · 노출없음 ${d.zeroed}`,
+                    'success');
+                await this.loadCandidates();
+            } catch (e) {
+                this.show(e.message, 'error');
+            } finally { this.busy = ''; }
         },
 
         listColumns() {

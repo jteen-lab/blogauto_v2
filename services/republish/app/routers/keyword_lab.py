@@ -166,6 +166,81 @@ async def test_connection(
     return {"naver_ads": ads, "naver_search": search}
 
 
+@router.get("/engines/{blog_id}", summary="블로그 타깃 검색 엔진")
+async def get_engines(
+    blog_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """이 블로그가 어느 검색 엔진 노출을 노리는지."""
+    from ..services.keyword_lab import engines as engine_service
+
+    blog = await _blog(db, blog_id, current_user)
+    return engine_service.describe(blog)
+
+
+@router.put("/engines/{blog_id}", summary="타깃 검색 엔진 저장")
+async def set_engines(
+    blog_id: int,
+    engines: List[str] = Body(..., embed=True),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """수요를 재는 엔진과 노출을 노리는 엔진을 맞춘다.
+
+    지금까지는 수요를 네이버로 재고 글은 구글 색인 대상에 내보냈다.
+    """
+    from ..services.keyword_lab import engines as engine_service
+
+    blog = await _blog(db, blog_id, current_user)
+    engine_service.set_target_engines(blog, engines)
+    await db.commit()
+    logger.info("[KEYWORD_LAB] 타깃 엔진 저장 | blog=%s | %s", blog_id, engines)
+    return engine_service.describe(blog)
+
+
+@router.get("/readiness/{blog_id}", summary="네이버 노출 준비 상태")
+async def naver_readiness(
+    blog_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """네이버는 등록·제출에 API 가 없다. 무엇이 되어 있는지만 모아 준다."""
+    from ..services.search_visibility import naver_readiness as readiness
+
+    blog = await _blog(db, blog_id, current_user)
+    return await readiness.check(blog)
+
+
+@router.post("/feedback", summary="실측 성과 회수")
+async def collect_feedback(
+    blog_id: int = Body(..., embed=True),
+    days: int = Body(28, embed=True),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """서치콘솔 실측을 회수해 키워드 점수에 반영한다.
+
+    노출이 붙은 축은 다음 회차 시드로 먼저 뽑히고, 확인했는데 노출이 없던
+    축은 뒤로 밀린다.
+    """
+    from ..services.keyword_lab.feedback import FeedbackCollector
+
+    blog = await _blog(db, blog_id, current_user)
+    collector = FeedbackCollector(db, current_user.id)
+    return await collector.apply(blog, days=max(1, min(180, days)))
+
+
+async def _blog(db: AsyncSession, blog_id: int, user: User) -> Blog:
+    """내 블로그인지 확인하고 돌려준다."""
+    blog = (await db.execute(
+        select(Blog).where(Blog.id == blog_id, Blog.user_id == user.id)
+    )).scalar_one_or_none()
+    if not blog:
+        raise HTTPException(404, "블로그를 찾을 수 없습니다")
+    return blog
+
+
 @router.get("/candidates", summary="후보 목록")
 async def list_candidates(
     blog_id: Optional[int] = Query(None),
