@@ -94,6 +94,83 @@ class KeywordModuleRunner:
         )
         return out
 
+    async def run_for_blogs(
+        self, settings: Optional[dict], blogs: Optional[list] = None,
+        force: bool = False, steps: Optional[list] = None,
+    ) -> Dict[str, Any]:
+        """플로우에 연결된 **블로그 전체**를 돈다.
+
+        블로그마다 니치가 다르므로 회차도 블로그마다 돈다. 첫 번째 블로그만
+        처리하면 나머지 블로그의 재고는 아무도 채우지 않는다(검토서 2-2).
+
+        블로그가 하나도 없으면 블로그 없이 1회 돈다(직접 입력 시드만 쓰는 경우).
+        """
+        targets = list(blogs or [])
+        if not targets:
+            result = await self.run(settings, blog_id=None,
+                                    force=force, steps=steps)
+            return self._aggregate([("-", result)])
+
+        rows = []
+        for blog in targets:
+            result = await self.run(settings, blog_id=blog.id,
+                                    force=force, steps=steps)
+            rows.append((getattr(blog, "name", None) or f"blog#{blog.id}",
+                         result))
+        return self._aggregate(rows)
+
+    @staticmethod
+    def _aggregate(rows: list) -> Dict[str, Any]:
+        """블로그별 결과를 하나로 합친다 — 로그·화면이 같은 모양을 쓴다."""
+        collected = measured = made = 0
+        ok = skipped = failed = 0
+        errors: list = []
+        details: list = []
+
+        for name, result in rows:
+            result = result or {}
+            if not result.get("success"):
+                failed += 1
+                reason = result.get("error") or "실행 실패"
+                if reason not in errors:
+                    errors.append(reason)
+                details.append({"blog_name": name, "status": "failed",
+                                "detail": reason})
+                continue
+            if result.get("skipped"):
+                skipped += 1
+                details.append({"blog_name": name, "status": "skipped",
+                                "detail": result.get("message", "건너뜀")})
+                continue
+            ok += 1
+            c = (result.get("collect") or {}).get("saved") or 0
+            m = (result.get("measure") or {}).get("measured") or 0
+            t = (result.get("titles") or {}).get("made") or 0
+            collected += c
+            measured += m
+            made += t
+            details.append({
+                "blog_name": name, "status": "success",
+                "detail": f"키워드 {c}개 · 측정 {m}건 · 제목 {t}편",
+            })
+
+        # 전부 실패했을 때만 실패다. 일부 블로그가 건너뛰는 것은 정상 동작이다.
+        success = failed < len(rows) or not rows
+        message = (f"블로그 {len(rows)}개 | 성공 {ok} · 건너뜀 {skipped} · "
+                   f"실패 {failed} | 키워드 {collected}개 · 측정 {measured}건 · "
+                   f"제목 {made}편")
+        out: Dict[str, Any] = {
+            "success": success, "message": message, "details": details,
+            "collected": collected, "measured": measured, "titles_made": made,
+            "blogs": len(rows), "ok": ok, "skipped_count": skipped,
+            "failed": failed,
+        }
+        if errors:
+            out["errors"] = errors
+            if not success:
+                out["error"] = errors[0]
+        return out
+
     async def _make_titles(self, cfg: KeywordModuleSettings,
                            blog) -> Dict[str, Any]:
         from ..ai.ai_service import AIService

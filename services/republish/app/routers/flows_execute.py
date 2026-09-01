@@ -272,6 +272,46 @@ async def _execute_flow_background(
                             action="collect"
                         )
 
+            # 5-1. keyword 모듈 실행 (연결된 블로그 전체를 돈다)
+            #      재고가 충분한 블로그는 실행기가 스스로 건너뛴다.
+            if "keyword" in modules_by_type:
+                from app.services.flow.module_blog_scope import blogs_for_module
+
+                for keyword_module in modules_by_type["keyword"]:
+                    module_start_time = datetime.now()
+                    logger.info(f"[FLOW_BG] 키워드 모듈 실행: {keyword_module.name}")
+                    try:
+                        kw_blogs = blogs_for_module(keyword_module, blogs)
+                        result = await _execute_keyword_module(
+                            keyword_module, kw_blogs, db
+                        )
+                    except Exception as e:
+                        logger.error(
+                            f"[FLOW_BG] 키워드 모듈 오류 | "
+                            f"module={keyword_module.name} | error={e}"
+                        )
+                        result = {"success": False, "message": str(e)}
+
+                    duration_ms = int(
+                        (datetime.now() - module_start_time).total_seconds() * 1000
+                    )
+                    await _save_autorun_log(
+                        db=db,
+                        user_id=user_id,
+                        flow_id=flow.id,
+                        flow_name=flow.name,
+                        module_name=keyword_module.name,
+                        blog_name="-",
+                        result=result,
+                        duration_ms=duration_ms,
+                        action="keyword"
+                    )
+                    if result.get("success"):
+                        success_count += 1
+                    else:
+                        fail_count += 1
+                    total_processed += 1
+
             # 6. data 모듈 실행 (블로그 없이 독립 실행 - 제목 이동 등)
             if "data" in modules_by_type:
                 # 플로우 내 수집 모듈 존재 여부 확인
@@ -999,6 +1039,30 @@ def _build_context(
         f"module={gp_module.name}"
     )
     return context
+
+
+async def _execute_keyword_module(
+    module: Module,
+    blogs: List[Blog],
+    db: AsyncSession,
+) -> Dict[str, Any]:
+    """키워드 모듈 실행 — 수집 → 측정 → 제목 생성 한 회차.
+
+    수동 화면·플로우·오토런이 **같은 실행기**를 부른다. 다른 코드를 타면
+    한쪽에서만 나는 버그가 생긴다.
+
+    Args:
+        module: 키워드 타입 모듈
+        blogs: 플로우에 연결된 블로그 목록(모듈 스코프로 이미 좁혀진 것)
+        db: DB 세션
+
+    Returns:
+        {"success": bool, "message": str, "details": [...]}
+    """
+    from app.services.keyword_lab.runner import KeywordModuleRunner
+
+    runner = KeywordModuleRunner(db, module.user_id)
+    return await runner.run_for_blogs(module.settings or {}, blogs)
 
 
 async def _execute_collect_module(
@@ -2188,6 +2252,19 @@ async def execute_single_module(
                 "status": "success" if exec_result.get("success") else "failed",
                 "detail": exec_result.get("message", "")
             })
+
+        elif type_code == "keyword":
+            from ..services.flow.module_blog_scope import blogs_for_module
+
+            kw_blogs = blogs_for_module(
+                target_module, [link.blog for link in flow.blog_links if link.blog]
+            )
+            exec_result = await _execute_keyword_module(target_module, kw_blogs, db)
+            results.extend(exec_result.get("details") or [{
+                "blog_name": "-",
+                "status": "success" if exec_result.get("success") else "failed",
+                "detail": exec_result.get("message", ""),
+            }])
 
         elif type_code == "contact_form":
             # 애드센스 필수구성 모듈: 연결된 블로그마다 문의폼 + 필수 4페이지 보장(멱등)

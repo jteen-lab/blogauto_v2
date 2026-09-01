@@ -746,7 +746,7 @@ class FlowScheduler:
                     )
                 elif action_type == "keyword":
                     result = await self._execute_keyword_module(
-                        target_module, db, flow
+                        target_module, db, blogs
                     )
 
                 elif action_type == "contact_form":
@@ -1468,7 +1468,7 @@ class FlowScheduler:
                     )
                 elif action_type == "keyword":
                     result = await self._execute_keyword_module(
-                        module, db, flow
+                        module, db, blogs
                     )
                     duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
                     logger.info(
@@ -2109,46 +2109,32 @@ class FlowScheduler:
         self,
         module: Module,
         db: AsyncSession,
-        flow: Flow
+        blogs: List[Blog],
     ) -> Dict[str, Any]:
         """키워드 모듈 — 수집 → 측정 → 제목 생성 한 회차.
 
-        재고가 충분하면 스스로 건너뛴다. 매번 도는 것은 API 낭비다.
-        수동 화면(`/keyword-lab`)과 **같은 실행기**를 부른다 — 다른 코드를
+        재고가 충분한 블로그는 실행기가 스스로 건너뛴다. 매번 도는 것은 API
+        낭비다. 수동 화면·플로우와 **같은 실행기**를 부른다 — 다른 코드를
         타면 한쪽에서만 나는 버그가 생긴다.
+
+        Args:
+            module: 키워드 타입 모듈
+            db: DB 세션
+            blogs: 플로우에 연결된 블로그 목록
+
+        Returns:
+            {"success": bool, "message": str, ...}
         """
+        from app.services.flow.module_blog_scope import blogs_for_module
         from app.services.keyword_lab.runner import KeywordModuleRunner
 
         try:
-            blog_ids = [fb.blog_id for fb in (flow.flow_blogs or [])]
-            blog_id = blog_ids[0] if blog_ids else None
+            targets = blogs_for_module(module, list(blogs or []))
             runner = KeywordModuleRunner(db, module.user_id)
-            result = await runner.run(module.settings or {}, blog_id=blog_id)
-
-            if result.get("skipped"):
-                return {"success": True, "skipped": True,
-                        "message": result.get("message", "건너뜀")}
-            if not result.get("success"):
-                return {"success": False,
-                        "error": result.get("error", "키워드 모듈 실행 실패")}
-
-            collect = result.get("collect") or {}
-            measure = result.get("measure") or {}
-            titles = result.get("titles") or {}
-            return {
-                "success": True,
-                "message": (
-                    f"키워드 {collect.get('saved', 0)}개 수집 · "
-                    f"{measure.get('measured', 0)}건 측정 · "
-                    f"제목 {titles.get('made', 0)}편"
-                ),
-                "collected": collect.get("saved", 0),
-                "measured": measure.get("measured", 0),
-                "titles_made": titles.get("made", 0),
-            }
+            return await runner.run_for_blogs(module.settings or {}, targets)
         except Exception as e:
             logger.error(f"[FLOW_SCHEDULER] 키워드 모듈 실행 오류: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": str(e), "message": str(e)}
 
     async def _execute_collect_module(
         self,
