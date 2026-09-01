@@ -122,9 +122,15 @@ async def run_module(
             blogs = (settings.get("blogs") or [])
             blog_id = blogs[0] if blogs else None
 
+    blogs = []
+    if blog_id:
+        blogs = [await _blog(db, blog_id, current_user)]
+
+    # 플로우/오토런과 **같은 실행기·같은 응답 모양**을 쓴다. 화면이 따로
+    # 해석하면 한쪽에서만 맞는 결과가 나온다.
     runner = KeywordModuleRunner(db, current_user.id)
-    result = await runner.run(settings, blog_id=blog_id,
-                              force=force, steps=steps)
+    result = await runner.run_for_blogs(settings, blogs, force=force,
+                                        steps=steps)
     if not result.get("success"):
         raise HTTPException(400, result.get("error") or "실행 실패")
     return result

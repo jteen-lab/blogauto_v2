@@ -115,6 +115,8 @@ class KeywordLabService:
 
         existing = await self._existing_keywords(blog_id)
         saved, skipped, api_calls = 0, 0, 0
+        # 화면이 "몇 개" 만이 아니라 "무엇이" 들어왔는지 보여줄 수 있게 한다
+        samples: List[str] = []
         # 실패를 삼키지 않는다. 로그에만 남기면 화면에는 '0개 수집' 만
         # 보이고 사용자는 무엇을 고쳐야 할지 알 수 없다.
         errors: List[str] = []
@@ -144,6 +146,7 @@ class KeywordLabService:
                     skipped += 1
                     continue
                 existing.add(kw.lower())
+                samples.append(kw)
                 # 니치는 **키워드 자체를 분류해서** 정한다. 시드를 그대로
                 # 물려주면 '마라탕' 으로 모은 것이 전부 '음식 효능' 이 되어
                 # 나중에 카테고리별로 넘길 수가 없다.
@@ -168,6 +171,7 @@ class KeywordLabService:
 
         return {"success": True, "saved": saved, "skipped": skipped,
                 "seeds": [s["seed"] for s in seed_rows],
+                "samples": samples[:40],
                 "api_calls": api_calls, "errors": errors}
 
     async def collect_with_config(
@@ -210,6 +214,8 @@ class KeywordLabService:
             cfg, blog_id, [m["seed"] for m in expanded], remaining)
         result["saved"] = (result.get("saved") or 0) + extra.get("saved", 0)
         result["by_source"] = extra.get("by_source") or {}
+        result["samples"] = (list(result.get("samples") or [])
+                             + list(extra.get("samples") or []))[:40]
         result["source_errors"] = extra.get("errors") or []
         if extra.get("errors"):
             result.setdefault("errors", []).extend(extra["errors"])
@@ -258,6 +264,7 @@ class KeywordLabService:
             len(gathered["ideas"]), stored["saved"], enriched["filled"],
         )
         return {"saved": stored["saved"], "by_source": stored["by_source"],
+                "samples": stored.get("samples") or [],
                 "enriched": enriched["filled"], "errors": errors}
 
     async def _blog(self, blog_id: int):

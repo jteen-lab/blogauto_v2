@@ -138,6 +138,8 @@ class KeywordModuleRunner:
         errors: list = []
         details: list = []
         preview: list = []
+        samples: list = []
+        by_source: dict = {}
         dry_run = False
 
         for name, result in rows:
@@ -157,7 +159,14 @@ class KeywordModuleRunner:
                 continue
             ok += 1
             titles = result.get("titles") or {}
-            c = (result.get("collect") or {}).get("saved") or 0
+            collect = result.get("collect") or {}
+            samples.extend(collect.get("samples") or [])
+            for code, n in (collect.get("by_source") or {}).items():
+                by_source[code] = by_source.get(code, 0) + n
+            if titles.get("error"):
+                errors.append(titles["error"]) if titles["error"] not in errors \
+                    else None
+            c = collect.get("saved") or 0
             m = (result.get("measure") or {}).get("measured") or 0
             t = titles.get("made") or 0
             drafted = len(titles.get("preview") or [])
@@ -194,15 +203,21 @@ class KeywordModuleRunner:
         picks = [p["title"] for p in preview if p.get("state") == "ready"][:2]
         if picks:
             sample = " | 예: " + " / ".join(f'"{t}"' for t in picks)
+        # 제목이 0편인데 사유가 있으면 반드시 보여 준다. 지금까지 20건이
+        # 조용히 실패해도 "제목 0편" 으로만 보였다.
+        note = ""
+        if not preview and errors:
+            note = f" | ⚠ {errors[0]}"
         message = (f"{head}블로그 {len(rows)}개 | 성공 {ok} · 건너뜀 {skipped} · "
                    f"실패 {failed} | 키워드 {collected}개 · 측정 {measured}건 · "
-                   f"{tail}{sample}")
+                   f"{tail}{sample}{note}")
         out: Dict[str, Any] = {
             "success": success, "message": message, "details": details,
             "collected": collected, "measured": measured, "titles_made": made,
             "blogs": len(rows), "ok": ok, "skipped_count": skipped,
             "failed": failed, "dry_run": dry_run,
-            "preview": preview[:60],
+            "preview": preview[:60], "samples": samples[:40],
+            "by_source": by_source,
         }
         if errors:
             out["errors"] = errors
@@ -256,6 +271,8 @@ class KeywordModuleRunner:
                            + single_out.get("queued", 0)),
                 "dry_run": cfg.dry_run,
                 "preview": preview,
+                "error": (cluster_out.get("error")
+                          or single_out.get("error")),
             }
         except Exception as e:  # noqa: BLE001
             # 제목 생성이 실패해도 수집·측정 결과는 남는다.

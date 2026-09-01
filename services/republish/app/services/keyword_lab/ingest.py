@@ -59,6 +59,7 @@ class IdeaIngestor:
         """
         saved, skipped = 0, 0
         by_source: Dict[str, int] = {}
+        samples: List[str] = []
 
         for idea in ideas:
             if saved >= limit:
@@ -75,11 +76,13 @@ class IdeaIngestor:
             await self._store_metric(row, idea)
 
             saved += 1
+            samples.append(idea.keyword)
             by_source[idea.source] = by_source.get(idea.source, 0) + 1
 
         logger.info("[KEYWORD_INGEST] 저장 %d · 중복 %d | %s",
                     saved, skipped, by_source)
-        return {"saved": saved, "skipped": skipped, "by_source": by_source}
+        return {"saved": saved, "skipped": skipped, "by_source": by_source,
+                "samples": samples[:40]}
 
     async def _build(self, idea: KeywordIdea,
                      blog_id: Optional[int]) -> KeywordCandidate:
