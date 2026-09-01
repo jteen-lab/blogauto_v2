@@ -879,25 +879,29 @@ function moduleFormApp(module = null, moduleType = null) {
                     ? this.bcModule.toSettings()
                     : (this.formData.settings || {});
             } else if (this.formData.type_code === 'keyword') {
+                // data.settings 에 직접 담는다. 예전에는 선언조차 없는 지역
+                // 변수 settings 에 넣어 저장이 ReferenceError 로 죽었다.
                 const k = this.formData.keyword || {};
                 const split = (t) => (t || '').split(',')
                     .map(x => x.trim()).filter(Boolean);
-                settings.keyword = {
-                    enabled: true,
-                    seeds: split(k.seeds_text),
-                    modifiers: split(k.modifiers_text),
-                    use_blog_categories: !!k.use_blog_categories,
-                    recurse_adopted: !!k.recurse_adopted,
-                    min_volume: k.min_volume,
-                    min_saturation: k.min_saturation,
-                    seed_limit: k.seed_limit,
-                    measure_limit: k.measure_limit,
-                    make_titles: !!k.make_titles,
-                    titles_per_keyword: k.titles_per_keyword,
-                    min_inventory: k.min_inventory,
+                data.settings = {
+                    keyword: {
+                        enabled: true,
+                        seeds: split(k.seeds_text),
+                        modifiers: split(k.modifiers_text),
+                        use_blog_categories: !!k.use_blog_categories,
+                        recurse_adopted: !!k.recurse_adopted,
+                        min_volume: k.min_volume,
+                        min_saturation: k.min_saturation,
+                        seed_limit: k.seed_limit,
+                        measure_limit: k.measure_limit,
+                        make_titles: !!k.make_titles,
+                        titles_per_keyword: k.titles_per_keyword,
+                        min_inventory: k.min_inventory,
+                    },
+                    // 주기는 bulk_collect 와 같은 자리에 둔다(스케줄러가 그 경로를 본다)
+                    schedule: { interval_minutes: k.interval_minutes },
                 };
-                // 주기는 bulk_collect 와 같은 자리에 둔다(스케줄러가 그 경로를 본다)
-                settings.schedule = { interval_minutes: k.interval_minutes };
             } else if (this.formData.type_code === 'contact_form') {
                 // 애드센스 필수구성 모듈: 문의폼(템플릿/디자인) + 필수페이지(프리셋/편집본)
                 // 프리셋 기본과 다른 페이지만 override로 저장(프리셋 변경이 자동 반영되도록).
