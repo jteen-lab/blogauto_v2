@@ -91,3 +91,27 @@ flowchart TD
 `await_generation` 은 `record_execution(True)` 를 부른다. 옛 `skip_interval`
 경로가 이걸 안 불러서 `successful_executions` 가 0에 머물렀고, 스케줄러는
 계속 '최초 실행' 으로 보고 10분마다 다시 걸었다. 스스로를 유지하는 고리였다.
+
+## 5. 덤으로 찾은 것 — 성공한 발행이 실패로 쌓였다
+
+인포노트가 08-30 정상 발행하고도 `consecutive_failures=2` 였다.
+
+```python
+if pub_result.get("success") and pub_result.get("crawled_post"):
+    ...                       # 직접 발행
+elif pub_result.get("skipped"):
+    pass
+else:
+    fail_count += 1           # ← Celery 디스패치 성공이 여기로 왔다
+```
+
+Celery 위임 결과 dict 는 `crawled_post` 도 `skipped` 도 없다. 그래서
+디스패치가 성공할 때마다 실패로 세었고, `result.success = fail_count == 0`
+가 False 가 되어 `record_execution(False)` 로 이어졌다.
+
+실제 발행 결과는 워커가 따로 기록한다. 스케줄러가 볼 수 있는 것은
+'큐에 넣었다' 까지이고, 그건 성공이다.
+
+직접 발행 경로(`publish_for_blog`)는 세 갈래 모두 `skipped=True` 이거나
+`crawled_post` 를 달고 오므로 새 가지로 새지 않는다. 회귀 테스트가 이
+성질을 지킨다 — 깨지면 반대로 실패한 발행이 성공으로 집계된다.
