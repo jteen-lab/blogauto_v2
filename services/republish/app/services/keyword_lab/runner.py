@@ -12,13 +12,13 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.logger import get_logger
 from ...models.blog import Blog
-from ...models.title import MainTitle
 from ...models.user_settings import UserSettings
+from .inventory import available_titles, target_inventory
 from .service import KeywordLabService
 from .settings import KeywordModuleSettings
 from .title_maker import TitleMaker
@@ -54,13 +54,15 @@ class KeywordModuleRunner:
         blog = await self._blog(blog_id) if blog_id else None
 
         # 재고를 먼저 본다. 충분하면 돌지 않는다 — 매번 도는 것은 API 낭비다.
+        # 목표치는 상수가 아니라 **소진 속도**로 정한다(inventory.py).
         if not force and "collect" in steps:
-            stock = await self._inventory(blog)
-            if stock >= cfg.min_inventory:
-                msg = f"재고 충분 ({stock}/{cfg.min_inventory})"
+            stock = await available_titles(self.db, blog)
+            target = await target_inventory(self.db, blog, cfg)
+            if stock >= target:
+                msg = f"재고 충분 ({stock}/{target})"
                 logger.info("[KEYWORD_RUNNER] %s | blog=%s", msg, blog_id)
                 return {"success": True, "skipped": True, "message": msg,
-                        "inventory": stock}
+                        "inventory": stock, "target": target}
 
         user_settings = await self._user_settings()
         if not user_settings:
@@ -182,27 +184,6 @@ class KeywordModuleRunner:
             # 제목 생성이 실패해도 수집·측정 결과는 남는다.
             logger.warning("[KEYWORD_RUNNER] 제목 생성 실패 | %s", e)
             return {"success": False, "error": str(e)[:120], "made": 0}
-
-    async def _inventory(self, blog) -> int:
-        """이 니치의 사용 가능한 제목 수.
-
-        블로그가 있으면 그 블로그의 활성 카테고리로 좁힌다. 전체 재고가
-        많아도 그 니치가 비어 있으면 채워야 한다.
-        """
-        q = select(func.count(MainTitle.id)).where(
-            MainTitle.status == "available")
-        if blog is not None:
-            from ...models.category import BlogCategory
-
-            subs = (await self.db.execute(
-                select(BlogCategory.subtopic_id).where(
-                    BlogCategory.blog_id == blog.id,
-                    BlogCategory.is_active.is_(True))
-            )).scalars().all()
-            subs = [s for s in subs if s]
-            if subs:
-                q = q.where(MainTitle.subtopic_id.in_(subs))
-        return (await self.db.execute(q)).scalar() or 0
 
     async def _blog(self, blog_id: int):
         return (await self.db.execute(
