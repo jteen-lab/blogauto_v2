@@ -107,7 +107,7 @@ class KeywordLabService:
             return {"success": False,
                     "error": "네이버 검색광고 API 키가 설정에 없습니다"}
 
-        existing = await self._existing_keywords()
+        existing = await self._existing_keywords(blog_id)
         saved, skipped, api_calls = 0, 0, 0
         # 실패를 삼키지 않는다. 로그에만 남기면 화면에는 '0개 수집' 만
         # 보이고 사용자는 무엇을 고쳐야 할지 알 수 없다.
@@ -253,11 +253,18 @@ class KeywordLabService:
                 self._matcher_cache = None
         return self._matcher_cache
 
-    async def _existing_keywords(self) -> set:
-        rows = (await self.db.execute(
-            select(KeywordCandidate.keyword)
-            .where(KeywordCandidate.user_id == self.user_id)
-        )).scalars().all()
+    async def _existing_keywords(self, blog_id: Optional[int]) -> set:
+        """이미 가진 키워드 — **이 블로그 것만** 본다.
+
+        사용자 전역으로 보면 1번 블로그가 먼저 잡은 키워드를 나머지 블로그가
+        영원히 재수집하지 못한다(검토서 D-6). 니치가 겹치는 블로그끼리는
+        같은 키워드를 각자 갖는 것이 정상이다.
+        """
+        q = select(KeywordCandidate.keyword).where(
+            KeywordCandidate.user_id == self.user_id)
+        q = q.where(KeywordCandidate.blog_id == blog_id) if blog_id \
+            else q.where(KeywordCandidate.blog_id.is_(None))
+        rows = (await self.db.execute(q)).scalars().all()
         return {k.lower() for k in rows if k}
 
     # ── 2단계: 문서수 측정 ───────────────────────────────

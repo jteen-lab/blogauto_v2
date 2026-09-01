@@ -27,8 +27,11 @@ class KeywordCandidate(Base):
     """수요 지표를 함께 들고 있는 키워드 후보."""
 
     __tablename__ = "keyword_candidates"
+    # 유일성은 **블로그별**이다. 사용자 전역으로 걸면 1번 블로그가 먼저 잡은
+    # 키워드를 나머지 블로그가 영원히 재수집하지 못한다(검토서 D-6).
     __table_args__ = (
-        UniqueConstraint("user_id", "keyword", name="uq_keyword_candidate"),
+        UniqueConstraint("user_id", "blog_id", "keyword",
+                         name="uq_keyword_candidate_blog"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -66,7 +69,12 @@ class KeywordCandidate(Base):
     note = Column(Text, nullable=True)
 
     measured_at = Column(DateTime(timezone=True), nullable=True)
-    promoted = Column(Boolean, nullable=False, default=False)
+    # promoted 와 titled 는 뜻이 다르다. 한 칸을 겸용하면 시드로 소비된
+    # 상위 키워드가 제목 대상에서 빠진다(검토서 D-4).
+    promoted = Column(Boolean, nullable=False, default=False,
+                      comment="시드로 이미 쓴 키워드인지")
+    titled = Column(Boolean, nullable=False, default=False,
+                    comment="제목을 이미 만든 키워드인지")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

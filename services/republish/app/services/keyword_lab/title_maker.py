@@ -65,9 +65,9 @@ class TitleMaker:
                 failed += 1
                 continue
             made += await self._save(titles, row)
-            # 다시 만들지 않도록 표시. promoted 는 시드 재사용 표시와
-            # 겸용이다 — 둘 다 "이미 썼다" 는 뜻이라 같은 칸을 쓴다.
-            row.promoted = True
+            # 다시 만들지 않도록 표시. **promoted 와 다른 칸**이다 —
+            # promoted 는 "시드로 썼다", titled 는 "제목을 만들었다".
+            row.titled = True
 
         await self.db.commit()
         logger.info("[TITLE_MAKER] 키워드 %d개 → 제목 %d편 | 실패 %d",
@@ -79,7 +79,7 @@ class TitleMaker:
         q = (select(KeywordCandidate)
              .where(KeywordCandidate.user_id == self.user_id,
                     KeywordCandidate.verdict == VERDICT_ADOPT,
-                    KeywordCandidate.promoted.is_(False))
+                    KeywordCandidate.titled.is_(False))
              .order_by(KeywordCandidate.search_volume.desc().nullslast())
              .limit(limit))
         if blog is not None:
