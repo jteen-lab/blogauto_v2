@@ -14,7 +14,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -22,7 +22,8 @@ from app.services.keyword_lab.expander import combine, expand
 from app.services.keyword_lab.settings import (
     DEFAULT_MODIFIERS, KeywordModuleSettings,
 )
-from app.services.keyword_lab.title_maker import SOURCE, TitleMaker
+from app.services.keyword_lab.title_gate import SOURCE
+from app.services.keyword_lab.title_maker import TitleMaker
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -98,11 +99,15 @@ def test_title_parse_strips_numbering() -> None:
 
 
 def test_titles_go_to_the_existing_inventory() -> None:
-    """기존 재고 구조를 그대로 써야 min_inventory 가 이들을 센다."""
-    src = (ROOT / "app/services/keyword_lab/title_maker.py").read_text(
+    """기존 재고 구조와 **관문**을 그대로 써야 재고로 잡힌다.
+
+    P1 이후 제목은 main_titles 로 직행하지 않는다. 금지어 필터 → 카테고리
+    분류 → 유사도 그룹핑을 거쳐(TitleGate) 이관 서비스가 넣는다.
+    """
+    src = (ROOT / "app/services/keyword_lab/title_gate.py").read_text(
         encoding="utf-8")
-    assert "MainTitle(" in src
-    assert 'status="available"' in src
+    assert "TitleTransferService" in src
+    assert "move_to_main" in src
     assert SOURCE == "keyword_module", "기존 transfer 와 구분돼야 비교가 된다"
 
 
@@ -112,11 +117,16 @@ async def test_skips_when_inventory_is_enough() -> None:
     """매번 도는 것은 API 낭비다."""
     from app.services.keyword_lab.runner import KeywordModuleRunner
 
+    import app.services.keyword_lab.runner as runner_mod
+
     runner = KeywordModuleRunner(db=SimpleNamespace(), user_id=1)
     runner._blog = AsyncMock(return_value=SimpleNamespace(id=19))
-    runner._inventory = AsyncMock(return_value=100)
-
-    result = await runner.run({"keyword": {"min_inventory": 30}}, blog_id=19)
+    with patch.object(runner_mod, "available_titles",
+                      AsyncMock(return_value=100)), \
+         patch.object(runner_mod, "target_inventory",
+                      AsyncMock(return_value=30)):
+        result = await runner.run({"keyword": {"min_inventory": 30}},
+                                  blog_id=19)
     assert result["skipped"] is True
     assert "재고 충분" in result["message"]
 
@@ -126,12 +136,17 @@ async def test_force_ignores_inventory() -> None:
     """수동 테스트는 재고가 충분해도 돌 수 있어야 한다."""
     from app.services.keyword_lab.runner import KeywordModuleRunner
 
+    import app.services.keyword_lab.runner as runner_mod
+
     runner = KeywordModuleRunner(db=SimpleNamespace(), user_id=1)
     runner._blog = AsyncMock(return_value=SimpleNamespace(id=19))
-    runner._inventory = AsyncMock(return_value=100)
     runner._user_settings = AsyncMock(return_value=None)
 
-    result = await runner.run({"keyword": {}}, blog_id=19, force=True)
+    with patch.object(runner_mod, "available_titles",
+                      AsyncMock(return_value=100)), \
+         patch.object(runner_mod, "target_inventory",
+                      AsyncMock(return_value=30)):
+        result = await runner.run({"keyword": {}}, blog_id=19, force=True)
     # 설정이 없어 실패하지만, 재고로 건너뛰지는 않았다
     assert result.get("skipped") is not True
     assert "API 키" in (result.get("error") or "")
