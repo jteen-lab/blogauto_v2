@@ -69,6 +69,11 @@ class KeywordCandidate(Base):
     # 막지 않고 표시만 한다 — 같은 말이 들어가도 정상 글일 수 있다.
     risk_label = Column(String(40), nullable=True)
 
+    # 소속 클러스터. 생산 단위는 키워드가 아니라 묶음이다.
+    cluster_id = Column(Integer, nullable=True, index=True)
+    # 검색 의도. 같은 주제라도 묻는 것이 다르면 다른 글이다.
+    intent = Column(String(20), nullable=True, index=True)
+
     source = Column(String(30), nullable=False, default="naver_ads")
     note = Column(Text, nullable=True)
 
