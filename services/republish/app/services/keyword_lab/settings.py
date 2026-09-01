@@ -45,7 +45,12 @@ class KeywordModuleSettings:
     measure_limit: int = DEFAULT_MEASURE_LIMIT
 
     min_volume: int = 100
+    # 상한이 없으면 검색량 50만짜리 대형 키워드가 그대로 채택된다.
+    # 신생 블로그가 써도 묻히는 자리다.
+    max_volume: int = 100_000
     min_saturation: float = 0.2
+    # 공급을 볼 기간(일). 누적 문서수가 아니라 최근 발행량이 경쟁 지표다.
+    pub_window_days: int = 30
 
     make_titles: bool = True
     titles_per_keyword: int = DEFAULT_TITLES_PER_KEYWORD
@@ -91,7 +96,9 @@ class KeywordModuleSettings:
             collect_limit=_int("collect_limit", DEFAULT_COLLECT_LIMIT),
             measure_limit=_int("measure_limit", DEFAULT_MEASURE_LIMIT),
             min_volume=_int("min_volume", 100),
+            max_volume=_int("max_volume", 100_000),
             min_saturation=max(0.0, sat),
+            pub_window_days=max(1, _int("pub_window_days", 30)),
             make_titles=bool(kw.get("make_titles", True)),
             titles_per_keyword=max(1, min(10, _int(
                 "titles_per_keyword", DEFAULT_TITLES_PER_KEYWORD))),
@@ -114,7 +121,9 @@ class KeywordModuleSettings:
             "collect_limit": self.collect_limit,
             "measure_limit": self.measure_limit,
             "min_volume": self.min_volume,
+            "max_volume": self.max_volume,
             "min_saturation": self.min_saturation,
+            "pub_window_days": self.pub_window_days,
             "make_titles": self.make_titles,
             "titles_per_keyword": self.titles_per_keyword,
             "min_inventory": self.min_inventory,

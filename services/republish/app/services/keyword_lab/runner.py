@@ -82,7 +82,8 @@ class KeywordModuleRunner:
         if "measure" in steps:
             out["measure"] = await svc.measure(
                 limit=cfg.measure_limit, blog_id=blog_id,
-                min_volume=cfg.min_volume, min_saturation=cfg.min_saturation)
+                min_volume=cfg.min_volume, min_saturation=cfg.min_saturation,
+                max_volume=cfg.max_volume, window_days=cfg.pub_window_days)
 
         if "titles" in steps and cfg.make_titles:
             out["titles"] = await self._make_titles(cfg, blog)

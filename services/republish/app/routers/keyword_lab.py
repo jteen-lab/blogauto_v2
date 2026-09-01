@@ -226,7 +226,10 @@ async def list_candidates(
             "search_volume_pc": r.search_volume_pc,
             "search_volume_mobile": r.search_volume_mobile,
             "competition": r.competition,
-            "doc_count": r.doc_count, "saturation": r.saturation,
+            "doc_count": r.doc_count,
+            # 경쟁 판정의 기준. 누적 문서수는 참고값이다.
+            "monthly_pub_count": r.monthly_pub_count,
+            "saturation": r.saturation,
             "verdict": r.verdict, "verdict_reason": r.verdict_reason,
             "risk_label": r.risk_label,
             "measured_at": r.measured_at.isoformat() if r.measured_at else None,
@@ -275,6 +278,7 @@ async def measure(
     limit: int = Body(50),
     min_volume: Optional[int] = Body(None),
     min_saturation: Optional[float] = Body(None),
+    max_volume: Optional[int] = Body(None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
@@ -282,7 +286,8 @@ async def measure(
     settings = await _settings(db, current_user)
     result = await _service(db, settings, current_user).measure(
         limit=min(limit, 100), blog_id=blog_id,
-        min_volume=min_volume, min_saturation=min_saturation)
+        min_volume=min_volume, min_saturation=min_saturation,
+        max_volume=max_volume)
     if not result.get("success"):
         raise HTTPException(400, result.get("error") or "측정 실패")
     return result
@@ -292,12 +297,13 @@ async def measure(
 async def rejudge(
     min_volume: Optional[int] = Body(None),
     min_saturation: Optional[float] = Body(None),
+    max_volume: Optional[int] = Body(None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
     settings = await _settings(db, current_user)
     return await _service(db, settings, current_user).rejudge(
-        min_volume, min_saturation)
+        min_volume, min_saturation, max_volume)
 
 
 @router.delete("/candidates", summary="후보 삭제")

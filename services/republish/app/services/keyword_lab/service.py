@@ -26,10 +26,13 @@ from ...models.category import BlogCategory, SubTopic
 from ...models.keyword_candidate import (
     KeywordCandidate, VERDICT_ADOPT, VERDICT_PENDING,
 )
+from ...models.keyword_metric import PRIMARY_ENGINE
 from ...models.user_settings import UserSettings
 from ..naver_ads_service import NaverAdsService
 from ..naver_search_service import NaverSearchService
-from .scoring import Thresholds, judge, saturation_of
+from .metrics import upsert_metric
+from .scoring import Thresholds, judge, saturation_of, supply_of
+from .supply import PUB_WINDOW_DAYS, measure_supply
 
 logger = get_logger("keyword_lab", "app.log")
 
@@ -47,6 +50,9 @@ class KeywordLabService:
         self.db = db
         self.settings = settings
         self.user_id = user_id
+        # 수집 시점과 측정 시점의 기준이 달라 모듈 설정이 안 먹던 문제
+        # (검토서 D-8). 두 단계가 같은 기준 객체를 본다.
+        self.thresholds: Optional[Thresholds] = None
 
     # ── 시드 ─────────────────────────────────────────────
     async def seeds_for_blog(self, blog_id: int) -> List[Dict[str, Any]]:
@@ -184,6 +190,8 @@ class KeywordLabService:
         if not picked:
             return {"success": False, "error": "쓸 수 있는 시드가 없습니다"}
 
+        self.thresholds = Thresholds.build(
+            cfg.min_volume, cfg.min_saturation, cfg.max_volume)
         expanded = expand(picked, cfg)
         logger.info(
             "[KEYWORD_LAB] 시드 %d개 → 수식어 결합 %d개 | blog=%s",
@@ -199,7 +207,7 @@ class KeywordLabService:
     def _build(self, keyword: str, item: dict, niche: dict,
                blog_id: Optional[int]) -> KeywordCandidate:
         volume = item.get("total_search_volume")
-        verdict, reason, risk = judge(keyword, volume, None)
+        verdict, reason, risk = judge(keyword, volume, None, self.thresholds)
         return KeywordCandidate(
             user_id=self.user_id,
             keyword=keyword,
@@ -272,8 +280,13 @@ class KeywordLabService:
         self, limit: int = 50, blog_id: Optional[int] = None,
         min_volume: Optional[int] = None,
         min_saturation: Optional[float] = None,
+        max_volume: Optional[int] = None,
+        window_days: int = PUB_WINDOW_DAYS,
     ) -> Dict[str, Any]:
-        """아직 안 잰 후보의 블로그 문서수를 조회하고 판정한다.
+        """아직 안 잰 후보의 **공급**을 조회하고 판정한다.
+
+        공급은 누적 문서수가 아니라 최근 30일 발행량이 기준이다. 누적은
+        10년치 총합이라 지금 경쟁이 붙는지 말해 주지 않는다.
 
         끊어서 여러 번 부를 수 있다. 이미 잰 것은 다시 재지 않는다.
         """
@@ -282,35 +295,24 @@ class KeywordLabService:
             return {"success": False,
                     "error": "네이버 검색 API 키가 설정에 없습니다"}
 
-        th = Thresholds.build(min_volume, min_saturation)
-        q = (select(KeywordCandidate)
-             .where(KeywordCandidate.user_id == self.user_id,
-                    KeywordCandidate.doc_count.is_(None))
-             .order_by(KeywordCandidate.search_volume.desc().nullslast())
-             .limit(limit))
-        if blog_id:
-            q = q.where(KeywordCandidate.blog_id == blog_id)
-        rows = (await self.db.execute(q)).scalars().all()
+        th = Thresholds.build(min_volume, min_saturation, max_volume)
+        rows = await self._unmeasured(limit, blog_id)
 
         now = datetime.now(pytz.timezone("Asia/Seoul"))
         measured, failed = 0, 0
         for row in rows:
             try:
-                res = await search.search_blog(row.keyword, display=1)
+                supply = await measure_supply(search, row.keyword, window_days)
             except Exception as e:  # noqa: BLE001
-                logger.warning("[KEYWORD_LAB] 문서수 조회 실패 | %s | %s",
+                logger.warning("[KEYWORD_LAB] 공급 조회 실패 | %s | %s",
                                row.keyword, e)
                 failed += 1
                 continue
-            if not res.get("success"):
+            if not supply.get("success"):
                 failed += 1
                 continue
 
-            row.doc_count = int(res.get("total") or 0)
-            row.saturation = saturation_of(row.search_volume, row.doc_count)
-            row.verdict, row.verdict_reason, row.risk_label = judge(
-                row.keyword, row.search_volume, row.doc_count, th)
-            row.measured_at = now
+            await self._apply_supply(row, supply, th, now)
             measured += 1
             await asyncio.sleep(DOC_LOOKUP_DELAY)
 
@@ -321,28 +323,64 @@ class KeywordLabService:
         return {"success": True, "measured": measured, "failed": failed,
                 "remaining": remaining}
 
+    async def _unmeasured(self, limit: int,
+                          blog_id: Optional[int]) -> List[KeywordCandidate]:
+        """아직 공급을 재지 않은 후보. 검색량이 큰 것부터 잰다."""
+        q = (select(KeywordCandidate)
+             .where(KeywordCandidate.user_id == self.user_id,
+                    KeywordCandidate.measured_at.is_(None))
+             .order_by(KeywordCandidate.search_volume.desc().nullslast())
+             .limit(limit))
+        if blog_id:
+            q = q.where(KeywordCandidate.blog_id == blog_id)
+        return list((await self.db.execute(q)).scalars().all())
+
+    async def _apply_supply(self, row: KeywordCandidate, supply: dict,
+                            th: Thresholds, now: datetime) -> None:
+        """측정값을 엔진 지표로 저장하고 판정을 갱신한다."""
+        pub = supply.get("monthly_pub_count")
+        doc = supply.get("doc_count")
+        sat = saturation_of(row.search_volume, supply_of(pub, doc))
+        verdict, reason, risk = judge(
+            row.keyword, row.search_volume, doc, th, monthly_pub_count=pub)
+
+        await upsert_metric(
+            self.db, row, PRIMARY_ENGINE,
+            search_volume=row.search_volume,
+            search_volume_pc=row.search_volume_pc,
+            search_volume_mobile=row.search_volume_mobile,
+            competition=row.competition,
+            doc_count=doc, monthly_pub_count=pub,
+            pub_count_capped=1 if supply.get("capped") else 0,
+            saturation=sat, measured_at=now,
+        )
+        row.verdict, row.verdict_reason, row.risk_label = verdict, reason, risk
+        row.measured_at = now
+
     async def _pending_count(self, blog_id: Optional[int]) -> int:
         from sqlalchemy import func as _f
 
         q = (select(_f.count(KeywordCandidate.id))
              .where(KeywordCandidate.user_id == self.user_id,
-                    KeywordCandidate.doc_count.is_(None)))
+                    KeywordCandidate.measured_at.is_(None)))
         if blog_id:
             q = q.where(KeywordCandidate.blog_id == blog_id)
         return (await self.db.execute(q)).scalar() or 0
 
     # ── 재판정 ───────────────────────────────────────────
     async def rejudge(self, min_volume: Optional[int],
-                      min_saturation: Optional[float]) -> Dict[str, Any]:
+                      min_saturation: Optional[float],
+                      max_volume: Optional[int] = None) -> Dict[str, Any]:
         """기준만 바꿔 다시 판정한다. API 를 부르지 않는다."""
-        th = Thresholds.build(min_volume, min_saturation)
+        th = Thresholds.build(min_volume, min_saturation, max_volume)
         rows = (await self.db.execute(
             select(KeywordCandidate)
             .where(KeywordCandidate.user_id == self.user_id)
         )).scalars().all()
         for row in rows:
             row.verdict, row.verdict_reason, row.risk_label = judge(
-                row.keyword, row.search_volume, row.doc_count, th)
+                row.keyword, row.search_volume, row.doc_count, th,
+                monthly_pub_count=row.monthly_pub_count)
         await self.db.commit()
         adopted = sum(1 for r in rows if r.verdict == VERDICT_ADOPT)
         return {"success": True, "total": len(rows), "adopted": adopted}
