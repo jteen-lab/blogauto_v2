@@ -398,11 +398,11 @@
                 <span class="ml-1 text-xs" x-text="`(${stats.filter?.total || 0})`"></span>
             </button>
             <button
-                @click="switchTab('urls')"
-                :class="{'active': activeTab === 'urls'}"
+                @click="switchTab('domains')"
+                :class="{'active': activeTab === 'domains'}"
                 class="tab-btn">
-                🔗 URL수집
-                <span class="ml-1 text-xs" x-text="`(${stats.urls?.total || 0})`"></span>
+                🌐 니치도메인
+                <span class="ml-1 text-xs" x-text="`(${stats.domains?.total || 0})`"></span>
             </button>
         </div>
 
@@ -429,9 +429,11 @@
             {% include "collection/_filters.html" %}
         </div>
 
-        <!-- URL수집 탭 -->
-        <div x-show="activeTab === 'urls'" class="tab-content" :class="{'active': activeTab === 'urls'}">
-            {% include "collection/_urls.html" %}
+        <!-- 니치 도메인 탭 -->
+        <div x-show="activeTab === 'domains'" class="tab-content" :class="{'active': activeTab === 'domains'}">
+            {# URL 12만 건은 도메인 자산으로 요약됐다(alembic 066).
+               개별 URL 은 소비되지 않았고, 남길 가치는 도메인 단위였다. #}
+            {% include "collection/_niche_domains.html" %}
         </div>
     </div>
 
@@ -567,6 +569,7 @@
 <!-- 발행대기 글 미리보기에 실제 블로그 스타일 재현: 스타일 탭과 동일한 CSS 생성 유틸 공유
      (presets = STYLE_SELECTORS/HIDDEN_SELECTORS, css-utils = generateCssFromConfig/buildBlogStyledPreview) -->
 <script src="/static/js/collection/keyword_pool.js?v=20260902s13"></script>
+<script src="/static/js/collection/niche_domains.js?v=20260902s13"></script>
 <script src="/static/js/blogs/style-tab-presets.js?v=20260709_preview"></script>
 <script src="/static/js/blogs/style-tab-css-utils.js?v=20260709_btnfull"></script>
 <script>
@@ -579,7 +582,7 @@ function dataManagementApp() {
             temp: { total: 0, new: 0, categorized: 0, filtered: 0 },
             main: { total: 0, available: 0 },
             filter: { total: 0, active: 0, system: 0, user: 0 },
-            urls: { total: 0, processed: 0, pending: 0, inactive: 0 }
+            domains: { total: 0, active: 0, urls_summarized: 0 }
         },
 
         // 키워드 탭은 keyword_pool.js 가 독립 컴포넌트로 맡는다.
@@ -615,18 +618,8 @@ function dataManagementApp() {
         filterSortField: 'created_at',
         filterSortDir: 'desc',
 
-        // URL 관련
-        urls: [],
-        urlPage: 1,
-        urlSearch: '',
-        urlStatus: '',
-        urlPlatform: '',
-        urlLoading: false,
-        urlHasNext: false,
-        urlTotal: 0,
-        selectedUrls: [],
-        urlSortField: 'created_at',
-        urlSortDir: 'desc',
+        // 니치 도메인 탭은 niche_domains.js 가 독립 컴포넌트로 맡는다.
+        // 옛 URL 수집 상태·함수는 도메인 자산 전환(alembic 066)으로 제거됨.
 
         // ★ 정식 제목 관련 (Phase E)
         mainTitles: [],
@@ -707,7 +700,6 @@ function dataManagementApp() {
 
         // ★ 모바일 아코디언 확장 상태
         expandedTitleId: null,
-        expandedUrlId: null,
         expandedFilterId: null,
 
         init() {
@@ -739,31 +731,29 @@ function dataManagementApp() {
                 this.loadMainTitles();
             } else if (tab === 'filters' && this.filters.length === 0) {
                 this.loadFilters();
-            } else if (tab === 'urls' && this.urls.length === 0) {
-                this.loadUrls();
             }
         },
 
         // 통계 로드
         async loadStats() {
             try {
-                const [kwRes, titleRes, filterRes, urlRes] = await Promise.all([
+                const [kwRes, titleRes, filterRes, domainRes] = await Promise.all([
                     fetch(`${API_BASE}/data/keywords/stats`, { credentials: 'include' }),
                     fetch(`${API_BASE}/data/titles/stats`, { credentials: 'include' }),
                     fetch(`${API_BASE}/data/filters/stats`, { credentials: 'include' }),
-                    fetch(`${API_BASE}/data/urls/stats`, { credentials: 'include' })
+                    fetch(`${API_BASE}/data/domains/stats`, { credentials: 'include' })
                 ]);
                 const kwData = await kwRes.json();
                 const titleData = await titleRes.json();
                 const filterData = await filterRes.json();
-                const urlData = await urlRes.json();
+                const domainData = await domainRes.json();
 
                 this.stats.seed = kwData.seed || { total: 0, active: 0 };
                 this.stats.collected = kwData.collected || { total: 0, processed: 0 };
                 this.stats.temp = titleData.temp || { total: 0, new: 0 };
                 this.stats.main = titleData.main || { total: 0, available: 0 };
                 this.stats.filter = filterData || { total: 0, active: 0 };
-                this.stats.urls = urlData || { total: 0, processed: 0, pending: 0 };
+                this.stats.domains = domainData || { total: 0, active: 0, urls_summarized: 0 };
             } catch (e) {
                 console.error('통계 로드 실패:', e);
             }
@@ -873,102 +863,11 @@ function dataManagementApp() {
         },
 
         // URL 로드
-        async loadUrls() {
-            this.urlLoading = true;
-            try {
-                const params = new URLSearchParams({
-                    page: this.urlPage,
-                    size: 20,
-                    sort_field: this.urlSortField,
-                    sort_dir: this.urlSortDir,
-                });
-                if (this.urlSearch) params.append('search', this.urlSearch);
-                if (this.urlStatus) params.append('status', this.urlStatus);
-                if (this.urlPlatform) params.append('platform', this.urlPlatform);
-
-                const res = await fetch(`${API_BASE}/data/urls?${params}`, {
-                    credentials: 'include'
-                });
-                const data = await res.json();
-                this.urls = data.items || [];
-                this.urlTotal = data.total || 0;
-                this.urlHasNext = data.has_next || false;
-            } catch (e) {
-                console.error('URL 로드 실패:', e);
-                showErrorMessage('URL 로드 실패');
-            } finally {
-                this.urlLoading = false;
-            }
-        },
-
         // URL 정렬
-        sortUrls(field) {
-            if (this.urlSortField === field) {
-                this.urlSortDir = this.urlSortDir === 'asc' ? 'desc' : 'asc';
-            } else {
-                this.urlSortField = field;
-                this.urlSortDir = 'asc';
-            }
-            this.urlPage = 1;
-            this.loadUrls();
-        },
-
         // URL 검색 리셋
-        resetUrlSearch() {
-            this.urlSearch = '';
-            this.urlPage = 1;
-            this.loadUrls();
-        },
-
         // URL 삭제
-        async deleteUrl(id) {
-            if (!confirm('이 URL을 삭제하시겠습니까?')) return;
-            try {
-                const res = await fetch(`${API_BASE}/data/urls/${id}`, {
-                    method: 'DELETE',
-                    credentials: 'include'
-                });
-                if (!res.ok) throw new Error('삭제 실패');
-                showSuccessMessage('URL이 삭제되었습니다');
-                this.loadUrls();
-                this.loadStats();
-            } catch (e) {
-                showErrorMessage('삭제 실패');
-            }
-        },
-
         // URL 재수집 대상 전환
-        async resetUrl(id) {
-            try {
-                const res = await fetch(`${API_BASE}/data/urls/${id}/reset`, {
-                    method: 'POST',
-                    credentials: 'include'
-                });
-                if (!res.ok) throw new Error('전환 실패');
-                showSuccessMessage('재수집 대상으로 전환되었습니다');
-                this.loadUrls();
-                this.loadStats();
-            } catch (e) {
-                showErrorMessage('전환 실패');
-            }
-        },
-
         // URL 활성화
-        async activateUrl(id) {
-            try {
-                const res = await fetch(`${API_BASE}/data/urls/${id}/activate`, {
-                    method: 'POST',
-                    credentials: 'include'
-                });
-                if (!res.ok) throw new Error('활성화 실패');
-                showSuccessMessage('URL이 활성화되었습니다');
-                this.loadUrls();
-                this.loadStats();
-            } catch (e) {
-                showErrorMessage('활성화 실패');
-            }
-        },
-
         // ========== 정식 제목 기능 (Phase E) ==========
 
         // Phase 2-2: 블로그 목록 로드
@@ -1701,84 +1600,9 @@ function dataManagementApp() {
         },
 
         // URL 전체 선택/해제
-        toggleUrlSelectAll() {
-            const isAllSelected = this.urls.length > 0 &&
-                this.selectedUrls.length === this.urls.length;
-            if (isAllSelected) {
-                this.selectedUrls = [];
-            } else {
-                this.selectedUrls = this.urls.map(u => u.id);
-            }
-        },
-
         // 선택된 URL 일괄 삭제
-        async deleteSelectedUrls() {
-            if (this.selectedUrls.length === 0) {
-                showErrorMessage('삭제할 URL을 선택하세요');
-                return;
-            }
-            if (!confirm(`선택된 ${this.selectedUrls.length}개 URL을 삭제하시겠습니까?`)) return;
-            try {
-                const res = await fetch(`${API_BASE}/data/urls/bulk-delete`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({ ids: this.selectedUrls })
-                });
-                if (!res.ok) throw new Error('삭제 실패');
-                const data = await res.json();
-                showSuccessMessage(`${data.deleted}개 URL이 삭제되었습니다`);
-                this.selectedUrls = [];
-                this.loadUrls();
-                this.loadStats();
-            } catch (e) {
-                showErrorMessage('일괄 삭제 실패');
-            }
-        },
-
         // 선택된 URL 일괄 재수집 대상 전환
-        async resetSelectedUrls() {
-            if (this.selectedUrls.length === 0) {
-                showErrorMessage('전환할 URL을 선택하세요');
-                return;
-            }
-            if (!confirm(`선택된 ${this.selectedUrls.length}개 URL을 재수집 대상으로 전환하시겠습니까?`)) return;
-            try {
-                const res = await fetch(`${API_BASE}/data/urls/bulk-reset`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({ ids: this.selectedUrls })
-                });
-                if (!res.ok) throw new Error('전환 실패');
-                const data = await res.json();
-                showSuccessMessage(`${data.reset}개 URL이 재수집 대상으로 전환되었습니다`);
-                this.selectedUrls = [];
-                this.loadUrls();
-                this.loadStats();
-            } catch (e) {
-                showErrorMessage('일괄 전환 실패');
-            }
-        },
-
         // 오래된 처리완료 URL 재수집 대상 전환
-        async resetOldUrls(days = 7) {
-            if (!confirm(`${days}일 이전에 처리된 URL을 재수집 대상으로 전환하시겠습니까?`)) return;
-            try {
-                const res = await fetch(`${API_BASE}/data/urls/reset-old?days=${days}`, {
-                    method: 'POST',
-                    credentials: 'include'
-                });
-                if (!res.ok) throw new Error('전환 실패');
-                const data = await res.json();
-                showSuccessMessage(`${data.reset}개 URL이 재수집 대상으로 전환되었습니다`);
-                this.loadUrls();
-                this.loadStats();
-            } catch (e) {
-                showErrorMessage('전환 실패');
-            }
-        },
-
         // 키워드 삭제
         // 제목 삭제
         async deleteTitle(id) {
