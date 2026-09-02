@@ -62,6 +62,20 @@ class TestMigration:
     def test_marks_origin(self):
         assert 'LEGACY_SOURCE = "legacy_seed"' in self._src()
 
+    def test_not_null_columns_are_explicit(self):
+        """운영 테이블은 create_all 산물이라 DB 기본값이 없다.
+
+        NOT NULL 컬럼을 INSERT 에서 빼면 NotNullViolation 이 난다.
+        실제로 promoted 에서 났고, 로컬 SQLite 는 DDL 에 DEFAULT 를 줘서
+        못 잡았다.
+        """
+        src = self._src()
+        for column in ("user_id", "keyword", "verdict", "source",
+                       "promoted", "titled"):
+            assert column in src, f"{column} 이 INSERT 에 없다"
+        # 값도 함께 넣어야 한다
+        assert "'pending', :source, false, false," in src
+
 
 class _FakeResult:
     def __init__(self, row):

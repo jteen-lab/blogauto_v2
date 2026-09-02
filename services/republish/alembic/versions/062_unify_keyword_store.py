@@ -84,6 +84,10 @@ def _migrate_rows(conn) -> None:
 
     지표는 비운 채(미측정) 넣는다. 이후 측정 회차가 채운다.
     소유자는 사용자 최솟값을 쓴다 — seed_keywords 에는 user_id 가 없다.
+
+    **NOT NULL 컬럼은 전부 명시한다.** 운영 테이블은 create_all 로 만들어져
+    파이썬 쪽 default 만 있고 DB server_default 가 없다. 빼면
+    NotNullViolation 이 난다(promoted 에서 실제로 났다).
     """
     owner = conn.execute(sa.text("SELECT MIN(id) FROM users")).scalar()
     if not owner:
@@ -92,12 +96,14 @@ def _migrate_rows(conn) -> None:
     moved = conn.execute(sa.text(f"""
         INSERT INTO {TABLE} (
             user_id, keyword, blog_id, topic_id, subtopic_id,
-            verdict, source, is_active, use_count, last_used_at,
+            verdict, source, promoted, titled,
+            is_active, use_count, last_used_at,
             priority, legacy_seed_id, created_at
         )
         SELECT
             :owner, s.keyword, NULL, s.topic_id, s.subtopic_id,
-            'pending', :source, s.is_active, s.use_count, s.last_used_at,
+            'pending', :source, false, false,
+            s.is_active, s.use_count, s.last_used_at,
             s.priority, s.id, s.created_at
         FROM {LEGACY} s
         WHERE NOT EXISTS (
