@@ -408,7 +408,18 @@
 
         <!-- 키워드 탭 -->
         <div x-show="activeTab === 'keywords'" class="tab-content" :class="{'active': activeTab === 'keywords'}">
-            {% include "collection/_keywords.html" %}
+            {# 정본(keyword_candidates) — 지표·판정과 수동 측정/분류/재판정.
+               아래 시드 목록은 전환기 동안 남겨 둔다(S6 에서 정리). #}
+            {% include "collection/_keyword_pool.html" %}
+
+            <details class="mb-4 border border-gray-200 rounded-lg">
+              <summary class="px-3 py-2 text-sm text-gray-600 cursor-pointer select-none">
+                기존 시드 키워드 목록 (전환기 · seed_keywords)
+              </summary>
+              <div class="p-3 border-t border-gray-200">
+                {% include "collection/_keywords.html" %}
+              </div>
+            </details>
         </div>
 
         <!-- 임시제목 탭 -->
@@ -563,6 +574,7 @@
 {% block extra_js %}
 <!-- 발행대기 글 미리보기에 실제 블로그 스타일 재현: 스타일 탭과 동일한 CSS 생성 유틸 공유
      (presets = STYLE_SELECTORS/HIDDEN_SELECTORS, css-utils = generateCssFromConfig/buildBlogStyledPreview) -->
+<script src="/static/js/collection/keyword_pool.js?v=20260902s2"></script>
 <script src="/static/js/blogs/style-tab-presets.js?v=20260709_preview"></script>
 <script src="/static/js/blogs/style-tab-css-utils.js?v=20260709_btnfull"></script>
 <script>
