@@ -311,8 +311,8 @@
     {#- 타입 탭 정의. 섹션이 6개라 마크업을 여섯 벌 쓰면 고칠 곳도 여섯이다. -#}
     {% set module_type_tabs = [
         {'code': 'prompt',         'icon': '📝', 'label': '프롬프트/생성'},
-        {'code': 'collect',        'icon': '🔍', 'label': '수집'},
-        {'code': 'bulk_collect',   'icon': '📦', 'label': '대량 수집'},
+        {'code': 'collect',        'icon': '🔍', 'label': '수집 (폐기 예정)'},
+        {'code': 'bulk_collect',   'icon': '📦', 'label': '대량 수집 (폐기 예정)'},
         {'code': 'data',           'icon': '🗂', 'label': '데이터'},
         {'code': 'growth_profile', 'icon': '📈', 'label': '성장 프로파일'},
         {'code': 'contact_form',   'icon': '✉️', 'label': '애드센스 필수구성'},
@@ -428,12 +428,6 @@
           <span class="text-xs text-gray-500 mt-1">AI 프롬프트 기반 글 생성</span>
         </button>
 
-        <button onclick="selectOption('moduleTypeSelector', 'collect', '수집')"
-                class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-purple-300 hover:bg-purple-50 transition-all duration-200 group">
-          <span class="text-3xl mb-2 group-hover:scale-110 transition-transform duration-200">🔍</span>
-          <span class="font-medium text-gray-900 group-hover:text-purple-700">수집</span>
-          <span class="text-xs text-gray-500 mt-1">키워드/제목 자동 수집</span>
-        </button>
 
         <button onclick="selectOption('moduleTypeSelector', 'data', '데이터')"
                 class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-teal-300 hover:bg-teal-50 transition-all duration-200 group">
@@ -449,13 +443,6 @@
           <span class="text-xs text-gray-500 mt-1">블로그 성장 단계별 자동화 스케줄</span>
         </button>
 
-        {# 대량 수집 모듈 - Phase D #}
-        <button onclick="selectOption('moduleTypeSelector', 'bulk_collect', '대량 수집')"
-                class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-sky-300 hover:bg-sky-50 transition-all duration-200 group">
-          <span class="text-3xl mb-2 group-hover:scale-110 transition-transform duration-200">🚀</span>
-          <span class="font-medium text-gray-900 group-hover:text-sky-700">대량 수집</span>
-          <span class="text-xs text-gray-500 mt-1">URL 기반 사이트맵 · 제목 대량 추출</span>
-        </button>
 
         {# 키워드 모듈 - 수요를 재고 제목까지 만들어 재고에 넣는다 #}
         <button onclick="selectOption('moduleTypeSelector', 'keyword', '키워드')"
@@ -481,6 +468,10 @@
           <span class="text-xs text-gray-500 mt-1">문의폼(Tally) + 필수 4페이지 자동 생성</span>
         </button>
       </div>
+      <p class="mt-4 text-xs text-gray-500">
+        '수집'·'대량 수집' 모듈은 <b>키워드</b>·<b>제목 생성/수집</b> 모듈로 대체돼
+        새로 만들 수 없습니다. 이미 만든 모듈은 계속 동작합니다.
+      </p>
     </div>
 
     <!-- 취소 버튼 -->

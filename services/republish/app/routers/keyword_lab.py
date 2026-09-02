@@ -10,7 +10,7 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import delete as sa_delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,11 +44,14 @@ def _service(db: AsyncSession, settings: UserSettings, user: User):
     return KeywordLabService(db, settings, user.id)
 
 
-@page_router.get("/keyword-lab", response_class=HTMLResponse)
+@page_router.get("/keyword-lab")
 async def keyword_lab_page(request: Request):
-    """키워드 관리 화면."""
-    return templates.TemplateResponse(
-        "keyword_lab/index.html", {"request": request})
+    """데이터 관리 키워드 탭으로 흡수됐다.
+
+    같은 개념을 두 화면이 따로 보여주고 있었다. 정본이 데이터 관리로
+    모였으므로 이 주소는 그쪽으로 넘긴다(즐겨찾기·링크 보존).
+    """
+    return RedirectResponse(url="/collection?tab=keywords", status_code=307)
 
 
 @router.get("/status", summary="API 키 설정 상태")

@@ -226,5 +226,16 @@ class TestCreateTypeSelector:
     def test_keyword_is_creatable(self):
         assert "keyword" in self._popup_codes()
 
-    def test_popup_matches_list_types(self):
-        assert self._popup_codes() == self._list_codes()
+    def test_popup_is_subset_of_list_types(self):
+        """만들 수 있는 타입은 목록 탭에도 있어야 한다.
+
+        반대는 성립하지 않는다 — 폐기된 타입(collect·bulk_collect)은
+        새로 만들 수 없지만 이미 만든 모듈은 목록에 보여야 한다.
+        """
+        assert self._popup_codes() <= self._list_codes()
+
+    def test_deprecated_types_cannot_be_created(self):
+        popup = self._popup_codes()
+        assert "collect" not in popup and "bulk_collect" not in popup
+        # 대체 타입은 만들 수 있어야 한다
+        assert {"keyword", "title_gen"} <= popup

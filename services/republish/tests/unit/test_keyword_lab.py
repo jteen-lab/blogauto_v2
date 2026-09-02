@@ -219,9 +219,17 @@ def test_collect_and_measure_are_separate_actions() -> None:
     assert '"/collect"' in router and '"/measure"' in router
 
 
-def test_menu_entry_exists() -> None:
+def test_menu_entry_absorbed() -> None:
+    """키워드 관리 화면은 데이터 관리 키워드 탭으로 흡수됐다(S6).
+
+    같은 개념을 두 화면이 따로 보여주고 있었다. 메뉴에서 빼고 주소는
+    리다이렉트로 살려 둔다(즐겨찾기·링크 보존).
+    """
     base = (TEMPLATES / "base.html").read_text(encoding="utf-8")
-    assert base.count('href="/keyword-lab"') == 2, "PC·모바일 메뉴 모두 필요"
+    assert 'href="/keyword-lab"' not in base
+
+    router = (ROOT / "app/routers/keyword_lab.py").read_text(encoding="utf-8")
+    assert "/collection?tab=keywords" in router
 
 
 # ── 불리언 속성 바인딩 ───────────────────────────────────
