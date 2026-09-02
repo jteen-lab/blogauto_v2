@@ -35,12 +35,7 @@ DEFAULT_SOURCES = ["naver_ads"]
 DEFAULT_ENRICH_LIMIT = 100
 
 DEFAULT_INTERVAL_MINUTES = 360
-DEFAULT_TITLES_PER_KEYWORD = 3
 
-# 클러스터 기본값. 업계 권장은 묶음당 키워드 8~10개다.
-DEFAULT_CLUSTER_THRESHOLD = 0.34
-DEFAULT_CLUSTER_MIN_SIZE = 3
-DEFAULT_CLUSTER_MAX_SIZE = 12
 DEFAULT_COLLECT_LIMIT = 100
 DEFAULT_MEASURE_LIMIT = 50
 
@@ -122,31 +117,6 @@ class KeywordModuleSettings:
     pub_window_days: int = 30
 
     # 제목은 '제목 생성/수집' 모듈이 맡는다(계획서 S5). 수집 모듈이
-    # 제목까지 만들면 중간 결과를 걸러낼 자리가 없고 실패가 한 덩어리로
-    # 묻힌다. 옛 모듈 호환을 위해 설정은 남기되 **기본은 꺼 둔다.**
-    make_titles: bool = False
-    titles_per_keyword: int = DEFAULT_TITLES_PER_KEYWORD
-
-    # 제목을 만들 AI. 블로그가 없으면(=시드만으로 도는 테스트) 블로그의
-    # ai_config 를 쓸 수 없어 제공자가 비고, AI 서비스는 폴백을 하지 않아
-    # 조용히 전부 실패한다. 그래서 모듈이 스스로 갖는다.
-    ai_provider: Optional[str] = None
-    ai_model: Optional[str] = None
-
-    # 검증 모드. 켜면 제목을 **데이터 관리(임시제목·정식제목)에 저장하지
-    # 않고** 결과만 돌려준다. 수집 품질을 먼저 확인하고, 쓸 만해지면 끈다.
-    # 기본 켜짐 — 검증 없이 재고를 오염시키는 쪽이 되돌리기 어렵다.
-    dry_run: bool = True
-
-    # 클러스터 생산 — 키워드 1개 = 제목 1개는 대량 발행에 맞지 않는다.
-    # 묶음 하나에서 대표 글 1편 + 곁가지 글 N편을 만든다.
-    cluster_enabled: bool = True
-    cluster_threshold: float = DEFAULT_CLUSTER_THRESHOLD
-    cluster_min_size: int = DEFAULT_CLUSTER_MIN_SIZE
-    cluster_max_size: int = DEFAULT_CLUSTER_MAX_SIZE
-    # 0이면 묶음 크기 + 1(대표 글)로 자동 결정한다.
-    titles_per_cluster: int = 0
-
     # 기준값이 바뀌면 이미 쌓인 후보도 다시 판정한다. API 를 부르지 않지만
     # 전체 행을 훑으므로 매 회차 돌릴 필요는 없다 — 기본은 꺼 둔다.
     rejudge_on_run: bool = False
@@ -204,20 +174,6 @@ class KeywordModuleSettings:
             max_volume=_int("max_volume", 100_000),
             min_saturation=max(0.0, sat),
             pub_window_days=max(1, _int("pub_window_days", 30)),
-            make_titles=bool(kw.get("make_titles", False)),
-            dry_run=bool(kw.get("dry_run", True)),
-            ai_provider=(kw.get("ai_provider") or None),
-            ai_model=(kw.get("ai_model") or None),
-            titles_per_keyword=max(1, min(10, _int(
-                "titles_per_keyword", DEFAULT_TITLES_PER_KEYWORD))),
-            cluster_enabled=bool(kw.get("cluster_enabled", True)),
-            cluster_threshold=_ratio(kw.get("cluster_threshold"),
-                                     DEFAULT_CLUSTER_THRESHOLD),
-            cluster_min_size=max(2, _int("cluster_min_size",
-                                         DEFAULT_CLUSTER_MIN_SIZE)),
-            cluster_max_size=max(2, _int("cluster_max_size",
-                                         DEFAULT_CLUSTER_MAX_SIZE)),
-            titles_per_cluster=min(30, _int("titles_per_cluster", 0)),
             rejudge_on_run=bool(kw.get("rejudge_on_run", False)),
             feedback_enabled=bool(kw.get("feedback_enabled", True)),
             feedback_days=max(1, _int("feedback_days", 28)),
@@ -247,16 +203,6 @@ class KeywordModuleSettings:
             "max_volume": self.max_volume,
             "min_saturation": self.min_saturation,
             "pub_window_days": self.pub_window_days,
-            "make_titles": self.make_titles,
-            "dry_run": self.dry_run,
-            "ai_provider": self.ai_provider,
-            "ai_model": self.ai_model,
-            "titles_per_keyword": self.titles_per_keyword,
-            "cluster_enabled": self.cluster_enabled,
-            "cluster_threshold": self.cluster_threshold,
-            "cluster_min_size": self.cluster_min_size,
-            "cluster_max_size": self.cluster_max_size,
-            "titles_per_cluster": self.titles_per_cluster,
             "rejudge_on_run": self.rejudge_on_run,
             "feedback_enabled": self.feedback_enabled,
             "feedback_days": self.feedback_days,

@@ -156,7 +156,6 @@ function moduleFormApp(module = null, moduleType = null) {
                 min_saturation: initialModule?.settings?.keyword?.min_saturation ?? 0.2,
                 seed_limit: initialModule?.settings?.keyword?.seed_limit ?? 10,
                 measure_limit: initialModule?.settings?.keyword?.measure_limit ?? 50,
-                make_titles: initialModule?.settings?.keyword?.make_titles ?? false,
                 // 스케줄 — 다른 모듈과 같은 방식(고정 시간 / 간격 + 활성 시간대)
                 schedule_mode: initialModule?.settings?.schedule?.schedule_mode || 'interval',
                 fixed_times: initialModule?.settings?.schedule?.fixed_times || [],
@@ -172,13 +171,6 @@ function moduleFormApp(module = null, moduleType = null) {
                 step_rejudge: (initialModule?.settings?.keyword?.steps || [])
                     .includes('rejudge')
                     || (initialModule?.settings?.keyword?.rejudge_on_run ?? false),
-                dry_run: initialModule?.settings?.keyword?.dry_run ?? true,
-                titles_per_keyword: initialModule?.settings?.keyword?.titles_per_keyword ?? 3,
-                cluster_enabled: initialModule?.settings?.keyword?.cluster_enabled ?? true,
-                cluster_threshold: initialModule?.settings?.keyword?.cluster_threshold ?? 0.34,
-                cluster_min_size: initialModule?.settings?.keyword?.cluster_min_size ?? 3,
-                cluster_max_size: initialModule?.settings?.keyword?.cluster_max_size ?? 12,
-                titles_per_cluster: initialModule?.settings?.keyword?.titles_per_cluster ?? 0,
                 min_inventory: initialModule?.settings?.keyword?.min_inventory ?? 30,
                 interval_minutes: initialModule?.settings?.schedule?.interval_minutes ?? 360,
             },
@@ -805,7 +797,7 @@ function moduleFormApp(module = null, moduleType = null) {
             }
 
             // 기타 타입 설정 JSON 검증
-            if (this.formData.type_code !== 'collect' && this.formData.type_code !== 'data' && this.formData.type_code !== 'generate' && this.formData.type_code !== 'prompt' && this.formData.type_code !== 'growth_profile' && this.formData.type_code !== 'bulk_collect' && this.settingsJson) {
+            if (this.formData.type_code !== 'collect' && this.formData.type_code !== 'data' && this.formData.type_code !== 'generate' && this.formData.type_code !== 'prompt' && this.formData.type_code !== 'growth_profile' && this.formData.type_code !== 'bulk_collect' && this.formData.type_code !== 'keyword' && this.settingsJson) {
                 try {
                     JSON.parse(this.settingsJson);
                 } catch (e) {
@@ -1129,20 +1121,12 @@ function moduleFormApp(module = null, moduleType = null) {
                         min_saturation: k.min_saturation,
                         seed_limit: k.seed_limit,
                         measure_limit: k.measure_limit,
-                        make_titles: !!k.make_titles,
                         steps: [
                             ['step_collect', 'collect'],
                             ['step_measure', 'measure'],
                             ['step_classify', 'classify'],
                             ['step_rejudge', 'rejudge'],
                         ].filter(([flag]) => k[flag]).map(([, code]) => code),
-                        dry_run: !!k.dry_run,
-                        titles_per_keyword: k.titles_per_keyword,
-                        cluster_enabled: !!k.cluster_enabled,
-                        cluster_threshold: k.cluster_threshold,
-                        cluster_min_size: k.cluster_min_size,
-                        cluster_max_size: k.cluster_max_size,
-                        titles_per_cluster: k.titles_per_cluster,
                         min_inventory: k.min_inventory,
                     },
                     // 스케줄은 bulk_collect 와 같은 자리·같은 모양으로 둔다

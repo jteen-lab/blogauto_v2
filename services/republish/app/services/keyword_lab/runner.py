@@ -21,13 +21,16 @@ from ...models.user_settings import UserSettings
 from .inventory import available_titles, target_inventory
 from .service import KeywordLabService
 from .settings import KeywordModuleSettings
-from .title_maker import TitleMaker
 
 logger = get_logger("keyword_runner", "app.log")
 
 
 class KeywordModuleRunner:
-    """수집 → 측정 → 제목 생성을 한 번에 수행한다."""
+    """수집 → 측정 → 분류 → 재판정을 한 회차에 수행한다.
+
+    제목 생성은 여기 없다. 중간 결과를 걸러낼 자리가 필요해
+    '제목 생성/수집' 모듈이 따로 맡는다.
+    """
 
     def __init__(self, db: AsyncSession, user_id: int):
         self.db = db
@@ -43,7 +46,7 @@ class KeywordModuleRunner:
             settings: 모듈 settings
             blog_id: 대상 블로그
             force: 재고가 충분해도 강제로 실행(수동 테스트용)
-            steps: 일부 단계만 — ['collect','measure','titles'] 중
+            steps: 일부 단계만 — ['collect','measure','classify','rejudge'] 중
         """
         cfg = KeywordModuleSettings.parse(settings)
         if not cfg.enabled and not force:
@@ -111,16 +114,13 @@ class KeywordModuleRunner:
             # 기준값을 바꿨을 때 이미 쌓인 후보에도 반영한다.
             out["rejudge"] = await self._rejudge(cfg)
 
-        # 제목은 별도 모듈이 맡는다. 옛 설정을 켠 모듈은 계속 돌게 둔다.
-        if "titles" in steps and cfg.make_titles:
-            out["titles"] = await self._make_titles(cfg, blog)
-
         logger.info(
-            "[KEYWORD_RUNNER] 회차 완료 | blog=%s | 수집 %s | 측정 %s | 제목 %s",
-            blog_id,
+            "[KEYWORD_RUNNER] 회차 완료 | blog=%s | 단계 %s | 수집 %s | 측정 %s "
+            "| 분류 %s",
+            blog_id, steps,
             (out.get("collect") or {}).get("saved"),
             (out.get("measure") or {}).get("measured"),
-            (out.get("titles") or {}).get("made"),
+            (out.get("classify") or {}).get("matched"),
         )
         return out
 
@@ -152,15 +152,13 @@ class KeywordModuleRunner:
     @staticmethod
     def _aggregate(rows: list) -> Dict[str, Any]:
         """블로그별 결과를 하나로 합친다 — 로그·화면이 같은 모양을 쓴다."""
-        collected = measured = made = classified = 0
+        collected = measured = classified = 0
         enriched = rejudged = filtered = 0
         ok = skipped = failed = 0
         errors: list = []
         details: list = []
-        preview: list = []
         samples: list = []
         by_source: dict = {}
-        dry_run = False
 
         for name, result in rows:
             result = result or {}
@@ -178,7 +176,6 @@ class KeywordModuleRunner:
                                 "detail": result.get("message", "건너뜀")})
                 continue
             ok += 1
-            titles = result.get("titles") or {}
             collect = result.get("collect") or {}
             classified += (result.get("classify") or {}).get("matched") or 0
             enriched += (result.get("measure") or {}).get("enriched") or 0
@@ -187,24 +184,13 @@ class KeywordModuleRunner:
             filtered += collect.get("blocked") or 0
             for code, n in (collect.get("by_source") or {}).items():
                 by_source[code] = by_source.get(code, 0) + n
-            if titles.get("error"):
-                errors.append(titles["error"]) if titles["error"] not in errors \
-                    else None
             c = collect.get("saved") or 0
             m = (result.get("measure") or {}).get("measured") or 0
-            t = titles.get("made") or 0
-            drafted = len(titles.get("preview") or [])
             collected += c
             measured += m
-            made += t
-            if titles.get("dry_run"):
-                dry_run = True
-            preview.extend(titles.get("preview") or [])
-            shaped = (f"제목 {drafted}편(미리보기)" if titles.get("dry_run")
-                      else f"제목 {t}편")
             details.append({
                 "blog_name": name, "status": "success",
-                "detail": f"키워드 {c}개 · 측정 {m}건 · {shaped}",
+                "detail": f"키워드 {c}개 · 측정 {m}건",
             })
 
         # 전부 실패했을 때만 실패다. 일부 블로그가 건너뛰는 것은 정상 동작이다.
@@ -216,39 +202,26 @@ class KeywordModuleRunner:
         if ok == 0 and rows:
             reasons = [d["detail"] for d in details if d["status"] != "success"]
             head = f"실행 안 됨 — {reasons[0]} | " if reasons else ""
-        # 검증 모드면 저장하지 않았다는 사실이 요약에 보여야 한다.
-        # "제목 0편" 만 보면 실패로 오해한다.
-        # 제목은 이제 별도 모듈이 맡는다. 옛 설정으로 만들었을 때만 적는다.
-        if dry_run:
-            tail_part = f" · 제목 {len(preview)}편 미리보기(검증 모드 — 저장 안 함)"
-        elif made or preview:
-            tail_part = f" · 제목 {made}편"
-        else:
-            tail_part = ""
-        # 제목 샘플을 붙인다. 숫자만 있으면 무엇이 만들어졌는지 알 수 없다.
+        # 수집 키워드 예시를 붙인다. 숫자만 있으면 무엇이 들어왔는지 모른다.
         sample = ""
-        picks = [p["title"] for p in preview if p.get("state") == "ready"][:2]
-        if picks:
-            sample = " | 예: " + " / ".join(f'"{t}"' for t in picks)
-        # 제목이 0편인데 사유가 있으면 반드시 보여 준다. 지금까지 20건이
-        # 조용히 실패해도 "제목 0편" 으로만 보였다.
-        note = ""
-        if not preview and errors:
-            note = f" | ⚠ {errors[0]}"
+        if samples:
+            sample = " | 예: " + " / ".join(f'"{k}"' for k in samples[:2])
+        note = f" | ⚠ {errors[0]}" if errors else ""
         message = (f"{head}블로그 {len(rows)}개 | 성공 {ok} · 건너뜀 {skipped} · "
                    f"실패 {failed} | 키워드 {collected}개 · 측정 {measured}건"
                    f"{f' · 금지어 차단 {filtered}건' if filtered else ''}"
                    f" · 분류 {classified}건"
                    f"{f' · 검색량 보강 {enriched}건' if enriched else ''}"
                    f"{f' · 재판정 {rejudged}건' if rejudged else ''}"
-                   f"{tail_part}{sample}{note}")
+                   f"{sample}{note}")
         out: Dict[str, Any] = {
             "success": success, "message": message, "details": details,
-            "collected": collected, "measured": measured, "titles_made": made,
+            # 화면이 "몇 개 중 몇 개 표시" 를 적을 수 있게 총계도 준다.
+            "collected": collected, "measured": measured,
             "blogs": len(rows), "ok": ok, "skipped_count": skipped,
-            "failed": failed, "dry_run": dry_run, "classified": classified,
+            "failed": failed, "classified": classified,
             "enriched": enriched, "rejudged": rejudged, "blocked": filtered,
-            "preview": preview[:60], "samples": samples[:40],
+            "samples": samples[:100],
             "by_source": by_source,
         }
         if errors:
@@ -294,48 +267,6 @@ class KeywordModuleRunner:
         except Exception as e:  # noqa: BLE001
             logger.warning("[KEYWORD_RUNNER] 되먹임 실패 | %s", e)
             return {"success": False, "error": str(e)[:120]}
-
-    async def _make_titles(self, cfg: KeywordModuleSettings,
-                           blog) -> Dict[str, Any]:
-        """묶음 제목 → 남은 단독 키워드 제목 순으로 만든다.
-
-        묶음이 먼저다. 묶음에 든 키워드를 단독으로 먼저 쓰면 같은 키워드로
-        두 번 제목을 만들게 된다.
-        """
-        from ..ai.ai_service import AIService
-        from .cluster_builder import ClusterBuilder
-
-        try:
-            built = await ClusterBuilder(self.db, self.user_id).build(cfg, blog)
-            maker = TitleMaker(self.db, AIService(self.db), self.user_id)
-
-            cluster_out: Dict[str, Any] = {}
-            if cfg.cluster_enabled:
-                cluster_out = await maker.run_clusters(cfg, blog)
-
-            single_out = await maker.run(cfg, blog)
-            preview = (list(cluster_out.get("preview") or [])
-                       + list(single_out.get("preview") or []))
-            return {
-                "success": True,
-                "made": (cluster_out.get("made", 0)
-                         + single_out.get("made", 0)),
-                "clusters_built": built.get("clusters", 0),
-                "clusters_titled": cluster_out.get("clusters", 0),
-                "keywords": single_out.get("keywords", 0),
-                "blocked": (cluster_out.get("blocked", 0)
-                            + single_out.get("blocked", 0)),
-                "queued": (cluster_out.get("queued", 0)
-                           + single_out.get("queued", 0)),
-                "dry_run": cfg.dry_run,
-                "preview": preview,
-                "error": (cluster_out.get("error")
-                          or single_out.get("error")),
-            }
-        except Exception as e:  # noqa: BLE001
-            # 제목 생성이 실패해도 수집·측정 결과는 남는다.
-            logger.warning("[KEYWORD_RUNNER] 제목 생성 실패 | %s", e)
-            return {"success": False, "error": str(e)[:120], "made": 0}
 
     async def _blog(self, blog_id: int):
         return (await self.db.execute(

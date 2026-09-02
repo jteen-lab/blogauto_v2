@@ -228,34 +228,6 @@ window.getKeywordFormTemplate = function () {
 
         ${window.getKeywordScheduleTemplate ? window.getKeywordScheduleTemplate() : ''}
 
-        <!-- 제목 생성 (이전 방식) -->
-        <details class="border border-gray-200 rounded-lg">
-            <summary class="px-3 py-2 text-sm text-gray-600 cursor-pointer select-none">
-                제목 생성 (이전 방식 · 기본 꺼짐)
-            </summary>
-            <div class="p-3 border-t border-gray-200 space-y-3">
-                <div class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
-                    제목은 <b>'제목 생성/수집' 모듈</b>이 맡습니다. 수집 모듈이 제목까지 만들면
-                    중간 결과를 걸러낼 자리가 없습니다.
-                </div>
-                <label class="flex items-center gap-2 text-sm text-gray-700">
-                    <input type="checkbox" x-model="formData.keyword.make_titles" class="rounded">
-                    (이전 방식) 채택 키워드로 제목을 만들어 재고에 넣기
-                </label>
-                <div x-show="formData.keyword.make_titles" class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-xs text-gray-500 mb-1">키워드당 제목 수</label>
-                        <input type="number" min="1" max="10" x-model.number="formData.keyword.titles_per_keyword"
-                               class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                    </div>
-                    <label class="flex items-center gap-2 text-sm text-gray-700 pt-5">
-                        <input type="checkbox" x-model="formData.keyword.dry_run" class="rounded">
-                        검증 모드 (저장하지 않고 결과만)
-                    </label>
-                </div>
-            </div>
-        </details>
-
         <!-- 테스트 -->
         <div class="border-t border-gray-100 pt-4">
             <div class="flex flex-wrap items-center gap-3">
@@ -288,7 +260,12 @@ window.getKeywordFormTemplate = function () {
                     </div>
                 </div>
                 <div x-show="(kwTest.result?.samples || []).length">
-                    <div class="text-xs font-medium text-gray-500 mb-1">수집된 키워드</div>
+                    <div class="text-xs font-medium text-gray-500 mb-1">
+                        수집된 키워드
+                        <span class="text-gray-400"
+                              x-text="'(' + (kwTest.result?.collected || 0).toLocaleString()
+                                  + '개 중 ' + (kwTest.result?.samples || []).length + '개 표시)'"></span>
+                    </div>
                     <div class="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
                         <template x-for="k in (kwTest.result?.samples || [])" :key="k">
                             <span class="px-2 py-0.5 bg-amber-50 border border-amber-200 rounded text-xs" x-text="k"></span>
