@@ -18,7 +18,10 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import func, or_, select
+from datetime import datetime
+
+import pytz
+from sqlalchemy import func, or_, select, update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.logger import get_logger
@@ -26,6 +29,8 @@ from ...models.keyword_candidate import KeywordCandidate
 from .scoring import Thresholds, judge
 
 logger = get_logger("keyword_pool", "app.log")
+
+KST = pytz.timezone("Asia/Seoul")
 
 # 한 번에 처리할 기본 건수. 네이버 검색광고는 5개씩, 검색은 키워드당 2회다.
 DEFAULT_MEASURE_LIMIT = 50
@@ -74,27 +79,66 @@ async def stats(db: AsyncSession, user_id: int) -> Dict[str, Any]:
 
 
 async def classify(db: AsyncSession, user_id: int,
-                   limit: int = DEFAULT_CLASSIFY_LIMIT) -> Dict[str, Any]:
+                   limit: int = DEFAULT_CLASSIFY_LIMIT,
+                   retry_all: bool = False) -> Dict[str, Any]:
     """미분류 키워드에 카테고리를 붙인다. API 를 부르지 않는다.
 
-    분류표에 없는 말은 그대로 미분류로 남는다 — 그 목록이 곧 분류표에
-    무엇이 빠졌는지 알려 준다.
+    **아직 안 훑은 것부터** 가져간다. 분류기는 결정적이라 안 붙은 것을
+    다시 훑어도 결과가 같다 — 시도 기록이 없으면 같은 앞부분만 반복해서
+    훑고 진행이 없다(실제로 "훑음 2000건" 이 반복됐다).
+
+    분류표에 없는 말은 미분류로 남는다. 그 목록이 곧 분류표에 무엇이
+    빠졌는지 알려 준다.
+
+    Args:
+        db: DB 세션
+        user_id: 사용자
+        limit: 이번에 훑을 최대 건수
+        retry_all: 분류표를 보강한 뒤 처음부터 다시 훑을 때 True
+
+    Returns:
+        {"scanned", "matched", "unmatched", "remaining", "unclassified",
+         "message"}
     """
     from ..category_matcher_service import CategoryMatcherService
 
-    rows = (await db.execute(
-        select(KeywordCandidate).where(
-            KeywordCandidate.user_id == user_id,
+    if retry_all:
+        # 분류표가 자랐다. 지난 실패를 다시 본다.
+        await db.execute(
+            sa_update(KeywordCandidate)
+            .where(KeywordCandidate.user_id == user_id,
+                   KeywordCandidate.topic_id.is_(None),
+                   KeywordCandidate.subtopic_id.is_(None))
+            .values(classify_tried_at=None))
+        await db.commit()
+
+    base = [KeywordCandidate.user_id == user_id,
             KeywordCandidate.topic_id.is_(None),
-            KeywordCandidate.subtopic_id.is_(None),
-        ).limit(limit)
+            KeywordCandidate.subtopic_id.is_(None)]
+
+    rows = (await db.execute(
+        select(KeywordCandidate)
+        .where(*base, KeywordCandidate.classify_tried_at.is_(None))
+        .order_by(KeywordCandidate.id)
+        .limit(limit)
     )).scalars().all()
+
+    unclassified = (await db.execute(
+        select(func.count(KeywordCandidate.id)).where(*base))).scalar() or 0
+
     if not rows:
-        return {"scanned": 0, "matched": 0, "message": "미분류 키워드가 없습니다"}
+        message = ("미분류 키워드가 없습니다" if not unclassified else
+                   f"남은 {unclassified:,}건은 이미 다 훑었습니다 — "
+                   "분류표에 없는 말입니다. 분류표를 보강한 뒤 "
+                   "'처음부터 다시 분류' 를 쓰세요")
+        return {"scanned": 0, "matched": 0, "unmatched": 0, "remaining": 0,
+                "unclassified": unclassified, "message": message}
 
     matcher = CategoryMatcherService(db, user_id)
+    now = datetime.now(KST)
     matched = 0
     for row in rows:
+        row.classify_tried_at = now      # 실패한 것도 기록한다
         try:
             topic_id, subtopic_id, _ = \
                 await matcher.match_and_apply_to_keyword(row.keyword)
@@ -106,9 +150,17 @@ async def classify(db: AsyncSession, user_id: int,
             matched += 1
 
     await db.commit()
-    logger.info("[KEYWORD_POOL] 분류 | 훑음 %d · 매칭 %d", len(rows), matched)
+
+    remaining = (await db.execute(
+        select(func.count(KeywordCandidate.id)).where(
+            *base, KeywordCandidate.classify_tried_at.is_(None))
+    )).scalar() or 0
+
+    logger.info("[KEYWORD_POOL] 분류 | 훑음 %d · 매칭 %d · 남은 %d",
+                len(rows), matched, remaining)
     return {"scanned": len(rows), "matched": matched,
-            "unmatched": len(rows) - matched}
+            "unmatched": len(rows) - matched, "remaining": remaining,
+            "unclassified": max(0, unclassified - matched)}
 
 
 async def rejudge(db: AsyncSession, user_id: int,

@@ -266,6 +266,10 @@ function keywordPoolApp() {
                 });
                 if (!started) return;
                 this.collectResult = await this.pollRun(started.task_id);
+                const blocked = this.collectResult?.blocked || 0;
+                if (blocked) {
+                    this.show(`금지어 필터로 ${blocked}건을 걸렀습니다`);
+                }
                 await Promise.all([this.loadStats(), this.load()]);
             } catch (e) {
                 this.show(e.message, 'error');
@@ -294,14 +298,21 @@ function keywordPoolApp() {
         },
 
         // ── 작업 ─────────────────────────────────────────
-        async runClassify() {
+        async runClassify(retryAll = false) {
             this.busy = 'classify';
             const d = await this.post('/api/v1/data/keyword-pool/classify',
-                { limit: 2000 });
+                { limit: 2000, retry_all: !!retryAll });
             this.busy = '';
             if (!d) return;
-            this.show(`분류: 훑음 ${d.scanned}건 · 매칭 ${d.matched}건 · `
-                + `여전히 미분류 ${d.unmatched ?? 0}건`);
+            if (d.message) {
+                // 더 훑을 게 없다 — 왜 안 줄어드는지 말해 준다
+                this.show(d.message);
+            } else {
+                this.show(`분류: 훑음 ${d.scanned.toLocaleString()}건 · `
+                    + `카테고리 붙음 ${d.matched.toLocaleString()}건 · `
+                    + `못 붙음 ${d.unmatched.toLocaleString()}건 · `
+                    + `아직 안 훑은 ${d.remaining.toLocaleString()}건`);
+            }
             await Promise.all([this.loadStats(), this.load()]);
         },
 
@@ -324,7 +335,7 @@ function keywordPoolApp() {
             if (!started) { this.busy = ''; return; }
             try {
                 const r = await this.poll(started.task_id);
-                this.show(`측정: 검색량 보강 ${r.enriched}건 · 공급 측정 ${r.measured}건`
+                this.show(`측정: 검색량 보강 ${r.enriched}건 · 공급(발행량) 측정 ${r.measured}건`
                     + (r.error ? ` · ⚠ ${r.error}` : '')
                     + ` · 남은 ${r.remaining.toLocaleString()}건`);
                 await Promise.all([this.loadStats(), this.load()]);

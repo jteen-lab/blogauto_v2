@@ -145,13 +145,19 @@ async def _decorate(db: AsyncSession,
 
 @router.post("/classify", summary="미분류 키워드 분류")
 async def classify_pool(
-    limit: int = Body(500, embed=True),
+    limit: int = Body(500),
+    retry_all: bool = Body(False),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    """분류표로 카테고리를 붙인다. API 를 부르지 않아 빠르다."""
+    """분류표로 카테고리를 붙인다. API 를 부르지 않아 빠르다.
+
+    아직 안 훑은 것부터 가져간다. `retry_all` 은 분류표를 보강한 뒤
+    지난 실패까지 다시 볼 때 쓴다.
+    """
     return await pool_ops.classify(db, current_user.id,
-                                   limit=max(1, min(5000, limit)))
+                                   limit=max(1, min(5000, limit)),
+                                   retry_all=retry_all)
 
 
 @router.post("/rejudge", summary="기준값 재판정")

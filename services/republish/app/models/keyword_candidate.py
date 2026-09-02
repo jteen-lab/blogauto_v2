@@ -73,6 +73,11 @@ class KeywordCandidate(Base):
     cluster_id = Column(Integer, nullable=True, index=True)
     # 검색 의도. 같은 주제라도 묻는 것이 다르면 다른 글이다.
     intent = Column(String(20), nullable=True, index=True)
+    # 분류를 시도한 시각. **실패한 것도 기록한다** — 분류기는 결정적이라
+    # 안 붙은 것을 다시 훑어도 결과가 같다. 이 값이 없어 같은 2,000건을
+    # 반복해서 훑고 진행이 없었다.
+    classify_tried_at = Column(DateTime(timezone=True), nullable=True,
+                               index=True)
 
     source = Column(String(30), nullable=False, default="naver_ads")
 
