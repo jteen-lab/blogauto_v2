@@ -22,6 +22,11 @@ DEFAULT_SEED_LIMIT = 10
 # 재고가 이보다 많으면 돌지 않는다. 매번 도는 것은 API 낭비다.
 DEFAULT_MIN_INVENTORY = 30
 
+# 한 회차에 수행할 단계. 골라서 끄면 **개별 모듈**이 된다
+# (수집만 하는 모듈 / 측정만 하는 모듈 …). 한 모듈이 전부 할 수도 있다.
+WORK_STEPS = ("collect", "measure", "classify", "rejudge")
+DEFAULT_STEPS = ["collect", "measure", "classify"]
+
 # 켤 수 있는 수집 소스. 기본은 검색광고만 — 나머지는 사용자가 켠다.
 # 한 소스만 쓰면 그 소스의 한계가 결과의 한계가 된다.
 DEFAULT_SOURCES = ["naver_ads"]
@@ -38,6 +43,27 @@ DEFAULT_CLUSTER_MIN_SIZE = 3
 DEFAULT_CLUSTER_MAX_SIZE = 12
 DEFAULT_COLLECT_LIMIT = 100
 DEFAULT_MEASURE_LIMIT = 50
+
+
+def _steps(value: Any, legacy_rejudge: Any = None) -> List[str]:
+    """이 모듈이 맡을 단계 목록.
+
+    모르는 값은 버린다. 전부 꺼 버리면 회차가 아무 일도 안 하므로 기본값을
+    돌려준다 — 실수로 비운 모듈이 조용히 노는 것을 막는다.
+
+    옛 설정 `rejudge_on_run` 은 단계 목록으로 흡수한다.
+    """
+    if isinstance(value, str):
+        value = [x.strip() for x in value.split(",")]
+    picked = [x for x in (value or []) if x in WORK_STEPS]
+    if not picked:
+        # steps 를 안 정한 옛 모듈. 기본 단계를 준다.
+        picked = list(DEFAULT_STEPS)
+    if legacy_rejudge and "rejudge" not in picked:
+        picked.append("rejudge")
+    # 실행 순서를 고정한다. 측정 전에 분류해도 결과가 달라지지 않지만
+    # 로그가 뒤죽박죽이면 무엇이 언제 돌았는지 읽을 수 없다.
+    return [s for s in WORK_STEPS if s in picked]
 
 
 def _ratio(value: Any, default: float) -> float:
@@ -69,6 +95,8 @@ class KeywordModuleSettings:
     """모듈 settings 를 읽어 쓸 수 있는 값으로 만든다."""
 
     enabled: bool = True
+    # 이 모듈이 맡을 단계. 하나만 켜면 그 단계 전용 모듈이 된다.
+    steps: List[str] = field(default_factory=lambda: list(DEFAULT_STEPS))
     seeds: List[str] = field(default_factory=list)
     modifiers: List[str] = field(default_factory=lambda: list(DEFAULT_MODIFIERS))
     use_blog_categories: bool = True
@@ -160,6 +188,7 @@ class KeywordModuleSettings:
 
         return cls(
             enabled=bool(kw.get("enabled", True)),
+            steps=_steps(kw.get("steps"), kw.get("rejudge_on_run")),
             seeds=[x for x in _list("seeds", []) if x],
             modifiers=_list("modifiers", DEFAULT_MODIFIERS),
             use_blog_categories=bool(kw.get("use_blog_categories", True)),
@@ -203,6 +232,7 @@ class KeywordModuleSettings:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "enabled": self.enabled,
+            "steps": self.steps,
             "seeds": self.seeds,
             "modifiers": self.modifiers,
             "use_blog_categories": self.use_blog_categories,

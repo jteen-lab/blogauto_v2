@@ -50,11 +50,11 @@ class KeywordModuleRunner:
             return {"success": True, "skipped": True,
                     "message": "모듈이 꺼져 있습니다"}
 
-        # 기본 단계에서 **제목 생성을 뺀다.** 수집 모듈이 제목까지 만들면
-        # 중간 결과를 걸러낼 자리가 없고 실패가 한 덩어리로 묻힌다.
-        # 제목은 '제목 생성/수집' 모듈이 맡는다(계획서 S5).
-        steps = steps or ["feedback", "collect", "measure", "classify",
-                          "rejudge"]
+        # 모듈이 맡을 단계는 설정이 정한다. 하나만 켜면 그 단계 전용
+        # 모듈이 된다(수집만 / 측정만 …). 제목은 여기 없다 — 중간 결과를
+        # 걸러낼 자리가 필요해 별도 모듈이 맡는다(계획서 S5).
+        if steps is None:
+            steps = (["feedback"] if cfg.feedback_enabled else []) + cfg.steps
         blog = await self._blog(blog_id) if blog_id else None
 
         # 재고를 먼저 본다. 충분하면 돌지 않는다 — 매번 도는 것은 API 낭비다.
@@ -107,7 +107,7 @@ class KeywordModuleRunner:
         if "classify" in steps:
             out["classify"] = await self._classify_leftovers(cfg)
 
-        if "rejudge" in steps and cfg.rejudge_on_run:
+        if "rejudge" in steps:
             # 기준값을 바꿨을 때 이미 쌓인 후보에도 반영한다.
             out["rejudge"] = await self._rejudge(cfg)
 

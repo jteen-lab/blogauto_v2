@@ -157,7 +157,16 @@ function moduleFormApp(module = null, moduleType = null) {
                 seed_limit: initialModule?.settings?.keyword?.seed_limit ?? 10,
                 measure_limit: initialModule?.settings?.keyword?.measure_limit ?? 50,
                 make_titles: initialModule?.settings?.keyword?.make_titles ?? false,
-                rejudge_on_run: initialModule?.settings?.keyword?.rejudge_on_run ?? false,
+                // 단계 선택 — 하나만 켜면 그 단계 전용 모듈이 된다
+                step_collect: (initialModule?.settings?.keyword?.steps
+                    || ['collect', 'measure', 'classify']).includes('collect'),
+                step_measure: (initialModule?.settings?.keyword?.steps
+                    || ['collect', 'measure', 'classify']).includes('measure'),
+                step_classify: (initialModule?.settings?.keyword?.steps
+                    || ['collect', 'measure', 'classify']).includes('classify'),
+                step_rejudge: (initialModule?.settings?.keyword?.steps || [])
+                    .includes('rejudge')
+                    || (initialModule?.settings?.keyword?.rejudge_on_run ?? false),
                 dry_run: initialModule?.settings?.keyword?.dry_run ?? true,
                 ai_provider: initialModule?.settings?.keyword?.ai_provider || '',
                 ai_model: initialModule?.settings?.keyword?.ai_model || '',
@@ -1120,7 +1129,12 @@ function moduleFormApp(module = null, moduleType = null) {
                         seed_limit: k.seed_limit,
                         measure_limit: k.measure_limit,
                         make_titles: !!k.make_titles,
-                        rejudge_on_run: !!k.rejudge_on_run,
+                        steps: [
+                            ['step_collect', 'collect'],
+                            ['step_measure', 'measure'],
+                            ['step_classify', 'classify'],
+                            ['step_rejudge', 'rejudge'],
+                        ].filter(([flag]) => k[flag]).map(([, code]) => code),
                         dry_run: !!k.dry_run,
                         ai_provider: k.ai_provider || null,
                         ai_model: k.ai_model || null,

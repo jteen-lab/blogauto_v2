@@ -159,23 +159,36 @@ window.getKeywordFormTemplate = function () {
             </div>
         </div>
 
-        <!-- 자동 처리 -->
+        <!-- 이 모듈이 맡을 단계 -->
         <div class="border-t border-gray-100 pt-4 space-y-2">
-            <div class="text-sm font-medium text-gray-700">회차마다 자동으로 할 일</div>
+            <div class="text-sm font-medium text-gray-700">이 모듈이 맡을 단계</div>
             <div class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
-                수집 뒤 <b>검색량 보강 → 공급 측정 → 분류</b>까지 자동으로 이어집니다.
+                <b>하나만 켜면 그 단계 전용 모듈</b>이 되고, 전부 켜면 한 모듈이 다 합니다.
+                단계를 나눠 모듈을 여러 개 두면 주기를 따로 줄 수 있습니다
+                (예: 수집은 6시간마다, 측정은 1시간마다).
                 데이터 관리 키워드 탭에서 손으로 누르는 것과 <b>같은 코드</b>입니다.
             </div>
-            <label class="flex items-start gap-2 text-sm text-gray-700">
-                <input type="checkbox" x-model="formData.keyword.rejudge_on_run" class="rounded mt-0.5">
-                <span>
-                    회차마다 <b>전체 재판정</b>도 함께
-                    <span class="block mt-1 text-xs text-gray-500">
-                        기준값(검색량 하한·상한·포화도)을 바꿨을 때 이미 쌓인 키워드에도 반영합니다.
-                        API 호출은 없지만 전체 행을 훑으므로, 기준을 자주 바꾸지 않으면 꺼 두세요.
-                    </span>
-                </span>
-            </label>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <label class="flex items-start gap-2 text-sm text-gray-700">
+                    <input type="checkbox" x-model="formData.keyword.step_collect" class="rounded mt-0.5">
+                    <span>① 수집 <span class="text-xs text-gray-500">(시드·발견 → 새 키워드)</span></span>
+                </label>
+                <label class="flex items-start gap-2 text-sm text-gray-700">
+                    <input type="checkbox" x-model="formData.keyword.step_measure" class="rounded mt-0.5">
+                    <span>② 측정 <span class="text-xs text-gray-500">(검색량 보강 + 월 발행량)</span></span>
+                </label>
+                <label class="flex items-start gap-2 text-sm text-gray-700">
+                    <input type="checkbox" x-model="formData.keyword.step_classify" class="rounded mt-0.5">
+                    <span>③ 분류 <span class="text-xs text-gray-500">(니치 매칭 · API 호출 없음)</span></span>
+                </label>
+                <label class="flex items-start gap-2 text-sm text-gray-700">
+                    <input type="checkbox" x-model="formData.keyword.step_rejudge" class="rounded mt-0.5">
+                    <span>④ 재판정 <span class="text-xs text-gray-500">(기준값 변경분 반영 · 전체 훑음)</span></span>
+                </label>
+            </div>
+            <p class="text-xs text-gray-400">
+                하나도 안 켜면 기본 단계(수집·측정·분류)로 돕니다.
+            </p>
         </div>
 
         <!-- 제목 생성 (이전 방식) -->
