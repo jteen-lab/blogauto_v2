@@ -75,6 +75,16 @@ class KeywordCandidate(Base):
     intent = Column(String(20), nullable=True, index=True)
 
     source = Column(String(30), nullable=False, default="naver_ads")
+
+    # ── 운영 상태 (seed_keywords 에서 승계) ──────────────
+    # 이 테이블이 데이터 관리 키워드 탭의 정본이 되면서, 순환 사용·활성
+    # 여부 같은 운영 정보도 여기로 온다.
+    is_active = Column(Boolean, nullable=False, default=True)
+    use_count = Column(Integer, nullable=False, default=0)
+    last_used_at = Column(DateTime(timezone=True), nullable=True)
+    priority = Column(Integer, nullable=False, default=0)
+    # 이관 추적용. 어디서 온 키워드인지 남아야 되돌릴 수 있다.
+    legacy_seed_id = Column(Integer, nullable=True)
     note = Column(Text, nullable=True)
 
     # ── 성과 되먹임 ──────────────────────────────────────
