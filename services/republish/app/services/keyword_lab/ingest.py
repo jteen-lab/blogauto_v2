@@ -123,11 +123,17 @@ class IdeaIngestor:
         )
 
     async def _load_filters(self) -> List[ContentFilter]:
-        """활성 금지어 필터. 한 회차에 한 번만 읽는다."""
+        """활성 금지어 필터. 조회가 실패해도 수집은 계속한다."""
         if self._filters is None:
-            self._filters = list((await self.db.execute(
-                select(ContentFilter).where(ContentFilter.is_active.is_(True))
-            )).scalars().all())
+            try:
+                self._filters = list((await self.db.execute(
+                    select(ContentFilter).where(
+                        ContentFilter.is_active.is_(True))
+                )).scalars().all())
+            except Exception as e:  # noqa: BLE001
+                logger.warning("[KEYWORD_INGEST] 필터 조회 실패 — 필터 없이 진행 | %s",
+                               e)
+                self._filters = []
         return self._filters
 
     async def _store_metric(self, row: KeywordCandidate,

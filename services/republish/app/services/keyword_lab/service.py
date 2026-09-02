@@ -349,11 +349,22 @@ class KeywordLabService:
         return self._matcher_cache
 
     async def _filters(self) -> List[ContentFilter]:
-        """활성 금지어 필터. 한 회차에 한 번만 읽는다."""
+        """활성 금지어 필터. 한 회차에 한 번만 읽는다.
+
+        조회가 실패해도 수집은 계속한다 — 보조 조회 때문에 회차 전체가
+        죽으면 안 된다(`_matcher` 와 같은 방침). 다만 필터가 빠진 채로
+        도는 것이므로 경고를 남긴다.
+        """
         if getattr(self, "_filter_cache", None) is None:
-            self._filter_cache = list((await self.db.execute(
-                select(ContentFilter).where(ContentFilter.is_active.is_(True))
-            )).scalars().all())
+            try:
+                self._filter_cache = list((await self.db.execute(
+                    select(ContentFilter).where(
+                        ContentFilter.is_active.is_(True))
+                )).scalars().all())
+            except Exception as e:  # noqa: BLE001
+                logger.warning("[KEYWORD_LAB] 필터 조회 실패 — 필터 없이 진행 | %s",
+                               e)
+                self._filter_cache = []
         return self._filter_cache
 
     async def _existing_keywords(self, blog_id: Optional[int]) -> set:
