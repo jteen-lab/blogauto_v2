@@ -287,7 +287,8 @@ class FlowScheduler:
                     # 발행할까' 를 정하는데, 키워드 생산은 '재고가 부족한가'
                     # 로 돌아야 한다. 축이 다르므로 GP 가 있어도 모듈 설정을
                     # 쓴다(실제 실행 시점에 재고를 다시 본다).
-                    if gp_settings and module_type_code != "keyword":
+                    if gp_settings and module_type_code not in ("keyword",
+                                                                 "title_gen"):
                         interval_minutes = self._get_gp_interval(
                             gp_settings, blogs, module_type_code
                         )
@@ -296,15 +297,17 @@ class FlowScheduler:
                         # bulk_collect 는 nested 경로(settings.schedule.interval_minutes)
                         # 에 저장한다(UI: _bulk_collect_form.html). 4-3 핫픽스로
                         # 모듈 타입별 폴백 경로 분기.
-                        if module_type_code in ("bulk_collect", "keyword"):
+                        if module_type_code in ("bulk_collect", "keyword",
+                                                "title_gen"):
                             # 둘 다 settings.schedule.interval_minutes 를 쓴다
                             schedule_cfg = (
                                 module_settings.get("schedule") or {}
                             )
+                            default_interval = {
+                                "keyword": 360, "title_gen": 180,
+                            }.get(module_type_code, 60)
                             interval_minutes = schedule_cfg.get(
-                                "interval_minutes",
-                                360 if module_type_code == "keyword" else 60,
-                            )
+                                "interval_minutes", default_interval)
                         else:
                             interval_minutes = module_settings.get(
                                 "interval_minutes", 60
@@ -746,6 +749,11 @@ class FlowScheduler:
                     )
                 elif action_type == "keyword":
                     result = await self._execute_keyword_module(
+                        target_module, db, blogs
+                    )
+
+                elif action_type == "title_gen":
+                    result = await self._execute_title_module(
                         target_module, db, blogs
                     )
 
@@ -1470,6 +1478,10 @@ class FlowScheduler:
                     result = await self._execute_keyword_module(
                         module, db, blogs
                     )
+                elif action_type == "title_gen":
+                    result = await self._execute_title_module(
+                        module, db, blogs
+                    )
                     duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
                     logger.info(
                         f"[FLOW_SCHEDULER] 키워드 모듈 실행 완료 | FlowID={flow_id} | "
@@ -2134,6 +2146,35 @@ class FlowScheduler:
             return await runner.run_for_blogs(module.settings or {}, targets)
         except Exception as e:
             logger.error(f"[FLOW_SCHEDULER] 키워드 모듈 실행 오류: {e}")
+            return {"success": False, "error": str(e), "message": str(e)}
+
+    async def _execute_title_module(
+        self,
+        module: Module,
+        db: AsyncSession,
+        blogs: List[Blog],
+    ) -> Dict[str, Any]:
+        """제목 생성/수집 모듈 — 분류된 키워드로 제목을 만든다.
+
+        재고가 충분한 블로그는 실행기가 스스로 건너뛴다.
+
+        Args:
+            module: 제목 타입 모듈
+            db: DB 세션
+            blogs: 플로우에 연결된 블로그 목록
+
+        Returns:
+            {"success": bool, "message": str, ...}
+        """
+        from app.services.flow.module_blog_scope import blogs_for_module
+        from app.services.title_gen.runner import TitleModuleRunner
+
+        try:
+            targets = blogs_for_module(module, list(blogs or []))
+            runner = TitleModuleRunner(db, module.user_id)
+            return await runner.run_for_blogs(module.settings or {}, targets)
+        except Exception as e:
+            logger.error(f"[FLOW_SCHEDULER] 제목 모듈 실행 오류: {e}")
             return {"success": False, "error": str(e), "message": str(e)}
 
     async def _execute_collect_module(

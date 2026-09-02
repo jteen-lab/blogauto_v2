@@ -101,6 +101,15 @@
                               class="ml-1 px-1.5 py-0.5 text-xs bg-primary text-white rounded-full"></span>
                     </button>
                     <button type="button"
+                            @click="activeModuleTab = 'title_gen'"
+                            :class="activeModuleTab === 'title_gen' ? 'bg-sky-50 text-sky-700 border-sky-500' : 'bg-white text-gray-500 hover:text-gray-700'"
+                            class="flex-1 px-3 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap min-w-0">
+                        제목
+                        <span x-show="getSelectedCountByTypes(['title_gen']) > 0"
+                              x-text="getSelectedCountByTypes(['title_gen'])"
+                              class="ml-1 px-1.5 py-0.5 text-xs bg-primary text-white rounded-full"></span>
+                    </button>
+                    <button type="button"
                             @click="activeModuleTab = 'data'"
                             :class="activeModuleTab === 'data' ? 'bg-teal-50 text-teal-700 border-teal-500' : 'bg-white text-gray-500 hover:text-gray-700'"
                             class="flex-1 px-3 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap min-w-0">

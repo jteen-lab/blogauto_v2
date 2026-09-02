@@ -102,7 +102,7 @@ function moduleListApp() {
                         return valueA - valueB;
 
                     case 'module_type':
-                        const typeOrder = { 'prompt': 1, 'generate': 2, 'collect': 3, 'data': 4, 'contact_form': 5, 'growth_profile': 6, 'bulk_collect': 7, 'keyword': 8 };
+                        const typeOrder = { 'prompt': 1, 'generate': 2, 'collect': 3, 'data': 4, 'contact_form': 5, 'growth_profile': 6, 'bulk_collect': 7, 'keyword': 8, 'title_gen': 9 };
                         valueA = typeOrder[a.module_type?.code] || 99;
                         valueB = typeOrder[b.module_type?.code] || 99;
                         return valueA - valueB;
@@ -314,7 +314,7 @@ function moduleListApp() {
 
         // 동적 섹션 레이아웃 적용
         applyDynamicLayout() {
-            const moduleTypes = ['prompt', 'collect', 'data', 'contact_form', 'growth_profile', 'bulk_collect', 'keyword'];
+            const moduleTypes = ['prompt', 'collect', 'data', 'contact_form', 'growth_profile', 'bulk_collect', 'keyword', 'title_gen'];
             const visibleSections = moduleTypes.filter(type => this.getModulesByType(type).length > 0);
             const sectionCount = visibleSections.length;
 
@@ -356,6 +356,7 @@ function moduleListApp() {
                 growth_profile: '📈',
                 bulk_collect: '🚀',
                 keyword: '🔑',
+                title_gen: '📝',
                 contact_form: '📋'
             };
             return icons[typeCode] || '📦';
@@ -375,6 +376,7 @@ function moduleListApp() {
                 'growth_profile': '성장 프로파일',
                 'bulk_collect': '대량 수집',
                 'keyword': '키워드',
+                'title_gen': '제목 생성/수집',
                 'contact_form': '애드센스 필수구성'
             };
             return fallbackNames[typeCode] || typeCode;
@@ -1203,9 +1205,10 @@ function moduleListApp() {
 
                         <!-- 키워드 모듈 -->
                         ${window.getKeywordFormTemplate ? window.getKeywordFormTemplate() : '<!-- keyword-form-template.js 로드 필요 -->'}
+                        ${window.getTitleGenFormTemplate ? window.getTitleGenFormTemplate() : '<!-- title-gen-form-template.js 로드 필요 -->'}
 
                         <!-- 기타 타입 설정 -->
-                        <div x-show="formData.type_code !== 'collect' && formData.type_code !== 'data' && formData.type_code !== 'prompt' && formData.type_code !== 'generate' && formData.type_code !== 'growth_profile' && formData.type_code !== 'bulk_collect' && formData.type_code !== 'contact_form'">
+                        <div x-show="formData.type_code !== 'collect' && formData.type_code !== 'data' && formData.type_code !== 'prompt' && formData.type_code !== 'generate' && formData.type_code !== 'growth_profile' && formData.type_code !== 'bulk_collect' && formData.type_code !== 'contact_form' && formData.type_code !== 'title_gen'">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-2">설정 정보 (JSON)</label>
                                 <textarea x-model="settingsJson"

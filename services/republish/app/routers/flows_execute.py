@@ -312,6 +312,40 @@ async def _execute_flow_background(
                         fail_count += 1
                     total_processed += 1
 
+            # 5-2. title_gen 모듈 실행 (키워드 다음 단계)
+            if "title_gen" in modules_by_type:
+                from app.services.flow.module_blog_scope import blogs_for_module
+
+                for title_module in modules_by_type["title_gen"]:
+                    module_start_time = datetime.now()
+                    logger.info(f"[FLOW_BG] 제목 모듈 실행: {title_module.name}")
+                    try:
+                        tg_blogs = blogs_for_module(title_module, blogs)
+                        result = await _execute_title_module(
+                            title_module, tg_blogs, db
+                        )
+                    except Exception as e:
+                        logger.error(
+                            f"[FLOW_BG] 제목 모듈 오류 | "
+                            f"module={title_module.name} | error={e}"
+                        )
+                        result = {"success": False, "message": str(e)}
+
+                    duration_ms = int(
+                        (datetime.now() - module_start_time).total_seconds() * 1000
+                    )
+                    await _save_autorun_log(
+                        db=db, user_id=user_id, flow_id=flow.id,
+                        flow_name=flow.name, module_name=title_module.name,
+                        blog_name="-", result=result,
+                        duration_ms=duration_ms, action="title_gen"
+                    )
+                    if result.get("success"):
+                        success_count += 1
+                    else:
+                        fail_count += 1
+                    total_processed += 1
+
             # 6. data 모듈 실행 (블로그 없이 독립 실행 - 제목 이동 등)
             if "data" in modules_by_type:
                 # 플로우 내 수집 모듈 존재 여부 확인
@@ -1064,6 +1098,33 @@ async def _execute_keyword_module(
     from app.services.keyword_lab.runner import KeywordModuleRunner
 
     runner = KeywordModuleRunner(db, module.user_id)
+    return await runner.run_for_blogs(module.settings or {}, blogs,
+                                      force=force)
+
+
+async def _execute_title_module(
+    module: Module,
+    blogs: List[Blog],
+    db: AsyncSession,
+    force: bool = False,
+) -> Dict[str, Any]:
+    """제목 생성/수집 모듈 — 분류된 키워드로 제목을 만든다.
+
+    수집 모듈에서 떼어낸 단계다. 수동 화면·플로우·오토런이 같은 실행기를
+    부른다.
+
+    Args:
+        module: 제목 타입 모듈
+        blogs: 플로우에 연결된 블로그(모듈 스코프로 좁혀진 것)
+        db: DB 세션
+        force: 재고가 충분해도 실행(사용자가 직접 누른 단발 실행)
+
+    Returns:
+        {"success": bool, "message": str, "details": [...]}
+    """
+    from app.services.title_gen.runner import TitleModuleRunner
+
+    runner = TitleModuleRunner(db, module.user_id)
     return await runner.run_for_blogs(module.settings or {}, blogs,
                                       force=force)
 
@@ -2266,6 +2327,21 @@ async def execute_single_module(
             # 결과를 확인할 수 있다 — 조용히 건너뛰면 테스트가 안 된다.
             exec_result = await _execute_keyword_module(
                 target_module, kw_blogs, db, force=True)
+            results.extend(exec_result.get("details") or [{
+                "blog_name": "-",
+                "status": "success" if exec_result.get("success") else "failed",
+                "detail": exec_result.get("message", ""),
+            }])
+
+        elif type_code == "title_gen":
+            from ..services.flow.module_blog_scope import blogs_for_module
+
+            tg_blogs = blogs_for_module(
+                target_module, [link.blog for link in flow.blog_links if link.blog]
+            )
+            # 직접 누른 단발 실행이다. 재고가 충분해도 돌려야 확인이 된다.
+            exec_result = await _execute_title_module(
+                target_module, tg_blogs, db, force=True)
             results.extend(exec_result.get("details") or [{
                 "blog_name": "-",
                 "status": "success" if exec_result.get("success") else "failed",

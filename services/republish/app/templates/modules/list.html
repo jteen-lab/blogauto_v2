@@ -316,7 +316,8 @@
         {'code': 'data',           'icon': '🗂', 'label': '데이터'},
         {'code': 'growth_profile', 'icon': '📈', 'label': '성장 프로파일'},
         {'code': 'contact_form',   'icon': '✉️', 'label': '애드센스 필수구성'},
-        {'code': 'keyword',        'icon': '🔑', 'label': '키워드'}
+        {'code': 'keyword',        'icon': '🔑', 'label': '키워드'},
+        {'code': 'title_gen',      'icon': '📝', 'label': '제목 생성/수집'}
     ] %}
 
     <!-- 모듈 목록 — 타입 탭 + 표(데스크톱)/2줄 목록(모바일).
@@ -464,6 +465,14 @@
           <span class="text-xs text-gray-500 mt-1">수요·경쟁 측정 → 묶음 제목 생성 → 재고 적재</span>
         </button>
 
+        {# 제목 생성/수집 모듈 — 수집에서 떼어낸 단계 #}
+        <button onclick="selectOption('moduleTypeSelector', 'title_gen', '제목 생성/수집')"
+                class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-sky-300 hover:bg-sky-50 transition-all duration-200 group">
+          <span class="text-3xl mb-2 group-hover:scale-110 transition-transform duration-200">📝</span>
+          <span class="font-medium text-gray-900 group-hover:text-sky-700">제목 생성/수집</span>
+          <span class="text-xs text-gray-500 mt-1">분류 키워드 → 묶음 제목 생성 · 경쟁 각도 참고</span>
+        </button>
+
         {# 애드센스 필수구성 모듈 - F10 #}
         <button onclick="selectOption('moduleTypeSelector', 'contact_form', '애드센스 필수구성')"
                 class="flex flex-col items-center p-4 border-2 border-gray-200 rounded-xl hover:border-purple-300 hover:bg-purple-50 transition-all duration-200 group">
@@ -552,8 +561,9 @@
 <!-- 애드센스 필수구성(contact_form) 모듈 폼 (2026-08-18) -->
 <script src="/static/js/modules/contact-form-pages.js?v=20260820d"></script>
 <script src="/static/js/modules/contact-form-template.js?v=20260820c"></script>
-<script src="/static/js/modules/keyword-form-template.js?v=20260902p9"></script>
-<script src="/static/js/modules/form.js?v=20260902p9"></script>
+<script src="/static/js/modules/keyword-form-template.js?v=20260902s4"></script>
+<script src="/static/js/modules/title-gen-form-template.js?v=20260902s5"></script>
+<script src="/static/js/modules/form.js?v=20260902s4"></script>
 <script src="/static/js/components/cell_slide.js?v=20260831sub"></script>
 <script src="/static/js/components/list_selection.js?v=20260831sub"></script>
 <script src="/static/js/modules/list.js?v=20260831sub"></script>
