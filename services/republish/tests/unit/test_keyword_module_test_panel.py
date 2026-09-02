@@ -141,7 +141,7 @@ class TestModuleTestPanel:
 
     def test_models_loaded_for_keyword_type(self):
         js = self._form()
-        assert "if (typeCode === 'keyword')" in js
+        assert "typeCode === 'keyword' || typeCode === 'title_gen'" in js
         assert "loadKeywordModels()" in js
 
     def test_state_declared(self):

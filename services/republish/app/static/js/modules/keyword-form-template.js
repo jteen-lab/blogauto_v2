@@ -8,8 +8,8 @@ window.getKeywordFormTemplate = function () {
     <div x-show="formData.type_code === 'keyword'" class="space-y-5 border-t border-gray-200 pt-4">
 
         <div class="px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
-            수요(검색량)를 재고 포화도가 낮은 키워드만 골라 제목까지 만들어 재고에 넣습니다.
-            <b>재고가 충분하면 돌지 않습니다</b> — 매번 도는 것은 API 낭비입니다.
+            <b>발견 → 확장 → 측정 → 분류</b> 순으로 돌아 수집 키워드를 데이터 관리에 쌓습니다.
+            제목 생성은 별도 모듈이 맡습니다. <b>재고가 충분하면 돌지 않습니다</b> — 매번 도는 것은 API 낭비입니다.
         </div>
 
         <!-- 검증 모드 -->
@@ -65,10 +65,25 @@ window.getKeywordFormTemplate = function () {
         <div class="border-t border-gray-100 pt-4">
             <label class="block text-sm font-medium text-gray-700 mb-2">수집 소스</label>
             <div class="px-3 py-2 mb-3 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
-                한 소스만 쓰면 그 소스의 한계가 결과의 한계가 됩니다.
+                <b>발견</b>은 입력 없이 지금 뜨는 말을 잡고, <b>확장</b>은 시드에서 가지를 뻗습니다.
+                입력이 달라 로직이 분리돼 있고, 발견 결과가 확장의 시드로 들어갑니다.
                 <b>네이버 검색광고는 항상 켜집니다</b> — 검색량을 아는 유일한 소스라
                 끄면 후보가 전부 미측정으로 남습니다.
+                (네이버 데이터랩은 연관 키워드를 주지 않아 발견 소스로 쓸 수 없습니다)
             </div>
+            <div class="text-xs font-medium text-gray-500 mb-1">발견 — 시드 없이 지금 뜨는 말</div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
+                <label class="flex items-start gap-2 text-sm text-gray-700">
+                    <input type="checkbox" x-model="formData.keyword.src_google_trending" class="rounded mt-0.5">
+                    <span>구글 실시간 인기 <span class="text-xs text-gray-500">(시드가 필요 없는 유일한 발견 소스)</span></span>
+                </label>
+                <label class="flex items-start gap-2 text-sm text-gray-700">
+                    <input type="checkbox" x-model="formData.keyword.discovery_niche_filter" class="rounded mt-0.5">
+                    <span>발견 결과에 <b>니치 필터</b> 적용 <span class="text-xs text-gray-500">(끄면 무관한 트렌드어가 들어옵니다)</span></span>
+                </label>
+            </div>
+
+            <div class="text-xs font-medium text-gray-500 mb-1">확장 — 시드에서 가지를 뻗는다</div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <label class="flex items-start gap-2 text-sm text-gray-500">
                     <input type="checkbox" checked disabled class="rounded mt-0.5">
@@ -144,11 +159,16 @@ window.getKeywordFormTemplate = function () {
             </div>
         </div>
 
-        <!-- 제목 생성 -->
+        <!-- 제목 생성 (이전 방식) -->
         <div class="border-t border-gray-100 pt-4 space-y-3">
+            <div class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
+                제목은 <b>'제목 생성/수집' 모듈</b>이 맡습니다. 수집 모듈이 제목까지 만들면
+                중간 결과를 걸러낼 자리가 없어 무엇이 잘못됐는지 알기 어렵습니다.
+                아래는 이전 방식이며 기본으로 꺼져 있습니다.
+            </div>
             <label class="flex items-center gap-2 text-sm text-gray-700">
                 <input type="checkbox" x-model="formData.keyword.make_titles" class="rounded">
-                채택 키워드로 제목을 만들어 재고에 넣기
+                (이전 방식) 채택 키워드로 제목을 만들어 재고에 넣기
             </label>
             <div x-show="formData.keyword.make_titles" class="grid grid-cols-2 gap-3">
                 <div>

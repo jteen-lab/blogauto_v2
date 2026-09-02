@@ -175,7 +175,9 @@ def test_keyword_interval_is_not_decided_by_growth_profile() -> None:
     키워드 생산은 '재고가 부족한가' 로 돌아야 한다. 축이 다르다.
     """
     src = (ROOT / "app/scheduler/flow_scheduler.py").read_text(encoding="utf-8")
-    assert 'if gp_settings and module_type_code != "keyword"' in src
+    # 제목 모듈도 같은 이유로 GP 주기를 따르지 않는다(축이 다르다)
+    assert 'module_type_code not in ("keyword",' in src
+    assert '"title_gen")' in src
 
 
 def test_keyword_is_not_gp_required() -> None:

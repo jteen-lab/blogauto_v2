@@ -50,7 +50,10 @@ class KeywordModuleRunner:
             return {"success": True, "skipped": True,
                     "message": "모듈이 꺼져 있습니다"}
 
-        steps = steps or ["feedback", "collect", "measure", "titles"]
+        # 기본 단계에서 **제목 생성을 뺀다.** 수집 모듈이 제목까지 만들면
+        # 중간 결과를 걸러낼 자리가 없고 실패가 한 덩어리로 묻힌다.
+        # 제목은 '제목 생성/수집' 모듈이 맡는다(계획서 S5).
+        steps = steps or ["feedback", "collect", "measure", "classify"]
         blog = await self._blog(blog_id) if blog_id else None
 
         # 재고를 먼저 본다. 충분하면 돌지 않는다 — 매번 도는 것은 API 낭비다.
@@ -93,6 +96,10 @@ class KeywordModuleRunner:
                 min_volume=cfg.min_volume, min_saturation=cfg.min_saturation,
                 max_volume=cfg.max_volume, window_days=cfg.pub_window_days)
 
+        if "classify" in steps:
+            out["classify"] = await self._classify_leftovers(cfg)
+
+        # 제목은 별도 모듈이 맡는다. 옛 설정을 켠 모듈은 계속 돌게 둔다.
         if "titles" in steps and cfg.make_titles:
             out["titles"] = await self._make_titles(cfg, blog)
 
@@ -133,7 +140,7 @@ class KeywordModuleRunner:
     @staticmethod
     def _aggregate(rows: list) -> Dict[str, Any]:
         """블로그별 결과를 하나로 합친다 — 로그·화면이 같은 모양을 쓴다."""
-        collected = measured = made = 0
+        collected = measured = made = classified = 0
         ok = skipped = failed = 0
         errors: list = []
         details: list = []
@@ -160,6 +167,7 @@ class KeywordModuleRunner:
             ok += 1
             titles = result.get("titles") or {}
             collect = result.get("collect") or {}
+            classified += (result.get("classify") or {}).get("matched") or 0
             samples.extend(collect.get("samples") or [])
             for code, n in (collect.get("by_source") or {}).items():
                 by_source[code] = by_source.get(code, 0) + n
@@ -194,10 +202,13 @@ class KeywordModuleRunner:
             head = f"실행 안 됨 — {reasons[0]} | " if reasons else ""
         # 검증 모드면 저장하지 않았다는 사실이 요약에 보여야 한다.
         # "제목 0편" 만 보면 실패로 오해한다.
+        # 제목은 이제 별도 모듈이 맡는다. 옛 설정으로 만들었을 때만 적는다.
         if dry_run:
-            tail = (f"제목 {len(preview)}편 미리보기(검증 모드 — 저장 안 함)")
+            tail_part = f" · 제목 {len(preview)}편 미리보기(검증 모드 — 저장 안 함)"
+        elif made or preview:
+            tail_part = f" · 제목 {made}편"
         else:
-            tail = f"제목 {made}편"
+            tail_part = ""
         # 제목 샘플을 붙인다. 숫자만 있으면 무엇이 만들어졌는지 알 수 없다.
         sample = ""
         picks = [p["title"] for p in preview if p.get("state") == "ready"][:2]
@@ -210,12 +221,12 @@ class KeywordModuleRunner:
             note = f" | ⚠ {errors[0]}"
         message = (f"{head}블로그 {len(rows)}개 | 성공 {ok} · 건너뜀 {skipped} · "
                    f"실패 {failed} | 키워드 {collected}개 · 측정 {measured}건 · "
-                   f"{tail}{sample}{note}")
+                   f"분류 {classified}건{tail_part}{sample}{note}")
         out: Dict[str, Any] = {
             "success": success, "message": message, "details": details,
             "collected": collected, "measured": measured, "titles_made": made,
             "blogs": len(rows), "ok": ok, "skipped_count": skipped,
-            "failed": failed, "dry_run": dry_run,
+            "failed": failed, "dry_run": dry_run, "classified": classified,
             "preview": preview[:60], "samples": samples[:40],
             "by_source": by_source,
         }
@@ -224,6 +235,21 @@ class KeywordModuleRunner:
             if not success:
                 out["error"] = errors[0]
         return out
+
+    async def _classify_leftovers(self, cfg: KeywordModuleSettings,
+                                  limit: int = 500) -> Dict[str, Any]:
+        """수집 때 분류가 안 된 키워드를 한 번 더 훑는다.
+
+        분류표는 계속 자란다. 처음 수집할 때 안 붙었어도 나중에 붙을 수
+        있으므로, 회차마다 미분류를 다시 본다. API 를 부르지 않는다.
+        """
+        from .pool_ops import classify
+
+        try:
+            return await classify(self.db, self.user_id, limit=limit)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[KEYWORD_RUNNER] 분류 실패 | %s", e)
+            return {"scanned": 0, "matched": 0, "error": str(e)[:120]}
 
     async def _feedback(self, cfg: KeywordModuleSettings,
                         blog) -> Dict[str, Any]:

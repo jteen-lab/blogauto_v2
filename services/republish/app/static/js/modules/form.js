@@ -65,6 +65,9 @@ function moduleFormApp(module = null, moduleType = null) {
         // 키워드 모듈 테스트 패널 상태 (모듈 안에서 바로 결과 확인)
         kwTest: { busy: false, error: '', result: null, models: [], elapsed: 0 },
 
+        // 제목 생성/수집 모듈 테스트 패널 상태
+        tgTest: { busy: false, error: '', result: null, elapsed: 0 },
+
         // 폼 데이터
         formData: {
             name: initialModule?.name || '',
@@ -115,12 +118,31 @@ function moduleFormApp(module = null, moduleType = null) {
             enable_normal_collect: initialModule?.settings?.enable_normal_collect ?? true,
             // 키워드 모듈 설정. 화면은 문자열로 다루고 저장할 때 배열로 바꾼다
             // (사용자가 쉼표로 입력하는 편이 자연스럽다).
+            title: {
+                dry_run: initialModule?.settings?.title?.dry_run ?? true,
+                ai_provider: initialModule?.settings?.title?.ai_provider || '',
+                ai_model: initialModule?.settings?.title?.ai_model || '',
+                use_angles: initialModule?.settings?.title?.use_angles ?? true,
+                angle_sample: initialModule?.settings?.title?.angle_sample ?? 10,
+                cluster_enabled: initialModule?.settings?.title?.cluster_enabled ?? true,
+                cluster_threshold: initialModule?.settings?.title?.cluster_threshold ?? 0.34,
+                cluster_min_size: initialModule?.settings?.title?.cluster_min_size ?? 3,
+                cluster_max_size: initialModule?.settings?.title?.cluster_max_size ?? 12,
+                titles_per_cluster: initialModule?.settings?.title?.titles_per_cluster ?? 0,
+                titles_per_keyword: initialModule?.settings?.title?.titles_per_keyword ?? 3,
+                cluster_limit: initialModule?.settings?.title?.cluster_limit ?? 5,
+                keyword_limit: initialModule?.settings?.title?.keyword_limit ?? 20,
+                min_inventory: initialModule?.settings?.title?.min_inventory ?? 30,
+                interval_minutes: initialModule?.settings?.title?.interval_minutes ?? 180,
+            },
             keyword: {
                 seeds_text: (initialModule?.settings?.keyword?.seeds || []).join(', '),
                 modifiers_text: (initialModule?.settings?.keyword?.modifiers
                     || ['방법', '추천', '후기', '비교', '초보']).join(', '),
                 use_blog_categories: initialModule?.settings?.keyword?.use_blog_categories ?? true,
                 // 수집 소스 — 체크박스별 상태로 펼쳐 두고 저장할 때 배열로 접는다
+                src_google_trending: (initialModule?.settings?.keyword?.sources || []).includes('google_trending'),
+                discovery_niche_filter: initialModule?.settings?.keyword?.discovery_niche_filter ?? true,
                 src_naver_suggest: (initialModule?.settings?.keyword?.sources || []).includes('naver_suggest'),
                 src_google_suggest: (initialModule?.settings?.keyword?.sources || []).includes('google_suggest'),
                 src_gsc: (initialModule?.settings?.keyword?.sources || []).includes('gsc'),
@@ -134,7 +156,7 @@ function moduleFormApp(module = null, moduleType = null) {
                 min_saturation: initialModule?.settings?.keyword?.min_saturation ?? 0.2,
                 seed_limit: initialModule?.settings?.keyword?.seed_limit ?? 10,
                 measure_limit: initialModule?.settings?.keyword?.measure_limit ?? 50,
-                make_titles: initialModule?.settings?.keyword?.make_titles ?? true,
+                make_titles: initialModule?.settings?.keyword?.make_titles ?? false,
                 dry_run: initialModule?.settings?.keyword?.dry_run ?? true,
                 ai_provider: initialModule?.settings?.keyword?.ai_provider || '',
                 ai_model: initialModule?.settings?.keyword?.ai_model || '',
@@ -236,7 +258,7 @@ function moduleFormApp(module = null, moduleType = null) {
             // moduleType.code 또는 formData.type_code 둘 다 체크
             const typeCode = this.formData.type_code || this.moduleType?.code;
             console.log('typeCode 확인:', typeCode, 'formData.type_code:', this.formData.type_code, 'moduleType:', this.moduleType);
-            if (typeCode === 'keyword') {
+            if (typeCode === 'keyword' || typeCode === 'title_gen') {
                 // 제목 생성 AI 선택지를 채운다
                 this.loadKeywordModels();
             }
@@ -884,6 +906,66 @@ function moduleFormApp(module = null, moduleType = null) {
             throw new Error('시간이 너무 오래 걸립니다. 동작 로그에서 결과를 확인하세요');
         },
 
+        // ── 제목 모듈 테스트 ─────────────────────────────
+        tgProviders() {
+            const set = new Set((this.kwTest.models || []).map(m => m.provider));
+            const saved = this.formData?.title?.ai_provider;
+            if (saved) set.add(saved);
+            return Array.from(set).sort();
+        },
+
+        tgModels(provider) {
+            if (!provider) return [];
+            const list = (this.kwTest.models || [])
+                .filter(m => m.provider === provider)
+                .map(m => m.model_id);
+            const saved = this.formData?.title?.ai_model;
+            if (saved && !list.includes(saved)) list.unshift(saved);
+            return list;
+        },
+
+        async runTitleTest() {
+            this.tgTest.busy = true;
+            this.tgTest.error = '';
+            this.tgTest.result = null;
+            this.tgTest.elapsed = 0;
+            try {
+                const payload = this.prepareRequestData();
+                const started = await this.kwPost('/api/v1/title-gen/run', {
+                    settings_override: payload.settings || {},
+                    force: true,
+                    background: true,
+                });
+                if (!started.task_id) {
+                    this.tgTest.result = started;
+                    return;
+                }
+                this.tgTest.result = await this.tgPoll(started.task_id);
+            } catch (e) {
+                this.tgTest.error = e.message;
+            } finally {
+                this.tgTest.busy = false;
+            }
+        },
+
+        async tgPoll(taskId, maxSeconds = 900) {
+            const step = 2000;
+            for (let waited = 0; waited < maxSeconds * 1000; waited += step) {
+                await new Promise(res => setTimeout(res, step));
+                this.tgTest.elapsed = Math.round(waited / 1000);
+                let row;
+                try {
+                    const r = await fetch(`/api/v1/title-gen/run/${taskId}`,
+                        { credentials: 'include' });
+                    const text = await r.text();
+                    row = text ? JSON.parse(text) : { status: 'running' };
+                } catch (e) { continue; }
+                if (row.status === 'done') return row.result;
+                if (row.status === 'failed') throw new Error(row.error || '실행 실패');
+            }
+            throw new Error('시간이 너무 오래 걸립니다. 동작 로그에서 결과를 확인하세요');
+        },
+
         // 요청 데이터 준비
         prepareRequestData() {
             // description: 빈 문자열도 명시적으로 전송 (null로 변환하지 않음)
@@ -1012,7 +1094,8 @@ function moduleFormApp(module = null, moduleType = null) {
                     .map(x => x.trim()).filter(Boolean);
                 // 검색광고는 항상 포함한다 — 검색량을 아는 유일한 소스다
                 const sources = ['naver_ads'];
-                [['src_naver_suggest', 'naver_suggest'],
+                [['src_google_trending', 'google_trending'],
+                 ['src_naver_suggest', 'naver_suggest'],
                  ['src_google_suggest', 'google_suggest'],
                  ['src_gsc', 'gsc'],
                  ['src_google_planner', 'google_planner'],
@@ -1026,6 +1109,7 @@ function moduleFormApp(module = null, moduleType = null) {
                         modifiers: split(k.modifiers_text),
                         use_blog_categories: !!k.use_blog_categories,
                         sources: sources,
+                        discovery_niche_filter: !!k.discovery_niche_filter,
                         enrich_limit: k.enrich_limit,
                         recurse_adopted: !!k.recurse_adopted,
                         min_volume: k.min_volume,
@@ -1048,6 +1132,29 @@ function moduleFormApp(module = null, moduleType = null) {
                     },
                     // 주기는 bulk_collect 와 같은 자리에 둔다(스케줄러가 그 경로를 본다)
                     schedule: { interval_minutes: k.interval_minutes },
+                };
+            } else if (this.formData.type_code === 'title_gen') {
+                const t = this.formData.title || {};
+                data.settings = {
+                    title: {
+                        enabled: true,
+                        dry_run: !!t.dry_run,
+                        ai_provider: t.ai_provider || null,
+                        ai_model: t.ai_model || null,
+                        use_angles: !!t.use_angles,
+                        angle_sample: t.angle_sample,
+                        cluster_enabled: !!t.cluster_enabled,
+                        cluster_threshold: t.cluster_threshold,
+                        cluster_min_size: t.cluster_min_size,
+                        cluster_max_size: t.cluster_max_size,
+                        titles_per_cluster: t.titles_per_cluster,
+                        titles_per_keyword: t.titles_per_keyword,
+                        cluster_limit: t.cluster_limit,
+                        keyword_limit: t.keyword_limit,
+                        min_inventory: t.min_inventory,
+                    },
+                    // 주기는 keyword·bulk_collect 와 같은 자리에 둔다
+                    schedule: { interval_minutes: t.interval_minutes },
                 };
             } else if (this.formData.type_code === 'contact_form') {
                 // 애드센스 필수구성 모듈: 문의폼(템플릿/디자인) + 필수페이지(프리셋/편집본)

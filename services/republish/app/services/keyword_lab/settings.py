@@ -74,6 +74,8 @@ class KeywordModuleSettings:
     use_blog_categories: bool = True
     # 검색광고 외에 켤 소스(자동완성·플래너·트렌드·서치콘솔)
     sources: List[str] = field(default_factory=lambda: list(DEFAULT_SOURCES))
+    # 발견 결과에 니치 필터를 건다. 끄면 무관한 트렌드어가 그대로 들어온다.
+    discovery_niche_filter: bool = True
     enrich_limit: int = DEFAULT_ENRICH_LIMIT
     # 지난 회차 채택 키워드를 다음 시드로 쓴다. 이게 없으면 카테고리만
     # 반복해 소재가 고갈된다.
@@ -91,7 +93,10 @@ class KeywordModuleSettings:
     # 공급을 볼 기간(일). 누적 문서수가 아니라 최근 발행량이 경쟁 지표다.
     pub_window_days: int = 30
 
-    make_titles: bool = True
+    # 제목은 '제목 생성/수집' 모듈이 맡는다(계획서 S5). 수집 모듈이
+    # 제목까지 만들면 중간 결과를 걸러낼 자리가 없고 실패가 한 덩어리로
+    # 묻힌다. 옛 모듈 호환을 위해 설정은 남기되 **기본은 꺼 둔다.**
+    make_titles: bool = False
     titles_per_keyword: int = DEFAULT_TITLES_PER_KEYWORD
 
     # 제목을 만들 AI. 블로그가 없으면(=시드만으로 도는 테스트) 블로그의
@@ -155,6 +160,8 @@ class KeywordModuleSettings:
             modifiers=_list("modifiers", DEFAULT_MODIFIERS),
             use_blog_categories=bool(kw.get("use_blog_categories", True)),
             sources=_sources(kw.get("sources")),
+            discovery_niche_filter=bool(
+                kw.get("discovery_niche_filter", True)),
             enrich_limit=_int("enrich_limit", DEFAULT_ENRICH_LIMIT),
             recurse_adopted=bool(kw.get("recurse_adopted", True)),
             seed_limit=_int("seed_limit", DEFAULT_SEED_LIMIT),
@@ -164,7 +171,7 @@ class KeywordModuleSettings:
             max_volume=_int("max_volume", 100_000),
             min_saturation=max(0.0, sat),
             pub_window_days=max(1, _int("pub_window_days", 30)),
-            make_titles=bool(kw.get("make_titles", True)),
+            make_titles=bool(kw.get("make_titles", False)),
             dry_run=bool(kw.get("dry_run", True)),
             ai_provider=(kw.get("ai_provider") or None),
             ai_model=(kw.get("ai_model") or None),
@@ -195,6 +202,7 @@ class KeywordModuleSettings:
             "modifiers": self.modifiers,
             "use_blog_categories": self.use_blog_categories,
             "sources": self.sources,
+            "discovery_niche_filter": self.discovery_niche_filter,
             "enrich_limit": self.enrich_limit,
             "recurse_adopted": self.recurse_adopted,
             "seed_limit": self.seed_limit,
