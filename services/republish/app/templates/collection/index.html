@@ -566,7 +566,7 @@
 {% block extra_js %}
 <!-- 발행대기 글 미리보기에 실제 블로그 스타일 재현: 스타일 탭과 동일한 CSS 생성 유틸 공유
      (presets = STYLE_SELECTORS/HIDDEN_SELECTORS, css-utils = generateCssFromConfig/buildBlogStyledPreview) -->
-<script src="/static/js/collection/keyword_pool.js?v=20260902s9"></script>
+<script src="/static/js/collection/keyword_pool.js?v=20260902s13"></script>
 <script src="/static/js/blogs/style-tab-presets.js?v=20260709_preview"></script>
 <script src="/static/js/blogs/style-tab-css-utils.js?v=20260709_btnfull"></script>
 <script>
@@ -582,18 +582,8 @@ function dataManagementApp() {
             urls: { total: 0, processed: 0, pending: 0, inactive: 0 }
         },
 
-        // 키워드 관련
-        keywords: [],
-        keywordPage: 1,
-        keywordSearch: '',
-        keywordSourceType: '',
-        keywordLoading: false,
-        keywordHasNext: false,
-        keywordTotal: 0,
-        selectedKeywords: [],
-        keywordSelectAll: false,
-        keywordSortField: 'created_at',
-        keywordSortDir: 'desc',
+        // 키워드 탭은 keyword_pool.js 가 독립 컴포넌트로 맡는다.
+        // 옛 시드 키워드 상태·함수는 저장소 일원화(alembic 065)로 제거됨.
 
         // 카테고리(Topic) 목록
         topics: [],
@@ -683,8 +673,6 @@ function dataManagementApp() {
         mainTitleUnifiedTotal: 0,  // 메인 + 미매칭 합계 (통합 페이지네이션용)
 
         // ★ 인라인 편집 상태 변수
-        editingKeywordId: null,
-        editingKeywordValue: '',
         editingTitleId: null,
         editingTitleValue: '',
         editingFilterId: null,
@@ -718,14 +706,12 @@ function dataManagementApp() {
         },
 
         // ★ 모바일 아코디언 확장 상태
-        expandedKeywordId: null,
         expandedTitleId: null,
         expandedUrlId: null,
         expandedFilterId: null,
 
         init() {
             this.loadStats();
-            this.loadKeywords();
             this.loadTopics();  // 카테고리(주제) 목록 로드
             this.loadAvailableBlogs();  // Phase 2-2: 블로그 목록 로드
         },
@@ -747,9 +733,7 @@ function dataManagementApp() {
 
         switchTab(tab) {
             this.activeTab = tab;
-            if (tab === 'keywords' && this.keywords.length === 0) {
-                this.loadKeywords();
-            } else if (tab === 'titles' && this.titles.length === 0) {
+            if (tab === 'titles' && this.titles.length === 0) {
                 this.loadTitles();
             } else if (tab === 'titlesMain' && this.mainTitles.length === 0) {
                 this.loadMainTitles();
@@ -786,52 +770,8 @@ function dataManagementApp() {
         },
 
         // 키워드 로드
-        async loadKeywords() {
-            this.keywordLoading = true;
-            try {
-                const params = new URLSearchParams({
-                    page: this.keywordPage,
-                    size: 20,
-                    sort_field: this.keywordSortField,
-                    sort_dir: this.keywordSortDir,
-                });
-                if (this.keywordSearch) params.append('search', this.keywordSearch);
-                if (this.keywordSourceType) params.append('source_type', this.keywordSourceType);
-
-                const res = await fetch(`${API_BASE}/data/keywords/seed?${params}`, {
-                    credentials: 'include'
-                });
-                const data = await res.json();
-                this.keywords = data.items || [];
-                this.keywordTotal = data.total || 0;
-                this.keywordHasNext = data.has_next || false;
-            } catch (e) {
-                console.error('키워드 로드 실패:', e);
-                showErrorMessage('키워드 로드 실패');
-            } finally {
-                this.keywordLoading = false;
-            }
-        },
-
         // 키워드 정렬
-        sortKeywords(field) {
-            if (this.keywordSortField === field) {
-                this.keywordSortDir = this.keywordSortDir === 'asc' ? 'desc' : 'asc';
-            } else {
-                this.keywordSortField = field;
-                this.keywordSortDir = 'asc';
-            }
-            this.keywordPage = 1;
-            this.loadKeywords();
-        },
-
         // 키워드 검색 리셋
-        resetKeywordSearch() {
-            this.keywordSearch = '';
-            this.keywordPage = 1;
-            this.loadKeywords();
-        },
-
         // 제목 로드
         async loadTitles() {
             this.titleLoading = true;
@@ -1840,22 +1780,6 @@ function dataManagementApp() {
         },
 
         // 키워드 삭제
-        async deleteKeyword(id) {
-            if (!confirm('이 키워드를 삭제하시겠습니까?')) return;
-            try {
-                const res = await fetch(`${API_BASE}/data/keywords/seed/${id}`, {
-                    method: 'DELETE',
-                    credentials: 'include'
-                });
-                if (!res.ok) throw new Error('삭제 실패');
-                showSuccessMessage('키워드가 삭제되었습니다');
-                this.loadKeywords();
-                this.loadStats();
-            } catch (e) {
-                showErrorMessage('삭제 실패');
-            }
-        },
-
         // 제목 삭제
         async deleteTitle(id) {
             if (!confirm('이 제목을 삭제하시겠습니까?')) return;
@@ -1971,25 +1895,7 @@ function dataManagementApp() {
         // ========== 전체 선택/해제 기능 ==========
 
         // 키워드 전체 선택/해제
-        toggleKeywordSelectAll() {
-            // 현재 전체 선택 상태 확인
-            const isAllSelected = this.keywords.length > 0 &&
-                this.selectedKeywords.length === this.keywords.length;
-
-            if (isAllSelected) {
-                // 전체 해제
-                this.selectedKeywords = [];
-            } else {
-                // 전체 선택
-                this.selectedKeywords = this.keywords.map(k => k.id);
-            }
-        },
-
         // 키워드 개별 선택 변경 시 (헤더 체크박스 상태는 :checked로 자동 반영)
-        onKeywordSelect() {
-            // 별도 처리 불필요 - :checked 바인딩이 자동으로 처리
-        },
-
         // 제목 전체 선택/해제
         toggleTitleSelectAll() {
             // 현재 전체 선택 상태 확인
@@ -2034,32 +1940,6 @@ function dataManagementApp() {
         // ========== 일괄 삭제 기능 ==========
 
         // 선택된 키워드 일괄 삭제
-        async deleteSelectedKeywords() {
-            if (this.selectedKeywords.length === 0) {
-                showErrorMessage('삭제할 키워드를 선택하세요');
-                return;
-            }
-            if (!confirm(`선택된 ${this.selectedKeywords.length}개 키워드를 삭제하시겠습니까?`)) return;
-
-            try {
-                const res = await fetch(`${API_BASE}/data/keywords/seed/bulk-delete`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({ ids: this.selectedKeywords })
-                });
-                if (!res.ok) throw new Error('삭제 실패');
-                const data = await res.json();
-                showSuccessMessage(`${data.deleted || this.selectedKeywords.length}개 키워드가 삭제되었습니다`);
-                this.selectedKeywords = [];
-                this.keywordSelectAll = false;
-                this.loadKeywords();
-                this.loadStats();
-            } catch (e) {
-                showErrorMessage('일괄 삭제 실패');
-            }
-        },
-
         // 선택된 제목 일괄 삭제
         async deleteSelectedTitles() {
             if (this.selectedTitles.length === 0) {
@@ -2117,32 +1997,6 @@ function dataManagementApp() {
         // ========== 전체 삭제 기능 ==========
 
         // 키워드 전체 삭제
-        async deleteAllKeywords() {
-            const total = this.stats.seed?.total || 0;
-            if (total === 0) {
-                showErrorMessage('삭제할 키워드가 없습니다');
-                return;
-            }
-            if (!confirm(`정말 ${total}개 키워드를 모두 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다!`)) return;
-            if (!confirm('한번 더 확인합니다. 정말 전체 삭제하시겠습니까?')) return;
-
-            try {
-                const res = await fetch(`${API_BASE}/data/keywords/seed/delete-all`, {
-                    method: 'DELETE',
-                    credentials: 'include'
-                });
-                if (!res.ok) throw new Error('삭제 실패');
-                const data = await res.json();
-                showSuccessMessage(`${data.deleted}개 키워드가 삭제되었습니다`);
-                this.selectedKeywords = [];
-                this.keywordSelectAll = false;
-                this.loadKeywords();
-                this.loadStats();
-            } catch (e) {
-                showErrorMessage('전체 삭제 실패');
-            }
-        },
-
         // 제목 전체 삭제
         async deleteAllTitles() {
             const total = this.stats.temp?.total || 0;
@@ -2209,7 +2063,6 @@ function dataManagementApp() {
                 const data = await res.json();
                 showSuccessMessage(data.message);
                 this.loadTitles();
-                this.loadKeywords();
                 this.loadStats();
             } catch (e) {
                 showErrorMessage('필터 적용 삭제 실패');
@@ -2219,53 +2072,8 @@ function dataManagementApp() {
         // ========== 인라인 편집 기능 ==========
 
         // 키워드 인라인 편집 시작
-        startEditKeyword(kw) {
-            this.editingKeywordId = kw.id;
-            this.editingKeywordValue = kw.keyword;
-            // 다음 틱에서 input에 포커스
-            this.$nextTick(() => {
-                const input = this.$refs.keywordEditInput;
-                if (input) {
-                    input.focus();
-                    input.select();
-                }
-            });
-        },
-
         // 키워드 인라인 편집 저장
-        async saveEditKeyword(id) {
-            if (!this.editingKeywordId) return;
-            const newValue = this.editingKeywordValue.trim();
-            if (!newValue) {
-                showErrorMessage('키워드를 입력하세요');
-                return;
-            }
-            try {
-                const res = await fetch(`${API_BASE}/data/keywords/seed/${id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({ keyword: newValue })
-                });
-                if (!res.ok) throw new Error('수정 실패');
-                // 로컬 데이터 업데이트
-                const kw = this.keywords.find(k => k.id === id);
-                if (kw) kw.keyword = newValue;
-                showSuccessMessage('키워드가 수정되었습니다');
-            } catch (e) {
-                showErrorMessage('키워드 수정 실패');
-            } finally {
-                this.editingKeywordId = null;
-                this.editingKeywordValue = '';
-            }
-        },
-
         // 키워드 인라인 편집 취소
-        cancelEditKeyword() {
-            this.editingKeywordId = null;
-            this.editingKeywordValue = '';
-        },
-
         // 제목 인라인 편집 시작
         startEditTitle(title) {
             this.editingTitleId = title.id;
@@ -2364,80 +2172,10 @@ function dataManagementApp() {
         // ========== 키워드 → 필터 이동 기능 ==========
 
         // 단일 키워드를 필터로 이동
-        async moveKeywordToFilter(id) {
-            if (!confirm('이 키워드를 필터로 이동하시겠습니까?\n(키워드는 삭제되고 필터값으로 등록됩니다)')) return;
-            try {
-                const res = await fetch(`${API_BASE}/data/keywords/seed/move-to-filter`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({ keyword_ids: [id], target_type: 'both' })
-                });
-                if (!res.ok) throw new Error('이동 실패');
-                const data = await res.json();
-                if (data.moved > 0) {
-                    showSuccessMessage('필터로 이동되었습니다');
-                } else if (data.skipped > 0) {
-                    showSuccessMessage('이미 등록된 필터입니다 (키워드 삭제됨)');
-                }
-                this.loadKeywords();
-                this.loadFilters();
-                this.loadStats();
-            } catch (e) {
-                showErrorMessage('필터 이동 실패');
-            }
-        },
-
         // 선택된 키워드들을 필터로 이동
-        async moveSelectedKeywordsToFilter() {
-            if (this.selectedKeywords.length === 0) {
-                showErrorMessage('이동할 키워드를 선택하세요');
-                return;
-            }
-            if (!confirm(`선택된 ${this.selectedKeywords.length}개 키워드를 필터로 이동하시겠습니까?\n(키워드는 삭제되고 필터값으로 등록됩니다)`)) return;
-            try {
-                const res = await fetch(`${API_BASE}/data/keywords/seed/move-to-filter`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({ keyword_ids: this.selectedKeywords, target_type: 'both' })
-                });
-                if (!res.ok) throw new Error('이동 실패');
-                const data = await res.json();
-                showSuccessMessage(`${data.moved}개 필터로 이동, ${data.skipped}개 중복`);
-                this.selectedKeywords = [];
-                this.loadKeywords();
-                this.loadFilters();
-                this.loadStats();
-            } catch (e) {
-                showErrorMessage('필터 이동 실패');
-            }
-        },
-
         // ========== 수동 중복 제거 기능 ==========
 
         // 키워드 중복 제거
-        async removeDuplicateKeywords() {
-            if (!confirm('중복된 키워드를 제거하시겠습니까?\n(대소문자 무시, 가장 오래된 것만 유지)')) return;
-            try {
-                const res = await fetch(`${API_BASE}/data/keywords/seed/remove-duplicates`, {
-                    method: 'POST',
-                    credentials: 'include'
-                });
-                if (!res.ok) throw new Error('중복 제거 실패');
-                const data = await res.json();
-                if (data.deleted > 0) {
-                    showSuccessMessage(`${data.deleted}개 중복 키워드가 삭제되었습니다`);
-                } else {
-                    showSuccessMessage('중복된 키워드가 없습니다');
-                }
-                this.loadKeywords();
-                this.loadStats();
-            } catch (e) {
-                showErrorMessage('중복 제거 실패');
-            }
-        },
-
         // 제목 중복 제거
         async removeDuplicateTitles() {
             if (!confirm('중복된 제목을 제거하시겠습니까?\n(대소문자 무시, 가장 오래된 것만 유지)')) return;
@@ -2483,35 +2221,6 @@ function dataManagementApp() {
         },
 
         // 키워드 카테고리 재분류
-        async reclassifyKeywords() {
-            if (!confirm('미분류 키워드의 카테고리를 재분류하시겠습니까?')) return;
-
-            try {
-                // ★ 재분류 전에 최신 카테고리(topics) 목록 로드
-                await this.loadTopics();
-                console.log('[reclassifyKeywords] 최신 카테고리 로드 완료:', this.topics.length, '개');
-
-                const res = await fetch(`${API_BASE}/data/keywords/seed/reclassify`, {
-                    method: 'POST',
-                    credentials: 'include'
-                });
-                if (!res.ok) throw new Error('재분류 실패');
-                const data = await res.json();
-
-                if (data.success) {
-                    showSuccessMessage(data.message);
-                    this.loadKeywords();
-                    this.loadStats();
-                    // ★ 재분류 후에도 카테고리 목록 새로고침 (드롭다운 동기화)
-                    await this.loadTopics();
-                } else {
-                    showErrorMessage(data.message || '재분류 실패');
-                }
-            } catch (e) {
-                showErrorMessage('키워드 재분류 중 오류가 발생했습니다');
-            }
-        },
-
         // 임시제목 카테고리 재분류
         // 재분류 완료까지 상태 폴링(최대 ~20분). done이면 상태 반환.
         async _pollReclassifyDone() {
