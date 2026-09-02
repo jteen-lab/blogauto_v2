@@ -1,295 +1,272 @@
 /**
- * 키워드 모듈 폼 템플릿 — list.js getFullFormTemplate() 에서 삽입.
+ * 키워드 모듈 폼 — list.js getFullFormTemplate() 에서 삽입.
+ *
+ * 단계(수집·측정·분류·재판정)를 **섹션으로 나누고**, 섹션 체크박스로
+ * 켜야 그 설정이 열린다. 하나만 켜면 그 단계 전용 모듈이 된다.
+ *
+ * 스케줄은 다른 모듈과 같은 방식(고정 시간 / 간격 + 활성 시간대)을 쓴다.
  *
  * 순서도: docs/flowcharts/keyword_module.md
  */
 window.getKeywordFormTemplate = function () {
     return `
-    <div x-show="formData.type_code === 'keyword'" class="space-y-5 border-t border-gray-200 pt-4">
+    <div x-show="formData.type_code === 'keyword'" class="space-y-4 border-t border-gray-200 pt-4">
 
         <div class="px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
-            <b>발견 → 확장 → 측정 → 분류</b> 순으로 돌아 수집 키워드를 데이터 관리에 쌓습니다.
-            제목 생성은 별도 모듈이 맡습니다. <b>재고가 충분하면 돌지 않습니다</b> — 매번 도는 것은 API 낭비입니다.
+            아래 단계를 <b>켠 것만</b> 수행합니다. 하나만 켜면 그 단계 전용 모듈이 되고,
+            전부 켜면 한 모듈이 다 합니다. 모든 작업은 <b>키워드 DB를 기준</b>으로 돌기 때문에
+            모듈을 여러 개 두어도 서로 꼬이지 않습니다.
         </div>
 
-        <!-- 검증 모드 -->
-        <div class="p-3 border-2 rounded-lg"
-             :class="formData.keyword.dry_run ? 'border-amber-300 bg-amber-50' : 'border-gray-200 bg-white'">
-            <label class="flex items-start gap-2 text-sm font-medium text-gray-800">
-                <input type="checkbox" x-model="formData.keyword.dry_run" class="rounded mt-0.5">
-                <span>
-                    검증 모드 — 제목을 <b>데이터 관리에 저장하지 않고</b> 결과만 보기
-                    <span class="block mt-1 font-normal text-xs text-gray-600">
-                        수집·측정·제목 생성은 그대로 하고, 임시제목·정식제목에는 넣지 않습니다.
-                        동작 로그에서 어떤 제목이 나왔고 무엇이 필터에 걸렸는지 확인한 뒤,
-                        쓸 만해지면 이 체크를 풀어 실제 재고에 쌓으세요.
-                    </span>
-                </span>
+        <!-- ① 수집 -->
+        <div class="border-2 rounded-lg overflow-hidden"
+             :class="formData.keyword.step_collect ? 'border-amber-300' : 'border-gray-200'">
+            <label class="flex items-center gap-2 px-3 py-2 cursor-pointer"
+                   :class="formData.keyword.step_collect ? 'bg-amber-50' : 'bg-gray-50'">
+                <input type="checkbox" x-model="formData.keyword.step_collect" class="rounded">
+                <span class="text-sm font-semibold text-gray-800">① 수집</span>
+                <span class="text-xs text-gray-500">시드·발견 → 새 키워드를 DB에 쌓습니다</span>
             </label>
-        </div>
 
-        <!-- 시드 -->
-        <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">시드 키워드 (선택)</label>
-            <input type="text" x-model="formData.keyword.seeds_text"
-                   class="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                   placeholder="예: 전기기사, 컴활 1급  (비우면 블로그 카테고리를 씁니다)">
-            <p class="mt-1 text-xs text-gray-500">
-                공백·가운뎃점은 보낼 때 자동으로 정리됩니다. 네이버가 그런 키워드를 거부합니다.
-            </p>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <label class="flex items-center gap-2 text-sm text-gray-700">
-                <input type="checkbox" x-model="formData.keyword.use_blog_categories" class="rounded">
-                블로그의 활성 카테고리를 시드로 사용
-            </label>
-            <label class="flex items-center gap-2 text-sm text-gray-700">
-                <input type="checkbox" x-model="formData.keyword.recurse_adopted" class="rounded">
-                채택된 키워드를 다음 회차 시드로 (소재 고갈 방지)
-            </label>
-        </div>
-
-        <!-- 수식어 -->
-        <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">수식어</label>
-            <input type="text" x-model="formData.keyword.modifiers_text"
-                   class="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                   placeholder="방법, 추천, 후기, 비교, 초보">
-            <p class="mt-1 text-xs text-gray-500">
-                시드 하나로 후보를 여러 개 만듭니다. 5개씩 묶어 보내므로 API 호출은 늘지 않습니다.
-            </p>
-        </div>
-
-        <!-- 수집 소스 -->
-        <div class="border-t border-gray-100 pt-4">
-            <label class="block text-sm font-medium text-gray-700 mb-2">수집 소스</label>
-            <div class="px-3 py-2 mb-3 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
-                <b>발견</b>은 입력 없이 지금 뜨는 말을 잡고, <b>확장</b>은 시드에서 가지를 뻗습니다.
-                입력이 달라 로직이 분리돼 있고, 발견 결과가 확장의 시드로 들어갑니다.
-                <b>네이버 검색광고는 항상 켜집니다</b> — 검색량을 아는 유일한 소스라
-                끄면 후보가 전부 미측정으로 남습니다.
-                (네이버 데이터랩은 연관 키워드를 주지 않아 발견 소스로 쓸 수 없습니다)
-            </div>
-            <div class="text-xs font-medium text-gray-500 mb-1">발견 — 시드 없이 지금 뜨는 말</div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
-                <label class="flex items-start gap-2 text-sm text-gray-700">
-                    <input type="checkbox" x-model="formData.keyword.src_google_trending" class="rounded mt-0.5">
-                    <span>구글 실시간 인기 <span class="text-xs text-gray-500">(시드가 필요 없는 유일한 발견 소스)</span></span>
-                </label>
-                <label class="flex items-start gap-2 text-sm text-gray-700">
-                    <input type="checkbox" x-model="formData.keyword.discovery_niche_filter" class="rounded mt-0.5">
-                    <span>발견 결과에 <b>니치 필터</b> 적용 <span class="text-xs text-gray-500">(끄면 무관한 트렌드어가 들어옵니다)</span></span>
-                </label>
-            </div>
-
-            <div class="text-xs font-medium text-gray-500 mb-1">확장 — 시드에서 가지를 뻗는다</div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-                <label class="flex items-start gap-2 text-sm text-gray-500">
-                    <input type="checkbox" checked disabled class="rounded mt-0.5">
-                    <span>네이버 검색광고 <span class="text-xs">(연관키워드 + 검색량 · 필수)</span></span>
-                </label>
-                <label class="flex items-start gap-2 text-sm text-gray-700">
-                    <input type="checkbox" x-model="formData.keyword.src_naver_suggest" class="rounded mt-0.5">
-                    <span>네이버 자동완성 <span class="text-xs text-gray-500">(최신성 강함 · 비공식 경로)</span></span>
-                </label>
-                <label class="flex items-start gap-2 text-sm text-gray-700">
-                    <input type="checkbox" x-model="formData.keyword.src_google_suggest" class="rounded mt-0.5">
-                    <span>구글 자동완성 <span class="text-xs text-gray-500">(롱테일·질문형 · 비공식 경로)</span></span>
-                </label>
-                <label class="flex items-start gap-2 text-sm text-gray-700">
-                    <input type="checkbox" x-model="formData.keyword.src_gsc" class="rounded mt-0.5">
-                    <span>서치콘솔 실측 쿼리 <span class="text-xs text-gray-500">(우리 글이 실제 노출된 검색어 · 속성 등록 필요)</span></span>
-                </label>
-                <label class="flex items-start gap-2 text-sm text-gray-700">
-                    <input type="checkbox" x-model="formData.keyword.src_google_planner" class="rounded mt-0.5">
-                    <span>구글 키워드플래너 <span class="text-xs text-gray-500">(검색량은 구간값 · 정렬용)</span></span>
-                </label>
-                <label class="flex items-start gap-2 text-sm text-gray-700">
-                    <input type="checkbox" x-model="formData.keyword.src_google_trends" class="rounded mt-0.5">
-                    <span>구글 트렌드 <span class="text-xs text-gray-500">(연관·급상승 · 절대 검색량 없음)</span></span>
-                </label>
-            </div>
-            <div class="mt-3">
-                <label class="block text-xs text-gray-500 mb-1">회차당 검색량 보강 수</label>
-                <input type="number" min="0" max="500" x-model.number="formData.keyword.enrich_limit"
-                       class="w-40 px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                <p class="mt-1 text-xs text-gray-500">
-                    자동완성·트렌드·서치콘솔은 키워드만 줍니다. 검색광고로 검색량을 채웁니다.
-                </p>
-            </div>
-        </div>
-
-        <!-- 판정 기준 -->
-        <div class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
-            공급은 누적 문서수가 아니라 <b>최근 N일 발행량</b>으로 봅니다.
-            누적은 10년치 총합이라 지금 경쟁이 붙는지 알려 주지 않습니다.
-            검색량 <b>상한</b>도 둡니다 — 대형 키워드는 써도 묻힙니다.
-        </div>
-        <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
-            <div>
-                <label class="block text-xs text-gray-500 mb-1">검색량 하한</label>
-                <input type="number" min="0" x-model.number="formData.keyword.min_volume"
-                       class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-            </div>
-            <div>
-                <label class="block text-xs text-gray-500 mb-1">검색량 상한</label>
-                <input type="number" min="0" x-model.number="formData.keyword.max_volume"
-                       class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-            </div>
-            <div>
-                <label class="block text-xs text-gray-500 mb-1">발행량 기간(일)</label>
-                <input type="number" min="1" max="365" x-model.number="formData.keyword.pub_window_days"
-                       class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-            </div>
-            <div>
-                <label class="block text-xs text-gray-500 mb-1">포화도 하한</label>
-                <input type="number" step="0.05" min="0" x-model.number="formData.keyword.min_saturation"
-                       class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-            </div>
-            <div>
-                <label class="block text-xs text-gray-500 mb-1">회차당 시드 수</label>
-                <input type="number" min="1" max="50" x-model.number="formData.keyword.seed_limit"
-                       class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-            </div>
-            <div>
-                <label class="block text-xs text-gray-500 mb-1">회차당 측정 수</label>
-                <input type="number" min="1" max="100" x-model.number="formData.keyword.measure_limit"
-                       class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-            </div>
-        </div>
-
-        <!-- 이 모듈이 맡을 단계 -->
-        <div class="border-t border-gray-100 pt-4 space-y-2">
-            <div class="text-sm font-medium text-gray-700">이 모듈이 맡을 단계</div>
-            <div class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
-                <b>하나만 켜면 그 단계 전용 모듈</b>이 되고, 전부 켜면 한 모듈이 다 합니다.
-                단계를 나눠 모듈을 여러 개 두면 주기를 따로 줄 수 있습니다
-                (예: 수집은 6시간마다, 측정은 1시간마다).
-                데이터 관리 키워드 탭에서 손으로 누르는 것과 <b>같은 코드</b>입니다.
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-                <label class="flex items-start gap-2 text-sm text-gray-700">
-                    <input type="checkbox" x-model="formData.keyword.step_collect" class="rounded mt-0.5">
-                    <span>① 수집 <span class="text-xs text-gray-500">(시드·발견 → 새 키워드)</span></span>
-                </label>
-                <label class="flex items-start gap-2 text-sm text-gray-700">
-                    <input type="checkbox" x-model="formData.keyword.step_measure" class="rounded mt-0.5">
-                    <span>② 측정 <span class="text-xs text-gray-500">(검색량 보강 + 월 발행량)</span></span>
-                </label>
-                <label class="flex items-start gap-2 text-sm text-gray-700">
-                    <input type="checkbox" x-model="formData.keyword.step_classify" class="rounded mt-0.5">
-                    <span>③ 분류 <span class="text-xs text-gray-500">(니치 매칭 · API 호출 없음)</span></span>
-                </label>
-                <label class="flex items-start gap-2 text-sm text-gray-700">
-                    <input type="checkbox" x-model="formData.keyword.step_rejudge" class="rounded mt-0.5">
-                    <span>④ 재판정 <span class="text-xs text-gray-500">(기준값 변경분 반영 · 전체 훑음)</span></span>
-                </label>
-            </div>
-            <p class="text-xs text-gray-400">
-                하나도 안 켜면 기본 단계(수집·측정·분류)로 돕니다.
-            </p>
-        </div>
-
-        <!-- 제목 생성 (이전 방식) -->
-        <div class="border-t border-gray-100 pt-4 space-y-3">
-            <div class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
-                제목은 <b>'제목 생성/수집' 모듈</b>이 맡습니다. 수집 모듈이 제목까지 만들면
-                중간 결과를 걸러낼 자리가 없어 무엇이 잘못됐는지 알기 어렵습니다.
-                아래는 이전 방식이며 기본으로 꺼져 있습니다.
-            </div>
-            <label class="flex items-center gap-2 text-sm text-gray-700">
-                <input type="checkbox" x-model="formData.keyword.make_titles" class="rounded">
-                (이전 방식) 채택 키워드로 제목을 만들어 재고에 넣기
-            </label>
-            <div x-show="formData.keyword.make_titles" class="grid grid-cols-2 gap-3">
+            <div x-show="formData.keyword.step_collect" x-transition class="p-3 space-y-4 border-t border-gray-200">
                 <div>
-                    <label class="block text-xs text-gray-500 mb-1">키워드당 제목 수</label>
-                    <input type="number" min="1" max="10" x-model.number="formData.keyword.titles_per_keyword"
-                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">시드 키워드 (선택)</label>
+                    <input type="text" x-model="formData.keyword.seeds_text"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                           placeholder="예: 전기기사, 컴활 1급  (비우면 블로그 카테고리를 씁니다)">
+                    <p class="mt-1 text-xs text-gray-500">
+                        출발점입니다. 각 시드로 연관 키워드를 받아옵니다. 공백은 보낼 때 자동 정리됩니다.
+                    </p>
                 </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <label class="flex items-center gap-2 text-sm text-gray-700">
+                        <input type="checkbox" x-model="formData.keyword.use_blog_categories" class="rounded">
+                        블로그의 활성 카테고리를 시드로 사용
+                    </label>
+                    <label class="flex items-center gap-2 text-sm text-gray-700">
+                        <input type="checkbox" x-model="formData.keyword.recurse_adopted" class="rounded">
+                        채택된 키워드를 다음 회차 시드로 (소재 고갈 방지)
+                    </label>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">수식어</label>
+                    <input type="text" x-model="formData.keyword.modifiers_text"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                           placeholder="방법, 추천, 후기, 비교, 초보">
+                    <p class="mt-1 text-xs text-gray-500">
+                        시드에 붙여 조회 대상을 늘립니다. 5개씩 묶어 보내므로 API 호출은 거의 늘지 않습니다.
+                    </p>
+                </div>
+
+                <div>
+                    <div class="text-xs font-medium text-gray-500 mb-1">발견 — 시드 없이 지금 뜨는 말</div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
+                        <label class="flex items-start gap-2 text-sm text-gray-700">
+                            <input type="checkbox" x-model="formData.keyword.src_google_trending" class="rounded mt-0.5">
+                            <span>구글 실시간 인기 <span class="text-xs text-gray-500">(시드 불필요)</span></span>
+                        </label>
+                        <label class="flex items-start gap-2 text-sm text-gray-700">
+                            <input type="checkbox" x-model="formData.keyword.discovery_niche_filter" class="rounded mt-0.5">
+                            <span>발견 결과에 <b>니치 필터</b> <span class="text-xs text-gray-500">(무관한 트렌드어 차단)</span></span>
+                        </label>
+                    </div>
+
+                    <div class="text-xs font-medium text-gray-500 mb-1">확장 — 시드에서 가지를 뻗는다</div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <label class="flex items-start gap-2 text-sm text-gray-500">
+                            <input type="checkbox" checked disabled class="rounded mt-0.5">
+                            <span>네이버 검색광고 <span class="text-xs">(연관+검색량 · 필수)</span></span>
+                        </label>
+                        <label class="flex items-start gap-2 text-sm text-gray-700">
+                            <input type="checkbox" x-model="formData.keyword.src_naver_suggest" class="rounded mt-0.5">
+                            <span>네이버 자동완성</span>
+                        </label>
+                        <label class="flex items-start gap-2 text-sm text-gray-700">
+                            <input type="checkbox" x-model="formData.keyword.src_google_suggest" class="rounded mt-0.5">
+                            <span>구글 자동완성</span>
+                        </label>
+                        <label class="flex items-start gap-2 text-sm text-gray-700">
+                            <input type="checkbox" x-model="formData.keyword.src_gsc" class="rounded mt-0.5">
+                            <span>서치콘솔 실측 쿼리 <span class="text-xs text-gray-500">(속성 등록 필요)</span></span>
+                        </label>
+                        <label class="flex items-start gap-2 text-sm text-gray-700">
+                            <input type="checkbox" x-model="formData.keyword.src_google_planner" class="rounded mt-0.5">
+                            <span>구글 키워드플래너 <span class="text-xs text-gray-500">(구간값)</span></span>
+                        </label>
+                        <label class="flex items-start gap-2 text-sm text-gray-700">
+                            <input type="checkbox" x-model="formData.keyword.src_google_trends" class="rounded mt-0.5">
+                            <span>구글 트렌드 <span class="text-xs text-gray-500">(연관·급상승)</span></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">회차당 시드 수</label>
+                        <input type="number" min="1" max="50" x-model.number="formData.keyword.seed_limit"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">회차당 수집 한도</label>
+                        <input type="number" min="10" max="500" x-model.number="formData.keyword.collect_limit"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                        <p class="mt-1 text-xs text-gray-400">시드별이 아니라 합계</p>
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">검색량 보강 수</label>
+                        <input type="number" min="0" max="500" x-model.number="formData.keyword.enrich_limit"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ② 측정 -->
+        <div class="border-2 rounded-lg overflow-hidden"
+             :class="formData.keyword.step_measure ? 'border-sky-300' : 'border-gray-200'">
+            <label class="flex items-center gap-2 px-3 py-2 cursor-pointer"
+                   :class="formData.keyword.step_measure ? 'bg-sky-50' : 'bg-gray-50'">
+                <input type="checkbox" x-model="formData.keyword.step_measure" class="rounded">
+                <span class="text-sm font-semibold text-gray-800">② 측정</span>
+                <span class="text-xs text-gray-500">DB에서 아직 안 잰 키워드의 검색량·발행량을 잽니다</span>
+            </label>
+
+            <div x-show="formData.keyword.step_measure || formData.keyword.step_rejudge" x-transition
+                 class="p-3 space-y-3 border-t border-gray-200">
+                <div class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
+                    <b>검색량 보강</b>(검색량이 빈 키워드를 검색광고로 채움) →
+                    <b>공급 측정</b>(최근 N일 발행량, 키워드당 검색 API 2회) 순으로 돕니다.
+                    아래 기준값은 <b>재판정</b>에도 같이 쓰입니다.
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">검색량 하한</label>
+                        <input type="number" min="0" x-model.number="formData.keyword.min_volume"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">검색량 상한</label>
+                        <input type="number" min="0" x-model.number="formData.keyword.max_volume"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">포화도 하한</label>
+                        <input type="number" step="0.05" min="0" x-model.number="formData.keyword.min_saturation"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">발행량 기간(일)</label>
+                        <input type="number" min="1" max="365" x-model.number="formData.keyword.pub_window_days"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                    </div>
+                </div>
+                <div x-show="formData.keyword.step_measure">
+                    <label class="block text-xs text-gray-500 mb-1">회차당 측정 수</label>
+                    <input type="number" min="1" max="200" x-model.number="formData.keyword.measure_limit"
+                           class="w-40 px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                    <p class="mt-1 text-xs text-gray-400">키워드당 검색 API 2회가 듭니다</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ③ 분류 -->
+        <div class="border-2 rounded-lg overflow-hidden"
+             :class="formData.keyword.step_classify ? 'border-green-300' : 'border-gray-200'">
+            <label class="flex items-center gap-2 px-3 py-2 cursor-pointer"
+                   :class="formData.keyword.step_classify ? 'bg-green-50' : 'bg-gray-50'">
+                <input type="checkbox" x-model="formData.keyword.step_classify" class="rounded">
+                <span class="text-sm font-semibold text-gray-800">③ 분류</span>
+                <span class="text-xs text-gray-500">DB의 미분류 키워드에 니치를 붙입니다</span>
+            </label>
+
+            <div x-show="formData.keyword.step_classify" x-transition
+                 class="p-3 border-t border-gray-200">
+                <div class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
+                    카테고리 관리의 분류표로 니치를 붙입니다. <b>API 호출이 없어 비용이 들지 않습니다.</b>
+                    아직 안 훑은 키워드부터 순서대로 가져가며, 분류표에 없는 말은 미분류로 남습니다.
+                    니치가 붙어야 그 니치를 가진 블로그가 이 키워드를 씁니다.
+                </div>
+            </div>
+        </div>
+
+        <!-- ④ 재판정 -->
+        <div class="border-2 rounded-lg overflow-hidden"
+             :class="formData.keyword.step_rejudge ? 'border-purple-300' : 'border-gray-200'">
+            <label class="flex items-center gap-2 px-3 py-2 cursor-pointer"
+                   :class="formData.keyword.step_rejudge ? 'bg-purple-50' : 'bg-gray-50'">
+                <input type="checkbox" x-model="formData.keyword.step_rejudge" class="rounded">
+                <span class="text-sm font-semibold text-gray-800">④ 재판정</span>
+                <span class="text-xs text-gray-500">DB 전체를 현재 기준값으로 다시 판정합니다</span>
+            </label>
+
+            <div x-show="formData.keyword.step_rejudge" x-transition
+                 class="p-3 border-t border-gray-200">
+                <div class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
+                    <b>② 측정 섹션의 기준값</b>을 씁니다. API 호출은 없지만 전체 행을 훑으므로,
+                    기준을 자주 바꾸지 않는다면 꺼 두는 편이 낫습니다.
+                </div>
+            </div>
+        </div>
+
+        <!-- 공통 -->
+        <div class="border border-gray-200 rounded-lg p-3 space-y-3">
+            <div class="text-sm font-semibold text-gray-800">공통</div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                     <label class="block text-xs text-gray-500 mb-1">재고 하한 (이보다 많으면 안 돎)</label>
                     <input type="number" min="0" x-model.number="formData.keyword.min_inventory"
                            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
                 </div>
+                <label class="flex items-start gap-2 text-sm text-gray-700 pt-5">
+                    <input type="checkbox" x-model="formData.keyword.feedback_enabled" class="rounded mt-0.5">
+                    <span>실측 성과 되먹임 <span class="text-xs text-gray-500">(노출된 축을 다음 시드로 먼저)</span></span>
+                </label>
             </div>
         </div>
 
-        <!-- 클러스터 생산 -->
-        <div class="border-t border-gray-100 pt-4 space-y-3">
-            <label class="flex items-center gap-2 text-sm font-medium text-gray-700">
-                <input type="checkbox" x-model="formData.keyword.cluster_enabled" class="rounded">
-                비슷한 키워드를 묶어 <b>대표 글 1편 + 곁가지 글 N편</b>으로 만들기
-            </label>
-            <div class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
-                키워드 1개 = 제목 1개는 대량 발행에 맞지 않습니다. 묶음 하나에서
-                <b>서로 다른 질문</b>에 답하는 제목이 여러 개 나옵니다.
-                묶이지 않은 키워드는 기존 방식으로 처리됩니다.
-            </div>
-            <div x-show="formData.keyword.cluster_enabled" class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div>
-                    <label class="block text-xs text-gray-500 mb-1">묶음 최소 크기</label>
-                    <input type="number" min="2" max="30" x-model.number="formData.keyword.cluster_min_size"
-                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                </div>
-                <div>
-                    <label class="block text-xs text-gray-500 mb-1">묶음 최대 크기</label>
-                    <input type="number" min="2" max="50" x-model.number="formData.keyword.cluster_max_size"
-                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                </div>
-                <div>
-                    <label class="block text-xs text-gray-500 mb-1">묶는 기준(0~1)</label>
-                    <input type="number" step="0.02" min="0.05" max="1" x-model.number="formData.keyword.cluster_threshold"
-                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                </div>
-                <div>
-                    <label class="block text-xs text-gray-500 mb-1">묶음당 곁가지 수</label>
-                    <input type="number" min="0" max="30" x-model.number="formData.keyword.titles_per_cluster"
-                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                    <p class="mt-1 text-xs text-gray-400">0이면 묶음 크기만큼</p>
-                </div>
-            </div>
-        </div>
+        ${window.getKeywordScheduleTemplate ? window.getKeywordScheduleTemplate() : ''}
 
-        <!-- 제목 생성 AI -->
-        <div class="border-t border-gray-100 pt-4">
-            <label class="block text-sm font-medium text-gray-700 mb-2">제목 생성 AI</label>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <select x-model="formData.keyword.ai_provider"
-                        @change="formData.keyword.ai_model = ''"
-                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                    <option value="">선택 안 함 (블로그 설정 사용)</option>
-                    <template x-for="p in kwProviders()" :key="p">
-                        <option :value="p" x-text="p"></option>
-                    </template>
-                </select>
-                <select x-model="formData.keyword.ai_model"
-                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                    <option value="">기본 모델</option>
-                    <template x-for="m in kwModels(formData.keyword.ai_provider)" :key="m">
-                        <option :value="m" x-text="m"></option>
-                    </template>
-                </select>
+        <!-- 제목 생성 (이전 방식) -->
+        <details class="border border-gray-200 rounded-lg">
+            <summary class="px-3 py-2 text-sm text-gray-600 cursor-pointer select-none">
+                제목 생성 (이전 방식 · 기본 꺼짐)
+            </summary>
+            <div class="p-3 border-t border-gray-200 space-y-3">
+                <div class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
+                    제목은 <b>'제목 생성/수집' 모듈</b>이 맡습니다. 수집 모듈이 제목까지 만들면
+                    중간 결과를 걸러낼 자리가 없습니다.
+                </div>
+                <label class="flex items-center gap-2 text-sm text-gray-700">
+                    <input type="checkbox" x-model="formData.keyword.make_titles" class="rounded">
+                    (이전 방식) 채택 키워드로 제목을 만들어 재고에 넣기
+                </label>
+                <div x-show="formData.keyword.make_titles" class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">키워드당 제목 수</label>
+                        <input type="number" min="1" max="10" x-model.number="formData.keyword.titles_per_keyword"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                    </div>
+                    <label class="flex items-center gap-2 text-sm text-gray-700 pt-5">
+                        <input type="checkbox" x-model="formData.keyword.dry_run" class="rounded">
+                        검증 모드 (저장하지 않고 결과만)
+                    </label>
+                </div>
             </div>
-            <p class="mt-1 text-xs text-gray-500">
-                블로그 없이 시드만으로 테스트할 때는 <b>여기서 골라야</b> 제목이 만들어집니다.
-                비워 두면 블로그의 글쓰기 AI를 쓰고, 그것도 없으면 제목 생성이 전부 실패합니다.
-            </p>
-        </div>
+        </details>
 
-        <!-- 테스트 실행 -->
+        <!-- 테스트 -->
         <div class="border-t border-gray-100 pt-4">
             <div class="flex flex-wrap items-center gap-3">
                 <button type="button" @click="runKeywordTest()" :disabled="kwTest.busy"
                         class="px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-medium disabled:opacity-40">
                     <span x-text="kwTest.busy
-                        ? '실행 중… (수집→측정→제목) ' + (kwTest.elapsed ? kwTest.elapsed + '초' : '')
+                        ? '실행 중… ' + (kwTest.elapsed ? kwTest.elapsed + '초' : '')
                         : '▶ 이 설정으로 테스트 실행'"></span>
                 </button>
                 <span class="text-xs text-gray-500">
-                    저장하지 않은 현재 화면 값 그대로 한 회차를 돌려 결과를 아래에 보여 줍니다.
-                    수집·측정에 1~2분이 걸릴 수 있고, 창을 닫지 않고 기다리면 됩니다.
+                    저장하지 않은 현재 값으로 한 회차를 돌려 결과를 아래에 보여 줍니다.
                 </span>
             </div>
 
@@ -301,7 +278,6 @@ window.getKeywordFormTemplate = function () {
             <div x-show="kwTest.result" x-transition class="mt-3 space-y-3">
                 <div class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-800"
                      x-text="kwTest.result?.message"></div>
-
                 <div x-show="Object.keys(kwTest.result?.by_source || {}).length">
                     <div class="text-xs font-medium text-gray-500 mb-1">소스별 수집</div>
                     <div class="flex flex-wrap gap-1.5">
@@ -311,45 +287,15 @@ window.getKeywordFormTemplate = function () {
                         </template>
                     </div>
                 </div>
-
                 <div x-show="(kwTest.result?.samples || []).length">
-                    <div class="text-xs font-medium text-gray-500 mb-1">
-                        수집된 키워드 <span x-text="'(' + (kwTest.result?.samples || []).length + '개 표시)'"></span>
-                    </div>
+                    <div class="text-xs font-medium text-gray-500 mb-1">수집된 키워드</div>
                     <div class="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
                         <template x-for="k in (kwTest.result?.samples || [])" :key="k">
                             <span class="px-2 py-0.5 bg-amber-50 border border-amber-200 rounded text-xs" x-text="k"></span>
                         </template>
                     </div>
                 </div>
-
-                <div x-show="(kwTest.result?.preview || []).length">
-                    <div class="text-xs font-medium text-gray-500 mb-1">생성된 제목 (검증 모드면 저장 안 됨)</div>
-                    <div class="border border-gray-200 rounded-lg divide-y divide-gray-100 max-h-64 overflow-y-auto">
-                        <template x-for="(t, i) in (kwTest.result?.preview || [])" :key="i">
-                            <div class="flex items-start gap-2 px-3 py-1.5 text-sm">
-                                <span class="text-xs px-1.5 py-0.5 rounded shrink-0"
-                                      :class="t.state === 'ready' ? 'bg-green-100 text-green-700'
-                                            : t.state === 'blocked' ? 'bg-red-100 text-red-700'
-                                            : 'bg-gray-100 text-gray-600'"
-                                      x-text="t.reason"></span>
-                                <span class="text-gray-800" x-text="t.title"></span>
-                            </div>
-                        </template>
-                    </div>
-                </div>
             </div>
-        </div>
-
-        <!-- 주기 -->
-        <div class="border-t border-gray-100 pt-4">
-            <label class="block text-sm font-medium text-gray-700 mb-2">실행 간격 (분)</label>
-            <input type="number" min="30" x-model.number="formData.keyword.interval_minutes"
-                   class="w-40 px-3 py-2 border border-gray-300 rounded-lg text-sm">
-            <p class="mt-1 text-xs text-gray-500">
-                성장 프로파일과 별개입니다. 성장 프로파일은 발행 주기를 정하고,
-                키워드 생산은 재고가 부족한지로 돕니다.
-            </p>
         </div>
     </div>
     `;

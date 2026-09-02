@@ -157,6 +157,11 @@ function moduleFormApp(module = null, moduleType = null) {
                 seed_limit: initialModule?.settings?.keyword?.seed_limit ?? 10,
                 measure_limit: initialModule?.settings?.keyword?.measure_limit ?? 50,
                 make_titles: initialModule?.settings?.keyword?.make_titles ?? false,
+                // 스케줄 — 다른 모듈과 같은 방식(고정 시간 / 간격 + 활성 시간대)
+                schedule_mode: initialModule?.settings?.schedule?.schedule_mode || 'interval',
+                fixed_times: initialModule?.settings?.schedule?.fixed_times || [],
+                interval_hours: initialModule?.settings?.schedule?.interval_hours ?? 6,
+
                 // 단계 선택 — 하나만 켜면 그 단계 전용 모듈이 된다
                 step_collect: (initialModule?.settings?.keyword?.steps
                     || ['collect', 'measure', 'classify']).includes('collect'),
@@ -168,8 +173,6 @@ function moduleFormApp(module = null, moduleType = null) {
                     .includes('rejudge')
                     || (initialModule?.settings?.keyword?.rejudge_on_run ?? false),
                 dry_run: initialModule?.settings?.keyword?.dry_run ?? true,
-                ai_provider: initialModule?.settings?.keyword?.ai_provider || '',
-                ai_model: initialModule?.settings?.keyword?.ai_model || '',
                 titles_per_keyword: initialModule?.settings?.keyword?.titles_per_keyword ?? 3,
                 cluster_enabled: initialModule?.settings?.keyword?.cluster_enabled ?? true,
                 cluster_threshold: initialModule?.settings?.keyword?.cluster_threshold ?? 0.34,
@@ -268,8 +271,8 @@ function moduleFormApp(module = null, moduleType = null) {
             // moduleType.code 또는 formData.type_code 둘 다 체크
             const typeCode = this.formData.type_code || this.moduleType?.code;
             console.log('typeCode 확인:', typeCode, 'formData.type_code:', this.formData.type_code, 'moduleType:', this.moduleType);
-            if (typeCode === 'keyword' || typeCode === 'title_gen') {
-                // 제목 생성 AI 선택지를 채운다
+            if (typeCode === 'title_gen') {
+                // 제목 생성 AI 선택지를 채운다(제목 모듈 전용)
                 this.loadKeywordModels();
             }
             if (typeCode === 'contact_form') {
@@ -350,7 +353,7 @@ function moduleFormApp(module = null, moduleType = null) {
 
         // 스케줄 매트릭스 초기화
         initializeSchedule() {
-            if (this.formData.type_code === 'collect' || this.formData.type_code === 'data' || this.formData.type_code === 'generate') {
+            if (['collect', 'data', 'generate', 'keyword'].includes(this.formData.type_code)) {
                 // 데이터 모듈: module.settings.schedule.schedule_matrix에서 먼저 로드 (우선순위 높음)
                 // ★ this.module.settings를 사용해야 함 (this.formData.settings가 아님)
                 const moduleSettings = this.module?.settings || {};
@@ -822,8 +825,6 @@ function moduleFormApp(module = null, moduleType = null) {
         // 것처럼 보이고, 그대로 저장하면 실제로 지워졌다.
         kwProviders() {
             const set = new Set((this.kwTest.models || []).map(m => m.provider));
-            const saved = this.formData?.keyword?.ai_provider;
-            if (saved) set.add(saved);
             return Array.from(set).sort();
         },
 
@@ -832,8 +833,6 @@ function moduleFormApp(module = null, moduleType = null) {
             const list = (this.kwTest.models || [])
                 .filter(m => m.provider === provider)
                 .map(m => m.model_id);
-            const saved = this.formData?.keyword?.ai_model;
-            if (saved && !list.includes(saved)) list.unshift(saved);
             return list;
         },
 
@@ -1118,6 +1117,8 @@ function moduleFormApp(module = null, moduleType = null) {
                         seeds: split(k.seeds_text),
                         modifiers: split(k.modifiers_text),
                         use_blog_categories: !!k.use_blog_categories,
+                        collect_limit: k.collect_limit,
+                        feedback_enabled: !!k.feedback_enabled,
                         sources: sources,
                         discovery_niche_filter: !!k.discovery_niche_filter,
                         enrich_limit: k.enrich_limit,
@@ -1136,8 +1137,6 @@ function moduleFormApp(module = null, moduleType = null) {
                             ['step_rejudge', 'rejudge'],
                         ].filter(([flag]) => k[flag]).map(([, code]) => code),
                         dry_run: !!k.dry_run,
-                        ai_provider: k.ai_provider || null,
-                        ai_model: k.ai_model || null,
                         titles_per_keyword: k.titles_per_keyword,
                         cluster_enabled: !!k.cluster_enabled,
                         cluster_threshold: k.cluster_threshold,
@@ -1146,9 +1145,16 @@ function moduleFormApp(module = null, moduleType = null) {
                         titles_per_cluster: k.titles_per_cluster,
                         min_inventory: k.min_inventory,
                     },
-                    // 주기는 bulk_collect 와 같은 자리에 둔다(스케줄러가 그 경로를 본다)
-                    schedule: { interval_minutes: k.interval_minutes },
+                    // 스케줄은 bulk_collect 와 같은 자리·같은 모양으로 둔다
+                    // (스케줄러가 그 경로를 본다)
+                    schedule: {
+                        schedule_mode: k.schedule_mode,
+                        fixed_times: k.fixed_times,
+                        interval_hours: k.interval_hours,
+                    },
                 };
+                // 활성 시간대. 간격 모드에서만 의미가 있다.
+                data.schedule_matrix = this.schedule;
             } else if (this.formData.type_code === 'title_gen') {
                 const t = this.formData.title || {};
                 data.settings = {
@@ -1202,6 +1208,23 @@ function moduleFormApp(module = null, moduleType = null) {
         },
 
         // 수집 시간 추가 (수집 모듈용)
+        addKeywordTime() {
+            const t = this.newFixedTime;
+            if (!t) return;
+            if (this.formData.keyword.fixed_times.includes(t)) {
+                this.showError('이미 추가된 시간입니다');
+                return;
+            }
+            this.formData.keyword.fixed_times.push(t);
+            this.formData.keyword.fixed_times.sort();
+            this.newFixedTime = '';
+        },
+
+        removeKeywordTime(time) {
+            this.formData.keyword.fixed_times =
+                this.formData.keyword.fixed_times.filter(t => t !== time);
+        },
+
         addFixedTime() {
             if (!this.newFixedTime) return;
 

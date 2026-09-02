@@ -306,8 +306,10 @@ class FlowScheduler:
                             default_interval = {
                                 "keyword": 360, "title_gen": 180,
                             }.get(module_type_code, 60)
+                            hours = schedule_cfg.get("interval_hours")
                             interval_minutes = schedule_cfg.get(
-                                "interval_minutes", default_interval)
+                                "interval_minutes",
+                                int(hours * 60) if hours else default_interval)
                         else:
                             interval_minutes = module_settings.get(
                                 "interval_minutes", 60
@@ -325,12 +327,14 @@ class FlowScheduler:
                         immediate_execution
                         and module_type_code in (
                             "collect", "data", "bulk_collect",
+                            "keyword", "title_gen",
                         )
                         and not gp_settings
                     ):
                         module_settings = module.settings or {}
-                        # bulk_collect 는 settings.schedule.* 중첩 경로 사용
-                        if module_type_code == "bulk_collect":
+                        # 중첩 경로를 쓰는 타입들
+                        if module_type_code in ("bulk_collect", "keyword",
+                                                "title_gen"):
                             _sched = module_settings.get("schedule") or {}
                             _mode = _sched.get("schedule_mode")
                         else:
@@ -350,7 +354,8 @@ class FlowScheduler:
                         # bulk_collect 등 GP 없이 자체 스케줄을 가지는 모듈은
                         # module_settings 를 넘겨 모듈 단위 지터를 적용한다.
                         mod_settings_for_jitter = None
-                        if not gp_settings and module_type_code == "bulk_collect":
+                        if not gp_settings and module_type_code in (
+                                "bulk_collect", "keyword", "title_gen"):
                             mod_settings_for_jitter = module.settings or {}
                         await self._schedule_next_execution(
                             db, flow, action_type=module_type_code, state=state,
@@ -1912,6 +1917,10 @@ class FlowScheduler:
                 continue
             if module.module_type.code == action_type:
                 module_settings = module.settings or {}
+                # 중첩 경로를 쓰는 타입은 그쪽을 먼저 본다.
+                if action_type in ("bulk_collect", "keyword", "title_gen"):
+                    module_settings = {**module_settings,
+                                       **(module_settings.get("schedule") or {})}
 
                 interval = module_settings.get("interval_minutes")
                 if interval and isinstance(interval, (int, float)) and interval > 0:
@@ -1952,9 +1961,9 @@ class FlowScheduler:
             if module.module_type.code != action_type:
                 continue
             settings = module.settings or {}
-            # bulk_collect 는 스케줄 설정을 settings.schedule.* 중첩에 저장한다.
-            # collect/data 는 top-level(settings.schedule_mode/fixed_times).
-            if action_type == "bulk_collect":
+            # bulk_collect·keyword·title_gen 은 스케줄을 settings.schedule.*
+            # 중첩에 저장한다. collect/data 는 top-level 이다.
+            if action_type in ("bulk_collect", "keyword", "title_gen"):
                 sched = settings.get("schedule") or {}
                 schedule_mode = sched.get("schedule_mode")
                 fixed_times = sched.get("fixed_times") or []
