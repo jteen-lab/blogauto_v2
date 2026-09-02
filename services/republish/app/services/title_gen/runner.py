@@ -148,14 +148,20 @@ class TitleModuleRunner:
 
         from ..naver_search_service import NaverSearchService
         from .angles import fetch, hint
+        from .niche import active_domains
 
         search = NaverSearchService(settings)
         if not search.is_configured():
             logger.info("[TITLE_RUNNER] 검색 API 미설정 — 각도 참고 생략")
             return None
 
+        # 니치 도메인을 한 번만 읽어 회차 내내 재사용한다.
+        # 비어 있으면 우선순위를 매기지 않는다(전부 통과).
+        domains = await active_domains(self.db, self.user_id)
+
         async def provide(keyword: str) -> str:
-            return hint(await fetch(search, keyword, cfg.angle_sample))
+            return hint(await fetch(search, keyword, cfg.angle_sample,
+                                    niche=domains))
 
         return provide
 

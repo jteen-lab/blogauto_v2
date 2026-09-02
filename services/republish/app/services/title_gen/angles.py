@@ -14,9 +14,10 @@
 from __future__ import annotations
 
 import re
-from typing import Any, List
+from typing import Any, List, Optional, Set
 
 from ...core.logger import get_logger
+from .niche import in_niche
 
 logger = get_logger("title_angles", "app.log")
 
@@ -35,8 +36,12 @@ def clean(title: str) -> str:
 
 
 async def fetch(search_service: Any, keyword: str,
-                sample: int = DEFAULT_SAMPLE) -> List[str]:
+                sample: int = DEFAULT_SAMPLE,
+                niche: Optional[Set[str]] = None) -> List[str]:
     """이 키워드로 이미 상위에 있는 제목들.
+
+    `niche` 를 주면 그 도메인의 결과를 **앞에 놓는다**. 배제가 아니라
+    우선순위다 — 목록에 없는 새 경쟁자를 놓치면 각도가 낡는다.
 
     실패는 빈 목록이다 — 참고 자료가 없다고 제목 생성을 멈출 이유는 없다.
     """
@@ -50,15 +55,21 @@ async def fetch(search_service: Any, keyword: str,
     if not result.get("success"):
         return []
 
-    out: List[str] = []
+    inside: List[str] = []
+    outside: List[str] = []
     seen = set()
     for item in result.get("items") or []:
         title = clean(item.get("title", ""))
         if len(title) < 6 or title in seen:
             continue
         seen.add(title)
-        out.append(title)
-    return out
+        link = item.get("link") or item.get("bloggerlink")
+        (inside if in_niche(link, niche or set()) else outside).append(title)
+
+    if niche and inside:
+        logger.info("[TITLE_ANGLES] 니치 %s건 · 그 밖 %s건 | %s",
+                    len(inside), len(outside), keyword)
+    return inside + outside
 
 
 def hint(titles: List[str], limit: int = 8) -> str:
