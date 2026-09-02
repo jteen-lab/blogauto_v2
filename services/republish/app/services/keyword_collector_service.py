@@ -5,9 +5,9 @@
 뉴스 제목은 키워드 추출 없이 그대로 TempTitle 테이블에 저장됩니다.
 
 수집 소스:
-- 구글 트렌드: 실시간 인기 검색어 → SeedKeyword
-- 네이버 데이터랩: 인기 검색어 트렌드 → SeedKeyword
-- 네이버 광고 도구: 연관 키워드 → SeedKeyword
+- 구글 트렌드: 실시간 인기 검색어 → keyword_candidates
+- 네이버 데이터랩: 인기 검색어 트렌드 → keyword_candidates
+- 네이버 광고 도구: 연관 키워드 → keyword_candidates
 - 네이버 뉴스: 뉴스 제목 → TempTitle (신규)
 - 구글 뉴스 RSS: 뉴스 제목 → TempTitle (신규)
 
@@ -31,7 +31,7 @@ from sqlalchemy import select
 
 import re
 from ..models.user_settings import UserSettings
-from ..models.keyword import SeedKeyword
+from ..models.keyword_candidate import KeywordCandidate
 from ..models.title import TempTitle
 from ..models.content_filter import ContentFilter
 from ..core.logger import get_logger
@@ -185,7 +185,7 @@ class KeywordCollectorService:
 
     async def collect_from_google_trends(self, limit: int = 100) -> Dict[str, Any]:
         """
-        구글 트렌드에서 실시간 인기 검색어 수집 → SeedKeyword 저장
+        구글 트렌드에서 실시간 인기 검색어 수집 → 정본 저장
 
         Args:
             limit: 최대 수집 수량
@@ -262,7 +262,7 @@ class KeywordCollectorService:
         limit: int = 100
     ) -> Dict[str, Any]:
         """
-        네이버 데이터랩에서 트렌드 키워드 수집 → SeedKeyword 저장
+        네이버 데이터랩에서 트렌드 키워드 수집 → 정본 저장
 
         Args:
             base_keywords: 기준 키워드 (없으면 기본 키워드 사용)
@@ -355,7 +355,7 @@ class KeywordCollectorService:
         include_related: bool = True
     ) -> Dict[str, Any]:
         """
-        네이버 광고 도구에서 연관 키워드 수집 → SeedKeyword 저장
+        네이버 광고 도구에서 연관 키워드 수집 → 정본 저장
 
         Args:
             base_keywords: 기준 키워드 (없으면 기본 키워드 사용)
@@ -710,7 +710,7 @@ class KeywordCollectorService:
         2. Phase 2: 저장된 URL 중 1~3개에서만 제목 수집 (TempTitle)
 
         Args:
-            keywords: 검색 키워드 목록 (없으면 SeedKeyword에서 조회)
+            keywords: 검색 키워드 목록 (없으면 정본(keyword_candidates)에서 조회)
             delay_between_sites: 사이트 간 딜레이 (초)
             urls_per_cycle: 주기당 처리할 URL 수 (기본 3개)
             max_titles_per_url: URL당 최대 제목 수집 수 (None=무제한, 사이트맵 전체)
@@ -728,7 +728,7 @@ class KeywordCollectorService:
         )
 
         try:
-            # 키워드가 없으면 SeedKeyword에서 조회 (keyword_limit 적용)
+            # 키워드가 없으면 정본(keyword_candidates)에서 조회 (keyword_limit 적용)
             if not keywords:
                 available_keywords = await self.get_available_keywords_for_search(limit=keyword_limit)
                 keywords = [kw.keyword for kw in available_keywords]
@@ -817,7 +817,7 @@ class KeywordCollectorService:
                 "saved": 0
             }
 
-    async def get_available_keywords_for_search(self, limit: int = 10) -> List[SeedKeyword]:
+    async def get_available_keywords_for_search(self, limit: int = 10) -> List[KeywordCandidate]:
         """
         검색에 사용할 키워드 조회 (use_count 0~3, 우선순위: 0→1→2→3)
 
@@ -831,9 +831,9 @@ class KeywordCollectorService:
         """
         # use_count 4 이상 키워드 비활성화
         deactivate_query = (
-            select(SeedKeyword)
-            .where(SeedKeyword.use_count >= 4)
-            .where(SeedKeyword.is_active == True)
+            select(KeywordCandidate)
+            .where(KeywordCandidate.use_count >= 4)
+            .where(KeywordCandidate.is_active == True)
         )
         deactivate_result = await self.db.execute(deactivate_query)
         keywords_to_deactivate = deactivate_result.scalars().all()
@@ -846,7 +846,7 @@ class KeywordCollectorService:
             await self.db.commit()
 
         # use_count 0~3 키워드를 우선순위 순서로 조회
-        available_keywords: List[SeedKeyword] = []
+        available_keywords: List[KeywordCandidate] = []
 
         for use_count in range(4):  # 0, 1, 2, 3 순서
             if len(available_keywords) >= limit:
@@ -854,10 +854,10 @@ class KeywordCollectorService:
 
             remaining = limit - len(available_keywords)
             query = (
-                select(SeedKeyword)
-                .where(SeedKeyword.is_active == True)
-                .where(SeedKeyword.use_count == use_count)
-                .order_by(SeedKeyword.created_at.asc())
+                select(KeywordCandidate)
+                .where(KeywordCandidate.is_active == True)
+                .where(KeywordCandidate.use_count == use_count)
+                .order_by(KeywordCandidate.created_at.asc())
                 .limit(remaining)
             )
             result = await self.db.execute(query)
@@ -877,9 +877,9 @@ class KeywordCollectorService:
             사용 가능한 키워드 존재 여부
         """
         query = (
-            select(SeedKeyword)
-            .where(SeedKeyword.is_active == True)
-            .where(SeedKeyword.use_count < 4)
+            select(KeywordCandidate)
+            .where(KeywordCandidate.is_active == True)
+            .where(KeywordCandidate.use_count < 4)
             .limit(1)
         )
         result = await self.db.execute(query)
@@ -1062,7 +1062,7 @@ class KeywordCollectorService:
         total_collected = 0
         total_saved = 0
 
-        # 키워드 소스 (SeedKeyword 테이블)
+        # 키워드 소스 (KeywordCandidate 테이블)
         keyword_source_list = ['google_trends', 'naver_datalab', 'naver_ads']
         # 제목 소스 (TempTitle 테이블)
         title_source_list = ['naver_news', 'google_news', 'naver_webdoc']
@@ -1240,7 +1240,7 @@ class KeywordCollectorService:
                 f"(urls_per_cycle={bulk_urls_per_cycle}, max_titles_per_url=무제한)..."
             )
             bulk_result = await self.collect_bulk_titles(
-                keywords=None,  # SeedKeyword에서 자동 조회
+                keywords=None,  # KeywordCandidate에서 자동 조회
                 delay_between_sites=bulk_collect_delay,
                 urls_per_cycle=bulk_urls_per_cycle,
                 max_titles_per_url=None,  # 대량 수집은 항상 무제한 (사이트맵 전체 크롤링)
@@ -1294,7 +1294,7 @@ class KeywordCollectorService:
         competition: Optional[float] = None
     ) -> bool:
         """
-        키워드를 SeedKeyword 테이블에 저장 (데이터 관리 페이지에 표시됨)
+        키워드를 정본(keyword_candidates)에 저장
 
         1차 중복 제거:
         - 세션 내 캐시로 같은 수집에서 중복 방지
@@ -1332,8 +1332,8 @@ class KeywordCollectorService:
 
         # 3. DB 중복 체크 (대소문자 무시)
         from sqlalchemy import func
-        query = select(SeedKeyword).where(
-            func.lower(SeedKeyword.keyword) == keyword_lower
+        query = select(KeywordCandidate).where(
+            func.lower(KeywordCandidate.keyword) == keyword_lower
         ).limit(1)
         result = await self.db.execute(query)
         existing = result.scalars().first()
@@ -1354,32 +1354,14 @@ class KeywordCollectorService:
         except Exception as cat_err:
             logger.warning(f"[CATEGORY] 키워드 카테고리 매칭 오류: {cat_err}")
 
-        # 5. 새 키워드를 SeedKeyword 테이블에 저장
-        new_keyword = SeedKeyword(
-            keyword=keyword,
-            source_type=source,
-            is_active=True,
-            use_count=0,
-            priority=0,
-            topic_id=topic_id,
-            subtopic_id=subtopic_id,
-            matched_keyword_id=matched_keyword_id
+        # 5. 정본(keyword_candidates)에 저장.
+        #    시드 테이블은 폐기됐다 — 저장소가 하나로 모였다.
+        from .keyword_lab.legacy_bridge import mirror_keyword
+
+        await mirror_keyword(
+            self.db, keyword, source,
+            topic_id=topic_id, subtopic_id=subtopic_id,
         )
-        self.db.add(new_keyword)
-
-        # 5-1. 정본(keyword_candidates)에도 적는다.
-        #      저장소를 일원화했지만 이 모듈은 아직 seed_keywords 를 쓴다.
-        #      전환 도중 새 키워드가 데이터 관리 화면에서 빠지지 않게 한다.
-        try:
-            from .keyword_lab.legacy_bridge import mirror_keyword
-
-            await mirror_keyword(
-                self.db, keyword, source,
-                topic_id=topic_id, subtopic_id=subtopic_id,
-            )
-        except Exception as bridge_err:  # noqa: BLE001
-            # 다리가 막혀도 기존 수집은 계속돼야 한다.
-            logger.warning(f"[BRIDGE] 정본 기록 실패: {bridge_err}")
 
         # 6. 세션 캐시에 추가
         self._seen_keywords.add(keyword_lower)
@@ -1510,7 +1492,7 @@ class KeywordCollectorService:
 
         try:
             # 1. 키워드 중복 제거
-            keyword_query = select(SeedKeyword).order_by(SeedKeyword.created_at.asc())
+            keyword_query = select(KeywordCandidate).order_by(KeywordCandidate.created_at.asc())
             keyword_result = await self.db.execute(keyword_query)
             all_keywords = list(keyword_result.scalars().all())
             logger.info(f"[DEDUP-2] 키워드 중복 검사: 전체 {len(all_keywords)}개 스캔")
@@ -1530,7 +1512,7 @@ class KeywordCollectorService:
             # 중복 키워드 삭제
             if keyword_ids_to_delete:
                 from sqlalchemy import delete
-                delete_stmt = delete(SeedKeyword).where(SeedKeyword.id.in_(keyword_ids_to_delete))
+                delete_stmt = delete(KeywordCandidate).where(KeywordCandidate.id.in_(keyword_ids_to_delete))
                 await self.db.execute(delete_stmt)
                 keywords_removed = len(keyword_ids_to_delete)
                 logger.info(f"[DEDUP-2] ✅ 키워드 {keywords_removed}개 중복 제거 완료")

@@ -90,11 +90,11 @@ def _build_collect_success_message(result: Dict[str, Any]) -> CollectLogStats:
             ...
         }
 
-    제목 소스(TempTitle 저장)와 키워드 소스(SeedKeyword 저장)를 구분하여
+    제목 소스(TempTitle 저장)와 키워드 소스(keyword_candidates 저장)를 구분하여
     저장 건수를 합산한다. ``deduplication`` 등 수집 소스가 아닌 메타 키는
     집계에서 제외한다.
     """
-    # 키워드 소스 (SeedKeyword 테이블 저장)
+    # 키워드 소스 (keyword_candidates 테이블 저장)
     keyword_source_codes = {"google_trends", "naver_datalab", "naver_ads"}
     # 제목 소스 (TempTitle 테이블 저장). keyword_search 는 키워드 기반
     # 제목 수집, bulk_collect 는 레거시 인라인 대량 제목 수집으로 둘 다 제목.

@@ -8,7 +8,7 @@
 4. 불용어 필터링
 
 임시 제목(TempTitle)에서 지정 수량의 제목을 선정하여
-키워드를 추출하고 SeedKeyword 테이블에 저장합니다.
+키워드를 추출하고 정본(keyword_candidates)에 저장합니다.
 """
 import re
 from collections import Counter
@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
 from ..models.title import TempTitle
-from ..models.keyword import SeedKeyword
+from ..models.keyword_candidate import KeywordCandidate, VERDICT_PENDING
 from ..models.content_filter import ContentFilter
 from ..core.logger import get_logger
 from .category_matcher_service import CategoryMatcherService
@@ -60,8 +60,9 @@ NEWS_STOPWORDS: Set[str] = {
 class KeywordExtractorService:
     """키워드 추출 서비스"""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, user_id: int = 1):
         self.db = db
+        self.user_id = user_id
         self._konlpy_available = False
         self._tagger = None
         self._filters_cache: Optional[List[ContentFilter]] = None
@@ -410,7 +411,7 @@ class KeywordExtractorService:
         title_status: str = "new"
     ) -> Dict[str, Any]:
         """
-        TempTitle에서 제목을 선정하여 키워드 추출 후 SeedKeyword에 저장
+        TempTitle에서 제목을 선정하여 키워드 추출 후 정본에 저장
 
         Args:
             title_limit: 분석할 제목 수량
@@ -463,7 +464,7 @@ class KeywordExtractorService:
             # 3. 카테고리 매처 초기화
             await self._init_category_matcher()
 
-            # 4. SeedKeyword에 저장 (중복 체크 및 재활성화 포함)
+            # 4. 정본에 저장 (중복 체크 및 재활성화 포함)
             saved_count = 0
             reactivated_count = 0
             skipped_count = 0
@@ -485,8 +486,9 @@ class KeywordExtractorService:
 
                 # 2. 중복 체크
                 existing_query = (
-                    select(SeedKeyword)
-                    .where(SeedKeyword.keyword == keyword)
+                    select(KeywordCandidate)
+                    .where(KeywordCandidate.user_id == self.user_id,
+                           KeywordCandidate.keyword == keyword)
                     .limit(1)
                 )
                 existing_result = await self.db.execute(existing_query)
@@ -523,15 +525,20 @@ class KeywordExtractorService:
                     logger.warning(f"[EXTRACTOR] 카테고리 매칭 오류: {cat_err}")
 
                 # 4. 새 키워드 저장
-                new_keyword = SeedKeyword(
+                # 전역 풀(blog_id NULL)에 넣는다. 니치가 붙으면 그 니치를
+                # 가진 블로그가 가져다 쓴다(scope.usable_by).
+                new_keyword = KeywordCandidate(
+                    user_id=self.user_id,
                     keyword=keyword,
-                    source_type="extracted",
+                    blog_id=None,
+                    source="extracted",
+                    verdict=VERDICT_PENDING,
+                    verdict_reason="제목에서 추출 — 아직 재지 않음",
                     is_active=True,
                     use_count=0,
                     priority=int(kw_data.get("score", 0)),
                     topic_id=topic_id,
                     subtopic_id=subtopic_id,
-                    matched_keyword_id=matched_keyword_id
                 )
                 self.db.add(new_keyword)
                 saved_count += 1
@@ -573,8 +580,8 @@ class KeywordExtractorService:
         try:
             # 추출된 키워드 수
             extracted_query = (
-                select(func.count(SeedKeyword.id))
-                .where(SeedKeyword.source_type == "extracted")
+                select(func.count(KeywordCandidate.id))
+                .where(KeywordCandidate.source == "extracted")
             )
             extracted_result = await self.db.execute(extracted_query)
             extracted_count = extracted_result.scalar() or 0

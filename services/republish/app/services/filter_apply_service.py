@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.logger import get_logger
 from ..models.content_filter import ContentFilter
 from ..models.title import TempTitle
-from ..models.keyword import SeedKeyword
+from ..models.keyword_candidate import KeywordCandidate
 
 logger = get_logger("filter_apply", "app.log")
 
@@ -100,15 +100,18 @@ async def _delete_by_keyword(
 async def _delete_by_keyword_kw(
     db: AsyncSession, val: str, enabled: bool,
 ) -> int:
-    """키워드 타입 필터로 시드키워드 삭제."""
+    """키워드 타입 필터로 수집 키워드 삭제.
+
+    저장소를 정본(keyword_candidates)으로 일원화하면서 대상도 옮겼다.
+    """
     if not enabled:
         return 0
     rows = await db.execute(
-        select(SeedKeyword.id).where(SeedKeyword.keyword.ilike(f"%{val}%"))
+        select(KeywordCandidate.id).where(KeywordCandidate.keyword.ilike(f"%{val}%"))
     )
     ids = [r[0] for r in rows.all()]
     if ids:
-        await db.execute(delete(SeedKeyword).where(SeedKeyword.id.in_(ids)))
+        await db.execute(delete(KeywordCandidate).where(KeywordCandidate.id.in_(ids)))
     return len(ids)
 
 
@@ -137,14 +140,14 @@ async def _delete_by_pattern(
 async def _delete_by_pattern_kw(
     db: AsyncSession, pattern: re.Pattern, enabled: bool,
 ) -> int:
-    """정규식 패턴 필터로 시드키워드 삭제 (Phase 1: 메모리 완화)."""
+    """정규식 패턴 필터로 수집 키워드 삭제 (Phase 1: 메모리 완화)."""
     if not enabled:
         return 0
     to_delete: list[int] = []
-    stream = await db.stream(select(SeedKeyword.id, SeedKeyword.keyword))
+    stream = await db.stream(select(KeywordCandidate.id, KeywordCandidate.keyword))
     async for kid, kw in stream:
         if kw and pattern.search(kw):
             to_delete.append(kid)
     if to_delete:
-        await db.execute(delete(SeedKeyword).where(SeedKeyword.id.in_(to_delete)))
+        await db.execute(delete(KeywordCandidate).where(KeywordCandidate.id.in_(to_delete)))
     return len(to_delete)

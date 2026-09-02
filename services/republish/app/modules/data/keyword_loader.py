@@ -120,14 +120,14 @@ class KeywordLoaderModule(ModuleInterface):
         context: ExecutionContext,
         limit: int
     ) -> list[dict]:
-        """키워드 테이블에서 로드 (SeedKeyword 사용)"""
+        """키워드 테이블에서 로드 (정본 keyword_candidates)"""
         try:
-            from app.models.keyword import SeedKeyword
+            from app.models.keyword_candidate import KeywordCandidate
 
             query = (
-                select(SeedKeyword)
-                .where(SeedKeyword.is_active == True)
-                .order_by(SeedKeyword.priority.desc(), SeedKeyword.use_count.asc())
+                select(KeywordCandidate)
+                .where(KeywordCandidate.is_active == True)
+                .order_by(KeywordCandidate.priority.desc(), KeywordCandidate.use_count.asc())
                 .limit(limit)
             )
 
@@ -144,6 +144,6 @@ class KeywordLoaderModule(ModuleInterface):
             ]
 
         except Exception as e:
-            # SeedKeyword 테이블이 없거나 에러 시 빈 목록 반환
+            # KeywordCandidate 테이블이 없거나 에러 시 빈 목록 반환
             context.log(f"[KEYWORD_LOADER] 키워드 테이블 조회 실패: {e}")
             return []
