@@ -162,7 +162,8 @@ class TestWiring:
     def test_runner_runs_feedback_first(self):
         src = (BASE / "app/services/keyword_lab/runner.py").read_text(
             encoding="utf-8")
-        assert '"feedback", "collect"' in src
+        # 되먹임을 앞에 붙인다 — 시드 우선순위가 그 결과를 쓴다
+        assert '["feedback"] if cfg.feedback_enabled' in src
         assert src.index("_feedback(cfg, blog)") < src.index(
             'out["collect"]')
 

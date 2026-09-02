@@ -25,11 +25,11 @@ class TestTitleSeparation:
     def test_default_steps_exclude_titles(self):
         src = (BASE / "app/services/keyword_lab/runner.py").read_text(
             encoding="utf-8")
-        assert '"feedback", "collect", "measure", "classify"' in src
-        # 기본 단계 목록에 titles 가 없다(옛 설정을 켠 모듈만 별도로 탄다)
-        default = src[src.index("steps = steps or"):]
-        default = default[:default.index("]") + 1]
-        assert "titles" not in default
+        # 단계는 모듈 설정이 정한다. 제목은 그 목록에 없다.
+        assert "steps = (" in src and "cfg.steps" in src
+        from app.services.keyword_lab.settings import WORK_STEPS
+
+        assert "titles" not in WORK_STEPS
 
     def test_make_titles_defaults_off(self):
         assert KeywordModuleSettings.parse({}).make_titles is False

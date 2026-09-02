@@ -150,13 +150,12 @@ class TestPoolOpsShape:
 
 
 class TestScreen:
-    def test_pool_view_included_first(self):
+    def test_pool_view_is_the_only_list(self):
+        """저장소 일원화가 끝나 옛 시드 목록은 제거됐다(alembic 065)."""
         html = (BASE / "app/templates/collection/index.html").read_text(
             encoding="utf-8")
         assert "collection/_keyword_pool.html" in html
-        # 기존 시드 목록은 전환기 동안 접어서 남긴다
-        assert "기존 시드 키워드 목록" in html
-        assert html.index("_keyword_pool.html") < html.index("_keywords.html")
+        assert "_keywords.html" not in html
 
     def test_script_loaded(self):
         html = (BASE / "app/templates/collection/index.html").read_text(

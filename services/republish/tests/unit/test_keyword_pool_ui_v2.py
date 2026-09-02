@@ -91,10 +91,12 @@ class TestModuleAutomation:
     """분류·측정·재판정이 자동으로도 돈다."""
 
     def test_default_steps_include_all(self):
-        src = (BASE / "app/services/keyword_lab/runner.py").read_text(
-            encoding="utf-8")
-        assert '"feedback", "collect", "measure", "classify"' in src
-        assert '"rejudge"' in src
+        from app.services.keyword_lab.settings import (
+            DEFAULT_STEPS, WORK_STEPS,
+        )
+
+        assert set(DEFAULT_STEPS) == {"collect", "measure", "classify"}
+        assert "rejudge" in WORK_STEPS
 
     def test_measure_enriches_volume(self):
         """이관된 옛 시드는 검색량이 아예 없다 — 보강 없이는 영원히 미측정."""
@@ -111,13 +113,13 @@ class TestModuleAutomation:
 
     def test_rejudge_is_opt_in(self):
         # 전체 행을 훑으므로 매 회차 돌릴 필요는 없다
-        assert KeywordModuleSettings.parse({}).rejudge_on_run is False
+        assert "rejudge" not in KeywordModuleSettings.parse({}).steps
 
     def test_rejudge_can_be_enabled(self):
         cfg = KeywordModuleSettings.parse(
-            {"keyword": {"rejudge_on_run": True}})
-        assert cfg.rejudge_on_run is True
-        assert cfg.to_dict()["rejudge_on_run"] is True
+            {"keyword": {"steps": ["collect", "rejudge"]}})
+        assert "rejudge" in cfg.steps
+        assert cfg.to_dict()["steps"] == ["collect", "rejudge"]
 
     def test_summary_reports_new_steps(self):
         out = KeywordModuleRunner._aggregate([("-", {
@@ -137,10 +139,10 @@ class TestModuleAutomation:
     def test_form_exposes_toggle(self):
         tpl = (BASE / "app/static/js/modules/keyword-form-template.js").read_text(
             encoding="utf-8")
-        assert "formData.keyword.rejudge_on_run" in tpl
+        assert "formData.keyword.step_rejudge" in tpl
         js = (BASE / "app/static/js/modules/form.js").read_text(
             encoding="utf-8")
-        assert "rejudge_on_run: !!k.rejudge_on_run" in js
+        assert "['step_rejudge', 'rejudge']" in js
 
 
 class TestFileSize:

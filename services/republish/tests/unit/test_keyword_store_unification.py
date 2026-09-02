@@ -148,11 +148,8 @@ class TestCollectorHook:
         assert "from .keyword_lab.legacy_bridge import mirror_keyword" in src
         assert "await mirror_keyword(" in src
 
-    def test_failure_does_not_break_collection(self):
-        # 다리가 막혀도 기존 수집은 계속돼야 한다
+    def test_no_longer_writes_legacy_table(self):
+        """시드 테이블이 폐기됐다(alembic 065). 정본에만 적는다."""
         src = self._src()
-        assert "[BRIDGE] 정본 기록 실패" in src
-
-    def test_still_writes_legacy_table(self):
-        # 전환기에는 양쪽에 적는다
-        assert "self.db.add(new_keyword)" in self._src()
+        assert "SeedKeyword" not in src
+        assert "self.db.add(new_keyword)" not in src
