@@ -41,7 +41,7 @@ from .ai_api_key import AIApiKey
 from .ai_model import AIModel, AIModelPrice
 
 # Phase D-1-1: Keyword models
-from .keyword import KeywordCategory, SeedKeyword, CollectedKeyword
+from .keyword import KeywordCategory, CollectedKeyword
 
 # Phase D-1-2: Title models
 from .title import TitleGroup, MainTitle, TempTitle
@@ -126,7 +126,6 @@ __all__ = [
     "AIModelPrice",
     # Phase D-1-1: Keyword models
     "KeywordCategory",
-    "SeedKeyword",
     "CollectedKeyword",
     # Phase D-1-2: Title models
     "TitleGroup",

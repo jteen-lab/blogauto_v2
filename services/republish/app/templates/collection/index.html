@@ -409,17 +409,9 @@
         <!-- 키워드 탭 -->
         <div x-show="activeTab === 'keywords'" class="tab-content" :class="{'active': activeTab === 'keywords'}">
             {# 정본(keyword_candidates) — 지표·판정과 수동 측정/분류/재판정.
-               아래 시드 목록은 전환기 동안 남겨 둔다(S6 에서 정리). #}
+               옛 시드 목록은 저장소 일원화 완료로 제거됐다(alembic 065). #}
             {% include "collection/_keyword_pool.html" %}
 
-            <details class="mb-4 border border-gray-200 rounded-lg">
-              <summary class="px-3 py-2 text-sm text-gray-600 cursor-pointer select-none">
-                기존 시드 키워드 목록 (전환기 · seed_keywords)
-              </summary>
-              <div class="p-3 border-t border-gray-200">
-                {% include "collection/_keywords.html" %}
-              </div>
-            </details>
         </div>
 
         <!-- 임시제목 탭 -->

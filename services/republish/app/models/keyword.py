@@ -3,7 +3,6 @@
 
 Features:
 - KeywordCategory: 계층형 키워드 카테고리
-- SeedKeyword: 시드 키워드 (자동 수집용)
 - CollectedKeyword: 수집된 연관 키워드
 """
 from datetime import datetime
@@ -63,10 +62,6 @@ class KeywordCategory(Base):
     )
 
     # 하위 관계
-    seed_keywords: Mapped[List["SeedKeyword"]] = relationship(
-        "SeedKeyword",
-        back_populates="category"
-    )
     collected_keywords: Mapped[List["CollectedKeyword"]] = relationship(
         "CollectedKeyword",
         back_populates="category"
@@ -74,95 +69,6 @@ class KeywordCategory(Base):
 
     def __repr__(self) -> str:
         return f"<KeywordCategory(id={self.id}, name='{self.name}')>"
-
-
-class SeedKeyword(Base):
-    """
-    시드 키워드 (자동 수집용)
-
-    사용자가 입력하거나 트렌드에서 수집한 기본 키워드입니다.
-    이 키워드를 기반으로 연관 키워드를 확장합니다.
-    """
-    __tablename__ = "seed_keywords"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    keyword: Mapped[str] = mapped_column(
-        String(200),
-        nullable=False,
-        index=True,
-        comment="키워드"
-    )
-    category_id: Mapped[Optional[int]] = mapped_column(
-        Integer,
-        ForeignKey("keyword_categories.id"),
-        nullable=True,
-        comment="카테고리 ID (KeywordCategory)"
-    )
-    # 카테고리 관리 연동 (Topic > SubTopic > Keyword)
-    topic_id: Mapped[Optional[int]] = mapped_column(
-        Integer,
-        ForeignKey("topics.id"),
-        nullable=True,
-        comment="주제 ID"
-    )
-    subtopic_id: Mapped[Optional[int]] = mapped_column(
-        Integer,
-        ForeignKey("subtopics.id"),
-        nullable=True,
-        comment="하위 주제 ID"
-    )
-    matched_keyword_id: Mapped[Optional[int]] = mapped_column(
-        Integer,
-        ForeignKey("keywords.id"),
-        nullable=True,
-        comment="매칭된 카테고리 키워드 ID"
-    )
-    source_type: Mapped[str] = mapped_column(
-        String(50),
-        nullable=False,
-        default="user_input",
-        comment="출처 타입 (user_input|trend|extracted)"
-    )
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, comment="활성 상태")
-    last_used_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-        comment="마지막 사용 시각"
-    )
-    use_count: Mapped[int] = mapped_column(Integer, default=0, comment="사용 횟수")
-    priority: Mapped[int] = mapped_column(Integer, default=0, comment="순환 우선순위")
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        onupdate=func.now()
-    )
-
-    # 관계
-    category: Mapped[Optional["KeywordCategory"]] = relationship(
-        "KeywordCategory",
-        back_populates="seed_keywords"
-    )
-    collected_keywords: Mapped[List["CollectedKeyword"]] = relationship(
-        "CollectedKeyword",
-        back_populates="seed_keyword"
-    )
-
-    # 유니크 제약조건
-    __table_args__ = (
-        UniqueConstraint('keyword', 'category_id', name='uq_seed_keyword_category'),
-    )
-
-    def __repr__(self) -> str:
-        return f"<SeedKeyword(id={self.id}, keyword='{self.keyword}')>"
-
-    def mark_used(self) -> None:
-        """사용 기록 업데이트"""
-        self.last_used_at = datetime.now()
-        self.use_count += 1
 
 
 class CollectedKeyword(Base):
@@ -180,12 +86,6 @@ class CollectedKeyword(Base):
         nullable=False,
         index=True,
         comment="수집된 키워드"
-    )
-    seed_keyword_id: Mapped[Optional[int]] = mapped_column(
-        Integer,
-        ForeignKey("seed_keywords.id"),
-        nullable=True,
-        comment="시드 키워드 ID (자동 수집 시 NULL)"
     )
     source: Mapped[Optional[str]] = mapped_column(
         String(50),
@@ -229,10 +129,6 @@ class CollectedKeyword(Base):
     )
 
     # 관계
-    seed_keyword: Mapped[Optional["SeedKeyword"]] = relationship(
-        "SeedKeyword",
-        back_populates="collected_keywords"
-    )
     category: Mapped[Optional["KeywordCategory"]] = relationship(
         "KeywordCategory",
         back_populates="collected_keywords"

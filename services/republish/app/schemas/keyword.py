@@ -3,7 +3,6 @@
 
 Features:
 - KeywordCategory CRUD 스키마
-- SeedKeyword CRUD 스키마
 - CollectedKeyword CRUD 스키마
 """
 from datetime import datetime
@@ -49,50 +48,6 @@ class KeywordCategoryTree(KeywordCategoryResponse):
     children: List["KeywordCategoryTree"] = []
 
 
-# ============ SeedKeyword ============
-
-class SeedKeywordBase(BaseModel):
-    """시드 키워드 기본"""
-    keyword: str = Field(..., max_length=200)
-    category_id: Optional[int] = None
-    source_type: str = Field(
-        default="user_input",
-        pattern="^(user_input|trend|extracted)$"
-    )
-    is_active: bool = True
-    priority: int = 0
-
-
-class SeedKeywordCreate(SeedKeywordBase):
-    """시드 키워드 생성"""
-    pass
-
-
-class SeedKeywordUpdate(BaseModel):
-    """시드 키워드 수정"""
-    keyword: Optional[str] = Field(None, max_length=200)
-    category_id: Optional[int] = None
-    source_type: Optional[str] = Field(
-        None,
-        pattern="^(user_input|trend|extracted)$"
-    )
-    is_active: Optional[bool] = None
-    priority: Optional[int] = None
-
-
-class SeedKeywordResponse(SeedKeywordBase):
-    """시드 키워드 응답"""
-    id: int
-    last_used_at: Optional[datetime]
-    use_count: int
-    created_at: datetime
-    updated_at: datetime
-    category: Optional[KeywordCategoryResponse] = None
-
-    class Config:
-        from_attributes = True
-
-
 # ============ CollectedKeyword ============
 
 class CollectedKeywordBase(BaseModel):
@@ -131,7 +86,6 @@ class CollectedKeywordResponse(CollectedKeywordBase):
     process_count: int
     last_processed_at: Optional[datetime]
     created_at: datetime
-    seed_keyword: Optional[SeedKeywordResponse] = None
     category: Optional[KeywordCategoryResponse] = None
 
     class Config:
