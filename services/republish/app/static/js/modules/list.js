@@ -1208,7 +1208,7 @@ function moduleListApp() {
                         ${window.getTitleGenFormTemplate ? window.getTitleGenFormTemplate() : '<!-- title-gen-form-template.js 로드 필요 -->'}
 
                         <!-- 기타 타입 설정 -->
-                        <div x-show="formData.type_code !== 'collect' && formData.type_code !== 'data' && formData.type_code !== 'prompt' && formData.type_code !== 'generate' && formData.type_code !== 'growth_profile' && formData.type_code !== 'bulk_collect' && formData.type_code !== 'contact_form' && formData.type_code !== 'title_gen'">
+                        <div x-show="formData.type_code !== 'collect' && formData.type_code !== 'data' && formData.type_code !== 'prompt' && formData.type_code !== 'generate' && formData.type_code !== 'growth_profile' && formData.type_code !== 'bulk_collect' && formData.type_code !== 'contact_form' && formData.type_code !== 'title_gen' && formData.type_code !== 'keyword'">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-2">설정 정보 (JSON)</label>
                                 <textarea x-model="settingsJson"
