@@ -783,16 +783,26 @@ function moduleFormApp(module = null, moduleType = null) {
         },
 
         // ── 키워드 모듈 테스트 ───────────────────────────
+        // 저장된 값을 **항상 옵션에 포함**한다.
+        // 모델 목록은 비동기로 오는데, 그 전에 select 에 매칭되는 option 이
+        // 없으면 브라우저가 value 를 '' 로 만들고 x-model 이 그 빈 값을
+        // formData 에 되써 버린다. 그래서 폼을 다시 열면 설정이 사라진
+        // 것처럼 보이고, 그대로 저장하면 실제로 지워졌다.
         kwProviders() {
             const set = new Set((this.kwTest.models || []).map(m => m.provider));
+            const saved = this.formData?.keyword?.ai_provider;
+            if (saved) set.add(saved);
             return Array.from(set).sort();
         },
 
         kwModels(provider) {
             if (!provider) return [];
-            return (this.kwTest.models || [])
+            const list = (this.kwTest.models || [])
                 .filter(m => m.provider === provider)
                 .map(m => m.model_id);
+            const saved = this.formData?.keyword?.ai_model;
+            if (saved && !list.includes(saved)) list.unshift(saved);
+            return list;
         },
 
         async loadKeywordModels() {

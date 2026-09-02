@@ -153,3 +153,28 @@ class TestRunEndpointShape:
         src = (BASE / "app/routers/keyword_lab.py").read_text(encoding="utf-8")
         # 화면·플로우·오토런이 같은 응답 모양을 써야 한다
         assert "runner.run_for_blogs(settings, blogs" in src
+
+
+class TestAiSelectKeepsSavedValue:
+    """저장된 AI 설정이 폼을 다시 열 때 사라지지 않는다.
+
+    모델 목록은 비동기로 온다. 그 전에 select 에 매칭 option 이 없으면
+    브라우저가 value 를 '' 로 만들고 x-model 이 빈 값을 formData 에
+    되쓴다. 그대로 저장하면 실제로 지워진다.
+    """
+
+    def _js(self):
+        return (BASE / "app/static/js/modules/form.js").read_text(
+            encoding="utf-8")
+
+    def test_provider_list_includes_saved(self):
+        js = self._js()
+        assert "const saved = this.formData?.keyword?.ai_provider;" in js
+        assert "if (saved) set.add(saved);" in js
+
+    def test_model_list_includes_saved(self):
+        js = self._js()
+        assert "if (saved && !list.includes(saved)) list.unshift(saved);" in js
+
+    def test_reason_is_documented(self):
+        assert "formData 에 되써 버린다" in self._js()
