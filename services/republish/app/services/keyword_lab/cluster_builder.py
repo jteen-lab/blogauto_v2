@@ -20,6 +20,7 @@ from ...models.keyword_candidate import KeywordCandidate, VERDICT_ADOPT
 from ...models.keyword_cluster import CLUSTER_NEW, KeywordCluster
 from . import clustering
 from . import intent as intent_mod
+from .scope import usable_by
 
 logger = get_logger("keyword_cluster_builder", "app.log")
 
@@ -118,6 +119,8 @@ class ClusterBuilder:
                     KeywordCandidate.titled.is_(False))
              .order_by(KeywordCandidate.search_volume.desc().nullslast())
              .limit(limit))
-        if blog is not None:
-            q = q.where(KeywordCandidate.blog_id == blog.id)
+        # 전역 풀 키워드도 니치가 맞으면 이 블로그 묶음으로 들어온다.
+        scope = await usable_by(self.db, blog, KeywordCandidate)
+        if scope is not None:
+            q = q.where(scope)
         return list((await self.db.execute(q)).scalars().all())

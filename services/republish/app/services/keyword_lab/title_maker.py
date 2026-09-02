@@ -22,6 +22,7 @@ from ...core.logger import get_logger
 from ...models.keyword_candidate import KeywordCandidate, VERDICT_ADOPT
 from ...models.keyword_cluster import CLUSTER_NEW, CLUSTER_TITLED, KeywordCluster
 from . import intent as intent_mod
+from .scope import usable_by
 from .settings import KeywordModuleSettings
 from .title_gate import TitleGate
 
@@ -205,8 +206,9 @@ class TitleMaker:
                     KeywordCluster.status == CLUSTER_NEW)
              .order_by(KeywordCluster.total_volume.desc().nullslast())
              .limit(limit))
-        if blog is not None:
-            q = q.where(KeywordCluster.blog_id == blog.id)
+        scope = await usable_by(self.db, blog, KeywordCluster)
+        if scope is not None:
+            q = q.where(scope)
         return list((await self.db.execute(q)).scalars().all())
 
     async def _members(self, cluster: KeywordCluster
@@ -227,8 +229,11 @@ class TitleMaker:
                     KeywordCandidate.cluster_id.is_(None))
              .order_by(KeywordCandidate.search_volume.desc().nullslast())
              .limit(limit))
-        if blog is not None:
-            q = q.where(KeywordCandidate.blog_id == blog.id)
+        # 전역 풀 키워드도 **니치가 맞으면** 이 블로그가 쓴다.
+        # 직접 배정분만 보면 전역 풀에 쌓인 채택 키워드를 아무도 못 쓴다.
+        scope = await usable_by(self.db, blog, KeywordCandidate)
+        if scope is not None:
+            q = q.where(scope)
         return list((await self.db.execute(q)).scalars().all())
 
     async def _generate(self, row: KeywordCandidate,
