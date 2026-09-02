@@ -23,10 +23,14 @@ SRC_GOOGLE_SUGGEST = "google_suggest"
 SRC_GOOGLE_PLANNER = "google_planner"
 SRC_GOOGLE_TRENDS = "google_trends"
 SRC_GSC = "gsc"
+# 발견(시드 없이 지금 뜨는 말) — 확장과 입력이 다르다
+SRC_GOOGLE_TRENDING = "google_trending"
+SRC_NAVER_DATALAB = "naver_datalab"
 
 ALL_SOURCES = (
     SRC_NAVER_ADS, SRC_NAVER_SUGGEST, SRC_GOOGLE_SUGGEST,
     SRC_GOOGLE_PLANNER, SRC_GOOGLE_TRENDS, SRC_GSC,
+    SRC_GOOGLE_TRENDING, SRC_NAVER_DATALAB,
 )
 
 # 소스 → 어느 엔진의 지표인지
@@ -37,6 +41,8 @@ SOURCE_ENGINE = {
     SRC_GOOGLE_PLANNER: "google",
     SRC_GOOGLE_TRENDS: "google",
     SRC_GSC: "google",
+    SRC_GOOGLE_TRENDING: "google",
+    SRC_NAVER_DATALAB: "naver",
 }
 
 # 사람이 읽을 이름
@@ -47,6 +53,8 @@ SOURCE_LABEL = {
     SRC_GOOGLE_PLANNER: "구글 키워드플래너",
     SRC_GOOGLE_TRENDS: "구글 트렌드",
     SRC_GSC: "서치콘솔 실측 쿼리",
+    SRC_GOOGLE_TRENDING: "구글 실시간 인기(발견)",
+    SRC_NAVER_DATALAB: "네이버 데이터랩(트렌드 검증)",
 }
 
 # 키워드 길이 상한. 문장이 통째로 들어오면 키워드가 아니다.

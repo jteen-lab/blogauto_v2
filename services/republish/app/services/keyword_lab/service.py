@@ -243,7 +243,9 @@ class KeywordLabService:
 
         blog = await self._blog(blog_id) if blog_id else None
         gathered = await registry.gather(
-            self.db, self.settings, blog, seeds, others)
+            self.db, self.settings, blog, seeds, others,
+            user_id=self.user_id,
+            niche_filter=getattr(cfg, "discovery_niche_filter", True))
 
         existing = await self._existing_keywords(blog_id)
         fresh = [i for i in gathered["ideas"]

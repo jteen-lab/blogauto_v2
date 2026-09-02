@@ -16,8 +16,9 @@ from typing import Any, Dict, List, Optional
 
 from ....core.logger import get_logger
 from .base import (
-    SRC_GOOGLE_PLANNER, SRC_GOOGLE_SUGGEST, SRC_GOOGLE_TRENDS, SRC_GSC,
-    SRC_NAVER_SUGGEST, KeywordIdea, dedupe,
+    SRC_GOOGLE_PLANNER, SRC_GOOGLE_SUGGEST, SRC_GOOGLE_TRENDING,
+    SRC_GOOGLE_TRENDS, SRC_GSC, SRC_NAVER_DATALAB, SRC_NAVER_SUGGEST,
+    KeywordIdea, dedupe,
 )
 
 logger = get_logger("keyword_sources", "app.log")
@@ -32,6 +33,7 @@ DEFAULT_ENRICH_LIMIT = 100
 async def gather(
     db: Any, user_settings: Any, blog: Any, seeds: List[str],
     enabled: List[str], per_source_limit: int = 200,
+    user_id: int = 1, niche_filter: bool = True,
 ) -> Dict[str, Any]:
     """켜진 소스에서 키워드를 모은다(검색광고 제외 — 그쪽은 본 서비스가 맡는다).
 
@@ -64,9 +66,24 @@ async def gather(
         by_source[code] = len(found)
 
     merged = dedupe(ideas)
-    logger.info("[KEYWORD_SOURCES] 소스 %d개 → %d개(중복 제거 %d)",
-                len(enabled), len(merged), len(ideas) - len(merged))
-    return {"ideas": merged, "by_source": by_source, "errors": errors}
+
+    # 발견 결과는 우리 니치와 무관한 말이 섞인다. 반드시 거른다 —
+    # 안 걸면 취업 블로그에 "맛집" 이 들어온다(기존 수집의 실제 문제).
+    dropped = 0
+    if niche_filter and any(i.source == SRC_GOOGLE_TRENDING for i in merged):
+        from . import discovery
+
+        found = [i for i in merged if i.source == SRC_GOOGLE_TRENDING]
+        rest = [i for i in merged if i.source != SRC_GOOGLE_TRENDING]
+        result = await discovery.filter_by_niche(db, user_id, found, blog)
+        merged = rest + result["kept"]
+        dropped = result["dropped"]
+        by_source[SRC_GOOGLE_TRENDING] = len(result["kept"])
+
+    logger.info("[KEYWORD_SOURCES] 소스 %d개 → %d개(중복 제거 %d · 니치 제외 %d)",
+                len(enabled), len(merged), len(ideas) - len(merged), dropped)
+    return {"ideas": merged, "by_source": by_source, "errors": errors,
+            "niche_dropped": dropped}
 
 
 async def _run_source(code: str, db: Any, user_settings: Any, blog: Any,
@@ -98,6 +115,18 @@ async def _run_source(code: str, db: Any, user_settings: Any, blog: Any,
         from . import gsc
 
         return await gsc.collect_for_blog(db, blog, limit=limit)
+
+    if code == SRC_GOOGLE_TRENDING:
+        # 시드가 필요 없는 유일한 발견 소스. 니치 필터는 호출부가 건다.
+        from . import discovery
+
+        return await discovery.google_trending(limit=min(limit, 100))
+
+    if code == SRC_NAVER_DATALAB:
+        # 데이터랩은 연관 키워드를 주지 않는다(API 제약). 새 키워드를 못
+        # 만들므로 여기서는 아무것도 돌려주지 않고, 트렌드 점수 보강에만 쓴다.
+        logger.info("[KEYWORD_SOURCES] 데이터랩은 발견 소스가 아니다 — 건너뜀")
+        return []
 
     return []
 
