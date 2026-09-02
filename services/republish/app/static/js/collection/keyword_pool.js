@@ -28,8 +28,78 @@ function keywordPoolApp() {
         th: { min_volume: 100, max_volume: 100000, min_saturation: 0.2 },
         measureLimit: 50,
 
+        // 노출 설정 — /keyword-lab 화면에서 이관
+        blogs: [],
+        blogId: '',
+        engines: ['google'],
+        engineWarnings: [],
+        readiness: null,
+
         async init() {
-            await Promise.all([this.loadStats(), this.load()]);
+            await Promise.all([this.loadStats(), this.load(), this.loadBlogs()]);
+        },
+
+        engineLabel(code) {
+            return { google: '구글', naver: '네이버', bing: '빙' }[code] || code;
+        },
+
+        stateIcon(state) {
+            return { ok: '✅', warn: '⚠️', fail: '❌' }[state] || '❔';
+        },
+
+        async loadBlogs() {
+            const d = await this.get('/api/v1/blogs?size=100');
+            this.blogs = (d && (d.items || d.blogs || d)) || [];
+        },
+
+        async loadEngines() {
+            this.readiness = null;
+            if (!this.blogId) return;
+            const d = await this.get(
+                `/api/v1/keyword-lab/engines/${this.blogId}`);
+            if (!d) return;
+            this.engines = d.engines || ['google'];
+            this.engineWarnings = d.warnings || [];
+        },
+
+        async saveEngines() {
+            if (!this.blogId) return;
+            try {
+                const r = await fetch(
+                    `/api/v1/keyword-lab/engines/${this.blogId}`, {
+                        method: 'PUT', credentials: 'include',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ engines: this.engines }),
+                    });
+                const text = await r.text();
+                if (!r.ok) throw new Error(this.detail(text, r.status));
+                const d = JSON.parse(text);
+                this.engines = d.engines || [];
+                this.engineWarnings = d.warnings || [];
+                this.show('노출 목표를 저장했습니다');
+            } catch (e) {
+                this.show(e.message, 'error');
+            }
+        },
+
+        async loadReadiness() {
+            if (!this.blogId) return;
+            this.busy = 'readiness';
+            this.readiness = await this.get(
+                `/api/v1/keyword-lab/readiness/${this.blogId}`);
+            this.busy = '';
+        },
+
+        async collectFeedback() {
+            if (!this.blogId) return;
+            this.busy = 'feedback';
+            const d = await this.post('/api/v1/keyword-lab/feedback',
+                { blog_id: Number(this.blogId) });
+            this.busy = '';
+            if (!d) return;
+            this.show(d.message
+                || `실측 ${d.rows}행 · 매칭 ${d.matched} · 노출없음 ${d.zeroed}`);
+            await this.load();
         },
 
         num(v) {
