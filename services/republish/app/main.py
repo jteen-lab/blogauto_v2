@@ -45,6 +45,7 @@ from .routers.engine import router as engine_router
 from .routers.flows_execute import router as flows_execute_router
 from .routers.collection_pages import router as collection_page_router
 from .routers.data_keywords import router as data_keywords_router
+from .routers.data_keyword_pool import router as data_keyword_pool_router  # 정본 키워드 풀
 from .routers.data_titles import router as data_titles_router
 from .routers.data_filters import router as data_filters_router
 from .routers.data_urls import router as data_urls_router
@@ -303,6 +304,7 @@ app.include_router(system_settings_router, prefix=settings.api_v1_prefix)
 app.include_router(task_status_router, prefix=settings.api_v1_prefix)  # Phase 3: Celery task 상태
 app.include_router(engine_router, prefix=settings.api_v1_prefix)
 app.include_router(data_keywords_router, prefix=settings.api_v1_prefix)
+app.include_router(data_keyword_pool_router, prefix=settings.api_v1_prefix)  # 수집 키워드 풀(정본)
 app.include_router(data_titles_router, prefix=settings.api_v1_prefix)
 app.include_router(data_filters_router, prefix=settings.api_v1_prefix)
 app.include_router(data_urls_router, prefix=settings.api_v1_prefix)
