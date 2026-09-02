@@ -53,8 +53,6 @@ class KeywordListResponse(BaseModel):
 class CollectedKeywordResponse(BaseModel):
     id: int
     keyword: str
-    seed_keyword_id: int
-    seed_keyword: Optional[str] = None
     search_volume: Optional[int] = None
     competition: Optional[float] = None
     is_processed: bool
@@ -79,7 +77,6 @@ async def list_collected_keywords(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
     search: Optional[str] = Query(None),
-    seed_keyword_id: Optional[int] = Query(None),
     is_processed: Optional[bool] = Query(None),
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_user),
@@ -89,8 +86,6 @@ async def list_collected_keywords(
 
     if search:
         query = query.where(CollectedKeyword.keyword.ilike(f"%{search}%"))
-    if seed_keyword_id:
-        query = query.where(CollectedKeyword.seed_keyword_id == seed_keyword_id)
     if is_processed is not None:
         query = query.where(CollectedKeyword.is_processed == is_processed)
 
@@ -103,12 +98,7 @@ async def list_collected_keywords(
     result = await db.execute(query)
     keywords = result.scalars().all()
 
-    items = []
-    for kw in keywords:
-        item = CollectedKeywordResponse.model_validate(kw)
-        seed = None   # 시드 테이블 폐기 — 정본으로 일원화됨
-        item.seed_keyword = seed.keyword if seed else None
-        items.append(item)
+    items = [CollectedKeywordResponse.model_validate(kw) for kw in keywords]
 
     return CollectedListResponse(
         items=items,
