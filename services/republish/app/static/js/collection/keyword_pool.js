@@ -365,6 +365,20 @@ function keywordPoolApp() {
             throw new Error('시간이 너무 오래 걸립니다');
         },
 
+        async purgeRejected() {
+            const n = (this.stats.by_verdict || {}).reject || 0;
+            if (!n) return;
+            if (!confirm(`제외된 키워드 ${n.toLocaleString()}건을 삭제할까요?\n`
+                + '기준을 완화하면 되살릴 수 있는 것들이라, 목록이 길 때만 권합니다.')) {
+                return;
+            }
+            const d = await this.post('/api/v1/data/keyword-pool/delete',
+                { verdict: 'reject' });
+            if (!d) return;
+            this.show(`제외 ${d.deleted.toLocaleString()}건 삭제`);
+            await Promise.all([this.loadStats(), this.load()]);
+        },
+
         async removeSelected() {
             if (!this.selected.length) return;
             if (!confirm(`${this.selected.length}개를 삭제할까요?`)) return;

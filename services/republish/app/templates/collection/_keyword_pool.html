@@ -149,6 +149,12 @@
               class="px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-40">
         <span x-text="busy === 'rejudge' ? '재판정 중…' : '③ 기준 적용해 재판정'"></span>
       </button>
+      <button type="button" @click="purgeRejected()" :disabled="!!busy"
+              x-show="(stats.by_verdict || {}).reject"
+              class="ml-auto px-3 py-2 border border-red-200 text-red-600 rounded-lg text-sm hover:bg-red-50 disabled:opacity-40"
+              title="기준을 바꿔 다시 살릴 수 있으므로 평소엔 남겨 두는 편이 낫습니다">
+        제외 <span x-text="((stats.by_verdict || {}).reject || 0).toLocaleString()"></span>건 정리
+      </button>
     </div>
     <p class="mt-2 text-xs text-gray-500">
       ① 분류는 분류표로 카테고리를 붙입니다(API 호출 없음).
@@ -156,6 +162,8 @@
       + <b>공급 측정</b>(최근 30일 발행량·누적 문서수, 키워드당 검색 API 2회).
       한 번에 최대 200건까지 지정할 수 있고, 남은 건수가 0이 될 때까지 반복해서 누르면 됩니다.
       ③ 재판정은 기준값만 바꿔 다시 판정합니다(API 호출 없음).
+      <b>제외된 키워드는 지우지 않고 남겨 둡니다</b> — 기준을 완화하면 채택으로 되살아나고,
+      같은 키워드를 다시 수집·측정하는 낭비도 막아 줍니다. 목록이 너무 길어질 때만 정리하세요.
     </p>
     <div x-show="message" x-transition class="mt-2 px-3 py-2 rounded-lg text-sm"
          :class="messageType === 'error' ? 'bg-red-50 text-red-800 border border-red-200'
