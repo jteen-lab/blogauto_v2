@@ -136,6 +136,11 @@
               class="px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-40">
         <span x-text="busy === 'classify' ? '분류 중…' : '① 분류'"></span>
       </button>
+      <button type="button" @click="runClassify(true)" :disabled="!!busy"
+              class="px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-500 disabled:opacity-40"
+              title="분류표를 보강한 뒤 지난 실패까지 다시 훑습니다">
+        ↻ 처음부터 다시 분류
+      </button>
       <button type="button" @click="runMeasure()" :disabled="!!busy"
               class="px-3 py-2 bg-accent text-white rounded-lg text-sm font-medium disabled:opacity-40">
         <span x-text="busy === 'measure' ? ('측정 중… ' + elapsed + '초') : '② 측정 (검색량·발행량)'"></span>
@@ -147,7 +152,9 @@
     </div>
     <p class="mt-2 text-xs text-gray-500">
       ① 분류는 분류표로 카테고리를 붙입니다(API 호출 없음).
-      ② 측정은 검색량이 없는 키워드를 검색광고로 채우고 최근 30일 발행량을 잽니다(키워드당 검색 API 2회).
+      ② 측정은 두 단계입니다 — <b>검색량 보강</b>(검색량이 비어 있는 키워드를 네이버 검색광고로 채움, 5개씩 1회 호출)
+      + <b>공급 측정</b>(최근 30일 발행량·누적 문서수, 키워드당 검색 API 2회).
+      한 번에 최대 200건까지 지정할 수 있고, 남은 건수가 0이 될 때까지 반복해서 누르면 됩니다.
       ③ 재판정은 기준값만 바꿔 다시 판정합니다(API 호출 없음).
     </p>
     <div x-show="message" x-transition class="mt-2 px-3 py-2 rounded-lg text-sm"
@@ -220,9 +227,25 @@
         <span x-text="chip.label"></span> ✕
       </button>
     </template>
-    <button type="button" x-show="selected.length" @click="removeSelected()"
-            class="ml-auto px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs">
-      선택 <span x-text="selected.length"></span>개 삭제
+  </div>
+
+  <!-- 선택 상태 (임시제목·정식제목 탭과 같은 형태) -->
+  <div x-show="selected.length > 0" class="flex items-center justify-between gap-2 mb-2">
+    <div class="flex items-center gap-3">
+      <span class="inline-flex items-center px-2.5 py-1 bg-accent/10 text-accent rounded-full text-sm font-medium">
+        ✓ <span x-text="selected.length" class="ml-1"></span>개 선택
+      </span>
+      <button @click="removeSelected()"
+              class="inline-flex items-center px-3 py-1.5 bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-600 transition-colors">
+        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+        </svg>
+        삭제
+      </button>
+    </div>
+    <button @click="selected = []"
+            class="inline-flex items-center px-3 py-1.5 text-gray-500 hover:text-gray-700 text-sm transition-colors">
+      선택 해제
     </button>
   </div>
 
