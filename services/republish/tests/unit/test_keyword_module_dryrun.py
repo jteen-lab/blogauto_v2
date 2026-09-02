@@ -9,6 +9,9 @@
     2. 사용자가 직접 누른 단발 실행은 force 로 돈다
     3. 아무것도 안 돌았으면 사유가 요약 **맨 앞**에 나온다
     4. 검증 모드에서는 제목을 데이터 관리에 저장하지 않고 결과만 준다
+
+검증 모드는 **제목 생성 모듈**의 설정이다. 수집 모듈은 제목을 만들지
+않으므로 검증할 대상 자체가 없다.
 """
 import re
 from pathlib import Path
@@ -17,8 +20,9 @@ from types import SimpleNamespace
 import pytest
 
 from app.services.keyword_lab.runner import KeywordModuleRunner
-from app.services.keyword_lab.settings import KeywordModuleSettings
 from app.services.keyword_lab.title_gate import TitleGate
+from app.services.title_gen.runner import _aggregate as title_aggregate
+from app.services.title_gen.settings import TitleModuleSettings
 
 BASE = Path(__file__).resolve().parents[2]
 
@@ -61,17 +65,16 @@ class TestSummaryMessage:
         assert out["message"].startswith("실행 안 됨 — 재고 충분")
 
     def test_dry_run_is_stated(self):
-        out = KeywordModuleRunner._aggregate([("A", {
-            "success": True, "collect": {"saved": 12},
-            "measure": {"measured": 5},
+        out = title_aggregate([("A", {
+            "success": True,
             "titles": {"made": 0, "dry_run": True, "preview": [
                 {"title": "전기기사 실기 준비", "state": "ready"}]}})])
         assert "검증 모드 — 저장 안 함" in out["message"]
         assert out["dry_run"] is True
 
     def test_sample_titles_shown(self):
-        out = KeywordModuleRunner._aggregate([("A", {
-            "success": True, "collect": {"saved": 1}, "measure": {},
+        out = title_aggregate([("A", {
+            "success": True,
             "titles": {"made": 0, "dry_run": True, "preview": [
                 {"title": "전기기사 실기 준비", "state": "ready"},
                 {"title": "상품권 현금화", "state": "blocked"}]}})])
@@ -80,32 +83,34 @@ class TestSummaryMessage:
         assert "상품권 현금화" not in out["message"]
 
     def test_normal_mode_reports_saved_count(self):
-        out = KeywordModuleRunner._aggregate([("A", {
-            "success": True, "collect": {"saved": 3}, "measure": {},
+        out = title_aggregate([("A", {
+            "success": True,
             "titles": {"made": 7, "dry_run": False, "preview": []}})])
         assert "제목 7편" in out["message"]
         assert "검증 모드" not in out["message"]
 
     def test_preview_is_capped(self):
-        rows = [("A", {"success": True, "collect": {}, "measure": {},
+        rows = [("A", {"success": True,
                        "titles": {"made": 0, "dry_run": True,
                                   "preview": [{"title": f"t{i}",
                                                "state": "ready"}
                                               for i in range(200)]}})]
-        assert len(KeywordModuleRunner._aggregate(rows)["preview"]) == 60
+        assert len(title_aggregate(rows)["preview"]) == 60
 
 
 class TestDryRunSetting:
+    """검증 모드는 제목 생성 모듈의 설정이다."""
+
     def test_default_is_on(self):
         # 검증 없이 재고를 오염시키는 쪽이 되돌리기 어렵다
-        assert KeywordModuleSettings.parse({}).dry_run is True
+        assert TitleModuleSettings.parse({}).dry_run is True
 
     def test_can_be_turned_off(self):
-        cfg = KeywordModuleSettings.parse({"keyword": {"dry_run": False}})
+        cfg = TitleModuleSettings.parse({"title": {"dry_run": False}})
         assert cfg.dry_run is False
 
     def test_round_trip(self):
-        cfg = KeywordModuleSettings.parse({"keyword": {"dry_run": False}})
+        cfg = TitleModuleSettings.parse({"title": {"dry_run": False}})
         assert cfg.to_dict()["dry_run"] is False
 
 
@@ -165,12 +170,12 @@ class TestTitleMakerRespectsDryRun:
         assert "if not cfg.dry_run:\n                cluster.status" in src
 
     def test_form_exposes_toggle(self):
-        js = (BASE / "app/static/js/modules/keyword-form-template.js").read_text(
+        js = (BASE / "app/static/js/modules/title-gen-form-template.js").read_text(
             encoding="utf-8")
-        assert "formData.keyword.dry_run" in js
+        assert "formData.title.dry_run" in js
         serial = (BASE / "app/static/js/modules/form.js").read_text(
             encoding="utf-8")
-        assert "dry_run: !!k.dry_run" in serial
+        assert "dry_run: !!t.dry_run" in serial
 
 
 class TestSeedErrorIsActionable:

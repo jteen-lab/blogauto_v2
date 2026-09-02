@@ -67,13 +67,14 @@ class TestAggregate:
     def test_all_success(self):
         rows = [
             ("A", {"success": True, "collect": {"saved": 10},
-                   "measure": {"measured": 5}, "titles": {"made": 9}}),
+                   "measure": {"measured": 5}, "classify": {"matched": 9}}),
             ("B", {"success": True, "collect": {"saved": 4},
-                   "measure": {"measured": 2}, "titles": {"made": 3}}),
+                   "measure": {"measured": 2}, "classify": {"matched": 3}}),
         ]
         out = KeywordModuleRunner._aggregate(rows)
         assert out["success"] is True
-        assert (out["collected"], out["measured"], out["titles_made"]) == (14, 7, 12)
+        assert (out["collected"], out["measured"],
+                out["classified"]) == (14, 7, 12)
         assert out["blogs"] == 2 and out["ok"] == 2
 
     def test_skipped_is_not_failure(self):

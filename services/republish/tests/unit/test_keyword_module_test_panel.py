@@ -11,8 +11,14 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from app.services.keyword_lab.runner import KeywordModuleRunner
-from app.services.keyword_lab.settings import KeywordModuleSettings
 from app.services.keyword_lab.title_maker import TitleMaker
+from app.services.title_gen.runner import _aggregate as title_aggregate
+from app.services.title_gen.settings import TitleModuleSettings
+
+
+def _maker_cfg(raw: dict = None):
+    """제목 모듈 설정을 제목 생성기가 쓰는 모양으로."""
+    return TitleModuleSettings.parse({"title": raw or {}}).as_maker_config()
 
 BASE = Path(__file__).resolve().parents[2]
 
@@ -21,13 +27,12 @@ class TestAiResolution:
     """제목 생성 AI 는 모듈 → 블로그 순으로 정한다."""
 
     def test_module_setting_wins(self):
-        cfg = KeywordModuleSettings.parse(
-            {"keyword": {"ai_provider": "google", "ai_model": "gemini"}})
+        cfg = _maker_cfg({"ai_provider": "google", "ai_model": "gemini"})
         blog = SimpleNamespace(ai_config={"writing_ai": {"provider": "openai"}})
         assert TitleMaker.resolve_ai(cfg, blog)["provider"] == "google"
 
     def test_falls_back_to_blog(self):
-        cfg = KeywordModuleSettings.parse({})
+        cfg = _maker_cfg()
         blog = SimpleNamespace(
             ai_config={"writing_ai": {"provider": "openai", "model": "gpt"}})
         picked = TitleMaker.resolve_ai(cfg, blog)
@@ -35,16 +40,13 @@ class TestAiResolution:
 
     def test_none_when_neither(self):
         # 블로그 없이 시드만으로 도는 테스트가 여기 해당한다
-        assert TitleMaker.resolve_ai(
-            KeywordModuleSettings.parse({}), None)["provider"] is None
+        assert TitleMaker.resolve_ai(_maker_cfg(), None)["provider"] is None
 
     def test_empty_string_is_not_a_provider(self):
-        cfg = KeywordModuleSettings.parse({"keyword": {"ai_provider": ""}})
-        assert cfg.ai_provider is None
+        assert _maker_cfg({"ai_provider": ""}).ai_provider is None
 
     def test_round_trip(self):
-        cfg = KeywordModuleSettings.parse(
-            {"keyword": {"ai_provider": "google"}})
+        cfg = TitleModuleSettings.parse({"title": {"ai_provider": "google"}})
         assert cfg.to_dict()["ai_provider"] == "google"
 
 
@@ -58,17 +60,15 @@ class TestSilentFailureIsSurfaced:
         assert "AI 제공자가 지정되지 않았습니다" in src
 
     def test_reason_reaches_the_summary(self):
-        out = KeywordModuleRunner._aggregate([("-", {
+        out = title_aggregate([("-", {
             "success": True,
-            "collect": {"saved": 100, "samples": ["전기기사"]},
-            "measure": {"measured": 50},
             "titles": {"made": 0, "dry_run": True, "preview": [],
                        "error": "AI 제공자가 지정되지 않았습니다"}})])
         assert "⚠ AI 제공자가 지정되지 않았습니다" in out["message"]
 
     def test_no_warning_when_titles_exist(self):
-        out = KeywordModuleRunner._aggregate([("-", {
-            "success": True, "collect": {}, "measure": {},
+        out = title_aggregate([("-", {
+            "success": True,
             "titles": {"made": 0, "dry_run": True,
                        "preview": [{"title": "가", "state": "ready"}],
                        "error": None}})])
@@ -83,10 +83,7 @@ class TestResultCarriesEvidence:
             "success": True,
             "collect": {"saved": 2, "samples": ["전기기사", "컴활"],
                         "by_source": {"naver_ads": 1, "google_suggest": 1}},
-            "measure": {"measured": 2},
-            "titles": {"made": 0, "dry_run": True, "preview": [
-                {"title": "전기기사 실기 정리", "state": "ready",
-                 "reason": "재고 후보"}]}})])
+            "measure": {"measured": 2}})])
 
     def test_samples_returned(self):
         assert self._out()["samples"] == ["전기기사", "컴활"]
@@ -96,13 +93,20 @@ class TestResultCarriesEvidence:
                                             "google_suggest": 1}
 
     def test_preview_returned(self):
-        assert self._out()["preview"][0]["reason"] == "재고 후보"
+        # 제목 미리보기는 제목 모듈의 결과다
+        out = title_aggregate([("-", {
+            "success": True,
+            "titles": {"made": 0, "dry_run": True, "preview": [
+                {"title": "전기기사 실기 정리", "state": "ready",
+                 "reason": "재고 후보"}]}})])
+        assert out["preview"][0]["reason"] == "재고 후보"
 
     def test_samples_capped(self):
-        rows = [("-", {"success": True, "measure": {}, "titles": {},
+        rows = [("-", {"success": True, "measure": {},
                        "collect": {"saved": 0,
-                                   "samples": [f"k{i}" for i in range(100)]}})]
-        assert len(KeywordModuleRunner._aggregate(rows)["samples"]) == 40
+                                   "samples": [f"k{i}" for i in range(300)]}})]
+        # 화면이 "N개 중 M개 표시" 를 적을 수 있게 총계와 함께 100개까지 준다
+        assert len(KeywordModuleRunner._aggregate(rows)["samples"]) == 100
 
 
 class TestModuleTestPanel:

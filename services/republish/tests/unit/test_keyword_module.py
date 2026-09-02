@@ -41,12 +41,12 @@ def test_settings_read_from_module_shape() -> None:
     """모듈 settings 와 같은 모양을 읽어야 한다."""
     cfg = KeywordModuleSettings.parse({
         "keyword": {"seeds": "전기기사, 컴활", "min_volume": 300,
-                    "titles_per_keyword": 99},
+                    "collect_limit": 300},
         "schedule": {"interval_minutes": 120},
     })
     assert cfg.seeds == ["전기기사", "컴활"]
     assert cfg.min_volume == 300
-    assert cfg.titles_per_keyword == 10, "터무니없는 값은 잘라야 한다"
+    assert cfg.collect_limit == 300
     assert cfg.interval_minutes == 120
 
 

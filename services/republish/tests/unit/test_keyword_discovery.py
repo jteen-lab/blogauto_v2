@@ -31,13 +31,13 @@ class TestTitleSeparation:
 
         assert "titles" not in WORK_STEPS
 
-    def test_make_titles_defaults_off(self):
-        assert KeywordModuleSettings.parse({}).make_titles is False
-
-    def test_legacy_modules_keep_working(self):
-        # 이미 켜 둔 모듈은 계속 돌아야 한다
+    def test_no_title_setting_left(self):
+        # 제목 설정 자체가 수집 모듈에서 사라졌다. 옛 모듈이 켜 뒀더라도
+        # 무시된다 — 제목은 'title_gen' 모듈이 맡는다.
         cfg = KeywordModuleSettings.parse({"keyword": {"make_titles": True}})
-        assert cfg.make_titles is True
+        for gone in ("make_titles", "titles_per_keyword", "cluster_enabled"):
+            assert not hasattr(cfg, gone), gone
+        assert "make_titles" not in cfg.to_dict()
 
     def test_classify_step_runs(self):
         src = (BASE / "app/services/keyword_lab/runner.py").read_text(
@@ -174,7 +174,10 @@ class TestForm:
         assert "['src_google_trending', 'google_trending']" in js
         assert "discovery_niche_filter: !!k.discovery_niche_filter" in js
 
-    def test_title_section_marked_legacy(self):
+    def test_title_section_removed(self):
+        # 제목 생성은 별도 모듈이다. 수집 폼에 입력칸이 남아 있으면
+        # 저장해도 반영되지 않는 죽은 입력이 된다.
         tpl = (BASE / "app/static/js/modules/keyword-form-template.js").read_text(
             encoding="utf-8")
-        assert "'제목 생성/수집' 모듈" in tpl
+        for gone in ("make_titles", "titles_per_keyword", "cluster_threshold"):
+            assert gone not in tpl, gone

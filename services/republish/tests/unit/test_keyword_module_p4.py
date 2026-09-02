@@ -15,7 +15,7 @@ import pytest
 from app.models.keyword_cluster import CLUSTER_NEW, CLUSTER_TITLED, KeywordCluster
 from app.services.keyword_lab import clustering
 from app.services.keyword_lab import intent as it
-from app.services.keyword_lab.settings import KeywordModuleSettings
+from app.services.title_gen.settings import TitleModuleSettings
 
 BASE = Path(__file__).resolve().parents[2]
 
@@ -150,26 +150,34 @@ class TestClusterModel:
 
 
 class TestSettings:
+    """묶음 설정은 '제목 생성' 모듈이 갖는다(수집 모듈에서 옮겨 옴)."""
+
     def test_cluster_defaults(self):
-        cfg = KeywordModuleSettings.parse({})
+        cfg = TitleModuleSettings.parse({})
         assert cfg.cluster_enabled is True
         assert cfg.cluster_min_size == 3 and cfg.cluster_max_size == 12
         assert cfg.titles_per_cluster == 0
 
     def test_threshold_out_of_range_falls_back(self):
         for bad in (0, -1, 5, "x"):
-            cfg = KeywordModuleSettings.parse(
-                {"keyword": {"cluster_threshold": bad}})
+            cfg = TitleModuleSettings.parse(
+                {"title": {"cluster_threshold": bad}})
             assert cfg.cluster_threshold == 0.34
 
     def test_min_size_floor(self):
-        cfg = KeywordModuleSettings.parse({"keyword": {"cluster_min_size": 0}})
+        cfg = TitleModuleSettings.parse({"title": {"cluster_min_size": 0}})
         assert cfg.cluster_min_size == 2
 
     def test_round_trip(self):
-        cfg = KeywordModuleSettings.parse(
-            {"keyword": {"cluster_enabled": False}})
+        cfg = TitleModuleSettings.parse({"title": {"cluster_enabled": False}})
         assert cfg.to_dict()["cluster_enabled"] is False
+
+    def test_keyword_module_has_none_of_it(self):
+        # 수집 모듈에 남아 있으면 저장해도 반영 안 되는 죽은 입력이 된다
+        from app.services.keyword_lab.settings import KeywordModuleSettings
+
+        kw = KeywordModuleSettings.parse({})
+        assert not hasattr(kw, "cluster_enabled")
 
 
 class TestWiring:
@@ -187,16 +195,16 @@ class TestWiring:
         assert "대표 글" in src and "곁가지" in src
 
     def test_runner_builds_then_titles(self):
-        src = (BASE / "app/services/keyword_lab/runner.py").read_text(
+        src = (BASE / "app/services/title_gen/runner.py").read_text(
             encoding="utf-8")
         assert "ClusterBuilder" in src
-        assert src.index("run_clusters") < src.index("maker.run(cfg, blog)")
+        assert src.index("run_clusters") < src.index("maker.run(maker_cfg")
 
     def test_form_serializes_cluster_settings(self):
         js = (BASE / "app/static/js/modules/form.js").read_text(
             encoding="utf-8")
-        assert "cluster_enabled: !!k.cluster_enabled" in js
-        assert "titles_per_cluster" in js
+        assert "cluster_enabled: !!t.cluster_enabled" in js
+        assert "titles_per_cluster: t.titles_per_cluster" in js
 
     @pytest.mark.parametrize("path", [
         "app/services/keyword_lab/clustering.py",
