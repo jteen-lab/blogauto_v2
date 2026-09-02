@@ -9,17 +9,104 @@
 #}
 <div x-data="keywordPoolApp()" x-init="init()" class="mb-6">
 
-  <!-- 현황 -->
-  <div class="grid grid-cols-2 md:grid-cols-5 gap-2 mb-3">
-    <template x-for="card in statCards()" :key="card.label">
-      <button type="button" @click="applyQuickFilter(card.filter)"
-              class="px-3 py-2 border rounded-lg text-left transition-colors"
-              :class="card.tone">
+  <!-- 현황 + 필터 (카드가 곧 필터다. 눌러서 켜고 다시 눌러 끈다) -->
+  <div class="grid grid-cols-3 md:grid-cols-6 gap-2 mb-2">
+    <template x-for="card in statCards()" :key="card.key">
+      <button type="button" @click="toggleCard(card)"
+              class="px-3 py-2 border-2 rounded-lg text-left transition-colors"
+              :class="isCardActive(card) ? card.activeTone : card.tone">
         <div class="text-xs text-gray-500" x-text="card.label"></div>
         <div class="text-lg font-semibold" x-text="card.value.toLocaleString()"></div>
       </button>
     </template>
   </div>
+  <p class="mb-3 text-xs text-gray-500">
+    카드를 눌러 걸러 봅니다. 여러 개를 켜면 <b>모두 만족하는 것</b>만 보입니다
+    (예: 미분류 + 채택 → 분류가 안 됐는데 채택된 키워드).
+    '전체'를 누르면 모두 해제됩니다.
+  </p>
+
+  <!-- 키워드 수집 (자동 모듈과 같은 실행기를 손으로 돌린다) -->
+  <details class="mb-3 border border-gray-200 rounded-lg">
+    <summary class="px-3 py-2 text-sm text-gray-700 cursor-pointer select-none">
+      🔎 키워드 수집 — 시드로 새 키워드 모으기
+    </summary>
+    <div class="p-3 border-t border-gray-200 space-y-3">
+      <div class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
+        '키워드' 모듈이 자동으로 하는 일을 <b>같은 코드로</b> 직접 돌립니다.
+        수집된 키워드는 미분류 상태로 아래 목록에 쌓이고, ① 분류 ② 측정으로 이어서 처리하면 됩니다.
+      </div>
+
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">시드 키워드 (쉼표로 구분)</label>
+        <input type="text" x-model="collectForm.seeds"
+               placeholder="예: 전기기사, 컴활 1급, 지게차운전기능사"
+               class="w-full text-sm border-gray-300 rounded-md py-1.5">
+        <p class="mt-1 text-xs text-gray-400">
+          비워 두고 '실시간 인기'만 켜면 시드 없이 지금 뜨는 말을 모읍니다.
+        </p>
+      </div>
+
+      <div>
+        <label class="block text-xs text-gray-500 mb-1">수식어 (시드 하나로 여러 개 만들기)</label>
+        <input type="text" x-model="collectForm.modifiers"
+               placeholder="방법, 추천, 후기, 비교, 초보"
+               class="w-full text-sm border-gray-300 rounded-md py-1.5">
+      </div>
+
+      <div>
+        <div class="text-xs text-gray-500 mb-1">수집 소스</div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <label class="flex items-center gap-2 text-sm text-gray-500">
+            <input type="checkbox" checked disabled class="rounded">
+            네이버 검색광고 <span class="text-xs">(연관+검색량 · 필수)</span>
+          </label>
+          <label class="flex items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" x-model="collectForm.src_google_trending" class="rounded">
+            구글 실시간 인기 <span class="text-xs text-gray-500">(발견 · 시드 불필요)</span>
+          </label>
+          <label class="flex items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" x-model="collectForm.src_naver_suggest" class="rounded">
+            네이버 자동완성
+          </label>
+          <label class="flex items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" x-model="collectForm.src_google_suggest" class="rounded">
+            구글 자동완성
+          </label>
+          <label class="flex items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" x-model="collectForm.niche_filter" class="rounded">
+            발견 결과에 니치 필터 <span class="text-xs text-gray-500">(무관한 트렌드어 차단)</span>
+          </label>
+          <div>
+            <label class="block text-xs text-gray-500 mb-1">수집 한도</label>
+            <input type="number" min="10" max="500" x-model.number="collectForm.limit"
+                   class="w-28 text-sm border-gray-300 rounded-md py-1.5">
+          </div>
+        </div>
+      </div>
+
+      <button type="button" @click="runCollect()" :disabled="!!busy"
+              class="px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-medium disabled:opacity-40">
+        <span x-text="busy === 'collect' ? ('수집 중… ' + elapsed + '초') : '▶ 키워드 수집 실행'"></span>
+      </button>
+
+      <div x-show="collectResult" x-transition class="space-y-2">
+        <div class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"
+             x-text="collectResult?.message"></div>
+        <div x-show="Object.keys(collectResult?.by_source || {}).length" class="flex flex-wrap gap-1.5">
+          <template x-for="[code, n] in Object.entries(collectResult?.by_source || {})" :key="code">
+            <span class="px-2 py-0.5 bg-white border border-gray-200 rounded text-xs"
+                  x-text="code + ' ' + n"></span>
+          </template>
+        </div>
+        <div x-show="(collectResult?.samples || []).length" class="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+          <template x-for="k in (collectResult?.samples || [])" :key="k">
+            <span class="px-2 py-0.5 bg-amber-50 border border-amber-200 rounded text-xs" x-text="k"></span>
+          </template>
+        </div>
+      </div>
+    </div>
+  </details>
 
   <!-- 작업 -->
   <div class="bg-white border border-gray-200 rounded-lg p-3 mb-3">
@@ -126,27 +213,13 @@
     <input type="text" x-model="search" @keydown.enter="load()"
            placeholder="키워드 검색 후 Enter"
            class="w-48 text-sm border-gray-300 rounded-md py-1.5">
-    <select x-model="filters.verdict" @change="load()"
-            class="text-sm border-gray-300 rounded-md py-1.5">
-      <option value="">판정 전체</option>
-      <option value="adopt">채택</option>
-      <option value="hold">보류</option>
-      <option value="pending">미측정</option>
-      <option value="reject">제외</option>
-    </select>
-    <select x-model="filters.classified" @change="load()"
-            class="text-sm border-gray-300 rounded-md py-1.5">
-      <option value="">분류 전체</option>
-      <option value="true">분류됨</option>
-      <option value="false">미분류</option>
-    </select>
-    <select x-model="filters.measured" @change="load()"
-            class="text-sm border-gray-300 rounded-md py-1.5">
-      <option value="">측정 전체</option>
-      <option value="true">측정됨</option>
-      <option value="false">미측정</option>
-    </select>
-    <span class="text-sm text-gray-500" x-text="`총 ${total.toLocaleString()}건`"></span>
+    <span class="text-sm text-gray-500" x-text="`${total.toLocaleString()}건`"></span>
+    <template x-for="chip in activeChips()" :key="chip.key">
+      <button type="button" @click="toggleCard(chip)"
+              class="px-2 py-1 bg-accent-lt text-accent rounded-full text-xs">
+        <span x-text="chip.label"></span> ✕
+      </button>
+    </template>
     <button type="button" x-show="selected.length" @click="removeSelected()"
             class="ml-auto px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs">
       선택 <span x-text="selected.length"></span>개 삭제

@@ -28,6 +28,14 @@ function keywordPoolApp() {
         th: { min_volume: 100, max_volume: 100000, min_saturation: 0.2 },
         measureLimit: 50,
 
+        // 수동 수집 — 자동 모듈과 같은 실행기를 손으로 돌린다
+        collectForm: {
+            seeds: '', modifiers: '방법, 추천, 후기, 비교, 초보',
+            src_google_trending: false, src_naver_suggest: false,
+            src_google_suggest: false, niche_filter: true, limit: 100,
+        },
+        collectResult: null,
+
         // 노출 설정 — /keyword-lab 화면에서 이관
         blogs: [],
         blogId: '',
@@ -120,31 +128,62 @@ function keywordPoolApp() {
             }[v] || 'bg-gray-100 text-gray-600';
         },
 
+        // 카드가 곧 필터다. 같은 조건을 카드와 드롭다운 두 군데서 고르면
+        // 어느 쪽이 지금 걸려 있는지 알 수 없고, 판정의 '미측정'(pending)과
+        // 측정 여부의 '미측정'이 같은 말로 보여 더 헷갈렸다.
         statCards() {
             const s = this.stats;
+            const v = s.by_verdict || {};
             return [
-                { label: '전체', value: s.total || 0, filter: {},
-                  tone: 'border-gray-200 hover:bg-gray-50' },
-                { label: '미분류', value: s.unclassified || 0,
-                  filter: { classified: 'false' },
-                  tone: 'border-amber-200 hover:bg-amber-50' },
-                { label: '미측정', value: s.unmeasured || 0,
-                  filter: { measured: 'false' },
-                  tone: 'border-sky-200 hover:bg-sky-50' },
-                { label: '채택', value: (s.by_verdict || {}).adopt || 0,
-                  filter: { verdict: 'adopt' },
-                  tone: 'border-green-200 hover:bg-green-50' },
-                { label: '제외', value: (s.by_verdict || {}).reject || 0,
-                  filter: { verdict: 'reject' },
-                  tone: 'border-red-200 hover:bg-red-50' },
+                { key: 'all', label: '전체', value: s.total || 0, patch: null,
+                  tone: 'border-gray-200 hover:bg-gray-50',
+                  activeTone: 'border-gray-400 bg-gray-50' },
+                { key: 'unclassified', label: '미분류',
+                  value: s.unclassified || 0, patch: ['classified', 'false'],
+                  tone: 'border-amber-200 hover:bg-amber-50',
+                  activeTone: 'border-amber-500 bg-amber-50' },
+                { key: 'unmeasured', label: '미측정',
+                  value: s.unmeasured || 0, patch: ['measured', 'false'],
+                  tone: 'border-sky-200 hover:bg-sky-50',
+                  activeTone: 'border-sky-500 bg-sky-50' },
+                { key: 'adopt', label: '채택', value: v.adopt || 0,
+                  patch: ['verdict', 'adopt'],
+                  tone: 'border-green-200 hover:bg-green-50',
+                  activeTone: 'border-green-500 bg-green-50' },
+                { key: 'hold', label: '보류', value: v.hold || 0,
+                  patch: ['verdict', 'hold'],
+                  tone: 'border-orange-200 hover:bg-orange-50',
+                  activeTone: 'border-orange-500 bg-orange-50' },
+                { key: 'reject', label: '제외', value: v.reject || 0,
+                  patch: ['verdict', 'reject'],
+                  tone: 'border-red-200 hover:bg-red-50',
+                  activeTone: 'border-red-500 bg-red-50' },
             ];
         },
 
-        applyQuickFilter(filter) {
-            this.filters = { verdict: '', classified: '', measured: '',
-                             ...filter };
+        isCardActive(card) {
+            if (!card.patch) {
+                return !this.filters.verdict && !this.filters.classified
+                    && !this.filters.measured;
+            }
+            const [key, value] = card.patch;
+            return this.filters[key] === value;
+        },
+
+        toggleCard(card) {
+            if (!card.patch) {
+                this.filters = { verdict: '', classified: '', measured: '' };
+            } else {
+                const [key, value] = card.patch;
+                // 같은 걸 다시 누르면 해제. 판정은 서로 배타적이라 교체된다.
+                this.filters[key] = this.filters[key] === value ? '' : value;
+            }
             this.page = 1;
             this.load();
+        },
+
+        activeChips() {
+            return this.statCards().filter(c => c.patch && this.isCardActive(c));
         },
 
         async loadStats() {
@@ -191,6 +230,67 @@ function keywordPoolApp() {
         toggleAll(event) {
             this.selected = event.target.checked
                 ? this.items.map(r => r.id) : [];
+        },
+
+        // ── 수집 ─────────────────────────────────────────
+        async runCollect() {
+            const f = this.collectForm;
+            const split = (t) => (t || '').split(',')
+                .map(x => x.trim()).filter(Boolean);
+            const sources = ['naver_ads'];
+            if (f.src_google_trending) sources.push('google_trending');
+            if (f.src_naver_suggest) sources.push('naver_suggest');
+            if (f.src_google_suggest) sources.push('google_suggest');
+
+            this.busy = 'collect';
+            this.elapsed = 0;
+            this.collectResult = null;
+            try {
+                // 모듈과 같은 실행기·같은 설정 모양을 쓴다
+                const started = await this.post('/api/v1/keyword-lab/run', {
+                    settings_override: {
+                        keyword: {
+                            enabled: true,
+                            seeds: split(f.seeds),
+                            modifiers: split(f.modifiers),
+                            use_blog_categories: false,
+                            sources: sources,
+                            discovery_niche_filter: !!f.niche_filter,
+                            collect_limit: f.limit,
+                            make_titles: false,
+                        },
+                    },
+                    steps: ['collect'],
+                    force: true,
+                    background: true,
+                });
+                if (!started) return;
+                this.collectResult = await this.pollRun(started.task_id);
+                await Promise.all([this.loadStats(), this.load()]);
+            } catch (e) {
+                this.show(e.message, 'error');
+            } finally {
+                this.busy = '';
+            }
+        },
+
+        async pollRun(taskId, maxSeconds = 900) {
+            const step = 2000;
+            for (let waited = 0; waited < maxSeconds * 1000; waited += step) {
+                await new Promise(res => setTimeout(res, step));
+                this.elapsed = Math.round(waited / 1000);
+                let row;
+                try {
+                    const res = await fetch(
+                        `/api/v1/keyword-lab/run/${taskId}`,
+                        { credentials: 'include' });
+                    const text = await res.text();
+                    row = text ? JSON.parse(text) : { status: 'running' };
+                } catch (e) { continue; }
+                if (row.status === 'done') return row.result;
+                if (row.status === 'failed') throw new Error(row.error || '수집 실패');
+            }
+            throw new Error('시간이 너무 오래 걸립니다');
         },
 
         // ── 작업 ─────────────────────────────────────────
