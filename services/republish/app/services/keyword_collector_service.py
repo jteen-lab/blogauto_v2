@@ -1367,6 +1367,20 @@ class KeywordCollectorService:
         )
         self.db.add(new_keyword)
 
+        # 5-1. 정본(keyword_candidates)에도 적는다.
+        #      저장소를 일원화했지만 이 모듈은 아직 seed_keywords 를 쓴다.
+        #      전환 도중 새 키워드가 데이터 관리 화면에서 빠지지 않게 한다.
+        try:
+            from .keyword_lab.legacy_bridge import mirror_keyword
+
+            await mirror_keyword(
+                self.db, keyword, source,
+                topic_id=topic_id, subtopic_id=subtopic_id,
+            )
+        except Exception as bridge_err:  # noqa: BLE001
+            # 다리가 막혀도 기존 수집은 계속돼야 한다.
+            logger.warning(f"[BRIDGE] 정본 기록 실패: {bridge_err}")
+
         # 6. 세션 캐시에 추가
         self._seen_keywords.add(keyword_lower)
         logger.debug(f"[DEDUP-1] 키워드 저장 및 캐시 추가: '{keyword}'")
