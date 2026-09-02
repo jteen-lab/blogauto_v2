@@ -70,6 +70,9 @@ class TitleMaker:
         self.user_id = user_id
         # 마지막 생성 실패 사유. 20건이 조용히 실패해도 알 수 없던 자리다.
         self.last_error: Optional[str] = None
+        # 경쟁 제목 각도를 넣어 주는 함수(선택). 제목 모듈이 꽂는다.
+        # (키워드) -> 프롬프트에 붙일 문구
+        self.angle_hint = None
 
     async def run(
         self, cfg: KeywordModuleSettings, blog, limit: int = 20,
@@ -191,6 +194,7 @@ class TitleMaker:
             questions=" / ".join(asked),
             subs=subs,
         )
+        prompt += await self._angles(cluster.name)
         text = await self._ask(prompt, blog, max_tokens=900, cfg=cfg)
         return self._parse(text, subs + 1)
 
@@ -232,6 +236,7 @@ class TitleMaker:
         prompt = PROMPT.format(
             keyword=row.keyword, count=cfg.titles_per_keyword,
             volume=row.search_volume or "알 수 없음")
+        prompt += await self._angles(row.keyword)
         text = await self._ask(prompt, blog, max_tokens=600, cfg=cfg)
         return self._parse(text, cfg.titles_per_keyword)
 
@@ -250,6 +255,19 @@ class TitleMaker:
             "provider": cfg.ai_provider or writing.get("provider"),
             "model": cfg.ai_model or writing.get("model"),
         }
+
+    async def _angles(self, keyword: str) -> str:
+        """이미 나와 있는 제목의 각도. 없으면 빈 문자열.
+
+        수집 제목을 재고로 쓰지 않고 **겹치지 않게 쓰라는 신호**로만 쓴다.
+        """
+        if self.angle_hint is None:
+            return ""
+        try:
+            return await self.angle_hint(keyword) or ""
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[TITLE_MAKER] 각도 조회 실패 | %s | %s", keyword, e)
+            return ""
 
     async def _ask(self, prompt: str, blog, max_tokens: int = 600,
                    cfg: Optional[KeywordModuleSettings] = None) -> str:
