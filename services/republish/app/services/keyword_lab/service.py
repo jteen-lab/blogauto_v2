@@ -30,9 +30,11 @@ from ...models.keyword_metric import PRIMARY_ENGINE
 from ...models.user_settings import UserSettings
 from ..naver_ads_service import NaverAdsService
 from ..naver_search_service import NaverSearchService
+from ...models.content_filter import ContentFilter
 from .metrics import upsert_metric
 from .scoring import Thresholds, judge, saturation_of, supply_of
 from .supply import PUB_WINDOW_DAYS, measure_supply
+from .title_gate import FILTER_TARGET_KEYWORD, blocking_filter
 
 logger = get_logger("keyword_lab", "app.log")
 
@@ -114,7 +116,8 @@ class KeywordLabService:
                     "error": "네이버 검색광고 API 키가 설정에 없습니다"}
 
         existing = await self._existing_keywords(blog_id)
-        saved, skipped, api_calls = 0, 0, 0
+        filters = await self._filters()
+        saved, skipped, api_calls, blocked = 0, 0, 0, 0
         # 화면이 "몇 개" 만이 아니라 "무엇이" 들어왔는지 보여줄 수 있게 한다
         samples: List[str] = []
         # 실패를 삼키지 않는다. 로그에만 남기면 화면에는 '0개 수집' 만
@@ -146,6 +149,15 @@ class KeywordLabService:
                     skipped += 1
                     continue
                 existing.add(kw.lower())
+
+                # 금지어 필터. 데이터 관리의 '필터설정' 이 키워드 수집에도
+                # 걸려야 한다 — 지금까지 제목에만 적용됐다.
+                hit = blocking_filter(filters, kw, FILTER_TARGET_KEYWORD)
+                if hit:
+                    blocked += 1
+                    logger.info("[KEYWORD_LAB] 필터 차단 | %s | 필터=%s",
+                                kw[:40], hit.filter_value)
+                    continue
                 samples.append(kw)
                 # 니치는 **키워드 자체를 분류해서** 정한다. 시드를 그대로
                 # 물려주면 '마라탕' 으로 모은 것이 전부 '음식 효능' 이 되어
@@ -170,6 +182,7 @@ class KeywordLabService:
                     "api_calls": api_calls}
 
         return {"success": True, "saved": saved, "skipped": skipped,
+                "blocked": blocked,
                 "seeds": [s["seed"] for s in seed_rows],
                 "samples": samples[:40],
                 "api_calls": api_calls, "errors": errors}
@@ -213,6 +226,8 @@ class KeywordLabService:
         extra = await self._collect_sources(
             cfg, blog_id, [m["seed"] for m in expanded], remaining)
         result["saved"] = (result.get("saved") or 0) + extra.get("saved", 0)
+        result["blocked"] = ((result.get("blocked") or 0)
+                             + (extra.get("blocked") or 0))
         result["by_source"] = extra.get("by_source") or {}
         result["samples"] = (list(result.get("samples") or [])
                              + list(extra.get("samples") or []))[:40]
@@ -265,7 +280,8 @@ class KeywordLabService:
             "[KEYWORD_LAB] 추가 소스 | 수집 %d · 저장 %d · 검색량 보강 %d",
             len(gathered["ideas"]), stored["saved"], enriched["filled"],
         )
-        return {"saved": stored["saved"], "by_source": stored["by_source"],
+        return {"saved": stored["saved"], "blocked": stored.get("blocked", 0),
+                "by_source": stored["by_source"],
                 "samples": stored.get("samples") or [],
                 "enriched": enriched["filled"], "errors": errors}
 
@@ -331,6 +347,14 @@ class KeywordLabService:
                 logger.warning("[KEYWORD_LAB] 카테고리 매칭기 초기화 실패 | %s", e)
                 self._matcher_cache = None
         return self._matcher_cache
+
+    async def _filters(self) -> List[ContentFilter]:
+        """활성 금지어 필터. 한 회차에 한 번만 읽는다."""
+        if getattr(self, "_filter_cache", None) is None:
+            self._filter_cache = list((await self.db.execute(
+                select(ContentFilter).where(ContentFilter.is_active.is_(True))
+            )).scalars().all())
+        return self._filter_cache
 
     async def _existing_keywords(self, blog_id: Optional[int]) -> set:
         """이미 가진 키워드 — **이 블로그 것만** 본다.

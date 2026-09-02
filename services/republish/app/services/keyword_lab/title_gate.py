@@ -41,22 +41,28 @@ COLLECTION_STAGE = "keyword_module"
 
 # 필터 대상 구분(ContentFilter.target_type)
 FILTER_TARGET = "title"
+FILTER_TARGET_KEYWORD = "keyword"
 
 
-def blocking_filter(filters: List[ContentFilter],
-                    text: str) -> Optional[ContentFilter]:
+def blocking_filter(filters: List[ContentFilter], text: str,
+                    target: str = FILTER_TARGET) -> Optional[ContentFilter]:
     """금지어/패턴에 걸리는지. 걸리면 그 필터를 돌려준다.
 
     판정 규칙은 기존 수집(`keyword_collector_service._check_filter`)과 같다.
     target_type 이 'both' 인 필터는 모든 대상에 적용된다.
+
+    Args:
+        filters: 활성 필터 목록
+        text: 검사할 문자열
+        target: 'title' 또는 'keyword'
     """
     lowered = (text or "").lower().strip()
     if not lowered:
         return None
 
     for row in filters:
-        target = (row.target_type or "both").lower().strip()
-        if target not in (FILTER_TARGET, "both"):
+        row_target = (row.target_type or "both").lower().strip()
+        if row_target not in (target, "both"):
             continue
         value = (row.filter_value or "").lower().strip()
         if not value:

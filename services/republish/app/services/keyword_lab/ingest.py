@@ -15,13 +15,16 @@ from __future__ import annotations
 
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.logger import get_logger
 from ...models.keyword_candidate import KeywordCandidate
+from ...models.content_filter import ContentFilter
 from .metrics import upsert_metric
 from .scoring import Thresholds, judge
 from .sources.base import SOURCE_ENGINE, KeywordIdea
+from .title_gate import FILTER_TARGET_KEYWORD, blocking_filter
 
 logger = get_logger("keyword_ingest", "app.log")
 
@@ -43,6 +46,7 @@ class IdeaIngestor:
         self.user_id = user_id
         self.classify = classify
         self.thresholds = thresholds
+        self._filters = None
 
     async def save(self, ideas: List[KeywordIdea], blog_id: Optional[int],
                    existing: set, limit: int) -> Dict[str, Any]:
@@ -57,9 +61,10 @@ class IdeaIngestor:
         Returns:
             {"saved": int, "skipped": int, "by_source": {코드: 개수}}
         """
-        saved, skipped = 0, 0
+        saved, skipped, blocked = 0, 0, 0
         by_source: Dict[str, int] = {}
         samples: List[str] = []
+        filters = await self._load_filters()
 
         for idea in ideas:
             if saved >= limit:
@@ -70,6 +75,16 @@ class IdeaIngestor:
                 continue
             existing.add(key)
 
+            # 금지어 필터. 지금까지 제목에만 걸려 있어 걸러야 할 키워드가
+            # 그대로 수집됐다(설정 화면의 '필터설정' 이 무시된 셈).
+            hit = blocking_filter(filters, idea.keyword,
+                                  FILTER_TARGET_KEYWORD)
+            if hit:
+                blocked += 1
+                logger.info("[KEYWORD_INGEST] 필터 차단 | %s | 필터=%s",
+                            idea.keyword[:40], hit.filter_value)
+                continue
+
             row = await self._build(idea, blog_id)
             self.db.add(row)
             await self.db.flush()
@@ -79,10 +94,10 @@ class IdeaIngestor:
             samples.append(idea.keyword)
             by_source[idea.source] = by_source.get(idea.source, 0) + 1
 
-        logger.info("[KEYWORD_INGEST] 저장 %d · 중복 %d | %s",
-                    saved, skipped, by_source)
-        return {"saved": saved, "skipped": skipped, "by_source": by_source,
-                "samples": samples[:40]}
+        logger.info("[KEYWORD_INGEST] 저장 %d · 중복 %d · 차단 %d | %s",
+                    saved, skipped, blocked, by_source)
+        return {"saved": saved, "skipped": skipped, "blocked": blocked,
+                "by_source": by_source, "samples": samples[:40]}
 
     async def _build(self, idea: KeywordIdea,
                      blog_id: Optional[int]) -> KeywordCandidate:
@@ -106,6 +121,14 @@ class IdeaIngestor:
             risk_label=risk,
             source=idea.source,
         )
+
+    async def _load_filters(self) -> List[ContentFilter]:
+        """활성 금지어 필터. 한 회차에 한 번만 읽는다."""
+        if self._filters is None:
+            self._filters = list((await self.db.execute(
+                select(ContentFilter).where(ContentFilter.is_active.is_(True))
+            )).scalars().all())
+        return self._filters
 
     async def _store_metric(self, row: KeywordCandidate,
                             idea: KeywordIdea) -> None:

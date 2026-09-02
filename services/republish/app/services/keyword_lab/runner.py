@@ -153,7 +153,7 @@ class KeywordModuleRunner:
     def _aggregate(rows: list) -> Dict[str, Any]:
         """블로그별 결과를 하나로 합친다 — 로그·화면이 같은 모양을 쓴다."""
         collected = measured = made = classified = 0
-        enriched = rejudged = 0
+        enriched = rejudged = filtered = 0
         ok = skipped = failed = 0
         errors: list = []
         details: list = []
@@ -184,6 +184,7 @@ class KeywordModuleRunner:
             enriched += (result.get("measure") or {}).get("enriched") or 0
             rejudged += (result.get("rejudge") or {}).get("total") or 0
             samples.extend(collect.get("samples") or [])
+            filtered += collect.get("blocked") or 0
             for code, n in (collect.get("by_source") or {}).items():
                 by_source[code] = by_source.get(code, 0) + n
             if titles.get("error"):
@@ -235,8 +236,9 @@ class KeywordModuleRunner:
         if not preview and errors:
             note = f" | ⚠ {errors[0]}"
         message = (f"{head}블로그 {len(rows)}개 | 성공 {ok} · 건너뜀 {skipped} · "
-                   f"실패 {failed} | 키워드 {collected}개 · 측정 {measured}건 · "
-                   f"분류 {classified}건"
+                   f"실패 {failed} | 키워드 {collected}개 · 측정 {measured}건"
+                   f"{f' · 금지어 차단 {filtered}건' if filtered else ''}"
+                   f" · 분류 {classified}건"
                    f"{f' · 검색량 보강 {enriched}건' if enriched else ''}"
                    f"{f' · 재판정 {rejudged}건' if rejudged else ''}"
                    f"{tail_part}{sample}{note}")
@@ -245,7 +247,7 @@ class KeywordModuleRunner:
             "collected": collected, "measured": measured, "titles_made": made,
             "blogs": len(rows), "ok": ok, "skipped_count": skipped,
             "failed": failed, "dry_run": dry_run, "classified": classified,
-            "enriched": enriched, "rejudged": rejudged,
+            "enriched": enriched, "rejudged": rejudged, "blocked": filtered,
             "preview": preview[:60], "samples": samples[:40],
             "by_source": by_source,
         }
