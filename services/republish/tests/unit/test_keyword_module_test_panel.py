@@ -128,20 +128,26 @@ class TestModuleTestPanel:
     def test_forces_execution(self):
         assert "force: true" in self._form()
 
-    def test_shows_keywords_titles_and_sources(self):
+    def test_shows_keywords_and_sources(self):
+        """키워드 모듈은 수집·측정·분류가 전부다 — 제목은 제목 모듈이 보여준다."""
         tpl = self._tpl()
-        for key in ("kwTest.result?.samples", "kwTest.result?.preview",
-                    "kwTest.result?.by_source", "kwTest.result?.message"):
+        for key in ("kwTest.result?.samples", "kwTest.result?.by_source",
+                    "kwTest.result?.message"):
             assert key in tpl, key
+        title = (BASE / "app/static/js/modules/title-gen-form-template.js").read_text(
+            encoding="utf-8")
+        assert "tgTest.result?.preview" in title
 
-    def test_ai_select_present(self):
-        tpl = self._tpl()
-        assert "formData.keyword.ai_provider" in tpl
-        assert "formData.keyword.ai_model" in tpl
+    def test_ai_select_moved_to_title_module(self):
+        """제목 생성 AI 는 키워드 모듈에서 제거됐다."""
+        assert "ai_provider" not in self._tpl()
+        title = (BASE / "app/static/js/modules/title-gen-form-template.js").read_text(
+            encoding="utf-8")
+        assert "formData.title.ai_provider" in title
 
-    def test_models_loaded_for_keyword_type(self):
+    def test_models_loaded_for_title_type(self):
         js = self._form()
-        assert "typeCode === 'keyword' || typeCode === 'title_gen'" in js
+        assert "if (typeCode === 'title_gen') {" in js
         assert "loadKeywordModels()" in js
 
     def test_state_declared(self):
@@ -168,8 +174,13 @@ class TestAiSelectKeepsSavedValue:
             encoding="utf-8")
 
     def test_provider_list_includes_saved(self):
+        """저장된 값이 옵션에 없으면 select 가 빈 값을 되쓴다.
+
+        키워드 모듈의 AI 선택은 제거됐고(제목 모듈이 맡는다) 같은 보호는
+        제목 모듈 쪽에 남아 있다.
+        """
         js = self._js()
-        assert "const saved = this.formData?.keyword?.ai_provider;" in js
+        assert "const saved = this.formData?.title?.ai_provider;" in js
         assert "if (saved) set.add(saved);" in js
 
     def test_model_list_includes_saved(self):
