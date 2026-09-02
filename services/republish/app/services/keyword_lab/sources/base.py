@@ -26,11 +26,13 @@ SRC_GSC = "gsc"
 # 발견(시드 없이 지금 뜨는 말) — 확장과 입력이 다르다
 SRC_GOOGLE_TRENDING = "google_trending"
 SRC_NAVER_DATALAB = "naver_datalab"
+# 질문 팬아웃 — 의문사를 붙여 자동완성에 되묻는다(PAA 대체)
+SRC_QUESTION_FANOUT = "question_fanout"
 
 ALL_SOURCES = (
     SRC_NAVER_ADS, SRC_NAVER_SUGGEST, SRC_GOOGLE_SUGGEST,
     SRC_GOOGLE_PLANNER, SRC_GOOGLE_TRENDS, SRC_GSC,
-    SRC_GOOGLE_TRENDING, SRC_NAVER_DATALAB,
+    SRC_GOOGLE_TRENDING, SRC_NAVER_DATALAB, SRC_QUESTION_FANOUT,
 )
 
 # 소스 → 어느 엔진의 지표인지
@@ -43,6 +45,7 @@ SOURCE_ENGINE = {
     SRC_GSC: "google",
     SRC_GOOGLE_TRENDING: "google",
     SRC_NAVER_DATALAB: "naver",
+    SRC_QUESTION_FANOUT: "naver",
 }
 
 # 사람이 읽을 이름
@@ -55,6 +58,7 @@ SOURCE_LABEL = {
     SRC_GSC: "서치콘솔 실측 쿼리",
     SRC_GOOGLE_TRENDING: "구글 실시간 인기(발견)",
     SRC_NAVER_DATALAB: "네이버 데이터랩(트렌드 검증)",
+    SRC_QUESTION_FANOUT: "질문 팬아웃(의문사 확장)",
 }
 
 # 키워드 길이 상한. 문장이 통째로 들어오면 키워드가 아니다.

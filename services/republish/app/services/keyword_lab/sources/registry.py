@@ -18,7 +18,7 @@ from ....core.logger import get_logger
 from .base import (
     SRC_GOOGLE_PLANNER, SRC_GOOGLE_SUGGEST, SRC_GOOGLE_TRENDING,
     SRC_GOOGLE_TRENDS, SRC_GSC, SRC_NAVER_DATALAB, SRC_NAVER_SUGGEST,
-    KeywordIdea, dedupe,
+    SRC_QUESTION_FANOUT, KeywordIdea, dedupe,
 )
 
 logger = get_logger("keyword_sources", "app.log")
@@ -98,6 +98,13 @@ async def _run_source(code: str, db: Any, user_settings: Any, blog: Any,
         from . import suggest
 
         return await suggest.collect(seeds, "google")
+
+    if code == SRC_QUESTION_FANOUT:
+        # 의문사를 붙여 자동완성에 되묻는다. PAA 는 공식 API 가 없어
+        # 쓰지 않는다(약관·차단 위험). 자동완성으로 대체 가능하다.
+        from . import questions
+
+        return await questions.collect(seeds, "naver")
 
     if code == SRC_GOOGLE_PLANNER:
         from . import google_ads

@@ -32,7 +32,8 @@ function keywordPoolApp() {
         collectForm: {
             seeds: '', modifiers: '방법, 추천, 후기, 비교, 초보',
             src_google_trending: false, src_naver_suggest: false,
-            src_google_suggest: false, niche_filter: true, limit: 100,
+            src_google_suggest: false, src_question_fanout: false,
+            niche_filter: true, limit: 100,
         },
         collectResult: null,
 
@@ -241,6 +242,7 @@ function keywordPoolApp() {
             if (f.src_google_trending) sources.push('google_trending');
             if (f.src_naver_suggest) sources.push('naver_suggest');
             if (f.src_google_suggest) sources.push('google_suggest');
+            if (f.src_question_fanout) sources.push('question_fanout');
 
             this.busy = 'collect';
             this.elapsed = 0;

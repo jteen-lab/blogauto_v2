@@ -145,6 +145,7 @@ function moduleFormApp(module = null, moduleType = null) {
                 discovery_niche_filter: initialModule?.settings?.keyword?.discovery_niche_filter ?? true,
                 src_naver_suggest: (initialModule?.settings?.keyword?.sources || []).includes('naver_suggest'),
                 src_google_suggest: (initialModule?.settings?.keyword?.sources || []).includes('google_suggest'),
+                src_question_fanout: (initialModule?.settings?.keyword?.sources || []).includes('question_fanout'),
                 src_gsc: (initialModule?.settings?.keyword?.sources || []).includes('gsc'),
                 src_google_planner: (initialModule?.settings?.keyword?.sources || []).includes('google_planner'),
                 src_google_trends: (initialModule?.settings?.keyword?.sources || []).includes('google_trends'),
@@ -1098,6 +1099,7 @@ function moduleFormApp(module = null, moduleType = null) {
                 [['src_google_trending', 'google_trending'],
                  ['src_naver_suggest', 'naver_suggest'],
                  ['src_google_suggest', 'google_suggest'],
+                 ['src_question_fanout', 'question_fanout'],
                  ['src_gsc', 'gsc'],
                  ['src_google_planner', 'google_planner'],
                  ['src_google_trends', 'google_trends']].forEach(([flag, code]) => {

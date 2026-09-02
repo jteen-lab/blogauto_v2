@@ -88,6 +88,10 @@ window.getKeywordFormTemplate = function () {
                             <span>구글 자동완성</span>
                         </label>
                         <label class="flex items-start gap-2 text-sm text-gray-700">
+                            <input type="checkbox" x-model="formData.keyword.src_question_fanout" class="rounded mt-0.5">
+                            <span>질문 팬아웃 <span class="text-xs text-gray-500">(의문사를 붙여 되물음 · 제목 소재)</span></span>
+                        </label>
+                        <label class="flex items-start gap-2 text-sm text-gray-700">
                             <input type="checkbox" x-model="formData.keyword.src_gsc" class="rounded mt-0.5">
                             <span>서치콘솔 실측 쿼리 <span class="text-xs text-gray-500">(속성 등록 필요)</span></span>
                         </label>
