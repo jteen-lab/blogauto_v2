@@ -97,7 +97,7 @@ class IdeaIngestor:
         logger.info("[KEYWORD_INGEST] 저장 %d · 중복 %d · 차단 %d | %s",
                     saved, skipped, blocked, by_source)
         return {"saved": saved, "skipped": skipped, "blocked": blocked,
-                "by_source": by_source, "samples": samples[:40]}
+                "by_source": by_source, "samples": samples[:100]}
 
     async def _build(self, idea: KeywordIdea,
                      blog_id: Optional[int]) -> KeywordCandidate:

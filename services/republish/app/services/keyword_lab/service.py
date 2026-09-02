@@ -184,7 +184,7 @@ class KeywordLabService:
         return {"success": True, "saved": saved, "skipped": skipped,
                 "blocked": blocked,
                 "seeds": [s["seed"] for s in seed_rows],
-                "samples": samples[:40],
+                "samples": samples[:100],
                 "api_calls": api_calls, "errors": errors}
 
     async def collect_with_config(
