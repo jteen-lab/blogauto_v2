@@ -49,6 +49,7 @@ from .routers.data_keyword_pool import router as data_keyword_pool_router  # 정
 from .routers.title_gen import router as title_gen_router  # 제목 생성/수집 모듈
 from .routers.data_titles import router as data_titles_router
 from .routers.data_filters import router as data_filters_router
+from .routers.data_domains import router as data_domains_router  # 니치 도메인 자산
 from .routers.data_urls import router as data_urls_router
 from .routers.titles import router as titles_router  # Phase C: MainTitle API
 from .routers.title_groups import router as title_groups_router  # Phase C: TitleGroup API
@@ -309,6 +310,7 @@ app.include_router(data_keyword_pool_router, prefix=settings.api_v1_prefix)  # �
 app.include_router(title_gen_router)  # 제목 생성/수집 (prefix 포함)
 app.include_router(data_titles_router, prefix=settings.api_v1_prefix)
 app.include_router(data_filters_router, prefix=settings.api_v1_prefix)
+app.include_router(data_domains_router, prefix=settings.api_v1_prefix)  # 니치 도메인
 app.include_router(data_urls_router, prefix=settings.api_v1_prefix)
 app.include_router(titles_router, prefix=settings.api_v1_prefix)  # Phase C: MainTitle
 app.include_router(title_groups_router, prefix=settings.api_v1_prefix)  # Phase C: TitleGroup
