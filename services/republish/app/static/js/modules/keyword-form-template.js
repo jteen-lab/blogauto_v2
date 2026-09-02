@@ -159,6 +159,25 @@ window.getKeywordFormTemplate = function () {
             </div>
         </div>
 
+        <!-- 자동 처리 -->
+        <div class="border-t border-gray-100 pt-4 space-y-2">
+            <div class="text-sm font-medium text-gray-700">회차마다 자동으로 할 일</div>
+            <div class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
+                수집 뒤 <b>검색량 보강 → 공급 측정 → 분류</b>까지 자동으로 이어집니다.
+                데이터 관리 키워드 탭에서 손으로 누르는 것과 <b>같은 코드</b>입니다.
+            </div>
+            <label class="flex items-start gap-2 text-sm text-gray-700">
+                <input type="checkbox" x-model="formData.keyword.rejudge_on_run" class="rounded mt-0.5">
+                <span>
+                    회차마다 <b>전체 재판정</b>도 함께
+                    <span class="block mt-1 text-xs text-gray-500">
+                        기준값(검색량 하한·상한·포화도)을 바꿨을 때 이미 쌓인 키워드에도 반영합니다.
+                        API 호출은 없지만 전체 행을 훑으므로, 기준을 자주 바꾸지 않으면 꺼 두세요.
+                    </span>
+                </span>
+            </label>
+        </div>
+
         <!-- 제목 생성 (이전 방식) -->
         <div class="border-t border-gray-100 pt-4 space-y-3">
             <div class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">

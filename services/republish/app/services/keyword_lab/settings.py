@@ -119,6 +119,10 @@ class KeywordModuleSettings:
     # 0이면 묶음 크기 + 1(대표 글)로 자동 결정한다.
     titles_per_cluster: int = 0
 
+    # 기준값이 바뀌면 이미 쌓인 후보도 다시 판정한다. API 를 부르지 않지만
+    # 전체 행을 훑으므로 매 회차 돌릴 필요는 없다 — 기본은 꺼 둔다.
+    rejudge_on_run: bool = False
+
     # 성과 되먹임 — 내보낸 뒤 실제로 노출됐는지 회수해 시드 순서에 반영한다.
     feedback_enabled: bool = True
     feedback_days: int = 28
@@ -185,6 +189,7 @@ class KeywordModuleSettings:
             cluster_max_size=max(2, _int("cluster_max_size",
                                          DEFAULT_CLUSTER_MAX_SIZE)),
             titles_per_cluster=min(30, _int("titles_per_cluster", 0)),
+            rejudge_on_run=bool(kw.get("rejudge_on_run", False)),
             feedback_enabled=bool(kw.get("feedback_enabled", True)),
             feedback_days=max(1, _int("feedback_days", 28)),
             min_inventory=_int("min_inventory", DEFAULT_MIN_INVENTORY),
@@ -222,6 +227,7 @@ class KeywordModuleSettings:
             "cluster_min_size": self.cluster_min_size,
             "cluster_max_size": self.cluster_max_size,
             "titles_per_cluster": self.titles_per_cluster,
+            "rejudge_on_run": self.rejudge_on_run,
             "feedback_enabled": self.feedback_enabled,
             "feedback_days": self.feedback_days,
             "min_inventory": self.min_inventory,

@@ -53,7 +53,8 @@ class KeywordModuleRunner:
         # 기본 단계에서 **제목 생성을 뺀다.** 수집 모듈이 제목까지 만들면
         # 중간 결과를 걸러낼 자리가 없고 실패가 한 덩어리로 묻힌다.
         # 제목은 '제목 생성/수집' 모듈이 맡는다(계획서 S5).
-        steps = steps or ["feedback", "collect", "measure", "classify"]
+        steps = steps or ["feedback", "collect", "measure", "classify",
+                          "rejudge"]
         blog = await self._blog(blog_id) if blog_id else None
 
         # 재고를 먼저 본다. 충분하면 돌지 않는다 — 매번 도는 것은 API 낭비다.
@@ -91,13 +92,24 @@ class KeywordModuleRunner:
                         "error": out["collect"].get("error"), **out}
 
         if "measure" in steps:
-            out["measure"] = await svc.measure(
-                limit=cfg.measure_limit, blog_id=blog_id,
-                min_volume=cfg.min_volume, min_saturation=cfg.min_saturation,
-                max_volume=cfg.max_volume, window_days=cfg.pub_window_days)
+            # 검색량 보강 → 공급 측정. 보강을 빼면 이관된 옛 시드처럼
+            # 검색량이 아예 없는 후보가 영원히 "검색량 미측정" 에 머문다.
+            # 측정은 블로그와 무관하므로(키워드 자체의 지표) 전역으로 돈다.
+            from .pool_ops import measure as pool_measure
+
+            out["measure"] = await pool_measure(
+                self.db, user_settings, self.user_id,
+                limit=cfg.measure_limit,
+                min_volume=cfg.min_volume, max_volume=cfg.max_volume,
+                min_saturation=cfg.min_saturation,
+                window_days=cfg.pub_window_days)
 
         if "classify" in steps:
             out["classify"] = await self._classify_leftovers(cfg)
+
+        if "rejudge" in steps and cfg.rejudge_on_run:
+            # 기준값을 바꿨을 때 이미 쌓인 후보에도 반영한다.
+            out["rejudge"] = await self._rejudge(cfg)
 
         # 제목은 별도 모듈이 맡는다. 옛 설정을 켠 모듈은 계속 돌게 둔다.
         if "titles" in steps and cfg.make_titles:
@@ -141,6 +153,7 @@ class KeywordModuleRunner:
     def _aggregate(rows: list) -> Dict[str, Any]:
         """블로그별 결과를 하나로 합친다 — 로그·화면이 같은 모양을 쓴다."""
         collected = measured = made = classified = 0
+        enriched = rejudged = 0
         ok = skipped = failed = 0
         errors: list = []
         details: list = []
@@ -168,6 +181,8 @@ class KeywordModuleRunner:
             titles = result.get("titles") or {}
             collect = result.get("collect") or {}
             classified += (result.get("classify") or {}).get("matched") or 0
+            enriched += (result.get("measure") or {}).get("enriched") or 0
+            rejudged += (result.get("rejudge") or {}).get("total") or 0
             samples.extend(collect.get("samples") or [])
             for code, n in (collect.get("by_source") or {}).items():
                 by_source[code] = by_source.get(code, 0) + n
@@ -221,12 +236,16 @@ class KeywordModuleRunner:
             note = f" | ⚠ {errors[0]}"
         message = (f"{head}블로그 {len(rows)}개 | 성공 {ok} · 건너뜀 {skipped} · "
                    f"실패 {failed} | 키워드 {collected}개 · 측정 {measured}건 · "
-                   f"분류 {classified}건{tail_part}{sample}{note}")
+                   f"분류 {classified}건"
+                   f"{f' · 검색량 보강 {enriched}건' if enriched else ''}"
+                   f"{f' · 재판정 {rejudged}건' if rejudged else ''}"
+                   f"{tail_part}{sample}{note}")
         out: Dict[str, Any] = {
             "success": success, "message": message, "details": details,
             "collected": collected, "measured": measured, "titles_made": made,
             "blogs": len(rows), "ok": ok, "skipped_count": skipped,
             "failed": failed, "dry_run": dry_run, "classified": classified,
+            "enriched": enriched, "rejudged": rejudged,
             "preview": preview[:60], "samples": samples[:40],
             "by_source": by_source,
         }
@@ -250,6 +269,17 @@ class KeywordModuleRunner:
         except Exception as e:  # noqa: BLE001
             logger.warning("[KEYWORD_RUNNER] 분류 실패 | %s", e)
             return {"scanned": 0, "matched": 0, "error": str(e)[:120]}
+
+    async def _rejudge(self, cfg: KeywordModuleSettings) -> Dict[str, Any]:
+        """모듈 기준값으로 전체 후보를 다시 판정한다. API 를 부르지 않는다."""
+        from .pool_ops import rejudge
+
+        try:
+            return await rejudge(self.db, self.user_id, cfg.min_volume,
+                                 cfg.max_volume, cfg.min_saturation)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[KEYWORD_RUNNER] 재판정 실패 | %s", e)
+            return {"total": 0, "error": str(e)[:120]}
 
     async def _feedback(self, cfg: KeywordModuleSettings,
                         blog) -> Dict[str, Any]:
