@@ -50,6 +50,7 @@ from .routers.title_gen import router as title_gen_router  # 제목 생성/수�
 from .routers.data_titles import router as data_titles_router
 from .routers.data_filters import router as data_filters_router
 from .routers.data_domains import router as data_domains_router  # 니치 도메인 자산
+from .routers.data_title_cleanup import router as data_title_cleanup_router  # 임시제목 정리
 from .routers.data_urls import router as data_urls_router
 from .routers.titles import router as titles_router  # Phase C: MainTitle API
 from .routers.title_groups import router as title_groups_router  # Phase C: TitleGroup API
@@ -311,6 +312,8 @@ app.include_router(title_gen_router)  # 제목 생성/수집 (prefix 포함)
 app.include_router(data_titles_router, prefix=settings.api_v1_prefix)
 app.include_router(data_filters_router, prefix=settings.api_v1_prefix)
 app.include_router(data_domains_router, prefix=settings.api_v1_prefix)  # 니치 도메인
+# data_titles 의 /temp/{title_id} 보다 먼저 등록해 경로가 겹치지 않게 한다
+app.include_router(data_title_cleanup_router, prefix=settings.api_v1_prefix)
 app.include_router(data_urls_router, prefix=settings.api_v1_prefix)
 app.include_router(titles_router, prefix=settings.api_v1_prefix)  # Phase C: MainTitle
 app.include_router(title_groups_router, prefix=settings.api_v1_prefix)  # Phase C: TitleGroup
