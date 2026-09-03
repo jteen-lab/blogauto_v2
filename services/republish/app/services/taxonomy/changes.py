@@ -78,11 +78,14 @@ async def plan(db: AsyncSession, user_id: int, items: Any,
     for entry in ops:
         if entry["op"] == OP_ADD_KEYWORD:
             recovered = await _would_recover(db, entry["term"])
+            # 걸릴 제목을 함께 보여 준다. 숫자만 보고 승인하면 오분류를
+            # 눈으로 확인할 수 없다.
+            samples = await _would_match(db, entry["term"])
             impact["add"] += 1
             impact["recovered"] += recovered
             impact["details"].append(
                 {"op": entry["op"], "term": entry["term"],
-                 "recovered": recovered})
+                 "recovered": recovered, "samples": samples})
         else:
             impact["remove"] += 1
             impact["details"].append({"op": entry["op"],
@@ -193,11 +196,19 @@ async def history(db: AsyncSession, user_id: int,
 
 
 async def tree(db: AsyncSession) -> List[Dict[str, Any]]:
-    """전체 분류표. 에이전트가 어디에 넣을지 판단하는 근거다."""
+    """전체 분류표. 어디에 넣을지 판단하는 근거다.
+
+    **삭제된 것은 뺀다.** 분류 매처(`CategoryMatcherService._load_keywords`)
+    가 `is_deleted` 를 거르므로, 여기서 안 거르면 화면에는 보이는데 실제로는
+    분류에 쓰이지 않는 하위주제가 목록에 뜬다. 실제로 테스트용 하위주제
+    37개와 주제 4개가 추천 화면 드롭다운에 노출됐다.
+    """
     topics = (await db.execute(
-        select(Topic).order_by(Topic.id))).scalars().all()
+        select(Topic).where(Topic.is_deleted.is_(False))
+        .order_by(Topic.id))).scalars().all()
     subs = (await db.execute(
-        select(SubTopic).order_by(SubTopic.id))).scalars().all()
+        select(SubTopic).where(SubTopic.is_deleted.is_(False))
+        .order_by(SubTopic.id))).scalars().all()
     keywords = (await db.execute(
         select(Keyword).where(Keyword.is_deleted.is_(False))
         .order_by(Keyword.id))).scalars().all()
@@ -222,6 +233,13 @@ async def _would_recover(db: AsyncSession, term: str) -> int:
     from .suggest import recovery_estimate
 
     return await recovery_estimate(db, term)
+
+
+async def _would_match(db: AsyncSession, term: str) -> List[str]:
+    """이 말에 걸릴 제목 표본."""
+    from .suggest import recovery_samples
+
+    return await recovery_samples(db, term)
 
 
 async def _change(db: AsyncSession, user_id: int,

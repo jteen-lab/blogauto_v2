@@ -331,6 +331,36 @@ class TestWiring:
         assert 'out.get("errors")' in src
         assert "제목 생성 AI 를 고르거나" in src
 
+    def test_blog_ai_is_the_fallback(self):
+        """AI 를 비우면 블로그의 제목 AI 를 쓴다. 매번 고르게 하면 실수한다."""
+        src = (BASE / "app/services/title_collect/workbench.py").read_text(
+            encoding="utf-8")
+        block = src[src.index("async def _make_ask("):
+                    src.index("async def _store_news(")]
+        assert 'ai_config.get("title_ai")' in block
+        assert 'writing_ai.get("provider")' in block
+        assert "_make_ask(gen, blog)" in src
+
+    def test_model_is_a_dropdown(self):
+        """모델명을 직접 적게 하면 오타 하나로 생성이 통째로 실패한다."""
+        tpl = (BASE
+               / "app/templates/collection/_title_workbench.html").read_text(
+            encoding="utf-8")
+        js = (BASE / "app/static/js/collection/title_workbench.js").read_text(
+            encoding="utf-8")
+        assert 'x-model="gen.ai_model"' in tpl
+        assert "modelsFor(gen.ai_provider)" in tpl
+        assert "ai-models?capability=text" in js
+        # 저장된 값이 목록에 없으면 select 가 빈 값을 되쓴다
+        assert "if (saved && !list.includes(saved))" in js
+
+    def test_sitemap_is_not_capped(self):
+        """801개 상한은 옛 집계값일 뿐, 추출은 전체를 읽는다."""
+        src = (BASE / "app/services/title_collect/extractor.py").read_text(
+            encoding="utf-8")
+        assert "max_urls=None" in src
+        assert "domain.url_count = len(urls)" in src
+
     def test_news_has_no_rule_fallback(self):
         """AI 없이 뉴스 원문을 붙여 만들면 원문이 재고에 들어간다."""
         src = (BASE / "app/services/title_gen/news_gen.py").read_text(

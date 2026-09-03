@@ -113,6 +113,79 @@ class TestAiSuggest:
         assert "null" in prompt and "억지로" in prompt
 
 
+class TestComboSuggestion:
+    """조합 후보 — 분류표의 84%가 조합이다. 단일어만 넣으면 오분류한다."""
+
+    def test_pairs_are_sorted(self):
+        from app.services.taxonomy.suggest import _pairs
+
+        assert _pairs(["검사", "난임"]) == ["검사+난임"]
+        assert _pairs(["난임", "검사"]) == ["검사+난임"], "순서가 달라도 같은 조합"
+
+    def test_pairs_are_capped(self):
+        """제목당 n(n-1)/2 로 폭발하는 것을 막는다."""
+        from app.services.taxonomy.suggest import PAIR_SOURCE_LIMIT, _pairs
+
+        n = PAIR_SOURCE_LIMIT
+        assert len(_pairs([f"t{i}" for i in range(20)])) == n * (n - 1) // 2
+
+    def test_single_token_makes_no_pair(self):
+        from app.services.taxonomy.suggest import _pairs
+
+        assert _pairs(["하나"]) == []
+
+    def test_combo_matches_all_parts(self):
+        """분류 매처가 `+` 를 AND 로 읽는다. 미리보기도 같아야 한다."""
+        from app.services.taxonomy.suggest import _match_conditions
+
+        assert len(_match_conditions("난임+검사")) == 2
+        assert len(_match_conditions("실비보험")) == 1
+        assert _match_conditions("") == []
+
+    def test_combo_threshold_is_lower(self):
+        """둘이 함께 나오는 일은 단독보다 드물다."""
+        from app.services.taxonomy import suggest as s
+
+        assert s.PAIR_COUNT_DIVISOR > 1
+
+    def test_ui_allows_editing_term(self):
+        """'검사' 를 '난임+검사' 로 좁히는 것이 흔한 경우다."""
+        tpl = (BASE / "app/templates/collection/_niche_suggest.html").read_text(
+            encoding="utf-8")
+        assert 'x-model="row.term"' in tpl
+        assert "조합" in tpl and "단일 — 범위가 넓습니다" in tpl
+
+    def test_plan_returns_samples(self):
+        """숫자만 보고 승인하면 오분류를 눈으로 확인할 수 없다."""
+        src = (BASE / "app/services/taxonomy/changes.py").read_text(
+            encoding="utf-8")
+        assert '"samples": samples' in src
+        tpl = (BASE / "app/templates/collection/_niche_suggest.html").read_text(
+            encoding="utf-8")
+        assert "이런 제목들이 걸립니다" in tpl
+
+
+class TestDeletedAreHidden:
+    """삭제된 분류는 매처가 안 쓴다. 화면에도 보이면 안 된다."""
+
+    def test_tree_filters_deleted(self):
+        src = (BASE / "app/services/taxonomy/changes.py").read_text(
+            encoding="utf-8")
+        block = src[src.index("async def tree("):]
+        assert "Topic.is_deleted.is_(False)" in block
+        assert "SubTopic.is_deleted.is_(False)" in block
+        assert "Keyword.is_deleted.is_(False)" in block
+
+    def test_known_terms_filters_deleted(self):
+        """삭제된 것을 '이미 있는 말' 로 세면 살아 있는 후보를 놓친다."""
+        src = (BASE / "app/services/taxonomy/suggest.py").read_text(
+            encoding="utf-8")
+        block = src[src.index("async def known_terms("):
+                    src.index("async def suggest(")]
+        assert "SubTopic.is_deleted.is_(False)" in block
+        assert "Topic.is_deleted.is_(False)" in block
+
+
 class TestSuggestRules:
     def test_thresholds(self):
         from app.services.taxonomy import suggest as s

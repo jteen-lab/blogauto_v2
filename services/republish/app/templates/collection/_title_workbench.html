@@ -127,23 +127,29 @@
           <div class="grid grid-cols-2 gap-2">
             <label class="text-xs text-gray-500">
               제목 생성 AI
-              <select x-model="gen.ai_provider" class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+              <select x-model="gen.ai_provider" @change="gen.ai_model = ''"
+                      class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
                 <option value="">블로그 설정 따름</option>
-                <option value="anthropic">Anthropic</option>
-                <option value="openai">OpenAI</option>
-                <option value="google">Google</option>
-                <option value="deepseek">DeepSeek</option>
+                <template x-for="p in providers()" :key="p">
+                  <option :value="p" x-text="p"></option>
+                </template>
               </select>
             </label>
             <label class="text-xs text-gray-500">
               모델 <span class="text-gray-400">(비우면 기본값)</span>
-              <input type="text" x-model="gen.ai_model" placeholder="예: claude-sonnet-5"
-                     class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+              <select x-model="gen.ai_model" :disabled="!gen.ai_provider"
+                      class="mt-0.5 w-full text-sm border-gray-300 rounded py-1 disabled:bg-gray-50">
+                <option value="">기본값</option>
+                <template x-for="m in modelsFor(gen.ai_provider)" :key="m">
+                  <option :value="m" x-text="m"></option>
+                </template>
+              </select>
             </label>
           </div>
           <p class="text-xs text-gray-400">
-            AI 를 고르지 않고 블로그도 선택하지 않으면 <b>제목이 만들어지지 않습니다.</b>
-            AI 서비스는 제공자를 지정하지 않으면 폴백 없이 거부합니다.
+            비우면 <b>대상 블로그의 제목 AI</b>를 씁니다. 블로그도 고르지 않으면
+            제목이 만들어지지 않습니다 — AI 서비스는 제공자를 지정하지 않으면
+            폴백 없이 거부합니다.
           </p>
 
           <!-- L1 -->

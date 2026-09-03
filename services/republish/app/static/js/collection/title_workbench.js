@@ -18,6 +18,7 @@ function titleWorkbench() {
         message: '',
         messageType: 'info',
         blogs: [],
+        models: [],
         stats: { partial_domains: null, blocked_domains: null },
 
         collect: {
@@ -52,7 +53,31 @@ function titleWorkbench() {
         },
 
         async init() {
-            await Promise.all([this.loadStats(), this.loadBlogs()]);
+            await Promise.all([this.loadStats(), this.loadBlogs(),
+                               this.loadModels()]);
+        },
+
+        async loadModels() {
+            // 모델명을 직접 적게 하면 오타 하나로 생성이 통째로 실패한다
+            const d = await this.get('/api/v1/ai-models?capability=text');
+            if (!d) return;
+            this.models = (d.models || d.items || (Array.isArray(d) ? d : []))
+                .filter((m) => m && m.provider && m.model_id);
+        },
+
+        providers() {
+            return [...new Set(this.models.map((m) => m.provider))].sort();
+        },
+
+        modelsFor(provider) {
+            if (!provider) return [];
+            const list = this.models
+                .filter((m) => m.provider === provider)
+                .map((m) => m.model_id);
+            // 저장된 값이 목록에 없으면 select 가 빈 값을 되쓴다
+            const saved = this.gen.ai_model;
+            if (saved && !list.includes(saved)) list.unshift(saved);
+            return [...new Set(list)];
         },
 
         anyEnabled() {

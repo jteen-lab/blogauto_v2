@@ -18,7 +18,11 @@
     <div class="p-3 border-t border-gray-200 space-y-3">
       <div class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
         미분류 제목에서 자주 나오는데 <b>분류표에 없는 말</b>을 찾습니다.
-        추가하면 그만큼 제목이 회수됩니다. 이 단계는 AI 를 쓰지 않습니다.
+        이 단계는 AI 를 쓰지 않습니다.
+        <br>
+        분류표의 84%가 <b>조합(<code>A+B</code>)</b>입니다. 단일어는 범위가 넓어
+        엉뚱한 제목까지 끌어오므로, <span class="px-1 bg-indigo-100 text-indigo-700 rounded">조합</span>
+        후보를 우선 보고 필요하면 <b>후보어를 직접 고쳐서</b> 추가하세요.
       </div>
 
       <div class="flex flex-wrap items-end gap-2">
@@ -54,7 +58,15 @@
             <tbody class="divide-y divide-gray-100">
               <template x-for="row in candidates" :key="row.term">
                 <tr class="hover:bg-gray-50" :class="row.done ? 'opacity-40' : ''">
-                  <td class="px-2 py-1.5 font-medium" x-text="row.term"></td>
+                  <td class="px-2 py-1.5">
+                    {# 후보어를 그대로 넣지 않고 고칠 수 있어야 한다.
+                       "검사" 를 "난임+검사" 로 좁히는 것이 흔한 경우다. #}
+                    <input type="text" x-model="row.term" :disabled="row.done"
+                           class="w-full text-sm border-gray-200 rounded py-1 font-medium">
+                    <span class="mt-0.5 inline-block px-1 rounded text-xs"
+                          :class="row.term.includes('+') ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'"
+                          x-text="row.term.includes('+') ? '조합' : '단일 — 범위가 넓습니다'"></span>
+                  </td>
                   <td class="px-2 py-1.5 text-right" x-text="row.count.toLocaleString()"></td>
                   <td class="px-2 py-1.5 text-xs text-gray-500 max-w-[20rem] truncate"
                       :title="(row.samples || []).join('\n')"
@@ -165,10 +177,17 @@ function nicheSuggestPanel() {
                                             { items, actor: 'ui' });
             if (!planned || !planned.success) return;
 
+            const detail = (planned.impact?.details || [])[0] || {};
             const recovered = planned.impact?.recovered || 0;
+            const samples = (detail.samples || []).slice(0, 5);
+            // 숫자만 보고 승인하면 오분류를 눈으로 확인할 수 없다
+            const preview = samples.length
+                ? '\n\n이런 제목들이 걸립니다:\n- ' + samples.join('\n- ')
+                : '';
             if (!confirm(`"${row.term}" 을 분류표에 추가합니다.\n`
-                + `미분류 ${recovered.toLocaleString()}건이 회수될 것으로 보입니다.\n`
-                + '계속할까요?')) return;
+                + `미분류 ${recovered.toLocaleString()}건이 회수될 것으로 보입니다.`
+                + preview
+                + '\n\n계속할까요?')) return;
 
             const applied = await this.post(
                 `/api/v1/admin/taxonomy/apply/${planned.change_id}`);

@@ -104,7 +104,7 @@ class TitleWorkbench:
             result["samples"].extend(found.get("samples") or [])
 
         if gen.get("l3_enabled"):
-            found = await self._run_l3(gen, settings)
+            found = await self._run_l3(gen, settings, blog)
             result["l3"] = found
             result["made"] += found.get("made") or 0
             result["samples"].extend(found.get("samples") or [])
@@ -142,7 +142,8 @@ class TitleWorkbench:
                 "samples": preview[:50], "message": out.get("message"),
                 "error": error}
 
-    async def _run_l3(self, gen: dict, settings: Any) -> Dict[str, Any]:
+    async def _run_l3(self, gen: dict, settings: Any,
+                      blog: Any = None) -> Dict[str, Any]:
         """L3 — 뉴스 요지 + 니치 키워드."""
         from ..naver_news_service import NaverNewsService
         from ..title_gen.news_gen import NewsTitleGenerator
@@ -151,7 +152,7 @@ class TitleWorkbench:
         if not news.is_configured():
             return {"made": 0, "error": "네이버 뉴스 API 키가 없습니다"}
 
-        ask = await self._make_ask(gen)
+        ask = await self._make_ask(gen, blog)
         generator = NewsTitleGenerator(self.db, self.user_id, news, ask)
         out = await generator.run(days=gen.get("news_days") or 3,
                                   limit=gen.get("news_limit") or 10)
@@ -164,16 +165,27 @@ class TitleWorkbench:
                 "samples": [t["title"] for t in titles][:50],
                 "error": out.get("error")}
 
-    async def _make_ask(self, gen: dict):
-        """AI 호출 함수. 제공자가 없으면 None — 그때는 만들지 않는다."""
+    async def _make_ask(self, gen: dict, blog: Any = None):
+        """AI 호출 함수.
+
+        고른 것이 없으면 **블로그의 제목 AI 를 쓴다.** 블로그마다 쓰는
+        모델이 다른데 매번 화면에서 고르게 하면 실수가 난다. 둘 다 없을
+        때만 None 이고, 그때는 만들지 않는다.
+        """
         provider = gen.get("ai_provider")
+        model = gen.get("ai_model")
+        if not provider and blog is not None:
+            ai_config = getattr(blog, "ai_config", None) or {}
+            title_ai = ai_config.get("title_ai") or {}
+            writing_ai = ai_config.get("writing_ai") or {}
+            provider = title_ai.get("provider") or writing_ai.get("provider")
+            model = model or title_ai.get("model") or writing_ai.get("model")
         if not provider:
             return None
 
         from ..ai.ai_service import AIService
 
         service = AIService(self.db, self.user_id)
-        model = gen.get("ai_model")
 
         async def ask(prompt: str) -> str:
             result = await service.generate(
