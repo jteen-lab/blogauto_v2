@@ -445,6 +445,9 @@
     {# 도메인 대량삭제 팝업 — 임계 초과 시 삭제 응답이 이벤트로 연다 #}
     {% include "collection/_domain_purge.html" %}
 
+    {# 제목 수정 팝업 — 제목과 니치를 한자리에서 고친다 #}
+    {% include "collection/_title_edit.html" %}
+
     <!-- 생성 콘텐츠 미리보기 모달 (iframe srcdoc) -->
     <div x-show="contentModal.open" x-transition:enter="transition ease-out duration-200"
          x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
@@ -680,8 +683,9 @@ function dataManagementApp() {
         mainTitleUnifiedTotal: 0,  // 메인 + 미매칭 합계 (통합 페이지네이션용)
 
         // ★ 인라인 편집 상태 변수
-        editingTitleId: null,
-        editingTitleValue: '',
+        {# 제목 인라인 편집은 폐기했다(계획서 §9). 제목만 고치면
+           오분류를 낳은 키워드가 그대로 남는다 — _title_edit.html 이
+           제목과 니치를 함께 다룬다. #}
         editingFilterId: null,
         editingFilterValue: '',
 
@@ -1922,52 +1926,8 @@ function dataManagementApp() {
         // 키워드 인라인 편집 저장
         // 키워드 인라인 편집 취소
         // 제목 인라인 편집 시작
-        startEditTitle(title) {
-            this.editingTitleId = title.id;
-            this.editingTitleValue = title.title;
-            this.$nextTick(() => {
-                const input = this.$refs.titleEditInput;
-                if (input) {
-                    input.focus();
-                    input.select();
-                }
-            });
-        },
-
         // 제목 인라인 편집 저장
-        async saveEditTitle(id) {
-            if (!this.editingTitleId) return;
-            const newValue = this.editingTitleValue.trim();
-            if (!newValue) {
-                showErrorMessage('제목을 입력하세요');
-                return;
-            }
-            try {
-                const res = await fetch(`${API_BASE}/data/titles/temp/${id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({ title: newValue })
-                });
-                if (!res.ok) throw new Error('수정 실패');
-                // 로컬 데이터 업데이트
-                const t = this.titles.find(t => t.id === id);
-                if (t) t.title = newValue;
-                showSuccessMessage('제목이 수정되었습니다');
-            } catch (e) {
-                showErrorMessage('제목 수정 실패');
-            } finally {
-                this.editingTitleId = null;
-                this.editingTitleValue = '';
-            }
-        },
-
         // 제목 인라인 편집 취소
-        cancelEditTitle() {
-            this.editingTitleId = null;
-            this.editingTitleValue = '';
-        },
-
         // 필터 인라인 편집 시작
         startEditFilter(filter) {
             if (filter.is_system) return; // 시스템 필터는 편집 불가

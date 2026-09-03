@@ -1,0 +1,296 @@
+{#
+  제목 수정 팝업 — 제목과 니치를 한자리에서 고친다.
+
+  **카테고리만 바꾸면 오분류가 반복된다.** 그 제목을 잘못 분류한 키워드가
+  그대로 남아 다음에 또 같은 곳으로 간다. 그래서 여기서 주제·하위주제·
+  키워드를 카테고리 관리와 **같은 API 로** 만들고 고칠 수 있게 한다.
+
+  여기서 만든 니치는 카테고리 관리에도 그대로 보이고, 임시제목 탭의
+  '카테고리 재분류' 가 바뀐 분류표로 다시 분류한다.
+
+  계획서: docs/plans/title_tab_workplan.md §9
+#}
+<div x-data="titleEditPanel()"
+     @edit-title.window="open($event.detail)"
+     x-show="visible" x-cloak
+     class="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4">
+  <div @click.away="close()"
+       class="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[88vh] flex flex-col">
+
+    <div class="p-5 pb-3 border-b border-gray-200">
+      <h3 class="text-lg font-semibold">제목 수정</h3>
+      <p class="mt-1 text-sm text-gray-500">
+        제목과 니치를 함께 고칩니다. 카테고리만 바꾸면 <b>같은 오분류가 반복됩니다</b> —
+        원인이 된 키워드까지 손봐야 합니다.
+      </p>
+    </div>
+
+    <div class="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+      <!-- 제목 -->
+      <label class="block">
+        <span class="text-xs text-gray-500">제목</span>
+        <input type="text" x-model="form.title"
+               class="mt-1 w-full text-sm border-gray-300 rounded-md py-2">
+      </label>
+
+      <!-- 왜 이렇게 분류됐나 -->
+      <div x-show="matchedKeyword" class="px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+        이 제목은 키워드 <b x-text="matchedKeyword"></b> 에 걸려 분류됐습니다.
+        범위가 넓다면 아래에서 <b>조합(<code>A+B</code>)</b>으로 좁히세요.
+      </div>
+
+      <!-- 니치 3단 -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <!-- 주제 -->
+        <div class="border border-gray-200 rounded-lg p-2">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-xs font-medium text-gray-700">주제</span>
+            <button @click="createTopic()" class="text-xs text-accent hover:underline">+ 새로</button>
+          </div>
+          <select x-model.number="form.topic_id" @change="onTopicChange()"
+                  size="6" class="w-full text-sm border-gray-200 rounded">
+            <option value="">(미분류)</option>
+            <template x-for="t in topics" :key="t.id">
+              <option :value="t.id" x-text="t.name"></option>
+            </template>
+          </select>
+        </div>
+
+        <!-- 하위 주제 -->
+        <div class="border border-gray-200 rounded-lg p-2">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-xs font-medium text-gray-700">하위 주제</span>
+            <button @click="createSubtopic()" :disabled="!form.topic_id"
+                    class="text-xs text-accent hover:underline disabled:opacity-30">+ 새로</button>
+          </div>
+          <select x-model.number="form.subtopic_id" @change="onSubtopicChange()"
+                  size="6" class="w-full text-sm border-gray-200 rounded">
+            <option value="">(없음)</option>
+            <template x-for="s in subtopics" :key="s.id">
+              <option :value="s.id" x-text="s.name"></option>
+            </template>
+          </select>
+        </div>
+
+        <!-- 키워드 -->
+        <div class="border border-gray-200 rounded-lg p-2">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-xs font-medium text-gray-700">키워드</span>
+            <button @click="createKeyword()" :disabled="!form.subtopic_id"
+                    class="text-xs text-accent hover:underline disabled:opacity-30">+ 새로</button>
+          </div>
+          <div class="max-h-36 overflow-y-auto space-y-0.5">
+            <template x-for="k in keywords" :key="k.id">
+              <div class="flex items-center gap-1 group">
+                <input type="text" x-model="k.name" @blur="renameKeyword(k)"
+                       class="flex-1 text-xs border-gray-200 rounded py-0.5">
+                <button @click="removeKeyword(k)"
+                        class="text-xs text-red-500 opacity-0 group-hover:opacity-100">✕</button>
+              </div>
+            </template>
+            <p x-show="!keywords.length" class="text-xs text-gray-400 py-2 text-center">
+              키워드 없음
+            </p>
+          </div>
+          <p class="mt-1 text-xs text-gray-400">
+            <code>A+B</code> 는 <b>둘 다</b> 들어간 제목에만 걸립니다.
+          </p>
+        </div>
+      </div>
+
+      <p x-show="message" class="text-sm"
+         :class="messageType === 'error' ? 'text-red-600' : 'text-emerald-600'"
+         x-text="message"></p>
+    </div>
+
+    <div class="p-4 border-t border-gray-200 flex items-center justify-between">
+      <span class="text-xs text-gray-400">
+        여기서 만든 니치는 카테고리 관리에도 보이고, 재분류에 바로 쓰입니다.
+      </span>
+      <div class="flex gap-2">
+        <button @click="close()" class="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800">닫기</button>
+        <button @click="save()" :disabled="busy"
+                class="px-4 py-1.5 bg-accent text-white rounded-lg text-sm font-medium disabled:opacity-40">
+          <span x-text="busy ? '저장 중…' : '저장'"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function titleEditPanel() {
+    return {
+        visible: false,
+        busy: false,
+        titleId: null,
+        matchedKeyword: '',
+        form: { title: '', topic_id: '', subtopic_id: '' },
+        topics: [],
+        subtopics: [],
+        keywords: [],
+        message: '',
+        messageType: 'info',
+
+        async open(row) {
+            if (!row) return;
+            this.visible = true;
+            this.message = '';
+            this.titleId = row.id;
+            this.matchedKeyword = row.matched_keyword || '';
+            this.form = {
+                title: row.title || '',
+                topic_id: row.topic_id || '',
+                subtopic_id: row.subtopic_id || '',
+            };
+            await this.loadTopics();
+            if (this.form.topic_id) await this.loadSubtopics();
+            if (this.form.subtopic_id) await this.loadKeywords();
+        },
+
+        close() {
+            this.visible = false;
+        },
+
+        async loadTopics() {
+            const d = await this.get('/api/v1/categories/topics');
+            this.topics = d ? (d.items || d.topics || (Array.isArray(d) ? d : [])) : [];
+        },
+
+        async loadSubtopics() {
+            if (!this.form.topic_id) { this.subtopics = []; return; }
+            const d = await this.get(
+                `/api/v1/categories/topics/${this.form.topic_id}/subtopics`);
+            this.subtopics = d ? (d.items || d.subtopics || (Array.isArray(d) ? d : [])) : [];
+        },
+
+        async loadKeywords() {
+            if (!this.form.subtopic_id) { this.keywords = []; return; }
+            const d = await this.get(
+                `/api/v1/categories/subtopics/${this.form.subtopic_id}/keywords`);
+            this.keywords = d ? (d.items || d.keywords || (Array.isArray(d) ? d : [])) : [];
+        },
+
+        async onTopicChange() {
+            this.form.subtopic_id = '';
+            this.keywords = [];
+            await this.loadSubtopics();
+        },
+
+        async onSubtopicChange() {
+            await this.loadKeywords();
+        },
+
+        /** 카테고리 관리와 같은 API 를 쓴다 — 그래서 그쪽에도 바로 보인다. */
+        async createTopic() {
+            const name = prompt('새 주제 이름');
+            if (!name || !name.trim()) return;
+            const d = await this.post('/api/v1/categories/topics',
+                                      { name: name.trim() });
+            if (!d) return;
+            await this.loadTopics();
+            this.form.topic_id = d.id;
+            await this.onTopicChange();
+        },
+
+        async createSubtopic() {
+            const name = prompt('새 하위 주제 이름');
+            if (!name || !name.trim()) return;
+            const d = await this.post('/api/v1/categories/subtopics',
+                { topic_id: this.form.topic_id, name: name.trim() });
+            if (!d) return;
+            await this.loadSubtopics();
+            this.form.subtopic_id = d.id;
+            await this.loadKeywords();
+        },
+
+        async createKeyword() {
+            const name = prompt('새 키워드 (조합은 A+B 형식)');
+            if (!name || !name.trim()) return;
+            const d = await this.post('/api/v1/categories/keywords',
+                { subtopic_id: this.form.subtopic_id, name: name.trim() });
+            if (!d) return;
+            await this.loadKeywords();
+            this.message = `키워드 "${name.trim()}" 추가 — 재분류하면 적용됩니다`;
+            this.messageType = 'info';
+        },
+
+        async renameKeyword(row) {
+            const name = (row.name || '').trim();
+            if (!name) return;
+            await this.put(`/api/v1/categories/keywords/${row.id}`,
+                           { name });
+        },
+
+        async removeKeyword(row) {
+            if (!confirm(`키워드 "${row.name}" 을 삭제할까요?\n`
+                + '이 키워드로 분류된 제목은 재분류 시 미분류로 돌아갑니다.')) return;
+            const ok = await this.del(`/api/v1/categories/keywords/${row.id}`);
+            if (ok) await this.loadKeywords();
+        },
+
+        async save() {
+            this.busy = true;
+            const d = await this.put(
+                `/api/v1/data/titles/temp/${this.titleId}`, {
+                    title: this.form.title,
+                    // 0 은 "비움" 이다. null 을 보내면 서버가 무시한다.
+                    topic_id: this.form.topic_id || 0,
+                    subtopic_id: this.form.subtopic_id || 0,
+                });
+            this.busy = false;
+            if (!d) return;
+            window.dispatchEvent(new CustomEvent('titles-changed'));
+            this.close();
+        },
+
+        async get(url) {
+            try {
+                const r = await fetch(url, { credentials: 'include' });
+                const text = await r.text();
+                if (!r.ok) throw new Error(this.detail(text, r.status));
+                return text ? JSON.parse(text) : null;
+            } catch (e) {
+                this.message = e.message; this.messageType = 'error';
+                return null;
+            }
+        },
+
+        async post(url, body) { return this.send('POST', url, body); },
+        async put(url, body) { return this.send('PUT', url, body); },
+
+        async send(method, url, body) {
+            try {
+                const r = await fetch(url, {
+                    method, credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body || {}),
+                });
+                const text = await r.text();
+                if (!r.ok) throw new Error(this.detail(text, r.status));
+                return text ? JSON.parse(text) : {};
+            } catch (e) {
+                this.message = e.message; this.messageType = 'error';
+                return null;
+            }
+        },
+
+        async del(url) {
+            try {
+                const r = await fetch(url, { method: 'DELETE',
+                                             credentials: 'include' });
+                if (!r.ok) throw new Error(this.detail(await r.text(), r.status));
+                return true;
+            } catch (e) {
+                this.message = e.message; this.messageType = 'error';
+                return false;
+            }
+        },
+
+        detail(text, status) {
+            try { return JSON.parse(text).detail || `요청 실패 (${status})`; }
+            catch (e) { return `요청 실패 (${status})`; }
+        },
+    };
+}
+</script>

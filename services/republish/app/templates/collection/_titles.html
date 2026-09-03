@@ -230,30 +230,16 @@
                                 x-model="selectedTitles"
                                 @change="onTitleSelect()">
                         </td>
-                        <!-- ★ 인라인 편집 가능한 제목 셀 -->
+                        {# 더블클릭 인라인 편집은 폐기했다. 제목만 고치면
+                           오분류를 낳은 키워드가 그대로 남아 같은 일이
+                           반복된다. '수정' 버튼이 제목과 니치를 함께 다룬다. #}
                         <td>
-                            <template x-if="editingTitleId !== title.id">
-                                <div>
-                                    <div
-                                        @dblclick="startEditTitle(title)"
-                                        class="font-medium truncate max-w-md cursor-pointer hover:bg-yellow-50 px-1 py-0.5 rounded"
-                                        title="더블클릭하여 수정"
-                                        x-text="title.title"></div>
-                                    <div x-show="title.source_keyword" class="text-xs text-gray-400 mt-0.5">
-                                        키워드: <span x-text="title.source_keyword"></span>
-                                    </div>
-                                </div>
-                            </template>
-                            <template x-if="editingTitleId === title.id">
-                                <input
-                                    type="text"
-                                    x-model="editingTitleValue"
-                                    @keyup.enter="saveEditTitle(title.id)"
-                                    @keyup.escape="cancelEditTitle()"
-                                    @blur="saveEditTitle(title.id)"
-                                    x-ref="titleEditInput"
-                                    class="w-full px-2 py-1 border border-primary rounded text-sm focus:outline-none focus:ring-2 focus:ring-accent">
-                            </template>
+                            <div class="font-medium truncate max-w-md" x-text="title.title"></div>
+                            <div x-show="title.source_keyword" class="text-xs text-gray-400 mt-0.5">
+                                키워드: <span x-text="title.source_keyword"></span>
+                            </div>
+                            <div x-show="title.filter_reason" class="text-xs text-amber-600 mt-0.5"
+                                 x-text="title.filter_reason"></div>
                         </td>
                         <td class="w-72">
                             <!-- 카테고리 관리 연동 (주제 - 하위 주제) 우선 표시 -->
@@ -276,6 +262,11 @@
                         </td>
                         <td class="w-40 text-center">
                             <div class="flex items-center justify-center gap-2">
+                                <button
+                                    @click="$dispatch('edit-title', title)"
+                                    class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                    수정
+                                </button>
                                 <button
                                     x-show="title.status !== 'moved'"
                                     @click="promoteTitle(title.id)"
@@ -389,6 +380,8 @@
                             </svg>
                             이동
                         </button>
+                        <button @click="$dispatch('edit-title', title)"
+                                class="flex-1 py-2 text-sm text-blue-600 font-medium">수정</button>
                         <button @click="deleteTitle(title.id)"
                                 class="mobile-card-action-btn text-red-600 border-red-200 hover:bg-red-50">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

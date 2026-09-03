@@ -62,7 +62,9 @@
                     {# 후보어를 그대로 넣지 않고 고칠 수 있어야 한다.
                        "검사" 를 "난임+검사" 로 좁히는 것이 흔한 경우다. #}
                     <input type="text" x-model="row.term" :disabled="row.done"
-                           class="w-full text-sm border-gray-200 rounded py-1 font-medium">
+                           placeholder="예: 난임+검사"
+                           class="w-full text-sm border-2 border-gray-300 rounded py-1 px-2 font-medium
+                                  focus:border-accent focus:ring-1 focus:ring-accent bg-white">
                     <span class="mt-0.5 inline-block px-1 rounded text-xs"
                           :class="row.term.includes('+') ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'"
                           x-text="row.term.includes('+') ? '조합' : '단일 — 범위가 넓습니다'"></span>

@@ -58,6 +58,9 @@ class TempTitleResponse(BaseModel):
     # 출처 배지 — 생성인지 수집인지 한눈에 가른다(계획서 W1)
     source_label: Optional[str] = None
     source_tone: Optional[str] = None
+    # 어떤 키워드에 걸려 분류됐는가. 오분류를 고칠 때 원인을 보여 준다.
+    matched_keyword_id: Optional[int] = None
+    matched_keyword: Optional[str] = None
     candidate_id: Optional[int] = None
     expires_at: Optional[datetime] = None
 
@@ -78,6 +81,11 @@ class TempTitleUpdate(BaseModel):
     status: Optional[str] = None
     category_id: Optional[int] = None
     filter_reason: Optional[str] = None
+    # 니치 수정 — 오분류를 고칠 때 카테고리도 함께 바꾼다.
+    # 값을 명시적으로 비우려면 0 을 보낸다(None 은 "안 바꿈" 이다).
+    topic_id: Optional[int] = None
+    subtopic_id: Optional[int] = None
+    matched_keyword_id: Optional[int] = None
 
 
 class TitlePromoteRequest(BaseModel):
@@ -236,6 +244,11 @@ async def list_temp_titles(
             if subtopic:
                 item.subtopic_id = subtopic.id
                 item.subtopic_name = subtopic.name
+        if t.matched_keyword_id:
+            from ..models.category import Keyword
+
+            matched = await db.get(Keyword, t.matched_keyword_id)
+            item.matched_keyword = matched.name if matched else None
         # category_path 구성 (주제 - 하위 주제)
         if item.topic_name and item.subtopic_name:
             item.category_path = f"{item.topic_name} - {item.subtopic_name}"
@@ -366,6 +379,17 @@ async def update_temp_title(
         title_obj.category_id = data.category_id
     if data.filter_reason is not None:
         title_obj.filter_reason = data.filter_reason
+
+    # 니치 수정. 0 은 "비움" 이다 — None 과 구분해야 미분류로 되돌릴 수 있다.
+    if data.topic_id is not None:
+        title_obj.topic_id = data.topic_id or None
+        # 주제를 바꾸면 상태도 따라간다. 안 그러면 분류됐는데 'new' 로
+        # 남아 목록 필터가 어긋난다.
+        title_obj.status = "categorized" if data.topic_id else "new"
+    if data.subtopic_id is not None:
+        title_obj.subtopic_id = data.subtopic_id or None
+    if data.matched_keyword_id is not None:
+        title_obj.matched_keyword_id = data.matched_keyword_id or None
 
     await db.commit()
     await db.refresh(title_obj)
