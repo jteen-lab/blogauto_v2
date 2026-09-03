@@ -20,6 +20,17 @@ from ...models.title import MainTitle
 logger = logging.getLogger(__name__)
 
 
+def is_recombined(row: Any) -> bool:
+    """이미 재조합된 제목인가.
+
+    값이 **정수일 때만** 참으로 본다. `getattr(...)` 만 쓰면 목 객체나
+    지연 로딩 프록시가 truthy 로 잡혀, 멀쩡한 원본 제목까지 "이미
+    재조합됨" 으로 오인하고 재조합을 건너뛴다.
+    """
+    value = getattr(row, "recombined_from_id", None)
+    return isinstance(value, int) and value > 0
+
+
 async def pick_style(db: AsyncSession, styles: list,
                      blog_id: Optional[int]) -> Optional[str]:
     """스타일 선택. 성과가 좋았던 쪽에 무게를 준다.
@@ -50,15 +61,24 @@ async def consume_group(db: AsyncSession, source_title: Any) -> int:
     if not source_title.group_id:
         return 1
 
-    rows = (await db.execute(
-        select(MainTitle).where(
-            MainTitle.group_id == source_title.group_id,
-            MainTitle.id != source_title.id,
-            MainTitle.status == "available")
-    )).scalars().all()
+    # 그룹 소진은 부가 동작이다. 여기서 실패해도 글은 이미 만들어졌으므로
+    # 파이프라인 전체를 되돌리지 않는다 — 최소한 원본은 소진된다.
+    try:
+        rows = (await db.execute(
+            select(MainTitle).where(
+                MainTitle.group_id == source_title.group_id,
+                MainTitle.id != source_title.id,
+                MainTitle.status == "available")
+        )).scalars().all()
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"[GENERATOR] 그룹 소진 실패(원본만 소진): {e}")
+        return 1
+
+    count = 0
     for row in rows:
         row.mark_used()
-    return 1 + len(rows)
+        count += 1
+    return 1 + count
 
 
 def title_keywords(row: Any) -> List[str]:

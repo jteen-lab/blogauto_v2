@@ -31,7 +31,9 @@ from .content_generator_helper import (
     DEFAULT_CONTENT_PROMPT,
 )
 from .author_signal_injector import inject_author_signal
-from .title_lifecycle import consume_group, pick_style, title_keywords
+from .title_lifecycle import (
+    consume_group, is_recombined, pick_style, title_keywords,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -165,7 +167,7 @@ class ContentGenerator:
         tr_styles = tr.get("styles", [])
         selected_style = await pick_style(self.db, tr_styles, blog_id)
 
-        if getattr(source_title, "recombined_from_id", None):
+        if is_recombined(source_title):
             # 이미 재조합된 제목이다. 또 돌리면 원문에서 두 단계 멀어져
             # 키워드가 유실된다(계획서 §4-3).
             from .title_recombiner import RecombineResult

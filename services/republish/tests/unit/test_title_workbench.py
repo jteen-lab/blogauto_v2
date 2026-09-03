@@ -278,8 +278,25 @@ class TestRecombine:
         """이미 재조합된 제목을 또 돌리면 원문에서 두 단계 멀어진다."""
         src = (BASE / "app/services/generation/generator.py").read_text(
             encoding="utf-8")
-        assert 'getattr(source_title, "recombined_from_id", None)' in src
+        assert "if is_recombined(source_title):" in src
         assert "재조합 건너뜀" in src
+
+    def test_recombined_check_is_type_safe(self):
+        """truthy 검사만 하면 목/프록시가 걸려 원본까지 건너뛴다."""
+        from unittest.mock import MagicMock
+
+        from app.services.generation.title_lifecycle import is_recombined
+
+        class Real:
+            recombined_from_id = 5
+
+        class Fresh:
+            recombined_from_id = None
+
+        assert is_recombined(Real()) is True
+        assert is_recombined(Fresh()) is False
+        assert is_recombined(MagicMock()) is False
+        assert is_recombined(object()) is False
 
     def test_group_is_consumed(self):
         """그룹 전체 소진(C안). 재조합만 소진하면 원본으로 또 쓴다."""
