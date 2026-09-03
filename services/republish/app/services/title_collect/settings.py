@@ -27,6 +27,9 @@ DEFAULT_TITLES_PER_KEYWORD = 30  # 키워드 하나에서 가져올 제목 수
 # 한 도메인에서 다 못 채우면 다음 도메인으로 넘어가 이어서 채운다.
 DEFAULT_EXTRACT_URLS = 100
 
+# 재고가 이보다 적은 니치를 '부족' 으로 본다. 화면과 같은 기준이다.
+DEFAULT_LOW_NICHE = 20
+
 # 니치 대조 모드. 초기에는 '표시' 가 안전하다 — 분류표가 얇은 상태에서
 # 차단부터 켜면 살릴 수 있는 제목까지 막힌다.
 NICHE_MARK = "mark"
@@ -61,6 +64,11 @@ class TitleCollectSettings:
     extract_enabled: bool = True
     extract_urls: int = DEFAULT_EXTRACT_URLS
 
+    # 재고가 부족한 니치의 키워드를 먼저 쓴다. 어디를 채울지 화면이
+    # 보여 주는 것과 같은 기준이다(niche_demand).
+    prioritize_low_niche: bool = True
+    low_niche_threshold: int = DEFAULT_LOW_NICHE
+
     # 저장 시점 니치 대조
     niche_mode: str = NICHE_MARK
 
@@ -79,6 +87,10 @@ class TitleCollectSettings:
             extract_enabled=bool(source.get("extract_enabled", True)),
             extract_urls=_int(source, "extract_urls",
                               DEFAULT_EXTRACT_URLS, 1, 5000),
+            prioritize_low_niche=bool(
+                source.get("prioritize_low_niche", True)),
+            low_niche_threshold=_int(source, "low_niche_threshold",
+                                     DEFAULT_LOW_NICHE, 1, 1000),
             niche_mode=mode if mode in NICHE_MODES else NICHE_MARK,
         )
 
@@ -90,5 +102,7 @@ class TitleCollectSettings:
             "titles_per_keyword": self.titles_per_keyword,
             "extract_enabled": self.extract_enabled,
             "extract_urls": self.extract_urls,
+            "prioritize_low_niche": self.prioritize_low_niche,
+            "low_niche_threshold": self.low_niche_threshold,
             "niche_mode": self.niche_mode,
         }

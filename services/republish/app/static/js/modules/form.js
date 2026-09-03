@@ -127,6 +127,8 @@ function moduleFormApp(module = null, moduleType = null) {
                     titles_per_keyword: initialModule?.settings?.title?.collect?.titles_per_keyword ?? 30,
                     extract_enabled: initialModule?.settings?.title?.collect?.extract_enabled ?? true,
                     extract_urls: initialModule?.settings?.title?.collect?.extract_urls ?? 100,
+                    prioritize_low_niche: initialModule?.settings?.title?.collect?.prioritize_low_niche ?? true,
+                    low_niche_threshold: initialModule?.settings?.title?.collect?.low_niche_threshold ?? 20,
                     niche_mode: initialModule?.settings?.title?.collect?.niche_mode || 'mark',
                 },
                 // 생성 섹션. 옛 모듈에는 gen 키가 없으므로 켜진 것으로 본다
@@ -1195,6 +1197,8 @@ function moduleFormApp(module = null, moduleType = null) {
                             titles_per_keyword: c.titles_per_keyword,
                             extract_enabled: !!c.extract_enabled,
                             extract_urls: c.extract_urls,
+                            prioritize_low_niche: !!c.prioritize_low_niche,
+                            low_niche_threshold: c.low_niche_threshold,
                             niche_mode: c.niche_mode || 'mark',
                         },
                         gen: {

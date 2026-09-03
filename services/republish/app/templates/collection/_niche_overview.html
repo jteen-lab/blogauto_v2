@@ -1,0 +1,150 @@
+{#
+  니치 현황 — 어디를 채워야 하는지 보여 준다.
+
+  숫자만 보고 판단할 수 있어야 수집·생성을 적극적으로 돌리게 된다.
+  두 값을 함께 본다.
+
+    재고    이 니치에 쓸 수 있는 정식제목 수
+    블로그  이 니치를 쓰는 블로그 수
+
+  **블로그 0인 재고는 죽은 재고다.** 아무도 꺼내 쓰지 않는다.
+  반대로 블로그는 있는데 재고가 적으면 그쪽부터 채워야 한다.
+
+  계획서: docs/plans/title_tab_workplan.md §9
+#}
+<div x-data="nicheOverview()" x-init="init()" class="mb-4">
+  <details class="border border-gray-200 rounded-lg">
+    <summary class="px-3 py-2 text-sm text-gray-700 cursor-pointer select-none">
+      🧭 니치 현황 — 어디에 제목이 부족한가
+    </summary>
+
+    <div class="p-3 border-t border-gray-200 space-y-3">
+      <!-- 요약 -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <div class="px-3 py-2 border-2 border-gray-200 rounded-lg">
+          <div class="text-xs text-gray-500">전체 재고</div>
+          <div class="text-lg font-semibold" x-text="(summary.total_titles || 0).toLocaleString()"></div>
+        </div>
+        <button @click="filter = filter === 'low' ? '' : 'low'"
+                class="px-3 py-2 border-2 rounded-lg text-left"
+                :class="filter === 'low' ? 'border-rose-400 bg-rose-50' : 'border-rose-200'">
+          <div class="text-xs text-gray-500">재고 부족</div>
+          <div class="text-lg font-semibold text-rose-600" x-text="summary.low_count || 0"></div>
+        </button>
+        <button @click="filter = filter === 'orphan' ? '' : 'orphan'"
+                class="px-3 py-2 border-2 rounded-lg text-left"
+                :class="filter === 'orphan' ? 'border-amber-400 bg-amber-50' : 'border-amber-200'">
+          <div class="text-xs text-gray-500">쓰는 블로그 없음</div>
+          <div class="text-lg font-semibold text-amber-600" x-text="summary.orphan_count || 0"></div>
+        </button>
+        <label class="px-3 py-2 border-2 border-gray-200 rounded-lg">
+          <span class="text-xs text-gray-500">부족 기준</span>
+          <input type="number" min="1" max="1000" x-model.number="threshold"
+                 @change="load()"
+                 class="mt-0.5 w-full text-sm border-gray-300 rounded py-0.5">
+        </label>
+      </div>
+
+      <p class="text-xs text-gray-500">
+        <b class="text-rose-600">재고 부족</b> = 쓰는 블로그가 있는데 제목이 기준보다 적은 니치 —
+        <b>여기부터 채웁니다</b>.
+        <b class="text-amber-600">쓰는 블로그 없음</b> = 재고는 있는데 꺼내 쓸 블로그가 없는 니치 —
+        블로그에 그 니치를 붙이거나, 더 만들 이유가 없습니다.
+      </p>
+
+      <!-- 목록 -->
+      <div class="border border-gray-200 rounded-lg overflow-hidden">
+        <div class="overflow-x-auto max-h-96 overflow-y-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50 sticky top-0">
+              <tr>
+                <th class="px-2 py-2 text-left">주제</th>
+                <th class="px-2 py-2 text-left">하위 주제</th>
+                <th class="px-2 py-2 text-right">재고</th>
+                <th class="px-2 py-2 text-right">블로그</th>
+                <th class="px-2 py-2 text-left">상태</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              <template x-for="row in visible()" :key="row.subtopic_id">
+                <tr class="hover:bg-gray-50">
+                  <td class="px-2 py-1.5 text-gray-600" x-text="row.topic_name"></td>
+                  <td class="px-2 py-1.5 font-medium" x-text="row.subtopic_name"></td>
+                  <td class="px-2 py-1.5 text-right"
+                      :class="row.is_low ? 'text-rose-600 font-semibold' : ''"
+                      x-text="row.titles.toLocaleString()"></td>
+                  <td class="px-2 py-1.5 text-right"
+                      :class="row.blogs ? '' : 'text-gray-300'"
+                      x-text="row.blogs"></td>
+                  <td class="px-2 py-1.5">
+                    <span x-show="row.is_low"
+                          class="px-1.5 py-0.5 rounded text-xs bg-rose-100 text-rose-700">부족</span>
+                    <span x-show="row.is_orphan"
+                          class="px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-700">블로그 없음</span>
+                    <span x-show="!row.is_low && !row.is_orphan && row.blogs"
+                          class="text-xs text-gray-400">충분</span>
+                    <span x-show="!row.titles && !row.blogs"
+                          class="text-xs text-gray-300">비어 있음</span>
+                  </td>
+                </tr>
+              </template>
+              <tr x-show="!visible().length && !loading">
+                <td colspan="5" class="px-3 py-8 text-center text-gray-400">
+                  해당하는 니치가 없습니다
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <p x-show="message" class="text-sm text-red-600" x-text="message"></p>
+    </div>
+  </details>
+</div>
+
+<script>
+function nicheOverview() {
+    return {
+        loading: false,
+        threshold: 20,
+        filter: '',
+        summary: { total_titles: 0, low_count: 0, orphan_count: 0 },
+        items: [],
+        message: '',
+
+        async init() {
+            await this.load();
+        },
+
+        async load() {
+            this.loading = true;
+            try {
+                const r = await fetch(
+                    `/api/v1/data/niches?low_threshold=${this.threshold}`,
+                    { credentials: 'include' });
+                const text = await r.text();
+                if (!r.ok) throw new Error(this.detail(text, r.status));
+                const d = JSON.parse(text);
+                this.summary = d;
+                this.items = d.items || [];
+            } catch (e) {
+                this.message = e.message;
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        visible() {
+            if (this.filter === 'low') return this.items.filter(r => r.is_low);
+            if (this.filter === 'orphan') return this.items.filter(r => r.is_orphan);
+            return this.items;
+        },
+
+        detail(text, status) {
+            try { return JSON.parse(text).detail || `요청 실패 (${status})`; }
+            catch (e) { return `요청 실패 (${status})`; }
+        },
+    };
+}
+</script>

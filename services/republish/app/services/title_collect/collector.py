@@ -44,7 +44,7 @@ class TitleCollector:
     async def run(self, cfg: TitleCollectSettings,
                   gate: NicheGate) -> Dict[str, Any]:
         """한 회차. 건너뛰는 조건은 없다 — 시드가 없을 때만 멈춘다."""
-        seeds = await self._seeds(cfg.seed_limit)
+        seeds = await self._seeds(cfg.seed_limit, cfg)
         if not seeds:
             return {"skipped": True, "saved": 0,
                     "message": "채택된 키워드가 없습니다 — 키워드 탭에서 먼저 "
@@ -84,22 +84,52 @@ class TitleCollector:
                 "seeds": len(seeds), "domains": len(domains),
                 "new_domains": registered, "samples": store.samples[:100]}
 
-    async def _seeds(self, limit: int) -> List[KeywordCandidate]:
+    async def _seeds(self, limit: int,
+                     cfg: TitleCollectSettings) -> List[KeywordCandidate]:
         """아직 제목을 안 만든 채택 키워드부터.
 
         `titled` 를 쓰는 이유: `promoted`(시드로 소비됨)와 뜻이 다르다.
         겸용하면 상위 키워드가 제목을 못 받는다.
+
+        **재고가 부족한 니치를 먼저 본다.** 어디를 채워야 하는지는 화면
+        (니치 현황)이 보여 주는 것과 같은 기준으로 정한다.
         """
         from ..keyword_lab.scoring import VERDICT_ADOPT
 
-        return list((await self.db.execute(
-            select(KeywordCandidate)
-            .where(KeywordCandidate.user_id == self.user_id,
-                   KeywordCandidate.verdict == VERDICT_ADOPT)
-            .order_by(KeywordCandidate.titled.asc(),
-                      KeywordCandidate.search_volume.desc().nullslast())
-            .limit(max(1, limit))
+        base = (select(KeywordCandidate)
+                .where(KeywordCandidate.user_id == self.user_id,
+                       KeywordCandidate.verdict == VERDICT_ADOPT))
+        order = [KeywordCandidate.titled.asc(),
+                 KeywordCandidate.search_volume.desc().nullslast()]
+
+        picked: List[KeywordCandidate] = []
+        if cfg.prioritize_low_niche:
+            from .niche_demand import low_subtopics
+
+            low = await low_subtopics(self.db, self.user_id,
+                                      cfg.low_niche_threshold)
+            if low:
+                picked = list((await self.db.execute(
+                    base.where(KeywordCandidate.subtopic_id.in_(list(low)))
+                    .order_by(*order).limit(max(1, limit))
+                )).scalars().all())
+
+        if len(picked) >= limit:
+            return picked[:limit]
+
+        # 부족 니치만으로 못 채우면 나머지를 일반 순서로 붙인다 —
+        # 부족한 곳이 없다고 회차가 노는 것은 낭비다.
+        seen = {row.id for row in picked}
+        rest = list((await self.db.execute(
+            base.order_by(*order).limit(max(1, limit) * 2)
         )).scalars().all())
+        for row in rest:
+            if row.id in seen:
+                continue
+            picked.append(row)
+            if len(picked) >= limit:
+                break
+        return picked[:limit]
 
     async def _search(self, keyword: str, limit: int) -> List[Dict[str, str]]:
         """검색 상위 결과. 실패는 빈 목록 — 회차를 죽이지 않는다."""

@@ -30,6 +30,9 @@ function titleWorkbench() {
             // ② 도메인 추출 — 1회 추출 URL 수(회차 전체 예산)
             extract_enabled: true,
             extract_urls: 100,
+            // 재고 부족 니치 먼저 — 니치 현황과 같은 기준
+            prioritize_low_niche: true,
+            low_niche_threshold: 20,
             // 초기 기본은 표시(mark). 차단부터 켜면 되돌릴 수 없다.
             niche_mode: 'mark',
         },

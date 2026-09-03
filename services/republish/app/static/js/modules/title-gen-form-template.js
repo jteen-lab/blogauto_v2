@@ -74,6 +74,27 @@ window.getTitleGenFormTemplate = function () {
                     </div>
                 </div>
 
+
+                <!-- 부족 니치 우선 -->
+                <div class="p-2 bg-white border border-gray-200 rounded">
+                    <label class="flex items-center gap-2 text-sm text-gray-800">
+                        <input type="checkbox" x-model="formData.title.collect.prioritize_low_niche" class="rounded">
+                        재고 부족 니치 먼저
+                        <span class="text-xs text-gray-500">부족한 곳의 키워드를 먼저 씁니다</span>
+                    </label>
+                    <label x-show="formData.title.collect.prioritize_low_niche" x-cloak
+                           class="mt-2 block text-xs text-gray-500">
+                        부족 기준(제목 수)
+                        <input type="number" min="1" max="1000"
+                               x-model.number="formData.title.collect.low_niche_threshold"
+                               class="mt-0.5 w-32 text-sm border-gray-300 rounded py-1">
+                    </label>
+                    <p class="mt-1 text-xs text-gray-400">
+                        정식제목 탭 <b>니치 현황</b>과 같은 기준입니다. 쓰는 블로그가 있는데
+                        재고가 기준보다 적은 니치를 먼저 채웁니다.
+                    </p>
+                </div>
+
                 <!-- 니치 대조 -->
                 <div class="p-2 bg-white border border-gray-200 rounded">
                     <div class="flex flex-wrap items-center gap-2">
