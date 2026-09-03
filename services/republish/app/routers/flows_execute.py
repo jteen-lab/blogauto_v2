@@ -1122,11 +1122,13 @@ async def _execute_title_module(
     Returns:
         {"success": bool, "message": str, "details": [...]}
     """
-    from app.services.title_gen.runner import TitleModuleRunner
+    # 임시제목 탭의 작업대와 **같은 실행기**를 탄다. 모듈이 수집·추출·
+    # 생성(L1/L3)을 모두 할 수 있고, 화면에서 되는 것은 자동에서도 된다.
+    from app.services.title_collect.workbench import TitleWorkbench
 
-    runner = TitleModuleRunner(db, module.user_id)
-    return await runner.run_for_blogs(module.settings or {}, blogs,
-                                      force=force)
+    workbench = TitleWorkbench(db, module.user_id)
+    return await workbench.run_for_module(module.settings or {}, blogs,
+                                          force=force)
 
 
 async def _execute_collect_module(

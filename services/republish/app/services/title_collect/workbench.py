@@ -33,6 +33,53 @@ class TitleWorkbench:
         self.db = db
         self.user_id = user_id
 
+    async def run_for_module(self, settings: Optional[dict],
+                             blogs: Optional[list] = None,
+                             force: bool = False) -> Dict[str, Any]:
+        """모듈·플로우 진입점. **화면과 같은 실행기를 탄다.**
+
+        수집·추출은 블로그와 무관하므로 회차당 한 번만 돈다. 생성만
+        블로그마다 돈다 — 블로그별로 니치가 다르기 때문이다.
+
+        Args:
+            settings: 모듈 settings(`{"title": {...}}`)
+            blogs: 이 모듈에 연결된 블로그들
+            force: 재고가 충분해도 실행(사용자가 직접 누른 단발 실행)
+        """
+        from .module_settings import normalize
+
+        payload = normalize(settings)
+        targets = list(blogs or [])
+
+        out: Dict[str, Any] = {"success": True}
+        samples: List[str] = []
+
+        user_settings = await self._user_settings()
+        if not user_settings:
+            return {"success": False,
+                    "error": "사용자 설정이 없습니다. API 키를 먼저 등록하세요"}
+
+        if payload["collect"].get("enabled"):
+            result = await self._collect(payload, user_settings)
+            out["collect"] = result
+            samples.extend(result.get("samples") or [])
+
+        if payload["gen"].get("enabled"):
+            rows = []
+            for blog in (targets or [None]):
+                gen = dict(payload["gen"])
+                gen["blog_id"] = getattr(blog, "id", None)
+                gen["force"] = force
+                rows.append(await self._generate({"gen": gen}, user_settings))
+            out["gen"] = _merge_gen(rows)
+            samples.extend(out["gen"].get("samples") or [])
+
+        out["samples"] = samples[:100]
+        out["made"] = _total(out)
+        out["message"] = _summarize(out)
+        out["blogs"] = len(targets)
+        return out
+
     async def run(self, payload: Optional[dict]) -> Dict[str, Any]:
         """실행. `payload` 는 화면이 보낸 설정 그대로다."""
         raw = payload or {}
@@ -126,8 +173,11 @@ class TitleWorkbench:
             "ai_model": gen.get("ai_model"),
         }}
         runner = TitleModuleRunner(self.db, self.user_id)
+        # 화면에서 누른 실행은 재고가 충분해도 돈다 — 조용히 건너뛰면
+        # 테스트가 불가능하다. 자동 실행은 재고를 본다.
         out = await runner.run_for_blogs(
-            settings, [blog] if blog else [], force=True)
+            settings, [blog] if blog else [],
+            force=bool(gen.get("force", True)))
         preview = [p.get("title") for p in (out.get("preview") or [])
                    if p.get("title")]
         # 생성이 0편일 때 **왜** 인지 화면이 말해야 한다. 옛 결과는
@@ -220,6 +270,26 @@ class TitleWorkbench:
         return (await self.db.execute(
             select(UserSettings).where(UserSettings.user_id == self.user_id)
         )).scalar_one_or_none()
+
+
+def _merge_gen(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """블로그별 생성 결과를 하나로 합친다."""
+    merged: Dict[str, Any] = {"made": 0, "samples": []}
+    for row in rows:
+        merged["made"] += row.get("made") or 0
+        merged["samples"].extend(row.get("samples") or [])
+        for key in ("l1", "l3"):
+            block = row.get(key)
+            if not block:
+                continue
+            base = merged.setdefault(key, {"made": 0, "samples": []})
+            base["made"] += block.get("made") or 0
+            base["samples"].extend(block.get("samples") or [])
+            # 사유는 하나만 남긴다 — 블로그마다 같은 이유일 때가 많다
+            if block.get("error") and not base.get("error"):
+                base["error"] = block["error"]
+    merged["samples"] = merged["samples"][:100]
+    return merged
 
 
 def _total(out: Dict[str, Any]) -> int:

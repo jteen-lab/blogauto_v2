@@ -628,3 +628,100 @@ class TestKeywordAxisExpansion:
         assert 'x-model="expand"' in tpl
         assert "expand: bool = False" in api
         assert "expand=payload.expand" in api
+
+
+class TestModulePortsWorkbench:
+    """작업대 기능을 모듈에 이식 — 화면과 모듈이 같은 실행기를 탄다."""
+
+    def test_flow_uses_workbench(self):
+        src = (BASE / "app/routers/flows_execute.py").read_text(
+            encoding="utf-8")
+        assert "TitleWorkbench" in src
+        assert "workbench.run_for_module(" in src
+
+    def test_legacy_module_still_generates(self):
+        """옛 모듈에는 collect/gen 키가 없다. 조용히 멈추면 안 된다."""
+        from app.services.title_collect.module_settings import normalize
+
+        out = normalize({"title": {"dry_run": True, "cluster_limit": 5}})
+        assert out["gen"]["enabled"] is True
+        assert out["gen"]["l1_enabled"] is True
+        assert out["gen"]["cluster_limit"] == 5
+
+    def test_legacy_module_does_not_collect(self):
+        """짐작해서 켜면 사용자가 모르는 사이 수집이 시작된다."""
+        from app.services.title_collect.module_settings import normalize
+
+        out = normalize({"title": {"dry_run": True}})
+        assert out["collect"]["enabled"] is False
+
+    def test_new_shape_passes_through(self):
+        from app.services.title_collect.module_settings import normalize
+
+        out = normalize({"title": {
+            "collect": {"enabled": True, "seed_limit": 7},
+            "gen": {"enabled": False}}})
+        assert out["collect"]["seed_limit"] == 7
+        assert out["gen"]["enabled"] is False
+
+    def test_collect_runs_once_not_per_blog(self):
+        """수집·추출은 블로그와 무관하다. 블로그마다 돌면 중복 호출이다."""
+        src = (BASE / "app/services/title_collect/workbench.py").read_text(
+            encoding="utf-8")
+        block = src[src.index("async def run_for_module("):
+                    src.index("async def run(self")]
+        assert block.index('payload["collect"]') < block.index("for blog in")
+
+    def test_module_form_has_sections(self):
+        tpl = (BASE
+               / "app/static/js/modules/title-gen-form-template.js").read_text(
+            encoding="utf-8")
+        for field in ("formData.title.collect.enabled",
+                      "formData.title.collect.extract_urls",
+                      "formData.title.gen_enabled",
+                      "formData.title.l3_enabled"):
+            assert field in tpl, field
+
+    def test_form_serializes_sections(self):
+        js = (BASE / "app/static/js/modules/form.js").read_text(
+            encoding="utf-8")
+        assert "collect: {" in js and "gen: {" in js
+        assert "niche_mode: c.niche_mode" in js
+
+
+class TestRecombineSimilarity:
+    """W8 C — 재조합은 관문 밖이라 지금까지 무검사였다."""
+
+    def test_checks_before_storing(self):
+        src = (BASE / "app/services/recombine/service.py").read_text(
+            encoding="utf-8")
+        assert "_too_similar" in src
+        assert src.index("_too_similar(text, row)") < src.index(
+            "return self._store(row, text")
+
+    def test_same_group_is_skipped(self):
+        """재조합 결과가 원본과 닮은 것은 정상이다."""
+        src = (BASE / "app/services/recombine/service.py").read_text(
+            encoding="utf-8")
+        assert "if origin.group_id and group_id == origin.group_id:" in src
+
+    def test_retry_is_capped_at_once(self):
+        """무한 재시도는 AI 호출이 통제를 벗어난다."""
+        src = (BASE / "app/services/recombine/service.py").read_text(
+            encoding="utf-8")
+        block = src[src.index("async def _retry_distinct("):]
+        assert "_retry_distinct" not in block[30:], "재시도 안에서 또 재시도하면 안 된다"
+
+    def test_missing_service_does_not_break(self):
+        """유사도 서비스를 못 불러와도 재조합은 계속된다."""
+        src = (BASE / "app/services/recombine/service.py").read_text(
+            encoding="utf-8")
+        block = src[src.index("def _similarity("):src.index("@dataclass")
+                    if "@dataclass" in src else len(src)]
+        assert "return None" in src[src.index("def _similarity("):
+                                    src.index("class RecombineService")]
+
+    def test_scan_is_bounded(self):
+        from app.services.recombine.service import SIMILARITY_SCAN
+
+        assert 100 <= SIMILARITY_SCAN <= 2000

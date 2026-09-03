@@ -119,7 +119,26 @@ function moduleFormApp(module = null, moduleType = null) {
             // 키워드 모듈 설정. 화면은 문자열로 다루고 저장할 때 배열로 바꾼다
             // (사용자가 쉼표로 입력하는 편이 자연스럽다).
             title: {
-                dry_run: initialModule?.settings?.title?.dry_run ?? true,
+                // 수집 섹션(작업대와 같은 설정 모양)
+                collect: {
+                    enabled: initialModule?.settings?.title?.collect?.enabled ?? false,
+                    search_enabled: initialModule?.settings?.title?.collect?.search_enabled ?? true,
+                    seed_limit: initialModule?.settings?.title?.collect?.seed_limit ?? 10,
+                    titles_per_keyword: initialModule?.settings?.title?.collect?.titles_per_keyword ?? 30,
+                    extract_enabled: initialModule?.settings?.title?.collect?.extract_enabled ?? true,
+                    extract_urls: initialModule?.settings?.title?.collect?.extract_urls ?? 100,
+                    niche_mode: initialModule?.settings?.title?.collect?.niche_mode || 'mark',
+                },
+                // 생성 섹션. 옛 모듈에는 gen 키가 없으므로 켜진 것으로 본다
+                // (제목 생성이 그 모듈의 존재 이유였다).
+                gen_enabled: initialModule?.settings?.title?.gen?.enabled ?? true,
+                l1_enabled: initialModule?.settings?.title?.gen?.l1_enabled ?? true,
+                l3_enabled: initialModule?.settings?.title?.gen?.l3_enabled ?? false,
+                news_days: initialModule?.settings?.title?.gen?.news_days ?? 3,
+                news_limit: initialModule?.settings?.title?.gen?.news_limit ?? 10,
+                expires_days: initialModule?.settings?.title?.gen?.expires_days ?? 14,
+                dry_run: initialModule?.settings?.title?.dry_run
+                    ?? initialModule?.settings?.title?.gen?.dry_run ?? true,
                 ai_provider: initialModule?.settings?.title?.ai_provider || '',
                 ai_model: initialModule?.settings?.title?.ai_model || '',
                 use_angles: initialModule?.settings?.title?.use_angles ?? true,
@@ -1143,22 +1162,47 @@ function moduleFormApp(module = null, moduleType = null) {
                 data.schedule_matrix = this.schedule;
             } else if (this.formData.type_code === 'title_gen') {
                 const t = this.formData.title || {};
+                const c = t.collect || {};
                 data.settings = {
                     title: {
                         enabled: true,
+                        // 수집·생성을 나눠 저장한다. 작업대 payload 와
+                        // 같은 모양이라 같은 실행기가 그대로 받는다.
+                        collect: {
+                            enabled: !!c.enabled,
+                            search_enabled: !!c.search_enabled,
+                            seed_limit: c.seed_limit,
+                            titles_per_keyword: c.titles_per_keyword,
+                            extract_enabled: !!c.extract_enabled,
+                            extract_urls: c.extract_urls,
+                            niche_mode: c.niche_mode || 'mark',
+                        },
+                        gen: {
+                            enabled: !!t.gen_enabled,
+                            l1_enabled: !!t.l1_enabled,
+                            l3_enabled: !!t.l3_enabled,
+                            news_days: t.news_days,
+                            news_limit: t.news_limit,
+                            expires_days: t.expires_days,
+                            dry_run: !!t.dry_run,
+                            ai_provider: t.ai_provider || null,
+                            ai_model: t.ai_model || null,
+                            use_angles: !!t.use_angles,
+                            angle_sample: t.angle_sample,
+                            cluster_enabled: !!t.cluster_enabled,
+                            cluster_threshold: t.cluster_threshold,
+                            cluster_min_size: t.cluster_min_size,
+                            cluster_max_size: t.cluster_max_size,
+                            titles_per_cluster: t.titles_per_cluster,
+                            titles_per_keyword: t.titles_per_keyword,
+                            cluster_limit: t.cluster_limit,
+                            keyword_limit: t.keyword_limit,
+                            min_inventory: t.min_inventory,
+                        },
+                        // 하위 호환: 옛 실행 경로가 읽던 평평한 값도 남긴다
                         dry_run: !!t.dry_run,
                         ai_provider: t.ai_provider || null,
                         ai_model: t.ai_model || null,
-                        use_angles: !!t.use_angles,
-                        angle_sample: t.angle_sample,
-                        cluster_enabled: !!t.cluster_enabled,
-                        cluster_threshold: t.cluster_threshold,
-                        cluster_min_size: t.cluster_min_size,
-                        cluster_max_size: t.cluster_max_size,
-                        titles_per_cluster: t.titles_per_cluster,
-                        titles_per_keyword: t.titles_per_keyword,
-                        cluster_limit: t.cluster_limit,
-                        keyword_limit: t.keyword_limit,
                         min_inventory: t.min_inventory,
                     },
                     // 주기는 keyword·bulk_collect 와 같은 자리에 둔다

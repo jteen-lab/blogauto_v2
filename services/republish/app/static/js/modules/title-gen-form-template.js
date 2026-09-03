@@ -8,9 +8,113 @@ window.getTitleGenFormTemplate = function () {
     <div x-show="formData.type_code === 'title_gen'" class="space-y-5 border-t border-gray-200 pt-4">
 
         <div class="px-3 py-2 bg-sky-50 border border-sky-200 rounded-lg text-xs text-sky-800">
-            <b>분류된 키워드</b>로 제목을 만듭니다. 비슷한 키워드를 묶어
-            <b>대표 글 1편 + 곁가지 N편</b>을 쓰고, 이미 나와 있는 제목의 각도를 참고해
-            <b>겹치지 않게</b> 씁니다. 키워드 수집은 '키워드' 모듈이 맡습니다.
+            임시제목 탭의 <b>제목 작업대와 같은 코드</b>로 돕니다. 화면에서 되는 것은
+            자동에서도 됩니다. 켠 섹션만 실행됩니다.
+        </div>
+
+        <!-- ── 수집 ─────────────────────────────────────────── -->
+        <div class="border-2 rounded-lg"
+             :class="formData.title.collect.enabled ? 'border-blue-300 bg-blue-50/40' : 'border-gray-200'">
+            <label class="flex items-center gap-2 px-3 py-2 cursor-pointer">
+                <input type="checkbox" x-model="formData.title.collect.enabled" class="rounded">
+                <span class="text-sm font-medium text-gray-800">수집</span>
+                <span class="text-xs text-gray-500">검색으로 제목을 모으고, 도메인에서 마저 캡니다</span>
+            </label>
+
+            <div x-show="formData.title.collect.enabled" x-cloak class="px-3 pb-3 space-y-2">
+                <!-- ① 제목 수집 -->
+                <div class="p-2 bg-white border border-gray-200 rounded">
+                    <label class="flex items-center gap-2 text-sm text-gray-800">
+                        <input type="checkbox" x-model="formData.title.collect.search_enabled" class="rounded">
+                        ① 제목 수집 <span class="text-xs text-gray-500">채택 키워드로 검색</span>
+                    </label>
+                    <div x-show="formData.title.collect.search_enabled" x-cloak
+                         class="mt-2 grid grid-cols-2 gap-2">
+                        <label class="text-xs text-gray-500">시드 키워드 수
+                            <input type="number" min="1" max="100"
+                                   x-model.number="formData.title.collect.seed_limit"
+                                   class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+                        </label>
+                        <label class="text-xs text-gray-500">키워드당 수집 제목 수
+                            <input type="number" min="1" max="100"
+                                   x-model.number="formData.title.collect.titles_per_keyword"
+                                   class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+                        </label>
+                    </div>
+                </div>
+
+                <!-- ② 도메인 추출 -->
+                <div class="p-2 bg-white border border-gray-200 rounded">
+                    <label class="flex items-center gap-2 text-sm text-gray-800">
+                        <input type="checkbox" x-model="formData.title.collect.extract_enabled" class="rounded">
+                        ② 도메인 추출 <span class="text-xs text-gray-500">사이트맵에서 제목 추출</span>
+                    </label>
+                    <div x-show="formData.title.collect.extract_enabled" x-cloak class="mt-2">
+                        <label class="text-xs text-gray-500">1회 추출 URL 수
+                            <input type="number" min="1" max="5000"
+                                   x-model.number="formData.title.collect.extract_urls"
+                                   class="mt-0.5 w-40 text-sm border-gray-300 rounded py-1">
+                        </label>
+                        <p class="mt-1 text-xs text-gray-400">
+                            회차 <b>전체</b>의 예산입니다. 한 도메인에서 다 못 채우면 다음
+                            도메인으로 넘어가고, 남으면 다음 회차에 이어 캡니다.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- 니치 대조 -->
+                <div class="p-2 bg-white border border-gray-200 rounded">
+                    <label class="text-xs text-gray-500">니치 대조
+                        <select x-model="formData.title.collect.niche_mode"
+                                class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+                            <option value="mark">표시만 — 저장하되 '니치 무관' 표시</option>
+                            <option value="block">차단 — 저장하지 않음</option>
+                        </select>
+                    </label>
+                    <p class="mt-1 text-xs text-gray-400">
+                        분류표가 얇을 때 차단부터 켜면 살릴 수 있는 제목까지 막힙니다.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── 생성 켜기 ───────────────────────────────────── -->
+        <div class="border-2 rounded-lg"
+             :class="formData.title.gen_enabled ? 'border-emerald-300 bg-emerald-50/40' : 'border-gray-200'">
+            <label class="flex items-center gap-2 px-3 py-2 cursor-pointer">
+                <input type="checkbox" x-model="formData.title.gen_enabled" class="rounded">
+                <span class="text-sm font-medium text-gray-800">생성</span>
+                <span class="text-xs text-gray-500">채택 키워드·뉴스로 제목을 만듭니다</span>
+            </label>
+            <div x-show="formData.title.gen_enabled" x-cloak class="px-3 pb-3 space-y-2">
+                <label class="flex items-center gap-2 text-sm text-gray-800">
+                    <input type="checkbox" x-model="formData.title.l1_enabled" class="rounded">
+                    L1 키워드 기반 <span class="text-xs text-gray-500">아래 설정을 씁니다</span>
+                </label>
+                <div class="p-2 bg-white border border-gray-200 rounded">
+                    <label class="flex items-center gap-2 text-sm text-gray-800">
+                        <input type="checkbox" x-model="formData.title.l3_enabled" class="rounded">
+                        L3 뉴스 시의성 <span class="text-xs text-gray-500">뉴스 요지 + 니치 결합</span>
+                    </label>
+                    <div x-show="formData.title.l3_enabled" x-cloak class="mt-2 grid grid-cols-3 gap-2">
+                        <label class="text-xs text-gray-500">조회 기간(일)
+                            <input type="number" min="1" max="30" x-model.number="formData.title.news_days"
+                                   class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+                        </label>
+                        <label class="text-xs text-gray-500">제목 수
+                            <input type="number" min="1" max="50" x-model.number="formData.title.news_limit"
+                                   class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+                        </label>
+                        <label class="text-xs text-gray-500">만료(일)
+                            <input type="number" min="1" max="90" x-model.number="formData.title.expires_days"
+                                   class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+                        </label>
+                    </div>
+                    <p x-show="formData.title.l3_enabled" x-cloak class="mt-1 text-xs text-gray-400">
+                        뉴스 <b>원문 제목은 재고에 넣지 않습니다.</b> 요지만 뽑아 니치와 엮습니다.
+                    </p>
+                </div>
+            </div>
         </div>
 
         <!-- 검증 모드 -->

@@ -33,6 +33,27 @@ logger = get_logger("recombine_service", "app.log")
 # 한 번에 만들 재조합 제목 수 상한. AI 호출이라 비싸다.
 MAX_PER_RUN = 30
 
+# 중복 검사에서 훑을 기존 제목 수. 전량을 비교하면 한 건당 수천 번
+# 비교하게 된다. 최근 것부터 본다 — 오래된 제목과 겹치는 일은 드물다.
+SIMILARITY_SCAN = 500
+
+
+def _similarity():
+    """유사도 서비스. 못 불러오면 검사를 건너뛴다(재조합은 계속한다)."""
+    import os
+    import sys
+
+    for path in ("/app/shared", "/home/jteen/blogauto_v2/shared"):
+        if os.path.exists(path) and path not in sys.path:
+            sys.path.insert(0, path)
+    try:
+        from services.similarity_service import SimilarityService
+
+        return SimilarityService()
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[RECOMBINE] 유사도 서비스 없음 | %s", e)
+        return None
+
 
 class RecombineService:
     """정식제목을 재조합해 같은 그룹에 넣는다."""
@@ -117,7 +138,77 @@ class RecombineService:
         text = (result.recombined_title or "").strip()
         if not text or text == row.title:
             return None
+
+        # 재조합은 관문 밖이다. 이미 있는 제목과 겹치면 재고만 늘고
+        # 같은 글이 두 번 나간다(계획서 §4-5 C).
+        clash = await self._too_similar(text, row)
+        if clash:
+            retry = await self._retry_distinct(row, module_id, style,
+                                               provider, model, clash)
+            if not retry:
+                logger.info("[RECOMBINE] 유사 제목이라 건너뜀 | %s", text[:30])
+                return None
+            text = retry
+
         return self._store(row, text, style or result.__dict__.get("style"))
+
+    async def _too_similar(self, text: str,
+                           origin: MainTitle) -> Optional[str]:
+        """이미 있는 제목과 겹치는가. 겹치면 그 제목을 돌려준다.
+
+        같은 그룹 안은 원래 비슷한 것들이라 검사에서 뺀다 — 재조합 결과가
+        원본과 닮은 것은 정상이다. 그룹 **밖**과 겹치는 것이 문제다.
+        """
+        service = _similarity()
+        if service is None:
+            return None
+
+        rows = (await self.db.execute(
+            select(MainTitle.title, MainTitle.group_id)
+            .where(MainTitle.status.in_(["available", "used"]))
+            .order_by(MainTitle.id.desc())
+            .limit(SIMILARITY_SCAN)
+        )).all()
+
+        for title, group_id in rows:
+            if origin.group_id and group_id == origin.group_id:
+                continue
+            if not title or title == origin.title:
+                continue
+            try:
+                verdict = service.calculate_similarity_v3(text, title)
+            except Exception:  # noqa: BLE001
+                continue
+            if verdict.get("groupable"):
+                return title
+        return None
+
+    async def _retry_distinct(self, row: MainTitle, module_id: int,
+                              style: Optional[str], provider: Optional[str],
+                              model: Optional[str],
+                              clash: str) -> Optional[str]:
+        """**한 번만** 다시 만든다.
+
+        무한히 재시도하면 AI 호출이 통제를 벗어난다. 한 번 더 해서도
+        겹치면 만들지 않는 편이 낫다.
+        """
+        if self.recombiner is None:
+            return None
+        keywords = await self._keywords(row)
+        try:
+            result = await self.recombiner.recombine(
+                original_title=f"{row.title}\n\n(주의: \"{clash}\" 와 겹치지 "
+                               f"않는 각도로 쓰세요)",
+                module_id=module_id, provider=provider, model=model,
+                style=style, keywords=keywords)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[RECOMBINE] 재시도 실패 | %s", e)
+            return None
+
+        text = (result.recombined_title or "").strip()
+        if not text or text == row.title:
+            return None
+        return None if await self._too_similar(text, row) else text
 
     def _store(self, origin: MainTitle, title: str,
                style: Optional[str]) -> Dict[str, Any]:
