@@ -415,7 +415,8 @@
         </div>
 
         <!-- 임시제목 탭 -->
-        <div x-show="activeTab === 'titles'" class="tab-content" :class="{'active': activeTab === 'titles'}">
+        <div x-show="activeTab === 'titles'" class="tab-content" :class="{'active': activeTab === 'titles'}"
+             @titles-changed.window="loadTitles(); loadStats()">
             {% include "collection/_titles.html" %}
         </div>
 
@@ -436,6 +437,9 @@
             {% include "collection/_niche_domains.html" %}
         </div>
     </div>
+
+    {# 임시제목 정리 모달 — 관리 메뉴에서 이벤트로 연다 #}
+    {% include "collection/_title_cleanup.html" %}
 
     <!-- 생성 콘텐츠 미리보기 모달 (iframe srcdoc) -->
     <div x-show="contentModal.open" x-transition:enter="transition ease-out duration-200"
@@ -568,8 +572,8 @@
 {% block extra_js %}
 <!-- 발행대기 글 미리보기에 실제 블로그 스타일 재현: 스타일 탭과 동일한 CSS 생성 유틸 공유
      (presets = STYLE_SELECTORS/HIDDEN_SELECTORS, css-utils = generateCssFromConfig/buildBlogStyledPreview) -->
-<script src="/static/js/collection/keyword_pool.js?v=20260902s13"></script>
-<script src="/static/js/collection/niche_domains.js?v=20260902s13"></script>
+<script src="/static/js/collection/keyword_pool.js?v=20260903s1"></script>
+<script src="/static/js/collection/niche_domains.js?v=20260903s1"></script>
 <script src="/static/js/blogs/style-tab-presets.js?v=20260709_preview"></script>
 <script src="/static/js/blogs/style-tab-css-utils.js?v=20260709_btnfull"></script>
 <script>

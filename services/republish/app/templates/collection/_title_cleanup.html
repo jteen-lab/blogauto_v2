@@ -1,0 +1,147 @@
+{#
+  임시제목 정리 패널 — 미분류·니치 무관을 걷어낸다.
+
+  삭제는 되돌릴 수 없으므로 **건수를 먼저 보여 주고** 확인을 받는다.
+  재분류를 먼저 돌리라는 안내도 여기서 한다(분류표는 계속 자란다).
+
+  계획서: docs/plans/title_pipeline_redesign_plan.md §5 (B안)
+#}
+<div x-data="titleCleanupPanel()"
+     @open-title-cleanup.window="open()"
+     x-show="visible" x-cloak
+     class="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+  <div @click.away="visible = false"
+       class="bg-white rounded-xl shadow-xl w-full max-w-lg p-5">
+
+    <h3 class="text-lg font-semibold mb-1">임시제목 정리</h3>
+    <p class="text-sm text-gray-500 mb-4">
+      발행 대상으로 고를 수 없는 제목을 걷어냅니다.
+      <b class="text-rose-600">되돌릴 수 없습니다.</b>
+    </p>
+
+    <div class="mb-4 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+      먼저 <b>관리 → 카테고리 재분류</b>를 돌리세요. 분류표는 계속 자라므로
+      지금 미분류인 제목이 재분류에서 붙을 수 있습니다. 그냥 지우면 살릴 수
+      있는 것까지 버립니다.
+    </div>
+
+    <div x-show="loading" class="py-8 text-center text-gray-400">확인 중…</div>
+
+    <template x-if="!loading && data">
+      <div>
+        <div class="space-y-2 mb-4">
+          <template x-for="reason in ['unclassified', 'off_niche']" :key="reason">
+            <label class="flex items-start gap-2 p-2 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
+              <input type="checkbox" :value="reason" x-model="picked" class="rounded mt-0.5">
+              <span class="flex-1">
+                <span class="text-sm text-gray-800" x-text="data.labels[reason]"></span>
+                <span class="ml-1 text-sm font-semibold"
+                      x-text="`${(data.counts[reason] || 0).toLocaleString()}건`"></span>
+              </span>
+            </label>
+          </template>
+        </div>
+
+        <div x-show="data.niche_check_skipped"
+             class="mb-3 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
+          블로그에 활성 카테고리가 없어 <b>니치 판정을 건너뜁니다.</b>
+          카테고리를 먼저 붙이면 무관한 제목을 가려낼 수 있습니다.
+        </div>
+
+        <div class="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg text-sm mb-4">
+          <span class="text-gray-600">전체 <b x-text="data.total.toLocaleString()"></b>건</span>
+          <span class="text-rose-600">삭제 <b x-text="selectedCount().toLocaleString()"></b>건</span>
+          <span class="text-gray-800">남김 <b x-text="(data.total - selectedCount()).toLocaleString()"></b>건</span>
+        </div>
+
+        <div class="flex justify-end gap-2">
+          <button @click="visible = false"
+                  class="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800">취소</button>
+          <button @click="run()" :disabled="busy || !selectedCount()"
+                  class="px-3 py-1.5 bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-600 disabled:opacity-40">
+            <span x-text="busy ? '삭제 중…' : '삭제'"></span>
+          </button>
+        </div>
+      </div>
+    </template>
+
+    <p x-show="message" class="mt-3 text-sm"
+       :class="messageType === 'error' ? 'text-red-600' : 'text-gray-700'"
+       x-text="message"></p>
+  </div>
+</div>
+
+<script>
+function titleCleanupPanel() {
+    return {
+        visible: false,
+        loading: false,
+        busy: false,
+        data: null,
+        picked: [],
+        message: '',
+        messageType: 'info',
+
+        async open() {
+            this.visible = true;
+            this.message = '';
+            this.loading = true;
+            this.data = null;
+            try {
+                const r = await fetch('/api/v1/data/titles/cleanup/preview',
+                                      { credentials: 'include' });
+                const text = await r.text();
+                if (!r.ok) throw new Error(this.detail(text, r.status));
+                this.data = JSON.parse(text);
+                // 지울 수 있는 것만 기본 선택 — 0건을 체크해 둘 이유가 없다
+                this.picked = ['unclassified', 'off_niche']
+                    .filter((k) => (this.data.counts[k] || 0) > 0);
+            } catch (e) {
+                this.message = e.message;
+                this.messageType = 'error';
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        selectedCount() {
+            if (!this.data) return 0;
+            return this.picked.reduce(
+                (sum, k) => sum + (this.data.counts[k] || 0), 0);
+        },
+
+        async run() {
+            const n = this.selectedCount();
+            if (!n) return;
+            if (!confirm(`임시제목 ${n.toLocaleString()}건을 삭제합니다.\n`
+                + '되돌릴 수 없습니다. 계속할까요?')) return;
+
+            this.busy = true;
+            try {
+                const r = await fetch('/api/v1/data/titles/cleanup', {
+                    method: 'POST', credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reasons: this.picked }),
+                });
+                const text = await r.text();
+                if (!r.ok) throw new Error(this.detail(text, r.status));
+                const d = JSON.parse(text);
+                this.message = `${(d.deleted || 0).toLocaleString()}건 삭제했습니다`;
+                this.messageType = 'info';
+                window.dispatchEvent(new CustomEvent('titles-changed'));
+                await this.open();
+            } catch (e) {
+                this.message = e.message;
+                this.messageType = 'error';
+            } finally {
+                this.busy = false;
+            }
+        },
+
+        detail(text, status) {
+            try { return JSON.parse(text).detail || `요청 실패 (${status})`; }
+            catch (e) { return `요청 실패 (${status})`; }
+        },
+    };
+}
+</script>
