@@ -88,8 +88,40 @@
         <div class="border border-gray-200 rounded-lg p-2">
           <div class="flex items-center justify-between mb-1">
             <span class="text-xs font-medium text-gray-700">키워드</span>
-            <button @click="createKeyword()" :disabled="!form.subtopic_id"
+            <button @click="newKw.open = !newKw.open" :disabled="!form.subtopic_id"
                     class="text-xs text-accent hover:underline disabled:opacity-30">+ 새로</button>
+          </div>
+
+          {# 새 키워드도 속성을 함께 받는다. 이름만 받고 나중에 고치게
+             하면 기본값(우선 5·난이도 0)으로 방치되기 쉽다. #}
+          <div x-show="newKw.open" x-cloak
+               class="mb-1 p-1 border border-accent/40 bg-accent/5 rounded space-y-1">
+            <input type="text" x-model="newKw.name" @keyup.enter="createKeyword()"
+                   placeholder="키워드 (조합은 A+B)"
+                   class="w-full text-xs border-gray-200 rounded py-0.5">
+            <div class="flex items-center gap-1">
+              <label class="flex-1 text-[11px] text-gray-500">
+                우선
+                <input type="number" min="1" max="10" x-model.number="newKw.priority"
+                       class="w-full text-xs border-gray-200 rounded py-0.5">
+              </label>
+              <label class="flex-1 text-[11px] text-gray-500">
+                난이도
+                <input type="number" min="0" max="10" x-model.number="newKw.difficulty"
+                       class="w-full text-xs border-gray-200 rounded py-0.5">
+              </label>
+              <label class="flex-1 text-[11px] text-gray-500">
+                검색량
+                <input type="number" min="0" x-model.number="newKw.search_volume"
+                       class="w-full text-xs border-gray-200 rounded py-0.5">
+              </label>
+            </div>
+            <div class="flex gap-1">
+              <button @click="createKeyword()" :disabled="!newKw.name.trim()"
+                      class="flex-1 py-0.5 text-xs bg-accent text-white rounded disabled:opacity-30">추가</button>
+              <button @click="newKw.open = false"
+                      class="py-0.5 px-2 text-xs text-gray-500">취소</button>
+            </div>
           </div>
           <div class="max-h-44 overflow-y-auto space-y-1">
             <template x-for="k in keywords" :key="k.id">
@@ -164,6 +196,9 @@ function titleEditPanel() {
         topics: [],
         subtopics: [],
         keywords: [],
+        // 새 키워드 입력값. 0 은 '미설정' 이다.
+        newKw: { open: false, name: '', priority: 5, difficulty: 0,
+                 search_volume: 0 },
         message: '',
         messageType: 'info',
 
@@ -240,13 +275,20 @@ function titleEditPanel() {
         },
 
         async createKeyword() {
-            const name = prompt('새 키워드 (조합은 A+B 형식)');
-            if (!name || !name.trim()) return;
-            const d = await this.post('/api/v1/categories/keywords',
-                { subtopic_id: this.form.subtopic_id, name: name.trim() });
+            const name = (this.newKw.name || '').trim();
+            if (!name || !this.form.subtopic_id) return;
+            const d = await this.post('/api/v1/categories/keywords', {
+                subtopic_id: this.form.subtopic_id,
+                name,
+                priority: this.newKw.priority ?? 5,
+                difficulty: this.newKw.difficulty ?? 0,
+                search_volume: this.newKw.search_volume ?? 0,
+            });
             if (!d) return;
             await this.loadKeywords();
-            this.message = `키워드 "${name.trim()}" 추가 — 재분류하면 적용됩니다`;
+            this.newKw = { open: false, name: '', priority: 5, difficulty: 0,
+                           search_volume: 0 };
+            this.message = `키워드 "${name}" 추가 — 재분류하면 적용됩니다`;
             this.messageType = 'info';
         },
 
@@ -257,7 +299,7 @@ function titleEditPanel() {
             await this.put(`/api/v1/categories/keywords/${row.id}`, {
                 name,
                 priority: row.priority ?? 5,
-                difficulty: row.difficulty ?? 1,
+                difficulty: row.difficulty ?? 0,
                 search_volume: row.search_volume ?? 0,
             });
         },

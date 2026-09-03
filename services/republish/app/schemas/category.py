@@ -131,7 +131,8 @@ class KeywordCreateRequest(BaseModel):
     description: Optional[str] = Field(None, max_length=1000, description="키워드 설명")
     order: int = Field(default=0, ge=0, description="정렬 순서")
     search_volume: int = Field(default=0, ge=0, description="검색량")
-    difficulty: int = Field(default=0, ge=1, le=10, description="난이도 (1-10)")
+    difficulty: int = Field(default=0, ge=0, le=10,
+                            description="난이도 (0=미설정, 1-10)")
     priority: int = Field(default=5, ge=1, le=10, description="매칭 우선순위 (1-10, 낮을수록 높은 우선순위)")
 
     class Config:
@@ -156,8 +157,13 @@ class KeywordUpdateRequest(BaseModel):
     description: Optional[str] = Field(None, max_length=1000, description="키워드 설명")
     order: Optional[int] = Field(None, ge=0, description="정렬 순서")
     search_volume: Optional[int] = Field(None, ge=0, description="검색량")
-    difficulty: Optional[int] = Field(None, ge=1, le=10, description="난이도 (1-10)")
-    priority: Optional[int] = Field(None, ge=1, le=10, description="매칭 우선순위 (1-10, 낮을수록 높은 우선순위)")
+    # 0 은 "미설정" 이다. 기존 키워드 383개가 0 이라 ge=1 로 막으면
+    # 그 키워드는 이름조차 고칠 수 없다(422).
+    difficulty: Optional[int] = Field(None, ge=0, le=10,
+                                      description="난이도 (0=미설정, 1-10)")
+    priority: Optional[int] = Field(None, ge=0, le=10,
+                                    description="매칭 우선순위 (0=미설정, "
+                                                "1-10, 낮을수록 먼저)")
 
     class Config:
         str_strip_whitespace = True

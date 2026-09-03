@@ -185,3 +185,57 @@ class TestDomainDeletionCounting:
         from app.routers.data_titles import TempTitleResponse
 
         assert "domain" in TempTitleResponse.model_fields
+
+
+class TestKeywordSchemaAcceptsExisting:
+    """기존 데이터를 거부하면 이름조차 고칠 수 없다(422)."""
+
+    def test_zero_difficulty_is_allowed(self):
+        """운영 키워드 383개가 difficulty=0 이다."""
+        from app.schemas.category import KeywordUpdateRequest
+
+        row = KeywordUpdateRequest(name="검사", difficulty=0, priority=5)
+        assert row.difficulty == 0
+
+    def test_zero_difficulty_on_create(self):
+        from app.schemas.category import KeywordCreateRequest
+
+        row = KeywordCreateRequest(subtopic_id=1, name="검사", difficulty=0)
+        assert row.difficulty == 0
+
+    def test_range_still_enforced(self):
+        import pytest as _pytest
+        from pydantic import ValidationError
+
+        from app.schemas.category import KeywordUpdateRequest
+
+        with _pytest.raises(ValidationError):
+            KeywordUpdateRequest(name="x", difficulty=11)
+
+    def test_client_sends_zero_not_one(self):
+        """`?? 1` 로 올리면 0 인 값이 조용히 1 로 바뀐다."""
+        src = TPL.read_text(encoding="utf-8")
+        assert "difficulty: row.difficulty ?? 0" in src
+
+
+class TestNewKeywordForm:
+    """새 키워드도 속성을 함께 받는다."""
+
+    def test_inline_form_replaces_prompt(self):
+        src = TPL.read_text(encoding="utf-8")
+        assert "prompt('새 키워드" not in src
+        assert 'x-model="newKw.name"' in src
+
+    def test_form_has_attributes(self):
+        src = TPL.read_text(encoding="utf-8")
+        for field in ("newKw.priority", "newKw.difficulty",
+                      "newKw.search_volume"):
+            assert field in src, field
+
+    def test_create_sends_attributes(self):
+        src = TPL.read_text(encoding="utf-8")
+        block = src[src.index("async createKeyword()"):
+                    src.index("async saveKeyword(row)")]
+        assert "priority: this.newKw.priority" in block
+        assert "difficulty: this.newKw.difficulty" in block
+        assert "search_volume: this.newKw.search_volume" in block
