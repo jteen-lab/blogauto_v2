@@ -680,6 +680,7 @@ class TestModulePortsWorkbench:
         fields = set(TitleModuleSettings.__dataclass_fields__)
         # 모듈이 정하는 것(enabled)·스케줄은 별도 경로다
         assert not (fields - set(_L1_KEYS) - {"enabled", "interval_minutes"})
+        # 화면에 없는 설정은 기본값이 쓰인다. UI 를 추가하지 않는다.
         assert not (set(_L1_KEYS) - fields), "없는 설정을 넘기고 있다"
 
     def test_cluster_toggle_reaches_runner(self):
@@ -720,6 +721,18 @@ class TestModulePortsWorkbench:
             encoding="utf-8")
         assert "addTitleTime()" in js and "removeTitleTime(time)" in js
         assert "schedule_mode: t.schedule_mode" in js
+
+    def test_form_matches_workbench_fields(self):
+        """작업대에 없는 항목을 모듈에만 넣지 않는다."""
+        module = (BASE
+                  / "app/static/js/modules/title-gen-form-template.js").read_text(
+            encoding="utf-8")
+        bench = (BASE
+                 / "app/templates/collection/_title_workbench.html").read_text(
+            encoding="utf-8")
+        # 작업대에 없는 설정이 모듈 폼에만 있으면 안 된다
+        assert "min_inventory" not in module
+        assert "min_inventory" not in bench
 
     def test_module_form_has_sections(self):
         tpl = (BASE

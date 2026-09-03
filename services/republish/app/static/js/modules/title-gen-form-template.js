@@ -205,16 +205,6 @@ window.getTitleGenFormTemplate = function () {
                         만료된 제목은 재고 선택에서 빠집니다(삭제하지는 않습니다).
                     </p>
                 </div>
-
-                <!-- 재고 하한 -->
-                <label class="block text-xs text-gray-500">
-                    재고 하한
-                    <input type="number" min="0" max="1000" x-model.number="formData.title.min_inventory"
-                           class="mt-0.5 w-40 text-sm border-gray-300 rounded py-1">
-                    <span class="block mt-0.5 text-gray-400">
-                        쓸 수 있는 제목이 이보다 많으면 회차를 건너뜁니다. AI 호출을 아낍니다.
-                    </span>
-                </label>
             </div>
         </div>
 

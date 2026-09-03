@@ -172,8 +172,6 @@ function moduleFormApp(module = null, moduleType = null) {
                     ?? initialModule?.settings?.title?.cluster_limit ?? 5,
                 keyword_limit: initialModule?.settings?.title?.gen?.keyword_limit
                     ?? initialModule?.settings?.title?.keyword_limit ?? 20,
-                min_inventory: initialModule?.settings?.title?.gen?.min_inventory
-                    ?? initialModule?.settings?.title?.min_inventory ?? 30,
                 interval_minutes: initialModule?.settings?.title?.interval_minutes ?? 180,
             },
             keyword: {
@@ -1219,13 +1217,11 @@ function moduleFormApp(module = null, moduleType = null) {
                             titles_per_keyword: t.titles_per_keyword,
                             cluster_limit: t.cluster_limit,
                             keyword_limit: t.keyword_limit,
-                            min_inventory: t.min_inventory,
                         },
                         // 하위 호환: 옛 실행 경로가 읽던 평평한 값도 남긴다
                         dry_run: !!t.dry_run,
                         ai_provider: t.ai_provider || null,
                         ai_model: t.ai_model || null,
-                        min_inventory: t.min_inventory,
                     },
                     // 스케줄은 keyword·bulk_collect 와 같은 자리·같은 모양
                     schedule: {
