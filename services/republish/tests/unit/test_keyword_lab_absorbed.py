@@ -98,3 +98,21 @@ class TestLegacyModulesRetired:
             encoding="utf-8")
         assert '_execute_collect_module' in flows
         assert 'type_code == "bulk_collect"' in flows
+
+
+class TestRemovedTypesStayRemoved:
+    """마이그레이션이 지워도 시드가 되살리면 소용없다."""
+
+    def test_not_in_default_seed(self):
+        from app.models.module_type import ModuleType
+
+        codes = {t["code"] for t in ModuleType.get_default_types()}
+        assert "collect" not in codes
+        assert "bulk_collect" not in codes
+
+    def test_cleanup_migration_exists(self):
+        path = BASE / "alembic/versions/074_cleanup_reseeded_collect.py"
+        assert path.exists()
+        src = path.read_text(encoding="utf-8")
+        # 같은 안전장치 — 운영이 도는 중이면 지우지 않는다
+        assert "flow_modules" in src and "건너뛴다" in src

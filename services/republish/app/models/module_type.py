@@ -53,12 +53,9 @@ class ModuleType(Base):
                 "icon": "🤖",
                 "display_order": 2
             },
-            {
-                "code": "collect",
-                "name": "수집",
-                "icon": "🔍",
-                "display_order": 3
-            },
+            # collect·bulk_collect 는 제거됐다(alembic 073). 여기 남기면
+            # 앱이 시작할 때마다 되살아난다 — 마이그레이션이 지워도
+            # 다음 재시작에 다시 생긴다.
             {
                 "code": "data",
                 "name": "데이터",
