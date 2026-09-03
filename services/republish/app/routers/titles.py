@@ -544,6 +544,9 @@ async def list_titles_unified(
             "subtopic_id": t.subtopic_id,
             "group_id": t.group_id,
             "is_group_representative": t.is_group_representative,
+            # 같은 그룹 안에서 재조합 제목을 가려낸다(♻ 배지)
+            "recombined_from_id": getattr(t, "recombined_from_id", None),
+            "recombine_style": getattr(t, "recombine_style", None),
             "use_count": t.use_count,
             "created_at": t.created_at.isoformat() if t.created_at else None,
             "updated_at": t.updated_at.isoformat() if t.updated_at else None,

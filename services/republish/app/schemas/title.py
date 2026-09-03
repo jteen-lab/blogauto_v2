@@ -104,6 +104,12 @@ class MainTitleResponse(MainTitleBase):
     source_url: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    # 재조합 결과면 원본을 가리킨다. 그룹은 원본 것을 승계하므로 같은
+    # 그룹 안에서 이 필드로 구분된다(♻ 배지).
+    recombined_from_id: Optional[int] = None
+    recombine_style: Optional[str] = None
+    candidate_id: Optional[int] = None
+    expires_at: Optional[datetime] = None
     # 추가 정보 (API에서 설정)
     category_name: Optional[str] = None
     category_path: Optional[str] = None  # "주제 - 하위 주제" 형식

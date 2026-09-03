@@ -31,6 +31,7 @@ from .content_generator_helper import (
     DEFAULT_CONTENT_PROMPT,
 )
 from .author_signal_injector import inject_author_signal
+from .title_lifecycle import consume_group, pick_style, title_keywords
 
 logger = logging.getLogger(__name__)
 
@@ -162,14 +163,29 @@ class ContentGenerator:
         title_provider = title_ai.get("provider")
         tr = settings.get("title_recombine", {})
         tr_styles = tr.get("styles", [])
-        selected_style = random.choice(tr_styles) if tr_styles else None
-        recombine_result = await self.title_recombiner.recombine(
-            original_title=source_title.title,
-            module_id=prompt_module_id,
-            provider=title_provider,
-            model=title_ai.get("model"),
-            style=selected_style,
-        )
+        selected_style = await pick_style(self.db, tr_styles, blog_id)
+
+        if getattr(source_title, "recombined_from_id", None):
+            # 이미 재조합된 제목이다. 또 돌리면 원문에서 두 단계 멀어져
+            # 키워드가 유실된다(계획서 §4-3).
+            from .title_recombiner import RecombineResult
+
+            recombine_result = RecombineResult(
+                original_title=source_title.title,
+                recombined_title=source_title.title,
+                ai_model="none", ai_provider="none", is_modified=False)
+            selected_style = source_title.recombine_style
+            logger.info("[GENERATOR] 재조합 제목 — 재조합 건너뜀")
+        else:
+            recombine_result = await self.title_recombiner.recombine(
+                original_title=source_title.title,
+                module_id=prompt_module_id,
+                provider=title_provider,
+                model=title_ai.get("model"),
+                style=selected_style,
+                # 핵심어가 빠지면 검색에 안 잡힌다(계획서 §4-5 B)
+                keywords=title_keywords(source_title),
+            )
         working_title = recombine_result.recombined_title
         logger.info(
             f"[GENERATOR] 제목 재조합 | "
@@ -448,6 +464,7 @@ class ContentGenerator:
             source_title_id=source_title_id,
             prompt_module_id=prompt_module_id,
             recombined_title=working_title,
+            title_style=selected_style,
             ai_model_title=recombine_result.ai_model,
             ai_model_content=ai_content_model,
             ai_model_image=ai_model_image,
@@ -480,10 +497,13 @@ class ContentGenerator:
         # GenerationHistory에 crawling_post_id 연결
         history.crawling_post_id = crawled_post.id
 
-        # 9. 원본 제목 사용 처리
-        source_title.mark_used()
+        # 9. 원본 제목 사용 처리 — 그룹 전체를 소진한다(계획서 §4-4 C)
+        # 그룹은 "같은 소재의 변형들" 이므로 하나를 쓰면 나머지도 쓸 이유가
+        # 없다. 재조합 제목만 소진하면 원본이 남아 같은 소재로 또 쓴다.
+        used = await consume_group(self.db, source_title)
         logger.debug(
-            f"[GENERATOR] 9단계 완료: 제목 사용 처리 (id={source_title_id})"
+            f"[GENERATOR] 9단계 완료: 제목 {used}건 사용 처리 "
+            f"(id={source_title_id})"
         )
 
         await self.db.commit()
@@ -560,5 +580,3 @@ class ContentGenerator:
                 await asyncio.sleep(wait)
 
         return None
-
-

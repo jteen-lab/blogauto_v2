@@ -1,0 +1,206 @@
+{#
+  정식제목 재조합 패널.
+
+  재조합은 지금까지 발행 직전에만 일어나 결과가 휘발됐다. 여기서 사람이
+  돌리고 **결과를 재고로 남긴다.** 결과는 원본과 같은 그룹에 들어가고
+  ♻ 배지로 구분된다.
+
+  생성 모듈이 재조합 제목을 고르면 다시 재조합하지 않는다.
+
+  계획서: docs/plans/title_tab_workplan.md §4
+#}
+<div x-data="recombinePanel()" x-init="init()" class="mb-4">
+  <details class="border border-gray-200 rounded-lg">
+    <summary class="px-3 py-2 text-sm text-gray-700 cursor-pointer select-none">
+      ♻ 재조합 — 고른 제목을 다시 쓰기
+    </summary>
+
+    <div class="p-3 border-t border-gray-200 space-y-3">
+      <div class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
+        결과는 <b>원본과 같은 그룹</b>에 들어가고 ♻ 표시가 붙습니다.
+        생성 모듈이 그 제목을 고르면 재조합을 건너뛰고 바로 씁니다.
+        글이 완성되면 <b>그룹 전체</b>가 소진되어 같은 소재로 또 쓰지 않습니다.
+      </div>
+
+      <!-- 최신성 -->
+      <div class="p-2 bg-white border border-gray-200 rounded">
+        <div class="flex items-center justify-between">
+          <label class="flex items-center gap-2 text-sm text-gray-800">
+            <input type="checkbox" x-model="freshness" class="rounded">
+            최신성 갱신 <span class="text-xs text-gray-500">낡은 제목을 지금 시점에 맞게</span>
+          </label>
+          <button @click="loadStale()" class="text-xs text-accent hover:underline">후보 확인</button>
+        </div>
+        <template x-if="stale">
+          <p class="mt-1 text-xs text-gray-500">
+            낡은 제목 <b x-text="stale.total"></b>건 ·
+            그중 <b x-text="stale.rule_only"></b>건은 <b>AI 없이</b> 연도만 바꾸면 됩니다.
+          </p>
+        </template>
+      </div>
+
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+        <label class="text-xs text-gray-500">
+          프롬프트 모듈
+          <select x-model.number="moduleId" class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+            <option value="">선택하세요</option>
+            <template x-for="m in modules" :key="m.id">
+              <option :value="m.id" x-text="m.name"></option>
+            </template>
+          </select>
+        </label>
+        <label class="text-xs text-gray-500">
+          스타일
+          <select x-model="style" class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+            <option value="">모듈 설정 따름</option>
+            <template x-for="s in styles" :key="s.code">
+              <option :value="s.code" x-text="s.label"></option>
+            </template>
+          </select>
+        </label>
+        <div class="flex items-end">
+          <button @click="run()" :disabled="busy || !canRun()"
+                  class="w-full px-3 py-1.5 bg-accent text-white rounded-lg text-sm font-medium disabled:opacity-40">
+            <span x-text="busy ? '재조합 중…' : `선택 ${selectedCount()}건 재조합`"></span>
+          </button>
+        </div>
+      </div>
+
+      <p x-show="!selectedCount()" class="text-xs text-gray-400">
+        위 목록에서 재조합할 정식제목을 선택하세요.
+      </p>
+
+      <template x-if="result">
+        <div class="p-3 bg-white border border-gray-200 rounded-lg text-sm">
+          <div class="text-gray-800">
+            <span x-text="`${result.made}건 생성`"></span>
+            <span x-show="result.skipped" class="text-gray-500"
+                  x-text="` · ${result.skipped}건 건너뜀(이미 재조합됨)`"></span>
+          </div>
+          <ul class="mt-1 list-disc list-inside text-xs text-gray-600 space-y-0.5">
+            <template x-for="(item, i) in (result.items || []).slice(0, 10)" :key="i">
+              <li x-text="item.title"></li>
+            </template>
+          </ul>
+        </div>
+      </template>
+
+      <p x-show="message" class="text-sm"
+         :class="messageType === 'error' ? 'text-red-600' : 'text-gray-600'"
+         x-text="message"></p>
+    </div>
+  </details>
+</div>
+
+<script>
+function recombinePanel() {
+    return {
+        busy: false,
+        moduleId: '',
+        style: '',
+        freshness: false,
+        modules: [],
+        styles: [],
+        stale: null,
+        result: null,
+        message: '',
+        messageType: 'info',
+
+        async init() {
+            await Promise.all([this.loadModules(), this.loadStyles()]);
+        },
+
+        /** 부모(collectionApp)의 선택 목록을 그대로 쓴다. */
+        selectedCount() {
+            const parent = this.$root.closest('[x-data]');
+            return (this.selected() || []).length;
+        },
+
+        selected() {
+            // Alpine 의 스코프 체인을 타고 부모 상태를 읽는다
+            let node = this.$el;
+            while (node) {
+                const stack = node._x_dataStack;
+                if (stack) {
+                    for (const scope of stack) {
+                        if (Array.isArray(scope.selectedMainTitles)) {
+                            return scope.selectedMainTitles;
+                        }
+                    }
+                }
+                node = node.parentElement;
+            }
+            return [];
+        },
+
+        canRun() {
+            return this.moduleId && this.selectedCount() > 0;
+        },
+
+        async loadModules() {
+            const d = await this.get('/api/v1/modules?type=generate');
+            this.modules = d ? (d.items || d || []) : [];
+        },
+
+        async loadStyles() {
+            const d = await this.get('/api/v1/data/titles/recombine/styles');
+            this.styles = d ? (d.styles || []) : [];
+        },
+
+        async loadStale() {
+            const d = await this.get('/api/v1/data/titles/recombine/stale');
+            if (d) this.stale = d;
+        },
+
+        async run() {
+            const ids = this.selected();
+            if (!this.moduleId || !ids.length) return;
+            this.busy = true;
+            this.result = null;
+            const d = await this.post('/api/v1/data/titles/recombine', {
+                ids, module_id: this.moduleId, style: this.style || null,
+                freshness: this.freshness,
+            });
+            this.busy = false;
+            if (!d) return;
+            this.result = d;
+            if (d.error) { this.message = d.error; this.messageType = 'error'; }
+            window.dispatchEvent(new CustomEvent('main-titles-changed'));
+        },
+
+        async get(url) {
+            try {
+                const r = await fetch(url, { credentials: 'include' });
+                const text = await r.text();
+                if (!r.ok) throw new Error(this.detail(text, r.status));
+                return text ? JSON.parse(text) : null;
+            } catch (e) {
+                this.message = e.message; this.messageType = 'error';
+                return null;
+            }
+        },
+
+        async post(url, body) {
+            try {
+                const r = await fetch(url, {
+                    method: 'POST', credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body || {}),
+                });
+                const text = await r.text();
+                if (!r.ok) throw new Error(this.detail(text, r.status));
+                if (!text) throw new Error('서버가 빈 응답을 돌려줬습니다');
+                return JSON.parse(text);
+            } catch (e) {
+                this.message = e.message; this.messageType = 'error';
+                return null;
+            }
+        },
+
+        detail(text, status) {
+            try { return JSON.parse(text).detail || `요청 실패 (${status})`; }
+            catch (e) { return `요청 실패 (${status})`; }
+        },
+    };
+}
+</script>

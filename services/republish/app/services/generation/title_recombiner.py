@@ -93,6 +93,7 @@ class TitleRecombiner:
         provider: Optional[str] = None,
         model: Optional[str] = None,
         style: Optional[str] = None,
+        keywords: Optional[list] = None,
     ) -> RecombineResult:
         """
         제목 재조합 실행
@@ -103,6 +104,8 @@ class TitleRecombiner:
             provider: AI 제공자 (None이면 자동)
             model: AI 모델 (None이면 기본값)
             style: 제목 스타일 (emotional, practical, question, viral, minimal)
+            keywords: 지켜야 할 핵심어. 재조합이 원본 문자열만 보면 검색
+                되는 말이 빠질 수 있다(계획서 §4-5 B)
 
         Returns:
             RecombineResult: 재조합 결과
@@ -150,6 +153,13 @@ class TitleRecombiner:
 
         # 2. 프롬프트 구성 (기본 프롬프트 + 추가 지시사항)
         full_prompt = DEFAULT_TITLE_PROMPT.replace("{title}", original_title)
+
+        # 핵심어를 명시한다. 이게 없으면 재조합이 검색되는 말을 흘린다.
+        picked = [k for k in (keywords or []) if k and str(k).strip()][:5]
+        if picked:
+            full_prompt += (
+                "\n\n반드시 유지할 핵심어: " + ", ".join(str(k) for k in picked)
+                + "\n이 말들이 제목에서 빠지면 검색에 잡히지 않습니다.")
 
         # 추가 지시사항이 있으면 기본 프롬프트 뒤에 추가
         if title_prompt_text and title_prompt_text.strip():

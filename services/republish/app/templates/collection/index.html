@@ -421,7 +421,8 @@
         </div>
 
         <!-- 정식제목 탭 -->
-        <div x-show="activeTab === 'titlesMain'" class="tab-content" :class="{'active': activeTab === 'titlesMain'}">
+        <div x-show="activeTab === 'titlesMain'" class="tab-content" :class="{'active': activeTab === 'titlesMain'}"
+             @main-titles-changed.window="loadMainTitles(); loadStats()">
             {% include "collection/_titles_main.html" %}
         </div>
 

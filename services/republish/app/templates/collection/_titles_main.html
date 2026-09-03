@@ -1,4 +1,7 @@
 <!-- 정식 제목 탭 컨텐츠 -->
+{# 재조합 패널 — 결과를 같은 그룹에 남긴다(계획서 §4) #}
+{% include "collection/_recombine_panel.html" %}
+
 <div>
     <!-- 페어 매칭 안내 (블로그 선택 시 상단에 표시) -->
     <div x-show="selectedBlogId" x-cloak
@@ -751,6 +754,11 @@
                                             <td class="p-3">
                                                 <div class="flex items-center gap-2">
                                                     <span x-show="title.is_group_representative" class="text-xs text-amber-600 font-medium px-1.5 py-0.5 bg-amber-100 rounded">대표</span>
+                                                    {# 같은 그룹 안에서 재조합 제목을 가려낸다. 유사 제목은 similarity_score 로,
+                                                       재조합 제목은 recombined_from_id 로 구분된다(계획서 §4-2) #}
+                                                    <span x-show="title.recombined_from_id"
+                                                          class="text-xs text-sky-700 font-medium px-1.5 py-0.5 bg-sky-100 rounded"
+                                                          :title="`재조합${title.recombine_style ? ' · ' + title.recombine_style : ''} — 생성 시 재조합을 건너뜁니다`">♻ 재조합</span>
                                                     <span x-text="title.title"></span>
                                                     <span x-show="title.similarity_score"
                                                           class="text-xs text-gray-400"

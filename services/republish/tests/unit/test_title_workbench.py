@@ -269,3 +269,126 @@ class TestDomainOps:
         src = (BASE / "app/services/title_transfer_service.py").read_text(
             encoding="utf-8")
         assert "candidate_id=getattr(temp_title" in src
+
+
+class TestRecombine:
+    """W7~W9 — 재조합 이동·건너뛰기·그룹 소진·최신성."""
+
+    def test_no_double_recombine(self):
+        """이미 재조합된 제목을 또 돌리면 원문에서 두 단계 멀어진다."""
+        src = (BASE / "app/services/generation/generator.py").read_text(
+            encoding="utf-8")
+        assert 'getattr(source_title, "recombined_from_id", None)' in src
+        assert "재조합 건너뜀" in src
+
+    def test_group_is_consumed(self):
+        """그룹 전체 소진(C안). 재조합만 소진하면 원본으로 또 쓴다."""
+        gen = (BASE / "app/services/generation/generator.py").read_text(
+            encoding="utf-8")
+        assert "consume_group(self.db, source_title)" in gen
+        life = (BASE / "app/services/generation/title_lifecycle.py").read_text(
+            encoding="utf-8")
+        assert "MainTitle.group_id == source_title.group_id" in life
+        assert "row.mark_used()" in life
+
+    def test_style_is_recorded(self):
+        src = (BASE / "app/services/generation/generator.py").read_text(
+            encoding="utf-8")
+        assert "title_style=selected_style" in src
+
+    def test_keywords_passed_to_recombiner(self):
+        src = (BASE / "app/services/generation/generator.py").read_text(
+            encoding="utf-8")
+        assert "keywords=title_keywords(source_title)" in src
+        recomb = (BASE / "app/services/generation/title_recombiner.py"
+                  ).read_text(encoding="utf-8")
+        assert "반드시 유지할 핵심어" in recomb
+
+    def test_result_keeps_origin_group(self):
+        """별도 그룹을 만들지 않는다 — 같은 그룹 안에서 필드로 구분."""
+        src = (BASE / "app/services/recombine/service.py").read_text(
+            encoding="utf-8")
+        assert "group_id=origin.group_id" in src
+        assert "is_group_representative=False" in src
+        assert "recombined_from_id=origin.id" in src
+
+    def test_badge_in_list(self):
+        tpl = (BASE / "app/templates/collection/_titles_main.html").read_text(
+            encoding="utf-8")
+        assert "recombined_from_id" in tpl and "♻" in tpl
+
+
+class TestFreshness:
+    """W9 — 최신성. 규칙으로 후보를 고르고 AI 는 최소로 쓴다."""
+
+    def _now(self):
+        from datetime import datetime, timezone
+        return datetime(2026, 9, 3, tzinfo=timezone.utc)
+
+    def _old(self):
+        from datetime import datetime, timezone
+        return datetime(2024, 1, 1, tzinfo=timezone.utc)
+
+    def test_past_year_is_stale(self):
+        from app.services.recombine.freshness import is_stale
+
+        assert is_stale("2024년 전기기사 접수", self._old(), self._now())
+
+    def test_fresh_title_untouched(self):
+        from app.services.recombine.freshness import is_stale
+
+        assert not is_stale("전기기사 실기 준비법", self._old(), self._now())
+
+    def test_year_swap_needs_no_ai(self):
+        """가장 흔한 경우다. AI 비용 0으로 끝나야 한다."""
+        from app.services.recombine.freshness import plan
+
+        out = plan("2024년 전기기사 접수", self._old(), self._now())
+        assert out["rule_only"] == "2026년 전기기사 접수"
+        assert out["needs_ai"] is False
+
+    def test_future_year_not_rewritten(self):
+        """'2027년 시행' 을 과거로 당기면 안 된다."""
+        from app.services.recombine.freshness import refresh_years
+
+        assert refresh_years("2027년 시행", self._now()) == "2027년 시행"
+
+    def test_time_word_needs_ai(self):
+        from app.services.recombine.freshness import plan
+
+        out = plan("올해 전기기사 준비법", self._old(), self._now())
+        assert out["stale"] and out["needs_ai"] and out["rule_only"] is None
+
+    def test_no_created_at_is_not_stale(self):
+        from app.services.recombine.freshness import is_stale
+
+        assert not is_stale("올해 준비법", None, self._now())
+
+
+class TestStylePicker:
+    """W8 — 성과 가중 선택. 무작위를 없애지 않는다."""
+
+    def test_single_style_short_circuit(self):
+        import asyncio
+
+        from app.services.generation.style_picker import pick
+
+        assert asyncio.run(pick(None, ["viral"])) == "viral"
+
+    def test_empty_returns_none(self):
+        import asyncio
+
+        from app.services.generation.style_picker import pick
+
+        assert asyncio.run(pick(None, [])) is None
+
+    def test_weight_is_capped(self):
+        """한 스타일이 판을 독점하면 탐색이 죽는다."""
+        from app.services.generation import style_picker as sp
+
+        assert sp.MAX_WEIGHT <= 3.0 and sp.BASE_WEIGHT > 0
+
+    def test_small_sample_ignored(self):
+        from app.services.generation import style_picker as sp
+
+        assert sp.MIN_SAMPLE >= 5, "1건 성공을 100%로 읽으면 안 된다"
