@@ -20,6 +20,7 @@ import io
 import re
 
 from ..core.database import get_db_session
+from ..services import title_source
 from ..core.logger import get_logger
 from ..models.title import TempTitle, MainTitle
 from ..services.title_dedup import title_exists
@@ -54,6 +55,11 @@ class TempTitleResponse(BaseModel):
     category_path: Optional[str] = None  # "주제/하위 주제" 형식
     similarity_score: Optional[float] = None
     created_at: datetime
+    # 출처 배지 — 생성인지 수집인지 한눈에 가른다(계획서 W1)
+    source_label: Optional[str] = None
+    source_tone: Optional[str] = None
+    candidate_id: Optional[int] = None
+    expires_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -137,6 +143,8 @@ async def list_temp_titles(
     topic_id: Optional[int] = Query(None, description="카테고리 관리 주제 ID"),
     subtopic_id: Optional[int] = Query(None, description="카테고리 관리 하위 주제 ID"),
     collection_stage: Optional[str] = Query(None),
+    source_group: Optional[str] = Query(
+        None, description="출처 묶음: generated|collected|legacy"),
     sort_field: Optional[str] = Query("created_at", description="정렬 필드"),
     sort_dir: Optional[str] = Query("desc", description="정렬 방향 (asc/desc)"),
     db: AsyncSession = Depends(get_db_session),
@@ -166,6 +174,13 @@ async def list_temp_titles(
         query = query.where(TempTitle.subtopic_id == subtopic_id)
     if collection_stage:
         query = query.where(TempTitle.collection_stage == collection_stage)
+    if source_group:
+        # 개별 코드를 다 노출하면 고르기 어렵다. 묶음으로 받는다.
+        from ..services.title_source import codes_for_group
+
+        codes = codes_for_group(source_group)
+        if codes:
+            query = query.where(TempTitle.collection_stage.in_(codes))
 
     # 전체 개수
     count_query = select(func.count()).select_from(query.subquery())
@@ -199,6 +214,8 @@ async def list_temp_titles(
     items = []
     for t in titles:
         item = TempTitleResponse.model_validate(t)
+        item.source_label = title_source.label(t.collection_stage)
+        item.source_tone = title_source.tone(t.collection_stage)
         if t.source_keyword_id:
             kw = await db.get(CollectedKeyword, t.source_keyword_id)
             item.source_keyword = kw.keyword if kw else None

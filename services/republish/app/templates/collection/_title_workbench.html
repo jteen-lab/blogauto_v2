@@ -1,0 +1,211 @@
+{#
+  임시제목 작업대 — 수집·생성 섹션.
+
+  키워드 탭과 같은 구조다. **섹션 체크박스를 켜야 그 섹션의 설정이 열리고,
+  실행 대상이 된다.** 한 섹션만 켜면 그 기능 전용으로 쓸 수 있다.
+
+  자동 모듈이 하는 일을 **같은 실행기로** 손으로 돌린다. 다른 코드를 타면
+  한쪽에서만 나는 버그가 생긴다.
+
+  계획서: docs/plans/title_tab_workplan.md §1 · §2 · §3
+#}
+<div x-data="titleWorkbench()" x-init="init()" class="mb-4">
+  <details class="border border-gray-200 rounded-lg">
+    <summary class="px-3 py-2 text-sm text-gray-700 cursor-pointer select-none">
+      🛠 제목 작업대 — 수집 · 생성
+    </summary>
+
+    <div class="p-3 border-t border-gray-200 space-y-3">
+      <div class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
+        체크한 섹션만 실행됩니다. 자동 모듈과 <b>같은 코드</b>로 돌아가므로,
+        여기서 되는 것은 자동에서도 됩니다.
+      </div>
+
+      <!-- ── 수집 ─────────────────────────────────────────────── -->
+      <div class="border rounded-lg"
+           :class="collect.enabled ? 'border-blue-300 bg-blue-50/40' : 'border-gray-200'">
+        <label class="flex items-center gap-2 px-3 py-2 cursor-pointer">
+          <input type="checkbox" x-model="collect.enabled" class="rounded">
+          <span class="text-sm font-medium text-gray-800">수집</span>
+          <span class="text-xs text-gray-500">검색으로 제목을 모으고, 밀린 도메인에서 마저 추출합니다</span>
+        </label>
+
+        <div x-show="collect.enabled" x-cloak class="px-3 pb-3 space-y-3">
+          <!-- ① 제목 수집 -->
+          <div class="p-2 bg-white border border-gray-200 rounded">
+            <label class="flex items-center gap-2 text-sm text-gray-800">
+              <input type="checkbox" x-model="collect.search_enabled" class="rounded">
+              ① 제목 수집 <span class="text-xs text-gray-500">채택 키워드로 검색 → 제목 + 새 도메인</span>
+            </label>
+            <div x-show="collect.search_enabled" x-cloak class="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2">
+              <label class="text-xs text-gray-500">
+                시드 키워드 수
+                <input type="number" min="1" max="50" x-model.number="collect.seed_limit"
+                       class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+              </label>
+              <label class="text-xs text-gray-500">
+                도메인당 URL
+                <input type="number" min="1" max="200" x-model.number="collect.urls_per_domain"
+                       class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+              </label>
+              <label class="text-xs text-gray-500">
+                회차당 새 도메인
+                <input type="number" min="1" max="50" x-model.number="collect.domains_per_cycle"
+                       class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+              </label>
+              <label class="text-xs text-gray-500">
+                미완료 도메인 상한
+                <input type="number" min="1" max="1000" x-model.number="collect.max_pending_domains"
+                       class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+              </label>
+            </div>
+            <p x-show="collect.search_enabled" x-cloak class="mt-1 text-xs text-gray-400">
+              미완료 도메인이 상한을 넘으면 새 도메인을 찾지 않고 ②추출만 합니다.
+              유입이 처리를 앞지르면 도메인만 쌓입니다.
+            </p>
+          </div>
+
+          <!-- ② 도메인 추출 -->
+          <div class="p-2 bg-white border border-gray-200 rounded">
+            <label class="flex items-center gap-2 text-sm text-gray-800">
+              <input type="checkbox" x-model="collect.extract_enabled" class="rounded">
+              ② 도메인 추출 <span class="text-xs text-gray-500">이미 저장된 도메인에서 마저 추출</span>
+            </label>
+            <div x-show="collect.extract_enabled" x-cloak class="mt-2 grid grid-cols-2 gap-2">
+              <label class="text-xs text-gray-500">
+                회차당 도메인 수
+                <input type="number" min="1" max="50" x-model.number="collect.extract_domains"
+                       class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+              </label>
+              <label class="text-xs text-gray-500">
+                도메인당 제목 수
+                <input type="number" min="1" max="200" x-model.number="collect.titles_per_domain"
+                       class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+              </label>
+            </div>
+            <p x-show="collect.extract_enabled" x-cloak class="mt-1 text-xs text-gray-400">
+              하다 만 도메인(<span x-text="stats.partial_domains ?? '-'"></span>개)을
+              승격률 높은 순으로 먼저 봅니다.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── 생성 ─────────────────────────────────────────────── -->
+      <div class="border rounded-lg"
+           :class="gen.enabled ? 'border-emerald-300 bg-emerald-50/40' : 'border-gray-200'">
+        <label class="flex items-center gap-2 px-3 py-2 cursor-pointer">
+          <input type="checkbox" x-model="gen.enabled" class="rounded">
+          <span class="text-sm font-medium text-gray-800">생성</span>
+          <span class="text-xs text-gray-500">채택 키워드·뉴스로 제목을 만듭니다</span>
+        </label>
+
+        <div x-show="gen.enabled" x-cloak class="px-3 pb-3 space-y-3">
+          <div class="grid grid-cols-2 gap-2">
+            <label class="text-xs text-gray-500">
+              대상 블로그
+              <select x-model="gen.blog_id" class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+                <option value="">(선택 안 함 — 전역)</option>
+                <template x-for="b in blogs" :key="b.id">
+                  <option :value="b.id" x-text="b.name"></option>
+                </template>
+              </select>
+            </label>
+            <label class="flex items-end gap-2 text-sm text-gray-700 pb-1">
+              <input type="checkbox" x-model="gen.dry_run" class="rounded">
+              검증 모드 <span class="text-xs text-gray-500">(저장 안 하고 결과만)</span>
+            </label>
+          </div>
+
+          <!-- L1 -->
+          <div class="p-2 bg-white border border-gray-200 rounded">
+            <label class="flex items-center gap-2 text-sm text-gray-800">
+              <input type="checkbox" x-model="gen.l1_enabled" class="rounded">
+              L1 키워드 기반 <span class="text-xs text-gray-500">채택 키워드 → 클러스터 → AI</span>
+            </label>
+            <div x-show="gen.l1_enabled" x-cloak class="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2">
+              <label class="text-xs text-gray-500">
+                묶음 수
+                <input type="number" min="1" max="50" x-model.number="gen.cluster_limit"
+                       class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+              </label>
+              <label class="text-xs text-gray-500">
+                단독 키워드 수
+                <input type="number" min="1" max="100" x-model.number="gen.keyword_limit"
+                       class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+              </label>
+              <label class="text-xs text-gray-500">
+                키워드당 제목
+                <input type="number" min="1" max="10" x-model.number="gen.titles_per_keyword"
+                       class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+              </label>
+              <label class="flex items-end gap-2 text-sm text-gray-700 pb-1">
+                <input type="checkbox" x-model="gen.use_angles" class="rounded">
+                각도 참고
+              </label>
+            </div>
+          </div>
+
+          <!-- L3 -->
+          <div class="p-2 bg-white border border-gray-200 rounded">
+            <label class="flex items-center gap-2 text-sm text-gray-800">
+              <input type="checkbox" x-model="gen.l3_enabled" class="rounded">
+              L3 뉴스 시의성 <span class="text-xs text-gray-500">뉴스 요지 + 니치 키워드 결합</span>
+            </label>
+            <div x-show="gen.l3_enabled" x-cloak class="mt-2 grid grid-cols-3 gap-2">
+              <label class="text-xs text-gray-500">
+                조회 기간(일)
+                <input type="number" min="1" max="30" x-model.number="gen.news_days"
+                       class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+              </label>
+              <label class="text-xs text-gray-500">
+                제목 수
+                <input type="number" min="1" max="50" x-model.number="gen.news_limit"
+                       class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+              </label>
+              <label class="text-xs text-gray-500">
+                만료(일)
+                <input type="number" min="1" max="90" x-model.number="gen.expires_days"
+                       class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+              </label>
+            </div>
+            <p x-show="gen.l3_enabled" x-cloak class="mt-1 text-xs text-gray-400">
+              뉴스 <b>원문 제목은 재고에 넣지 않습니다.</b> 요지만 뽑아 우리 니치와 결합합니다.
+              만료된 제목은 재고 선택에서 빠집니다(삭제하지는 않습니다).
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 실행 -->
+      <div class="flex items-center gap-2">
+        <button @click="run()" :disabled="busy || !anyEnabled()"
+                class="px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium disabled:opacity-40">
+          <span x-text="busy ? `실행 중… ${elapsed}초` : '실행'"></span>
+        </button>
+        <span x-show="!anyEnabled()" class="text-xs text-gray-400">섹션을 하나 이상 켜세요</span>
+      </div>
+
+      <!-- 결과 -->
+      <template x-if="result">
+        <div class="p-3 bg-white border border-gray-200 rounded-lg text-sm space-y-2">
+          <div x-text="result.message" class="text-gray-800"></div>
+          <div x-show="(result.samples || []).length" class="text-xs text-gray-500">
+            <div class="mb-1">
+              제목 <span x-text="`${result.made ?? 0}개 중 ${(result.samples || []).length}개 표시`"></span>
+            </div>
+            <ul class="list-disc list-inside space-y-0.5">
+              <template x-for="(t, i) in (result.samples || [])" :key="i">
+                <li x-text="t"></li>
+              </template>
+            </ul>
+          </div>
+        </div>
+      </template>
+
+      <p x-show="message" class="text-sm"
+         :class="messageType === 'error' ? 'text-red-600' : 'text-gray-600'"
+         x-text="message"></p>
+    </div>
+  </details>
+</div>
