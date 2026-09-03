@@ -15,12 +15,21 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import (
-    Boolean, DateTime, Integer, String, Text, UniqueConstraint,
+    Boolean, DateTime, Integer, String, Text, UniqueConstraint, text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from ..core.database import Base
+
+# 추출 진행 상태
+EXTRACT_PENDING = "pending"    # 아직 안 봄
+EXTRACT_PARTIAL = "partial"    # 하다 말았다 — 다시 꺼낼 대상
+EXTRACT_DONE = "done"          # 더 가져올 게 없다
+EXTRACT_BLOCKED = "blocked"    # 차단됨
+
+# 품질 점수를 믿을 수 있는 최소 표본. 이하는 판단하지 않는다.
+MIN_QUALITY_SAMPLE = 10
 
 
 class NicheDomain(Base):
@@ -63,6 +72,39 @@ class NicheDomain(Base):
         Boolean, nullable=False, default=True, index=True,
         comment="False 면 각도 조회 대상에서 제외")
 
+    # ── 제목 추출 진행 상태 (alembic 067) ──────────────────────────────
+    # 옛 수집은 도메인 하나에서 목표를 못 채우면 그대로 방치했다. 어디까지
+    # 했는지 적을 자리가 없어서였다. partial 이 다시 꺼낼 대상이다.
+    extract_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=EXTRACT_PENDING, index=True,
+        server_default=EXTRACT_PENDING,
+        comment="pending|partial|done|blocked")
+    extracted_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0",
+        comment="지금까지 추출한 제목 수")
+    last_extracted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="마지막 추출 시각")
+
+    # ── 재수집 차단 (alembic 067) ─────────────────────────────────────
+    # is_active(각도 참조)와 축이 다르다. 합치면 각도를 끄려다 재수집까지
+    # 막힌다.
+    is_blocked: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, index=True,
+        server_default=text("false"),
+        comment="True 면 제목 수집·추출 대상에서 제외")
+    blocked_reason: Mapped[Optional[str]] = mapped_column(
+        String(200), nullable=True, comment="차단 사유")
+    blocked_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="차단 시각")
+
+    # ── 품질 (alembic 067) ────────────────────────────────────────────
+    promoted_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0",
+        comment="이 도메인 제목 중 정식제목이 된 수")
+    deleted_title_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0",
+        comment="이 도메인에서 삭제된 제목 누계(세션이 아니라 누적)")
+
     first_seen_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True, comment="최초 관측")
     last_seen_at: Mapped[Optional[datetime]] = mapped_column(
@@ -77,3 +119,17 @@ class NicheDomain(Base):
     def keywords(self) -> list:
         """대표 키워드 목록."""
         return [k for k in (self.top_keywords or "").split("\n") if k.strip()]
+
+    def quality_score(self) -> Optional[float]:
+        """승격률 = 정식제목이 된 수 ÷ 추출한 수.
+
+        표본이 적으면 점수를 믿을 수 없다. `None` 을 돌려주고 화면은 `-` 로
+        표시한다 — 추출 2건 중 1건 승격을 50% 로 읽으면 안 된다.
+        """
+        if (self.extracted_count or 0) < MIN_QUALITY_SAMPLE:
+            return None
+        return round((self.promoted_count or 0) / self.extracted_count, 4)
+
+    def usable_for_collect(self) -> bool:
+        """수집·추출 대상인가. 차단된 도메인은 양쪽에서 뺀다."""
+        return not self.is_blocked

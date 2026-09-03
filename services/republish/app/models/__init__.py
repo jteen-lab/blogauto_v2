@@ -58,6 +58,7 @@ from .content_filter import ContentFilter
 # Phase D-2: Bulk Collection models
 from .collected_url import CollectedUrl
 from .niche_domain import NicheDomain
+from .taxonomy_change import TaxonomyChange
 
 # Phase A-041: Bulk Collect 모듈 분리 — 진행 상태
 from .bulk_collect_progress import BulkCollectProgress
@@ -142,6 +143,7 @@ __all__ = [
     # Phase D-2: Bulk Collection models
     "CollectedUrl",
     "NicheDomain",
+    "TaxonomyChange",
     "PromptBlock",
     # Phase A-041: Bulk Collect 모듈 분리 — 진행 상태
     "BulkCollectProgress",

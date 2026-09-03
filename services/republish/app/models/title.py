@@ -86,6 +86,21 @@ class MainTitle(Base):
     # 원본 정보
     source: Mapped[str] = mapped_column(String(50), default="transfer", comment="transfer/manual/crawl")
     source_temp_title_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # 정본 키워드 연결 — 확장 재조합이 "어떤 키워드로 넓힐지" 를 안다.
+    candidate_id: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True, index=True,
+        comment="이 제목의 근거가 된 채택 키워드(keyword_candidates.id)")
+    # 재조합 결과면 원본 정식제목을 가리킨다. 그룹은 원본 것을 승계하므로
+    # 같은 그룹 안에서 이 필드로 구분된다.
+    recombined_from_id: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True, index=True, comment="재조합 원본 정식제목 ID")
+    recombine_style: Mapped[Optional[str]] = mapped_column(
+        String(30), nullable=True, comment="재조합에 쓴 스타일")
+    freshness_checked_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="최신성 점검 시각")
+    expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True,
+        comment="시의성 만료 시각(뉴스 소재 제목)")
     source_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -126,6 +141,11 @@ class TempTitle(Base):
     title: Mapped[str] = mapped_column(String(500), nullable=False, index=True, comment="제목")
     # 수집 정보
     source_keyword_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("collected_keywords.id"), nullable=True)
+    # 정본 키워드(keyword_candidates) 연결. FK 를 걸지 않는 이유: 후보는
+    # 정리·재판정으로 지워질 수 있는데 그때 제목까지 잃으면 안 된다.
+    candidate_id: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True, index=True,
+        comment="이 제목을 찾게 한 채택 키워드(keyword_candidates.id)")
     source_blog_url: Mapped[str] = mapped_column(String(1000), nullable=False)
     source_post_url: Mapped[str] = mapped_column(String(1000), nullable=False)
     collection_stage: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -146,6 +166,10 @@ class TempTitle(Base):
     # 이동 정보
     moved_to_main_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     moved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # 시의성 만료(L3 뉴스). 지나면 재고 선택에서 뺀다 — 삭제하지는 않는다.
+    expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True,
+        comment="시의성 만료 시각(뉴스 소재 제목)")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 

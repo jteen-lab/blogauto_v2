@@ -62,6 +62,13 @@ class GenerationHistory(Base):
         nullable=True,
         comment="제목 재조합에 사용된 AI 모델",
     )
+    # 어떤 스타일을 썼는지. 이게 없어서 5개 스타일을 굴리며 무엇이 먹히는지
+    # 알 수 없었다. GSC 실측과 대조해 성과 가중 선택에 쓴다.
+    title_style: Mapped[Optional[str]] = mapped_column(
+        String(30),
+        nullable=True,
+        comment="재조합 스타일(emotional/practical/question/viral/minimal)",
+    )
     ai_model_content: Mapped[Optional[str]] = mapped_column(
         String(100),
         nullable=True,
