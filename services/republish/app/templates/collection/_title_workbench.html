@@ -88,6 +88,25 @@
               승격률 높은 순으로 먼저 봅니다.
             </p>
           </div>
+
+          <!-- 니치 대조 (W11·W17) -->
+          <div class="p-2 bg-white border border-gray-200 rounded">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="text-sm text-gray-800">니치 대조</span>
+              <select x-model="collect.niche_mode"
+                      class="text-sm border-gray-300 rounded py-1">
+                <option value="mark">표시만 — 저장하되 '니치 무관' 표시</option>
+                <option value="block">차단 — 저장하지 않음</option>
+              </select>
+            </div>
+            <p class="mt-1 text-xs text-gray-400">
+              금지어 필터와 카테고리 분류는 <b>이미 걸려 있습니다.</b>
+              여기서 보는 것은 "그 주제를 쓰는 블로그가 있는가" 입니다.
+              분류표가 얇을 때 차단부터 켜면 살릴 수 있는 제목까지 막힙니다 —
+              <b>니치 추천으로 분류표를 채운 뒤</b> 차단으로 바꾸세요.
+              활성 카테고리가 없으면 이 검사는 건너뜁니다.
+            </p>
+          </div>
         </div>
       </div>
 

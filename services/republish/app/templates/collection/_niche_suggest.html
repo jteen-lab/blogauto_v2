@@ -1,0 +1,243 @@
+{#
+  니치 추천 — 미분류에서 빠진 분류어를 찾는다.
+
+  미분류는 쓰레기가 아니라 **분류표의 구멍 목록**이다. 분류 매칭이 문자열
+  포함 검사라, 등록된 키워드에 없는 말은 무조건 미분류가 된다.
+
+  1단계(규칙 기반)는 AI 를 부르지 않는다. 사람이 하는 일은 "어느 하위주제에
+  넣을지" 고르는 것 하나다.
+
+  계획서: docs/plans/title_tab_workplan.md §9-2 · §9-3
+#}
+<div x-data="nicheSuggestPanel()" x-init="init()" class="mb-4">
+  <details class="border border-gray-200 rounded-lg">
+    <summary class="px-3 py-2 text-sm text-gray-700 cursor-pointer select-none">
+      🧩 니치 추천 — 미분류에서 빠진 분류어 찾기
+    </summary>
+
+    <div class="p-3 border-t border-gray-200 space-y-3">
+      <div class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
+        미분류 제목에서 자주 나오는데 <b>분류표에 없는 말</b>을 찾습니다.
+        추가하면 그만큼 제목이 회수됩니다. 이 단계는 AI 를 쓰지 않습니다.
+      </div>
+
+      <div class="flex flex-wrap items-end gap-2">
+        <label class="text-xs text-gray-500">
+          최소 등장 수
+          <input type="number" min="1" max="10000" x-model.number="minCount"
+                 class="mt-0.5 w-24 text-sm border-gray-300 rounded py-1">
+        </label>
+        <button @click="load()" :disabled="loading"
+                class="px-3 py-1.5 bg-accent text-white rounded-lg text-sm disabled:opacity-40">
+          <span x-text="loading ? '분석 중…' : '후보 찾기'"></span>
+        </button>
+        <template x-if="summary">
+          <span class="text-xs text-gray-500">
+            미분류 <b x-text="(summary.unclassified || 0).toLocaleString()"></b>건 중
+            <b x-text="scanned.toLocaleString()"></b>건 분석
+          </span>
+        </template>
+      </div>
+
+      <template x-if="candidates.length">
+        <div class="border border-gray-200 rounded-lg overflow-hidden">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-2 py-2 text-left">후보어</th>
+                <th class="px-2 py-2 text-right">등장</th>
+                <th class="px-2 py-2 text-left">예시 제목</th>
+                <th class="px-2 py-2 text-left w-56">넣을 하위주제</th>
+                <th class="px-2 py-2 w-16"></th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              <template x-for="row in candidates" :key="row.term">
+                <tr class="hover:bg-gray-50" :class="row.done ? 'opacity-40' : ''">
+                  <td class="px-2 py-1.5 font-medium" x-text="row.term"></td>
+                  <td class="px-2 py-1.5 text-right" x-text="row.count.toLocaleString()"></td>
+                  <td class="px-2 py-1.5 text-xs text-gray-500 max-w-[20rem] truncate"
+                      :title="(row.samples || []).join('\n')"
+                      x-text="(row.samples || [])[0] || '-'"></td>
+                  <td class="px-2 py-1.5">
+                    <select x-model.number="row.subtopic_id"
+                            class="w-full text-sm border-gray-300 rounded py-1">
+                      <option value="">선택</option>
+                      <template x-for="opt in subtopics" :key="opt.id">
+                        <option :value="opt.id" x-text="opt.path"></option>
+                      </template>
+                    </select>
+                  </td>
+                  <td class="px-2 py-1.5 text-center">
+                    <button @click="addOne(row)" :disabled="!row.subtopic_id || row.done"
+                            class="px-2 py-0.5 bg-emerald-500 text-white rounded text-xs disabled:opacity-30">
+                      추가
+                    </button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </template>
+
+      <div class="flex flex-wrap items-center gap-2" x-show="candidates.length">
+        <button @click="askAi()" :disabled="busy"
+                class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm disabled:opacity-40">
+          AI 에게 자리 묻기
+        </button>
+        <select x-model="provider" class="text-sm border-gray-300 rounded py-1.5">
+          <option value="">AI 제공자</option>
+          <option value="anthropic">Anthropic</option>
+          <option value="openai">OpenAI</option>
+          <option value="google">Google</option>
+        </select>
+        <span class="text-xs text-gray-400">
+          제안은 승인해야 반영됩니다. 신뢰도가 낮으면 보류함으로 갑니다.
+        </span>
+      </div>
+
+      <template x-if="held.length">
+        <div class="px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+          보류 <b x-text="held.length"></b>건 — 자리를 못 찾았거나 신뢰도가 낮습니다.
+          직접 골라 주세요.
+        </div>
+      </template>
+
+      <p x-show="message" class="text-sm"
+         :class="messageType === 'error' ? 'text-red-600' : 'text-gray-600'"
+         x-text="message"></p>
+    </div>
+  </details>
+</div>
+
+<script>
+function nicheSuggestPanel() {
+    return {
+        loading: false,
+        busy: false,
+        minCount: 50,
+        provider: '',
+        scanned: 0,
+        summary: null,
+        candidates: [],
+        subtopics: [],
+        held: [],
+        message: '',
+        messageType: 'info',
+
+        async init() {
+            await this.loadTree();
+        },
+
+        async loadTree() {
+            const d = await this.get('/api/v1/admin/taxonomy');
+            if (!d) return;
+            const out = [];
+            for (const topic of d.topics || []) {
+                for (const sub of topic.subtopics || []) {
+                    out.push({ id: sub.id, path: `${topic.name} > ${sub.name}` });
+                }
+            }
+            this.subtopics = out;
+        },
+
+        async load() {
+            this.loading = true;
+            const d = await this.get(
+                `/api/v1/admin/taxonomy/suggest?min_count=${this.minCount}`);
+            this.loading = false;
+            if (!d) return;
+            this.scanned = d.scanned || 0;
+            this.summary = d;
+            this.candidates = (d.candidates || []).map(
+                (c) => ({ ...c, subtopic_id: '', done: false }));
+            if (!this.candidates.length) {
+                this.message = '기준 이상 반복되는 미등록 어휘가 없습니다';
+            }
+        },
+
+        /** plan 으로 영향을 확인한 뒤 apply 한다. 되돌릴 수 있어야 한다. */
+        async addOne(row) {
+            const items = [{ op: 'add_keyword', term: row.term,
+                             subtopic_id: row.subtopic_id }];
+            const planned = await this.post('/api/v1/admin/taxonomy/plan',
+                                            { items, actor: 'ui' });
+            if (!planned || !planned.success) return;
+
+            const recovered = planned.impact?.recovered || 0;
+            if (!confirm(`"${row.term}" 을 분류표에 추가합니다.\n`
+                + `미분류 ${recovered.toLocaleString()}건이 회수될 것으로 보입니다.\n`
+                + '계속할까요?')) return;
+
+            const applied = await this.post(
+                `/api/v1/admin/taxonomy/apply/${planned.change_id}`);
+            if (!applied || !applied.success) return;
+            row.done = true;
+            this.message = `"${row.term}" 추가 · 약 ${recovered.toLocaleString()}건 회수 예상`;
+            await this.loadTree();
+        },
+
+        async askAi() {
+            if (!this.provider) {
+                this.message = 'AI 제공자를 고르세요';
+                this.messageType = 'error';
+                return;
+            }
+            this.busy = true;
+            const d = await this.post('/api/v1/admin/taxonomy/suggest/ai', {
+                candidates: this.candidates.filter((c) => !c.done),
+                provider: this.provider,
+            });
+            this.busy = false;
+            if (!d) return;
+            if (d.error) {
+                this.message = d.error; this.messageType = 'error'; return;
+            }
+            // 제안을 목록에 채워 넣기만 한다 — 적용은 사람이 누른다
+            const map = new Map((d.approved || []).map((r) => [r.term, r]));
+            for (const row of this.candidates) {
+                const hit = map.get(row.term);
+                if (hit) row.subtopic_id = hit.subtopic_id;
+            }
+            this.held = d.held || [];
+            this.message = `제안 ${(d.approved || []).length}건 · 보류 ${this.held.length}건`
+                + ' — 확인 후 추가를 누르세요';
+        },
+
+        async get(url) {
+            try {
+                const r = await fetch(url, { credentials: 'include' });
+                const text = await r.text();
+                if (!r.ok) throw new Error(this.detail(text, r.status));
+                return text ? JSON.parse(text) : null;
+            } catch (e) {
+                this.message = e.message; this.messageType = 'error';
+                return null;
+            }
+        },
+
+        async post(url, body) {
+            try {
+                const r = await fetch(url, {
+                    method: 'POST', credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body || {}),
+                });
+                const text = await r.text();
+                if (!r.ok) throw new Error(this.detail(text, r.status));
+                if (!text) throw new Error('서버가 빈 응답을 돌려줬습니다');
+                return JSON.parse(text);
+            } catch (e) {
+                this.message = e.message; this.messageType = 'error';
+                return null;
+            }
+        },
+
+        detail(text, status) {
+            try { return JSON.parse(text).detail || `요청 실패 (${status})`; }
+            catch (e) { return `요청 실패 (${status})`; }
+        },
+    };
+}
+</script>

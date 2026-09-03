@@ -30,6 +30,8 @@ function titleWorkbench() {
             extract_enabled: true,
             extract_domains: 5,
             titles_per_domain: 30,
+            // 초기 기본은 표시(mark). 차단부터 켜면 되돌릴 수 없다.
+            niche_mode: 'mark',
         },
 
         gen: {

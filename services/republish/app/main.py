@@ -52,6 +52,7 @@ from .routers.data_filters import router as data_filters_router
 from .routers.data_domains import router as data_domains_router  # 니치 도메인 자산
 from .routers.data_title_cleanup import router as data_title_cleanup_router  # 임시제목 정리
 from .routers.data_domain_ops import router as data_domain_ops_router  # 도메인 정리
+from .routers.taxonomy import router as taxonomy_router  # 분류표 관리
 from .routers.title_recombine import router as title_recombine_router  # 수동 재조합
 from .routers.title_workbench import router as title_workbench_router  # 제목 작업대
 from .routers.data_urls import router as data_urls_router
@@ -319,6 +320,7 @@ app.include_router(data_domains_router, prefix=settings.api_v1_prefix)  # 니치
 app.include_router(data_title_cleanup_router, prefix=settings.api_v1_prefix)
 # data_domains 의 /{domain_id}/toggle 과 겹치지 않게 먼저 등록한다
 app.include_router(data_domain_ops_router, prefix=settings.api_v1_prefix)
+app.include_router(taxonomy_router, prefix=settings.api_v1_prefix)
 app.include_router(title_recombine_router, prefix=settings.api_v1_prefix)
 app.include_router(title_workbench_router, prefix=settings.api_v1_prefix)
 app.include_router(data_urls_router, prefix=settings.api_v1_prefix)
