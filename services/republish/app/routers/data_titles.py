@@ -97,6 +97,8 @@ class BulkTitleCreate(BaseModel):
 class BulkTitleDelete(BaseModel):
     """대량 제목 삭제"""
     ids: List[int]
+    # 같은 도메인에서 이만큼 지우면 "남은 것도 정리할까요" 를 묻는다.
+    domain_threshold: Optional[int] = None
 
 
 # API Endpoints
@@ -256,19 +258,41 @@ async def delete_temp_titles_bulk(
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_user),
 ):
-    """임시 제목 일괄 삭제"""
+    """임시 제목 일괄 삭제.
+
+    삭제한 제목의 도메인을 세어 둔다. 같은 도메인에서 임계 이상 지우면
+    화면이 "남은 제목도 정리할까요" 를 묻는다(계획서 §2-3). 누계는 세션이
+    아니라 DB 에 쌓으므로 오늘 3건·내일 3건도 걸린다.
+    """
+    from ..services.title_collect.domain_ops import record_deletions
+    from ..services.title_gen.niche import host_of
+
     deleted_count = 0
+    by_domain: dict = {}
 
     for title_id in data.ids:
         title = await db.get(TempTitle, title_id)
-        if title:
-            await db.delete(title)
-            deleted_count += 1
+        if not title:
+            continue
+        host = host_of(title.source_post_url or title.source_blog_url)
+        if host:
+            by_domain[host] = by_domain.get(host, 0) + 1
+        await db.delete(title)
+        deleted_count += 1
 
     await db.commit()
     logger.info(f"[BULK_DELETE_TITLE] 삭제: {deleted_count}개")
 
-    return {"deleted": deleted_count, "message": f"{deleted_count}개 제목이 삭제되었습니다"}
+    hits = []
+    if by_domain:
+        hits = await record_deletions(
+            db, current_user.id, by_domain,
+            threshold=data.domain_threshold or 5)
+
+    return {"deleted": deleted_count,
+            "message": f"{deleted_count}개 제목이 삭제되었습니다",
+            # 임계를 넘은 도메인 — 화면이 팝업을 띄운다
+            "domain_hits": hits}
 
 
 @router.delete("/temp/delete-all")

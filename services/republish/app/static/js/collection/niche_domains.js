@@ -21,10 +21,12 @@ function nicheDomainApp() {
         search: '',
         platform: '',
         activeFilter: '',
+        blockedFilter: '',
         selected: [],
         sortField: 'url_count',
         sortDir: 'desc',
-        stats: { total: 0, active: 0, urls_summarized: 0 },
+        stats: { total: 0, active: 0, urls_summarized: 0, blocked: 0,
+                 pending_extract: 0 },
 
         async init() {
             await Promise.all([this.loadStats(), this.load()]);
@@ -44,6 +46,7 @@ function nicheDomainApp() {
             if (this.search) q.set('search', this.search);
             if (this.platform) q.set('platform', this.platform);
             if (this.activeFilter) q.set('is_active', this.activeFilter);
+            if (this.blockedFilter) q.set('is_blocked', this.blockedFilter);
 
             const d = await this.get(`/api/v1/data/domains?${q}`);
             this.loading = false;
@@ -95,6 +98,39 @@ function nicheDomainApp() {
             if (!d) return;
             this.show(`${d.updated}개 도메인을 ${active ? '참조' : '제외'}로 바꿨습니다`);
             await Promise.all([this.loadStats(), this.load()]);
+        },
+
+        /** 승격률. 표본이 적으면 판단하지 않는다 — 2건 중 1건을 50%로
+         *  읽으면 신생 도메인이 최상위로 올라간다. */
+        qualityText(score) {
+            if (score === null || score === undefined) return '-';
+            return `${(score * 100).toFixed(1)}%`;
+        },
+
+        qualityTone(score) {
+            if (score === null || score === undefined) return 'text-gray-400';
+            if (score >= 0.15) return 'text-emerald-600 font-medium';
+            if (score >= 0.05) return 'text-gray-700';
+            return 'text-rose-600';
+        },
+
+        statusLabel(status) {
+            return { pending: '대기', partial: '진행', done: '완료',
+                     blocked: '차단' }[status] || status || '-';
+        },
+
+        statusTone(status) {
+            return { partial: 'text-amber-600', done: 'text-gray-400',
+                     blocked: 'text-rose-500' }[status] || 'text-gray-400';
+        },
+
+        async unblock(row) {
+            const d = await this.post(
+                `/api/v1/data/domains/${row.id}/unblock`);
+            if (!d) return;
+            row.is_blocked = false;
+            this.show(`${row.domain} 차단을 해제했습니다`);
+            await this.loadStats();
         },
 
         async removeSelected() {

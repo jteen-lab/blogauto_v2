@@ -441,6 +441,9 @@
     {# 임시제목 정리 모달 — 관리 메뉴에서 이벤트로 연다 #}
     {% include "collection/_title_cleanup.html" %}
 
+    {# 도메인 대량삭제 팝업 — 임계 초과 시 삭제 응답이 이벤트로 연다 #}
+    {% include "collection/_domain_purge.html" %}
+
     <!-- 생성 콘텐츠 미리보기 모달 (iframe srcdoc) -->
     <div x-show="contentModal.open" x-transition:enter="transition ease-out duration-200"
          x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
@@ -622,6 +625,11 @@ function dataManagementApp() {
         filterSelectAll: false,
         filterSortField: 'created_at',
         filterSortDir: 'desc',
+
+        // 같은 도메인에서 이만큼 지우면 "남은 것도 정리할까요" 를 묻는다.
+        // 비율(%)이 아니라 횟수만 본다 — 100건짜리 도메인에서 30건을
+        // 지워야 반응하면 이 기능을 만든 의미가 없다.
+        domainDeleteThreshold: 5,
 
         // 니치 도메인 탭은 niche_domains.js 가 독립 컴포넌트로 맡는다.
         // 옛 URL 수집 상태·함수는 도메인 자산 전환(alembic 066)으로 제거됨.
@@ -1782,7 +1790,10 @@ function dataManagementApp() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
-                    body: JSON.stringify({ ids: this.selectedTitles })
+                    body: JSON.stringify({
+                        ids: this.selectedTitles,
+                        domain_threshold: this.domainDeleteThreshold,
+                    })
                 });
                 if (!res.ok) throw new Error('삭제 실패');
                 const data = await res.json();
@@ -1791,6 +1802,12 @@ function dataManagementApp() {
                 this.titleSelectAll = false;
                 this.loadTitles();
                 this.loadStats();
+                // 같은 도메인에서 임계 이상 지웠으면 남은 제목을 한 번에
+                // 정리할 수 있게 팝업을 띄운다(계획서 §2-3)
+                if ((data.domain_hits || []).length) {
+                    window.dispatchEvent(new CustomEvent('domain-purge',
+                        { detail: data.domain_hits }));
+                }
             } catch (e) {
                 showErrorMessage('일괄 삭제 실패');
             }

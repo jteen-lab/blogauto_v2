@@ -1,0 +1,190 @@
+{#
+  도메인 대량삭제 팝업.
+
+  같은 도메인에서 임계(기본 5회) 이상 제목을 지우면 열린다. 남은 제목을
+  **한 화면에 전부** 보여 주고 일괄·선택 삭제한다. 페이지를 넘겨 가며
+  하나씩 지우지 않기 위한 도구다.
+
+  자동 삭제가 아니다 — 사람이 보고 고른다.
+
+  계획서: docs/plans/title_tab_workplan.md §2-3
+#}
+<div x-data="domainPurgePanel()"
+     @domain-purge.window="open($event.detail)"
+     x-show="visible" x-cloak
+     class="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-4">
+  <div @click.away="close()"
+       class="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[85vh] flex flex-col">
+
+    <div class="p-5 pb-3 border-b border-gray-200">
+      <h3 class="text-lg font-semibold">
+        <span x-text="domain"></span> — 결이 맞지 않나요?
+      </h3>
+      <p class="mt-1 text-sm text-gray-500">
+        이 도메인에서 <b x-text="deletedCount"></b>건을 지우셨습니다.
+        남은 <b x-text="items.length"></b>건을 여기서 한 번에 정리할 수 있습니다.
+      </p>
+    </div>
+
+    <div class="px-5 py-2 border-b border-gray-100 flex items-center gap-2">
+      <button @click="selectAll()" class="text-sm text-accent hover:underline">전체 선택</button>
+      <button @click="picked = []" class="text-sm text-gray-500 hover:underline">선택 해제</button>
+      <span class="text-sm text-gray-400" x-text="`${picked.length}건 선택`"></span>
+    </div>
+
+    <div class="flex-1 overflow-y-auto px-5 py-2">
+      <div x-show="loading" class="py-8 text-center text-gray-400">불러오는 중…</div>
+      <template x-for="row in items" :key="row.id">
+        <label class="flex items-start gap-2 py-1.5 border-b border-gray-50 cursor-pointer hover:bg-gray-50">
+          <input type="checkbox" :value="row.id" x-model.number="picked" class="rounded mt-0.5">
+          <span class="flex-1 text-sm text-gray-800" x-text="row.title"></span>
+          <span x-show="!row.topic_id" class="text-xs text-amber-600 shrink-0">미분류</span>
+        </label>
+      </template>
+      <div x-show="!loading && !items.length" class="py-8 text-center text-gray-400">
+        남은 제목이 없습니다
+      </div>
+    </div>
+
+    <div class="p-4 border-t border-gray-200 space-y-2">
+      <label class="flex items-center gap-2 text-sm text-gray-700">
+        <input type="checkbox" x-model="blockDomain" class="rounded">
+        재수집도 차단 <span class="text-xs text-gray-500">(끄면 제목만 정리하고 도메인은 남깁니다)</span>
+      </label>
+      <div class="flex justify-end gap-2">
+        <button @click="close()" class="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800">닫기</button>
+        <button @click="deleteSelected()" :disabled="busy || !picked.length"
+                class="px-3 py-1.5 bg-gray-600 text-white rounded-lg text-sm disabled:opacity-40">
+          선택 삭제
+        </button>
+        <button @click="purgeAll()" :disabled="busy"
+                class="px-3 py-1.5 bg-red-500 text-white rounded-lg text-sm font-medium disabled:opacity-40">
+          <span x-text="blockDomain ? '전체 삭제 + 차단' : '전체 삭제'"></span>
+        </button>
+      </div>
+      <p x-show="message" class="text-sm text-right"
+         :class="messageType === 'error' ? 'text-red-600' : 'text-gray-600'"
+         x-text="message"></p>
+    </div>
+  </div>
+</div>
+
+<script>
+function domainPurgePanel() {
+    return {
+        visible: false,
+        loading: false,
+        busy: false,
+        domainId: null,
+        domain: '',
+        deletedCount: 0,
+        items: [],
+        picked: [],
+        blockDomain: true,
+        message: '',
+        messageType: 'info',
+        queue: [],
+
+        /** 임계를 넘은 도메인이 여러 개면 차례로 띄운다. */
+        async open(hits) {
+            const list = Array.isArray(hits) ? hits : [hits];
+            this.queue = list.filter(Boolean);
+            await this.next();
+        },
+
+        async next() {
+            const hit = this.queue.shift();
+            if (!hit) { this.visible = false; return; }
+            this.visible = true;
+            this.domainId = hit.id;
+            this.domain = hit.domain;
+            this.deletedCount = hit.deleted || 0;
+            this.message = '';
+            this.picked = [];
+            this.blockDomain = true;
+            await this.load();
+        },
+
+        async load() {
+            this.loading = true;
+            const d = await this.get(
+                `/api/v1/data/domains/${this.domainId}/titles`);
+            this.loading = false;
+            this.items = d ? (d.items || []) : [];
+        },
+
+        selectAll() {
+            this.picked = this.items.map((r) => r.id);
+        },
+
+        async deleteSelected() {
+            if (!this.picked.length) return;
+            this.busy = true;
+            const d = await this.post('/api/v1/data/domains/titles/delete',
+                                      { ids: this.picked });
+            this.busy = false;
+            if (!d) return;
+            this.message = `${d.deleted}건 삭제했습니다`;
+            this.items = this.items.filter((r) => !this.picked.includes(r.id));
+            this.picked = [];
+            window.dispatchEvent(new CustomEvent('titles-changed'));
+        },
+
+        async purgeAll() {
+            const label = this.blockDomain
+                ? `${this.domain} 의 제목을 모두 삭제하고 재수집을 차단합니다.`
+                : `${this.domain} 의 제목을 모두 삭제합니다.`;
+            if (!confirm(`${label}\n되돌릴 수 없습니다. 계속할까요?`)) return;
+
+            this.busy = true;
+            const d = await this.post('/api/v1/data/domains/purge',
+                { domain: this.domain, block: this.blockDomain });
+            this.busy = false;
+            if (!d) return;
+            this.message = `${d.deleted}건 삭제`
+                + (d.blocked ? ' · 재수집 차단됨' : '');
+            window.dispatchEvent(new CustomEvent('titles-changed'));
+            await this.next();
+        },
+
+        close() {
+            this.visible = false;
+            this.queue = [];
+        },
+
+        async get(url) {
+            try {
+                const r = await fetch(url, { credentials: 'include' });
+                const text = await r.text();
+                if (!r.ok) throw new Error(this.detail(text, r.status));
+                return text ? JSON.parse(text) : null;
+            } catch (e) {
+                this.message = e.message; this.messageType = 'error';
+                return null;
+            }
+        },
+
+        async post(url, body) {
+            try {
+                const r = await fetch(url, {
+                    method: 'POST', credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body || {}),
+                });
+                const text = await r.text();
+                if (!r.ok) throw new Error(this.detail(text, r.status));
+                if (!text) throw new Error('서버가 빈 응답을 돌려줬습니다');
+                return JSON.parse(text);
+            } catch (e) {
+                this.message = e.message; this.messageType = 'error';
+                return null;
+            }
+        },
+
+        detail(text, status) {
+            try { return JSON.parse(text).detail || `요청 실패 (${status})`; }
+            catch (e) { return `요청 실패 (${status})`; }
+        },
+    };
+}
+</script>

@@ -203,3 +203,69 @@ class TestWiring:
     def test_source_filter_in_list_api(self):
         src = (BASE / "app/routers/data_titles.py").read_text(encoding="utf-8")
         assert "source_group" in src and "codes_for_group" in src
+
+
+class TestDomainOps:
+    """W5·W6 — 대량삭제 판정과 품질 점수."""
+
+    def test_threshold_uses_count_only(self):
+        """비율(%) 기준을 쓰지 않는다.
+
+        100건짜리 도메인에서 30건을 지워야 반응하면 이 기능을 만든 의미가
+        없다. 운영자는 3~5건이면 결이 다름을 안다.
+        """
+        from app.services.title_collect import domain_ops
+
+        src = (BASE / "app/services/title_collect/domain_ops.py").read_text(
+            encoding="utf-8")
+        assert "ratio" not in src and "percent" not in src
+        assert domain_ops.DEFAULT_THRESHOLD == 5
+
+    @pytest.mark.parametrize("value,expected", [
+        (None, 5), ("", 5), (0, 3), (1, 3), (5, 5), (15, 15), (99, 20),
+        ("x", 5),
+    ])
+    def test_clamp_threshold(self, value, expected):
+        from app.services.title_collect.domain_ops import clamp_threshold
+
+        assert clamp_threshold(value) == expected
+
+    def test_quality_needs_sample(self):
+        """표본이 적으면 점수를 믿을 수 없다."""
+        assert NicheDomain(extracted_count=9, promoted_count=9
+                           ).quality_score() is None
+        assert NicheDomain(extracted_count=10, promoted_count=1
+                           ).quality_score() == 0.1
+
+    def test_blocked_domain_is_not_collected(self):
+        assert NicheDomain(is_blocked=True).usable_for_collect() is False
+        assert NicheDomain(is_blocked=False).usable_for_collect() is True
+
+    def test_block_uses_separate_field(self):
+        """is_active(각도 참조)를 재수집 차단에 겸용하면 안 된다."""
+        src = (BASE / "app/services/title_collect/domain_ops.py").read_text(
+            encoding="utf-8")
+        assert "is_blocked = True" in src
+        assert "is_active = False" not in src
+
+    def test_bulk_delete_reports_hits(self):
+        src = (BASE / "app/routers/data_titles.py").read_text(encoding="utf-8")
+        assert "record_deletions" in src and "domain_hits" in src
+
+    def test_popup_wired(self):
+        index = (BASE / "app/templates/collection/index.html").read_text(
+            encoding="utf-8")
+        assert "_domain_purge.html" in index
+        assert "domain-purge" in index
+
+    def test_promotion_counted(self):
+        """승격률의 분자가 실제로 올라가야 한다."""
+        src = (BASE / "app/services/title_transfer_service.py").read_text(
+            encoding="utf-8")
+        assert "_count_promotions" in src
+        assert "promoted_count" in src
+
+    def test_transfer_carries_candidate_id(self):
+        src = (BASE / "app/services/title_transfer_service.py").read_text(
+            encoding="utf-8")
+        assert "candidate_id=getattr(temp_title" in src

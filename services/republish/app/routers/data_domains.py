@@ -23,7 +23,8 @@ from ..routers.auth import get_current_user
 router = APIRouter(prefix="/data/domains", tags=["data-domains"])
 logger = get_logger("data_domains", "app.log")
 
-SORTABLE = {"url_count", "domain", "last_seen_at", "created_at"}
+SORTABLE = {"url_count", "domain", "last_seen_at", "created_at",
+            "extracted_count", "promoted_count", "deleted_title_count"}
 
 
 class DomainResponse(BaseModel):
@@ -34,6 +35,14 @@ class DomainResponse(BaseModel):
     platform: str
     url_count: int
     is_active: bool
+    is_blocked: bool = False
+    blocked_reason: Optional[str] = None
+    extract_status: str = "pending"
+    extracted_count: int = 0
+    promoted_count: int = 0
+    deleted_title_count: int = 0
+    # 승격률. 표본이 적으면 None — 화면은 '-' 로 표시한다.
+    quality_score: Optional[float] = None
     sample_titles: List[str] = []
     top_keywords: List[str] = []
     last_seen_at: Optional[str] = None
@@ -51,6 +60,8 @@ class DomainStatsResponse(BaseModel):
     total: int
     active: int
     urls_summarized: int
+    blocked: int = 0
+    pending_extract: int = 0
 
 
 class IdsRequest(BaseModel):
@@ -62,6 +73,12 @@ def _to_response(row: NicheDomain) -> DomainResponse:
     return DomainResponse(
         id=row.id, domain=row.domain, platform=row.platform,
         url_count=row.url_count, is_active=row.is_active,
+        is_blocked=bool(row.is_blocked), blocked_reason=row.blocked_reason,
+        extract_status=row.extract_status or "pending",
+        extracted_count=row.extracted_count or 0,
+        promoted_count=row.promoted_count or 0,
+        deleted_title_count=row.deleted_title_count or 0,
+        quality_score=row.quality_score(),
         sample_titles=row.titles()[:5], top_keywords=row.keywords()[:5],
         last_seen_at=row.last_seen_at.isoformat() if row.last_seen_at else None,
     )
@@ -74,6 +91,8 @@ async def list_domains(
     search: Optional[str] = Query(None),
     platform: Optional[str] = Query(None),
     is_active: Optional[bool] = Query(None),
+    is_blocked: Optional[bool] = Query(None),
+    extract_status: Optional[str] = Query(None),
     sort_field: str = Query("url_count"),
     sort_dir: str = Query("desc"),
     db: AsyncSession = Depends(get_db_session),
@@ -87,6 +106,10 @@ async def list_domains(
         query = query.where(NicheDomain.platform == platform)
     if is_active is not None:
         query = query.where(NicheDomain.is_active == is_active)
+    if is_blocked is not None:
+        query = query.where(NicheDomain.is_blocked == is_blocked)
+    if extract_status:
+        query = query.where(NicheDomain.extract_status == extract_status)
 
     total = (await db.execute(
         select(func.count()).select_from(query.subquery()))).scalar() or 0
@@ -117,8 +140,20 @@ async def domain_stats(
     urls = (await db.execute(
         select(func.coalesce(func.sum(NicheDomain.url_count), 0))
         .where(mine))).scalar() or 0
+    from ..models.niche_domain import EXTRACT_PARTIAL, EXTRACT_PENDING
+
+    blocked = (await db.execute(
+        select(func.count()).select_from(NicheDomain)
+        .where(mine, NicheDomain.is_blocked.is_(True)))).scalar() or 0
+    pending = (await db.execute(
+        select(func.count()).select_from(NicheDomain).where(
+            mine, NicheDomain.is_blocked.is_(False),
+            NicheDomain.extract_status.in_(
+                [EXTRACT_PENDING, EXTRACT_PARTIAL])))).scalar() or 0
     return DomainStatsResponse(total=total, active=active,
-                               urls_summarized=int(urls))
+                               urls_summarized=int(urls),
+                               blocked=int(blocked),
+                               pending_extract=int(pending))
 
 
 @router.post("/{domain_id}/toggle")

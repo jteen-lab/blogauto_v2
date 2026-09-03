@@ -169,6 +169,10 @@ class TitleTransferService(SimilarityGroupingMixin):
                 source_temp_title_id=temp_title.id,
                 source_url=temp_title.source_post_url,
                 location_info=location_json,
+                # 정본 키워드·시의성을 물려준다. 확장 재조합이 "어떤
+                # 키워드로 넓힐지" 를 알아야 한다(alembic 068·071).
+                candidate_id=getattr(temp_title, "candidate_id", None),
+                expires_at=getattr(temp_title, "expires_at", None),
             )
 
             main_titles_to_add.append({
@@ -252,6 +256,10 @@ class TitleTransferService(SimilarityGroupingMixin):
 
         result["moved"] = len(main_titles_to_add)
 
+        # 도메인 승격 수를 올린다. 승격률(품질 점수)의 분자다 — 이게 없으면
+        # 추출 우선순위와 차단 후보를 데이터로 정할 수 없다.
+        await self._count_promotions(main_titles_to_add)
+
         await self.db.commit()
         logger.info(f"[TRANSFER] 이동: moved={result['moved']}, grouped={result['grouped']}, deleted={result['deleted']}")
         return result
@@ -274,6 +282,33 @@ class TitleTransferService(SimilarityGroupingMixin):
         )
         group._pending_rep_title = rep_title
         return group
+
+    async def _count_promotions(self, entries: list) -> None:
+        """승격한 제목의 출처 도메인에 카운트를 올린다.
+
+        실패해도 이동은 계속한다 — 통계 때문에 재고 이동이 막히면 안 된다.
+        """
+        if not entries:
+            return
+        try:
+            from sqlalchemy import select
+
+            from ..models.niche_domain import NicheDomain
+            from .title_gen.niche import host_of
+
+            counts: dict = {}
+            for entry in entries:
+                host = host_of(getattr(entry["main_title"], "source_url", ""))
+                if host:
+                    counts[host] = counts.get(host, 0) + 1
+            for host, count in counts.items():
+                rows = (await self.db.execute(
+                    select(NicheDomain).where(NicheDomain.domain == host)
+                )).scalars().all()
+                for row in rows:
+                    row.promoted_count = (row.promoted_count or 0) + count
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"[TRANSFER] 승격 카운트 실패: {e}")
 
     async def _auto_group_title(
         self,

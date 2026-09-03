@@ -10,7 +10,7 @@
 <div x-data="nicheDomainApp()" x-init="init()" class="mb-6">
 
   <!-- 현황 -->
-  <div class="grid grid-cols-3 gap-2 mb-2">
+  <div class="grid grid-cols-2 md:grid-cols-5 gap-2 mb-2">
     <div class="px-3 py-2 border-2 border-gray-200 rounded-lg">
       <div class="text-xs text-gray-500">전체 도메인</div>
       <div class="text-lg font-semibold" x-text="stats.total.toLocaleString()"></div>
@@ -22,6 +22,14 @@
     <div class="px-3 py-2 border-2 border-gray-200 rounded-lg">
       <div class="text-xs text-gray-500">요약된 URL</div>
       <div class="text-lg font-semibold" x-text="stats.urls_summarized.toLocaleString()"></div>
+    </div>
+    <div class="px-3 py-2 border-2 border-amber-200 bg-amber-50 rounded-lg">
+      <div class="text-xs text-gray-500">추출 대기</div>
+      <div class="text-lg font-semibold" x-text="(stats.pending_extract || 0).toLocaleString()"></div>
+    </div>
+    <div class="px-3 py-2 border-2 border-rose-200 bg-rose-50 rounded-lg">
+      <div class="text-xs text-gray-500">차단됨</div>
+      <div class="text-lg font-semibold" x-text="(stats.blocked || 0).toLocaleString()"></div>
     </div>
   </div>
   <p class="mb-3 text-xs text-gray-500">
@@ -45,9 +53,15 @@
     </select>
     <select x-model="activeFilter" @change="reload()"
             class="text-sm border-gray-300 rounded-md py-1.5">
-      <option value="">전체 상태</option>
+      <option value="">각도 참조 전체</option>
       <option value="true">참조 중</option>
-      <option value="false">제외됨</option>
+      <option value="false">참조 제외</option>
+    </select>
+    <select x-model="blockedFilter" @change="reload()"
+            class="text-sm border-gray-300 rounded-md py-1.5">
+      <option value="">수집 상태 전체</option>
+      <option value="false">수집 가능</option>
+      <option value="true">차단됨</option>
     </select>
     <button @click="reload()"
             class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md text-sm">조회</button>
@@ -90,10 +104,12 @@
             <th class="w-10 px-2 py-2"><input type="checkbox" @change="toggleAll($event)"></th>
             <th class="px-2 py-2 text-left cursor-pointer" @click="sort('domain')">도메인</th>
             <th class="px-2 py-2 text-left">플랫폼</th>
-            <th class="px-2 py-2 text-right cursor-pointer" @click="sort('url_count')">관측 수</th>
+            <th class="px-2 py-2 text-right cursor-pointer" @click="sort('url_count')">관측</th>
+            <th class="px-2 py-2 text-right cursor-pointer" @click="sort('extracted_count')">추출</th>
+            <th class="px-2 py-2 text-right cursor-pointer" @click="sort('promoted_count')">승격률</th>
             <th class="px-2 py-2 text-left">대표 제목</th>
-            <th class="px-2 py-2 text-left">유입 키워드</th>
-            <th class="px-2 py-2 text-center">참조</th>
+            <th class="px-2 py-2 text-center">각도</th>
+            <th class="px-2 py-2 text-center">수집</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100">
@@ -103,21 +119,33 @@
               <td class="px-2 py-1.5 font-medium" x-text="row.domain"></td>
               <td class="px-2 py-1.5 text-gray-500 text-xs" x-text="row.platform"></td>
               <td class="px-2 py-1.5 text-right" x-text="row.url_count.toLocaleString()"></td>
-              <td class="px-2 py-1.5 text-gray-600 text-xs max-w-[22rem] truncate"
+              <td class="px-2 py-1.5 text-right">
+                <span x-text="(row.extracted_count || 0).toLocaleString()"></span>
+                <span class="ml-1 text-xs" :class="statusTone(row.extract_status)"
+                      x-text="statusLabel(row.extract_status)"></span>
+              </td>
+              <td class="px-2 py-1.5 text-right" :class="qualityTone(row.quality_score)"
+                  :title="row.quality_score === null ? '표본이 적어 판단하지 않습니다(추출 10건 미만)' : ''"
+                  x-text="qualityText(row.quality_score)"></td>
+              <td class="px-2 py-1.5 text-gray-600 text-xs max-w-[20rem] truncate"
                   :title="(row.sample_titles || []).join('\n')"
                   x-text="(row.sample_titles || []).slice(0, 2).join(' · ') || '-'"></td>
-              <td class="px-2 py-1.5 text-gray-500 text-xs"
-                  x-text="(row.top_keywords || []).slice(0, 3).join(', ') || '-'"></td>
               <td class="px-2 py-1.5 text-center">
                 <button @click="toggle(row)" type="button"
                         class="px-2 py-0.5 rounded text-xs"
                         :class="row.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'"
                         x-text="row.is_active ? '참조' : '제외'"></button>
               </td>
+              <td class="px-2 py-1.5 text-center">
+                <button x-show="row.is_blocked" @click="unblock(row)" type="button"
+                        class="px-2 py-0.5 rounded text-xs bg-rose-100 text-rose-700"
+                        :title="row.blocked_reason || ''">차단 해제</button>
+                <span x-show="!row.is_blocked" class="text-xs text-gray-400">가능</span>
+              </td>
             </tr>
           </template>
           <tr x-show="!items.length && !loading">
-            <td colspan="7" class="px-3 py-8 text-center text-gray-400">도메인이 없습니다</td>
+            <td colspan="8" class="px-3 py-8 text-center text-gray-400">도메인이 없습니다</td>
           </tr>
         </tbody>
       </table>
