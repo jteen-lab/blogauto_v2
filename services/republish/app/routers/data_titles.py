@@ -21,6 +21,7 @@ import re
 
 from ..core.database import get_db_session
 from ..services import title_source
+from ..services.title_gen.niche import host_of
 from ..core.logger import get_logger
 from ..models.title import TempTitle, MainTitle
 from ..services.title_dedup import title_exists
@@ -61,6 +62,8 @@ class TempTitleResponse(BaseModel):
     # 어떤 키워드에 걸려 분류됐는가. 오분류를 고칠 때 원인을 보여 준다.
     matched_keyword_id: Optional[int] = None
     matched_keyword: Optional[str] = None
+    # 어느 도메인에서 왔나 — 도메인 단위 정리의 출발점
+    domain: Optional[str] = None
     candidate_id: Optional[int] = None
     expires_at: Optional[datetime] = None
 
@@ -155,6 +158,8 @@ async def list_temp_titles(
     collection_stage: Optional[str] = Query(None),
     source_group: Optional[str] = Query(
         None, description="출처 묶음: generated|collected|legacy"),
+    domain: Optional[str] = Query(
+        None, description="이 도메인에서 온 제목만 — 모아서 정리할 때 쓴다"),
     sort_field: Optional[str] = Query("created_at", description="정렬 필드"),
     sort_dir: Optional[str] = Query("desc", description="정렬 방향 (asc/desc)"),
     db: AsyncSession = Depends(get_db_session),
@@ -184,6 +189,10 @@ async def list_temp_titles(
         query = query.where(TempTitle.subtopic_id == subtopic_id)
     if collection_stage:
         query = query.where(TempTitle.collection_stage == collection_stage)
+    if domain:
+        # 같은 도메인 제목이 여러 페이지에 흩어져 있으면 모아서 지울 수
+        # 없다. 도메인으로 좁혀야 정리가 된다.
+        query = query.where(TempTitle.source_post_url.ilike(f"%{domain}%"))
     if source_group:
         # 개별 코드를 다 노출하면 고르기 어렵다. 묶음으로 받는다.
         from ..services.title_source import codes_for_group
@@ -226,6 +235,7 @@ async def list_temp_titles(
         item = TempTitleResponse.model_validate(t)
         item.source_label = title_source.label(t.collection_stage)
         item.source_tone = title_source.tone(t.collection_stage)
+        item.domain = host_of(t.source_post_url or t.source_blog_url) or None
         if t.source_keyword_id:
             kw = await db.get(CollectedKeyword, t.source_keyword_id)
             item.source_keyword = kw.keyword if kw else None
@@ -400,18 +410,34 @@ async def update_temp_title(
 @router.delete("/temp/{title_id}")
 async def delete_temp_title(
     title_id: int,
+    domain_threshold: Optional[int] = Query(
+        None, description="같은 도메인에서 이만큼 지우면 정리를 묻는다"),
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_user),
 ):
-    """임시 제목 삭제"""
+    """임시 제목 삭제.
+
+    개별 삭제도 도메인 누계에 반영한다. 일괄 삭제만 세면 하나씩 지우는
+    사용자는 임계에 영영 도달하지 못한다 — 그런데 이 기능이 필요한 사람이
+    바로 하나씩 지우던 사람이다.
+    """
+    from ..services.title_collect.domain_ops import record_deletions
+    from ..services.title_gen.niche import host_of
+
     title = await db.get(TempTitle, title_id)
     if not title:
         raise HTTPException(status_code=404, detail="제목을 찾을 수 없습니다")
 
+    host = host_of(title.source_post_url or title.source_blog_url)
     await db.delete(title)
     await db.commit()
 
-    return {"message": "삭제되었습니다"}
+    hits = []
+    if host:
+        hits = await record_deletions(db, current_user.id, {host: 1},
+                                      threshold=domain_threshold or 5)
+
+    return {"message": "삭제되었습니다", "domain_hits": hits}
 
 
 @router.post("/temp/promote")

@@ -48,12 +48,18 @@
             <button @click="createTopic()" class="text-xs text-accent hover:underline">+ 새로</button>
           </div>
           <select x-model.number="form.topic_id" @change="onTopicChange()"
-                  size="6" class="w-full text-sm border-gray-200 rounded">
+                  size="5" class="w-full text-sm border-gray-200 rounded">
             <option value="">(미분류)</option>
             <template x-for="t in topics" :key="t.id">
               <option :value="t.id" x-text="t.name"></option>
             </template>
           </select>
+          <div class="mt-1 flex gap-1" x-show="form.topic_id">
+            <button @click="renameTopic()"
+                    class="flex-1 py-0.5 text-xs border border-gray-200 rounded hover:bg-gray-50">이름 수정</button>
+            <button @click="deleteTopic()"
+                    class="py-0.5 px-2 text-xs text-red-600 border border-red-200 rounded hover:bg-red-50">삭제</button>
+          </div>
         </div>
 
         <!-- 하위 주제 -->
@@ -64,12 +70,18 @@
                     class="text-xs text-accent hover:underline disabled:opacity-30">+ 새로</button>
           </div>
           <select x-model.number="form.subtopic_id" @change="onSubtopicChange()"
-                  size="6" class="w-full text-sm border-gray-200 rounded">
+                  size="5" class="w-full text-sm border-gray-200 rounded">
             <option value="">(없음)</option>
             <template x-for="s in subtopics" :key="s.id">
               <option :value="s.id" x-text="s.name"></option>
             </template>
           </select>
+          <div class="mt-1 flex gap-1" x-show="form.subtopic_id">
+            <button @click="renameSubtopic()"
+                    class="flex-1 py-0.5 text-xs border border-gray-200 rounded hover:bg-gray-50">이름 수정</button>
+            <button @click="deleteSubtopic()"
+                    class="py-0.5 px-2 text-xs text-red-600 border border-red-200 rounded hover:bg-red-50">삭제</button>
+          </div>
         </div>
 
         <!-- 키워드 -->
@@ -79,13 +91,35 @@
             <button @click="createKeyword()" :disabled="!form.subtopic_id"
                     class="text-xs text-accent hover:underline disabled:opacity-30">+ 새로</button>
           </div>
-          <div class="max-h-36 overflow-y-auto space-y-0.5">
+          <div class="max-h-44 overflow-y-auto space-y-1">
             <template x-for="k in keywords" :key="k.id">
-              <div class="flex items-center gap-1 group">
-                <input type="text" x-model="k.name" @blur="renameKeyword(k)"
-                       class="flex-1 text-xs border-gray-200 rounded py-0.5">
-                <button @click="removeKeyword(k)"
-                        class="text-xs text-red-500 opacity-0 group-hover:opacity-100">✕</button>
+              <div class="border border-gray-100 rounded p-1 space-y-1">
+                <div class="flex items-center gap-1">
+                  <input type="text" x-model="k.name" @blur="saveKeyword(k)"
+                         class="flex-1 text-xs border-gray-200 rounded py-0.5">
+                  <button @click="removeKeyword(k)"
+                          class="text-xs text-red-500 hover:text-red-700">✕</button>
+                </div>
+                <div class="flex items-center gap-1">
+                  <label class="flex-1 text-[11px] text-gray-500">
+                    우선
+                    <input type="number" min="1" max="10" x-model.number="k.priority"
+                           @change="saveKeyword(k)"
+                           class="w-full text-xs border-gray-200 rounded py-0.5">
+                  </label>
+                  <label class="flex-1 text-[11px] text-gray-500">
+                    난이도
+                    <input type="number" min="1" max="10" x-model.number="k.difficulty"
+                           @change="saveKeyword(k)"
+                           class="w-full text-xs border-gray-200 rounded py-0.5">
+                  </label>
+                  <label class="flex-1 text-[11px] text-gray-500">
+                    검색량
+                    <input type="number" min="0" x-model.number="k.search_volume"
+                           @change="saveKeyword(k)"
+                           class="w-full text-xs border-gray-200 rounded py-0.5">
+                  </label>
+                </div>
               </div>
             </template>
             <p x-show="!keywords.length" class="text-xs text-gray-400 py-2 text-center">
@@ -94,6 +128,7 @@
           </div>
           <p class="mt-1 text-xs text-gray-400">
             <code>A+B</code> 는 <b>둘 다</b> 들어간 제목에만 걸립니다.
+            <b>우선</b>은 낮을수록 먼저 매칭됩니다(1~10).
           </p>
         </div>
       </div>
@@ -215,11 +250,16 @@ function titleEditPanel() {
             this.messageType = 'info';
         },
 
-        async renameKeyword(row) {
+        /** 이름·우선순위·난이도·검색량을 함께 저장한다. */
+        async saveKeyword(row) {
             const name = (row.name || '').trim();
             if (!name) return;
-            await this.put(`/api/v1/categories/keywords/${row.id}`,
-                           { name });
+            await this.put(`/api/v1/categories/keywords/${row.id}`, {
+                name,
+                priority: row.priority ?? 5,
+                difficulty: row.difficulty ?? 1,
+                search_volume: row.search_volume ?? 0,
+            });
         },
 
         async removeKeyword(row) {
@@ -227,6 +267,55 @@ function titleEditPanel() {
                 + '이 키워드로 분류된 제목은 재분류 시 미분류로 돌아갑니다.')) return;
             const ok = await this.del(`/api/v1/categories/keywords/${row.id}`);
             if (ok) await this.loadKeywords();
+        },
+
+        async renameTopic() {
+            const current = this.topics.find((t) => t.id === this.form.topic_id);
+            if (!current) return;
+            const name = prompt('주제 이름', current.name);
+            if (!name || !name.trim()) return;
+            const d = await this.put(
+                `/api/v1/categories/topics/${current.id}`, { name: name.trim() });
+            if (d) await this.loadTopics();
+        },
+
+        async deleteTopic() {
+            const current = this.topics.find((t) => t.id === this.form.topic_id);
+            if (!current) return;
+            if (!confirm(`주제 "${current.name}" 을 삭제할까요?\n`
+                + '하위 주제와 키워드도 함께 쓰이지 않게 됩니다.\n'
+                + '이 분류를 쓰던 제목은 재분류 시 미분류로 돌아갑니다.')) return;
+            const ok = await this.del(`/api/v1/categories/topics/${current.id}`);
+            if (!ok) return;
+            this.form.topic_id = '';
+            await this.loadTopics();
+            await this.onTopicChange();
+        },
+
+        async renameSubtopic() {
+            const current = this.subtopics.find(
+                (s) => s.id === this.form.subtopic_id);
+            if (!current) return;
+            const name = prompt('하위 주제 이름', current.name);
+            if (!name || !name.trim()) return;
+            const d = await this.put(
+                `/api/v1/categories/subtopics/${current.id}`,
+                { name: name.trim() });
+            if (d) await this.loadSubtopics();
+        },
+
+        async deleteSubtopic() {
+            const current = this.subtopics.find(
+                (s) => s.id === this.form.subtopic_id);
+            if (!current) return;
+            if (!confirm(`하위 주제 "${current.name}" 을 삭제할까요?\n`
+                + '속한 키워드도 함께 쓰이지 않게 됩니다.')) return;
+            const ok = await this.del(
+                `/api/v1/categories/subtopics/${current.id}`);
+            if (!ok) return;
+            this.form.subtopic_id = '';
+            await this.loadSubtopics();
+            this.keywords = [];
         },
 
         async save() {

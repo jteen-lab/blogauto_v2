@@ -45,6 +45,11 @@
                     <option :value="topic.id" x-text="topic.name"></option>
                 </template>
             </select>
+            <button x-show="titleDomain" @click="filterByDomain('')"
+                class="inline-flex items-center px-3 py-2 bg-accent/10 text-accent rounded-lg text-sm">
+                <span x-text="titleDomain"></span>
+                <span class="ml-1">✕</span>
+            </button>
             <button
                 @click="titlePage = 1; loadTitles()"
                 class="inline-flex items-center justify-center px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors">
@@ -240,6 +245,12 @@
                             </div>
                             <div x-show="title.filter_reason" class="text-xs text-amber-600 mt-0.5"
                                  x-text="title.filter_reason"></div>
+                            {# 도메인을 눌러 같은 곳에서 온 제목만 모아 본다.
+                               흩어져 있으면 도메인 단위로 정리할 수 없다. #}
+                            <button x-show="title.domain" @click="filterByDomain(title.domain)"
+                                    class="text-xs text-gray-400 hover:text-accent hover:underline mt-0.5"
+                                    :title="`${title.domain} 제목만 보기`"
+                                    x-text="title.domain"></button>
                         </td>
                         <td class="w-72">
                             <!-- 카테고리 관리 연동 (주제 - 하위 주제) 우선 표시 -->

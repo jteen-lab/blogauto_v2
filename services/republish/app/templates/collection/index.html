@@ -635,6 +635,16 @@ function dataManagementApp() {
         // 지워야 반응하면 이 기능을 만든 의미가 없다.
         domainDeleteThreshold: 5,
 
+        // 도메인으로 좁혀 보기. 같은 곳에서 온 제목이 여러 페이지에
+        // 흩어져 있으면 도메인 단위로 정리할 수 없다.
+        titleDomain: '',
+
+        filterByDomain(domain) {
+            this.titleDomain = domain || '';
+            this.titlePage = 1;
+            this.loadTitles();
+        },
+
         // 니치 도메인 탭은 niche_domains.js 가 독립 컴포넌트로 맡는다.
         // 옛 URL 수집 상태·함수는 도메인 자산 전환(alembic 066)으로 제거됨.
 
@@ -793,6 +803,7 @@ function dataManagementApp() {
                 if (this.titleSearch) params.append('search', this.titleSearch);
                 if (this.titleStatus) params.append('status', this.titleStatus);
                 if (this.titleTopicId) params.append('topic_id', this.titleTopicId);
+                if (this.titleDomain) params.append('domain', this.titleDomain);
 
                 // 디버깅 로그
                 console.log('[loadTitles] titleTopicId:', this.titleTopicId, 'params:', params.toString());
@@ -1626,14 +1637,22 @@ function dataManagementApp() {
         async deleteTitle(id) {
             if (!confirm('이 제목을 삭제하시겠습니까?')) return;
             try {
-                const res = await fetch(`${API_BASE}/data/titles/temp/${id}`, {
+                const res = await fetch(
+                    `${API_BASE}/data/titles/temp/${id}`
+                    + `?domain_threshold=${this.domainDeleteThreshold}`, {
                     method: 'DELETE',
                     credentials: 'include'
                 });
                 if (!res.ok) throw new Error('삭제 실패');
+                const data = await res.json().catch(() => ({}));
                 showSuccessMessage('제목이 삭제되었습니다');
                 this.loadTitles();
                 this.loadStats();
+                // 하나씩 지워도 누계가 임계를 넘으면 묻는다
+                if ((data.domain_hits || []).length) {
+                    window.dispatchEvent(new CustomEvent('domain-purge',
+                        { detail: data.domain_hits }));
+                }
             } catch (e) {
                 showErrorMessage('삭제 실패');
             }

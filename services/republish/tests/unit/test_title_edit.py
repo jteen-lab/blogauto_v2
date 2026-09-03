@@ -63,7 +63,7 @@ class TestPopupCoversWholeNiche:
     def test_keyword_can_be_edited_and_removed(self):
         """오분류의 원인은 대개 범위가 넓은 키워드다."""
         src = TPL.read_text(encoding="utf-8")
-        assert "renameKeyword(k)" in src and "removeKeyword(k)" in src
+        assert "saveKeyword(k)" in src and "removeKeyword(k)" in src
 
     def test_explains_combo_rule(self):
         src = TPL.read_text(encoding="utf-8")
@@ -114,3 +114,74 @@ class TestCandidateInput:
         # 입력칸처럼 보여야 사람이 고칠 생각을 한다
         assert "border-2 border-gray-300" in src
         assert 'placeholder="예: 난임+검사"' in src
+
+
+class TestNicheCrudInPopup:
+    """기존 항목도 고치고 지울 수 있어야 한다."""
+
+    def test_topic_can_be_renamed_and_deleted(self):
+        src = TPL.read_text(encoding="utf-8")
+        assert "renameTopic()" in src and "deleteTopic()" in src
+
+    def test_subtopic_can_be_renamed_and_deleted(self):
+        src = TPL.read_text(encoding="utf-8")
+        assert "renameSubtopic()" in src and "deleteSubtopic()" in src
+
+    def test_keyword_attributes_editable(self):
+        """우선순위·난이도가 없으면 매칭 순서를 조정할 수 없다."""
+        src = TPL.read_text(encoding="utf-8")
+        for field in ("k.priority", "k.difficulty", "k.search_volume"):
+            assert field in src, field
+        assert "saveKeyword(k)" in src
+
+    def test_priority_meaning_is_explained(self):
+        """낮을수록 먼저 매칭된다 — 반대로 알면 잘못 설정한다."""
+        assert "낮을수록 먼저 매칭" in TPL.read_text(encoding="utf-8")
+
+    def test_delete_warns_about_reclassify(self):
+        src = TPL.read_text(encoding="utf-8")
+        assert "미분류로 돌아갑니다" in src
+
+    def test_uses_category_crud_endpoints(self):
+        src = TPL.read_text(encoding="utf-8")
+        assert "/api/v1/categories/topics/${current.id}" in src
+        assert "/api/v1/categories/subtopics/${current.id}" in src
+        assert "/api/v1/categories/keywords/${row.id}" in src
+
+
+class TestDomainDeletionCounting:
+    """도메인 정리 확인이 안 뜨던 원인 — 개별 삭제를 세지 않았다."""
+
+    def test_single_delete_counts(self):
+        """이 기능이 필요한 사람이 바로 하나씩 지우던 사람이다."""
+        src = (BASE / "app/routers/data_titles.py").read_text(encoding="utf-8")
+        block = src[src.index('@router.delete("/temp/{title_id}")'):]
+        assert "record_deletions" in block
+        assert "domain_hits" in block
+
+    def test_single_delete_passes_threshold(self):
+        src = (BASE / "app/templates/collection/index.html").read_text(
+            encoding="utf-8")
+        assert "?domain_threshold=${this.domainDeleteThreshold}" in src
+
+    def test_single_delete_opens_popup(self):
+        src = (BASE / "app/templates/collection/index.html").read_text(
+            encoding="utf-8")
+        # 일괄·개별 양쪽에서 팝업이 열려야 한다
+        assert src.count("new CustomEvent('domain-purge'") >= 2
+
+    def test_domain_filter_exists(self):
+        """같은 도메인 제목이 여러 페이지에 흩어지면 모아 지울 수 없다."""
+        api = (BASE / "app/routers/data_titles.py").read_text(encoding="utf-8")
+        tpl = (BASE / "app/templates/collection/_titles.html").read_text(
+            encoding="utf-8")
+        js = (BASE / "app/templates/collection/index.html").read_text(
+            encoding="utf-8")
+        assert 'domain: Optional[str] = Query(' in api
+        assert "filterByDomain(title.domain)" in tpl
+        assert "params.append('domain', this.titleDomain)" in js
+
+    def test_list_exposes_domain(self):
+        from app.routers.data_titles import TempTitleResponse
+
+        assert "domain" in TempTitleResponse.model_fields
