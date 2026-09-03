@@ -32,6 +32,8 @@ class RecombineRequest(BaseModel):
     model: Optional[str] = None
     # 최신성 갱신 모드 — 연도만 바꾸면 되는 것은 AI 를 부르지 않는다
     freshness: bool = False
+    # 키워드 축 확장 — 원본 키워드의 질문들을 힌트로(§4-6 ②)
+    expand: bool = False
 
 
 @router.get("/styles")
@@ -71,7 +73,7 @@ async def run_recombine(
     result = await service.run(
         title_ids=payload.ids, module_id=payload.module_id,
         style=payload.style, provider=payload.provider, model=payload.model,
-        freshness=payload.freshness)
+        freshness=payload.freshness, expand=payload.expand)
     logger.info("[RECOMBINE_API] user=%s | %s건", current_user.id,
                 result.get("made"))
     return {"success": True, **result}

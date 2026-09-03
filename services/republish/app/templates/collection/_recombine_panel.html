@@ -31,6 +31,10 @@
           </label>
           <button @click="loadStale()" class="text-xs text-accent hover:underline">후보 확인</button>
         </div>
+        <label class="mt-2 flex items-center gap-2 text-sm text-gray-800">
+          <input type="checkbox" x-model="expand" class="rounded">
+          키워드 축 확장 <span class="text-xs text-gray-500">원본 키워드의 다른 질문을 힌트로</span>
+        </label>
         <template x-if="stale">
           <p class="mt-1 text-xs text-gray-500">
             낡은 제목 <b x-text="stale.total"></b>건 ·
@@ -99,6 +103,7 @@ function recombinePanel() {
         moduleId: '',
         style: '',
         freshness: false,
+        expand: false,
         modules: [],
         styles: [],
         stale: null,
@@ -159,7 +164,7 @@ function recombinePanel() {
             this.result = null;
             const d = await this.post('/api/v1/data/titles/recombine', {
                 ids, module_id: this.moduleId, style: this.style || null,
-                freshness: this.freshness,
+                freshness: this.freshness, expand: this.expand,
             });
             this.busy = false;
             if (!d) return;

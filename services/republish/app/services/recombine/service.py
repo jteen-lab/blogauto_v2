@@ -47,7 +47,8 @@ class RecombineService:
                   style: Optional[str] = None,
                   provider: Optional[str] = None,
                   model: Optional[str] = None,
-                  freshness: bool = False) -> Dict[str, Any]:
+                  freshness: bool = False,
+                  expand: bool = False) -> Dict[str, Any]:
         """고른 제목들을 재조합한다.
 
         Args:
@@ -55,6 +56,8 @@ class RecombineService:
             module_id: 프롬프트 모듈(재조합 프롬프트를 여기서 읽는다)
             style: 스타일. None 이면 모듈 설정을 따른다
             freshness: 최신성 갱신 모드 — 연도만 바꾸면 되는 것은 AI 없이
+            expand: 키워드 축 확장 — 원본의 채택 키워드에서 뽑은 질문을
+                힌트로 넣는다. `candidate_id` 가 있어야 동작한다(§4-6 ②)
         """
         rows = await self._titles(title_ids[:MAX_PER_RUN])
         if not rows:
@@ -69,7 +72,7 @@ class RecombineService:
                 skipped += 1
                 continue
             result = await self._one(row, module_id, style, provider, model,
-                                     freshness)
+                                     freshness, expand)
             if result:
                 made.append(result)
 
@@ -80,8 +83,8 @@ class RecombineService:
 
     async def _one(self, row: MainTitle, module_id: int,
                    style: Optional[str], provider: Optional[str],
-                   model: Optional[str],
-                   freshness: bool) -> Optional[Dict[str, Any]]:
+                   model: Optional[str], freshness: bool,
+                   expand: bool = False) -> Optional[Dict[str, Any]]:
         """제목 하나. 규칙으로 끝나면 AI 를 부르지 않는다."""
         if freshness:
             decision = freshness_plan(row.title, row.created_at)
@@ -97,6 +100,10 @@ class RecombineService:
             return None
 
         keywords = await self._keywords(row)
+        if expand:
+            # 원본 키워드에서 질문 축을 뽑아 함께 넣는다. 같은 말을 다르게
+            # 적는 대신 **다른 질문에 답하는** 제목이 나온다.
+            keywords = keywords + await self._question_axes(row)
         try:
             result = await self.recombiner.recombine(
                 original_title=row.title, module_id=module_id,
@@ -138,6 +145,29 @@ class RecombineService:
         )
         self.db.add(row)
         return {"title": title, "from_id": origin.id, "style": style}
+
+    async def _question_axes(self, row: MainTitle) -> List[str]:
+        """이 제목의 키워드가 답할 수 있는 **다른 질문들**.
+
+        의도 분류가 이미 규칙으로 질문을 만든다(`keyword_lab.intent`).
+        AI 호출 없이 축을 넓힐 수 있다. 정본 키워드가 없으면 빈 목록이다 —
+        무엇으로 넓힐지 모르는 채로 확장하면 엉뚱한 제목이 나온다.
+        """
+        if not row.candidate_id:
+            return []
+        keyword = (await self.db.execute(
+            select(KeywordCandidate.keyword).where(
+                KeywordCandidate.id == row.candidate_id)
+        )).scalar_one_or_none()
+        if not keyword:
+            return []
+        try:
+            from ..keyword_lab.intent import questions
+
+            return [q for q in questions(keyword) if q][:3]
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[RECOMBINE] 질문 축 생성 실패 | %s", e)
+            return []
 
     async def _titles(self, ids: List[int]) -> List[MainTitle]:
         if not ids:

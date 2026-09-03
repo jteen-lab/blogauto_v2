@@ -409,3 +409,41 @@ class TestStylePicker:
         from app.services.generation import style_picker as sp
 
         assert sp.MIN_SAMPLE >= 5, "1건 성공을 100%로 읽으면 안 된다"
+
+
+class TestKeywordAxisExpansion:
+    """W13 — 확장 재조합 ②. candidate_id 연결이 전제다."""
+
+    @pytest.mark.asyncio
+    async def test_no_candidate_means_no_axes(self):
+        """무엇으로 넓힐지 모르는 채 확장하면 엉뚱한 제목이 나온다."""
+        from app.models.title import MainTitle
+        from app.services.recombine.service import RecombineService
+
+        service = RecombineService(db=None, user_id=1)
+        row = MainTitle(title="제목", candidate_id=None)
+        assert await service._question_axes(row) == []
+
+    def test_axes_use_rule_based_questions(self):
+        """AI 없이 축을 넓힌다 — 의도 분류가 이미 질문을 만든다."""
+        src = (BASE / "app/services/recombine/service.py").read_text(
+            encoding="utf-8")
+        assert "from ..keyword_lab.intent import questions" in src
+
+    def test_expand_is_opt_in(self):
+        """기본은 꺼짐. 확장이 항상 좋은 것은 아니다."""
+        import inspect
+
+        from app.services.recombine.service import RecombineService
+
+        params = inspect.signature(RecombineService.run).parameters
+        assert params["expand"].default is False
+
+    def test_ui_and_api_wired(self):
+        tpl = (BASE / "app/templates/collection/_recombine_panel.html"
+               ).read_text(encoding="utf-8")
+        api = (BASE / "app/routers/title_recombine.py").read_text(
+            encoding="utf-8")
+        assert 'x-model="expand"' in tpl
+        assert "expand: bool = False" in api
+        assert "expand=payload.expand" in api
