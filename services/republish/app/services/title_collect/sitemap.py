@@ -1,12 +1,10 @@
-"""
-사이트맵 파서 (Phase B)
+"""사이트맵 파서 — 도메인의 URL 목록과 각 URL 의 제목.
 
-기존 `bulk_title_collector_service.py` 안에 있던 사이트맵 관련 로직
-(`_extract_urls_from_sitemap`, `_parse_sitemap_index`, `_parse_sitemap_urls`,
-`_fetch_title_from_url`, `_clean_title`)을 재사용 가능한 모듈로 분리한 것.
+`bulk_collect` 에서 옮겨 왔다. 그 모듈은 폐기됐지만 사이트맵 읽기는
+② 도메인 추출의 핵심이라 여기 남긴다. 새 코드가 폐기된 패키지에
+의존하지 않게 하는 것이 이동의 목적이다.
 
-새 청크 프로세서에서 사용한다. 기존 서비스는 호환을 위해 그대로 두되,
-Phase E 정리 시점에 이 파서를 호출하도록 통합 예정.
+계획서: docs/plans/title_tab_workplan.md §2-2
 """
 
 from __future__ import annotations

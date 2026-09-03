@@ -102,7 +102,7 @@ function moduleListApp() {
                         return valueA - valueB;
 
                     case 'module_type':
-                        const typeOrder = { 'prompt': 1, 'generate': 2, 'collect': 3, 'data': 4, 'contact_form': 5, 'growth_profile': 6, 'bulk_collect': 7, 'keyword': 8, 'title_gen': 9 };
+                        const typeOrder = { 'prompt': 1, 'generate': 2, 'data': 3, 'contact_form': 4, 'growth_profile': 5, 'keyword': 6, 'title_gen': 7 };
                         valueA = typeOrder[a.module_type?.code] || 99;
                         valueB = typeOrder[b.module_type?.code] || 99;
                         return valueA - valueB;
@@ -314,7 +314,9 @@ function moduleListApp() {
 
         // 동적 섹션 레이아웃 적용
         applyDynamicLayout() {
-            const moduleTypes = ['prompt', 'collect', 'data', 'contact_form', 'growth_profile', 'bulk_collect', 'keyword', 'title_gen'];
+            // collect·bulk_collect 는 제거됐다(alembic 073). 제목 수집·생성은
+            // title_gen 이 맡는다.
+            const moduleTypes = ['prompt', 'data', 'contact_form', 'growth_profile', 'keyword', 'title_gen'];
             const visibleSections = moduleTypes.filter(type => this.getModulesByType(type).length > 0);
             const sectionCount = visibleSections.length;
 

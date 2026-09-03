@@ -164,7 +164,7 @@ class DomainExtractor:
         있는 것을 버린다.
         """
         if self._parser is None:
-            from ..bulk_collect.sitemap_parser import SitemapParser
+            from .sitemap import SitemapParser
 
             self._parser = SitemapParser()
         try:
@@ -177,7 +177,7 @@ class DomainExtractor:
     async def _title_of(self, url: str, client: Any) -> Optional[str]:
         """URL 에서 제목을 가져온다. 실패는 None — 한 건이 막혀도 계속한다."""
         if self._fetch_title is None:
-            from ..bulk_collect.sitemap_parser import fetch_title_from_url
+            from .sitemap import fetch_title_from_url
 
             self._fetch_title = fetch_title_from_url
         try:

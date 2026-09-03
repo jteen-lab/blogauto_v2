@@ -25,7 +25,7 @@ from app.services.bulk_collect.incremental_ingest import (
     ingest_blog_url_incremental,
 )
 from app.services.bulk_collect.lastmod_tracker import LastmodTracker
-from app.services.bulk_collect.sitemap_parser import SitemapParser
+from app.services.title_collect.sitemap import SitemapParser
 from app.services.bulk_collect.timebox import Timebox
 from app.services.bulk_collect.url_utils import (
     extract_domain_safe,

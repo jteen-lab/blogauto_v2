@@ -82,11 +82,17 @@ def test_prompt_preset_badge_kept(js):
 
 
 # ── 화면 구조 ────────────────────────────────────────────
-def test_all_six_types_have_tabs(page):
-    """타입 6종이 모두 탭으로 있어야 한다."""
-    for code in ("prompt", "collect", "bulk_collect", "data",
-                 "growth_profile", "contact_form"):
+def test_all_types_have_tabs(page):
+    """살아 있는 타입은 모두 탭으로 있어야 한다.
+
+    collect·bulk_collect 는 제거됐다(alembic 073) — 제목 수집·생성은
+    title_gen 이 맡는다.
+    """
+    for code in ("prompt", "data", "growth_profile", "contact_form",
+                 "keyword", "title_gen"):
         assert f"'code': '{code}'" in page, f"탭 누락: {code}"
+    for gone in ("collect", "bulk_collect"):
+        assert f"'code': '{gone}'" not in page, f"제거된 타입이 남았다: {gone}"
 
 
 def test_types_use_tabs_not_stacked(page):

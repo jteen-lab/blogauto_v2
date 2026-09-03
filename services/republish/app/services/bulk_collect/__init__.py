@@ -17,7 +17,7 @@ from .chunk_processor import ChunkProcessor, ChunkStats
 from .cycle_runner import run_bulk_collect_cycle
 from .domain_limiter import DomainLimiter
 from .lastmod_tracker import LastmodTracker
-from .sitemap_parser import (
+from ..title_collect.sitemap import (
     SitemapParser,
     clean_title,
     fetch_title_from_url,

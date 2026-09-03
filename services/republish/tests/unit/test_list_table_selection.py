@@ -44,12 +44,13 @@ def test_blog_table_has_checkbox_column(blogs_html: str) -> None:
 
 
 def test_module_table_has_checkbox_for_every_tab(modules_html: str) -> None:
-    """모듈 6개 타입 탭 모두 체크박스를 가진다."""
+    """살아 있는 타입 탭이 모두 체크박스를 가진다.
+
+    collect·bulk_collect 는 제거됐다(alembic 073).
+    """
     scopes = set(re.findall(r"listToggleOne\('(modules-[a-z_]+)'", modules_html))
     assert scopes == {
         "modules-prompt",
-        "modules-collect",
-        "modules-bulk_collect",
         "modules-data",
         "modules-growth_profile",
         "modules-contact_form",
@@ -75,8 +76,9 @@ def test_selection_scope_is_per_tab(modules_html: str) -> None:
         r"deleteSelectedModules\('(modules-[a-z_]+)', visibleModules\('([a-z_]+)'\)\)",
         modules_html,
     )
-    # 프롬프트·수집·대량수집·데이터·성장·문의폼·키워드·제목
-    assert len(calls) == 8
+    # 프롬프트·데이터·성장·문의폼·키워드·제목
+    # (collect·bulk_collect 는 제거됨 — alembic 073)
+    assert len(calls) == 6
     for scope, type_code in calls:
         assert scope == f"modules-{type_code}", (scope, type_code)
 
@@ -187,18 +189,18 @@ const call = (name, ...a) => s[name].apply(s, a);
 
 
 def test_toggle_all_does_not_leak_across_tabs() -> None:
-    """프롬프트 탭 전체선택이 수집 탭 선택에 영향을 주지 않는다."""
+    """프롬프트 탭 전체선택이 다른 탭 선택에 영향을 주지 않는다."""
     out = _run_mixin("""
 const prompt = [{id: 1}, {id: 2}];
-const collect = [{id: 7}];
+const keyword = [{id: 7}];
 call('listToggleAll', 'modules-prompt', prompt);
 console.log(JSON.stringify({
   prompt: call('listSelectedCount', 'modules-prompt'),
-  collect: call('listSelectedCount', 'modules-collect'),
-  collectRows: call('listSelectedRows', 'modules-collect', collect).length,
+  keyword: call('listSelectedCount', 'modules-keyword'),
+  keywordRows: call('listSelectedRows', 'modules-keyword', keyword).length,
 }));
 """)
-    assert out == '{"prompt":2,"collect":0,"collectRows":0}'
+    assert out == '{"prompt":2,"keyword":0,"keywordRows":0}'
 
 
 def test_toggle_all_twice_clears() -> None:

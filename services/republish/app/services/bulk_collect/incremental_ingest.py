@@ -15,7 +15,7 @@ from typing import Optional, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.bulk_collect.lastmod_tracker import LastmodTracker
-from app.services.bulk_collect.sitemap_parser import SitemapParser
+from app.services.title_collect.sitemap import SitemapParser
 from app.services.bulk_collect.timebox import Timebox
 
 logger = logging.getLogger(__name__)

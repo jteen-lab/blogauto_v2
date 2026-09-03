@@ -62,24 +62,35 @@ class TestLegacyModulesRetired:
     def test_replacements_available(self):
         assert {"keyword", "title_gen"} <= self._popup()
 
-    def test_existing_modules_still_listed(self):
-        """이미 만든 모듈은 계속 보이고 돌아야 한다."""
+    def test_removed_from_list(self):
+        """제거 완료(alembic 073). 목록에서도 빠진다."""
         js = (BASE / "app/static/js/modules/list.js").read_text(
             encoding="utf-8")
         types = re.search(r"const moduleTypes = \[([^\]]+)\]", js).group(1)
-        assert "'collect'" in types and "'bulk_collect'" in types
+        assert "'collect'" not in types
+        assert "'bulk_collect'" not in types
+        assert "'title_gen'" in types
 
-    def test_tabs_marked_deprecated(self):
+    def test_tabs_removed(self):
         html = (BASE / "app/templates/modules/list.html").read_text(
             encoding="utf-8")
-        assert "수집 (폐기 예정)" in html
-        assert "대량 수집 (폐기 예정)" in html
+        assert "수집 (폐기 예정)" not in html
+        assert "대량 수집 (폐기 예정)" not in html
 
-    def test_reason_explained_to_user(self):
-        html = (BASE / "app/templates/modules/list.html").read_text(
+    def test_migration_guards_live_flows(self):
+        """운영이 도는 중이면 지우지 않는다."""
+        src = (BASE
+               / "alembic/versions/073_drop_legacy_collect_modules.py").read_text(
             encoding="utf-8")
-        assert "대체돼" in html
-        assert "이미 만든 모듈은 계속 동작합니다" in html
+        assert "flow_modules" in src
+        assert "연결돼 있어 건너뛴다" in src
+
+    def test_sitemap_parser_moved(self):
+        """새 코드가 폐기된 패키지에 의존하면 안 된다."""
+        src = (BASE / "app/services/title_collect/extractor.py").read_text(
+            encoding="utf-8")
+        assert "bulk_collect" not in src
+        assert (BASE / "app/services/title_collect/sitemap.py").exists()
 
     def test_execution_paths_intact(self):
         """폐기는 생성만 막는 것이다. 실행 경로를 지우면 운영이 멈춘다."""

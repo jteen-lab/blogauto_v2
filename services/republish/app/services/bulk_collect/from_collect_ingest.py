@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.bulk_collect_progress import BulkCollectProgress
 from app.models.collected_url import CollectedUrl
 from app.services.bulk_collect.lastmod_tracker import LastmodTracker
-from app.services.bulk_collect.sitemap_parser import SitemapParser
+from app.services.title_collect.sitemap import SitemapParser
 from app.services.bulk_collect.timebox import Timebox
 from app.services.bulk_collect.url_utils import (
     extract_domain_safe,

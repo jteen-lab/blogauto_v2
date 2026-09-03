@@ -31,7 +31,7 @@ from sqlalchemy.sql import func as sa_func
 
 from ...models.collected_url import CollectedUrl
 from .domain_limiter import DomainLimiter
-from .sitemap_parser import fetch_title_from_url
+from ..title_collect.sitemap import fetch_title_from_url
 from .timebox import Timebox
 
 logger = logging.getLogger(__name__)
