@@ -131,27 +131,49 @@ function moduleFormApp(module = null, moduleType = null) {
                 },
                 // 생성 섹션. 옛 모듈에는 gen 키가 없으므로 켜진 것으로 본다
                 // (제목 생성이 그 모듈의 존재 이유였다).
-                gen_enabled: initialModule?.settings?.title?.gen?.enabled ?? true,
+                // 새로 만드는 모듈은 꺼진 채 시작한다(작업대와 같다).
+                // 옛 모듈은 gen 키가 없으므로 켜진 것으로 본다 —
+                // 제목 생성이 그 모듈의 존재 이유였다.
+                gen_enabled: initialModule?.settings?.title?.gen?.enabled
+                    ?? (initialModule ? true : false),
                 l1_enabled: initialModule?.settings?.title?.gen?.l1_enabled ?? true,
                 l3_enabled: initialModule?.settings?.title?.gen?.l3_enabled ?? false,
                 news_days: initialModule?.settings?.title?.gen?.news_days ?? 3,
                 news_limit: initialModule?.settings?.title?.gen?.news_limit ?? 10,
                 expires_days: initialModule?.settings?.title?.gen?.expires_days ?? 14,
-                dry_run: initialModule?.settings?.title?.dry_run
-                    ?? initialModule?.settings?.title?.gen?.dry_run ?? true,
-                ai_provider: initialModule?.settings?.title?.ai_provider || '',
-                ai_model: initialModule?.settings?.title?.ai_model || '',
-                use_angles: initialModule?.settings?.title?.use_angles ?? true,
-                angle_sample: initialModule?.settings?.title?.angle_sample ?? 10,
-                cluster_enabled: initialModule?.settings?.title?.cluster_enabled ?? true,
-                cluster_threshold: initialModule?.settings?.title?.cluster_threshold ?? 0.34,
-                cluster_min_size: initialModule?.settings?.title?.cluster_min_size ?? 3,
-                cluster_max_size: initialModule?.settings?.title?.cluster_max_size ?? 12,
-                titles_per_cluster: initialModule?.settings?.title?.titles_per_cluster ?? 0,
-                titles_per_keyword: initialModule?.settings?.title?.titles_per_keyword ?? 3,
-                cluster_limit: initialModule?.settings?.title?.cluster_limit ?? 5,
-                keyword_limit: initialModule?.settings?.title?.keyword_limit ?? 20,
-                min_inventory: initialModule?.settings?.title?.min_inventory ?? 30,
+                dry_run: initialModule?.settings?.title?.gen?.dry_run
+                    ?? initialModule?.settings?.title?.dry_run ?? true,
+                // 스케줄 — 키워드 모듈과 같은 방식
+                schedule_mode: initialModule?.settings?.schedule?.schedule_mode
+                    || 'interval',
+                fixed_times: initialModule?.settings?.schedule?.fixed_times || [],
+                interval_hours: initialModule?.settings?.schedule?.interval_hours ?? 3,
+                ai_provider: initialModule?.settings?.title?.gen?.ai_provider
+                    || initialModule?.settings?.title?.ai_provider || '',
+                ai_model: initialModule?.settings?.title?.gen?.ai_model
+                    || initialModule?.settings?.title?.ai_model || '',
+                use_angles: initialModule?.settings?.title?.gen?.use_angles
+                    ?? initialModule?.settings?.title?.use_angles ?? true,
+                angle_sample: initialModule?.settings?.title?.gen?.angle_sample
+                    ?? initialModule?.settings?.title?.angle_sample ?? 10,
+                cluster_enabled: initialModule?.settings?.title?.gen?.cluster_enabled
+                    ?? initialModule?.settings?.title?.cluster_enabled ?? true,
+                cluster_threshold: initialModule?.settings?.title?.gen?.cluster_threshold
+                    ?? initialModule?.settings?.title?.cluster_threshold ?? 0.34,
+                cluster_min_size: initialModule?.settings?.title?.gen?.cluster_min_size
+                    ?? initialModule?.settings?.title?.cluster_min_size ?? 3,
+                cluster_max_size: initialModule?.settings?.title?.gen?.cluster_max_size
+                    ?? initialModule?.settings?.title?.cluster_max_size ?? 12,
+                titles_per_cluster: initialModule?.settings?.title?.gen?.titles_per_cluster
+                    ?? initialModule?.settings?.title?.titles_per_cluster ?? 0,
+                titles_per_keyword: initialModule?.settings?.title?.gen?.titles_per_keyword
+                    ?? initialModule?.settings?.title?.titles_per_keyword ?? 3,
+                cluster_limit: initialModule?.settings?.title?.gen?.cluster_limit
+                    ?? initialModule?.settings?.title?.cluster_limit ?? 5,
+                keyword_limit: initialModule?.settings?.title?.gen?.keyword_limit
+                    ?? initialModule?.settings?.title?.keyword_limit ?? 20,
+                min_inventory: initialModule?.settings?.title?.gen?.min_inventory
+                    ?? initialModule?.settings?.title?.min_inventory ?? 30,
                 interval_minutes: initialModule?.settings?.title?.interval_minutes ?? 180,
             },
             keyword: {
@@ -1205,8 +1227,13 @@ function moduleFormApp(module = null, moduleType = null) {
                         ai_model: t.ai_model || null,
                         min_inventory: t.min_inventory,
                     },
-                    // 주기는 keyword·bulk_collect 와 같은 자리에 둔다
-                    schedule: { interval_minutes: t.interval_minutes },
+                    // 스케줄은 keyword·bulk_collect 와 같은 자리·같은 모양
+                    schedule: {
+                        schedule_mode: t.schedule_mode,
+                        fixed_times: t.fixed_times,
+                        interval_hours: t.interval_hours,
+                    },
+
                 };
             } else if (this.formData.type_code === 'contact_form') {
                 // 애드센스 필수구성 모듈: 문의폼(템플릿/디자인) + 필수페이지(프리셋/편집본)
@@ -1253,6 +1280,40 @@ function moduleFormApp(module = null, moduleType = null) {
         removeKeywordTime(time) {
             this.formData.keyword.fixed_times =
                 this.formData.keyword.fixed_times.filter(t => t !== time);
+        },
+
+        addTitleTime() {
+            const t = this.newFixedTime;
+            if (!t) return;
+            if (this.formData.title.fixed_times.includes(t)) {
+                this.showError('이미 추가된 시간입니다');
+                return;
+            }
+            this.formData.title.fixed_times.push(t);
+            this.formData.title.fixed_times.sort();
+            this.newFixedTime = '';
+        },
+
+        removeTitleTime(time) {
+            this.formData.title.fixed_times =
+                this.formData.title.fixed_times.filter(t => t !== time);
+        },
+
+        /** 제목 모듈 AI 목록. 모델명을 직접 적게 하면 오타로 생성이 실패한다. */
+        titleProviders() {
+            return [...new Set((this.kwTest.models || [])
+                .map(m => m.provider))].sort();
+        },
+
+        titleModelsFor(provider) {
+            if (!provider) return [];
+            const list = (this.kwTest.models || [])
+                .filter(m => m.provider === provider)
+                .map(m => m.model_id);
+            // 저장된 값이 목록에 없으면 select 가 빈 값을 되쓴다
+            const saved = this.formData?.title?.ai_model;
+            if (saved && !list.includes(saved)) list.unshift(saved);
+            return [...new Set(list)];
         },
 
         addFixedTime() {

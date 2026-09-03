@@ -53,8 +53,6 @@ async def run_module(
     수동 실행이므로 재고가 충분해도 돈다(force 기본 true).
     """
     from ..models.module import Module
-    from ..services.title_gen.runner import TitleModuleRunner
-
     settings = settings_override
     if module_id and settings is None:
         module = (await db.execute(
@@ -87,9 +85,12 @@ async def run_module(
         blogs = [(await db.execute(
             select(Blog).where(Blog.id == blog_ids[0])
         )).scalar_one_or_none()]
-    runner = TitleModuleRunner(db, current_user.id)
-    result = await runner.run_for_blogs(settings, [b for b in blogs if b],
-                                        force=force, steps=steps)
+    # 모듈 폼의 테스트도 **플로우와 같은 실행기**를 탄다. 여기서만 다른
+    # 코드를 타면 "테스트는 되는데 자동은 안 되는" 상태가 된다.
+    from ..services.title_collect.workbench import TitleWorkbench
+
+    result = await TitleWorkbench(db, current_user.id).run_for_module(
+        settings, [b for b in blogs if b], force=force)
     if not result.get("success"):
         raise HTTPException(400, result.get("error") or "실행 실패")
     return result
@@ -100,7 +101,7 @@ async def _run_in_background(task_id: str, user_id: int,
                              force: bool, steps: Optional[List[str]]) -> None:
     """요청과 분리해 돈다. 요청 세션은 응답과 함께 닫힌다."""
     from ..core.database import db_manager
-    from ..services.title_gen.runner import TitleModuleRunner
+    from ..services.title_collect.workbench import TitleWorkbench
 
     try:
         async with db_manager.get_session() as db:
@@ -111,9 +112,8 @@ async def _run_in_background(task_id: str, user_id: int,
                 )).scalar_one_or_none()
                 if row:
                     blogs.append(row)
-            runner = TitleModuleRunner(db, user_id)
-            result = await runner.run_for_blogs(settings, blogs, force=force,
-                                                steps=steps)
+            result = await TitleWorkbench(db, user_id).run_for_module(
+                settings, blogs, force=force)
         cache_set(_task_key(task_id), {"status": "done", "result": result})
     except Exception as e:  # noqa: BLE001
         logger.error("[TITLE_GEN] 백그라운드 오류 | %s | %s", task_id, e)

@@ -25,6 +25,17 @@ from .settings import TitleCollectSettings
 
 logger = get_logger("title_workbench", "app.log")
 
+# L1(제목 생성) 실행기가 읽는 설정 키. 화면·모듈이 보낸 값을 그대로
+# 넘기기 위한 목록이다. 여기서 빠진 키는 기본값이 되살아나 사용자가 끈
+# 옵션이 강제로 켜진다.
+_L1_KEYS = (
+    "dry_run", "use_angles", "angle_sample",
+    "cluster_enabled", "cluster_threshold", "cluster_min_size",
+    "cluster_max_size", "titles_per_cluster", "titles_per_keyword",
+    "cluster_limit", "keyword_limit", "min_inventory",
+    "ai_provider", "ai_model",
+)
+
 
 class TitleWorkbench:
     """한 회차를 수행하고 사람이 읽을 요약을 돌려준다."""
@@ -162,16 +173,15 @@ class TitleWorkbench:
         """L1 — 제목 모듈과 **같은 실행기**. 화면용 코드를 따로 만들지 않는다."""
         from ..title_gen.runner import TitleModuleRunner
 
-        settings = {"title": {
-            "enabled": True,
-            "dry_run": bool(gen.get("dry_run", True)),
-            "use_angles": bool(gen.get("use_angles", True)),
-            "cluster_limit": gen.get("cluster_limit") or 5,
-            "keyword_limit": gen.get("keyword_limit") or 20,
-            "titles_per_keyword": gen.get("titles_per_keyword") or 3,
-            "ai_provider": gen.get("ai_provider"),
-            "ai_model": gen.get("ai_model"),
-        }}
+        # 화면이 보낸 값을 **그대로** 넘긴다. 예전에는 몇 개만 골라
+        # 넘겨서, 빠뜨린 항목(cluster_enabled 등)이 기본값으로 되살아났다
+        # — 사용자가 끈 옵션이 강제로 켜졌다.
+        title: Dict[str, Any] = {
+            key: gen[key] for key in _L1_KEYS if key in gen
+        }
+        title["enabled"] = True
+        title.setdefault("dry_run", True)
+        settings = {"title": title}
         runner = TitleModuleRunner(self.db, self.user_id)
         # 화면에서 누른 실행은 재고가 충분해도 돈다 — 조용히 건너뛰면
         # 테스트가 불가능하다. 자동 실행은 재고를 본다.

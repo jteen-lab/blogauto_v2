@@ -672,6 +672,55 @@ class TestModulePortsWorkbench:
                     src.index("async def run(self")]
         assert block.index('payload["collect"]') < block.index("for blog in")
 
+    def test_all_l1_settings_are_forwarded(self):
+        """골라 넘기면 빠뜨린 키가 기본값으로 되살아나 옵션이 강제 켜진다."""
+        from app.services.title_collect.workbench import _L1_KEYS
+        from app.services.title_gen.settings import TitleModuleSettings
+
+        fields = set(TitleModuleSettings.__dataclass_fields__)
+        # 모듈이 정하는 것(enabled)·스케줄은 별도 경로다
+        assert not (fields - set(_L1_KEYS) - {"enabled", "interval_minutes"})
+        assert not (set(_L1_KEYS) - fields), "없는 설정을 넘기고 있다"
+
+    def test_cluster_toggle_reaches_runner(self):
+        """사용자가 끈 '비슷한 키워드 묶기' 가 강제로 켜지던 자리."""
+        from app.services.title_collect.workbench import _L1_KEYS
+
+        assert "cluster_enabled" in _L1_KEYS
+        assert "use_angles" in _L1_KEYS
+
+    def test_ai_is_inside_generate_section(self):
+        """섹션 밖 설정은 그 섹션을 꺼도 적용된다 — 수집만 해도 AI 를
+        요구하던 원인이다."""
+        tpl = (BASE
+               / "app/static/js/modules/title-gen-form-template.js").read_text(
+            encoding="utf-8")
+        gen_at = tpl.index('x-model="formData.title.gen_enabled"')
+        ai_at = tpl.index('x-model="formData.title.ai_provider"')
+        angles_at = tpl.index('x-model="formData.title.use_angles"')
+        cluster_at = tpl.index('x-model="formData.title.cluster_enabled"')
+        for name, at in (("ai", ai_at), ("angles", angles_at),
+                         ("cluster", cluster_at)):
+            assert at > gen_at, f"{name} 이 생성 섹션 밖에 있다"
+
+    def test_new_module_starts_with_generate_off(self):
+        """작업대와 같다 — 켠 섹션만 돈다."""
+        js = (BASE / "app/static/js/modules/form.js").read_text(
+            encoding="utf-8")
+        assert "?? (initialModule ? true : false)" in js
+
+    def test_schedule_matches_keyword_module(self):
+        """모듈마다 스케줄 UI 가 다르면 매번 다시 익혀야 한다."""
+        tpl = (BASE
+               / "app/static/js/modules/title-schedule-template.js").read_text(
+            encoding="utf-8")
+        assert "formData.title.schedule_mode" in tpl
+        assert "fixed_time" in tpl and "interval" in tpl
+        js = (BASE / "app/static/js/modules/form.js").read_text(
+            encoding="utf-8")
+        assert "addTitleTime()" in js and "removeTitleTime(time)" in js
+        assert "schedule_mode: t.schedule_mode" in js
+
     def test_module_form_has_sections(self):
         tpl = (BASE
                / "app/static/js/modules/title-gen-form-template.js").read_text(
