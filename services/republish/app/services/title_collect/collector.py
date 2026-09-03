@@ -1,38 +1,40 @@
-"""① 제목 수집 — 채택 키워드로 검색해 제목과 도메인을 얻는다.
+"""① 제목 수집 — 채택 키워드로 검색해 제목을 얻는다.
 
-옛 수집과 다른 점 셋:
+**하는 일은 이것뿐이다.**
 
-1. **키워드에 의존하지 않는다.** 옛 `collect` 모듈의 결과를 받지 않고
-   정본(`keyword_candidates`)의 채택 키워드를 직접 시드로 쓴다.
-2. **도메인당 상한이 있다.** 사이트맵을 통째로 읽어 801건씩 넣던 것을
-   최신순 상위 N건으로 자른다.
-3. **`candidate_id` 를 남긴다.** 어떤 채택 키워드로 찾았는지 알아야
-   확장 재조합이 가능하다.
+    채택 키워드에서 시드 N개 → 검색 → 설정한 수만큼 제목
+      → 제목은 바로 임시제목으로
+      → 그 제목이 있던 도메인은 니치도메인에 등록(URL 은 캐지 않는다)
+
+도메인에서 URL 을 뽑는 것은 ②도메인 추출의 몫이다. 두 일을 한 사이클에
+섞었던 것이 옛 설계의 문제였다.
+
+**상한을 두지 않는다.** 도메인당 URL 수·회차당 새 도메인·미완료 도메인
+상한을 걸었더니 초기 상태(도메인 287개 전부 미처리)에서 수집이 영구히
+건너뛰어졌다. 누적을 걱정하지 않고 수집만 한다.
 
 계획서: docs/plans/title_tab_workplan.md §2-1
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.logger import get_logger
 from ...models.keyword_candidate import KeywordCandidate
-from ...models.niche_domain import (
-    EXTRACT_PARTIAL, EXTRACT_PENDING, NicheDomain,
-)
+from ...models.niche_domain import EXTRACT_PENDING, NicheDomain
 from ..title_source import SRC_TITLE_COLLECT
 from .niche_gate import NicheGate
-from .store import TitleStore
 from .settings import TitleCollectSettings
+from .store import TitleStore
 
 logger = get_logger("title_collector", "app.log")
 
 
 class TitleCollector:
-    """채택 키워드로 검색해 제목을 모은다."""
+    """채택 키워드로 검색해 제목을 모으고 도메인을 등록한다."""
 
     def __init__(self, db: AsyncSession, user_id: int, search_service: Any):
         self.db = db
@@ -41,18 +43,7 @@ class TitleCollector:
 
     async def run(self, cfg: TitleCollectSettings,
                   gate: NicheGate) -> Dict[str, Any]:
-        """한 회차.
-
-        미완료 도메인이 상한을 넘으면 **새 도메인을 찾지 않는다.** 분리만
-        으로는 격차가 다시 벌어지므로 상한을 함께 둔다.
-        """
-        pending = await self._pending_domains()
-        if pending >= cfg.max_pending_domains:
-            msg = f"미완료 도메인 {pending}개 — 신규 수집을 건너뜁니다"
-            logger.info("[TITLE_COLLECT] %s", msg)
-            return {"skipped": True, "message": msg, "saved": 0,
-                    "pending_domains": pending}
-
+        """한 회차. 건너뛰는 조건은 없다 — 시드가 없을 때만 멈춘다."""
         seeds = await self._seeds(cfg.seed_limit)
         if not seeds:
             return {"skipped": True, "saved": 0,
@@ -64,30 +55,34 @@ class TitleCollector:
         domains: Dict[str, int] = {}
 
         for row in seeds:
-            found = await self._search(row.keyword, cfg.urls_per_domain)
+            found = await self._search(row.keyword, cfg.titles_per_keyword)
             for item in found:
                 result = await store.add(
                     title=item["title"], url=item["link"],
                     keyword=row.keyword, candidate_id=row.id,
                     source=SRC_TITLE_COLLECT)
+                host = result.get("domain")
+                if host:
+                    # 걸러진 제목의 도메인도 센다 — 그 도메인에 다른 글이
+                    # 있을 수 있고, 추출은 도메인 단위로 돈다.
+                    domains[host] = domains.get(host, 0) + 1
                 if result["stored"]:
                     saved += 1
-                    host = result.get("domain")
-                    if host:
-                        domains[host] = domains.get(host, 0) + 1
                 elif result["reason"] == "filtered":
                     blocked += 1
                 elif result["reason"] == "off_niche":
                     off_niche += 1
+            # 이 키워드로 제목을 만들었음을 표시한다
+            row.titled = True
 
-        await self._register_domains(domains, cfg.domains_per_cycle)
+        registered = await self._register_domains(domains)
         await self.db.commit()
 
-        logger.info("[TITLE_COLLECT] 시드 %d개 → 제목 %d개 · 도메인 %d개",
-                    len(seeds), saved, len(domains))
+        logger.info("[TITLE_COLLECT] 시드 %d개 → 제목 %d개 · 도메인 %d개(신규 %d)",
+                    len(seeds), saved, len(domains), registered)
         return {"saved": saved, "blocked": blocked, "off_niche": off_niche,
                 "seeds": len(seeds), "domains": len(domains),
-                "samples": store.samples[:100], "pending_domains": pending}
+                "new_domains": registered, "samples": store.samples[:100]}
 
     async def _seeds(self, limit: int) -> List[KeywordCandidate]:
         """아직 제목을 안 만든 채택 키워드부터.
@@ -106,16 +101,6 @@ class TitleCollector:
             .limit(max(1, limit))
         )).scalars().all())
 
-    async def _pending_domains(self) -> int:
-        """아직 다 못 캔 도메인 수. 차단된 것은 세지 않는다."""
-        return (await self.db.execute(
-            select(func.count()).select_from(NicheDomain).where(
-                NicheDomain.user_id == self.user_id,
-                NicheDomain.is_blocked.is_(False),
-                NicheDomain.extract_status.in_(
-                    [EXTRACT_PENDING, EXTRACT_PARTIAL]))
-        )).scalar() or 0
-
     async def _search(self, keyword: str, limit: int) -> List[Dict[str, str]]:
         """검색 상위 결과. 실패는 빈 목록 — 회차를 죽이지 않는다."""
         try:
@@ -125,20 +110,22 @@ class TitleCollector:
             logger.warning("[TITLE_COLLECT] 검색 실패 | %s | %s", keyword, e)
             return []
         if not result.get("success"):
+            logger.warning("[TITLE_COLLECT] 검색 실패 | %s | %s",
+                           keyword, result.get("error"))
             return []
         return [{"title": i.get("title", ""),
                  "link": i.get("link") or i.get("bloggerlink") or ""}
                 for i in (result.get("items") or [])]
 
-    async def _register_domains(self, domains: Dict[str, int],
-                                limit: int) -> None:
-        """새로 본 도메인을 등록한다. 이미 있으면 관측만 갱신한다.
+    async def _register_domains(self, domains: Dict[str, int]) -> int:
+        """본 도메인을 니치도메인에 등록한다.
 
-        한 회차에 새로 들이는 도메인 수를 제한한다 — 유입이 처리를
-        앞지르면 도메인만 쌓인다.
+        **여기서 URL 을 캐지 않는다.** 도메인만 남기고, 사이트맵을 읽어
+        URL 을 뽑는 것은 ②도메인 추출이 맡는다.
+
+        Returns:
+            새로 등록한 도메인 수.
         """
-        from ..title_gen.niche import host_of
-
         added = 0
         for host, count in sorted(domains.items(), key=lambda x: -x[1]):
             existing = (await self.db.execute(
@@ -148,16 +135,16 @@ class TitleCollector:
             )).scalar_one_or_none()
 
             if existing:
-                existing.url_count = (existing.url_count or 0) + count
                 existing.last_seen_at = func.now()
                 continue
-            if added >= limit:
-                continue
+
             self.db.add(NicheDomain(
                 user_id=self.user_id, domain=host,
-                platform=_platform(host), url_count=count,
-                extract_status=EXTRACT_PENDING))
+                platform=_platform(host),
+                # 관측 수는 사이트맵을 읽을 때 실제 URL 수로 채워진다.
+                url_count=0, extract_status=EXTRACT_PENDING))
             added += 1
+        return added
 
 
 def _platform(host: str) -> str:

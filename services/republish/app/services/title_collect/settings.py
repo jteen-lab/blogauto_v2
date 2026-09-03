@@ -1,29 +1,31 @@
 """제목 수집 모듈 설정.
 
-수집은 두 기능으로 나뉜다. 옛 방식은 "키워드로 검색 → 목표 수 채우면 종료"
-였고, 도메인 하나에서 목표를 못 채우면 **그 도메인이 그대로 방치**됐다.
-어디까지 했는지 적을 자리가 없어서였다(URL 12만 건 중 처리 0.02%).
+수집은 두 기능으로 나뉜다. 하는 일이 다르고, 각자 켜고 끌 수 있다.
 
-    ① 제목 수집  — 채택 키워드로 검색 → 제목 + 새 도메인
-    ② 도메인 추출 — 이미 저장된 도메인에서 마저 추출
+    ① 제목 수집  — 채택 키워드로 검색해 **제목을 얻고**, 그 제목이 있던
+                   도메인을 니치도메인에 등록한다. 도메인에서 URL 을
+                   캐지는 않는다.
+    ② 도메인 추출 — 등록된 도메인의 **사이트맵을 읽어** URL 을 뽑고,
+                   각 URL 에서 제목을 가져온다.
 
-②가 큐를 소진시킨다. ①만 켜면 새 소재를 찾고, ②만 켜면 밀린 것을 비운다.
+**상한을 두지 않는다.** 옛 설계에서 도메인당 URL 수·회차당 새 도메인·
+미완료 도메인 상한을 걸었더니, 도메인 287개가 전부 미처리인 초기 상태에서
+①이 영구히 건너뛰어지는 교착이 생겼다. 수집은 수집만 한다.
 
-계획서: docs/plans/title_tab_workplan.md §2-2
+계획서: docs/plans/title_tab_workplan.md §2
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
-# 한 회차 기본값. 유입이 처리를 앞지르지 않게 잡은 값이다.
-DEFAULT_SEED_LIMIT = 10
-DEFAULT_URLS_PER_DOMAIN = 30
-DEFAULT_DOMAINS_PER_CYCLE = 5
-DEFAULT_MAX_PENDING_DOMAINS = 50
+# ① 제목 수집
+DEFAULT_SEED_LIMIT = 10          # 한 회차에 검색할 채택 키워드 수
+DEFAULT_TITLES_PER_KEYWORD = 30  # 키워드 하나에서 가져올 제목 수
 
-DEFAULT_EXTRACT_DOMAINS = 5
-DEFAULT_TITLES_PER_DOMAIN = 30
+# ② 도메인 추출 — 한 회차의 **전체** 예산이다(도메인당이 아니다).
+# 한 도메인에서 다 못 채우면 다음 도메인으로 넘어가 이어서 채운다.
+DEFAULT_EXTRACT_URLS = 100
 
 # 니치 대조 모드. 초기에는 '표시' 가 안전하다 — 분류표가 얇은 상태에서
 # 차단부터 켜면 살릴 수 있는 제목까지 막힌다.
@@ -50,19 +52,14 @@ class TitleCollectSettings:
 
     enabled: bool = True
 
-    # ① 제목 수집
+    # ① 제목 수집 — 설정은 둘뿐이다
     search_enabled: bool = True
     seed_limit: int = DEFAULT_SEED_LIMIT
-    urls_per_domain: int = DEFAULT_URLS_PER_DOMAIN
-    domains_per_cycle: int = DEFAULT_DOMAINS_PER_CYCLE
-    # 미완료 도메인이 이보다 많으면 ①을 건너뛴다. 분리만으로는 격차가
-    # 다시 벌어지므로 상한을 함께 둔다.
-    max_pending_domains: int = DEFAULT_MAX_PENDING_DOMAINS
+    titles_per_keyword: int = DEFAULT_TITLES_PER_KEYWORD
 
-    # ② 도메인 추출
+    # ② 도메인 추출 — 1회 추출 URL 수(전체 예산)
     extract_enabled: bool = True
-    extract_domains: int = DEFAULT_EXTRACT_DOMAINS
-    titles_per_domain: int = DEFAULT_TITLES_PER_DOMAIN
+    extract_urls: int = DEFAULT_EXTRACT_URLS
 
     # 저장 시점 니치 대조
     niche_mode: str = NICHE_MARK
@@ -76,18 +73,12 @@ class TitleCollectSettings:
         return cls(
             enabled=bool(source.get("enabled", True)),
             search_enabled=bool(source.get("search_enabled", True)),
-            seed_limit=_int(source, "seed_limit", DEFAULT_SEED_LIMIT, 1, 50),
-            urls_per_domain=_int(source, "urls_per_domain",
-                                 DEFAULT_URLS_PER_DOMAIN, 1, 200),
-            domains_per_cycle=_int(source, "domains_per_cycle",
-                                   DEFAULT_DOMAINS_PER_CYCLE, 1, 50),
-            max_pending_domains=_int(source, "max_pending_domains",
-                                     DEFAULT_MAX_PENDING_DOMAINS, 1, 1000),
+            seed_limit=_int(source, "seed_limit", DEFAULT_SEED_LIMIT, 1, 100),
+            titles_per_keyword=_int(source, "titles_per_keyword",
+                                    DEFAULT_TITLES_PER_KEYWORD, 1, 100),
             extract_enabled=bool(source.get("extract_enabled", True)),
-            extract_domains=_int(source, "extract_domains",
-                                 DEFAULT_EXTRACT_DOMAINS, 1, 50),
-            titles_per_domain=_int(source, "titles_per_domain",
-                                   DEFAULT_TITLES_PER_DOMAIN, 1, 200),
+            extract_urls=_int(source, "extract_urls",
+                              DEFAULT_EXTRACT_URLS, 1, 5000),
             niche_mode=mode if mode in NICHE_MODES else NICHE_MARK,
         )
 
@@ -96,11 +87,8 @@ class TitleCollectSettings:
             "enabled": self.enabled,
             "search_enabled": self.search_enabled,
             "seed_limit": self.seed_limit,
-            "urls_per_domain": self.urls_per_domain,
-            "domains_per_cycle": self.domains_per_cycle,
-            "max_pending_domains": self.max_pending_domains,
+            "titles_per_keyword": self.titles_per_keyword,
             "extract_enabled": self.extract_enabled,
-            "extract_domains": self.extract_domains,
-            "titles_per_domain": self.titles_per_domain,
+            "extract_urls": self.extract_urls,
             "niche_mode": self.niche_mode,
         }

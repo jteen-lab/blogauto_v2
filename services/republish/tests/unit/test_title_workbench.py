@@ -31,14 +31,27 @@ BASE = Path(__file__).resolve().parents[2]
 class TestSettings:
     def test_defaults(self):
         cfg = TitleCollectSettings.parse({})
-        assert cfg.urls_per_domain == 30, "사이트맵 전량 적재로 돌아가면 안 된다"
-        assert cfg.max_pending_domains == 50
+        assert cfg.seed_limit == 10
+        assert cfg.titles_per_keyword == 30
+        assert cfg.extract_urls == 100
         assert cfg.niche_mode == NICHE_MARK, "초기 기본은 되돌릴 수 있는 쪽"
 
+    def test_no_throttles_remain(self):
+        """상한을 두면 초기 상태(도메인 전부 미처리)에서 교착이 생긴다.
+
+        옛 설계의 도메인당 URL·회차당 새 도메인·미완료 도메인 상한 때문에
+        ①이 영구히 건너뛰어졌다. 수집은 수집만 한다.
+        """
+        cfg = TitleCollectSettings.parse({})
+        for gone in ("urls_per_domain", "domains_per_cycle",
+                     "max_pending_domains", "extract_domains",
+                     "titles_per_domain"):
+            assert not hasattr(cfg, gone), gone
+
     def test_out_of_range_falls_back(self):
-        cfg = TitleCollectSettings.parse({"collect": {"seed_limit": 0,
-                                                      "urls_per_domain": 9999}})
-        assert cfg.seed_limit == 1 and cfg.urls_per_domain == 200
+        cfg = TitleCollectSettings.parse(
+            {"collect": {"seed_limit": 0, "titles_per_keyword": 9999}})
+        assert cfg.seed_limit == 1 and cfg.titles_per_keyword == 100
 
     def test_unknown_niche_mode(self):
         assert TitleCollectSettings.parse(
@@ -86,18 +99,6 @@ class TestNicheGate:
 class TestExtractProgress:
     """도메인이 방치되던 원인 — 진행 상태를 남기지 않았다."""
 
-    def test_full_batch_stays_partial(self):
-        d = NicheDomain(extract_status=EXTRACT_PENDING, extracted_count=0)
-        DomainExtractor._advance(d, 30, 30)
-        assert d.extract_status == EXTRACT_PARTIAL, "더 남았을 수 있다"
-        assert d.extracted_count == 30
-
-    def test_short_batch_is_done(self):
-        d = NicheDomain(extract_status=EXTRACT_PARTIAL, extracted_count=10)
-        DomainExtractor._advance(d, 3, 30)
-        assert d.extract_status == EXTRACT_DONE
-        assert d.extracted_count == 13
-
     def test_partial_comes_first(self):
         partial = NicheDomain(domain="p", extract_status=EXTRACT_PARTIAL,
                               extracted_count=20, promoted_count=0)
@@ -124,6 +125,126 @@ class TestExtractProgress:
                            extracted_count=100, promoted_count=90)
         rows = sorted([bad, new, good], key=_priority)
         assert [r.domain for r in rows] == ["good", "new", "bad"]
+
+
+class TestSitemapExtraction:
+    """② 도메인 추출 — 사이트맵 기반, 예산은 회차 전체, 이어서 캔다."""
+
+    def _domain(self, **kw):
+        base = {"domain": "a.com", "extract_status": EXTRACT_PENDING,
+                "extracted_count": 0, "url_count": 0}
+        base.update(kw)
+        return NicheDomain(**base)
+
+    def _extractor(self, urls, titles=None):
+        class Parser:
+            async def fetch_urls(self, domain, max_urls=None):
+                # 상한을 걸면 캘 수 있는 것을 버린다
+                assert max_urls is None, "사이트맵 URL 수를 자르면 안 된다"
+                return list(urls)
+
+        async def fetch_title(url, client=None):
+            return (titles or {}).get(url, f"제목 {url}")
+
+        return DomainExtractor(db=None, user_id=1, sitemap_parser=Parser(),
+                               title_fetcher=fetch_title)
+
+    @pytest.mark.asyncio
+    async def test_resumes_from_offset(self):
+        """다음 회차는 멈춘 자리에서 이어 캔다."""
+        urls = [f"https://a.com/{i}" for i in range(500)]
+        extractor = self._extractor(urls)
+        domain = self._domain(extracted_count=100)
+        store = _FakeStore()
+
+        got, empty = await extractor._drain(domain, 50, store, None)
+
+        assert not empty
+        assert got["seen"] == 50
+        assert domain.extracted_count == 150, "101번째부터 이어서"
+        assert domain.extract_status == EXTRACT_PARTIAL
+        assert store.urls[0] == "https://a.com/100"
+
+    @pytest.mark.asyncio
+    async def test_url_count_is_not_capped(self):
+        """관측 수는 사이트맵 실제 URL 수다. 801개로 자르지 않는다."""
+        urls = [f"https://a.com/{i}" for i in range(10_000)]
+        extractor = self._extractor(urls)
+        domain = self._domain()
+
+        await extractor._drain(domain, 10, _FakeStore(), None)
+
+        assert domain.url_count == 10_000
+
+    @pytest.mark.asyncio
+    async def test_done_when_drained(self):
+        urls = [f"https://a.com/{i}" for i in range(30)]
+        extractor = self._extractor(urls)
+        domain = self._domain(extracted_count=25)
+
+        await extractor._drain(domain, 100, _FakeStore(), None)
+
+        assert domain.extracted_count == 30
+        assert domain.extract_status == EXTRACT_DONE
+
+    @pytest.mark.asyncio
+    async def test_no_sitemap_is_closed(self):
+        """못 읽는 도메인을 계속 열면 회차가 그것만 반복한다."""
+        extractor = self._extractor([])
+        domain = self._domain()
+
+        got, empty = await extractor._drain(domain, 100, _FakeStore(), None)
+
+        assert empty and got["seen"] == 0
+        assert domain.extract_status == EXTRACT_DONE
+
+    @pytest.mark.asyncio
+    async def test_budget_is_run_wide(self):
+        """예산은 도메인당이 아니라 회차 전체다.
+
+        30개 남은 도메인에서 30개만 쓰고, 남은 예산은 다음 도메인 몫이다.
+        """
+        urls = [f"https://a.com/{i}" for i in range(30)]
+        extractor = self._extractor(urls)
+        domain = self._domain()
+
+        got, _ = await extractor._drain(domain, 100, _FakeStore(), None)
+
+        assert got["seen"] == 30, "남은 예산 70은 다음 도메인으로 넘어간다"
+
+
+class _FakeStore:
+    """TitleStore 대역 — 무엇이 들어왔는지만 본다."""
+
+    def __init__(self):
+        self.urls = []
+        self.samples = []
+
+    async def add(self, title, url, keyword, candidate_id, source,
+                  expires_at=None):
+        self.urls.append(url)
+        return {"stored": True, "reason": "ok", "domain": "a.com"}
+
+
+class TestCollectorScope:
+    """① 제목 수집 — 검색하고 제목·도메인만 남긴다."""
+
+    def test_does_not_crawl_urls(self):
+        src = (BASE / "app/services/title_collect/collector.py").read_text(
+            encoding="utf-8")
+        assert "sitemap" not in src.lower(), "URL 캐기는 ②의 몫이다"
+
+    def test_registers_domain_without_url_count(self):
+        src = (BASE / "app/services/title_collect/collector.py").read_text(
+            encoding="utf-8")
+        assert "url_count=0" in src
+
+    def test_no_skip_gate(self):
+        """건너뛰는 조건은 시드가 없을 때뿐이다."""
+        src = (BASE / "app/services/title_collect/collector.py").read_text(
+            encoding="utf-8")
+        assert "max_pending_domains" not in src
+        assert "신규 수집을 건너뜁니다" not in src
 
 
 class TestSummary:
@@ -186,6 +307,36 @@ class TestWiring:
         assert 'x-model="gen.enabled"' in tpl
         assert 'x-show="collect.enabled"' in tpl
         assert 'x-show="gen.enabled"' in tpl
+
+    def test_blog_list_parsed_correctly(self):
+        """응답은 {"blogs": [...]} 다. items 를 먼저 보면 목록이 빈다."""
+        js = (BASE / "app/static/js/collection/title_workbench.js").read_text(
+            encoding="utf-8")
+        assert "d.blogs || d.items" in js
+
+    def test_ai_selection_exposed(self):
+        """AI 를 못 고르면 L1·L3 이 통째로 0편이 된다."""
+        tpl = (BASE
+               / "app/templates/collection/_title_workbench.html").read_text(
+            encoding="utf-8")
+        js = (BASE / "app/static/js/collection/title_workbench.js").read_text(
+            encoding="utf-8")
+        assert 'x-model="gen.ai_provider"' in tpl
+        assert "ai_provider: ''" in js
+
+    def test_failure_reason_surfaces(self):
+        """'L1 0편' 만 보이고 사유가 로그에만 있으면 안 된다."""
+        src = (BASE / "app/services/title_collect/workbench.py").read_text(
+            encoding="utf-8")
+        assert 'out.get("errors")' in src
+        assert "제목 생성 AI 를 고르거나" in src
+
+    def test_news_has_no_rule_fallback(self):
+        """AI 없이 뉴스 원문을 붙여 만들면 원문이 재고에 들어간다."""
+        src = (BASE / "app/services/title_gen/news_gen.py").read_text(
+            encoding="utf-8")
+        assert "에는 어떤 영향이 있을까" not in src.split('"""')[-1]
+        assert "제목 생성 AI 를 고르세요" in src
 
     def test_uses_polling_not_long_request(self):
         """Caddy 가 60초에 헤더를 끊는다. 배경 실행 + 폴링이어야 한다."""

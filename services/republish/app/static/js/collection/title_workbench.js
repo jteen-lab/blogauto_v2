@@ -22,14 +22,13 @@ function titleWorkbench() {
 
         collect: {
             enabled: false,
+            // ① 제목 수집 — 설정은 둘뿐이다. 상한을 두지 않는다.
             search_enabled: true,
             seed_limit: 10,
-            urls_per_domain: 30,
-            domains_per_cycle: 5,
-            max_pending_domains: 50,
+            titles_per_keyword: 30,
+            // ② 도메인 추출 — 1회 추출 URL 수(회차 전체 예산)
             extract_enabled: true,
-            extract_domains: 5,
-            titles_per_domain: 30,
+            extract_urls: 100,
             // 초기 기본은 표시(mark). 차단부터 켜면 되돌릴 수 없다.
             niche_mode: 'mark',
         },
@@ -38,6 +37,9 @@ function titleWorkbench() {
             enabled: false,
             blog_id: '',
             dry_run: true,
+            // AI 를 안 고르고 블로그도 없으면 제목이 만들어지지 않는다
+            ai_provider: '',
+            ai_model: '',
             l1_enabled: true,
             cluster_limit: 5,
             keyword_limit: 20,
@@ -63,8 +65,11 @@ function titleWorkbench() {
         },
 
         async loadBlogs() {
-            const d = await this.get('/api/v1/blogs?size=100');
-            if (d) this.blogs = d.items || d || [];
+            // 응답은 {"blogs": [...]} 다. items 를 먼저 보면 객체 자체가
+            // 목록에 들어가 x-for 가 아무것도 그리지 못한다.
+            const d = await this.get('/api/v1/blogs');
+            if (!d) { this.blogs = []; return; }
+            this.blogs = d.blogs || d.items || (Array.isArray(d) ? d : []);
         },
 
         async run() {

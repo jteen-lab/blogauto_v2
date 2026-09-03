@@ -141,9 +141,19 @@ class NewsTitleGenerator:
         return out
 
     async def _compose(self, keyword: str, news_gist: str) -> Optional[str]:
-        """요지와 키워드를 엮는다. AI 가 없으면 규칙으로 붙인다."""
+        """요지와 키워드를 엮는다.
+
+        **AI 가 없으면 만들지 않는다.** 예전에는 규칙으로 붙였는데
+        (`"{요지}, {키워드}에는 어떤 영향이 있을까"`), 결과가 뉴스 원문
+        제목이 거의 그대로 남은 형태였다. "원문을 재고에 넣지 않는다" 는
+        원칙이 폴백에서 깨진 것이다. 재고로 쓸 수 없는 품질이라면
+        아무것도 만들지 않는 편이 낫다.
+        """
         if self.ask is None:
-            return f"{news_gist}, {keyword}에는 어떤 영향이 있을까"
+            self.last_error = (
+                "제목 생성 AI 를 고르세요 — 뉴스 요지를 우리 주제와 엮으려면 "
+                "AI 가 필요합니다")
+            return None
 
         prompt = (
             f"최근 이런 일이 있었습니다: \"{news_gist}\"\n"

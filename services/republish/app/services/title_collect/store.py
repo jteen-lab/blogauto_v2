@@ -62,26 +62,32 @@ class TitleStore:
         Returns:
             {"stored": bool, "reason": str, "domain": str|None}
         """
+        from ..title_gen.niche import host_of
+
+        # 도메인은 저장 여부와 무관하게 돌려준다. 걸러진 제목이 있던
+        # 도메인에도 쓸 만한 글이 있을 수 있고, 추출은 도메인 단위로 돈다.
+        host = host_of(url)
+
         text = clean(title)
         if len(text) < MIN_LENGTH:
-            return {"stored": False, "reason": "too_short", "domain": None}
+            return {"stored": False, "reason": "too_short", "domain": host}
 
         key = text.lower()
         if key in self._seen:
-            return {"stored": False, "reason": "duplicate", "domain": None}
+            return {"stored": False, "reason": "duplicate", "domain": host}
 
         if await self._is_duplicate(text):
             self._seen.add(key)
-            return {"stored": False, "reason": "duplicate", "domain": None}
+            return {"stored": False, "reason": "duplicate", "domain": host}
 
         if blocking_filter(await self._load_filters(), text, "title"):
             self._seen.add(key)
-            return {"stored": False, "reason": "filtered", "domain": None}
+            return {"stored": False, "reason": "filtered", "domain": host}
 
         topic_id, subtopic_id, matched_id = await self._classify(text)
         if not await self.gate.should_store(topic_id):
             self._seen.add(key)
-            return {"stored": False, "reason": "off_niche", "domain": None}
+            return {"stored": False, "reason": "off_niche", "domain": host}
 
         verdict = await self.gate.judge(topic_id)
         self.db.add(TempTitle(
@@ -95,10 +101,7 @@ class TitleStore:
         self._seen.add(key)
         if len(self.samples) < 100:
             self.samples.append(text)
-
-        from ..title_gen.niche import host_of
-
-        return {"stored": True, "reason": "ok", "domain": host_of(url)}
+        return {"stored": True, "reason": "ok", "domain": host}
 
     async def _load_filters(self) -> List[ContentFilter]:
         """활성 필터. 조회가 실패해도 회차를 죽이지 않는다."""

@@ -61,28 +61,30 @@ class TitleWorkbench:
 
     async def _collect(self, raw: dict, settings: Any) -> Dict[str, Any]:
         """수집 섹션. ①과 ②를 각각 켜고 끌 수 있다."""
-        from ..naver_search_service import NaverSearchService
         from .collector import TitleCollector
         from .extractor import DomainExtractor
 
         cfg = TitleCollectSettings.parse(raw)
-        search = NaverSearchService(settings)
-        if not search.is_configured():
-            return {"error": "네이버 검색 API 키가 없습니다", "saved": 0}
-
         gate = NicheGate(self.db, cfg.niche_mode)
         result: Dict[str, Any] = {"saved": 0, "samples": []}
 
         if cfg.search_enabled:
-            found = await TitleCollector(
-                self.db, self.user_id, search).run(cfg, gate)
-            result["search"] = found
-            result["saved"] += found.get("saved") or 0
-            result["samples"].extend(found.get("samples") or [])
+            # 검색은 API 키가 필요하다. 추출(사이트맵)은 필요 없다.
+            from ..naver_search_service import NaverSearchService
+
+            search = NaverSearchService(settings)
+            if not search.is_configured():
+                result["search"] = {"saved": 0,
+                                    "error": "네이버 검색 API 키가 없습니다"}
+            else:
+                found = await TitleCollector(
+                    self.db, self.user_id, search).run(cfg, gate)
+                result["search"] = found
+                result["saved"] += found.get("saved") or 0
+                result["samples"].extend(found.get("samples") or [])
 
         if cfg.extract_enabled:
-            found = await DomainExtractor(
-                self.db, self.user_id, search).run(cfg, gate)
+            found = await DomainExtractor(self.db, self.user_id).run(cfg, gate)
             result["extract"] = found
             result["saved"] += found.get("saved") or 0
             result["samples"].extend(found.get("samples") or [])
@@ -128,9 +130,17 @@ class TitleWorkbench:
             settings, [blog] if blog else [], force=True)
         preview = [p.get("title") for p in (out.get("preview") or [])
                    if p.get("title")]
+        # 생성이 0편일 때 **왜** 인지 화면이 말해야 한다. 옛 결과는
+        # "L1 0편" 만 보이고 사유는 로그에만 있었다.
+        error = out.get("error")
+        if not error and not preview and not (out.get("made") or 0):
+            errors = out.get("errors") or []
+            error = errors[0] if errors else (
+                "제목이 생성되지 않았습니다 — 제목 생성 AI 를 고르거나 "
+                "대상 블로그를 선택하세요")
         return {"made": out.get("made") or len(preview),
                 "samples": preview[:50], "message": out.get("message"),
-                "error": out.get("error")}
+                "error": error}
 
     async def _run_l3(self, gen: dict, settings: Any) -> Dict[str, Any]:
         """L3 — 뉴스 요지 + 니치 키워드."""
@@ -141,7 +151,8 @@ class TitleWorkbench:
         if not news.is_configured():
             return {"made": 0, "error": "네이버 뉴스 API 키가 없습니다"}
 
-        generator = NewsTitleGenerator(self.db, self.user_id, news)
+        ask = await self._make_ask(gen)
+        generator = NewsTitleGenerator(self.db, self.user_id, news, ask)
         out = await generator.run(days=gen.get("news_days") or 3,
                                   limit=gen.get("news_limit") or 10)
         titles = out.get("titles") or []
@@ -152,6 +163,24 @@ class TitleWorkbench:
         return {"made": out.get("made") or 0,
                 "samples": [t["title"] for t in titles][:50],
                 "error": out.get("error")}
+
+    async def _make_ask(self, gen: dict):
+        """AI 호출 함수. 제공자가 없으면 None — 그때는 만들지 않는다."""
+        provider = gen.get("ai_provider")
+        if not provider:
+            return None
+
+        from ..ai.ai_service import AIService
+
+        service = AIService(self.db, self.user_id)
+        model = gen.get("ai_model")
+
+        async def ask(prompt: str) -> str:
+            result = await service.generate(
+                prompt=prompt, provider=provider, model=model, max_tokens=300)
+            return (result or {}).get("content") or ""
+
+        return ask
 
     async def _store_news(self, titles: list, expires_days: int) -> None:
         """검증 모드가 아니면 저장한다. 만료일을 함께 박는다."""
@@ -201,9 +230,16 @@ def _summarize(out: Dict[str, Any]) -> str:
             parts.append(f"수집 {search.get('saved', 0)}건")
             if search.get("skipped"):
                 errors.append(search.get("message", ""))
+            if search.get("error"):
+                errors.append(search["error"])
         if extract:
             parts.append(f"추출 {extract.get('saved', 0)}건"
                          f"(도메인 {extract.get('domains', 0)}개)")
+            missing = extract.get("no_sitemap") or []
+            if missing:
+                parts.append(f"사이트맵 없음 {len(missing)}개")
+            if extract.get("error"):
+                errors.append(extract["error"])
         if collect.get("error"):
             errors.append(collect["error"])
 

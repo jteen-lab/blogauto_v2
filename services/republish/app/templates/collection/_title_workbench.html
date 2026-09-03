@@ -35,33 +35,23 @@
           <div class="p-2 bg-white border border-gray-200 rounded">
             <label class="flex items-center gap-2 text-sm text-gray-800">
               <input type="checkbox" x-model="collect.search_enabled" class="rounded">
-              ① 제목 수집 <span class="text-xs text-gray-500">채택 키워드로 검색 → 제목 + 새 도메인</span>
+              ① 제목 수집 <span class="text-xs text-gray-500">채택 키워드로 검색 → 제목 + 도메인 등록</span>
             </label>
-            <div x-show="collect.search_enabled" x-cloak class="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2">
+            <div x-show="collect.search_enabled" x-cloak class="mt-2 grid grid-cols-2 gap-2">
               <label class="text-xs text-gray-500">
                 시드 키워드 수
-                <input type="number" min="1" max="50" x-model.number="collect.seed_limit"
+                <input type="number" min="1" max="100" x-model.number="collect.seed_limit"
                        class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
               </label>
               <label class="text-xs text-gray-500">
-                도메인당 URL
-                <input type="number" min="1" max="200" x-model.number="collect.urls_per_domain"
-                       class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
-              </label>
-              <label class="text-xs text-gray-500">
-                회차당 새 도메인
-                <input type="number" min="1" max="50" x-model.number="collect.domains_per_cycle"
-                       class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
-              </label>
-              <label class="text-xs text-gray-500">
-                미완료 도메인 상한
-                <input type="number" min="1" max="1000" x-model.number="collect.max_pending_domains"
+                키워드당 수집 제목 수
+                <input type="number" min="1" max="100" x-model.number="collect.titles_per_keyword"
                        class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
               </label>
             </div>
             <p x-show="collect.search_enabled" x-cloak class="mt-1 text-xs text-gray-400">
-              미완료 도메인이 상한을 넘으면 새 도메인을 찾지 않고 ②추출만 합니다.
-              유입이 처리를 앞지르면 도메인만 쌓입니다.
+              검색된 제목은 <b>바로 임시제목으로</b> 들어가고, 그 제목이 있던 도메인은
+              니치도메인에 등록됩니다. 여기서 도메인의 URL 을 캐지는 않습니다 — 그건 ②의 몫입니다.
             </p>
           </div>
 
@@ -69,23 +59,21 @@
           <div class="p-2 bg-white border border-gray-200 rounded">
             <label class="flex items-center gap-2 text-sm text-gray-800">
               <input type="checkbox" x-model="collect.extract_enabled" class="rounded">
-              ② 도메인 추출 <span class="text-xs text-gray-500">이미 저장된 도메인에서 마저 추출</span>
+              ② 도메인 추출 <span class="text-xs text-gray-500">등록된 도메인의 사이트맵에서 제목 추출</span>
             </label>
-            <div x-show="collect.extract_enabled" x-cloak class="mt-2 grid grid-cols-2 gap-2">
+            <div x-show="collect.extract_enabled" x-cloak class="mt-2">
               <label class="text-xs text-gray-500">
-                회차당 도메인 수
-                <input type="number" min="1" max="50" x-model.number="collect.extract_domains"
-                       class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
-              </label>
-              <label class="text-xs text-gray-500">
-                도메인당 제목 수
-                <input type="number" min="1" max="200" x-model.number="collect.titles_per_domain"
-                       class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+                1회 추출 URL 수
+                <input type="number" min="1" max="5000" x-model.number="collect.extract_urls"
+                       class="mt-0.5 w-40 text-sm border-gray-300 rounded py-1">
               </label>
             </div>
             <p x-show="collect.extract_enabled" x-cloak class="mt-1 text-xs text-gray-400">
-              하다 만 도메인(<span x-text="stats.partial_domains ?? '-'"></span>개)을
-              승격률 높은 순으로 먼저 봅니다.
+              이 수는 <b>회차 전체의 예산</b>입니다(도메인당이 아닙니다). 한 도메인에서 다
+              못 채우면 다음 도메인으로 넘어가 이어서 채웁니다. 도메인에 URL 이 남았다면
+              다음 회차에 그 자리에서 이어 캡니다.
+              사이트맵 URL 수에는 상한을 두지 않습니다 —
+              대기 중 <span x-text="stats.partial_domains ?? '-'"></span>개 도메인.
             </p>
           </div>
 
@@ -135,6 +123,28 @@
               검증 모드 <span class="text-xs text-gray-500">(저장 안 하고 결과만)</span>
             </label>
           </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <label class="text-xs text-gray-500">
+              제목 생성 AI
+              <select x-model="gen.ai_provider" class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+                <option value="">블로그 설정 따름</option>
+                <option value="anthropic">Anthropic</option>
+                <option value="openai">OpenAI</option>
+                <option value="google">Google</option>
+                <option value="deepseek">DeepSeek</option>
+              </select>
+            </label>
+            <label class="text-xs text-gray-500">
+              모델 <span class="text-gray-400">(비우면 기본값)</span>
+              <input type="text" x-model="gen.ai_model" placeholder="예: claude-sonnet-5"
+                     class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+            </label>
+          </div>
+          <p class="text-xs text-gray-400">
+            AI 를 고르지 않고 블로그도 선택하지 않으면 <b>제목이 만들어지지 않습니다.</b>
+            AI 서비스는 제공자를 지정하지 않으면 폴백 없이 거부합니다.
+          </p>
 
           <!-- L1 -->
           <div class="p-2 bg-white border border-gray-200 rounded">
