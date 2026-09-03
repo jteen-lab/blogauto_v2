@@ -49,7 +49,8 @@
           <select x-model.number="moduleId" class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
             <option value="">선택하세요</option>
             <template x-for="m in modules" :key="m.id">
-              <option :value="m.id" x-text="m.name"></option>
+              <option :value="m.id"
+                      x-text="m.name + (m.enabled ? '' : ' (재조합 꺼짐)')"></option>
             </template>
           </select>
         </label>
@@ -71,7 +72,11 @@
       </div>
 
       <p x-show="!selectedCount()" class="text-xs text-gray-400">
-        위 목록에서 재조합할 정식제목을 선택하세요.
+        아래 목록에서 <b>재조합할 정식제목을 체크</b>하세요. 무작위로 고르지 않습니다.
+      </p>
+      <p x-show="!modules.length" class="text-xs text-amber-600">
+        프롬프트 모듈이 없습니다 — 모듈 관리에서 프롬프트 모듈을 먼저 만드세요.
+        재조합 프롬프트는 그 모듈의 <b>제목 재조합</b> 설정에 들어 있습니다.
       </p>
 
       <template x-if="result">
@@ -115,27 +120,19 @@ function recombinePanel() {
             await Promise.all([this.loadModules(), this.loadStyles()]);
         },
 
-        /** 부모(collectionApp)의 선택 목록을 그대로 쓴다. */
-        selectedCount() {
-            const parent = this.$root.closest('[x-data]');
-            return (this.selected() || []).length;
+        /** 목록에서 **체크한 제목**을 쓴다. 무작위로 고르지 않는다.
+         *
+         *  Alpine 3 은 중첩 x-data 가 부모 스코프를 상속하므로
+         *  `this.selectedMainTitles` 로 바로 읽힌다. 내부 API
+         *  (`_x_dataStack`)를 뒤지면 버전이 바뀔 때 조용히 빈 배열이 된다.
+         */
+        selected() {
+            const rows = this.selectedMainTitles;
+            return Array.isArray(rows) ? rows : [];
         },
 
-        selected() {
-            // Alpine 의 스코프 체인을 타고 부모 상태를 읽는다
-            let node = this.$el;
-            while (node) {
-                const stack = node._x_dataStack;
-                if (stack) {
-                    for (const scope of stack) {
-                        if (Array.isArray(scope.selectedMainTitles)) {
-                            return scope.selectedMainTitles;
-                        }
-                    }
-                }
-                node = node.parentElement;
-            }
-            return [];
+        selectedCount() {
+            return this.selected().length;
         },
 
         canRun() {
@@ -143,8 +140,19 @@ function recombinePanel() {
         },
 
         async loadModules() {
-            const d = await this.get('/api/v1/modules?type=generate');
-            this.modules = d ? (d.items || d || []) : [];
+            // 재조합 프롬프트는 'prompt' 타입 모듈의 title_recombine 설정에
+            // 들어 있다. 파라미터는 module_type_code, 응답 키는 modules 다.
+            const d = await this.get(
+                '/api/v1/modules?module_type_code=prompt&size=100');
+            const rows = d ? (d.modules || d.items || []) : [];
+            // 재조합이 켜진 모듈만 고를 수 있게 한다 — 꺼진 모듈을 고르면
+            // 원본이 그대로 돌아와 아무 일도 일어나지 않는다.
+            this.modules = rows.map((m) => ({
+                id: m.id,
+                name: m.name,
+                enabled: !!(m.settings?.title_recombine?.enabled
+                    ?? m.settings?.enable_title_prompt),
+            }));
         },
 
         async loadStyles() {

@@ -239,3 +239,49 @@ class TestNewKeywordForm:
         assert "priority: this.newKw.priority" in block
         assert "difficulty: this.newKw.difficulty" in block
         assert "search_volume: this.newKw.search_volume" in block
+
+
+class TestRecombinePanelWiring:
+    """드롭다운이 비고, 대상이 무작위로 보이던 자리."""
+
+    PANEL = BASE / "app/templates/collection/_recombine_panel.html"
+
+    def test_queries_prompt_modules(self):
+        """재조합 프롬프트는 prompt 타입 모듈의 설정에 있다.
+
+        'generate' 타입으로 물으면 운영에 0개라 목록이 빈다.
+        """
+        src = self.PANEL.read_text(encoding="utf-8")
+        assert "module_type_code=prompt" in src
+        assert "type=generate" not in src
+
+    def test_reads_correct_response_key(self):
+        """응답 키는 modules 다. items 를 읽으면 항상 빈다."""
+        from app.schemas.module import ModuleListResponse
+
+        assert "modules" in ModuleListResponse.model_fields
+        assert "items" not in ModuleListResponse.model_fields
+        src = self.PANEL.read_text(encoding="utf-8")
+        assert "d.modules" in src
+
+    def test_marks_disabled_modules(self):
+        """재조합이 꺼진 모듈을 고르면 원본이 그대로 돌아온다."""
+        src = self.PANEL.read_text(encoding="utf-8")
+        assert "title_recombine?.enabled" in src
+        assert "재조합 꺼짐" in src
+
+    def test_uses_checked_titles_not_random(self):
+        """대상은 목록에서 체크한 제목이다. 무작위가 아니다."""
+        src = self.PANEL.read_text(encoding="utf-8")
+        assert "const rows = this.selectedMainTitles;" in src
+        # 내부 API 를 뒤지면 버전이 바뀔 때 조용히 빈 배열이 된다.
+        # 주석에는 남아 있으므로 실제 접근만 본다.
+        assert "node._x_dataStack" not in src
+
+    def test_explains_selection_to_user(self):
+        src = self.PANEL.read_text(encoding="utf-8")
+        assert "무작위로 고르지 않습니다" in src
+
+    def test_warns_when_no_module(self):
+        src = self.PANEL.read_text(encoding="utf-8")
+        assert "프롬프트 모듈이 없습니다" in src
