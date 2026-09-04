@@ -28,12 +28,26 @@ _ACTION_DISPLAY = {
     "generate": "글/이미지 생성",
     "publish": "발행",
     "republish": "재발행",
-    "collect": "제목 수집",
-    "bulk_collect": "대량 수집",
+    "keyword": "키워드",
+    "title_gen": "제목 생성/수집",
     "data": "데이터 이동",
     "flow_init": "플로우 초기화",
     "queue_register": "워커 등록",
+    # collect·bulk_collect 모듈은 없앴다(alembic 073/074). 남은 옛 로그가
+    # "시스템" 으로 뭉개지지 않도록 이름만 유지한다.
+    "collect": "제목 수집(폐기)",
+    "bulk_collect": "대량 수집(폐기)",
 }
+
+# "작업" 탭에 묶이는 액션. 세 곳에서 쓰므로 한 곳에만 적는다 —
+# 따로 적어 두면 모듈이 늘 때마다 한 군데를 빠뜨린다.
+# 성공해도 "성공" 대신 건수 요약을 보여줄 액션
+_COUNT_ACTIONS = ("keyword", "title_gen", "collect", "bulk_collect")
+
+_WORK_ACTIONS = [
+    "generate", "publish", "republish", "keyword", "title_gen",
+    "collect", "bulk_collect",   # 폐기된 모듈의 옛 로그
+]
 
 
 @router.get("/unified-logs")
@@ -58,9 +72,9 @@ async def get_unified_logs(
         level: "all"|"INFO"|"SUCCESS"|"WARN"|"ERROR".
         search: 메시지 검색어.
         blog_name: 특정 블로그명으로 필터 (빈 값이면 전체).
-        action_type: 단일 액션 필터 "publish"|"republish"|"generate"|"collect"|
-                     "bulk_collect"|"data"|"queue_register"|"queue_publish"|
-                     "queue_republish"|"queue_generate".
+        action_type: 단일 액션 필터 "publish"|"republish"|"generate"|
+                     "keyword"|"title_gen"|"data"|"queue_register"|
+                     "queue_publish"|"queue_republish"|"queue_generate".
                      queue_* 는 queue_register 중 발행/재발행/생성 종류 분리용.
         db: DB 세션.
 
@@ -163,7 +177,7 @@ def _apply_action_type_filter(
     """단일 액션 타입 또는 queue_register 세분화 필터.
 
     action_type 값:
-      - publish/republish/generate/collect: 단일 action 필터
+      - publish/republish/generate/keyword/title_gen: 단일 action 필터
       - queue_publish/queue_republish/queue_generate: queue_register 중 메시지 패턴 분리
     """
     queue_kind_map = {
@@ -182,8 +196,8 @@ def _apply_action_type_filter(
             AutorunLog.message.like(pattern),
         )
     elif action_type in (
-        "publish", "republish", "generate", "collect",
-        "bulk_collect", "data", "queue_register",
+        "publish", "republish", "generate", "keyword",
+        "title_gen", "data", "queue_register",
     ):
         query = query.where(AutorunLog.action == action_type)
         count_query = count_query.where(AutorunLog.action == action_type)
@@ -209,27 +223,17 @@ def _apply_filters(
         count_query = count_query.where(AutorunLog.status == "warning")
 
     # 카테고리 필터 (log_type → AutorunLog.action 매핑)
-    # - action(작업): 모듈 실행 관련 (generate, publish, republish, collect, bulk_collect)
+    # - action(작업): 모듈 실행 관련 (_WORK_ACTIONS)
     # - activity(활동): 시스템 이벤트 (플로우 상태 변경, 블로그 변경 등 작업 외 모든 이벤트)
     # - generation(생성): 생성 전용 (generate만)
     if log_type == "action":
-        query = query.where(
-            AutorunLog.action.in_(
-                ["generate", "publish", "republish", "collect", "bulk_collect"]
-            )
-        )
-        count_query = count_query.where(
-            AutorunLog.action.in_(
-                ["generate", "publish", "republish", "collect", "bulk_collect"]
-            )
-        )
+        query = query.where(AutorunLog.action.in_(_WORK_ACTIONS))
+        count_query = count_query.where(AutorunLog.action.in_(_WORK_ACTIONS))
     elif log_type == "activity":
         # 활동: 시스템 이벤트 + 워커 등록 로그
         from sqlalchemy import or_
         activity_filter = or_(
-            AutorunLog.action.notin_(
-                ["generate", "publish", "republish", "collect", "bulk_collect"]
-            ),
+            AutorunLog.action.notin_(_WORK_ACTIONS),
             AutorunLog.action == "queue_register",
         )
         query = query.where(activity_filter)
@@ -309,11 +313,10 @@ async def _serialize_autorun_log(
     if log.status == "success":
         level = "SUCCESS"
         status_text = "성공"
-        # 수집/대량수집 성공 로그는 "성공" 대신 건수 요약(message)을 노출.
+        # 수집 계열 성공 로그는 "성공" 대신 건수 요약(message)을 노출.
         # 예) "제목 152개, 키워드/URL 20개 수집 (소스 2개)".
-        # 기존에는 message 를 버리고 "제목 수집 - 성공" 만 표시해
-        # 몇 개를 수집했는지 사용자가 알 수 없었다.
-        if log.action in ("collect", "bulk_collect") and log.message:
+        # "성공" 만 띄우면 몇 개를 수집했는지 알 수 없다.
+        if log.action in _COUNT_ACTIONS and log.message:
             status_text = log.message.strip()
     elif log.status == "skipped":
         level = "INFO"
@@ -390,10 +393,13 @@ def _get_action_type(action: str) -> str:
         return "publish"
     if action in ("republish",):
         return "republish"
-    if action in ("collect",):
-        return "collect"
-    if action in ("bulk_collect",):
-        return "bulk_collect"
+    if action in ("keyword",):
+        return "keyword"
+    if action in ("title_gen",):
+        return "title_gen"
+    # 폐기된 모듈의 옛 로그도 원래 배지 그대로 보여준다
+    if action in ("collect", "bulk_collect"):
+        return action
     if action in ("data",):
         return "data"
     if action in ("queue_register",):

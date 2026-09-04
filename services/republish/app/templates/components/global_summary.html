@@ -217,7 +217,7 @@
                 </select>
                 <span x-show="logBlogList.length === 0" class="text-gray-600 text-[10px]">(목록 로드 중)</span>
 
-                <!-- 액션 드롭다운 (발행/재발행/생성/수집/대량수집/데이터/큐 등) -->
+                <!-- 액션 드롭다운 (발행/재발행/생성/키워드/제목/데이터/큐 등) -->
                 <label class="text-gray-500 ml-2">액션:</label>
                 <select x-model="logActionFilter" @change.stop="loadUnifiedLogs()" @click.stop
                         class="bg-gray-800 text-gray-100 px-2 py-1 rounded-md border border-gray-600 focus:outline-none focus:border-gray-400 cursor-pointer"
@@ -226,8 +226,8 @@
                     <option value="publish" class="bg-gray-800 text-gray-100">발행</option>
                     <option value="republish" class="bg-gray-800 text-gray-100">재발행</option>
                     <option value="generate" class="bg-gray-800 text-gray-100">생성</option>
-                    <option value="collect" class="bg-gray-800 text-gray-100">수집</option>
-                    <option value="bulk_collect" class="bg-gray-800 text-gray-100">대량수집</option>
+                    <option value="keyword" class="bg-gray-800 text-gray-100">키워드</option>
+                    <option value="title_gen" class="bg-gray-800 text-gray-100">제목 생성/수집</option>
                     <option value="data" class="bg-gray-800 text-gray-100">데이터</option>
                     <option value="queue_register" class="bg-gray-800 text-gray-100">워커 등록</option>
                     <option value="queue_publish" class="bg-gray-800 text-gray-100">발행 큐</option>

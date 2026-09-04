@@ -5,7 +5,7 @@ function globalSummary() {
         logFilter: localStorage.getItem('dashboard_log_filter') || 'all',
         logSearch: '',
         logBlogFilter: '',         // 블로그 드롭다운 선택값 (빈 문자열=전체)
-        logActionFilter: '',       // 액션 라디오 선택값 (publish/republish/generate/queue_publish 등, 빈 문자열=전체)
+        logActionFilter: '',       // 액션 선택값 (publish/republish/generate/keyword/title_gen/queue_* 등, 빈 문자열=전체)
         logBlogList: [],           // 검색 드롭다운용 블로그 목록
         logPageSize: parseInt(localStorage.getItem('dashboard_log_page_size') || '50', 10),
         unifiedLogs: [],
@@ -816,19 +816,28 @@ function globalSummary() {
                 generate: 'bg-emerald-800/60 text-emerald-300',
                 publish: 'bg-blue-800/60 text-blue-300',
                 republish: 'bg-violet-800/60 text-violet-300',
-                collect: 'bg-cyan-800/60 text-cyan-300',
-                bulk_collect: 'bg-sky-800/60 text-sky-300',
+                keyword: 'bg-cyan-800/60 text-cyan-300',
+                title_gen: 'bg-sky-800/60 text-sky-300',
+                // 폐기된 모듈(collect/bulk_collect)의 옛 로그
+                collect: 'bg-gray-700/60 text-gray-400',
+                bulk_collect: 'bg-gray-700/60 text-gray-400',
                 data: 'bg-amber-800/60 text-amber-300',
                 queue_register: 'bg-indigo-800/60 text-indigo-300',
             };
             return map[actionType] || 'bg-gray-700/60 text-gray-400';
         },
         getActionLabel(actionType) {
-            const map = { generate: '생성', publish: '발행', republish: '재발행', collect: '수집', bulk_collect: '대량수집', data: '데이터', queue_register: '워커 등록' };
+            const map = {
+                generate: '생성', publish: '발행', republish: '재발행',
+                keyword: '키워드', title_gen: '제목', data: '데이터',
+                queue_register: '워커 등록',
+                // 폐기된 모듈의 옛 로그가 '시스템' 으로 뭉개지지 않게
+                collect: '수집(폐기)', bulk_collect: '대량수집(폐기)',
+            };
             return map[actionType] || '시스템';
         },
         getLogRowBorderClass(actionType) {
-            // 작업 로그(generate/publish/republish/collect/data)는 별도 강조 없음.
+            // 작업 로그(generate/publish/republish/keyword/title_gen/data)는 별도 강조 없음.
             // 활동 로그(queue_register/system)는 행 전체 배경 하이라이트로 표시.
             return '';
         },
