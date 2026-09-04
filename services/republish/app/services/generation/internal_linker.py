@@ -151,13 +151,22 @@ class InternalLinker:
         )
 
         # 3. 결론 뒤 링크 삽입
-        # 원래 순수 랜덤이었다. 여기는 유사도가 기준이 아니므로, 무작위성을 유지한
-        # 채 **미색인 글을 앞으로 당긴다**(S7). 구글이 "발견됨-미색인" 으로 둔 글에
-        # 대한 표준 처방이 내부링크다. 서론·본문은 유사도가 1차 기준이라 건드리지 않는다.
+        # 무작위성을 유지한 채 **미색인 글을 앞으로 당긴다**(S7). 구글이
+        # "발견됨-미색인" 으로 둔 글에 대한 표준 처방이 내부링크다.
+        #
+        # 다만 **아무 글이나 붙이지는 않는다.** 홈트 글 끝에 '일본여행 환전'
+        # 이 붙으면 독자에게도 검색엔진에도 손해다. 같은 니치 안에서 고르고,
+        # 니치가 겹치는 글이 부족하면 그만큼만 넣는다.
         remaining = [p for p in all_posts if p.url not in used_urls]
-        random.shuffle(remaining)
-        remaining = await prioritize_by_index(self.db, blog_id, remaining)
-        conclusion_posts = remaining[:conclusion_count]
+        related = self._filter_related(current_title, remaining, sim_service)
+        random.shuffle(related)
+        related = await prioritize_by_index(self.db, blog_id, related)
+        conclusion_posts = related[:conclusion_count]
+        if len(conclusion_posts) < conclusion_count:
+            logger.info(
+                "[INTERNAL_LINK] 결론 링크 %d/%d — 관련 글이 부족해 "
+                "채우지 않음(무관한 링크 방지)",
+                len(conclusion_posts), conclusion_count)
         content = self._insert_conclusion_links(
             content, conclusion_posts, used_urls, conclusion_list_style
         )
@@ -291,6 +300,34 @@ class InternalLinker:
             )
 
         return matched
+
+    def _filter_related(
+        self,
+        current_title: str,
+        posts: List[CrawledPost],
+        sim_service: SimilarityService,
+    ) -> List[CrawledPost]:
+        """현재 글과 **주제가 닿는** 글만 남긴다.
+
+        결론 링크는 유사도 순으로 줄세우지 않는다(미색인 글을 밀어 주는
+        것이 목적이라 무작위성이 필요하다). 대신 공통 키워드가 하나도 없는
+        글은 뺀다 — 개수를 채우려고 무관한 글을 끌어오면 독자에게도
+        검색엔진에도 손해다.
+
+        현재 글에서 키워드를 못 뽑으면 거르지 않는다. 판단 근거가 없는데
+        막으면 결론 링크가 통째로 사라진다.
+        """
+        target_kw = self._extract_keywords(current_title, sim_service)
+        if not target_kw:
+            return list(posts)
+
+        out = []
+        for post in posts:
+            if not post.title:
+                continue
+            if target_kw & self._extract_keywords(post.title, sim_service):
+                out.append(post)
+        return out
 
     def _find_best_match_for_section(
         self,
