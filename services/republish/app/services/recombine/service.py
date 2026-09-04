@@ -63,6 +63,11 @@ class RecombineService:
         self.user_id = user_id
         self.recombiner = recombiner
         self.last_error: Optional[str] = None
+        # 왜 안 만들어졌는지. 0건일 때 화면이 이걸로 설명한다.
+        self.reasons: Dict[str, int] = {}
+
+    def _count(self, reason: str) -> None:
+        self.reasons[reason] = self.reasons.get(reason, 0) + 1
 
     async def run(self, title_ids: List[int], module_id: int,
                   style: Optional[str] = None,
@@ -94,11 +99,15 @@ class RecombineService:
 
         made: List[Dict[str, Any]] = []
         skipped = 0
+        # 왜 안 만들어졌는지 센다. 숫자만 0 으로 두면 화면이 아무것도
+        # 말해 주지 못한다 — 실제로 "0건" 만 보이고 끝난 적이 있다.
+        self.reasons = {}
 
         for row in rows:
             if row.recombined_from_id:
                 # 재조합 결과를 또 재조합하면 원문에서 두 단계 멀어진다
                 skipped += 1
+                self._count("already")
                 continue
             result = await self._one(row, module_id, style, provider, model,
                                      freshness, expand)
@@ -106,9 +115,12 @@ class RecombineService:
                 made.append(result)
 
         await self.db.commit()
-        logger.info("[RECOMBINE] %d건 생성 · %d건 건너뜀", len(made), skipped)
+        error = self.last_error or (
+            _explain(self.reasons, len(rows)) if not made else None)
+        logger.info("[RECOMBINE] %d건 생성 · %d건 건너뜀 | 사유 %s",
+                    len(made), skipped, self.reasons)
         return {"made": len(made), "items": made, "skipped": skipped,
-                "error": self.last_error}
+                "reasons": dict(self.reasons), "error": error}
 
     async def _one(self, row: MainTitle, module_id: int,
                    style: Optional[str], provider: Optional[str],
@@ -119,6 +131,9 @@ class RecombineService:
             decision = freshness_plan(row.title, row.created_at)
             row.freshness_checked_at = func.now()
             if not decision["stale"]:
+                # 최신성 모드는 **낡은 제목만** 손본다. 고른 제목이 낡지
+                # 않았으면 할 일이 없다 — 그 사실을 말해 줘야 한다.
+                self._count("not_stale")
                 return None
             if decision["rule_only"]:
                 # 연도만 바꾸면 되는 경우가 가장 흔하다. AI 비용 0.
@@ -126,6 +141,7 @@ class RecombineService:
 
         if self.recombiner is None:
             self.last_error = "재조합 AI 가 지정되지 않았습니다"
+            self._count("no_ai")
             return None
 
         keywords = await self._keywords(row)
@@ -141,6 +157,7 @@ class RecombineService:
         except Exception as e:  # noqa: BLE001
             self.last_error = str(e)[:200]
             logger.warning("[RECOMBINE] 실패 | %s | %s", row.id, e)
+            self._count("ai_error")
             return None
 
         text = (result.recombined_title or "").strip()
@@ -152,6 +169,7 @@ class RecombineService:
                     f"제목이 바뀌지 않았습니다 — 프롬프트 모듈의 "
                     f"'제목 재조합' 이 켜져 있는지, AI 키가 살아 있는지 "
                     f"확인하세요 (provider={result.ai_provider})")
+            self._count("unchanged")
             return None
 
         # 재조합은 관문 밖이다. 이미 있는 제목과 겹치면 재고만 늘고
@@ -162,6 +180,7 @@ class RecombineService:
                                                provider, model, clash)
             if not retry:
                 logger.info("[RECOMBINE] 유사 제목이라 건너뜀 | %s", text[:30])
+                self._count("duplicate")
                 return None
             text = retry
 
@@ -328,6 +347,26 @@ class RecombineService:
         # 중복 제거하되 순서는 유지 — 정본 키워드가 앞에 와야 한다
         seen = set()
         return [k for k in out if not (k in seen or seen.add(k))]
+
+
+REASON_LABEL = {
+    "not_stale": "낡지 않아 갱신할 것이 없습니다(최신성 갱신 모드)",
+    "already": "이미 재조합된 제목입니다",
+    "duplicate": "기존 제목과 겹쳐 건너뛰었습니다",
+    "no_ai": "재조합 AI 가 없습니다",
+    "ai_error": "AI 호출이 실패했습니다",
+    "unchanged": "제목이 바뀌지 않았습니다",
+}
+
+
+def _explain(reasons: Dict[str, int], total: int) -> Optional[str]:
+    """0건일 때 사람이 읽을 사유. 가장 많은 것을 앞에 둔다."""
+    if not reasons:
+        return None
+    ordered = sorted(reasons.items(), key=lambda x: -x[1])
+    parts = [f"{REASON_LABEL.get(code, code)} {count}건"
+             for code, count in ordered]
+    return f"{total}건 중 — " + " · ".join(parts)
 
 
 async def stale_titles(db: AsyncSession, limit: int = 100) -> List[dict]:

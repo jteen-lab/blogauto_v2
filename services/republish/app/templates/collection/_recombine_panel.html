@@ -27,7 +27,10 @@
         <div class="flex items-center justify-between">
           <label class="flex items-center gap-2 text-sm text-gray-800">
             <input type="checkbox" x-model="freshness" class="rounded">
-            최신성 갱신 <span class="text-xs text-gray-500">낡은 제목을 지금 시점에 맞게</span>
+            최신성 갱신
+            <span class="text-xs text-gray-500">
+              <b>낡은 제목만</b> 손봅니다 — 연도가 지났거나 '올해·최신' 이 든 제목
+            </span>
           </label>
           <button @click="loadStale()" class="text-xs text-accent hover:underline">후보 확인</button>
         </div>
@@ -35,6 +38,9 @@
           <input type="checkbox" x-model="expand" class="rounded">
           키워드 축 확장 <span class="text-xs text-gray-500">원본 키워드의 다른 질문을 힌트로</span>
         </label>
+        <p x-show="freshness" x-cloak class="mt-1 text-xs text-amber-700">
+          이 모드에서는 <b>낡지 않은 제목은 건너뜁니다.</b> 일반 재조합을 하려면 끄세요.
+        </p>
         <template x-if="stale">
           <p class="mt-1 text-xs text-gray-500">
             낡은 제목 <b x-text="stale.total"></b>건 ·
@@ -108,6 +114,9 @@
           </div>
           <p x-show="result.error" class="mt-1 text-xs text-amber-700"
              x-text="result.error"></p>
+          <p x-show="!result.made && !result.error" class="mt-1 text-xs text-gray-500">
+            만들어진 제목이 없습니다. 최신성 갱신을 켰다면 끄고 다시 시도해 보세요.
+          </p>
           <ul class="mt-1 list-disc list-inside text-xs text-gray-600 space-y-0.5">
             <template x-for="(item, i) in (result.items || []).slice(0, 10)" :key="i">
               <li x-text="item.title"></li>

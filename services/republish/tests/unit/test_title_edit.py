@@ -333,3 +333,46 @@ class TestKeywordInventoryRemoved:
         js = (BASE / "app/static/js/modules/form.js").read_text(
             encoding="utf-8")
         assert "min_inventory" not in js
+
+
+class TestRecombineExplainsZero:
+    """0건인데 사유가 안 보이던 자리 — 실제로 두 번 겪었다."""
+
+    SERVICE = BASE / "app/services/recombine/service.py"
+    PANEL = BASE / "app/templates/collection/_recombine_panel.html"
+
+    def test_reasons_counted(self):
+        src = self.SERVICE.read_text(encoding="utf-8")
+        assert "self.reasons" in src and "_count(" in src
+
+    def test_not_stale_is_counted(self):
+        """최신성 모드는 낡은 제목만 손본다. 그 사실을 말해야 한다."""
+        src = self.SERVICE.read_text(encoding="utf-8")
+        block = src[src.index("if freshness:"):src.index("if self.recombiner is None")]
+        assert '_count("not_stale")' in block
+
+    def test_every_none_path_counts(self):
+        """사유 없이 None 을 돌려주면 화면이 아무것도 못 말한다."""
+        src = self.SERVICE.read_text(encoding="utf-8")
+        for reason in ("not_stale", "already", "duplicate", "no_ai",
+                       "ai_error", "unchanged"):
+            assert f'_count("{reason}")' in src, reason
+
+    def test_explain_reads_naturally(self):
+        from app.services.recombine.service import _explain
+
+        text = _explain({"not_stale": 5}, 5)
+        assert "5건 중" in text and "낡지 않아" in text
+        assert _explain({}, 0) is None
+
+    def test_error_filled_when_nothing_made(self):
+        src = self.SERVICE.read_text(encoding="utf-8")
+        assert "_explain(self.reasons, len(rows)) if not made else None" in src
+
+    def test_panel_warns_about_freshness_mode(self):
+        src = self.PANEL.read_text(encoding="utf-8")
+        assert "낡지 않은 제목은 건너뜁니다" in src
+
+    def test_panel_shows_fallback_message(self):
+        src = self.PANEL.read_text(encoding="utf-8")
+        assert '!result.made && !result.error' in src
