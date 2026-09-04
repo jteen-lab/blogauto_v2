@@ -28,6 +28,11 @@ function createPromptModuleState() {
             stylePrompts: {}
         },
 
+        // 스타일 템플릿(서버에서 받는다)
+        styleTemplates: [],
+        styleTemplate: '',
+        styleTemplateHint: '',
+
         // 서버 기본값(placeholder 로 보여 준다). 분위기가 아니라 형태다 —
         // "따뜻하게" 로는 AI 가 스타일을 구분하지 못한다.
         styleDefaults: {
@@ -392,6 +397,59 @@ const promptModuleMethods = {
         if (idx !== -1) this.promptModule.titleRecombine.selectedStyles.splice(idx, 1);
         else this.promptModule.titleRecombine.selectedStyles.push(styleValue);
     },
+    /** 템플릿 목록을 서버에서 받는다. 정의를 한 곳에서 관리한다. */
+    async loadStyleTemplates() {
+        if (this.promptModule.styleTemplates.length) return;
+        try {
+            const r = await fetch('/api/v1/recombine-templates',
+                                  { credentials: 'include' });
+            if (!r.ok) return;
+            const d = await r.json();
+            this.promptModule.styleTemplates = d.templates || [];
+        } catch (e) { /* 목록이 없어도 직접 입력은 된다 */ }
+    },
+
+    /** 고른 템플릿으로 다섯 칸을 채운다. 채운 뒤 개별 수정할 수 있다. */
+    applyStyleTemplate() {
+        const code = this.promptModule.styleTemplate;
+        if (!code) return;
+        const found = (this.promptModule.styleTemplates || [])
+            .find(t => t.code === code);
+        if (!found) return;
+        this.promptModule.titleRecombine.stylePrompts = { ...found.prompts };
+        this.promptModule.styleTemplateHint = `${found.label} 적용됨`;
+    },
+
+    /** 모듈이 고른 블로그의 니치로 템플릿을 고른다.
+     *
+     *  금융 블로그에 맛집용 지시가 들어가면 제목이 어긋난다. 맞는 것이
+     *  없으면 고르지 않는다 — 짐작하면 엉뚱한 지시가 들어간다.
+     */
+    async recommendStyleTemplate() {
+        const blogs = this.promptModule.selectedBlogs || [];
+        if (!blogs.length) {
+            this.promptModule.styleTemplateHint = '블로그를 먼저 고르세요';
+            return;
+        }
+        await this.loadStyleTemplates();
+        try {
+            const r = await fetch(
+                `/api/v1/recombine-templates/recommend?blog_ids=${blogs.join(',')}`,
+                { credentials: 'include' });
+            if (!r.ok) return;
+            const d = await r.json();
+            if (!d.code) {
+                this.promptModule.styleTemplateHint = d.reason || '';
+                return;
+            }
+            this.promptModule.styleTemplate = d.code;
+            this.promptModule.titleRecombine.stylePrompts = { ...d.prompts };
+            this.promptModule.styleTemplateHint = d.reason || '';
+        } catch (e) {
+            this.promptModule.styleTemplateHint = '추천을 받지 못했습니다';
+        }
+    },
+
     // 프롬프트 모듈 유효성 검증
     validatePromptModule() {
         const linkMode = this.promptModule.linking?.linkMode || 'category';

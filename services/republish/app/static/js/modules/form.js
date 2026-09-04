@@ -355,6 +355,8 @@ function moduleFormApp(module = null, moduleType = null) {
             if (typeCode === 'prompt') {
                 console.log('프롬프트 모듈 감지 - 카테고리 로드 시작');
                 this.loadCategories();
+                // 제목 스타일 템플릿 목록(드롭다운)
+                if (this.loadStyleTemplates) this.loadStyleTemplates();
                 // 애드센스 승인 전용 프리셋 목록(빌더 목록에는 없다)
                 this.loadApprovalPresets();
                 // used-blog-categories 는 아래 경로에서 자동 호출되므로

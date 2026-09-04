@@ -280,7 +280,23 @@ function getPromptTitleSection() {
                                         </div>
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-2">스타일별 지시 (선택)</label>
+                                        <div class="flex flex-wrap items-center gap-2 mb-2">
+                                            <label class="text-sm font-medium text-gray-700">스타일별 지시 (선택)</label>
+                                            <select x-model="promptModule.styleTemplate"
+                                                    @change="applyStyleTemplate()"
+                                                    class="px-2 py-1 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500">
+                                                <option value="">템플릿 선택…</option>
+                                                <template x-for="t in promptModule.styleTemplates" :key="t.code">
+                                                    <option :value="t.code" x-text="t.label"></option>
+                                                </template>
+                                            </select>
+                                            <button type="button" @click="recommendStyleTemplate()"
+                                                    class="px-2 py-1 text-xs text-blue-600 border border-blue-200 rounded hover:bg-blue-50">
+                                                니치로 추천
+                                            </button>
+                                            <span x-show="promptModule.styleTemplateHint" class="text-xs text-gray-500"
+                                                  x-text="promptModule.styleTemplateHint"></span>
+                                        </div>
                                         <div class="space-y-1.5">
                                             <template x-for="style in promptModule.titleStyles" :key="style.value">
                                                 <div x-show="promptModule.titleRecombine.selectedStyles.includes(style.value)"

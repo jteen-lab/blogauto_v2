@@ -138,3 +138,114 @@ class TestFormWiring:
         for code in ("emotional", "practical", "question", "viral", "minimal"):
             head = STYLE_PROMPTS[code].split(".")[0][:12]
             assert head in src, code
+
+
+class TestStyleTemplates:
+    """블로그 성격마다 먹히는 제목 형태가 다르다."""
+
+    def test_four_templates(self):
+        from app.services.generation.style_templates import TEMPLATES
+
+        assert len(TEMPLATES) == 4
+        codes = {t["code"] for t in TEMPLATES}
+        assert codes == {"trust", "review", "howto", "prep"}
+
+    def test_every_template_covers_all_styles(self):
+        from app.services.generation.style_templates import TEMPLATES
+        from app.services.generation.title_recombiner import STYLE_PROMPTS
+
+        for template in TEMPLATES:
+            assert set(template["prompts"]) == set(STYLE_PROMPTS), \
+                template["code"]
+
+    def test_styles_touch_different_parts(self):
+        """같은 자리를 건드리면 결과가 비슷해진다.
+
+        minimal 은 문장 끝을, question 은 묻는 형태를 정한다. 다섯 지시가
+        모두 '느낌' 만 말하면 같은 자리를 건드려 비슷한 제목이 나온다.
+        """
+        from app.services.generation.style_templates import TEMPLATES
+
+        for template in TEMPLATES:
+            prompts = template["prompts"]
+            code = template["code"]
+            assert "끝낼 것" in prompts["minimal"], code
+            assert any(word in prompts["question"]
+                       for word in ("시작", "묻는")), code
+            # 다섯 지시가 서로 달라야 한다
+            assert len(set(prompts.values())) == 5, code
+
+    def test_trust_template_avoids_clickbait(self):
+        """금융·건강에서 단정형 낚시는 애드센스 심사에도 불리하다."""
+        from app.services.generation.style_templates import BY_CODE
+
+        assert "단정하지 말 것" in BY_CODE["trust"]["prompts"]["viral"]
+
+    def test_recommend_matches_real_blogs(self):
+        """운영 블로그의 실제 니치로 확인한다."""
+        from app.services.generation.style_templates import recommend
+
+        assert recommend(["금융/대출"]) == "trust"
+        assert recommend(["재테크/돈관리"]) == "trust"
+        assert recommend(["여행/관광", "음식/레시피"]) == "review"
+        assert recommend(["컴퓨터/IT", "AI/인공지능"]) == "howto"
+        assert recommend(["취업/자격증"]) == "prep"
+
+    def test_recommend_uses_majority(self):
+        """여러 니치를 쓰는 블로그가 많다."""
+        from app.services.generation.style_templates import recommend
+
+        # 여행 2 · 금융 1 → 체험형
+        assert recommend(["여행/관광", "음식/레시피", "금융/대출"]) == "review"
+
+    def test_no_match_returns_none(self):
+        """짐작해서 고르면 엉뚱한 지시가 들어간다."""
+        from app.services.generation.style_templates import recommend
+
+        assert recommend(["알 수 없는 주제"]) is None
+        assert recommend([]) is None
+        assert recommend([""]) is None
+
+    def test_router_registered(self):
+        from app.main import app
+
+        paths = {r.path for r in app.routes}
+        assert "/api/v1/recombine-templates" in paths
+        assert "/api/v1/recombine-templates/recommend" in paths
+
+    def test_id_parsing_is_defensive(self):
+        from app.routers.style_templates import _parse_ids
+
+        assert _parse_ids("1, 2,x,,3") == [1, 2, 3]
+        assert _parse_ids(None) == []
+
+
+class TestTemplateUi:
+    FORM = BASE / "app/static/js/modules/prompt-form.js"
+    TPL = BASE / "app/static/js/modules/prompt-form-template.js"
+
+    def test_dropdown_and_recommend_button(self):
+        tpl = self.TPL.read_text(encoding="utf-8")
+        assert 'x-model="promptModule.styleTemplate"' in tpl
+        assert "applyStyleTemplate()" in tpl
+        assert "recommendStyleTemplate()" in tpl
+
+    def test_apply_fills_all_fields(self):
+        src = self.FORM.read_text(encoding="utf-8")
+        assert "stylePrompts = { ...found.prompts }" in src
+
+    def test_recommend_needs_blogs(self):
+        src = self.FORM.read_text(encoding="utf-8")
+        assert "블로그를 먼저 고르세요" in src
+
+    def test_recommend_does_not_guess(self):
+        """맞는 템플릿이 없으면 채우지 않는다."""
+        src = self.FORM.read_text(encoding="utf-8")
+        block = src[src.index("async recommendStyleTemplate()"):
+                    src.index("// 프롬프트 모듈 유효성 검증")]
+        assert "if (!d.code) {" in block
+
+    def test_loaded_on_prompt_module(self):
+        js = (BASE / "app/static/js/modules/form.js").read_text(
+            encoding="utf-8")
+        assert "this.loadStyleTemplates()" in js
