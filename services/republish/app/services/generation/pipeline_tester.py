@@ -117,8 +117,20 @@ class PipelineTester:
         blog = await self.db.get(Blog, blog_id)
         ai_config = blog.ai_config or {} if blog else {}
         title_ai = ai_config.get("title_ai", {})
+        writing_ai = ai_config.get("writing_ai", {})
         provider = title_ai.get("provider")
         model = title_ai.get("model")
+
+        # 블로그에 제목 AI 가 없으면 글쓰기 AI → 등록된 활성 키 순으로
+        # 찾는다. 제공자가 없으면 재조합기가 예외 대신 **원본을 그대로**
+        # 돌려줘 테스트가 조용히 무효가 된다.
+        if not provider:
+            provider = writing_ai.get("provider")
+            model = model or writing_ai.get("model")
+        if not provider:
+            from .title_lifecycle import resolve_provider
+
+            provider = await resolve_provider(self.db, self.user_id, None)
 
         tr_settings = settings.get("title_recombine", {})
 
@@ -136,6 +148,10 @@ class PipelineTester:
         # provider_source 판별
         if title_ai.get("provider"):
             prov_src = "blog_title_ai"
+        elif writing_ai.get("provider") and provider == writing_ai.get("provider"):
+            prov_src = "blog_writing_ai"
+        elif provider:
+            prov_src = "active_key"
         else:
             prov_src = "none"
 

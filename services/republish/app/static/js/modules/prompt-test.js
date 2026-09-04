@@ -55,7 +55,16 @@ const promptTestMethods = {
         return this.module?.id;
     },
     getTestBlogId() {
-        return parseInt(this.promptTest.testBlogId) || null;
+        const picked = parseInt(this.promptTest.testBlogId) || null;
+        if (picked) return picked;
+        // 모듈에 이미 블로그가 설정돼 있으면 그것을 쓴다. 테스트마다
+        // 같은 값을 다시 고르게 할 이유가 없다.
+        const options = this.getSelectedBlogOptions();
+        if (options.length) {
+            this.promptTest.testBlogId = options[0].id;
+            return options[0].id;
+        }
+        return null;
     },
     async previewRenewal() {
         // 선택 블로그의 가장 오래된 글 1개를 이 모듈 설정(저장본)으로 리뉴얼
@@ -151,7 +160,7 @@ const promptTestMethods = {
         console.log('[PromptTest] runStepSelectTitle 호출됨');
         const moduleId = this.getTestModuleId();
         const blogId = this.getTestBlogId();
-        if (!moduleId || !blogId) return this._setTestError('selectTitle', '모듈 ID와 블로그를 선택하세요');
+        if (!moduleId || !blogId) return this._setTestError('selectTitle', '모듈에 블로그가 연결돼 있지 않습니다 — 모듈 설정에서 블로그를 고르세요');
         this._startTest('selectTitle');
         try {
             const data = await this._testFetch('/api/v1/generation/test/select-title', {
@@ -179,7 +188,7 @@ const promptTestMethods = {
         const moduleId = this.getTestModuleId();
         if (!moduleId) return this._setTestError('recombine', '모듈 ID가 필요합니다');
         const blogId = this.getTestBlogId();
-        if (!blogId) return this._setTestError('recombine', '블로그를 선택하세요');
+        if (!blogId) return this._setTestError('recombine', '모듈에 블로그가 연결돼 있지 않습니다 — 모듈 설정에서 블로그를 고르세요');
         const titleText = this.promptTest.titleText?.trim();
         if (!titleText) return this._setTestError('recombine', '제목을 입력하세요');
         this._startTest('recombine');
@@ -217,7 +226,7 @@ const promptTestMethods = {
         const blogId = this.getTestBlogId();
         const query = this.promptTest.searchQuery?.trim();
         if (!moduleId) return this._setTestError('references', '모듈 ID가 필요합니다');
-        if (!blogId) return this._setTestError('references', '블로그를 선택하세요');
+        if (!blogId) return this._setTestError('references', '모듈에 블로그가 연결돼 있지 않습니다 — 모듈 설정에서 블로그를 고르세요');
         if (!query) return this._setTestError('references', '검색어를 입력하세요');
         this._startTest('references');
         try {
@@ -250,7 +259,7 @@ const promptTestMethods = {
         const moduleId = this.getTestModuleId();
         const blogId = this.getTestBlogId();
         const title = this.promptTest.contentTitle?.trim();
-        if (!moduleId || !blogId) return this._setTestError('content', '모듈 ID와 블로그를 선택하세요');
+        if (!moduleId || !blogId) return this._setTestError('content', '모듈에 블로그가 연결돼 있지 않습니다 — 모듈 설정에서 블로그를 고르세요');
         if (!title) return this._setTestError('content', '제목을 입력하세요');
         this._startTest('content');
         try {
@@ -274,7 +283,7 @@ const promptTestMethods = {
         const blogId = this.getTestBlogId();
         const title = this.promptTest.contentTitle?.trim();
         const content = this.promptTest.internalLinksContent?.trim();
-        if (!moduleId || !blogId) return this._setTestError('internalLinks', '모듈 ID와 블로그를 선택하세요');
+        if (!moduleId || !blogId) return this._setTestError('internalLinks', '모듈에 블로그가 연결돼 있지 않습니다 — 모듈 설정에서 블로그를 고르세요');
         if (!content) return this._setTestError('internalLinks', '글 생성 테스트를 먼저 실행하세요');
         this._startTest('internalLinks');
         try {
@@ -307,7 +316,7 @@ const promptTestMethods = {
         const moduleId = this.getTestModuleId();
         const blogId = this.getTestBlogId();
         const title = this.promptTest.imageTitle?.trim();
-        if (!moduleId || !blogId) return this._setTestError('image', '모듈 ID와 블로그를 선택하세요');
+        if (!moduleId || !blogId) return this._setTestError('image', '모듈에 블로그가 연결돼 있지 않습니다 — 모듈 설정에서 블로그를 고르세요');
         if (!title) return this._setTestError('image', '제목을 입력하세요');
 
         // 블로그 최신 image_mode 캐시 갱신
@@ -404,7 +413,7 @@ const promptTestMethods = {
         console.log('[PromptTest] runStepSubstitution 호출됨');
         const blogId = this.getTestBlogId();
         const content = this.promptTest.internalLinksContent?.trim();
-        if (!blogId) return this._setTestError('substitution', '블로그를 선택하세요');
+        if (!blogId) return this._setTestError('substitution', '모듈에 블로그가 연결돼 있지 않습니다 — 모듈 설정에서 블로그를 고르세요');
         if (!content) return this._setTestError('substitution', '글 생성 테스트를 먼저 실행하세요');
         this._startTest('substitution');
         try {
@@ -423,7 +432,7 @@ const promptTestMethods = {
         const moduleId = this.getTestModuleId();
         const blogId = this.getTestBlogId();
         if (!moduleId || !blogId) {
-            alert('모듈 ID와 블로그를 선택하세요');
+            alert('모듈에 블로그가 연결돼 있지 않습니다 — 모듈 설정에서 블로그를 고르세요');
             return;
         }
         this.clearAllTestResults();

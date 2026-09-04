@@ -376,3 +376,39 @@ class TestRecombineExplainsZero:
     def test_panel_shows_fallback_message(self):
         src = self.PANEL.read_text(encoding="utf-8")
         assert '!result.made && !result.error' in src
+
+
+class TestPromptTestUsesModuleSettings:
+    """모듈 테스트는 모듈에 설정된 값으로 돌아야 한다.
+
+    수동 화면처럼 매번 고르게 하면, 이미 설정된 값을 다시 입력하는 셈이고
+    안 골랐을 때 원인을 알기 어렵다.
+    """
+
+    JS = BASE / "app/static/js/modules/prompt-test.js"
+    TESTER = BASE / "app/services/generation/pipeline_tester.py"
+
+    def test_blog_defaults_to_module_setting(self):
+        src = self.JS.read_text(encoding="utf-8")
+        block = src[src.index("getTestBlogId() {"):
+                    src.index("async previewRenewal()")]
+        assert "this.getSelectedBlogOptions()" in block
+        assert "this.promptTest.testBlogId = options[0].id" in block
+
+    def test_error_points_at_module_settings(self):
+        """'블로그를 선택하세요' 는 어디서 고르라는 건지 알 수 없다."""
+        src = self.JS.read_text(encoding="utf-8")
+        assert "모듈에 블로그가 연결돼 있지 않습니다" in src
+
+    def test_tester_falls_back_for_ai(self):
+        """블로그에 제목 AI 가 없으면 재조합기가 원본을 그대로 돌려준다."""
+        src = self.TESTER.read_text(encoding="utf-8")
+        assert "writing_ai.get(\"provider\")" in src
+        assert "resolve_provider(self.db, self.user_id, None)" in src
+
+    def test_provider_source_is_reported(self):
+        """어디서 온 AI 인지 알아야 설정이 맞는지 확인할 수 있다."""
+        src = self.TESTER.read_text(encoding="utf-8")
+        for source in ("blog_title_ai", "blog_writing_ai", "active_key",
+                       "none"):
+            assert f'prov_src = "{source}"' in src, source
