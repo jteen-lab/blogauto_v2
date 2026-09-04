@@ -280,9 +280,31 @@ function getPromptTitleSection() {
                                         </div>
                                     </div>
                                     <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">스타일별 지시 (선택)</label>
+                                        <div class="space-y-1.5">
+                                            <template x-for="style in promptModule.titleStyles" :key="style.value">
+                                                <div x-show="promptModule.titleRecombine.selectedStyles.includes(style.value)"
+                                                     class="flex items-center gap-2">
+                                                    <span class="w-20 shrink-0 text-xs text-gray-600" x-text="style.icon + ' ' + style.label"></span>
+                                                    <input type="text"
+                                                           x-model="promptModule.titleRecombine.stylePrompts[style.value]"
+                                                           :placeholder="promptModule.styleDefaults[style.value] || ''"
+                                                           class="flex-1 px-2 py-1 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500">
+                                                </div>
+                                            </template>
+                                        </div>
+                                        <p class="text-xs text-gray-400 mt-1">
+                                            <b>분위기가 아니라 형태</b>를 적으세요 — "따뜻하게" 대신 "당신으로 부를 것".
+                                            비우면 회색 글씨의 기본값이 쓰입니다. 이 지시는 <b>그 스타일에만</b> 들어갑니다.
+                                        </p>
+                                    </div>
+                                    <div>
                                         <label class="block text-sm font-medium text-gray-700 mb-2">추가 지시사항 (선택)</label>
                                         <textarea x-model="promptModule.titleRecombine.customPrompt" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm" placeholder="예: 한국 시장에 맞는 표현 사용, 이모지 포함하지 않기"></textarea>
-                                        <p class="text-xs text-gray-400 mt-1">기본 재조합 프롬프트에 추가됩니다. 예: "반말체로 작성", "15자 이내로 짧게"</p>
+                                        <p class="text-xs text-gray-400 mt-1">
+                                            <b>모든 스타일에 공통</b>으로 붙습니다. 스타일별 지시는 위 칸에 적으세요 —
+                                            여기에 스타일별 내용을 적으면 모든 스타일이 그것을 지키려 해 결과가 같아집니다.
+                                        </p>
                                     </div>
                                 </div>
                             </div>`;

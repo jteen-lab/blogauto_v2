@@ -23,7 +23,19 @@ function createPromptModuleState() {
             enabled: true,
             selectedStyles: ['emotional', 'practical'],
             countPerStyle: 3,
-            customPrompt: ''
+            customPrompt: '',
+            // 스타일별 지시. 비우면 기본값을 쓴다.
+            stylePrompts: {}
+        },
+
+        // 서버 기본값(placeholder 로 보여 준다). 분위기가 아니라 형태다 —
+        // "따뜻하게" 로는 AI 가 스타일을 구분하지 못한다.
+        styleDefaults: {
+            emotional: "독자를 '당신'으로 부르고 감정 어휘를 하나 넣을 것. 예: 지금도 손실 중인 당신에게",
+            practical: '숫자나 절차를 넣을 것. 예: 3단계로 끝내는 / 5가지 조건',
+            question: '의문사로 시작할 것. 예: 왜 / 언제 / 얼마나',
+            viral: '역설이나 반전을 넣을 것. 예: 아무도 말하지 않는 / 오히려 손해인',
+            minimal: '명사로 끝낼 것. 수식어 금지. 예: 무한매수법 정리'
         },
 
         // 제목 스타일 옵션
@@ -162,7 +174,8 @@ const promptModuleMethods = {
                 enabled: settings.title_recombine.enabled ?? true,
                 selectedStyles: settings.title_recombine.styles || ['emotional', 'practical'],
                 countPerStyle: settings.title_recombine.count_per_style || 3,
-                customPrompt: settings.title_recombine.custom_prompt || ''
+                customPrompt: settings.title_recombine.custom_prompt || '',
+                stylePrompts: settings.title_recombine.style_prompts || {}
             };
         }
 
@@ -489,7 +502,12 @@ const promptModuleMethods = {
                 enabled: this.promptModule.titleRecombine.enabled,
                 styles: this.promptModule.titleRecombine.selectedStyles,
                 count_per_style: this.promptModule.titleRecombine.countPerStyle,
-                custom_prompt: this.promptModule.titleRecombine.customPrompt
+                custom_prompt: this.promptModule.titleRecombine.customPrompt,
+                // 빈 값은 보내지 않는다 — 저장해 두면 기본값으로 못 돌아간다
+                style_prompts: Object.fromEntries(
+                    Object.entries(this.promptModule.titleRecombine.stylePrompts || {})
+                        .filter(([, v]) => v && String(v).trim())
+                        .map(([k, v]) => [k, String(v).trim()]))
             },
             // 글 생성 설정
             content_generation: {

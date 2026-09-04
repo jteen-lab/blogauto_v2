@@ -29,13 +29,21 @@ DEFAULT_TITLE_PROMPT = (
     "- 제목만 출력 (부가 설명 없이)"
 )
 
-# 스타일별 AI 프롬프트 설명
+# 스타일별 지시. **분위기가 아니라 형태**를 말한다.
+#
+# "감성적이고 따뜻한 느낌" 같은 설명으로는 AI 가 스타일을 구분하지 못한다.
+# 실제로 다섯 스타일이 거의 같은 제목으로 수렴했다. 무엇을 넣고 무엇을
+# 빼야 하는지 문장 구조로 지시해야 갈린다.
+#
+# 모듈 설정(`title_recombine.style_prompts`)으로 덮어쓸 수 있다.
 STYLE_PROMPTS: dict[str, str] = {
-    "emotional": "감성적이고 따뜻한 느낌으로, 독자의 감정에 호소하는 스타일",
-    "practical": "실용적이고 구체적인 정보를 강조하는 스타일",
-    "question": "독자의 궁금증을 자극하는 질문형 스타일",
-    "viral": "클릭을 유도하는 임팩트 있는 바이럴 스타일",
-    "minimal": "간결하고 핵심만 담은 심플한 스타일",
+    "emotional": ("독자를 '당신'으로 부르고 감정 어휘를 하나 넣을 것. "
+                  "예: 지금도 손실 중인 당신에게"),
+    "practical": "숫자나 절차를 넣을 것. 예: 3단계로 끝내는 / 5가지 조건",
+    "question": "의문사로 시작할 것. 예: 왜 / 언제 / 얼마나",
+    "viral": ("역설이나 반전을 넣을 것. "
+              "예: 아무도 말하지 않는 / 오히려 손해인"),
+    "minimal": "명사로 끝낼 것. 수식어 금지. 예: 무한매수법 정리",
 }
 
 # 스타일 한국어 라벨
@@ -46,6 +54,44 @@ STYLE_LABELS: dict[str, str] = {
     "viral": "바이럴",
     "minimal": "심플",
 }
+
+
+def build_base_prompt(original_title: str,
+                      extra_text: Optional[str] = None,
+                      keywords: Optional[list] = None) -> str:
+    """스타일 지시를 뺀 공통 프롬프트.
+
+    단일 호출과 배치 호출이 **같은 본문**을 쓴다. 따로 만들면 한쪽만
+    고쳐져 결과가 갈린다.
+    """
+    prompt = DEFAULT_TITLE_PROMPT.replace("{title}", original_title)
+
+    # 핵심어를 명시한다. 이게 없으면 재조합이 검색되는 말을 흘린다.
+    picked = [k for k in (keywords or []) if k and str(k).strip()][:5]
+    if picked:
+        prompt += ("\n\n반드시 유지할 핵심어: "
+                   + ", ".join(str(k) for k in picked)
+                   + "\n이 말들이 제목에서 빠지면 검색에 잡히지 않습니다.")
+
+    if extra_text and extra_text.strip():
+        extra = extra_text.strip().replace("{title}", original_title)
+        prompt += f"\n\n추가 지시사항:\n{extra}"
+    return prompt
+
+
+def style_instruction(style: Optional[str],
+                      overrides: Optional[dict] = None) -> Optional[str]:
+    """이 스타일의 지시문. 모듈 설정이 있으면 그것을 쓴다.
+
+    비어 있거나 공백뿐인 값은 덮어쓰기로 보지 않는다 — 화면에서 지우면
+    기본값으로 돌아가야 한다.
+    """
+    if not style:
+        return None
+    custom = (overrides or {}).get(style)
+    if custom and str(custom).strip():
+        return str(custom).strip()
+    return STYLE_PROMPTS.get(style)
 
 
 @dataclass
@@ -131,11 +177,14 @@ class TitleRecombiner:
         title_enabled = False
         title_prompt_text = None
 
+        style_overrides: dict = {}
         if "title_recombine" in settings:
             # 새 형식 (프롬프트 모듈: settings.title_recombine)
             tr = settings["title_recombine"]
             title_enabled = tr.get("enabled", False)
             title_prompt_text = tr.get("custom_prompt")
+            # 스타일 지시를 화면에서 고칠 수 있다. 비운 것은 기본값을 쓴다.
+            style_overrides = tr.get("style_prompts") or {}
         else:
             # 구 형식 (생성 모듈: settings.enable_title_prompt)
             title_enabled = settings.get("enable_title_prompt", False)
@@ -152,29 +201,17 @@ class TitleRecombiner:
             )
 
         # 2. 프롬프트 구성 (기본 프롬프트 + 추가 지시사항)
-        full_prompt = DEFAULT_TITLE_PROMPT.replace("{title}", original_title)
+        full_prompt = build_base_prompt(
+            original_title, title_prompt_text, keywords)
 
-        # 핵심어를 명시한다. 이게 없으면 재조합이 검색되는 말을 흘린다.
-        picked = [k for k in (keywords or []) if k and str(k).strip()][:5]
-        if picked:
+        # 스타일 지시. **이 스타일 것만** 넣는다 — 다섯 개를 다 넣으면
+        # AI 가 전부 지키려 해서 결과가 같아진다(실제로 그랬다).
+        instruction = style_instruction(style, style_overrides)
+        if instruction:
             full_prompt += (
-                "\n\n반드시 유지할 핵심어: " + ", ".join(str(k) for k in picked)
-                + "\n이 말들이 제목에서 빠지면 검색에 잡히지 않습니다.")
-
-        # 추가 지시사항이 있으면 기본 프롬프트 뒤에 추가
-        if title_prompt_text and title_prompt_text.strip():
-            extra = title_prompt_text.strip().replace("{title}", original_title)
-            full_prompt += f"\n\n추가 지시사항:\n{extra}"
-
-        # 스타일이 지정된 경우 프롬프트에 스타일 지시 추가
-        if style and style in STYLE_PROMPTS:
-            style_instruction = (
-                f"\n\n스타일: {STYLE_PROMPTS[style]}"
-            )
-            full_prompt += style_instruction
-            logger.debug(
-                f"[RECOMBINE] 스타일 적용 | style={style}"
-            )
+                f"\n\n[스타일: {STYLE_LABELS.get(style, style)}] {instruction}"
+                "\n위 규칙과 충돌하면 스타일을 우선하세요.")
+            logger.debug(f"[RECOMBINE] 스타일 적용 | style={style}")
 
         # 3. AI 호출
         logger.info(
@@ -298,6 +335,14 @@ class TitleRecombiner:
             f"[RECOMBINE_STYLES] {len(styles)}개 스타일 실행 | "
             f"styles={styles}"
         )
+        # 한 번에 만들어 본다. 스타일마다 따로 부르면 서로를 몰라서
+        # 비슷한 답이 나온다(실제로 다섯이 거의 같았다).
+        batched = await self._batch_styles(module, styles, original_title,
+                                           provider, model)
+        if batched:
+            return batched
+
+        logger.info("[RECOMBINE_STYLES] 배치 실패 → 스타일별 개별 호출")
         results: list[RecombineStyleResult] = []
         for style in styles:
             result = await self.recombine(
@@ -319,6 +364,56 @@ class TitleRecombiner:
             ))
 
         return results
+
+    async def _batch_styles(self, module, styles: list, original_title: str,
+                            provider: Optional[str], model: Optional[str],
+                            ) -> Optional[list]:
+        """스타일 전체를 한 번에 만든다. 실패하면 None(개별 호출로)."""
+        from .title_style_batch import (
+            MAX_STYLES, build_prompt, is_complete, parse,
+        )
+
+        picked = [s for s in styles if s][:MAX_STYLES]
+        if not picked:
+            return None
+
+        settings = module.settings or {}
+        tr = settings.get("title_recombine", {})
+        overrides = tr.get("style_prompts") or {}
+
+        base = build_base_prompt(original_title, tr.get("custom_prompt"))
+        prompt = build_prompt(
+            base, picked, STYLE_LABELS,
+            {code: style_instruction(code, overrides) for code in picked})
+
+        try:
+            result = await self.ai_service.generate(
+                prompt=prompt, provider=provider, model=model,
+                # 스타일 수만큼 받아야 하니 단일 호출보다 넉넉히
+                max_tokens=200 + 120 * len(picked),
+                temperature=0.8)
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"[RECOMBINE_STYLES] 배치 호출 실패: {e}")
+            return None
+        if not result:
+            return None
+
+        parsed = parse(result.get("content") or "", picked)
+        if not is_complete(parsed, picked):
+            # 일부만 오면 빈칸이 생긴다. 개별 호출로 돌아가는 편이 낫다.
+            logger.info("[RECOMBINE_STYLES] 응답 부족 | %d/%d",
+                        len(parsed), len(picked))
+            return None
+
+        return [RecombineStyleResult(
+            style=code,
+            style_label=STYLE_LABELS.get(code, code),
+            original_title=original_title,
+            recombined_title=self._clean_title(parsed[code]),
+            ai_model=result.get("model", "unknown"),
+            ai_provider=result.get("provider", provider or "unknown"),
+            is_modified=self._clean_title(parsed[code]) != original_title,
+        ) for code in picked]
 
     def _clean_title(self, raw_title: str) -> str:
         """AI 출력에서 제목만 추출 및 정리"""
