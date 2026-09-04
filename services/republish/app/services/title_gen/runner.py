@@ -34,9 +34,13 @@ logger = get_logger("title_runner", "app.log")
 class TitleModuleRunner:
     """제목 한 회차를 수행한다."""
 
-    def __init__(self, db: AsyncSession, user_id: int):
+    def __init__(self, db: AsyncSession, user_id: int,
+                 subtopic_ids: tuple = ()):
         self.db = db
         self.user_id = user_id
+        # 니치 하나만 채울 때(요약탭 카드). 비면 전체 — 모듈·오토런은
+        # 늘 비어 있다.
+        self.subtopic_ids = tuple(subtopic_ids or ())
 
     async def run_for_blogs(
         self, settings: Optional[dict], blogs: Optional[list] = None,
@@ -109,6 +113,7 @@ class TitleModuleRunner:
         try:
             maker = TitleMaker(self.db, AIService(self.db), self.user_id)
             maker.angle_hint = await self._angle_hint(cfg)
+            maker.subtopic_ids = self.subtopic_ids
 
             cluster_out: Dict[str, Any] = {}
             if cfg.cluster_enabled:

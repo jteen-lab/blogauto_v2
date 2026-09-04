@@ -74,6 +74,8 @@ class TitleMaker:
         # 경쟁 제목 각도를 넣어 주는 함수(선택). 제목 모듈이 꽂는다.
         # (키워드) -> 프롬프트에 붙일 문구
         self.angle_hint = None
+        # 니치 하나만 채울 때의 하위주제 id 들. 요약탭이 꽂는다.
+        self.subtopic_ids: tuple = ()
 
     async def run(
         self, cfg: KeywordModuleSettings, blog, limit: int = 20,
@@ -209,7 +211,18 @@ class TitleMaker:
         scope = await usable_by(self.db, blog, KeywordCluster)
         if scope is not None:
             q = q.where(scope)
+        q = self._niche_scope(q, KeywordCluster)
         return list((await self.db.execute(q)).scalars().all())
+
+    def _niche_scope(self, q, model):
+        """니치 하나만 채우라는 지시가 있으면 좁힌다.
+
+        요약탭에서 카드를 눌러 돌릴 때만 설정된다. 좁히지 않으면 사용자가
+        누른 카드가 아니라 검색량 큰 다른 니치가 채워진다.
+        """
+        if not self.subtopic_ids:
+            return q
+        return q.where(model.subtopic_id.in_(list(self.subtopic_ids)))
 
     async def _members(self, cluster: KeywordCluster
                        ) -> List[KeywordCandidate]:
@@ -234,6 +247,7 @@ class TitleMaker:
         scope = await usable_by(self.db, blog, KeywordCandidate)
         if scope is not None:
             q = q.where(scope)
+        q = self._niche_scope(q, KeywordCandidate)
         return list((await self.db.execute(q)).scalars().all())
 
     async def _generate(self, row: KeywordCandidate,

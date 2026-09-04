@@ -49,6 +49,21 @@ def _int(source: dict, key: str, default: int, low: int = 1,
         return default
 
 
+def _ids(value: Any) -> tuple:
+    """정수 id 목록만 남긴다. 화면이 문자열을 보내도 받는다."""
+    if not value:
+        return ()
+    if isinstance(value, (int, str)):
+        value = [value]
+    out = []
+    for item in value:
+        try:
+            out.append(int(item))
+        except (TypeError, ValueError):
+            continue
+    return tuple(out)
+
+
 @dataclass
 class TitleCollectSettings:
     """수집 섹션 설정."""
@@ -72,6 +87,10 @@ class TitleCollectSettings:
     # 저장 시점 니치 대조
     niche_mode: str = NICHE_MARK
 
+    # 이 니치만 채운다(요약탭에서 카드 하나를 눌러 돌릴 때).
+    # 비면 전체 — 모듈·오토런은 늘 비어 있다.
+    subtopic_ids: tuple = ()
+
     @classmethod
     def parse(cls, settings: Optional[dict]) -> "TitleCollectSettings":
         raw = settings or {}
@@ -92,6 +111,7 @@ class TitleCollectSettings:
             low_niche_threshold=_int(source, "low_niche_threshold",
                                      DEFAULT_LOW_NICHE, 1, 1000),
             niche_mode=mode if mode in NICHE_MODES else NICHE_MARK,
+            subtopic_ids=_ids(source.get("subtopic_ids")),
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -105,4 +125,5 @@ class TitleCollectSettings:
             "prioritize_low_niche": self.prioritize_low_niche,
             "low_niche_threshold": self.low_niche_threshold,
             "niche_mode": self.niche_mode,
+            "subtopic_ids": list(self.subtopic_ids),
         }

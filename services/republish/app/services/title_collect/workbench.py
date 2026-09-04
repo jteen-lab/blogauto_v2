@@ -37,6 +37,21 @@ _L1_KEYS = (
 )
 
 
+def _ids(value: Any) -> tuple:
+    """화면이 보낸 하위주제 id 목록. 문자열도 받는다."""
+    if not value:
+        return ()
+    if isinstance(value, (int, str)):
+        value = [value]
+    out = []
+    for item in value:
+        try:
+            out.append(int(item))
+        except (TypeError, ValueError):
+            continue
+    return tuple(out)
+
+
 class TitleWorkbench:
     """한 회차를 수행하고 사람이 읽을 요약을 돌려준다."""
 
@@ -182,7 +197,9 @@ class TitleWorkbench:
         title["enabled"] = True
         title.setdefault("dry_run", True)
         settings = {"title": title}
-        runner = TitleModuleRunner(self.db, self.user_id)
+        # 니치 하나만 채우라는 지시(요약탭 카드)를 그대로 넘긴다.
+        runner = TitleModuleRunner(self.db, self.user_id,
+                                   subtopic_ids=_ids(gen.get("subtopic_ids")))
         # 화면에서 누른 실행은 재고가 충분해도 돈다 — 조용히 건너뛰면
         # 테스트가 불가능하다. 자동 실행은 재고를 본다.
         out = await runner.run_for_blogs(

@@ -17,6 +17,7 @@
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Dict, List
 
 from sqlalchemy import func, select
@@ -33,6 +34,22 @@ from .store import TitleStore
 logger = get_logger("title_collector", "app.log")
 
 
+@dataclass
+class _CategorySeed:
+    """카테고리 키워드를 시드로 쓸 때의 껍데기.
+
+    채택 키워드가 하나도 없는 니치를 요약탭에서 채우려면 시드가 필요하다.
+    부족 니치 32개 중 31개가 채택 키워드 0개다(2026-09-04 실측) — 여기서
+    멈추면 카드의 '제목 수집' 버튼은 아무 데서도 안 돈다.
+
+    `titled` 는 받아만 두고 버린다. 카테고리 키워드에는 소비 개념이 없다.
+    """
+
+    id: Any = None
+    keyword: str = ""
+    titled: bool = False
+
+
 class TitleCollector:
     """채택 키워드로 검색해 제목을 모으고 도메인을 등록한다."""
 
@@ -46,6 +63,10 @@ class TitleCollector:
         """한 회차. 건너뛰는 조건은 없다 — 시드가 없을 때만 멈춘다."""
         seeds = await self._seeds(cfg.seed_limit, cfg)
         if not seeds:
+            if cfg.subtopic_ids:
+                return {"skipped": True, "saved": 0,
+                        "message": "이 니치에 시드가 없습니다 — 카테고리 관리에서 "
+                                   "키워드를 먼저 등록하세요"}
             return {"skipped": True, "saved": 0,
                     "message": "채택된 키워드가 없습니다 — 키워드 탭에서 먼저 "
                                "수집·측정·분류를 돌리세요"}
@@ -102,6 +123,11 @@ class TitleCollector:
         order = [KeywordCandidate.titled.asc(),
                  KeywordCandidate.search_volume.desc().nullslast()]
 
+        # 요약탭에서 니치 하나를 눌러 돌리는 경우. 그 니치만 본다 —
+        # 다른 니치를 채우면 사용자가 누른 카드의 숫자가 안 움직인다.
+        if cfg.subtopic_ids:
+            return await self._niche_seeds(base, order, cfg, limit)
+
         picked: List[KeywordCandidate] = []
         if cfg.prioritize_low_niche:
             from .niche_demand import low_subtopics
@@ -130,6 +156,35 @@ class TitleCollector:
             if len(picked) >= limit:
                 break
         return picked[:limit]
+
+    async def _niche_seeds(self, base, order, cfg: TitleCollectSettings,
+                           limit: int) -> List[Any]:
+        """니치 하나를 채울 시드.
+
+        채택 키워드를 먼저 쓰고, 없으면 그 니치의 **카테고리 키워드**로
+        내려간다. 카테고리 키워드는 사람이 직접 등록한 것이라 니치를
+        가장 정확히 대표한다.
+        """
+        ids = list(cfg.subtopic_ids)
+        rows = list((await self.db.execute(
+            base.where(KeywordCandidate.subtopic_id.in_(ids))
+            .order_by(*order).limit(max(1, limit))
+        )).scalars().all())
+        if rows:
+            return rows
+
+        from ...models.category import Keyword
+
+        names = list((await self.db.execute(
+            select(Keyword.name)
+            .where(Keyword.subtopic_id.in_(ids),
+                   Keyword.is_deleted.is_(False))
+            .order_by(Keyword.priority.asc(), Keyword.id.asc())
+            .limit(max(1, limit))
+        )).scalars().all())
+        logger.info("[TITLE_COLLECT] 니치 %s — 채택 키워드가 없어 카테고리 "
+                    "키워드 %d개를 시드로", ids, len(names))
+        return [_CategorySeed(keyword=name) for name in names if name]
 
     async def _search(self, keyword: str, limit: int) -> List[Dict[str, str]]:
         """검색 상위 결과. 실패는 빈 목록 — 회차를 죽이지 않는다."""

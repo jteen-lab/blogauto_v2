@@ -28,6 +28,9 @@ DEFAULTS: Dict[str, dict] = {
     "similarity_ai_enabled": {"value": "false", "type": "bool", "category": "similarity", "desc": "회색지대 AI 판정 사용"},
     "similarity_ai_provider": {"value": "", "type": "string", "category": "similarity", "desc": "회색지대 AI 제공자(openai/anthropic/google)"},
     "similarity_ai_model": {"value": "", "type": "string", "category": "similarity", "desc": "회색지대 AI 모델(비우면 기본)"},
+    # 니치 요약탭(정식제목 탭) — 화면과 수집이 같은 기준을 쓴다
+    "niche_low_threshold": {"value": "20", "type": "int", "category": "niche", "desc": "재고가 이보다 적으면 '부족'"},
+    "niche_card_limit": {"value": "12", "type": "int", "category": "niche", "desc": "요약탭에 띄울 카드 수"},
 }
 
 _ENV_MAP = {

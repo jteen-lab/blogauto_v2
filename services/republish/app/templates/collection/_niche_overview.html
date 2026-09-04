@@ -1,144 +1,310 @@
 {#
-  니치 현황 — 어디를 채워야 하는지 보여 준다.
+  니치 요약탭 — 무슨 니치에 제목이 부족한가.
 
-  숫자만 보고 판단할 수 있어야 수집·생성을 적극적으로 돌리게 된다.
-  두 값을 함께 본다.
+  카드 하나가 니치 하나다. 카드에는 셋만 적는다 —
+  **니치명 · 재고 · 연동 블로그 수.** "부족한 니치가 몇 개인가" 는
+  궁금한 게 아니다. "무슨 니치가 부족한가" 를 답하는 화면이다.
 
-    재고    이 니치에 쓸 수 있는 정식제목 수
-    블로그  이 니치를 쓰는 블로그 수
+  카드를 누르면 그 니치만 표로 펼쳐지고, 그 자리에서 수집·생성을 돌린다.
+  다른 화면으로 옮겨 가서 대상을 다시 고르게 하면 아무도 안 쓴다.
 
-  **블로그 0인 재고는 죽은 재고다.** 아무도 꺼내 쓰지 않는다.
-  반대로 블로그는 있는데 재고가 적으면 그쪽부터 채워야 한다.
-
-  계획서: docs/plans/title_tab_workplan.md §9
+  순서도: docs/flowcharts/niche_summary_cards.md
 #}
 <div x-data="nicheOverview()" x-init="init()" class="mb-4">
-  <details class="border border-gray-200 rounded-lg">
-    <summary class="px-3 py-2 text-sm text-gray-700 cursor-pointer select-none">
-      🧭 니치 현황 — 어디에 제목이 부족한가
-    </summary>
 
-    <div class="p-3 border-t border-gray-200 space-y-3">
-      <!-- 요약 -->
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-        <div class="px-3 py-2 border-2 border-gray-200 rounded-lg">
-          <div class="text-xs text-gray-500">전체 재고</div>
-          <div class="text-lg font-semibold" x-text="(summary.total_titles || 0).toLocaleString()"></div>
-        </div>
-        <button @click="filter = filter === 'low' ? '' : 'low'"
-                class="px-3 py-2 border-2 rounded-lg text-left"
-                :class="filter === 'low' ? 'border-rose-400 bg-rose-50' : 'border-rose-200'">
-          <div class="text-xs text-gray-500">재고 부족</div>
-          <div class="text-lg font-semibold text-rose-600" x-text="summary.low_count || 0"></div>
-        </button>
-        <button @click="filter = filter === 'orphan' ? '' : 'orphan'"
-                class="px-3 py-2 border-2 rounded-lg text-left"
-                :class="filter === 'orphan' ? 'border-amber-400 bg-amber-50' : 'border-amber-200'">
-          <div class="text-xs text-gray-500">쓰는 블로그 없음</div>
-          <div class="text-lg font-semibold text-amber-600" x-text="summary.orphan_count || 0"></div>
-        </button>
-        <label class="px-3 py-2 border-2 border-gray-200 rounded-lg">
-          <span class="text-xs text-gray-500">부족 기준</span>
-          <input type="number" min="1" max="1000" x-model.number="threshold"
-                 @change="load()"
-                 class="mt-0.5 w-full text-sm border-gray-300 rounded py-0.5">
-        </label>
-      </div>
-
-      <p class="text-xs text-gray-500">
-        <b class="text-rose-600">재고 부족</b> = 쓰는 블로그가 있는데 제목이 기준보다 적은 니치 —
-        <b>여기부터 채웁니다</b>.
-        <b class="text-amber-600">쓰는 블로그 없음</b> = 재고는 있는데 꺼내 쓸 블로그가 없는 니치 —
-        블로그에 그 니치를 붙이거나, 더 만들 이유가 없습니다.
-      </p>
-
-      <!-- 목록 -->
-      <div class="border border-gray-200 rounded-lg overflow-hidden">
-        <div class="overflow-x-auto max-h-96 overflow-y-auto">
-          <table class="w-full text-sm">
-            <thead class="bg-gray-50 sticky top-0">
-              <tr>
-                <th class="px-2 py-2 text-left">주제</th>
-                <th class="px-2 py-2 text-left">하위 주제</th>
-                <th class="px-2 py-2 text-right">재고</th>
-                <th class="px-2 py-2 text-right">블로그</th>
-                <th class="px-2 py-2 text-left">상태</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100">
-              <template x-for="row in visible()" :key="row.subtopic_id">
-                <tr class="hover:bg-gray-50">
-                  <td class="px-2 py-1.5 text-gray-600" x-text="row.topic_name"></td>
-                  <td class="px-2 py-1.5 font-medium" x-text="row.subtopic_name"></td>
-                  <td class="px-2 py-1.5 text-right"
-                      :class="row.is_low ? 'text-rose-600 font-semibold' : ''"
-                      x-text="row.titles.toLocaleString()"></td>
-                  <td class="px-2 py-1.5 text-right"
-                      :class="row.blogs ? '' : 'text-gray-300'"
-                      x-text="row.blogs"></td>
-                  <td class="px-2 py-1.5">
-                    <span x-show="row.is_low"
-                          class="px-1.5 py-0.5 rounded text-xs bg-rose-100 text-rose-700">부족</span>
-                    <span x-show="row.is_orphan"
-                          class="px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-700">블로그 없음</span>
-                    <span x-show="!row.is_low && !row.is_orphan && row.blogs"
-                          class="text-xs text-gray-400">충분</span>
-                    <span x-show="!row.titles && !row.blogs"
-                          class="text-xs text-gray-300">비어 있음</span>
-                  </td>
-                </tr>
-              </template>
-              <tr x-show="!visible().length && !loading">
-                <td colspan="5" class="px-3 py-8 text-center text-gray-400">
-                  해당하는 니치가 없습니다
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <p x-show="message" class="text-sm text-red-600" x-text="message"></p>
+  <div class="flex items-center justify-between mb-2">
+    <div class="text-sm text-gray-700">
+      🧭 재고가 부족한 니치
+      <span class="ml-1 text-gray-400" x-text="`${summary.low_count || 0}개`"></span>
     </div>
-  </details>
+    <div class="flex items-center gap-2 text-xs">
+      <button @click="showAll = !showAll; load()"
+              class="text-gray-500 hover:text-gray-800"
+              x-text="showAll ? '부족만 보기' : '전체 보기'"></button>
+      <button @click="settingsOpen = !settingsOpen"
+              class="text-gray-500 hover:text-gray-800">⚙ 설정</button>
+    </div>
+  </div>
+
+  {# 설정 — 요약탭 바로 옆에서 연다. 화면과 수집이 같은 기준을 쓴다 #}
+  <div x-show="settingsOpen" x-cloak
+       class="mb-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
+      <label class="text-xs text-gray-500">
+        재고 부족 기준
+        <input type="number" min="1" max="1000" x-model.number="form.low_threshold"
+               class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+      </label>
+      <label class="text-xs text-gray-500">
+        요약탭 노출 수
+        <input type="number" min="1" max="100" x-model.number="form.card_limit"
+               class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+      </label>
+      <div>
+        <button @click="saveSettings()" :disabled="savingSettings"
+                class="px-3 py-1.5 bg-accent text-white rounded-lg text-sm disabled:opacity-40">
+          저장
+        </button>
+      </div>
+    </div>
+    <p class="mt-2 text-xs text-gray-500">
+      부족 기준은 <b>수집기도 같은 값을 읽습니다</b> — 화면은 부족하다는데
+      수집은 다른 곳을 채우는 일이 없도록.
+    </p>
+  </div>
+
+  {# 요약탭 — 넘치면 가로로 민다 #}
+  <div class="flex gap-2 overflow-x-auto pb-1">
+    <template x-for="row in cards()" :key="row.subtopic_id">
+      <button type="button" @click="toggle(row)"
+              class="shrink-0 px-3 py-2 border-2 rounded-lg text-left min-w-[9.5rem] transition-colors"
+              :class="opened === row.subtopic_id
+                      ? 'border-accent bg-primary-lt'
+                      : (row.is_low ? 'border-rose-200 hover:border-rose-300'
+                                    : 'border-gray-200 hover:border-gray-300')">
+        <div class="text-sm font-medium truncate" x-text="row.subtopic_name"></div>
+        <div class="mt-0.5 flex items-baseline gap-1">
+          <span class="text-lg font-semibold"
+                :class="row.is_low ? 'text-rose-600' : 'text-gray-700'"
+                x-text="row.titles.toLocaleString()"></span>
+          <span class="text-xs text-gray-400">재고</span>
+        </div>
+        <div class="text-xs text-gray-500" x-text="`블로그 ${row.blogs}`"></div>
+      </button>
+    </template>
+    <div x-show="!cards().length && !loading"
+         class="px-3 py-4 text-sm text-gray-400">
+      재고가 부족한 니치가 없습니다
+    </div>
+  </div>
+
+  {# 펼침 — 누른 니치 하나만 표로 #}
+  <template x-if="current()">
+    <div class="mt-2 border border-gray-200 rounded-lg overflow-hidden">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-3 py-2 text-left font-medium text-gray-600">주제</th>
+            <th class="px-3 py-2 text-left font-medium text-gray-600">하위 주제</th>
+            <th class="px-3 py-2 text-right font-medium text-gray-600">재고</th>
+            <th class="px-3 py-2 text-left font-medium text-gray-600">연동 블로그</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="px-3 py-2 text-gray-600" x-text="current().topic_name"></td>
+            <td class="px-3 py-2 font-medium" x-text="current().subtopic_name"></td>
+            <td class="px-3 py-2 text-right"
+                :class="current().is_low ? 'text-rose-600 font-semibold' : ''"
+                x-text="current().titles.toLocaleString()"></td>
+            <td class="px-3 py-2">
+              <template x-if="current().blog_names.length">
+                <span class="flex flex-wrap gap-1">
+                  <template x-for="name in current().blog_names" :key="name">
+                    <span class="px-1.5 py-0.5 rounded bg-gray-100 text-xs text-gray-700"
+                          x-text="name"></span>
+                  </template>
+                </span>
+              </template>
+              <span x-show="!current().blog_names.length" class="text-xs text-amber-600">
+                이 니치를 쓰는 블로그가 없습니다 — 채워도 꺼내 쓸 곳이 없습니다
+              </span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="px-3 py-3 border-t border-gray-200 bg-gray-50 space-y-2">
+        <div class="text-xs text-gray-600">
+          제목을 만들 키워드
+          <b x-text="current().keywords"></b>개
+          <span class="text-gray-400"
+                x-text="`· 카테고리 키워드 ${current().seeds}개`"></span>
+          <span x-show="!current().keywords" class="ml-1 text-amber-700">
+            — 만들 재료가 없습니다. <b>제목 수집</b>으로 먼저 모으세요.
+          </span>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <button @click="run('collect')" :disabled="busy()"
+                  class="px-3 py-1.5 bg-accent text-white rounded-lg text-sm font-medium disabled:opacity-40">
+            제목 수집
+          </button>
+          <button @click="run('gen')" :disabled="busy() || !current().keywords"
+                  class="px-3 py-1.5 border border-gray-300 bg-white rounded-lg text-sm disabled:opacity-40">
+            제목 생성
+          </button>
+          <a href="/categories" target="_blank"
+             class="px-3 py-1.5 border border-gray-300 bg-white rounded-lg text-sm text-gray-700">
+            블로그 연동
+          </a>
+          <span x-show="busy()" class="text-xs text-gray-500"
+                x-text="`${runningLabel} 중… ${elapsed}초`"></span>
+        </div>
+
+        <p x-show="result" class="text-xs"
+           :class="resultError ? 'text-red-600' : 'text-gray-700'"
+           x-text="result"></p>
+      </div>
+    </div>
+  </template>
+
+  <p x-show="message" class="mt-1 text-sm text-red-600" x-text="message"></p>
 </div>
 
 <script>
 function nicheOverview() {
     return {
         loading: false,
-        threshold: 20,
-        filter: '',
-        summary: { total_titles: 0, low_count: 0, orphan_count: 0 },
+        showAll: false,
+        settingsOpen: false,
+        savingSettings: false,
+        opened: null,
+        summary: { low_count: 0, card_limit: 12, threshold: 20 },
+        form: { low_threshold: 20, card_limit: 12 },
         items: [],
+        // 니치별 실행 상태. 여러 카드를 동시에 돌릴 수 있다.
+        runs: {},
+        runningLabel: '',
+        elapsed: 0,
+        result: '',
+        resultError: false,
         message: '',
+        poll: null,
 
         async init() {
             await this.load();
+            this.form = {
+                low_threshold: this.summary.threshold,
+                card_limit: this.summary.card_limit,
+            };
         },
 
         async load() {
             this.loading = true;
-            try {
-                const r = await fetch(
-                    `/api/v1/data/niches?low_threshold=${this.threshold}`,
-                    { credentials: 'include' });
-                const text = await r.text();
-                if (!r.ok) throw new Error(this.detail(text, r.status));
-                const d = JSON.parse(text);
+            const d = await this.get('/api/v1/data/niches');
+            if (d) {
                 this.summary = d;
                 this.items = d.items || [];
+            }
+            this.loading = false;
+        },
+
+        /** 요약탭에 깔 카드. 기본은 부족한 것만, 설정한 수까지. */
+        cards() {
+            const rows = this.showAll ? this.items
+                                      : this.items.filter(r => r.is_low);
+            return rows.slice(0, this.summary.card_limit || 12);
+        },
+
+        current() {
+            if (!this.opened) return null;
+            return this.items.find(r => r.subtopic_id === this.opened) || null;
+        },
+
+        toggle(row) {
+            this.opened = this.opened === row.subtopic_id ? null : row.subtopic_id;
+            this.result = '';
+            this.resultError = false;
+        },
+
+        busy() {
+            const row = this.current();
+            return !!(row && this.runs[row.subtopic_id]);
+        },
+
+        /** 이 니치만 수집하거나 생성한다. */
+        async run(kind) {
+            const row = this.current();
+            if (!row || this.busy()) return;
+            const body = { subtopic_id: row.subtopic_id };
+            if (kind === 'collect') {
+                body.collect = { enabled: true, search_enabled: true,
+                                 extract_enabled: false };
+            } else {
+                body.gen = { enabled: true, l1_enabled: true, dry_run: false,
+                             force: true };
+            }
+            this.runningLabel = kind === 'collect' ? '수집' : '생성';
+            this.result = '';
+            this.resultError = false;
+
+            const d = await this.post('/api/v1/title-workbench/run', body);
+            if (!d) return;
+            if (!d.success) { this.result = d.message; this.resultError = true; return; }
+
+            this.runs[row.subtopic_id] = true;
+            this.elapsed = 0;
+            this.watch(row.subtopic_id);
+        },
+
+        /** 2초마다 되묻는다. Caddy 가 60초에 끊어 동기 응답은 못 받는다. */
+        watch(subtopicId) {
+            if (this.poll) clearInterval(this.poll);
+            this.poll = setInterval(async () => {
+                this.elapsed += 2;
+                const d = await this.get(
+                    `/api/v1/title-workbench/status?subtopic_id=${subtopicId}`);
+                if (!d) return this.stop(subtopicId);
+                if (d.running) return;
+                this.stop(subtopicId);
+                if (d.error) {
+                    this.result = d.error;
+                    this.resultError = true;
+                } else {
+                    this.result = (d.result || {}).message || '완료';
+                    this.resultError = false;
+                }
+                // 재고 숫자를 다시 읽어 카드에 반영한다
+                await this.load();
+                window.dispatchEvent(new CustomEvent('main-titles-changed'));
+            }, 2000);
+        },
+
+        stop(subtopicId) {
+            if (this.poll) { clearInterval(this.poll); this.poll = null; }
+            delete this.runs[subtopicId];
+        },
+
+        async saveSettings() {
+            this.savingSettings = true;
+            const d = await this.put('/api/v1/data/niches/settings', this.form);
+            this.savingSettings = false;
+            if (!d) return;
+            this.settingsOpen = false;
+            await this.load();
+        },
+
+        async get(url) {
+            try {
+                const r = await fetch(url, { credentials: 'include' });
+                const text = await r.text();
+                if (!r.ok) throw new Error(this.detail(text, r.status));
+                return text ? JSON.parse(text) : null;
             } catch (e) {
                 this.message = e.message;
-            } finally {
-                this.loading = false;
+                return null;
             }
         },
 
-        visible() {
-            if (this.filter === 'low') return this.items.filter(r => r.is_low);
-            if (this.filter === 'orphan') return this.items.filter(r => r.is_orphan);
-            return this.items;
+        post(url, body) { return this.send('POST', url, body); },
+        put(url, body) { return this.send('PUT', url, body); },
+
+        async send(method, url, body) {
+            try {
+                const r = await fetch(url, {
+                    method, credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body || {}),
+                });
+                const text = await r.text();
+                if (!r.ok) throw new Error(this.detail(text, r.status));
+                if (!text) throw new Error('서버가 빈 응답을 돌려줬습니다');
+                return JSON.parse(text);
+            } catch (e) {
+                this.message = e.message;
+                return null;
+            }
         },
 
         detail(text, status) {
