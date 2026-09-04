@@ -285,3 +285,51 @@ class TestRecombinePanelWiring:
     def test_warns_when_no_module(self):
         src = self.PANEL.read_text(encoding="utf-8")
         assert "프롬프트 모듈이 없습니다" in src
+
+
+class TestRecombineNeedsProvider:
+    """0건만 뜨던 원인 — AI 제공자가 없으면 원본이 그대로 돌아온다."""
+
+    PANEL = BASE / "app/templates/collection/_recombine_panel.html"
+    SERVICE = BASE / "app/services/recombine/service.py"
+
+    def test_panel_has_ai_selector(self):
+        src = self.PANEL.read_text(encoding="utf-8")
+        assert 'x-model="provider"' in src
+        assert "modelsFor(provider)" in src
+
+    def test_provider_is_sent(self):
+        src = self.PANEL.read_text(encoding="utf-8")
+        assert "provider: this.provider || null" in src
+
+    def test_service_falls_back_to_active_key(self):
+        """화면에서 안 골랐다고 조용히 0건을 돌려주면 안 된다."""
+        src = self.SERVICE.read_text(encoding="utf-8")
+        assert "_default_provider" in src
+        assert 'AIApiKey.status == "active"' in src
+
+    def test_no_provider_reports_reason(self):
+        src = self.SERVICE.read_text(encoding="utf-8")
+        assert "등록된 활성 AI 키가 없습니다" in src
+
+    def test_unchanged_title_reports_reason(self):
+        """재조합기는 실패해도 예외 대신 원본을 돌려준다."""
+        src = self.SERVICE.read_text(encoding="utf-8")
+        assert "제목이 바뀌지 않았습니다" in src
+
+    def test_error_shown_in_panel(self):
+        src = self.PANEL.read_text(encoding="utf-8")
+        assert 'x-show="result.error"' in src
+
+
+class TestKeywordInventoryRemoved:
+    def test_min_inventory_gone_from_form(self):
+        tpl = (BASE / "app/static/js/modules/keyword-form-template.js").read_text(
+            encoding="utf-8")
+        assert "min_inventory" not in tpl
+        assert "재고 하한" not in tpl
+
+    def test_not_serialized(self):
+        js = (BASE / "app/static/js/modules/form.js").read_text(
+            encoding="utf-8")
+        assert "min_inventory" not in js

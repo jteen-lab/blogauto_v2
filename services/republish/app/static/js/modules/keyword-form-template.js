@@ -217,17 +217,10 @@ window.getKeywordFormTemplate = function () {
         <!-- 공통 -->
         <div class="border border-gray-200 rounded-lg p-3 space-y-3">
             <div class="text-sm font-semibold text-gray-800">공통</div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                    <label class="block text-xs text-gray-500 mb-1">재고 하한 (이보다 많으면 안 돎)</label>
-                    <input type="number" min="0" x-model.number="formData.keyword.min_inventory"
-                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
-                </div>
-                <label class="flex items-start gap-2 text-sm text-gray-700 pt-5">
-                    <input type="checkbox" x-model="formData.keyword.feedback_enabled" class="rounded mt-0.5">
-                    <span>실측 성과 되먹임 <span class="text-xs text-gray-500">(노출된 축을 다음 시드로 먼저)</span></span>
-                </label>
-            </div>
+            <label class="flex items-start gap-2 text-sm text-gray-700">
+                <input type="checkbox" x-model="formData.keyword.feedback_enabled" class="rounded mt-0.5">
+                <span>실측 성과 되먹임 <span class="text-xs text-gray-500">(노출된 축을 다음 시드로 먼저)</span></span>
+            </label>
         </div>
 
         ${window.getKeywordScheduleTemplate ? window.getKeywordScheduleTemplate() : ''}

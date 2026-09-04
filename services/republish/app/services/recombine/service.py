@@ -69,7 +69,7 @@ class RecombineService:
                   provider: Optional[str] = None,
                   model: Optional[str] = None,
                   freshness: bool = False,
-                  expand: bool = False) -> Dict[str, Any]:
+                  expand: bool = False) -> Dict[str, Any]:  # noqa: C901
         """고른 제목들을 재조합한다.
 
         Args:
@@ -83,6 +83,14 @@ class RecombineService:
         rows = await self._titles(title_ids[:MAX_PER_RUN])
         if not rows:
             return {"made": 0, "items": [], "error": "대상 제목이 없습니다"}
+
+        # AI 제공자가 없으면 재조합기는 **원본을 그대로 돌려준다.** 그러면
+        # "같은 제목" 이라 저장되지 않고 0건으로 끝난다 — 사유도 안 보인다.
+        # 화면에서 안 골랐으면 등록된 활성 키에서 찾는다.
+        provider = provider or await self._default_provider()
+        if not provider:
+            return {"made": 0, "items": [],
+                    "error": "AI 제공자를 고르세요 — 등록된 활성 AI 키가 없습니다"}
 
         made: List[Dict[str, Any]] = []
         skipped = 0
@@ -137,6 +145,13 @@ class RecombineService:
 
         text = (result.recombined_title or "").strip()
         if not text or text == row.title:
+            # 재조합기는 실패해도 예외를 던지지 않고 원본을 돌려준다.
+            # 사유를 남기지 않으면 화면에 "0건" 만 뜨고 끝난다.
+            if not self.last_error:
+                self.last_error = (
+                    f"제목이 바뀌지 않았습니다 — 프롬프트 모듈의 "
+                    f"'제목 재조합' 이 켜져 있는지, AI 키가 살아 있는지 "
+                    f"확인하세요 (provider={result.ai_provider})")
             return None
 
         # 재조합은 관문 밖이다. 이미 있는 제목과 겹치면 재고만 늘고
@@ -259,6 +274,28 @@ class RecombineService:
         except Exception as e:  # noqa: BLE001
             logger.warning("[RECOMBINE] 질문 축 생성 실패 | %s", e)
             return []
+
+    async def _default_provider(self) -> Optional[str]:
+        """등록된 활성 AI 키에서 제공자를 고른다.
+
+        수동 재조합에는 블로그가 없어 `blog.ai_config` 를 쓸 수 없다.
+        고르지 않았다고 조용히 0건을 돌려주는 것보다, 쓸 수 있는 키를
+        찾아 돌리는 편이 낫다.
+        """
+        from ...models.ai_api_key import AIApiKey
+
+        try:
+            return (await self.db.execute(
+                select(AIApiKey.provider)
+                .where(AIApiKey.user_id == self.user_id,
+                       AIApiKey.is_active.is_(True),
+                       AIApiKey.status == "active")
+                .order_by(AIApiKey.priority.asc())
+                .limit(1)
+            )).scalar_one_or_none()
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[RECOMBINE] 기본 AI 조회 실패 | %s", e)
+            return None
 
     async def _titles(self, ids: List[int]) -> List[MainTitle]:
         if not ids:

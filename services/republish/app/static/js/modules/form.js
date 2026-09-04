@@ -213,7 +213,6 @@ function moduleFormApp(module = null, moduleType = null) {
                 step_rejudge: (initialModule?.settings?.keyword?.steps || [])
                     .includes('rejudge')
                     || (initialModule?.settings?.keyword?.rejudge_on_run ?? false),
-                min_inventory: initialModule?.settings?.keyword?.min_inventory ?? 30,
                 interval_minutes: initialModule?.settings?.schedule?.interval_minutes ?? 360,
             },
 
@@ -1170,7 +1169,6 @@ function moduleFormApp(module = null, moduleType = null) {
                             ['step_classify', 'classify'],
                             ['step_rejudge', 'rejudge'],
                         ].filter(([flag]) => k[flag]).map(([, code]) => code),
-                        min_inventory: k.min_inventory,
                     },
                     // 스케줄은 bulk_collect 와 같은 자리·같은 모양으로 둔다
                     // (스케줄러가 그 경로를 본다)

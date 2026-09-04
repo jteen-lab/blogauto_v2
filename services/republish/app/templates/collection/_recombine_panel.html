@@ -43,7 +43,7 @@
         </template>
       </div>
 
-      <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
         <label class="text-xs text-gray-500">
           프롬프트 모듈
           <select x-model.number="moduleId" class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
@@ -60,6 +60,26 @@
             <option value="">모듈 설정 따름</option>
             <template x-for="s in styles" :key="s.code">
               <option :value="s.code" x-text="s.label"></option>
+            </template>
+          </select>
+        </label>
+        <label class="text-xs text-gray-500">
+          재조합 AI
+          <select x-model="provider" @change="model = ''"
+                  class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+            <option value="">등록된 키에서 자동</option>
+            <template x-for="p in providers()" :key="p">
+              <option :value="p" x-text="p"></option>
+            </template>
+          </select>
+        </label>
+        <label class="text-xs text-gray-500">
+          모델 <span class="text-gray-400">(비우면 기본값)</span>
+          <select x-model="model" :disabled="!provider"
+                  class="mt-0.5 w-full text-sm border-gray-300 rounded py-1 disabled:bg-gray-50">
+            <option value="">기본값</option>
+            <template x-for="m in modelsFor(provider)" :key="m">
+              <option :value="m" x-text="m"></option>
             </template>
           </select>
         </label>
@@ -86,6 +106,8 @@
             <span x-show="result.skipped" class="text-gray-500"
                   x-text="` · ${result.skipped}건 건너뜀(이미 재조합됨)`"></span>
           </div>
+          <p x-show="result.error" class="mt-1 text-xs text-amber-700"
+             x-text="result.error"></p>
           <ul class="mt-1 list-disc list-inside text-xs text-gray-600 space-y-0.5">
             <template x-for="(item, i) in (result.items || []).slice(0, 10)" :key="i">
               <li x-text="item.title"></li>
@@ -107,6 +129,9 @@ function recombinePanel() {
         busy: false,
         moduleId: '',
         style: '',
+        provider: '',
+        model: '',
+        models: [],
         freshness: false,
         expand: false,
         modules: [],
@@ -117,7 +142,8 @@ function recombinePanel() {
         messageType: 'info',
 
         async init() {
-            await Promise.all([this.loadModules(), this.loadStyles()]);
+            await Promise.all([this.loadModules(), this.loadStyles(),
+                               this.loadModels()]);
         },
 
         /** 목록에서 **체크한 제목**을 쓴다. 무작위로 고르지 않는다.
@@ -155,6 +181,27 @@ function recombinePanel() {
             }));
         },
 
+        async loadModels() {
+            // 모델명을 직접 적게 하면 오타 하나로 재조합이 통째로 실패한다
+            const d = await this.get('/api/v1/ai-models?capability=text');
+            if (!d) return;
+            this.models = (d.models || d.items || (Array.isArray(d) ? d : []))
+                .filter((m) => m && m.provider && m.model_id);
+        },
+
+        providers() {
+            return [...new Set(this.models.map((m) => m.provider))].sort();
+        },
+
+        modelsFor(provider) {
+            if (!provider) return [];
+            const list = this.models
+                .filter((m) => m.provider === provider)
+                .map((m) => m.model_id);
+            if (this.model && !list.includes(this.model)) list.unshift(this.model);
+            return [...new Set(list)];
+        },
+
         async loadStyles() {
             const d = await this.get('/api/v1/data/titles/recombine/styles');
             this.styles = d ? (d.styles || []) : [];
@@ -172,6 +219,7 @@ function recombinePanel() {
             this.result = null;
             const d = await this.post('/api/v1/data/titles/recombine', {
                 ids, module_id: this.moduleId, style: this.style || null,
+                provider: this.provider || null, model: this.model || null,
                 freshness: this.freshness, expand: this.expand,
             });
             this.busy = false;
