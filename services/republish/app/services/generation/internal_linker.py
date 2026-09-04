@@ -321,6 +321,24 @@ class InternalLinker:
 
     # ── 링크 삽입 ──────────────────────────────────
 
+    @staticmethod
+    def _section_headings(content: str) -> list:
+        """본문 섹션 헤딩 목록. **H1(글 타이틀)은 제외한다.**
+
+        예전에는 "헤딩 중 두 번째" 를 첫 섹션으로 봤다. 첫 헤딩이 H1
+        타이틀이라는 전제였는데, 본문 H1 이 제목과 겹칠 때 제거되면서
+        (quality_gate.strip_duplicate_h1) 그 전제가 깨졌다. 실측으로 최근
+        30일 글 639건 중 476건(75%)에 H1 이 없었고, 그 글들은 서론 링크가
+        한 섹션씩 밀려 있었다.
+
+        레벨로 판단하면 H1 유무와 무관하게 같은 자리에 들어간다.
+        """
+        heads = list(re.finditer(
+            r'^(#{1,6})[ \t]+(.+?)[ \t]*$', content, re.MULTILINE))
+        sections = [m for m in heads if len(m.group(1)) > 1]
+        # 모두 H1 이면(비정상 구조) 첫 헤딩만 타이틀로 보고 나머지를 쓴다
+        return sections if sections else heads[1:]
+
     def _insert_intro_links(
         self,
         content: str,
@@ -352,19 +370,19 @@ class InternalLinker:
         for post in links_to_insert:
             used_urls.add(post.url)
 
-        # 첫 본문 섹션 헤딩 앞에 삽입(= 서론 끝). 첫 헤딩은 글 타이틀이므로
-        # 레벨 무관 모든 헤딩 중 '두 번째'(첫 섹션) 앞에 넣는다. ## 만 보면
-        # # 타이틀을 놓쳐 두 번째 섹션 뒤에 삽입되던 버그를 방지한다.
-        headings = list(re.finditer(r'^#{1,6} .+', content, re.MULTILINE))
-        if len(headings) >= 2:
-            insert_pos = headings[1].start()
+        # **첫 본문 섹션 헤딩 앞**에 삽입한다(= 서론 끝).
+        # 헤딩 순번이 아니라 레벨로 찾는다 — H1 이 제거된 글에서 한 섹션씩
+        # 밀리던 자리다.
+        sections = self._section_headings(content)
+        if sections:
+            insert_pos = sections[0].start()
             content = (
                 content[:insert_pos]
                 + link_block + "\n\n"
                 + content[insert_pos:]
             )
         else:
-            # 헤딩이 1개 이하면 본문 구분이 없어 끝에 추가
+            # 섹션 헤딩이 없으면 본문 구분이 없어 끝에 추가
             content += "\n\n" + link_block
 
         logger.debug(
@@ -407,20 +425,18 @@ class InternalLinker:
         if not all_posts:
             return content
 
-        heads = list(re.finditer(
-            r'^(#{1,6})[ \t]+(.+?)[ \t]*$', content, re.MULTILINE
-        ))
-        if len(heads) < 2:
+        # 서론 링크와 **같은 기준**으로 섹션을 찾는다. 따로 판단하면
+        # H1 유무에 따라 두 링크가 서로 다른 섹션을 가리킨다.
+        sections = self._section_headings(content)
+        if not sections:
             return content
 
-        # 섹션 레벨 = 타이틀(첫 헤딩) 다음 첫 헤딩의 레벨 (보통 ## H2)
-        section_level = len(heads[1].group(1))
+        # 섹션 레벨 = 첫 본문 섹션의 레벨(보통 ## H2). 더 깊은 헤딩은
+        # 그 섹션의 하위 항목이므로 섹션으로 세지 않는다.
+        section_level = len(sections[0].group(1))
         section_heads = [
-            m for m in heads if len(m.group(1)) == section_level
+            m for m in sections if len(m.group(1)) == section_level
         ]
-        # 첫 헤딩이 타이틀이고 섹션 레벨과 같으면(예: ## 타이틀 구조) 제외
-        if section_heads and section_heads[0].start() == heads[0].start():
-            section_heads = section_heads[1:]
         if len(section_heads) < 2:
             # 본문 섹션(결론 제외)이 없으면 스킵
             logger.debug("[INTERNAL_LINK] 본론: 본문 섹션 부족, 스킵")
