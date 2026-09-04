@@ -131,7 +131,7 @@ function getTestRecombineSection() {
             <p class="text-xs text-gray-500">AI를 사용하여 선택한 스타일별로 제목을 재조합합니다.</p>
             <div>
                 <label class="block text-xs font-medium text-gray-600 mb-1">원본 제목</label>
-                <input type="text" x-model="promptTest.titleText" placeholder="제목 선택에서 자동 입력 또는 직접 입력"
+                <input type="text" x-model="promptTest.titleText" placeholder="비우면 이 블로그의 니치에서 무작위로 고릅니다"
                        class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
             </div>
             ${_testBtn('runStepRecombine', '실행', 'recombine')}

@@ -185,7 +185,11 @@ class TestRecombineTitle:
 
     @pytest.mark.asyncio
     async def test_no_title_provided(self, mock_db):
-        """제목 미입력 시 에러"""
+        """제목을 안 넣으면 블로그 니치에서 무작위로 고른다.
+
+        고를 재고조차 없을 때만 에러이고, 그때는 두 가지 길(직접 입력 /
+        재고 채우기)을 함께 알려 준다.
+        """
         module = create_mock_module(module_id=1)
         blog = create_mock_blog(blog_id=1)
         mock_db.get = AsyncMock(
@@ -202,7 +206,8 @@ class TestRecombineTitle:
         )
 
         assert result["success"] is False
-        assert "제목을 지정해주세요" in result["error"]
+        assert "제목을 입력하거나" in result["error"]
+        assert "정식제목을 먼저 채우세요" in result["error"]
 
 
 class TestCollectReferences:

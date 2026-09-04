@@ -189,8 +189,9 @@ const promptTestMethods = {
         if (!moduleId) return this._setTestError('recombine', '모듈 ID가 필요합니다');
         const blogId = this.getTestBlogId();
         if (!blogId) return this._setTestError('recombine', '모듈에 블로그가 연결돼 있지 않습니다 — 모듈 설정에서 블로그를 고르세요');
-        const titleText = this.promptTest.titleText?.trim();
-        if (!titleText) return this._setTestError('recombine', '제목을 입력하세요');
+        // 비우면 서버가 이 블로그의 니치에서 무작위로 고른다.
+        // 테스트마다 제목을 손으로 적게 할 이유가 없다.
+        const titleText = this.promptTest.titleText?.trim() || null;
         this._startTest('recombine');
         try {
             const data = await this._testFetch('/api/v1/generation/test/recombine-title', {

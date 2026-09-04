@@ -412,3 +412,48 @@ class TestPromptTestUsesModuleSettings:
         for source in ("blog_title_ai", "blog_writing_ai", "active_key",
                        "none"):
             assert f'prov_src = "{source}"' in src, source
+
+
+class TestRecombineTestPicksTitle:
+    """제목을 손으로 적게 하지 않는다 — 블로그 니치에서 뽑는다."""
+
+    TESTER = BASE / "app/services/generation/pipeline_tester.py"
+    JS = BASE / "app/static/js/modules/prompt-test.js"
+
+    def test_resolve_takes_blog(self):
+        src = self.TESTER.read_text(encoding="utf-8")
+        assert "_resolve_title(title_id, title_text, blog_id)" in src
+
+    def test_random_scoped_to_blog_niche(self):
+        """실제 발행이 고르는 것과 같은 범위여야 한다."""
+        src = self.TESTER.read_text(encoding="utf-8")
+        block = src[src.index("async def _random_title("):]
+        assert "BlogCategory.blog_id == blog_id" in block
+        assert "MainTitle.subtopic_id.in_(picked)" in block
+        assert 'MainTitle.status == "available"' in block
+
+    def test_falls_back_to_all_when_no_niche(self):
+        """니치가 없다고 테스트가 아예 못 도는 것보다 낫다."""
+        src = self.TESTER.read_text(encoding="utf-8")
+        block = src[src.index("async def _random_title("):]
+        assert "if picked:" in block
+
+    def test_priority_order(self):
+        """title_id → 직접 입력 → 무작위."""
+        src = self.TESTER.read_text(encoding="utf-8")
+        block = src[src.index("async def _resolve_title("):
+                    src.index("async def _random_title(")]
+        assert block.index("if title_id:") < block.index("if title_text")
+        assert block.index("if title_text") < block.index("_random_title(")
+
+    def test_client_sends_null_when_empty(self):
+        """재조합 단계만 본다 — 글 생성·이미지는 제목이 반드시 필요하다."""
+        src = self.JS.read_text(encoding="utf-8")
+        block = src[src.index("async runStepRecombine()"):
+                    src.index("async runStepReferences()")]
+        assert "this.promptTest.titleText?.trim() || null" in block
+        assert "'제목을 입력하세요'" not in block
+
+    def test_error_explains_both_ways(self):
+        src = self.TESTER.read_text(encoding="utf-8")
+        assert "정식제목을 먼저 채우세요" in src

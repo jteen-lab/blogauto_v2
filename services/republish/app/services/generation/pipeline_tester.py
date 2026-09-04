@@ -107,9 +107,12 @@ class PipelineTester:
         styles: Optional[list[str]] = None,
     ) -> dict:
         """Step 2: 제목 재조합 테스트 (스타일별 다중 결과, blog.title_ai 기준)"""
-        original = await self._resolve_title(title_id, title_text)
+        original = await self._resolve_title(title_id, title_text, blog_id)
         if not original:
-            return make_error("recombine_title", "제목을 지정해주세요")
+            return make_error(
+                "recombine_title",
+                "제목을 입력하거나, 이 블로그의 니치에 쓸 수 있는 "
+                "정식제목을 먼저 채우세요")
 
         module = await self.db.get(Module, module_id)
         settings = module.settings or {} if module else {}
@@ -435,9 +438,49 @@ class PipelineTester:
 
     async def _resolve_title(
         self, title_id: Optional[int], title_text: Optional[str],
+        blog_id: Optional[int] = None,
     ) -> Optional[str]:
-        """title_id 또는 title_text에서 제목 문자열 가져오기"""
+        """제목 문자열을 정한다.
+
+        우선순위: `title_id` → 직접 입력 → **블로그 니치에서 무작위**.
+
+        테스트마다 제목을 손으로 적게 할 이유가 없다. 모듈에 블로그가
+        연결돼 있고 그 블로그의 니치에 재고가 있으면 거기서 하나 뽑는다 —
+        실제 발행이 고르는 것과 같은 범위다.
+        """
         if title_id:
             title_obj = await self.db.get(MainTitle, title_id)
-            return title_obj.title if title_obj else title_text
-        return title_text
+            if title_obj:
+                return title_obj.title
+        if title_text and title_text.strip():
+            return title_text.strip()
+        return await self._random_title(blog_id)
+
+    async def _random_title(self, blog_id: Optional[int]) -> Optional[str]:
+        """블로그 니치에서 쓸 수 있는 제목 하나를 무작위로.
+
+        니치가 정해지지 않았으면 전체에서 고른다 — 테스트가 아예 못 도는
+        것보다 낫다. 실패는 None 이고, 호출부가 사유를 말한다.
+        """
+        from sqlalchemy import func as _func, select as _select
+
+        from ...models.category import BlogCategory
+
+        try:
+            query = _select(MainTitle.title).where(
+                MainTitle.status == "available")
+            if blog_id:
+                subs = (await self.db.execute(
+                    _select(BlogCategory.subtopic_id).where(
+                        BlogCategory.blog_id == blog_id,
+                        BlogCategory.is_active.is_(True),
+                        BlogCategory.subtopic_id.is_not(None))
+                )).scalars().all()
+                picked = [s for s in subs if s]
+                if picked:
+                    query = query.where(MainTitle.subtopic_id.in_(picked))
+            return (await self.db.execute(
+                query.order_by(_func.random()).limit(1))).scalar_one_or_none()
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"[TESTER] 무작위 제목 선택 실패: {e}")
+            return None
