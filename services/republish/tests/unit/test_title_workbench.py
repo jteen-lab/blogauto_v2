@@ -763,9 +763,9 @@ class TestRecombineSimilarity:
 
     def test_same_group_is_skipped(self):
         """재조합 결과가 원본과 닮은 것은 정상이다."""
-        src = (BASE / "app/services/recombine/service.py").read_text(
+        src = (BASE / "app/services/recombine/dedup.py").read_text(
             encoding="utf-8")
-        assert "if origin.group_id and group_id == origin.group_id:" in src
+        assert "if origin_group and group_id == origin_group:" in src
 
     def test_retry_is_capped_at_once(self):
         """무한 재시도는 AI 호출이 통제를 벗어난다."""
@@ -776,14 +776,50 @@ class TestRecombineSimilarity:
 
     def test_missing_service_does_not_break(self):
         """유사도 서비스를 못 불러와도 재조합은 계속된다."""
-        src = (BASE / "app/services/recombine/service.py").read_text(
+        src = (BASE / "app/services/recombine/dedup.py").read_text(
             encoding="utf-8")
-        block = src[src.index("def _similarity("):src.index("@dataclass")
-                    if "@dataclass" in src else len(src)]
-        assert "return None" in src[src.index("def _similarity("):
-                                    src.index("class RecombineService")]
+        block = src[src.index("def similarity_service("):
+                    src.index("async def find_clash(")]
+        assert "return None" in block
+        # 조회가 실패해도 '겹치지 않음' 으로 보고 계속한다
+        assert "조회 실패" in src
 
     def test_scan_is_bounded(self):
-        from app.services.recombine.service import SIMILARITY_SCAN
+        from app.services.recombine.dedup import SIMILARITY_SCAN
 
         assert 100 <= SIMILARITY_SCAN <= 2000
+
+    def test_both_paths_share_the_check(self):
+        """수동·자동이 다른 검사를 쓰면 한쪽으로 중복이 샌다."""
+        manual = (BASE / "app/services/recombine/service.py").read_text(
+            encoding="utf-8")
+        auto = (BASE / "app/services/generation/title_lifecycle.py").read_text(
+            encoding="utf-8")
+        assert "from .dedup import find_clash" in manual
+        assert "from ..recombine.dedup import find_clash" in auto
+
+    def test_generation_checks_duplicates(self):
+        """재조합은 관문 밖이라 여기서 안 걸면 같은 글이 두 번 나간다."""
+        src = (BASE / "app/services/generation/generator.py").read_text(
+            encoding="utf-8")
+        assert "distinct_or_original(" in src
+        assert src.index("distinct_or_original(") > src.index(
+            "recombine_result = await self.title_recombiner.recombine(")
+
+    def test_generation_has_provider_fallback(self):
+        """제공자가 없으면 재조합기가 원본을 돌려줘 조용히 무효가 된다."""
+        src = (BASE / "app/services/generation/generator.py").read_text(
+            encoding="utf-8")
+        assert "resolve_provider(" in src
+        life = (BASE / "app/services/generation/title_lifecycle.py").read_text(
+            encoding="utf-8")
+        assert 'AIApiKey.status == "active"' in life
+
+    def test_clash_falls_back_to_original(self):
+        """발행 직전이라 재시도로 시간을 끌기보다 안전한 쪽을 택한다."""
+        src = (BASE / "app/services/generation/title_lifecycle.py").read_text(
+            encoding="utf-8")
+        block = src[src.index("async def distinct_or_original("):
+                    src.index("def title_keywords(")]
+        assert "if clash:" in block
+        assert "getattr(source_title, \"title\", \"\")" in block

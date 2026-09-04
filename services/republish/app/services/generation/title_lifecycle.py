@@ -81,6 +81,60 @@ async def consume_group(db: AsyncSession, source_title: Any) -> int:
     return 1 + count
 
 
+async def resolve_provider(db: AsyncSession, user_id: int,
+                           provider: Optional[str]) -> Optional[str]:
+    """제목 AI 제공자. 블로그 설정이 비면 등록된 활성 키에서 찾는다.
+
+    `TitleRecombiner` 는 제공자가 없으면 예외 대신 **원본을 그대로**
+    돌려준다. 그러면 재조합이 조용히 무효가 되고 원인을 알 수 없다.
+    수동 재조합과 같은 폴백을 여기도 둔다.
+    """
+    if provider:
+        return provider
+    try:
+        from ...models.ai_api_key import AIApiKey
+
+        return (await db.execute(
+            select(AIApiKey.provider)
+            .where(AIApiKey.user_id == user_id,
+                   AIApiKey.is_active.is_(True),
+                   AIApiKey.status == "active")
+            .order_by(AIApiKey.priority.asc())
+            .limit(1)
+        )).scalar_one_or_none()
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"[GENERATOR] 기본 AI 조회 실패: {e}")
+        return None
+
+
+async def distinct_or_original(db: AsyncSession, result: Any,
+                               source_title: Any) -> str:
+    """재조합 결과가 기존 제목과 겹치면 원본을 쓴다.
+
+    재조합은 관문 밖이라 무검사였다. 수동 재조합과 **같은 검사**를 쓴다
+    (계획서 §4-5 C). 겹치면 원본으로 되돌린다 — 발행 직전이라 재시도로
+    시간을 끌기보다 안전한 쪽을 택한다.
+    """
+    text = (getattr(result, "recombined_title", None) or "").strip()
+    if not text or text == getattr(source_title, "title", None):
+        return getattr(source_title, "title", "") or text
+
+    try:
+        from ..recombine.dedup import find_clash
+
+        clash = await find_clash(db, text, source_title)
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"[GENERATOR] 중복 검사 실패(그대로 사용): {e}")
+        return text
+
+    if clash:
+        logger.info(
+            f"[GENERATOR] 재조합 결과가 기존 제목과 겹침 → 원본 사용 | "
+            f"'{text[:30]}' ≈ '{clash[:30]}'")
+        return getattr(source_title, "title", "") or text
+    return text
+
+
 def title_keywords(row: Any) -> List[str]:
     """재조합이 지켜야 할 핵심어.
 

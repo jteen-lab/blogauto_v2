@@ -32,7 +32,8 @@ from .content_generator_helper import (
 )
 from .author_signal_injector import inject_author_signal
 from .title_lifecycle import (
-    consume_group, is_recombined, pick_style, title_keywords,
+    consume_group, distinct_or_original, is_recombined, pick_style,
+    resolve_provider, title_keywords,
 )
 
 logger = logging.getLogger(__name__)
@@ -179,16 +180,23 @@ class ContentGenerator:
             selected_style = source_title.recombine_style
             logger.info("[GENERATOR] 재조합 제목 — 재조합 건너뜀")
         else:
+            # 제공자가 없으면 재조합기가 원본을 그대로 돌려줘 재조합이
+            # 조용히 무효가 된다. 수동 재조합과 같은 폴백을 쓴다.
+            provider = await resolve_provider(
+                self.db, self.user_id, title_provider)
             recombine_result = await self.title_recombiner.recombine(
                 original_title=source_title.title,
                 module_id=prompt_module_id,
-                provider=title_provider,
+                provider=provider,
                 model=title_ai.get("model"),
                 style=selected_style,
                 # 핵심어가 빠지면 검색에 안 잡힌다(계획서 §4-5 B)
                 keywords=title_keywords(source_title),
             )
-        working_title = recombine_result.recombined_title
+        # 기존 제목과 겹치면 원본을 쓴다(계획서 §4-5 C). 재조합은 관문
+        # 밖이라 여기서 안 걸면 같은 글이 두 번 나간다.
+        working_title = await distinct_or_original(
+            self.db, recombine_result, source_title)
         logger.info(
             f"[GENERATOR] 제목 재조합 | "
             f"'{source_title.title[:30]}' → '{working_title[:30]}'"
