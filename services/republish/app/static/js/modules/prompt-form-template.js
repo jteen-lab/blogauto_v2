@@ -279,6 +279,19 @@ function getPromptTitleSection() {
                                             </template>
                                         </div>
                                     </div>
+                                    <div class="flex flex-wrap items-center gap-2 p-2 bg-white border border-gray-200 rounded-lg">
+                                        <label class="text-sm font-medium text-gray-700">제목 길이</label>
+                                        <input type="number" min="0" max="80" x-model.number="promptModule.titleRecombine.minLength"
+                                               class="w-16 px-2 py-1 border border-gray-300 rounded text-sm">
+                                        <span class="text-sm text-gray-500">~</span>
+                                        <input type="number" min="0" max="80" x-model.number="promptModule.titleRecombine.maxLength"
+                                               class="w-16 px-2 py-1 border border-gray-300 rounded text-sm">
+                                        <span class="text-sm text-gray-500">자</span>
+                                        <span class="text-xs text-gray-400">
+                                            0이면 제한 없음. <b>AI는 글자수를 세지 못하므로</b> 결과를 직접 재고
+                                            벗어나면 한 번 다시 만듭니다. 추가 지시사항에 적는 것보다 정확합니다.
+                                        </span>
+                                    </div>
                                     <div>
                                         <div class="flex flex-wrap items-center gap-2 mb-2">
                                             <label class="text-sm font-medium text-gray-700">스타일별 지시 (선택)</label>

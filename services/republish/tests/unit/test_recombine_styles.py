@@ -249,3 +249,103 @@ class TestTemplateUi:
         js = (BASE / "app/static/js/modules/form.js").read_text(
             encoding="utf-8")
         assert "this.loadStyleTemplates()" in js
+
+
+class TestTitleLength:
+    """AI 는 글자수를 세지 못한다 — 우리가 센다."""
+
+    def test_parse_range(self):
+        from app.services.generation.title_length import parse_range
+
+        assert parse_range({"min_length": 25, "max_length": 30}) == (25, 30)
+        assert parse_range({}) == (0, 0)
+        assert parse_range({"max_length": "x"}) == (0, 0)
+
+    def test_swapped_range_is_fixed(self):
+        """뒤집힌 채 두면 아무 제목도 통과하지 못한다."""
+        from app.services.generation.title_length import parse_range
+
+        assert parse_range({"min_length": 30, "max_length": 25}) == (25, 30)
+
+    def test_instruction_none_when_unset(self):
+        from app.services.generation.title_length import instruction
+
+        assert instruction(0, 0) is None
+        assert "25자 이상 30자 이내" in instruction(25, 30)
+
+    def test_fits(self):
+        from app.services.generation.title_length import fits
+
+        assert fits("가" * 27, 25, 30)
+        assert not fits("가" * 10, 25, 30)
+        assert fits("가" * 10, 0, 0), "미설정이면 검사하지 않는다"
+
+    def test_retry_hint_states_actual_length(self):
+        """AI 는 자기가 쓴 제목이 몇 자인지 모른다. 숫자를 줘야 고친다."""
+        from app.services.generation.title_length import retry_hint
+
+        assert "35자" in retry_hint("가" * 35, 25, 30)
+        assert "15자" in retry_hint("가" * 15, 25, 30)
+
+    def test_length_goes_first_in_prompt(self):
+        """뒤에 두면 스타일 지시에 묻힌다 — 실제로 그랬다."""
+        from app.services.generation.title_recombiner import build_base_prompt
+
+        prompt = build_base_prompt("제목", "- 부호 금지", None, (25, 30))
+        assert prompt.index("25자 이상") < prompt.index("다음 블로그 제목을")
+
+    def test_retry_wired(self):
+        src = (BASE / "app/services/generation/title_recombiner.py").read_text(
+            encoding="utf-8")
+        assert "_fit_length" in src
+        # 두 번은 하지 않는다 — 호출이 통제를 벗어난다
+        block = src[src.index("async def _fit_length("):
+                    src.index("async def _batch_styles(")]
+        assert block.count("_fit_length") == 1
+
+    def test_batch_drops_bad_lengths(self):
+        """배치를 통째로 다시 부르면 맞았던 제목까지 바뀐다."""
+        src = (BASE / "app/services/generation/title_recombiner.py").read_text(
+            encoding="utf-8")
+        assert "if fits_length(self._clean_title(title), low, high)" in src
+
+    def test_form_has_length_inputs(self):
+        tpl = (BASE / "app/static/js/modules/prompt-form-template.js").read_text(
+            encoding="utf-8")
+        js = (BASE / "app/static/js/modules/prompt-form.js").read_text(
+            encoding="utf-8")
+        assert "titleRecombine.minLength" in tpl
+        assert "min_length: this.promptModule.titleRecombine.minLength" in js
+        assert "AI는 글자수를 세지 못하므로" in tpl
+
+
+class TestExampleLength:
+    """AI 는 지시문보다 **예시**를 따라간다."""
+
+    def test_template_examples_are_long_enough(self):
+        import re
+
+        from app.services.generation.style_templates import TEMPLATES
+
+        for template in TEMPLATES:
+            for code, text in template["prompts"].items():
+                match = re.search(r"예: (.+)", text)
+                assert match, (template["code"], code)
+                assert len(match.group(1)) >= 20, (template["code"], code)
+
+    def test_default_examples_are_long_enough(self):
+        import re
+
+        from app.services.generation.title_recombiner import STYLE_PROMPTS
+
+        for code, text in STYLE_PROMPTS.items():
+            match = re.search(r"예: (.+)", text)
+            assert match and len(match.group(1)) >= 20, code
+
+    def test_form_defaults_match_server(self):
+        from app.services.generation.title_recombiner import STYLE_PROMPTS
+
+        js = (BASE / "app/static/js/modules/prompt-form.js").read_text(
+            encoding="utf-8")
+        for code, text in STYLE_PROMPTS.items():
+            assert text in js, code

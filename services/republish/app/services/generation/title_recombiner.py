@@ -15,6 +15,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..ai.ai_service import AIService
 from ...models.module import Module
+from .title_length import (
+    fits as fits_length, parse_range as parse_length,
+    retry_hint as length_retry_hint,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,12 +42,12 @@ DEFAULT_TITLE_PROMPT = (
 # 모듈 설정(`title_recombine.style_prompts`)으로 덮어쓸 수 있다.
 STYLE_PROMPTS: dict[str, str] = {
     "emotional": ("독자를 '당신'으로 부르고 감정 어휘를 하나 넣을 것. "
-                  "예: 지금도 손실 중인 당신에게"),
-    "practical": "숫자나 절차를 넣을 것. 예: 3단계로 끝내는 / 5가지 조건",
-    "question": "의문사로 시작할 것. 예: 왜 / 언제 / 얼마나",
+                  "예: 지금도 손실 중인 당신이 확인해야 할 매매 원칙"),
+    "practical": "숫자나 절차를 넣을 것. 예: 3단계로 끝내는 매매 원칙과 5가지 확인 조건",
+    "question": "의문사로 시작할 것. 예: 왜 지금 사야 하고 얼마나 나눠 담아야 하는가",
     "viral": ("역설이나 반전을 넣을 것. "
-              "예: 아무도 말하지 않는 / 오히려 손해인"),
-    "minimal": "명사로 끝낼 것. 수식어 금지. 예: 무한매수법 정리",
+              "예: 아무도 말하지 않는 오히려 손해인 분할매수 구간"),
+    "minimal": "명사로 끝낼 것. 수식어 금지. 예: 라오어 무한매수법 실전 매매 원칙 총정리",
 }
 
 # 스타일 한국어 라벨
@@ -58,13 +62,24 @@ STYLE_LABELS: dict[str, str] = {
 
 def build_base_prompt(original_title: str,
                       extra_text: Optional[str] = None,
-                      keywords: Optional[list] = None) -> str:
+                      keywords: Optional[list] = None,
+                      length: Optional[tuple] = None) -> str:
     """스타일 지시를 뺀 공통 프롬프트.
 
     단일 호출과 배치 호출이 **같은 본문**을 쓴다. 따로 만들면 한쪽만
     고쳐져 결과가 갈린다.
+
+    길이 지시는 **맨 앞**에 둔다. 뒤에 두면 스타일 지시에 묻힌다 —
+    추가 지시사항에 "25자 이내" 를 적어도 안 지켜지던 이유가 그것이다.
     """
-    prompt = DEFAULT_TITLE_PROMPT.replace("{title}", original_title)
+    from .title_length import instruction as length_instruction
+
+    prompt = ""
+    if length:
+        note = length_instruction(*length)
+        if note:
+            prompt = note + "\n\n"
+    prompt += DEFAULT_TITLE_PROMPT.replace("{title}", original_title)
 
     # 핵심어를 명시한다. 이게 없으면 재조합이 검색되는 말을 흘린다.
     picked = [k for k in (keywords or []) if k and str(k).strip()][:5]
@@ -185,10 +200,12 @@ class TitleRecombiner:
             title_prompt_text = tr.get("custom_prompt")
             # 스타일 지시를 화면에서 고칠 수 있다. 비운 것은 기본값을 쓴다.
             style_overrides = tr.get("style_prompts") or {}
+            length_range = parse_length(tr)
         else:
             # 구 형식 (생성 모듈: settings.enable_title_prompt)
             title_enabled = settings.get("enable_title_prompt", False)
             title_prompt_text = settings.get("title_prompt")
+            length_range = (0, 0)
 
         if not title_enabled:
             logger.info("[RECOMBINE] 제목 재조합 비활성화 → 원본 제목 반환")
@@ -202,7 +219,7 @@ class TitleRecombiner:
 
         # 2. 프롬프트 구성 (기본 프롬프트 + 추가 지시사항)
         full_prompt = build_base_prompt(
-            original_title, title_prompt_text, keywords)
+            original_title, title_prompt_text, keywords, length_range)
 
         # 스타일 지시. **이 스타일 것만** 넣는다 — 다섯 개를 다 넣으면
         # AI 가 전부 지키려 해서 결과가 같아진다(실제로 그랬다).
@@ -254,6 +271,12 @@ class TitleRecombiner:
 
         # 4. 결과 정리 (줄바꿈, 따옴표 제거)
         recombined = self._clean_title(result["content"])
+
+        # **AI 는 글자수를 세지 못한다.** 우리가 세고, 벗어나면 실제 길이를
+        # 알려 주며 한 번 다시 청한다. 두 번은 하지 않는다 — 호출이
+        # 통제를 벗어난다.
+        recombined = await self._fit_length(
+            recombined, full_prompt, length_range, provider, model)
 
         logger.info(
             f"[RECOMBINE] 완료 | 원본: '{original_title[:30]}' "
@@ -365,6 +388,33 @@ class TitleRecombiner:
 
         return results
 
+    async def _fit_length(self, title: str, base_prompt: str,
+                          length: tuple, provider: Optional[str],
+                          model: Optional[str]) -> str:
+        """길이가 안 맞으면 한 번 다시 만든다. 실패하면 원래 것을 쓴다."""
+        low, high = length or (0, 0)
+        if not (low or high) or fits_length(title, low, high):
+            return title
+
+        hint = length_retry_hint(title, low, high)
+        logger.info(f"[RECOMBINE] 길이 재시도 | {hint}")
+        try:
+            result = await self.ai_service.generate(
+                prompt=f"{base_prompt}\n\n{hint}\n제목만 출력하세요.",
+                provider=provider, model=model,
+                max_tokens=200, temperature=0.7)
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"[RECOMBINE] 길이 재시도 실패: {e}")
+            return title
+        if not result:
+            return title
+
+        retried = self._clean_title(result.get("content") or "")
+        # 다시 만든 것도 안 맞으면 더 시도하지 않는다. 둘 중 가까운 쪽을 쓴다.
+        if retried and fits_length(retried, low, high):
+            return retried
+        return retried or title
+
     async def _batch_styles(self, module, styles: list, original_title: str,
                             provider: Optional[str], model: Optional[str],
                             ) -> Optional[list]:
@@ -381,7 +431,9 @@ class TitleRecombiner:
         tr = settings.get("title_recombine", {})
         overrides = tr.get("style_prompts") or {}
 
-        base = build_base_prompt(original_title, tr.get("custom_prompt"))
+        length = parse_length(tr)
+        base = build_base_prompt(
+            original_title, tr.get("custom_prompt"), None, length)
         prompt = build_prompt(
             base, picked, STYLE_LABELS,
             {code: style_instruction(code, overrides) for code in picked})
@@ -399,6 +451,12 @@ class TitleRecombiner:
             return None
 
         parsed = parse(result.get("content") or "", picked)
+        # 길이가 어긋난 것은 개별 호출로 돌린다. 거기서 한 번 더 청한다 —
+        # 배치를 통째로 다시 부르면 맞았던 제목까지 바뀐다.
+        low, high = length
+        if low or high:
+            parsed = {code: title for code, title in parsed.items()
+                      if fits_length(self._clean_title(title), low, high)}
         if not is_complete(parsed, picked):
             # 일부만 오면 빈칸이 생긴다. 개별 호출로 돌아가는 편이 낫다.
             logger.info("[RECOMBINE_STYLES] 응답 부족 | %d/%d",
