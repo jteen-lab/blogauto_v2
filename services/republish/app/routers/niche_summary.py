@@ -157,9 +157,9 @@ async def _settings(db: AsyncSession) -> dict:
     try:
         return {
             "low_threshold": await SystemSettingsService.get_int(
-                "niche_low_threshold", DEFAULT_LOW, db),
+                "niche_low_threshold", db, DEFAULT_LOW),
             "card_limit": await SystemSettingsService.get_int(
-                "niche_card_limit", DEFAULT_CARDS, db),
+                "niche_card_limit", db, DEFAULT_CARDS),
         }
     except Exception as e:  # noqa: BLE001
         logger.warning("[NICHE_SUMMARY] 설정 로드 실패 | %s", e)

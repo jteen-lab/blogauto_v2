@@ -138,3 +138,24 @@ class TestRunSlots:
         from app.routers.title_workbench import MAX_CONCURRENT
 
         assert 1 <= MAX_CONCURRENT <= 8
+
+
+class TestSettingsWiring:
+    """설정을 잘못 읽으면 화면 기준과 수집 기준이 갈라진다."""
+
+    def test_get_int_argument_order(self):
+        """시그니처는 (key, db, default) 다. 순서를 바꾸면 db 자리에
+        정수가 들어가 조회가 통째로 예외로 떨어지고, 사용자가 저장한
+        값 대신 기본값이 조용히 쓰인다."""
+        import inspect
+
+        from app.services.system_settings_service import SystemSettingsService
+
+        params = list(inspect.signature(
+            SystemSettingsService.get_int).parameters)
+        assert params[:3] == ["key", "db", "default"]
+
+        src = (ROOT / "app/routers/niche_summary.py").read_text(
+            encoding="utf-8")
+        assert '"niche_low_threshold", db, DEFAULT_LOW)' in src
+        assert '"niche_card_limit", db, DEFAULT_CARDS)' in src
