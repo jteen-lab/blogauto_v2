@@ -43,6 +43,10 @@ from .scheduler import scheduler_instance
 
 logger = get_logger("flow_scheduler", "republish.log")
 
+# 한 플로우에 같은 타입 모듈을 여러 개 넣어 **순서대로** 돌리는 액션.
+# 제목 쪽은 수집 → URL 추출 → 생성이 한 세트라 하나만 돌리면 의미가 없다.
+_CHAIN_ACTIONS = {"keyword": "키워드 모듈", "title_gen": "제목 모듈"}
+
 # Timezone 설정
 KST = pytz.timezone('Asia/Seoul')
 
@@ -1232,7 +1236,26 @@ class FlowScheduler:
 
                 # 모듈이 필요한 액션 타입은 모듈 찾기
                 module = None
-                if action_type in (
+                # keyword·title_gen 은 한 플로우에 여러 개를 넣어 순서대로
+                # 돌린다(제목 수집 → URL 추출 → 제목 생성). 아래 단일 조회는
+                # 첫 개에서 break 하므로 나머지가 영원히 안 돈다.
+                chain: List[Module] = []
+                if action_type in _CHAIN_ACTIONS:
+                    chain = [
+                        link.module
+                        for link in sorted(flow.module_links,
+                                           key=lambda x: x.execution_order)
+                        if link.module and link.module.module_type
+                        and link.module.module_type.code == action_type
+                    ]
+                    if not chain:
+                        logger.warning(
+                            f"[FLOW_SCHEDULER] Module not found for action_type | "
+                            f"FlowID={flow_id} | ActionType={action_type}"
+                        )
+                        return
+                    module = chain[0]
+                elif action_type in (
                     "collect", "bulk_collect", "data", "generate", "prompt",
                     "contact_form",
                 ):
@@ -1479,17 +1502,14 @@ class FlowScheduler:
                         f"[FLOW_SCHEDULER] 생성 모듈 실행 완료 | FlowID={flow_id} | "
                         f"Success={result.get('success', False)} | Duration={duration_ms}ms"
                     )
-                elif action_type == "keyword":
-                    result = await self._execute_keyword_module(
-                        module, db, blogs
-                    )
-                elif action_type == "title_gen":
-                    result = await self._execute_title_module(
-                        module, db, blogs
+                elif action_type in _CHAIN_ACTIONS:
+                    result = await self._execute_module_chain(
+                        action_type, chain, flow, blogs, db,
                     )
                     duration_ms = int((datetime.now() - started_at).total_seconds() * 1000)
                     logger.info(
-                        f"[FLOW_SCHEDULER] 키워드 모듈 실행 완료 | FlowID={flow_id} | "
+                        f"[FLOW_SCHEDULER] {_CHAIN_ACTIONS[action_type]} 실행 완료 | "
+                        f"FlowID={flow_id} | Modules={len(chain)} | "
                         f"Success={result.get('success', False)} | Duration={duration_ms}ms"
                     )
                 elif action_type == "contact_form":
@@ -2156,6 +2176,62 @@ class FlowScheduler:
         except Exception as e:
             logger.error(f"[FLOW_SCHEDULER] 키워드 모듈 실행 오류: {e}")
             return {"success": False, "error": str(e), "message": str(e)}
+
+    async def _execute_module_chain(
+        self,
+        action_type: str,
+        modules: List[Module],
+        flow: Flow,
+        blogs: List[Blog],
+        db: AsyncSession,
+    ) -> Dict[str, Any]:
+        """같은 타입 모듈을 execution_order 순으로 모두 돌린다.
+
+        모듈마다 AutorunLog 를 남긴다. 남기지 않으면 오토런이 돌았는지
+        동작로그로 확인할 방법이 없다 — 실패해도 화면에는 아무것도 안 뜬다.
+
+        한 모듈이 실패해도 나머지는 계속 돈다. 수집이 실패했다고 추출까지
+        멈추면 이미 쌓인 URL 이 방치된다.
+
+        Args:
+            action_type: "keyword" 또는 "title_gen".
+            modules: 실행할 모듈 목록(이미 순서대로 정렬됨).
+            flow: 대상 플로우.
+            blogs: 플로우에 연결된 블로그 목록.
+            db: DB 세션.
+
+        Returns:
+            {"success": bool, "message": str, "details": [...]}
+        """
+        runner = (self._execute_keyword_module if action_type == "keyword"
+                  else self._execute_title_module)
+        details, ok = [], 0
+        for module in modules:
+            started = datetime.now()
+            try:
+                result = await runner(module, db, blogs)
+            except Exception as e:      # 한 모듈이 죽어도 나머지는 돈다
+                logger.error(
+                    f"[FLOW_SCHEDULER] 모듈 실행 오류 | module={module.name} | {e}"
+                )
+                result = {"success": False, "message": str(e)}
+            duration_ms = int((datetime.now() - started).total_seconds() * 1000)
+            if result.get("success"):
+                ok += 1
+            details.append({"module": module.name,
+                            "success": bool(result.get("success")),
+                            "message": result.get("message", "")})
+            await self._save_autorun_log(
+                db=db, user_id=flow.user_id, flow_id=flow.id,
+                flow_name=flow.name, module_name=module.name,
+                blog_name="-", result=result, duration_ms=duration_ms,
+                action=action_type,
+            )
+        return {
+            "success": ok > 0,
+            "message": f"모듈 {ok}/{len(modules)}개 성공",
+            "details": details,
+        }
 
     async def _execute_title_module(
         self,
