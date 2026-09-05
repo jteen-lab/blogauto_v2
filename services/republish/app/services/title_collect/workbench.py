@@ -104,6 +104,8 @@ class TitleWorkbench:
         out["made"] = _total(out)
         out["message"] = _summarize(out)
         out["blogs"] = len(targets)
+        out["success"] = _succeeded(out)
+        out["skipped"] = _skipped(out)
         return out
 
     async def run(self, payload: Optional[dict]) -> Dict[str, Any]:
@@ -130,6 +132,8 @@ class TitleWorkbench:
         out["samples"] = samples[:100]
         out["made"] = _total(out)
         out["message"] = _summarize(out)
+        out["success"] = _succeeded(out)
+        out["skipped"] = _skipped(out)
         return out
 
     async def _collect(self, raw: dict, settings: Any) -> Dict[str, Any]:
@@ -324,6 +328,53 @@ def _total(out: Dict[str, Any]) -> int:
     collect = (out.get("collect") or {}).get("saved") or 0
     gen = (out.get("gen") or {}).get("made") or 0
     return collect + gen
+
+
+def _errors_of(out: Dict[str, Any]) -> List[str]:
+    """켠 섹션이 남긴 실패 사유들."""
+    found: List[str] = []
+    collect = out.get("collect") or {}
+    for block in (collect.get("search"), collect.get("extract"), collect):
+        if isinstance(block, dict) and block.get("error"):
+            found.append(str(block["error"]))
+    gen = out.get("gen") or {}
+    for key in ("l1", "l3"):
+        block = gen.get(key)
+        if isinstance(block, dict) and block.get("error"):
+            found.append(str(block["error"]))
+    return found
+
+
+def _skipped(out: Dict[str, Any]) -> bool:
+    """할 일이 없어 지나간 회차인가.
+
+    실패도 성공도 아니다. '성공' 으로 적으면 시드가 없어 아무것도 안 한
+    회차가 잘 돈 회차와 같아 보인다.
+    """
+    if _total(out) or _errors_of(out):
+        return False
+    collect = out.get("collect") or {}
+    blocks = [collect.get("search"), collect.get("extract")]
+    gen = out.get("gen") or {}
+    blocks += [gen.get("l1"), gen.get("l3")]
+    seen = [b for b in blocks if isinstance(b, dict)]
+    return bool(seen) and all(b.get("skipped") for b in seen)
+
+
+def _succeeded(out: Dict[str, Any]) -> bool:
+    """정말 성공했는가.
+
+    예전에는 무조건 True 였다. AI 제공자를 안 골라 한 편도 못 만든
+    회차가 동작로그에 SUCCESS 로 남아, 사용자가 상세를 펼쳐 보기 전에는
+    실패를 알 수 없었다.
+
+    얻은 게 하나라도 있으면 성공으로 본다 — 두 섹션 중 하나만 실패한
+    회차까지 실패로 적으면 진짜 실패가 묻힌다. 그 경우 메시지 끝에
+    ``| ⚠ 사유`` 가 붙는다.
+    """
+    if _total(out):
+        return True
+    return not _errors_of(out)
 
 
 def _summarize(out: Dict[str, Any]) -> str:

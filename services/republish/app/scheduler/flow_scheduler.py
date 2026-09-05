@@ -40,12 +40,23 @@ from ..services.generation.growth_profile_resolver import GrowthProfileResolver
 from ..services.generation.flow_execution_context import StageParams
 from ..services.generation.post_count_helper import build_effective_post_counts
 from .scheduler import scheduler_instance
+from ..services.module_action_label import label_for
 
 logger = get_logger("flow_scheduler", "republish.log")
 
 # 한 플로우에 같은 타입 모듈을 여러 개 넣어 **순서대로** 돌리는 액션.
 # 제목 쪽은 수집 → URL 추출 → 생성이 한 세트라 하나만 돌리면 의미가 없다.
 _CHAIN_ACTIONS = {"keyword": "키워드 모듈", "title_gen": "제목 모듈"}
+
+# GP 없이 **모듈이 스스로 시각을 정하는** 액션. 여기 빠지면 모듈에
+# fixed_times 를 넣어도 무시되고 폴백 간격(3시간)으로 돈다.
+_SELF_SCHEDULED = ("collect", "data", "bulk_collect", "keyword", "title_gen")
+
+# 정해진 시각을 얼마나 지나서까지 "지금" 으로 볼지. 재기동·지터로 늦게
+# 깨어나도 그 회차를 건너뛰지 않게 한다.
+_DUE_WINDOW_SECONDS = 30 * 60
+# 반대로 조금 일찍 깨어난 경우(스케줄러 오차).
+_DUE_GRACE_SECONDS = 120
 
 # Timezone 설정
 KST = pytz.timezone('Asia/Seoul')
@@ -1003,9 +1014,7 @@ class FlowScheduler:
         from app.scheduler.jitter import resolve_module_jitter
 
         # fixed_time 모드 우선 처리 (GP 없는 collect/data/bulk_collect)
-        if not gp_settings and action_type in (
-            "collect", "data", "bulk_collect",
-        ):
+        if not gp_settings and action_type in _SELF_SCHEDULED:
             fixed_next = self._get_module_next_fixed_time(flow, action_type)
             if fixed_next:
                 await self._schedule_at_time(
@@ -1241,18 +1250,21 @@ class FlowScheduler:
                 # 첫 개에서 break 하므로 나머지가 영원히 안 돈다.
                 chain: List[Module] = []
                 if action_type in _CHAIN_ACTIONS:
-                    chain = [
-                        link.module
-                        for link in sorted(flow.module_links,
-                                           key=lambda x: x.execution_order)
-                        if link.module and link.module.module_type
-                        and link.module.module_type.code == action_type
-                    ]
+                    # 시각을 정한 모듈은 자기 시각에만 돈다. 전부 돌리면
+                    # 하루 한 번짜리 모듈이 깨어날 때마다 같이 돌아간다.
+                    chain = self._modules_due(flow, action_type)
                     if not chain:
-                        logger.warning(
-                            f"[FLOW_SCHEDULER] Module not found for action_type | "
-                            f"FlowID={flow_id} | ActionType={action_type}"
+                        # 모듈이 아예 없는 것과 "지금은 아무 모듈의 시각이
+                        # 아닌 것" 을 구분한다. 후자는 정상이므로 다음
+                        # 시각만 다시 잡고 조용히 끝낸다.
+                        await self._reschedule_next(
+                            db, flow, action_type,
+                            await self._get_execution_state(
+                                db, flow_id, action_type),
+                            self._find_gp_settings(flow),
+                            [link.blog for link in flow.blog_links if link.blog],
                         )
+                        await db.commit()
                         return
                     module = chain[0]
                 elif action_type in (
@@ -1670,7 +1682,7 @@ class FlowScheduler:
         if (
             fallback_interval <= 0
             and not gp_settings
-            and action_type in ("collect", "data", "bulk_collect")
+            and action_type in _SELF_SCHEDULED
         ):
             fixed_next = self._get_module_next_fixed_time(flow, action_type)
             if fixed_next:
@@ -1964,63 +1976,128 @@ class FlowScheduler:
         )
         return default_minutes
 
+    def _module_fixed_times(self, module: Module,
+                            action_type: str) -> Optional[List[str]]:
+        """이 모듈이 정한 실행 시각 목록. fixed_time 모드가 아니면 None."""
+        settings = module.settings or {}
+        # bulk_collect·keyword·title_gen 은 스케줄을 settings.schedule.*
+        # 중첩에 저장한다. collect/data 는 top-level 이다.
+        if action_type in ("bulk_collect", "keyword", "title_gen"):
+            sched = settings.get("schedule") or {}
+        else:
+            sched = settings
+        if sched.get("schedule_mode") != "fixed_time":
+            return None
+        times = sched.get("fixed_times") or []
+        return list(times) if times else None
+
+    def _modules_of(self, flow: Flow, action_type: str) -> List[Module]:
+        """이 액션에 속한 모듈들. 실행 순서대로."""
+        return [
+            link.module
+            for link in sorted(flow.module_links,
+                               key=lambda x: x.execution_order)
+            if link.module and link.module.module_type
+            and link.module.module_type.code == action_type
+        ]
+
+    @staticmethod
+    def _parse_times(times: List[str], now: datetime) -> List[datetime]:
+        """"HH:MM" 을 오늘/내일의 실제 시각으로. 지난 시각은 내일로."""
+        midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        out: List[datetime] = []
+        for raw in times:
+            try:
+                h_str, m_str = str(raw).split(":")
+                hour, minute = int(h_str), int(m_str)
+            except (ValueError, AttributeError):
+                logger.warning(
+                    f"[FLOW_SCHEDULER] fixed_times 파싱 실패 | value={raw!r}")
+                continue
+            if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                continue
+            slot = midnight.replace(hour=hour, minute=minute)
+            if slot <= now:
+                slot += timedelta(days=1)
+            out.append(slot)
+        return out
+
     def _get_module_next_fixed_time(
         self,
         flow: Flow,
         action_type: str,
     ) -> Optional[datetime]:
-        """모듈 settings 의 schedule_mode/fixed_times 기반 다음 실행 시각
+        """이 액션의 다음 실행 시각 (KST).
 
-        fixed_time 모드가 아니거나 유효한 fixed_times 가 없으면 None 반환.
-        반환 시각은 KST 기준 가장 가까운 미래 시각.
+        한 플로우에 같은 타입 모듈이 여러 개일 수 있다(제목 수집 07·19시,
+        URL 추출 09시, 제목 생성 10시). **전부의 시각을 모아** 가장 가까운
+        것을 고른다. 예전에는 첫 모듈만 보고 정해, 나머지 모듈의 시각은
+        영영 오지 않았다.
+
+        하나라도 fixed_time 이 아니면 None — 섞인 설정에서 시각만 보고
+        돌리면 간격 모드 모듈이 하루 한 번밖에 못 돈다.
         """
-        for link in flow.module_links:
-            module = link.module
-            if not module or not module.module_type:
-                continue
-            if module.module_type.code != action_type:
-                continue
-            settings = module.settings or {}
-            # bulk_collect·keyword·title_gen 은 스케줄을 settings.schedule.*
-            # 중첩에 저장한다. collect/data 는 top-level 이다.
-            if action_type in ("bulk_collect", "keyword", "title_gen"):
-                sched = settings.get("schedule") or {}
-                schedule_mode = sched.get("schedule_mode")
-                fixed_times = sched.get("fixed_times") or []
-            else:
-                schedule_mode = settings.get("schedule_mode")
-                fixed_times = settings.get("fixed_times") or []
-            if schedule_mode != "fixed_time":
-                return None
-            if not fixed_times:
-                return None
+        modules = self._modules_of(flow, action_type)
+        if not modules:
+            return None
 
-            now = datetime.now(KST)
-            today_midnight = now.replace(
-                hour=0, minute=0, second=0, microsecond=0
-            )
-            candidates: list[datetime] = []
-            for t_str in fixed_times:
-                try:
-                    h_str, m_str = str(t_str).split(":")
-                    h, m = int(h_str), int(m_str)
-                except (ValueError, AttributeError):
-                    logger.warning(
-                        f"[FLOW_SCHEDULER] fixed_times 파싱 실패 | "
-                        f"value={t_str!r}"
-                    )
-                    continue
-                if not (0 <= h <= 23 and 0 <= m <= 59):
-                    continue
-                candidate = today_midnight.replace(hour=h, minute=m)
-                # 이미 지난 시각이면 다음 날로
-                if candidate <= now:
-                    candidate = candidate + timedelta(days=1)
-                candidates.append(candidate)
-            if not candidates:
+        now = datetime.now(KST)
+        slots: List[datetime] = []
+        for module in modules:
+            times = self._module_fixed_times(module, action_type)
+            if times is None:
                 return None
-            return min(candidates)
-        return None
+            slots.extend(self._parse_times(times, now))
+        return min(slots) if slots else None
+
+    def _modules_due(self, flow: Flow, action_type: str) -> List[Module]:
+        """지금 돌아야 할 모듈만.
+
+        시각을 정한 모듈은 **자기 시각에만** 돈다. 안 그러면 07시에 깨어난
+        김에 10시 모듈까지 같이 돌아, 하루 한 번짜리 모듈이 하루 네 번 돈다.
+
+        시각을 안 정한(간격 모드) 모듈은 늘 돈다 — 판단 근거가 없다.
+        """
+        modules = self._modules_of(flow, action_type)
+        now = datetime.now(KST)
+        due: List[Module] = []
+        for module in modules:
+            times = self._module_fixed_times(module, action_type)
+            if times is None:
+                due.append(module)
+                continue
+            if self._is_due_now(times, now):
+                due.append(module)
+        if not due:
+            names = [m.name for m in modules]
+            logger.info(
+                f"[FLOW_SCHEDULER] 지금 시각에 해당하는 모듈 없음 | "
+                f"FlowID={flow.id} | ActionType={action_type} | "
+                f"Modules={names}")
+        return due
+
+    @staticmethod
+    def _is_due_now(times: List[str], now: datetime) -> bool:
+        """정해진 시각 중 하나가 방금 지났는가.
+
+        앱 재기동·지터로 몇 분 늦게 깨어날 수 있어 창을 둔다. 창이 너무
+        넓으면 옆 모듈의 시각까지 삼키므로 30분으로 잡는다.
+        """
+        for raw in times:
+            try:
+                h_str, m_str = str(raw).split(":")
+                hour, minute = int(h_str), int(m_str)
+            except (ValueError, AttributeError):
+                continue
+            if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                continue
+            slot = now.replace(hour=hour, minute=minute,
+                               second=0, microsecond=0)
+            for shifted in (slot, slot - timedelta(days=1)):
+                gap = (now - shifted).total_seconds()
+                if -_DUE_GRACE_SECONDS <= gap <= _DUE_WINDOW_SECONDS:
+                    return True
+        return False
 
     def _acquire_module_dispatch_lock(
         self,
@@ -2221,9 +2298,14 @@ class FlowScheduler:
             details.append({"module": module.name,
                             "success": bool(result.get("success")),
                             "message": result.get("message", "")})
+            # 로그에는 모듈명이 아니라 **동작명**을 남긴다. 모듈명은 사람이
+            # 붙인 것이라 설정과 어긋날 수 있고, 무엇이 돌았는지 알려면
+            # 매번 상세를 펼쳐 봐야 했다.
             await self._save_autorun_log(
                 db=db, user_id=flow.user_id, flow_id=flow.id,
-                flow_name=flow.name, module_name=module.name,
+                flow_name=flow.name,
+                module_name=label_for(action_type, module.settings,
+                                      module.name),
                 blog_name="-", result=result, duration_ms=duration_ms,
                 action=action_type,
             )
@@ -2252,12 +2334,16 @@ class FlowScheduler:
             {"success": bool, "message": str, ...}
         """
         from app.services.flow.module_blog_scope import blogs_for_module
-        from app.services.title_gen.runner import TitleModuleRunner
+        from app.services.title_collect.workbench import TitleWorkbench
 
         try:
             targets = blogs_for_module(module, list(blogs or []))
-            runner = TitleModuleRunner(db, module.user_id)
-            return await runner.run_for_blogs(module.settings or {}, targets)
+            # 수동 화면·플로우와 **같은 실행기**. TitleModuleRunner 를 직접
+            # 부르면 생성만 돈다 — 수집·추출 모듈이 제 일 대신 생성기를
+            # 돌리며 "AI 제공자가 없습니다" 로 매 회차 헛돌았다.
+            return await TitleWorkbench(
+                db, module.user_id).run_for_module(
+                    module.settings or {}, targets)
         except Exception as e:
             logger.error(f"[FLOW_SCHEDULER] 제목 모듈 실행 오류: {e}")
             return {"success": False, "error": str(e), "message": str(e)}

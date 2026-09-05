@@ -35,12 +35,15 @@ class TestModuleLookup:
         assert action in _CHAIN_ACTIONS
 
     def test_all_modules_of_type_collected(self):
-        """첫 개에서 break 하면 수집만 돌고 추출·생성이 안 돈다."""
-        block = SRC[SRC.index("chain: List[Module] = []"):
-                    SRC.index("elif action_type in (\n"
-                              "                    \"collect\"")]
-        assert "execution_order" in block   # 순서대로
-        assert "break" not in block         # 전부 모은다
+        """첫 개에서 break 하면 수집만 돌고 추출·생성이 안 돈다.
+
+        지금은 `_modules_due` 가 모아 준다 — 실행 순서대로 전부 훑고,
+        그중 **지금 시각인 것**만 돌려준다.
+        """
+        body = SRC[SRC.index("def _modules_of("):
+                   SRC.index("def _parse_times(")]
+        assert "execution_order" in body   # 순서대로
+        assert "break" not in body         # 전부 모은다
 
 
 class TestChainRunner:

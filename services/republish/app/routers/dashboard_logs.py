@@ -41,6 +41,9 @@ _ACTION_DISPLAY = {
 
 # "작업" 탭에 묶이는 액션. 세 곳에서 쓰므로 한 곳에만 적는다 —
 # 따로 적어 두면 모듈이 늘 때마다 한 군데를 빠뜨린다.
+# 한 액션이 여러 동작으로 나뉘는 것들. 로그에 동작명을 쓴다.
+_CHAIN_ACTIONS = ("keyword", "title_gen")
+
 # 성공해도 "성공" 대신 건수 요약을 보여줄 액션
 _COUNT_ACTIONS = ("keyword", "title_gen", "collect", "bulk_collect")
 
@@ -308,6 +311,11 @@ async def _serialize_autorun_log(
     """
     prefix = await _get_platform_prefix(log.blog_name, db, blog_platforms)
     action_text = _ACTION_DISPLAY.get(log.action, log.action)
+    # 키워드·제목 모듈은 한 액션이 여러 일을 한다(제목 수집 / URL 추출 /
+    # 제목 생성). "제목 생성/수집" 만 적으면 무엇이 돌았는지 알 수 없어
+    # 매번 상세를 펼쳐 봐야 했다 — 실행기가 남긴 동작명을 쓴다.
+    if log.action in _CHAIN_ACTIONS and (log.module_name or "").strip():
+        action_text = log.module_name.strip()
 
     # 상태 → 레벨/텍스트 변환
     if log.status == "success":
