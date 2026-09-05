@@ -53,6 +53,7 @@ from .routers.data_domains import router as data_domains_router  # 니치 도메
 from .routers.data_title_cleanup import router as data_title_cleanup_router  # 임시제목 정리
 from .routers.data_domain_ops import router as data_domain_ops_router  # 도메인 정리
 from .routers.niche_summary import router as niche_summary_router  # 니치 현황
+from .routers.analytics import router as analytics_router  # 유입 분석
 from .routers.style_templates import router as style_templates_router  # 제목 스타일 템플릿
 from .routers.taxonomy import router as taxonomy_router  # 분류표 관리
 from .routers.title_recombine import router as title_recombine_router  # 수동 재조합
@@ -239,6 +240,20 @@ async def lifespan(app: FastAPI):
             "검색 노출 점검 Job 등록됨 (사이트맵 30분 / 구글색인 6시간 / 네이버 8시간)"
         )
 
+        # 유입 수집 Job — 하루 한 번. 두 API 모두 최근 며칠치를 보정하므로
+        # 28일 창을 통째로 다시 읽어 덮어쓴다.
+        from .scheduler.analytics_job import collect_analytics_job
+
+        scheduler.add_job(
+            collect_analytics_job,
+            "cron",
+            hour=5, minute=20,
+            id="analytics_collect_job",
+            name="유입 수집(GA4·서치콘솔)",
+            replace_existing=True,
+        )
+        logger.info("유입 수집 Job 등록됨 (매일 05:20)")
+
         # 플로우 스케줄러 시작
         await setup_flow_scheduler()
         logger.info("플로우 스케줄러 시작됨")
@@ -323,6 +338,7 @@ app.include_router(data_title_cleanup_router, prefix=settings.api_v1_prefix)
 # data_domains 의 /{domain_id}/toggle 과 겹치지 않게 먼저 등록한다
 app.include_router(data_domain_ops_router, prefix=settings.api_v1_prefix)
 app.include_router(niche_summary_router, prefix=settings.api_v1_prefix)
+app.include_router(analytics_router, prefix=settings.api_v1_prefix)
 app.include_router(style_templates_router, prefix=settings.api_v1_prefix)
 app.include_router(taxonomy_router, prefix=settings.api_v1_prefix)
 app.include_router(title_recombine_router, prefix=settings.api_v1_prefix)

@@ -9,7 +9,10 @@ from app.routers.blog_settings_renewal import (
 
 def test_defaults():
     cfg = _normalize_config(RenewalSettingsRequest())
-    assert cfg == {
+    # 성과 판정(analytics P4)은 별도 테스트에서 본다 — 여기서는 기본값이
+    # 꺼져 있다는 것만 확인한다. 지표가 쌓이기 전에 켜지면 안 된다.
+    assert cfg["performance"]["enabled"] is False
+    assert {k: v for k, v in cfg.items() if k != "performance"} == {
         "enabled": False,
         "default_period_months": 6,
         "title_mode": "keep",

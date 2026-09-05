@@ -46,10 +46,24 @@ class RenewalService:
             return {"success": False, "error": "라이브 글 조회 실패"}
 
         is_blogauto = crawled_post.source == "generated"
+        perf = await self._performance(blog, crawled_post)
         plan = decide_renewal_plan(
             title_mode, is_blogauto, live.image_origin,
             live.featured_image_url or "",
+            action=perf.action, action_reason=perf.reason,
         )
+
+        # **잘 되는 글은 건드리지 않는다.** 지금까지 없던 선택지다.
+        if plan.skip:
+            logger.info("[RENEWAL] 건너뜀 | blog=%s | post=%s | %s",
+                        blog.name, crawled_post.id, plan.action_reason)
+            if not dry_run:
+                # 주기만 미룬다. 다음 회차에 또 후보로 올라오면 의미가 없다.
+                crawled_post.last_renewed_at = datetime.now()
+                await self.db.commit()
+            return {"success": True, "skipped": True,
+                    "action": plan.action, "reason": plan.action_reason,
+                    "title": live.title}
 
         module = await self._resolve_module(blog, crawled_post)
         if not module:
@@ -58,10 +72,12 @@ class RenewalService:
         subtopic_id, topic_id = await self._resolve_category(crawled_post)
         # user_id 미지정 시 블로그 소유자로 폴백(AIService 키 조회용).
         gen_user_id = self.user_id or blog.user_id
+        gaps = await self._gaps(blog, crawled_post, live, plan)
         rc = await RenewalGenerator(self.db, gen_user_id).regenerate(
             blog, module, live.title, plan,
             subtopic_id=subtopic_id, topic_id=topic_id,
             existing_content=live.content_html,
+            gap_instruction=gaps,
         )
         if not rc.success:
             return {"success": False, "error": rc.error}
@@ -75,6 +91,8 @@ class RenewalService:
                 "image_origin": live.image_origin,
                 "image_action": plan.image_action,
                 "content_len": len(rc.content_html),
+                "action": plan.action, "reason": plan.action_reason,
+                "gaps": gaps.splitlines()[4:] if gaps else [],
                 "warnings": rc.warnings,
             }
             if include_content:
@@ -103,7 +121,63 @@ class RenewalService:
         return {
             "success": True, "title": rc.title,
             "url": upd.get("link"), "image_action": plan.image_action,
+            "action": plan.action, "reason": plan.action_reason,
         }
+
+    async def _performance(self, blog: Blog, crawled_post: CrawledPost):
+        """이 글의 성과 판정.
+
+        지표가 없으면 legacy — **지금 동작 그대로**다. 없는 데이터를 0 으로
+        읽으면 "유입 없는 글" 이 되어 멀쩡한 글이 갈아엎힌다.
+        """
+        from sqlalchemy import select
+
+        from ...models.search_visibility import SearchVisibilityUrl
+        from ..analytics.performance import Performance, evaluate
+
+        cfg = (blog.renewal_config or {}).get("performance") or {}
+        if not cfg.get("enabled", False):
+            return Performance(url_id=0, reason="성과 판정 꺼짐")
+
+        row = (await self.db.execute(
+            select(SearchVisibilityUrl).where(
+                SearchVisibilityUrl.crawled_post_id == crawled_post.id
+            ).limit(1)
+        )).scalars().first()
+        if not row:
+            return Performance(url_id=0, reason="발행 URL 이력 없음")
+        try:
+            return await evaluate(self.db, row.id,
+                                  thresholds=cfg.get("thresholds"))
+        except Exception as e:  # noqa: BLE001 — 판정 실패로 리뉴얼을 막지 않는다
+            logger.warning("[RENEWAL] 성과 판정 실패 | post=%s | %s",
+                           crawled_post.id, e)
+            return Performance(url_id=row.id, reason="판정 실패")
+
+    async def _gaps(self, blog: Blog, crawled_post: CrawledPost,
+                    live, plan) -> str:
+        """보강할 때만 니즈 갭을 붙인다.
+
+        전면 재작성에는 넣지 않는다 — 새로 쓰는 글에 "빠진 것" 을 지시하면
+        그것만 다루는 글이 된다.
+        """
+        if plan.action not in ("augment", "title"):
+            return ""
+        try:
+            from ..analytics.intent_gap import gaps_for_url, to_prompt
+
+            gaps = await gaps_for_url(
+                self.db, blog, crawled_post.url or "",
+                live.content_html or "")
+            if gaps:
+                logger.info("[RENEWAL] 니즈 갭 %d건 | post=%s | %s",
+                            len(gaps), crawled_post.id,
+                            [g["query"] for g in gaps[:3]])
+            return to_prompt(gaps)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[RENEWAL] 니즈 갭 실패 | post=%s | %s",
+                           crawled_post.id, e)
+            return ""
 
     async def _resolve_module(self, blog: Blog, crawled_post: CrawledPost):
         """리뉴얼에 쓸 생성 프롬프트 모듈 결정.

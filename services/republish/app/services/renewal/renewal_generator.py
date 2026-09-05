@@ -25,6 +25,17 @@ from ..generation.content_generator_helper import generate_content_with_meta
 from ..generation.generator import ContentGenerator
 from .renewal_plan import RenewalPlan
 
+# 모듈에 리뉴얼 문구가 없을 때 쓰는 기본값. 성과 판정이 모드를 정했는데
+# 문구가 없다고 아무 일도 안 하면 판정이 무의미해진다.
+_AUGMENT_TEXT = (
+    "기존 글의 구조와 이미 잘 쓰인 부분은 그대로 두고, 낡은 정보만 최신으로 "
+    "고치고 빠진 내용을 덧붙여 더 충실하게 만드세요. 전체를 새로 쓰지 마세요."
+)
+_REWRITE_TEXT = (
+    "이 주제를 처음부터 다시 쓰세요. 기존 글은 검색에서 성과를 내지 못했으므로 "
+    "구성과 접근을 바꿔야 합니다."
+)
+
 logger = get_logger("renewal_generator", "app.log")
 
 
@@ -59,11 +70,14 @@ class RenewalGenerator:
         topic_id: Optional[int] = None,
         text_replace_enabled: bool = True,
         existing_content: str = "",
+        gap_instruction: str = "",
     ) -> RenewalContent:
         """라이브 글을 현재 양식·최신 내용으로 재생성한다.
 
         existing_content: 라이브 글 본문(HTML). 리뉴얼 프롬프트가 '추가/새'
             모드일 때 기존 내용 보존·확장용으로 주입한다.
+        gap_instruction: 서치콘솔 실측으로 뽑은 '독자가 답을 못 찾은 것'.
+            보강할 때만 들어온다.
         """
         settings = module.settings or {}
         ai_config = blog.ai_config or {}
@@ -87,8 +101,11 @@ class RenewalGenerator:
         category_name = await self._category_name(subtopic_id, topic_id)
 
         override, extra, existing_for_prompt = self._renewal_prompt(
-            settings, existing_content,
+            settings, existing_content, plan,
         )
+        if gap_instruction:
+            # 갭은 **마지막에** 붙인다. 앞에 두면 모듈의 기본 지시를 밀어낸다.
+            extra = f"{extra}\n\n{gap_instruction}" if extra else gap_instruction
         content_result = await generate_content_with_meta(
             ai_service=self.gen.ai_service,
             title=working_title,
@@ -138,13 +155,18 @@ class RenewalGenerator:
         return text[:EXISTING_CONTENT_MAX_CHARS]
 
     @classmethod
-    def _renewal_prompt(cls, settings: dict, existing_content: str):
+    def _renewal_prompt(cls, settings: dict, existing_content: str,
+                        plan=None):
         """모듈 settings의 리뉴얼 프롬프트 모드 해석.
 
         content_generation.renewal_prompt = {mode, text}:
         - inherit(기본): 생성 프롬프트 그대로(기존 글 미주입, 현재 동작).
         - new: text를 프롬프트로 교체(+기존 글은 {existing_content}로 제공).
         - additional: text를 추가 지침으로 결합 + 기존 글 본문을 보존·확장하도록 주입.
+
+        **성과 판정이 모드를 덮어쓴다.** 모듈 설정은 블로그 전체에 걸리는
+        기본값이고, 유입은 글마다 다르다. 잘 되던 글을 살려 확장할지 없는
+        글을 새로 쓸지는 그 글의 성적이 정해야 한다.
 
         Returns:
             (prompt_override, extra_instruction, existing_for_prompt)
@@ -153,6 +175,15 @@ class RenewalGenerator:
         rp = (cg.get("renewal_prompt") or {}) if isinstance(cg, dict) else {}
         mode = (rp.get("mode") or "inherit").strip()
         text = (rp.get("text") or "").strip()
+
+        forced = getattr(plan, "content_mode", "") if plan else ""
+        if forced:
+            mode = forced
+            # 모듈에 문구가 없으면 기본 문구를 준다 — 없으면 아래 분기가
+            # 통째로 inherit 으로 떨어져 성과 판정이 무시된다.
+            if not text:
+                text = (_AUGMENT_TEXT if forced == "additional"
+                        else _REWRITE_TEXT)
         existing_text = cls._strip_html(existing_content)
 
         if mode == "new" and text:

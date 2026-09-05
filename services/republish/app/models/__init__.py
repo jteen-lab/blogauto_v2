@@ -85,6 +85,7 @@ from .blog_main_title_scan import BlogMainTitleScan
 from .adsense_account import AdsenseAccount, AdsenseSite
 
 # 검색 노출 3종(S1 IndexNow · S2 사이트맵 · S6 색인 점검) 원장
+from .post_metric import PostMetricDaily
 from .search_visibility import SearchVisibilityUrl
 from .keyword_candidate import KeywordCandidate
 from .keyword_cluster import KeywordCluster
@@ -163,6 +164,7 @@ __all__ = [
     # 애드센스 계정·사이트 상태(다중 계정)
     "AdsenseAccount",
     "AdsenseSite",
+    "PostMetricDaily",
     "SearchVisibilityUrl",
     "KeywordCandidate",
     "KeywordCluster",

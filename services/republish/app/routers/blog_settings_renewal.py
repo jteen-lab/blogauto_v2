@@ -35,6 +35,13 @@ class RenewalSettingsRequest(BaseModel):
     delete_grace_days: int = Field(7, ge=0, le=365)
     # {subtopic_id(문자열): 개월수}
     category_periods: Dict[str, int] = Field(default_factory=dict)
+    # 성과 판정(analytics P4). 켜면 유입을 보고 글마다 동작을 정한다.
+    # 기본 꺼짐 — 지표가 28일 쌓이기 전에는 판단 근거가 없다.
+    performance_enabled: bool = False
+    decay_ratio: float = Field(0.20, ge=0.05, le=0.9)
+    ctr_position_min: float = Field(8.0, ge=1.0, le=100.0)
+    ctr_position_max: float = Field(20.0, ge=1.0, le=100.0)
+    performance_min_days: int = Field(14, ge=1, le=90)
 
 
 def _normalize_config(req: RenewalSettingsRequest) -> dict:
@@ -54,6 +61,19 @@ def _normalize_config(req: RenewalSettingsRequest) -> dict:
         "title_mode": req.title_mode if req.title_mode in TITLE_MODES else "keep",
         "delete_grace_days": req.delete_grace_days,
         "category_periods": cats,
+        "performance": {
+            "enabled": bool(req.performance_enabled),
+            "thresholds": {
+                "decay_ratio": req.decay_ratio,
+                # 뒤집힌 값이 오면 바로잡는다 — min>max 면 어떤 글도
+                # '제목 손질' 로 안 잡혀 판정이 조용히 죽는다.
+                "ctr_position_min": min(req.ctr_position_min,
+                                        req.ctr_position_max),
+                "ctr_position_max": max(req.ctr_position_min,
+                                        req.ctr_position_max),
+                "min_days": req.performance_min_days,
+            },
+        },
     }
 
 
@@ -97,6 +117,7 @@ async def get_renewal_settings(
             "enabled": cfg.get("enabled", False),
             "default_period_months": cfg.get("default_period_months", 6),
             "title_mode": cfg.get("title_mode", "keep"),
+            "performance": cfg.get("performance") or {"enabled": False},
             "delete_grace_days": cfg.get("delete_grace_days", 7),
             "category_periods": cfg.get("category_periods", {}),
         },

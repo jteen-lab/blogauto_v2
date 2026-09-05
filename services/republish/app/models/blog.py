@@ -129,6 +129,14 @@ class Blog(Base):
         comment="검색 노출 설정: IndexNow 키/활성, 사이트맵 점검, 색인 점검",
     )
 
+    # GA4 연결. 속성은 블로그마다 따로다.
+    # {"property_id": "123456789", "display_name": "카인포노트"}
+    analytics_config = Column(
+        JSON,
+        nullable=True,
+        comment="GA4 연결: property_id, display_name",
+    )
+
     # 재발행 리뉴얼 정책 (P1)
     renewal_config = Column(
         JSON,

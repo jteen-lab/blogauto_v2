@@ -640,6 +640,115 @@
                                 </template>
                             </div>
                         </div>
+
+                        <!-- 유입 분석 — GA4 연동. 속성은 블로그마다 따로다. -->
+                        <div class="space-y-3 pt-4 border-t border-gray-100"
+                             x-data="{
+                                configured: false, refresh_token: '', showToken: false,
+                                saving: false, loading: false, msg: '', result: null,
+                                async saveGa() {
+                                    this.saving = true; this.msg='';
+                                    try {
+                                        const r = await fetch('/api/v1/analytics/account', {method:'POST', credentials:'include',
+                                            headers:{'Content-Type':'application/json'},
+                                            body: JSON.stringify({refresh_token: this.refresh_token.trim()})});
+                                        const d = await r.json();
+                                        if (r.ok) { this.configured = d.configured; this.msg='저장되었습니다'; await this.loadProps(); }
+                                        else { this.msg = d.detail || '저장 실패'; }
+                                    } catch(e){ this.msg='오류가 발생했습니다'; } finally { this.saving=false; }
+                                },
+                                async loadProps() {
+                                    this.loading = true;
+                                    try {
+                                        const r = await fetch('/api/v1/analytics/properties', {credentials:'include'});
+                                        if (r.ok) { this.result = await r.json(); this.configured = !!this.result.connected; }
+                                    } catch(e){ } finally { this.loading = false; }
+                                },
+                                async link(blog, propertyId) {
+                                    const prop = (this.result.properties || []).find(p => p.property_id === propertyId);
+                                    try {
+                                        await fetch('/api/v1/analytics/properties', {method:'PUT', credentials:'include',
+                                            headers:{'Content-Type':'application/json'},
+                                            body: JSON.stringify({blog_id: blog.id, property_id: propertyId,
+                                                                  display_name: prop ? prop.display_name : ''})});
+                                        blog.property_id = propertyId;
+                                        this.msg = blog.name + ' 연결됨';
+                                    } catch(e){ this.msg='연결 실패'; }
+                                }
+                             }"
+                             x-init="loadProps()">
+                            <h4 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                                📈 유입 분석 (Google Analytics 연동)
+                                <span x-show="configured" class="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full">연결됨</span>
+                            </h4>
+                            <p class="text-xs text-gray-500 -mt-1">
+                                발행한 글에 <strong>실제로 사람이 들어왔는지</strong> 회수합니다.
+                                서치콘솔(검색에 보였나)과 합쳐 재발행 때 <strong>잘 되는 글은 건드리지 않도록</strong> 씁니다.
+                                권한 범위는 <code>analytics.readonly</code>(읽기 전용)이며,
+                                Blogger는 설정 → 기본 → <strong>Google 애널리틱스 측정 ID</strong>에 <code>G-</code> 값이 들어가 있어야 합니다.
+                            </p>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Refresh Token</label>
+                                <div class="relative">
+                                    <input :type="showToken ? 'text' : 'password'"
+                                           x-model="refresh_token" placeholder="1// 로 시작하는 refresh token"
+                                           class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-accent">
+                                    <button @click="showToken = !showToken" type="button"
+                                            class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs">
+                                        <span x-text="showToken ? '숨김' : '보기'"></span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <button type="button" @click="saveGa()" :disabled="saving"
+                                        class="px-4 py-2 bg-accent text-white rounded-lg text-sm disabled:opacity-50">
+                                    <span x-text="saving ? '저장 중...' : '저장'"></span>
+                                </button>
+                                <button type="button" @click="loadProps()" :disabled="loading"
+                                        class="px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-40">
+                                    <span x-text="loading ? '확인 중...' : '연결 확인'"></span>
+                                </button>
+                                <span class="text-xs text-gray-500" x-text="msg"></span>
+                            </div>
+
+                            <template x-if="result && !result.connected">
+                                <div class="text-xs bg-red-50 text-red-700 rounded-lg p-3 space-y-1">
+                                    <p x-text="result.error"></p>
+                                    <template x-if="result.required_scope">
+                                        <div class="bg-white rounded p-2 border border-red-200 space-y-1">
+                                            <p class="text-gray-600">현재 부여된 권한:</p>
+                                            <template x-for="sc in (result.granted_scopes || [])" :key="sc">
+                                                <p class="text-gray-500 pl-2" x-text="'· ' + sc"></p>
+                                            </template>
+                                            <p class="text-gray-600 pt-1">필요한 권한:</p>
+                                            <p class="text-gray-500 pl-2" x-text="'· ' + result.required_scope"></p>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+
+                            {# 속성은 블로그마다 따로다 — 어느 블로그가 어느 속성인지 직접 고른다 #}
+                            <template x-if="result && result.connected">
+                                <div class="text-xs bg-gray-50 rounded-lg p-3 space-y-2">
+                                    <p class="text-gray-600" x-text="`속성 ${(result.properties||[]).length}개`"></p>
+                                    <template x-for="b in (result.blogs || [])" :key="b.id">
+                                        <div class="flex items-center justify-between gap-2">
+                                            <span class="text-gray-700 truncate" x-text="b.name"></span>
+                                            <select :value="b.property_id"
+                                                    @change="link(b, $event.target.value)"
+                                                    class="text-xs border-gray-300 rounded py-1 max-w-[60%]">
+                                                <option value="">연결 안 함</option>
+                                                <template x-for="p in (result.properties || [])" :key="p.property_id">
+                                                    <option :value="p.property_id"
+                                                            :selected="p.property_id === b.property_id"
+                                                            x-text="p.display_name"></option>
+                                                </template>
+                                            </select>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
                     </div>
 
                     <hr class="border-gray-200">
