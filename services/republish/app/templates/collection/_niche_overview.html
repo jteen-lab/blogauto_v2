@@ -10,15 +10,22 @@
 
   순서도: docs/flowcharts/niche_summary_cards.md
 #}
+<style>
+  /* 잡아끌어 넘기므로 스크롤바는 감춘다. 남겨 두면 조작 방법이 둘로
+     보이고, PC 에서 굳이 작은 화살표를 누르게 된다. */
+  .niche-strip { scrollbar-width: none; -ms-overflow-style: none; }
+  .niche-strip::-webkit-scrollbar { display: none; }
+</style>
+
 <div x-data="nicheOverview()" x-init="init()" class="mb-4">
 
   <div class="flex items-center justify-between mb-2">
     <div class="text-sm text-gray-700">
-      🧭 재고가 부족한 니치
-      <span class="ml-1 text-gray-400" x-text="`${summary.low_count || 0}개`"></span>
+      <span x-text="showAll ? '🧭 전체 니치' : '🧭 재고가 부족한 니치'"></span>
+      <span class="ml-1 text-gray-400" x-text="countLabel()"></span>
     </div>
     <div class="flex items-center gap-2 text-xs">
-      <button @click="showAll = !showAll; load()"
+      <button @click="showAll = !showAll"
               class="text-gray-500 hover:text-gray-800"
               x-text="showAll ? '부족만 보기' : '전체 보기'"></button>
       <button @click="settingsOpen = !settingsOpen"
@@ -53,10 +60,20 @@
     </p>
   </div>
 
-  {# 요약탭 — 넘치면 가로로 민다 #}
-  <div class="flex gap-2 overflow-x-auto pb-1">
+  {# 요약탭 — 넘치면 가로로 민다.
+
+     PC 에서는 스크롤바의 작은 화살표를 눌러야 해서 불편했다. 모바일처럼
+     카드를 **잡아끌어** 넘긴다. 터치는 브라우저 기본 동작이 이미 자연스러워
+     건드리지 않는다. #}
+  <div class="niche-strip flex gap-2 overflow-x-auto pb-1 select-none"
+       :class="dragging ? 'cursor-grabbing' : 'cursor-grab'"
+       @pointerdown="dragStart($event)"
+       @pointermove="dragMove($event)"
+       @pointerup="dragEnd($event)"
+       @pointercancel="dragEnd($event)"
+       @dragstart.prevent>
     <template x-for="row in cards()" :key="row.subtopic_id">
-      <button type="button" @click="toggle(row)"
+      <button type="button" @click="toggle(row)" draggable="false"
               class="shrink-0 px-3 py-2 border-2 rounded-lg text-left min-w-[9.5rem] transition-colors"
               :class="opened === row.subtopic_id
                       ? 'border-accent bg-primary-lt'
@@ -171,6 +188,10 @@ function nicheOverview() {
         resultError: false,
         message: '',
         poll: null,
+        // 잡아끌기. 드래그가 끝나면서 카드가 눌리지 않게 막아야 한다.
+        drag: null,
+        dragging: false,
+        suppressClick: false,
 
         async init() {
             await this.load();
@@ -190,11 +211,25 @@ function nicheOverview() {
             this.loading = false;
         },
 
-        /** 요약탭에 깔 카드. 기본은 부족한 것만, 설정한 수까지. */
+        /** 요약탭에 깔 카드.
+         *
+         *  '노출 수' 는 **부족만 보기**의 기본값이다. 전체 보기에도 같은
+         *  제한을 걸면, 부족한 것이 노출 수보다 많을 때(부족 30 · 노출 12)
+         *  두 화면이 똑같은 12개가 되어 버튼을 눌러도 아무 변화가 없다.
+         */
         cards() {
-            const rows = this.showAll ? this.items
-                                      : this.items.filter(r => r.is_low);
-            return rows.slice(0, this.summary.card_limit || 12);
+            if (this.showAll) return this.items;
+            return this.items.filter(r => r.is_low)
+                       .slice(0, this.summary.card_limit || 12);
+        },
+
+        /** 몇 개 중 몇 개를 보고 있는지. */
+        countLabel() {
+            const shown = this.cards().length;
+            const total = this.showAll
+                ? this.items.length
+                : this.items.filter(r => r.is_low).length;
+            return shown < total ? `${total}개 중 ${shown}개` : `${total}개`;
         },
 
         current() {
@@ -203,9 +238,39 @@ function nicheOverview() {
         },
 
         toggle(row) {
+            // 끌어서 넘긴 직후의 클릭은 카드를 여는 뜻이 아니다
+            if (this.suppressClick) { this.suppressClick = false; return; }
             this.opened = this.opened === row.subtopic_id ? null : row.subtopic_id;
             this.result = '';
             this.resultError = false;
+        },
+
+        /** 마우스로 잡는다. 터치는 브라우저 기본 스와이프가 더 매끄럽다. */
+        dragStart(event) {
+            if (event.pointerType === 'touch') return;
+            if (event.button !== undefined && event.button !== 0) return;
+            this.drag = { x: event.clientX,
+                          left: event.currentTarget.scrollLeft, moved: 0 };
+            this.dragging = true;
+            try { event.currentTarget.setPointerCapture(event.pointerId); }
+            catch (e) { /* 캡처를 못 해도 move/up 은 대개 들어온다 */ }
+        },
+
+        dragMove(event) {
+            if (!this.drag) return;
+            const dx = event.clientX - this.drag.x;
+            this.drag.moved = Math.max(this.drag.moved, Math.abs(dx));
+            event.currentTarget.scrollLeft = this.drag.left - dx;
+        },
+
+        dragEnd(event) {
+            if (!this.drag) return;
+            // 5px 은 손떨림. 그 이상 움직였으면 넘긴 것으로 본다.
+            this.suppressClick = this.drag.moved > 5;
+            this.drag = null;
+            this.dragging = false;
+            try { event.currentTarget.releasePointerCapture(event.pointerId); }
+            catch (e) { /* 캡처를 안 잡았으면 풀 것도 없다 */ }
         },
 
         busy() {

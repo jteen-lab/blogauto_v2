@@ -159,3 +159,48 @@ class TestSettingsWiring:
             encoding="utf-8")
         assert '"niche_low_threshold", db, DEFAULT_LOW)' in src
         assert '"niche_card_limit", db, DEFAULT_CARDS)' in src
+
+
+class TestDragToScroll:
+    """PC 에서 스크롤바 화살표를 누르게 하지 않는다."""
+
+    def test_scrollbar_hidden(self):
+        assert ".niche-strip::-webkit-scrollbar { display: none; }" in TEMPLATE
+        assert "scrollbar-width: none" in TEMPLATE
+
+    def test_pointer_handlers_bound(self):
+        for handler in ("@pointerdown", "@pointermove",
+                        "@pointerup", "@pointercancel"):
+            assert handler in TEMPLATE
+
+    def test_touch_left_to_browser(self):
+        """모바일은 기본 스와이프가 더 매끄럽다 — 가로채지 않는다."""
+        assert "if (event.pointerType === 'touch') return;" in TEMPLATE
+
+    def test_drag_does_not_open_a_card(self):
+        """끌어서 넘긴 손을 떼는 순간 카드가 열리면 안 된다."""
+        assert "if (this.suppressClick) { this.suppressClick = false; return; }" \
+            in TEMPLATE
+        assert "this.suppressClick = this.drag.moved > 5;" in TEMPLATE
+
+    def test_grab_cursor(self):
+        assert "dragging ? 'cursor-grabbing' : 'cursor-grab'" in TEMPLATE
+
+
+class TestShowAllToggle:
+    """부족 30개 · 노출 12개일 때 두 화면이 같아지던 자리."""
+
+    def test_show_all_ignores_the_limit(self):
+        block = TEMPLATE[TEMPLATE.index("        cards() {"):
+                         TEMPLATE.index("        countLabel() {")]
+        assert "if (this.showAll) return this.items;" in block
+        # 제한은 '부족만 보기' 쪽에만 걸린다
+        assert block.count("card_limit") == 1
+
+    def test_toggle_does_not_refetch(self):
+        """같은 응답을 다시 받아 오느라 전환이 늦어질 이유가 없다."""
+        assert "showAll = !showAll; load()" not in TEMPLATE
+        assert "@click=\"showAll = !showAll\"" in TEMPLATE
+
+    def test_count_label_shows_hidden_ones(self):
+        assert "shown < total ? `${total}개 중 ${shown}개`" in TEMPLATE
