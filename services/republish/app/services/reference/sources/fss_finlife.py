@@ -67,18 +67,42 @@ BASE_LABELS = {
     "loan_lmt": "대출 한도",
     "mtrt_int": "만기 후 이자율",
     "spcl_cnd": "우대조건",
+    # 개인신용대출
+    "crdt_prdt_type_nm": "대출 종류",
+    "cb_name": "신용평가사",
 }
 OPTION_LABELS = {
+    # 담보·전세 대출
     "mrtg_type_nm": "담보 유형",
     "rpay_type_nm": "상환 방식",
     "lend_rate_type_nm": "금리 유형",
     "lend_rate_min": "최저 금리(%)",
     "lend_rate_max": "최고 금리(%)",
     "lend_rate_avg": "전월 평균 금리(%)",
+    # 예금·적금·연금
     "intr_rate_type_nm": "저축 금리 유형",
     "intr_rate": "저축 금리(%)",
     "intr_rate2": "최고 우대금리(%)",
     "save_trm": "저축 기간(개월)",
+    # 개인신용대출 — 항목 이름이 위와 **완전히 다르다.**
+    # 이걸 안 넣어서 신용대출 조회에 금리가 하나도 안 나왔다.
+    "crdt_lend_rate_type_nm": "금리 구분",
+    "crdt_grad_avg": "평균 금리(%)",
+    "crdt_grad_1": "신용점수 900 초과 금리(%)",
+    "crdt_grad_4": "신용점수 801~900 금리(%)",
+    "crdt_grad_5": "신용점수 701~800 금리(%)",
+    "crdt_grad_6": "신용점수 601~700 금리(%)",
+    "crdt_grad_10": "신용점수 501~600 금리(%)",
+    "crdt_grad_11": "신용점수 401~500 금리(%)",
+    "crdt_grad_12": "신용점수 301~400 금리(%)",
+    "crdt_grad_13": "신용점수 300 이하 금리(%)",
+}
+
+# 값이 있는데 이름을 모르는 항목까지 버리면, 상품 종류가 바뀔 때마다
+# 금리가 통째로 사라진다. 아래 것들만 빼고 나머지는 원래 키로 붙인다.
+SKIP_KEYS = {
+    "dcls_month", "fin_co_no", "fin_prdt_cd", "crdt_prdt_type",
+    "dcls_strt_day", "dcls_end_day", "fin_co_subm_day",
 }
 
 
@@ -192,8 +216,24 @@ def _match_products(base_list: List[dict], query: str,
                        f"{item.get('kor_co_nm', '')}", scope)
         ]
         if hit:
-            return hit
+            return _dedupe(hit)
     return []
+
+
+def _dedupe(items: List[dict]) -> List[dict]:
+    """같은 상품을 한 번만. 공시는 월·회사별로 같은 상품을 여러 줄로 준다.
+
+    중복을 안 걸러 "우리은행 신용대출상품" 이 두 번 실렸다(사용자 보고).
+    """
+    seen, out = set(), []
+    for item in items:
+        key = (item.get("fin_co_no"), item.get("fin_prdt_cd"),
+               item.get("fin_prdt_nm"))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(item)
+    return out
 
 
 def _group_options(option_list: List[dict]) -> Dict[str, List[dict]]:
@@ -223,6 +263,14 @@ def _to_fact(product: dict, options: List[dict], source_name: str,
         for key, label in OPTION_LABELS.items():
             if best.get(key):
                 fields[label] = best[key]
+        # 이름을 모르는 항목도 값이 있으면 살린다. 상품 종류가 바뀔 때마다
+        # 금리가 통째로 사라지는 것보다 낫다.
+        for key, value in best.items():
+            if key in SKIP_KEYS or key in OPTION_LABELS:
+                continue
+            if value not in (None, "", "-") and not isinstance(
+                    value, (dict, list)):
+                fields.setdefault(key, value)
 
     title = (f"{product.get('kor_co_nm', '')} "
              f"{product.get('fin_prdt_nm', '')}").strip()
@@ -239,7 +287,8 @@ def _cheapest(options: List[dict]) -> Optional[dict]:
         return None
     rated = []
     for row in options:
-        raw = row.get("lend_rate_min") or row.get("intr_rate")
+        raw = (row.get("lend_rate_min") or row.get("intr_rate")
+               or row.get("crdt_grad_avg") or row.get("crdt_grad_1"))
         try:
             rated.append((float(raw), row))
         except (TypeError, ValueError):

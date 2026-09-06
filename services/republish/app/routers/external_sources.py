@@ -202,8 +202,11 @@ async def test_source(
             adapter_code = found["adapter"]
             endpoint = found["endpoint"]
             options = found.get("options") or {}
+        # 이름을 "테스트" 로 두면 미리보기에 "[공식 자료 — 테스트]" 가
+        # 찍혀, 실제로 무엇을 조회했는지 알 수 없다.
         row = ExternalSource(
-            code="_test", name="테스트", adapter=adapter_code,
+            code="_test", name=(request.name or "").strip() or "미등록 소스",
+            adapter=adapter_code,
             endpoint=endpoint,
             auth_key_encrypted=encrypt_api_key(request.auth_key.strip()),
             options=options)

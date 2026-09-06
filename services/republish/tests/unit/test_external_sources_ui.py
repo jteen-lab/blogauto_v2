@@ -257,3 +257,69 @@ class TestAdapterDefaults:
         """식별 코드는 내부용이다. 사용자가 고민할 이유가 없다."""
         assert "비우면 자동" in MODAL
         assert "'src_' + Date.now()" in JS
+
+
+class TestCreditLoanFields:
+    """개인신용대출은 응답 항목 이름이 담보대출과 **완전히 다르다.**
+
+    사용자 보고(2026-09-06): 연결 테스트에 금융회사·상품명·가입방법만 나오고
+    금리가 하나도 없었다. OPTION_LABELS 가 lend_rate_* 만 알아서였다.
+    """
+
+    def _fact(self, options):
+        from app.services.reference.sources.fss_finlife import _to_fact
+
+        return _to_fact({"kor_co_nm": "우리은행", "fin_prdt_nm": "신용대출"},
+                        options, "금감원", "")
+
+    def test_credit_rates_are_labelled(self):
+        fact = self._fact([{"crdt_grad_avg": "8.5", "crdt_grad_1": "5.2"}])
+        text = "\n".join(fact.to_lines())
+        assert "평균 금리(%)" in text
+        assert "신용점수 900 초과 금리(%)" in text
+
+    def test_unknown_fields_survive(self):
+        """이름을 모른다고 버리면 상품 종류가 바뀔 때 금리가 사라진다."""
+        fact = self._fact([{"새로운_금리항목": "4.4"}])
+        assert "새로운_금리항목" in "\n".join(fact.to_lines())
+
+    def test_bookkeeping_fields_are_dropped(self):
+        """공시월·회사코드는 글에 쓸 값이 아니다."""
+        fact = self._fact([{"dcls_month": "202609", "fin_co_no": "0010001",
+                            "crdt_grad_avg": "8.5"}])
+        text = "\n".join(fact.to_lines())
+        assert "202609" not in text
+        assert "0010001" not in text
+
+    def test_cheapest_uses_credit_rate(self):
+        from app.services.reference.sources.fss_finlife import _cheapest
+
+        best = _cheapest([{"crdt_grad_avg": "9.1"}, {"crdt_grad_avg": "6.3"}])
+        assert best["crdt_grad_avg"] == "6.3"
+
+
+class TestDedupe:
+    """공시는 같은 상품을 여러 줄로 준다 — 미리보기에 두 번 실렸다."""
+
+    def test_same_product_once(self):
+        from app.services.reference.sources.fss_finlife import _dedupe
+
+        rows = [{"fin_co_no": "1", "fin_prdt_cd": "A", "fin_prdt_nm": "X"},
+                {"fin_co_no": "1", "fin_prdt_cd": "A", "fin_prdt_nm": "X"},
+                {"fin_co_no": "2", "fin_prdt_cd": "B", "fin_prdt_nm": "Y"}]
+        assert len(_dedupe(rows)) == 2
+
+    def test_match_dedupes(self):
+        from app.services.reference.sources.fss_finlife import _match_products
+
+        rows = [{"fin_co_no": "1", "fin_prdt_cd": "A",
+                 "fin_prdt_nm": "신용대출", "kor_co_nm": "우리은행"}] * 3
+        assert len(_match_products(rows, "신용대출", ["신용대출"])) == 1
+
+
+class TestPreviewName:
+    def test_uses_form_name_not_placeholder(self):
+        """'[공식 자료 — 테스트]' 로 찍히면 무엇을 조회했는지 알 수 없다."""
+        src = (ROOT / "app/routers/external_sources.py").read_text(
+            encoding="utf-8")
+        assert 'name=(request.name or "").strip() or "미등록 소스"' in src
