@@ -180,3 +180,80 @@ class TestPresetEndpoint:
     def test_preset_leaves_endpoint_empty(self):
         """안내 문구를 넣으면 그게 주소로 저장된다."""
         assert "this.form.endpoint = '';" in JS
+
+
+class TestFssMultiProduct:
+    """금감원은 상품 종류마다 주소가 다르다.
+
+    대출 니치는 주담대·전세·신용대출을 다 다룬다. 종류마다 소스를 따로
+    등록하게 하면 같은 인증키를 세 번 넣어야 한다(사용자 지적 2026-09-06).
+    """
+
+    @pytest.mark.parametrize("title,expected", [
+        ("우리아파트론 우리은행 대출", "mortgage"),
+        ("전세자금대출 조건", "rent"),
+        ("햇살론15 신용대출", "credit"),
+        ("정기예금 금리 비교", "deposit"),
+        ("청년 적금 추천", "saving"),
+        ("연금저축 세액공제", "annuity"),
+    ])
+    def test_op_picked_from_title(self, title, expected):
+        from app.services.reference.sources.fss_finlife import pick_op
+
+        assert pick_op(title) == expected
+
+    def test_rent_wins_over_generic_loan(self):
+        """'전세자금대출' 은 '전세' 와 '대출' 에 다 걸린다 — 순서가 중요하다."""
+        from app.services.reference.sources.fss_finlife import pick_op
+
+        assert pick_op("전세자금대출") == "rent"
+
+    def test_endpoint_resolved(self):
+        from app.services.reference.sources.fss_finlife import resolve_endpoint
+
+        base = "https://finlife.fss.or.kr/finlifeapi/{op}.json"
+        assert "rentHouse" in resolve_endpoint(base, "전세자금대출", [])
+
+    def test_fixed_endpoint_untouched(self):
+        """종류를 고정한 옛 소스는 그대로 쓴다."""
+        from app.services.reference.sources.fss_finlife import resolve_endpoint
+
+        fixed = "https://finlife.fss.or.kr/finlifeapi/depositProductsSearch.json"
+        assert resolve_endpoint(fixed, "전세자금대출", []) == fixed
+
+    def test_unified_preset_exists(self):
+        from app.services.reference.sources import presets
+
+        found = presets.get("fss_all")
+        assert "{op}" in found["endpoint"]
+        assert "권장" in found["name"]
+
+
+class TestAdapterDefaults:
+    """직접 입력에서 주소를 몰라 '주소를 입력하세요' 로 막혔다."""
+
+    def test_adapter_has_default_endpoint(self):
+        from app.services.reference.sources import presets
+
+        assert "{op}" in presets.adapter_default("fss_finlife")["endpoint"]
+
+    def test_server_fills_endpoint_without_preset(self):
+        from app.routers.external_sources import (
+            SourceRequest, _resolve_preset,
+        )
+
+        req = SourceRequest(code="c1", name="n", adapter="fss_finlife",
+                            match_keywords=["대출"])
+        _resolve_preset(req)
+        assert req.endpoint
+        assert req.options
+
+    def test_screen_fills_on_adapter_change(self):
+        assert 'onAdapter()' in MODAL
+        assert "app.form.endpoint = base.endpoint" in JS or \
+            "this.form.endpoint = base.endpoint" in JS
+
+    def test_code_is_optional(self):
+        """식별 코드는 내부용이다. 사용자가 고민할 이유가 없다."""
+        assert "비우면 자동" in MODAL
+        assert "'src_' + Date.now()" in JS

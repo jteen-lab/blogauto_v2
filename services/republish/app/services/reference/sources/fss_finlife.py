@@ -28,6 +28,34 @@ TIMEOUT = 20.0
 # 권역 코드. 은행만 볼지 저축은행까지 볼지는 등록표 options 에서 정한다.
 GRP_BANK = "020000"
 
+# 상품 종류별 조회 이름. **주소가 종류마다 다르다.**
+#
+# 대출 니치는 주담대·전세·신용대출을 다 다룬다. 종류마다 소스를 따로
+# 등록하게 하면 인증키가 같은데도 세 번 등록해야 한다. 제목을 보고
+# 알아서 고른다 — 등록은 하나로 끝난다.
+OPS = {
+    "mortgage": "mortgageLoanProductsSearch",
+    "rent": "rentHouseLoanProductsSearch",
+    "credit": "creditLoanProductsSearch",
+    "deposit": "depositProductsSearch",
+    "saving": "savingProductsSearch",
+    "annuity": "annuitySavingProductsSearch",
+}
+
+# 제목에 이 말이 있으면 그 종류다. 위에서부터 먼저 맞는 것을 쓴다 —
+# "전세자금대출" 은 '전세' 와 '대출' 에 다 걸리므로 순서가 중요하다.
+OP_HINTS = [
+    ("rent", ("전세", "임차", "보증금")),
+    ("mortgage", ("주택담보", "주담대", "아파트론", "담보대출", "부동산담보")),
+    ("annuity", ("연금저축", "연금")),
+    ("saving", ("적금", "청약", "부금")),
+    ("deposit", ("예금", "예치", "정기예")),
+    ("credit", ("신용대출", "마이너스", "비상금", "직장인대출", "대출")),
+]
+
+# 어느 것에도 안 걸릴 때. 대출 니치가 대부분이라 신용대출을 기본으로 둔다.
+DEFAULT_OP = "credit"
+
 # 응답 항목 → 사람이 읽을 이름
 BASE_LABELS = {
     "kor_co_nm": "금융회사",
@@ -54,6 +82,33 @@ OPTION_LABELS = {
 }
 
 
+def pick_op(text: str) -> str:
+    """제목·질의를 보고 어느 상품 종류인지 고른다.
+
+    등록은 하나로 하고, 부를 때 종류를 정한다. 그래서 대출 니치에서
+    주담대 글과 전세 글이 각각 맞는 공시를 본다.
+    """
+    haystack = (text or "").replace(" ", "")
+    for op, hints in OP_HINTS:
+        if any(hint in haystack for hint in hints):
+            return op
+    return DEFAULT_OP
+
+
+def resolve_endpoint(endpoint: str, query: str,
+                     entities: List[str]) -> str:
+    """주소에 `{op}` 가 있으면 상품 종류를 채운다.
+
+    `{op}` 가 없으면 종류를 고정한 소스다(옛 프리셋). 그대로 쓴다.
+    """
+    if "{op}" not in (endpoint or ""):
+        return endpoint
+    op = pick_op(" ".join([query, *(entities or [])]))
+    resolved = endpoint.replace("{op}", OPS.get(op, OPS[DEFAULT_OP]))
+    logger.info("[FSS] 상품 종류 자동 선택 | %s | %s", op, resolved)
+    return resolved
+
+
 class FssFinlifeAdapter(SourceAdapter):
     """금감원 금융상품통합비교공시."""
 
@@ -73,9 +128,10 @@ class FssFinlifeAdapter(SourceAdapter):
             "topFinGrpNo": options.get("top_fin_grp_no", GRP_BANK),
             "pageNo": 1,
         }
+        endpoint = resolve_endpoint(source.endpoint, query, entities)
         try:
             async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-                response = await client.get(source.endpoint, params=params)
+                response = await client.get(endpoint, params=params)
         except Exception as e:  # noqa: BLE001
             return SourceResult(code=source.code, name=name,
                                 error=f"호출 실패: {e}")

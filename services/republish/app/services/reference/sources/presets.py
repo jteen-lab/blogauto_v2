@@ -21,8 +21,23 @@ _FSS = "https://finlife.fss.or.kr/finlifeapi/{op}.json"
 
 PRESETS: List[Dict[str, Any]] = [
     {
+        # **권장.** 주소의 {op} 를 어댑터가 제목에 맞춰 채운다. 대출 니치는
+        # 주담대·전세·신용대출을 다 다루므로, 종류마다 따로 등록하면
+        # 같은 인증키를 세 번 넣게 된다.
+        "code": "fss_all",
+        "name": "금감원 금융상품 공시 (자동 선택 · 권장)",
+        "adapter": ADAPTER_FSS_FINLIFE,
+        "endpoint": _FSS.format(op="{op}"),
+        "options": {"top_fin_grp_no": "020000", "max_facts": 2},
+        "match_topics": ["금융/대출", "재테크/돈관리", "부동산",
+                         "시니어/노후"],
+        "match_keywords": ["대출", "금리", "예금", "적금", "연금", "한도",
+                           "전세", "주담대", "아파트론"],
+        "key_hint": "금감원 오픈API 인증키 (finlife.fss.or.kr 에서 신청)",
+    },
+    {
         "code": "fss_mortgage",
-        "name": "금감원 주택담보대출 공시",
+        "name": "금감원 주택담보대출 공시 (이 종류만)",
         "adapter": ADAPTER_FSS_FINLIFE,
         "endpoint": _FSS.format(op="mortgageLoanProductsSearch"),
         "options": {"top_fin_grp_no": "020000", "max_facts": 2},
@@ -32,7 +47,7 @@ PRESETS: List[Dict[str, Any]] = [
     },
     {
         "code": "fss_rent",
-        "name": "금감원 전세자금대출 공시",
+        "name": "금감원 전세자금대출 공시 (이 종류만)",
         "adapter": ADAPTER_FSS_FINLIFE,
         "endpoint": _FSS.format(op="rentHouseLoanProductsSearch"),
         "options": {"top_fin_grp_no": "020000", "max_facts": 2},
@@ -42,7 +57,7 @@ PRESETS: List[Dict[str, Any]] = [
     },
     {
         "code": "fss_credit",
-        "name": "금감원 개인신용대출 공시",
+        "name": "금감원 개인신용대출 공시 (이 종류만)",
         "adapter": ADAPTER_FSS_FINLIFE,
         "endpoint": _FSS.format(op="creditLoanProductsSearch"),
         "options": {"top_fin_grp_no": "020000", "max_facts": 2},
@@ -52,7 +67,7 @@ PRESETS: List[Dict[str, Any]] = [
     },
     {
         "code": "fss_deposit",
-        "name": "금감원 정기예금 공시",
+        "name": "금감원 정기예금 공시 (이 종류만)",
         "adapter": ADAPTER_FSS_FINLIFE,
         "endpoint": _FSS.format(op="depositProductsSearch"),
         "options": {"top_fin_grp_no": "020000", "max_facts": 2},
@@ -62,7 +77,7 @@ PRESETS: List[Dict[str, Any]] = [
     },
     {
         "code": "fss_saving",
-        "name": "금감원 적금 공시",
+        "name": "금감원 적금 공시 (이 종류만)",
         "adapter": ADAPTER_FSS_FINLIFE,
         "endpoint": _FSS.format(op="savingProductsSearch"),
         "options": {"top_fin_grp_no": "020000", "max_facts": 2},
@@ -119,6 +134,27 @@ PRESETS: List[Dict[str, Any]] = [
 ]
 
 _BY_CODE = {p["code"]: p for p in PRESETS}
+
+# 어댑터를 고르면 채워 줄 기본 주소. 직접 입력에서 주소를 몰라
+# "주소를 입력하세요" 로 막히던 자리다.
+ADAPTER_DEFAULTS: Dict[str, Dict[str, Any]] = {
+    ADAPTER_FSS_FINLIFE: {
+        "endpoint": _FSS.format(op="{op}"),
+        "options": {"top_fin_grp_no": "020000", "max_facts": 2},
+        "hint": "{op} 자리는 제목에 맞는 상품 종류로 자동 치환됩니다",
+    },
+    ADAPTER_DATA_GO_KR: {
+        "endpoint": "",
+        "options": {"items_path": ["response", "body", "items", "item"],
+                    "rows": 10, "max_facts": 3},
+        "hint": "공공데이터포털에서 받은 요청 주소를 붙여넣으세요",
+    },
+}
+
+
+def adapter_default(adapter: str) -> Dict[str, Any]:
+    """어댑터 기본값. 모르는 어댑터면 빈 dict."""
+    return dict(ADAPTER_DEFAULTS.get(adapter) or {})
 
 
 def get(code: str) -> Dict[str, Any]:

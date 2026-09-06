@@ -711,7 +711,7 @@
                                                class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
                                     </label>
                                     <label class="text-xs text-gray-500">
-                                        식별 코드 <span class="text-gray-400">(영문·숫자)</span>
+                                        식별 코드 <span class="text-gray-400">(비우면 자동)</span>
                                         <input type="text" x-model="form.code"
                                                :disabled="!!form.id"
                                                placeholder="fss_mortgage"
@@ -723,7 +723,8 @@
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
                                     <label class="text-xs text-gray-500">
                                         어댑터 <span class="text-gray-400" x-show="form.preset">(프리셋이 설정)</span>
-                                        <select x-model="form.adapter" :disabled="!!form.preset"
+                                        <select x-model="form.adapter" @change="onAdapter()"
+                                                :disabled="!!form.preset"
                                                 class="mt-0.5 w-full text-sm border-gray-300 rounded py-1 disabled:bg-gray-100 disabled:text-gray-400">
                                             <option value="">고르세요</option>
                                             <option value="data_go_kr">공공데이터포털 표준</option>
@@ -752,6 +753,7 @@
                                 <p class="text-xs text-gray-500">
                                     둘 중 <strong>하나는 반드시</strong> 채워야 합니다. 비워 두면 이 API는 영영 호출되지 않습니다.
                                 </p>
+                                <p x-show="adapterHint" class="text-xs text-gray-500" x-text="adapterHint"></p>
                                 <div class="flex items-center gap-2 flex-wrap">
                                     <button @click="save()" :disabled="saving"
                                             class="px-3 py-1.5 bg-accent text-white rounded-lg text-sm disabled:opacity-40">

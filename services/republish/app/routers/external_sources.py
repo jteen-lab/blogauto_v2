@@ -75,7 +75,9 @@ async def list_presets(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     """고를 수 있는 프리셋과 어댑터 목록."""
-    return {"presets": presets.listing(), "adapters": list(ADAPTERS)}
+    return {"presets": presets.listing(), "adapters": list(ADAPTERS),
+            "adapter_defaults": {
+                code: presets.adapter_default(code) for code in ADAPTERS}}
 
 
 @router.get("")
@@ -188,6 +190,11 @@ async def test_source(
             raise HTTPException(status_code=422, detail="인증키를 입력하세요")
         adapter_code, endpoint, options = request.adapter, request.endpoint, \
             (request.options or {})
+        if not request.preset:
+            base = presets.adapter_default(adapter_code or "")
+            if base:
+                endpoint = endpoint or base.get("endpoint") or ""
+                options = options or base.get("options") or {}
         if request.preset:
             found = presets.get(request.preset)
             if not found:
@@ -240,6 +247,14 @@ def _resolve_preset(request: SourceRequest) -> None:
     오타 하나로 조용히 실패하는 소스가 생긴다.
     """
     if not request.preset:
+        # 프리셋을 안 썼어도 어댑터 기본값은 채운다. 금감원 주소를
+        # 사용자가 외워서 적을 이유가 없다.
+        base = presets.adapter_default(request.adapter or "")
+        if base:
+            if not (request.endpoint or "").strip():
+                request.endpoint = base.get("endpoint") or ""
+            if not request.options:
+                request.options = base.get("options") or {}
         return
     found = presets.get(request.preset)
     if not found:

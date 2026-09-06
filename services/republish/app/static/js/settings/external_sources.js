@@ -11,16 +11,19 @@ function externalSources() {
     return {
         sources: [],
         presets: [],
+        adapterDefaults: {},
         saving: false,
         testing: false,
         msg: '',
         keyHint: '인증키',
+        adapterHint: '',
         testResult: null,
         form: _blankForm(),
 
         async loadSources() {
             const meta = await this.get('/api/v1/external-sources/presets');
             this.presets = (meta && meta.presets) || [];
+            this.adapterDefaults = (meta && meta.adapter_defaults) || {};
             const list = await this.get('/api/v1/external-sources');
             this.sources = (list && list.sources) || [];
         },
@@ -44,6 +47,19 @@ function externalSources() {
             // 비워 둔다 — 안내 문구를 넣으면 그게 주소로 저장될 수 있다.
             this.form.endpoint = '';
             this.msg = '';
+        },
+
+        /** 어댑터를 고르면 기본 주소를 채운다. 사용자가 외워서 적을
+         *  이유가 없고, 비워 두면 "주소를 입력하세요" 로 막힌다. */
+        onAdapter() {
+            const base = this.adapterDefaults[this.form.adapter] || {};
+            if (!this.form.endpoint && base.endpoint) {
+                this.form.endpoint = base.endpoint;
+            }
+            this.adapterHint = base.hint || '';
+            if (!this.form.code && this.form.adapter) {
+                this.form.code = this.form.adapter + '_' + Date.now().toString(36).slice(-4);
+            }
         },
 
         edit(source) {
@@ -96,8 +112,12 @@ function externalSources() {
         },
 
         async save() {
-            if (!this.form.name || !this.form.code) {
-                this.msg = '프리셋을 고르거나 이름·코드를 입력하세요';
+            if (!this.form.code && this.form.name) {
+                // 식별 코드는 내부용이다. 비었으면 만들어 준다.
+                this.form.code = 'src_' + Date.now().toString(36);
+            }
+            if (!this.form.name) {
+                this.msg = '이름을 입력하세요';
                 return;
             }
             const missing = this._missing();
