@@ -323,3 +323,61 @@ class TestPreviewName:
         src = (ROOT / "app/routers/external_sources.py").read_text(
             encoding="utf-8")
         assert 'name=(request.name or "").strip() or "미등록 소스"' in src
+
+
+class TestCompanyMustMatch:
+    """다른 은행 금리를 이 은행 것처럼 쓰면 사실이 아닌 글이 된다.
+
+    2026-09-06 실측: "NH농협은행 전세대출" 글에 중소기업은행 IBK전세대출이
+    붙었다. 개체를 넓히는 과정에서 "전세대출" 이라는 일반어가 걸렸다.
+    """
+
+    BASE = [
+        {"fin_co_no": "1", "fin_prdt_cd": "A",
+         "fin_prdt_nm": "IBK전세대출 (HF)", "kor_co_nm": "중소기업은행"},
+        {"fin_co_no": "2", "fin_prdt_cd": "B",
+         "fin_prdt_nm": "NH전세대출", "kor_co_nm": "농협은행"},
+        {"fin_co_no": "3", "fin_prdt_cd": "C",
+         "fin_prdt_nm": "우리아파트론", "kor_co_nm": "우리은행"},
+    ]
+
+    def test_other_bank_never_substituted(self):
+        from app.services.reference.sources.fss_finlife import _match_products
+
+        hit = _match_products(self.BASE, "",
+                              ["NH농협은행", "전세대출", "서류"])
+        assert [h["kor_co_nm"] for h in hit] == ["농협은행"]
+
+    @pytest.mark.parametrize("name", ["케이뱅크", "카카오뱅크", "토스뱅크"])
+    def test_internet_banks_are_companies(self, name):
+        """인터넷은행은 '뱅크' 로 끝난다. '은행' 만 보면 회사 제약이 풀린다."""
+        from app.services.reference.sources.fss_finlife import _company_of
+
+        assert _company_of([name, "전세대출"]) == name
+
+    def test_prefix_difference_is_tolerated(self):
+        """제목은 'NH농협은행', 공시는 '농협은행' 이다."""
+        from app.services.reference.sources.fss_finlife import _same_company
+
+        assert _same_company("NH농협은행", "농협은행")
+        assert _same_company("케이뱅크", "주식회사 케이뱅크")
+        assert not _same_company("우리은행", "농협은행")
+
+    def test_absent_company_returns_nothing(self):
+        """그 은행 상품이 목록에 없으면 빈손이다."""
+        from app.services.reference.sources.fss_finlife import _match_products
+
+        assert _match_products(self.BASE, "", ["카카오뱅크", "전세대출"]) == []
+
+    def test_company_found_but_product_not(self):
+        """회사가 맞으면 그 회사 상품을 준다 — 사실이 어긋나지는 않는다."""
+        from app.services.reference.sources.fss_finlife import _match_products
+
+        hit = _match_products(self.BASE, "", ["우리은행", "없는상품명"])
+        assert [h["kor_co_nm"] for h in hit] == ["우리은행"]
+
+    def test_company_detection(self):
+        from app.services.reference.sources.fss_finlife import _company_of
+
+        assert _company_of(["우리아파트론", "우리은행"]) == "우리은행"
+        assert _company_of(["전기차", "충전"]) is None

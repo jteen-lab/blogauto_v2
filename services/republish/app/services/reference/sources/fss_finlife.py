@@ -193,9 +193,47 @@ class FssFinlifeAdapter(SourceAdapter):
         return SourceResult(code=source.code, name=name, facts=facts)
 
 
+# 금융회사 이름의 꼬리. 제목에서 기관을 알아보는 데 쓴다.
+# 인터넷은행은 "뱅크" 로 끝난다(케이뱅크·카카오뱅크·토스뱅크). "은행" 만
+# 보면 이들이 회사로 인식되지 않아, 회사 제약이 통째로 풀린다.
+_COMPANY_TAILS = ("은행", "뱅크", "캐피탈", "저축은행", "카드", "증권",
+                  "생명", "화재", "금고", "조합", "파이낸셜", "대부")
+
+
+def _company_of(words: List[str]) -> Optional[str]:
+    """제목에서 금융회사 이름을 찾는다. 없으면 None."""
+    for word in words:
+        if any(word.endswith(tail) for tail in _COMPANY_TAILS):
+            return word
+    return None
+
+
+def _same_company(title_name: str, listed: str) -> bool:
+    """같은 회사인가.
+
+    제목은 "NH농협은행", 공시는 "농협은행" 처럼 접두어가 다르다. 영문
+    접두어를 떼고 서로 포함하는지 본다.
+    """
+    import re as _re
+
+    def norm(text: str) -> str:
+        cut = _re.sub(r"^[A-Za-z]+", "", (text or "").replace(" ", ""))
+        return cut or (text or "").replace(" ", "")
+
+    left, right = norm(title_name), norm(listed)
+    if not left or not right:
+        return False
+    return left in right or right in left
+
+
 def _match_products(base_list: List[dict], query: str,
                     entities: List[str]) -> List[dict]:
     """상품명이 개체와 맞는 것만.
+
+    **회사가 제목에 있으면 그 회사 상품만 본다.** 예전에는 개체를 넓히는
+    과정에서 "전세대출" 같은 일반어가 걸려, "NH농협은행 전세대출" 글에
+    중소기업은행 IBK전세대출이 붙었다(2026-09-06 실측). 다른 은행의
+    금리를 이 은행 것처럼 쓰면 사실이 아닌 글이 된다.
 
     개체가 없으면 아무것도 고르지 않는다 — 목록 첫 상품을 주면 그게 곧
     엉뚱한 상품이다.
@@ -208,15 +246,32 @@ def _match_products(base_list: List[dict], query: str,
     if not targets:
         return []
 
+    pool = base_list
+    company = _company_of(targets)
+    if company:
+        pool = [item for item in base_list
+                if _same_company(company, item.get("kor_co_nm", ""))]
+        if not pool:
+            logger.info("[FSS] 회사 미일치 — 빈손 | 제목회사='%s'", company)
+            return []
+        # 회사를 좁혔으면 상품명만 남는다. 회사명 자체는 빼고 비교한다.
+        targets = [t for t in targets if t != company] or [company]
+
     # 좁은 것부터: 첫 개체(가장 고유) → 전체 개체
     for scope in (targets[:1], targets):
         hit = [
-            item for item in base_list
+            item for item in pool
             if matches(f"{item.get('fin_prdt_nm', '')} "
                        f"{item.get('kor_co_nm', '')}", scope)
         ]
         if hit:
             return _dedupe(hit)
+
+    # 회사는 맞는데 상품명이 안 맞으면 그 회사 상품을 준다. 다른 회사를
+    # 주는 것과 달리, 적어도 이 은행의 조건이라 사실이 어긋나지 않는다.
+    if company and pool:
+        logger.info("[FSS] 상품명 미일치 — 회사 상품으로 대체 | '%s'", company)
+        return _dedupe(pool)
     return []
 
 
