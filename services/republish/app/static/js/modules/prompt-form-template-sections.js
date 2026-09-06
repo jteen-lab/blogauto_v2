@@ -206,7 +206,7 @@ function getPromptContentGenSection() {
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 mb-2">
                                             사용자 프롬프트 템플릿
-                                            <span class="text-xs text-gray-500">(변수: {title}, {keywords}, {category})</span>
+                                            <span class="text-xs text-gray-500">(변수: {title}, {keywords}, {category}, {reference_materials})</span>
                                         </label>
                                         <textarea x-model="promptModule.contentGeneration.userPromptTemplate"
                                                   rows="4"

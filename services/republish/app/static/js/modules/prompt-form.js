@@ -73,7 +73,10 @@ function createPromptModuleState() {
             presencePenalty: 0,
             topK: 40,
             systemPrompt: '당신은 전문적인 블로그 콘텐츠 작성자입니다. SEO에 최적화된 고품질 블로그 글을 작성해주세요.',
-            userPromptTemplate: '제목: {title}\n\n위 제목으로 블로그 글을 작성해주세요.\n카테고리: {category}\n키워드: {keywords}',
+            // {reference_materials} — 검색해 모은 자료가 들어갈 자리.
+            // 빠져 있으면 생성기가 프롬프트 끝에 붙이지만, 원하는 위치에
+            // 두려면 여기에 적는다.
+            userPromptTemplate: '제목: {title}\n\n위 제목으로 블로그 글을 작성해주세요.\n카테고리: {category}\n키워드: {keywords}\n\n아래 자료를 참고해 사실·수치를 반영하되 문장을 그대로 옮기지 마세요.\n{reference_materials}',
             renewalMode: 'inherit',
             renewalText: '',
             showAdvanced: false

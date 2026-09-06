@@ -81,6 +81,22 @@ async def generate_content_with_meta(
         .replace("{keywords}", keywords_text)
         .replace("{existing_content}", existing_content)
     )
+    # 자리표시자가 없는 프롬프트에도 자료가 들어가게 한다.
+    #
+    # 프롬프트 빌더 화면은 {title}·{category}·{keywords} 만 안내한다.
+    # {reference_materials} 는 어디에도 없어서, 화면으로 만든 모듈은
+    # **전부** 이 자리표시자가 빠져 있었다. 검색·크롤링·요약을 다 하고
+    # 결과를 버린 셈이다(2026-09-06 실측: 14개 중 12개, 최근 30일 글의 95%).
+    #
+    # 분량·정보이득 지시문보다 **앞에** 붙인다. 그것들이 마지막에 읽혀야
+    # "위의 다른 분량 언급보다 우선" 같은 문장이 뜻을 갖는다.
+    if reference_injection and "{reference_materials}" not in prompt_template:
+        full_prompt = f"{full_prompt}\n\n{reference_injection}"
+        logger.info(
+            "[GENERATOR] 참조 자리표시자 없음 — 말미에 붙임 | blog=%s",
+            blog.name,
+        )
+
     # 리뉴얼 추가 지침을 프롬프트 말미에 결합
     if extra_instruction:
         full_prompt = f"{full_prompt}\n\n{extra_instruction}"
