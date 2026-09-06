@@ -54,6 +54,7 @@ from .routers.data_title_cleanup import router as data_title_cleanup_router  # �
 from .routers.data_domain_ops import router as data_domain_ops_router  # 도메인 정리
 from .routers.niche_summary import router as niche_summary_router  # 니치 현황
 from .routers.analytics import router as analytics_router  # 유입 분석
+from .routers.external_sources import router as external_sources_router  # 1차 출처 API
 from .routers.style_templates import router as style_templates_router  # 제목 스타일 템플릿
 from .routers.taxonomy import router as taxonomy_router  # 분류표 관리
 from .routers.title_recombine import router as title_recombine_router  # 수동 재조합
@@ -339,6 +340,7 @@ app.include_router(data_title_cleanup_router, prefix=settings.api_v1_prefix)
 app.include_router(data_domain_ops_router, prefix=settings.api_v1_prefix)
 app.include_router(niche_summary_router, prefix=settings.api_v1_prefix)
 app.include_router(analytics_router, prefix=settings.api_v1_prefix)
+app.include_router(external_sources_router, prefix=settings.api_v1_prefix)
 app.include_router(style_templates_router, prefix=settings.api_v1_prefix)
 app.include_router(taxonomy_router, prefix=settings.api_v1_prefix)
 app.include_router(title_recombine_router, prefix=settings.api_v1_prefix)

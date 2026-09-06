@@ -641,6 +641,117 @@
                             </div>
                         </div>
 
+                        <!-- 1차 출처 API — 글 쓸 때 공식 자료를 먼저 본다 -->
+                        <div class="space-y-3 pt-4 border-t border-gray-100"
+                             x-data="externalSources()" x-init="loadSources()">
+                            <h4 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                                🏛 1차 출처 API
+                                <span x-show="sources.length" class="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full"
+                                      x-text="`${sources.filter(s => s.enabled).length}개 사용 중`"></span>
+                            </h4>
+                            <p class="text-xs text-gray-500 -mt-1">
+                                글을 쓸 때 <strong>기관이 공시한 값</strong>을 먼저 봅니다. 남의 블로그를 요약하면
+                                그 글의 오류까지 물려받지만, 공식 자료는 값 자체가 사실입니다.
+                                등록해 두면 <strong>주제·제목에 맞을 때만</strong> 자동으로 호출됩니다.
+                            </p>
+
+                            <!-- 등록된 소스 -->
+                            <template x-for="s in sources" :key="s.id">
+                                <div class="px-3 py-2 border rounded-lg text-xs"
+                                     :class="s.enabled ? 'border-emerald-200 bg-emerald-50/40' : 'border-gray-200 bg-gray-50'">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <div class="min-w-0">
+                                            <div class="font-medium text-gray-900 truncate" x-text="s.name"></div>
+                                            <div class="text-gray-500 truncate"
+                                                 x-text="`${(s.match_topics||[]).join(', ') || '주제 미지정'} · ${(s.match_keywords||[]).join(', ') || '낱말 미지정'}`"></div>
+                                        </div>
+                                        <div class="flex items-center gap-2 shrink-0">
+                                            <span x-show="!s.has_key" class="text-amber-600">키 없음</span>
+                                            <button @click="runTest(s)" :disabled="testing"
+                                                    class="px-2 py-1 border border-gray-300 rounded bg-white">테스트</button>
+                                            <button @click="edit(s)" class="px-2 py-1 border border-gray-300 rounded bg-white">수정</button>
+                                            <button @click="remove(s)" class="px-2 py-1 text-red-600">삭제</button>
+                                        </div>
+                                    </div>
+                                    <template x-if="testResult && testResult.id === s.id">
+                                        <div class="mt-2 p-2 rounded whitespace-pre-wrap"
+                                             :class="testResult.ok ? 'bg-white text-gray-700' : 'bg-red-50 text-red-700'"
+                                             x-text="testResult.text"></div>
+                                    </template>
+                                </div>
+                            </template>
+                            <p x-show="!sources.length" class="text-xs text-gray-400">
+                                등록된 API가 없습니다. 아래에서 추가하세요.
+                            </p>
+
+                            <!-- 추가·수정 -->
+                            <div class="p-3 bg-gray-50 border border-gray-200 rounded-lg space-y-2">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                    <label class="text-xs text-gray-500">
+                                        프리셋
+                                        <select @change="applyPreset($event.target.value)"
+                                                class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+                                            <option value="">직접 입력</option>
+                                            <template x-for="p in presets" :key="p.code">
+                                                <option :value="p.code" x-text="p.name"></option>
+                                            </template>
+                                        </select>
+                                    </label>
+                                    <label class="text-xs text-gray-500">
+                                        인증키
+                                        <input type="password" x-model="form.auth_key"
+                                               :placeholder="form.has_key ? '(등록됨 — 바꿀 때만 입력)' : keyHint"
+                                               class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+                                    </label>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                    <label class="text-xs text-gray-500">
+                                        이름
+                                        <input type="text" x-model="form.name"
+                                               class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+                                    </label>
+                                    <label class="text-xs text-gray-500">
+                                        주소 <span class="text-gray-400" x-show="form.preset">(프리셋이 설정)</span>
+                                        <input type="text" x-model="form.endpoint"
+                                               :disabled="!!form.preset"
+                                               class="mt-0.5 w-full text-sm border-gray-300 rounded py-1 disabled:bg-gray-100 disabled:text-gray-400">
+                                    </label>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                    <label class="text-xs text-gray-500">
+                                        대상 주제 <span class="text-gray-400">(쉼표)</span>
+                                        <input type="text" x-model="form.topics" placeholder="금융/대출, 부동산"
+                                               class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+                                    </label>
+                                    <label class="text-xs text-gray-500">
+                                        제목 낱말 <span class="text-gray-400">(쉼표)</span>
+                                        <input type="text" x-model="form.keywords" placeholder="주담대, 아파트론"
+                                               class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
+                                    </label>
+                                </div>
+                                <p class="text-xs text-gray-500">
+                                    둘 중 <strong>하나는 반드시</strong> 채워야 합니다. 비워 두면 이 API는 영영 호출되지 않습니다.
+                                </p>
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <button @click="save()" :disabled="saving"
+                                            class="px-3 py-1.5 bg-accent text-white rounded-lg text-sm disabled:opacity-40">
+                                        <span x-text="saving ? '저장 중…' : (form.id ? '수정' : '추가')"></span>
+                                    </button>
+                                    <button @click="runTest(null)" :disabled="testing"
+                                            class="px-3 py-1.5 border border-gray-300 bg-white rounded-lg text-sm disabled:opacity-40">
+                                        <span x-text="testing ? '확인 중…' : '연결 테스트'"></span>
+                                    </button>
+                                    <button x-show="form.id" @click="reset()"
+                                            class="px-3 py-1.5 text-sm text-gray-500">취소</button>
+                                    <span class="text-xs text-gray-500" x-text="msg"></span>
+                                </div>
+                                <template x-if="testResult && testResult.id === null">
+                                    <div class="p-2 rounded text-xs whitespace-pre-wrap"
+                                         :class="testResult.ok ? 'bg-white text-gray-700' : 'bg-red-50 text-red-700'"
+                                         x-text="testResult.text"></div>
+                                </template>
+                            </div>
+                        </div>
                     </div>
 
                     <hr class="border-gray-200">
