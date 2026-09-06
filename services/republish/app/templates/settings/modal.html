@@ -711,6 +711,26 @@
                                                class="mt-0.5 w-full text-sm border-gray-300 rounded py-1">
                                     </label>
                                     <label class="text-xs text-gray-500">
+                                        식별 코드 <span class="text-gray-400">(영문·숫자)</span>
+                                        <input type="text" x-model="form.code"
+                                               :disabled="!!form.id"
+                                               placeholder="fss_mortgage"
+                                               class="mt-0.5 w-full text-sm border-gray-300 rounded py-1 disabled:bg-gray-100">
+                                    </label>
+                                </div>
+                                {# 직접 입력일 때는 어댑터를 골라야 한다. 없으면
+                                   "모르는 어댑터: " 로 테스트가 실패한다. #}
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                    <label class="text-xs text-gray-500">
+                                        어댑터 <span class="text-gray-400" x-show="form.preset">(프리셋이 설정)</span>
+                                        <select x-model="form.adapter" :disabled="!!form.preset"
+                                                class="mt-0.5 w-full text-sm border-gray-300 rounded py-1 disabled:bg-gray-100 disabled:text-gray-400">
+                                            <option value="">고르세요</option>
+                                            <option value="data_go_kr">공공데이터포털 표준</option>
+                                            <option value="fss_finlife">금융감독원 금융상품한눈에</option>
+                                        </select>
+                                    </label>
+                                    <label class="text-xs text-gray-500">
                                         주소 <span class="text-gray-400" x-show="form.preset">(프리셋이 설정)</span>
                                         <input type="text" x-model="form.endpoint"
                                                :disabled="!!form.preset"

@@ -40,8 +40,9 @@ function externalSources() {
                 keywords: (p.match_keywords || []).join(', '),
             };
             this.keyHint = p.key_hint || '인증키';
-            // 주소·options 는 서버가 프리셋에서 채운다
-            this.form.endpoint = '(프리셋 사용 — 저장 시 자동 설정)';
+            // 주소·options 는 서버가 프리셋에서 채운다. 화면에는 잠긴 채로
+            // 비워 둔다 — 안내 문구를 넣으면 그게 주소로 저장될 수 있다.
+            this.form.endpoint = '';
             this.msg = '';
         },
 
@@ -80,9 +81,30 @@ function externalSources() {
             };
         },
 
+        /** 저장·테스트 전에 부족한 값을 알려 준다. 없으면 빈 문자열. */
+        _missing() {
+            if (!this.form.preset && !this.form.adapter) {
+                return '어댑터를 고르세요 (프리셋을 선택하면 자동으로 정해집니다)';
+            }
+            if (!this.form.preset && !this.form.endpoint) {
+                return '주소를 입력하세요';
+            }
+            if (!this.form.auth_key && !this.form.has_key) {
+                return '인증키를 입력하세요';
+            }
+            return '';
+        },
+
         async save() {
             if (!this.form.name || !this.form.code) {
                 this.msg = '프리셋을 고르거나 이름·코드를 입력하세요';
+                return;
+            }
+            const missing = this._missing();
+            if (missing && !this.form.id) { this.msg = missing; return; }
+            if (!_split(this.form.topics).length
+                && !_split(this.form.keywords).length) {
+                this.msg = '대상 주제 또는 제목 낱말 중 하나는 채워야 합니다';
                 return;
             }
             this.saving = true; this.msg = '';
@@ -107,6 +129,13 @@ function externalSources() {
 
         /** 실제로 한 번 불러 본다. source 가 null 이면 입력 중인 값으로. */
         async runTest(source) {
+            if (!source) {
+                const missing = this._missing();
+                if (missing) {
+                    this.testResult = { id: null, ok: false, text: missing };
+                    return;
+                }
+            }
             this.testing = true;
             this.testResult = null;
             const body = source
@@ -122,7 +151,9 @@ function externalSources() {
                 text: d.ok
                     ? `질의 "${d.query}" → ${d.count}건\n${d.preview || ''}`
                     : (d.error || '자료를 찾지 못했습니다')
-                      + `\n(질의 "${d.query}", 개체 ${(d.entities || []).join(', ')})`,
+                      + (d.query
+                         ? `\n(질의 "${d.query}", 개체 ${(d.entities || []).join(', ') || '없음'})`
+                         : ''),
             };
         },
 

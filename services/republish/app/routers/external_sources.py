@@ -201,22 +201,33 @@ async def test_source(
             auth_key_encrypted=encrypt_api_key(request.auth_key.strip()),
             options=options)
 
-    adapter = _adapter(row.adapter or "")
-    if adapter is None:
-        return {"ok": False, "error": f"모르는 어댑터: {row.adapter}"}
-
+    # 질의는 먼저 만든다. 오류로 빠져나가는 길에서도 화면이 무엇을 물었는지
+    # 보여줘야 한다 — 예전에는 오류 응답에 query 가 없어 "undefined" 가 떴다.
     plan = build_plan(request.query)
+    base = {"query": plan.primary, "entities": plan.entities, "count": 0,
+            "preview": ""}
+
+    if not (row.adapter or "").strip():
+        return {**base, "ok": False,
+                "error": "어댑터를 고르지 않았습니다. 프리셋을 선택하거나 "
+                         "어댑터를 직접 지정하세요."}
+    adapter = _adapter(row.adapter)
+    if adapter is None:
+        return {**base, "ok": False,
+                "error": f"모르는 어댑터: {row.adapter}"}
+    if not (row.endpoint or "").strip():
+        return {**base, "ok": False, "error": "주소가 비어 있습니다"}
+
     try:
         result = await adapter.fetch(row, plan.primary, plan.entities)
     except Exception as e:  # noqa: BLE001
-        return {"ok": False, "error": f"호출 실패: {e}"}
+        return {**base, "ok": False, "error": f"호출 실패: {e}"}
 
     return {
+        **base,
         "ok": result.ok,
         "error": result.error,
         "count": len(result.facts),
-        "query": plan.primary,
-        "entities": plan.entities,
         # 실제로 무엇이 왔는지 보여 준다. 건수만으로는 맞는지 알 수 없다.
         "preview": "\n".join(result.to_prompt().splitlines()[:14]),
     }

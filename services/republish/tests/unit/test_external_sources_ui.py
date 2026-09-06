@@ -129,3 +129,54 @@ class TestScreen:
 
     def test_warns_when_no_key(self):
         assert "키 없음" in MODAL
+
+
+class TestManualEntry:
+    """직접 입력에는 어댑터를 고를 칸이 없어 테스트가 '모르는 어댑터: ' 로
+    실패했다(2026-09-06 사용자 보고)."""
+
+    def test_adapter_select_exists(self):
+        assert 'x-model="form.adapter"' in MODAL
+        assert 'value="fss_finlife"' in MODAL
+        assert 'value="data_go_kr"' in MODAL
+
+    def test_adapter_locked_when_preset(self):
+        block = MODAL[MODAL.index('x-model="form.adapter"'):]
+        assert ':disabled="!!form.preset"' in block[:300]
+
+    def test_code_field_exists(self):
+        """식별 코드도 입력칸이 없었다."""
+        assert 'x-model="form.code"' in MODAL
+
+    def test_client_blocks_before_calling(self):
+        """서버까지 갔다 오면 느리고 메시지도 흐리다."""
+        assert "_missing()" in JS
+        assert "어댑터를 고르세요" in JS
+
+
+class TestErrorResponse:
+    """오류 응답에 query 가 없어 화면에 '질의 undefined' 가 떴다."""
+
+    def test_error_paths_carry_query(self):
+        src = (ROOT / "app/routers/external_sources.py").read_text(
+            encoding="utf-8")
+        body = src[src.index("async def test_source"):]
+        # 모든 조기 반환이 base 를 펼쳐 query·entities 를 싣는다
+        assert body.count("**base") >= 4
+        assert 'base = {"query": plan.primary' in body
+
+    def test_empty_adapter_says_what_to_do(self):
+        src = (ROOT / "app/routers/external_sources.py").read_text(
+            encoding="utf-8")
+        assert "어댑터를 고르지 않았습니다" in src
+
+    def test_js_hides_undefined_query(self):
+        assert "d.query\n" in JS or "? `\\n(질의" in JS or "d.query" in JS
+        # query 가 없으면 괄호 문구 자체를 붙이지 않는다
+        assert "(d.query" in JS
+
+
+class TestPresetEndpoint:
+    def test_preset_leaves_endpoint_empty(self):
+        """안내 문구를 넣으면 그게 주소로 저장된다."""
+        assert "this.form.endpoint = '';" in JS
