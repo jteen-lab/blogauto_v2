@@ -257,6 +257,13 @@ async def posts(
             .where(SearchVisibilityUrl.id.in_(url_ids))
         )).scalars().all()
     }
+    # 전체 블로그로 보면 어느 블로그 글인지 알 수 없다
+    blog_names = {
+        row[0]: row[1] for row in (await db.execute(
+            select(Blog.id, Blog.name).where(
+                Blog.id.in_({u.blog_id for u in urls.values()}))
+        )).all()
+    }
 
     items, perfs = [], []
     for url_id, sessions, clicks, impressions, position, day_count in rows:
@@ -272,5 +279,7 @@ async def posts(
             **perf.to_dict(),
             "title": getattr(row, "title", "") or "",
             "url": getattr(row, "url", "") or "",
+            "blog": blog_names.get(getattr(row, "blog_id", None), ""),
         })
-    return {"items": items, "summary": summarize(perfs)}
+    return {"items": items, "summary": summarize(perfs),
+            "days": days, "blog_id": blog_id}

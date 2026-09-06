@@ -97,13 +97,20 @@ compactDashboard = function () {
     app.collectAnalytics = async function () {
         this.gaCollecting = true; this.gaMsg = '수집 중…';
         try {
+            const scope = this.gaBlogId ? `&blog_id=${this.gaBlogId}` : '';
             const r = await fetch(
-                `/api/v1/analytics/collect?days=${this.gaDays}`,
+                `/api/v1/analytics/collect?days=${this.gaDays}${scope}`,
                 { method: 'POST', credentials: 'include' });
             const d = await r.json();
-            this.gaMsg = r.ok
-                ? `블로그 ${d.blogs ?? 0}개 · ${d.rows ?? 0}건 적재`
-                : (d.detail || '수집 실패');
+            if (!r.ok) {
+                this.gaMsg = d.detail || '수집 실패';
+            } else if (d.skipped) {
+                // 조용히 0건이면 왜 없는지 알 수 없다
+                this.gaMsg = `수집 안 함 — ${d.skipped}`;
+            } else {
+                const where = this.gaBlogId ? this.gaScopeLabel() : `블로그 ${d.blogs ?? 0}개`;
+                this.gaMsg = `${where} · ${d.rows ?? 0}건 적재`;
+            }
             if (r.ok) await this.loadAnalytics();
         } catch (e) {
             this.gaMsg = '수집 실패';
@@ -153,6 +160,14 @@ compactDashboard = function () {
         if (row.decay <= -0.2) return 'text-rose-600';
         if (row.decay > 0) return 'text-emerald-600';
         return 'text-gray-500';
+    };
+
+    /** 지금 무엇을 보고 있는가. 표만 보면 어느 블로그인지 알 수 없다. */
+    app.gaScopeLabel = function () {
+        if (!this.gaBlogId) return '전체 블로그';
+        const found = ((this.gaConn && this.gaConn.blogs) || [])
+            .find(b => String(b.id) === String(this.gaBlogId));
+        return found ? found.name : '선택한 블로그';
     };
 
     /** 연결된 블로그 수. 0 이면 아무 데이터도 안 쌓인다. */
