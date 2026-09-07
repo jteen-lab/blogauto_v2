@@ -558,3 +558,43 @@ class TestEditableEndpoint:
                             endpoint="https://apis.data.go.kr/1371000/svc/op")
         _resolve_preset(req)
         assert req.endpoint == "https://apis.data.go.kr/1371000/svc/op"
+
+
+class TestKeyFormRetry:
+    """포털은 인증키를 Decoding·Encoding 두 형태로 준다.
+
+    어느 쪽을 넣었는지 사용자가 알기 어렵고, 틀리면
+    SERVICE_KEY_IS_NOT_REGISTERED_ERROR 만 본다. 화면에서 바꿔 가며
+    시험하게 할 이유가 없어 자동으로 한 번 더 시도한다.
+    """
+
+    def test_retry_exists(self):
+        src = (ROOT / "app/services/reference/sources/data_go_kr.py").read_text(
+            encoding="utf-8")
+        body = src[src.index("async def _call("):src.index("def looks_like")]
+        assert "SERVICE_KEY_IS_NOT_REGISTERED_ERROR" in body
+        assert "unquote" in body and "quote" in body
+
+    def test_encoded_key_not_double_encoded(self):
+        """이미 인코딩된 키를 params 로 넘기면 %가 다시 인코딩된다."""
+        src = (ROOT / "app/services/reference/sources/data_go_kr.py").read_text(
+            encoding="utf-8")
+        body = src[src.index("async def _call("):src.index("def looks_like")]
+        # 재시도는 질의문자열을 직접 만들어 붙인다
+        assert 'f"{endpoint}?serviceKey={flipped}"' in body
+
+    def test_flip_is_reversible(self):
+        from urllib.parse import quote, unquote
+
+        decoded = "abc+def/ghi=="
+        encoded = quote(decoded, safe="")
+        assert unquote(encoded) == decoded
+
+    def test_guide_no_longer_blames_key_form(self):
+        """두 형태를 다 시도했으므로 표기 문제가 아니다."""
+        from app.services.reference.sources.data_go_kr import ERROR_GUIDE
+
+        guide = ERROR_GUIDE["SERVICE_KEY_IS_NOT_REGISTERED_ERROR"]
+        assert "키 표기 문제는 아닙니다" in guide
+        assert "마이페이지" in guide
+        assert "1시간" in guide

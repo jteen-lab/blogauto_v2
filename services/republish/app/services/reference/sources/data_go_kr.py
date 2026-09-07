@@ -36,9 +36,12 @@ DEFAULT_ITEMS_PATH = ["response", "body", "items", "item"]
 # 무엇을 고쳐야 할지 알 수 없다. 실제로 이 오류를 받고 멈췄다.
 ERROR_GUIDE = {
     "SERVICE_KEY_IS_NOT_REGISTERED_ERROR": (
-        "이 API 에 활용신청이 안 됐거나 키 형식이 다릅니다. "
-        "① 공공데이터포털에서 해당 API 의 [활용신청]을 눌렀는지 확인하고 "
-        "② 인증키를 Decoding ↔ Encoding 으로 바꿔 넣어 보세요."),
+        "인증키가 이 API 에 등록돼 있지 않습니다. Decoding·Encoding 두 형태로 "
+        "모두 시도했으므로 키 표기 문제는 아닙니다. "
+        "① 공공데이터포털 > 마이페이지 > 오픈API > 개발계정에서 **이 API 가 "
+        "목록에 있는지** 확인하세요(없으면 활용신청 필요). "
+        "② 방금 신청했다면 반영에 최대 1시간이 걸립니다. "
+        "③ 같은 기관의 다른 데이터셋을 신청한 것은 아닌지 확인하세요."),
     "NO_OPENAPI_SERVICE_ERROR": (
         "그 주소에 API 가 없습니다. 공공데이터포털 상세 페이지의 "
         "'요청주소'를 그대로 복사해 넣으세요."),
@@ -81,8 +84,7 @@ class DataGoKrAdapter(SourceAdapter):
         params.update(options.get("extra_params") or {})
 
         try:
-            async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-                response = await client.get(source.endpoint, params=params)
+            response = await _call(source.endpoint, params)
         except Exception as e:  # noqa: BLE001
             return SourceResult(code=source.code, name=name,
                                 error=f"호출 실패: {e}")
@@ -115,6 +117,47 @@ class DataGoKrAdapter(SourceAdapter):
         facts = _to_facts(items, options, entities, name,
                           getattr(source, "endpoint", ""))
         return SourceResult(code=source.code, name=name, facts=facts)
+
+
+async def _call(endpoint: str, params: Dict[str, Any]):
+    """호출한다. 키가 안 먹히면 **다른 형태로 한 번 더** 시도한다.
+
+    포털은 인증키를 두 가지로 준다.
+
+        Decoding  abc+def/ghi==
+        Encoding  abc%2Bdef%2Fghi%3D%3D
+
+    같은 키인데 표기가 다르다. httpx 는 파라미터를 자동 인코딩하므로
+    Decoding 키가 맞지만, Encoding 키를 넣으면 `%` 가 다시 인코딩돼
+    (`%252B`) SERVICE_KEY_IS_NOT_REGISTERED_ERROR 가 난다.
+
+    어느 쪽을 넣었는지 사용자가 알기 어렵다. 실패하면 반대 형태로
+    자동 재시도한다 — 화면에서 바꿔 가며 시험하게 할 이유가 없다.
+    """
+    from urllib.parse import quote, unquote
+
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+        response = await client.get(endpoint, params=params)
+        if "SERVICE_KEY_IS_NOT_REGISTERED_ERROR" not in (response.text or ""):
+            return response
+
+        key = str(params.get("serviceKey") or "")
+        flipped = unquote(key) if "%" in key else quote(key, safe="")
+        if not flipped or flipped == key:
+            return response
+
+        # 이미 인코딩된 키는 다시 인코딩되면 안 된다. 질의문자열을 직접 만든다.
+        rest = "&".join(
+            f"{k}={quote(str(v), safe='')}"
+            for k, v in params.items() if k != "serviceKey")
+        url = f"{endpoint}?serviceKey={flipped}"
+        if rest:
+            url = f"{url}&{rest}"
+        logger.info("[DATA_GO_KR] 인증키 형태를 바꿔 재시도")
+        retried = await client.get(url)
+        if "SERVICE_KEY_IS_NOT_REGISTERED_ERROR" not in (retried.text or ""):
+            return retried
+        return response
 
 
 def looks_like_service_base(endpoint: str) -> bool:
