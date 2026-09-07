@@ -38,6 +38,11 @@ class ReferenceCollectionResult:
     official: str = ""
     # 관문·소스 통과 현황. 0건일 때 어디서 막혔는지 화면이 말해야 한다.
     trace: dict = field(default_factory=dict)
+    # url → 발행일. 요약본에는 날짜가 없어 검색 단계의 값을 실어 보낸다.
+    postdates: dict = field(default_factory=dict)
+    # 제목의 회사가 금감원 공시 목록에 있나 (True/False/None 모름)
+    company_known: Optional[bool] = None
+    company_note: str = ""
 
     def to_prompt_injection(self) -> str:
         """프롬프트에 주입할 형태로 변환.
@@ -207,6 +212,8 @@ class ReferenceCollector:
         # ⑤ 최신성 — 새 문서를 앞으로. 금리·제도는 오래된 값이 틀린 값이다
         search_results = relevance.sort_by_freshness(search_results)
         trace["gate1"] = relevance.report(before, len(search_results), "관문1")
+        postdates = {r.link: (getattr(r, "postdate", "") or "")
+                     for r in search_results if getattr(r, "link", "")}
 
         if not search_results:
             ref.status = "failed"
@@ -274,6 +281,7 @@ class ReferenceCollector:
                 sum_before, len(summaries), "관문3")
 
         # ③ 1차 출처 — 등록된 공식 API 에서 값을 받아 온다(있으면)
+        company = await self._company_check(title or query, entities)
         official = await self._official_facts(title or query, query, entities)
         if official:
             trace["official"] = True
@@ -305,12 +313,44 @@ class ReferenceCollector:
         return ReferenceCollectionResult(
             count=count,
             summaries=summaries,
+            postdates=postdates,
+            company_known=company.known,
+            company_note=company.reason,
             sources=digest_sources or [s.url for s in summaries],
             reference_id=ref.id,
             digest=digest_text,
             official=official,
             trace=trace,
         )
+
+    async def _company_check(self, title: str, entities: List[str]):
+        """제목에 나온 금융회사가 금감원 공시 목록에 있나.
+
+        실패하면 known=None(모름)이다. 조회가 안 된다고 글을 막지 않는다.
+        """
+        from ..reference.company import CompanyCheck, company_in, verify
+
+        name = company_in(title, entities)
+        if not name:
+            return CompanyCheck(reason="제목에 회사 이름이 없음")
+        try:
+            from sqlalchemy import select as _select
+
+            from ...models.external_source import (
+                ADAPTER_FSS_FINLIFE, ExternalSource)
+            from ..reference.sources.base import decrypt_key
+
+            row = (await self.db.execute(
+                _select(ExternalSource)
+                .where(ExternalSource.adapter == ADAPTER_FSS_FINLIFE)
+                .where(ExternalSource.enabled.is_(True))
+                .limit(1))).scalars().first()
+            if not row:
+                return CompanyCheck(name=name, reason="금감원 소스 미등록")
+            return await verify(decrypt_key(row), name)
+        except Exception as e:  # noqa: BLE001 — 조회 실패로 글을 막지 않는다
+            logger.warning(f"[REF_COLLECT] 회사 확인 실패: {e}")
+            return CompanyCheck(name=name, reason=f"확인 실패: {e}")
 
     async def _official_facts(self, title: str, query: str,
                               entities: List[str]) -> str:

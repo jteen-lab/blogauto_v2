@@ -580,6 +580,8 @@ class ContentGenerator:
                 topic_names, working_title,
                 official_hit=bool(getattr(ref_result, "official", "")),
                 documents=getattr(ref_result, "summaries", None) or [],
+                postdates=getattr(ref_result, "postdates", None) or {},
+                company_known=getattr(ref_result, "company_known", None),
             )
         except Exception as e:  # noqa: BLE001 — 판정 실패로 생성을 막지 않는다
             logger.warning(f"[GENERATOR] 근거 판정 실패: {e}")
