@@ -52,6 +52,12 @@ ERROR_GUIDE = {
         "활용신청 기간이 끝났습니다. 포털에서 연장 신청하세요."),
     "UNREGISTERED_IP_ERROR": "등록되지 않은 IP 입니다. 포털에서 IP 를 등록하세요.",
     "SERVICE_ACCESS_DENIED_ERROR": "이 API 에 대한 접근 권한이 없습니다.",
+    "NO_MANDATORY_REQUEST_PARAMETERS_ERROR": (
+        "필수 파라미터가 빠졌습니다. 이 API 는 날짜 범위 같은 값을 요구합니다 "
+        "— 등록표 options 의 date_params 를 지정하세요."),
+    "THREE_DAYS_OVER_ERROR": (
+        "조회 기간이 너무 깁니다. 이 API 는 최대 3일까지만 조회됩니다 "
+        "(options.date_range_days)."),
 }
 
 
@@ -81,6 +87,7 @@ class DataGoKrAdapter(SourceAdapter):
         query_field = options.get("query_field")
         if query_field and query:
             params[query_field] = query
+        params.update(_date_params(options))
         params.update(options.get("extra_params") or {})
 
         try:
@@ -158,6 +165,28 @@ async def _call(endpoint: str, params: Dict[str, Any]):
         if "SERVICE_KEY_IS_NOT_REGISTERED_ERROR" not in (retried.text or ""):
             return retried
         return response
+
+
+def _date_params(options: Dict[str, Any]) -> Dict[str, str]:
+    """날짜가 필수인 API 에 기간을 채워 준다.
+
+    정책브리핑은 startDate·endDate 가 없으면
+    NO_MANDATORY_REQUEST_PARAMETERS_ERROR 를, 범위가 3일을 넘으면
+    THREE_DAYS_OVER_ERROR 를 준다. 사용자가 알 수 없는 규칙이라
+    등록표(options)에 적어 두고 여기서 계산한다.
+    """
+    from datetime import date, timedelta
+
+    names = options.get("date_params") or {}
+    start_key, end_key = names.get("start"), names.get("end")
+    if not start_key or not end_key:
+        return {}
+
+    span = max(1, int(options.get("date_range_days") or 3))
+    end = date.today()
+    start = end - timedelta(days=span - 1)
+    return {start_key: start.strftime("%Y%m%d"),
+            end_key: end.strftime("%Y%m%d")}
 
 
 def looks_like_service_base(endpoint: str) -> bool:
@@ -294,9 +323,15 @@ def _to_facts(items: List[Any], options: Dict[str, Any],
         if entities and not matches(f"{title} {_flat(item)}", entities):
             continue
 
-        fields = {label: item.get(key) for label, key in field_map.items()} \
-            if field_map else {k: v for k, v in item.items()
-                               if not isinstance(v, (dict, list))}
+        # 보도자료 본문은 HTML 로 온다. 태그를 그대로 프롬프트에 넣으면
+        # 토큰만 먹고, AI 가 그 마크업을 흉내 내기도 한다.
+        limit_chars = int(options.get("field_chars", 700))
+        if field_map:
+            fields = {label: _plain(item.get(key), limit_chars)
+                      for label, key in field_map.items()}
+        else:
+            fields = {k: _plain(v, limit_chars) for k, v in item.items()
+                      if not isinstance(v, (dict, list))}
         facts.append(SourceFact(
             title=title or source_name,
             fields=fields,
@@ -307,6 +342,24 @@ def _to_facts(items: List[Any], options: Dict[str, Any],
         if len(facts) >= limit:
             break
     return facts
+
+
+_TAG = re.compile(r"<[^>]+>")
+_ENTITY = re.compile(r"&(nbsp|amp|lt|gt|quot|#\d+);")
+
+
+def _plain(value: Any, limit: int = 700) -> Any:
+    """HTML 을 걷어내고 길이를 자른다.
+
+    보도자료 DataContents 는 <p>·<figure>·캡션까지 통째로 온다. 그대로
+    두면 참조 하나가 프롬프트를 다 차지한다.
+    """
+    if value is None or not isinstance(value, str):
+        return value
+    text = _TAG.sub(" ", value)
+    text = _ENTITY.sub(" ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text[:limit] + "…" if len(text) > limit else text
 
 
 def _flat(item: Dict[str, Any]) -> str:

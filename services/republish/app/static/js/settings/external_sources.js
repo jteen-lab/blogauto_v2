@@ -173,8 +173,9 @@ function externalSources() {
                 id: source ? source.id : null,
                 ok: !!d.ok,
                 text: d.ok
-                    ? `질의 "${d.query}" → ${d.count}건\n${d.preview || ''}`
+                    ? `질의 "${d.query}" → ${d.count}건\n${d.endpoint || ''}\n${d.preview || ''}`
                     : (d.error || '자료를 찾지 못했습니다')
+                      + (d.endpoint ? `\n호출 주소: ${d.endpoint}` : '')
                       + (d.query
                          ? `\n(질의 "${d.query}", 개체 ${(d.entities || []).join(', ') || '없음'})`
                          : ''),

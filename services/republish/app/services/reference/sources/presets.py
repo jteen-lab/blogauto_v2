@@ -86,33 +86,35 @@ PRESETS: List[Dict[str, Any]] = [
         "key_hint": "금감원 오픈API 인증키",
     },
     {
+        # 실호출로 확정한 규격(2026-09-07). 짐작으로 적었다가 두 번 틀렸다.
+        #   주소   .../policyNewsService2/policyNewsList2
+        #   필수   startDate·endDate (YYYYMMDD)
+        #   제약   범위 최대 3일 — 넘기면 THREE_DAYS_OVER_ERROR
+        #   응답   XML, 항목은 <NewsItem>
+        # v1(policyNewsService/policyNewsList)은 같은 키로 안 된다.
         "code": "policy_briefing",
         "name": "정책브리핑 정책뉴스·보도자료",
         "adapter": ADAPTER_DATA_GO_KR,
-        # 사용자가 포털에서 확인한 End Point 는 policyNewsService2 다
-        # (v1 주소로 넣었다가 NO_OPENAPI_SERVICE_ERROR 가 났다).
-        # 오퍼레이션 이름은 상세 페이지마다 다를 수 있어 화면에서 고칠 수
-        # 있게 둔다 — 짐작으로 박아 두면 또 같은 오류를 본다.
         "endpoint": ("https://apis.data.go.kr/1371000/policyNewsService2/"
-                     "policyNewsList"),
-        "editable_endpoint": True,
+                     "policyNewsList2"),
         "options": {
-            "query_field": "title",
-            "items_path": ["response", "body", "items", "item"],
-            "title_field": "newsItemTitle",
-            "date_field": "approveDate",
-            "url_field": "originalUrl",
+            "items_path": ["response", "body", "NewsItem"],
+            "title_field": "Title",
+            "date_field": "ApproveDate",
             "field_map": {
-                "제목": "newsItemTitle",
-                "부제": "newsItemSubTitle",
-                "내용": "dataContents",
-                "승인일": "approveDate",
+                "제목": "Title",
+                "부제": "SubTitle1",
+                "내용": "DataContents",
+                "승인일": "ApproveDate",
             },
-            "rows": 10, "max_facts": 3,
+            # 날짜가 필수이고 범위가 3일을 넘으면 거절한다
+            "date_range_days": 3,
+            "date_params": {"start": "startDate", "end": "endDate"},
+            "rows": 20, "max_facts": 3,
         },
         "match_topics": ["정부지원금/복지", "시니어/노후", "세금/절세"],
         "match_keywords": ["정책", "지원금", "제도", "개편", "시행"],
-        "key_hint": "공공데이터포털 일반 인증키(Decoding)",
+        "key_hint": "공공데이터포털 일반 인증키",
     },
     {
         # 주소를 비워 둔다. 포털 상세 페이지의 '요청주소' 를 복사해 넣어야

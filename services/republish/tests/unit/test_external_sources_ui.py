@@ -440,12 +440,17 @@ class TestUnverifiedEndpoint:
 
         assert "B553701" in presets.get("welfare_loan")["endpoint"]
 
-    def test_portal_presets_stay_editable(self):
+    def test_unconfirmed_preset_stays_editable(self):
+        """주소를 확정하지 못한 것만 열어 둔다.
+
+        정책브리핑은 실호출로 확정했으므로 잠근다 — 열어 두면 사용자가
+        옛 주소를 다시 넣을 수 있다.
+        """
         from app.services.reference.sources import presets
 
         found = {p["code"]: p for p in presets.listing()}
         assert found["welfare_loan"]["needs_endpoint"] is True
-        assert found["policy_briefing"]["needs_endpoint"] is True
+        assert found["policy_briefing"]["needs_endpoint"] is False
 
     def test_user_endpoint_survives_preset(self):
         """프리셋 값으로 덮으면 빈 주소가 된다."""
@@ -534,13 +539,12 @@ class TestOperationMissing:
 
 
 class TestEditableEndpoint:
-    def test_portal_presets_are_editable(self):
+    def test_unconfirmed_preset_is_editable(self):
         from app.services.reference.sources import presets
 
         found = {p["code"]: p for p in presets.listing()}
-        for code in ("policy_briefing", "welfare_loan"):
-            assert found[code]["needs_endpoint"] is True
-            assert found[code]["default_endpoint"]
+        assert found["welfare_loan"]["needs_endpoint"] is True
+        assert found["welfare_loan"]["default_endpoint"]
 
     def test_fss_preset_stays_locked(self):
         """금감원은 주소가 확정돼 있다."""
@@ -598,3 +602,99 @@ class TestKeyFormRetry:
         assert "키 표기 문제는 아닙니다" in guide
         assert "마이페이지" in guide
         assert "1시간" in guide
+
+
+class TestPolicyBriefingSpec:
+    """실호출로 확정한 규격(2026-09-07). 짐작으로 적었다가 두 번 틀렸다."""
+
+    def _preset(self):
+        from app.services.reference.sources import presets
+
+        return presets.get("policy_briefing")
+
+    def test_operation_is_list2(self):
+        """policyNewsList 는 400, policyNewsList2 가 200 이었다."""
+        assert self._preset()["endpoint"].endswith("policyNewsList2")
+        assert "policyNewsService2" in self._preset()["endpoint"]
+
+    def test_items_path_matches_response(self):
+        """응답 항목은 <NewsItem> 이다. items/item 이 아니다."""
+        assert self._preset()["options"]["items_path"] == [
+            "response", "body", "NewsItem"]
+
+    def test_date_params_required(self):
+        """없으면 NO_MANDATORY_REQUEST_PARAMETERS_ERROR."""
+        options = self._preset()["options"]
+        assert options["date_params"] == {"start": "startDate",
+                                          "end": "endDate"}
+
+    def test_range_capped_at_three_days(self):
+        """넘기면 THREE_DAYS_OVER_ERROR."""
+        assert self._preset()["options"]["date_range_days"] == 3
+
+    def test_dates_are_generated(self):
+        from datetime import datetime
+
+        from app.services.reference.sources.data_go_kr import _date_params
+
+        out = _date_params({"date_params": {"start": "s", "end": "e"},
+                            "date_range_days": 3})
+        start = datetime.strptime(out["s"], "%Y%m%d")
+        end = datetime.strptime(out["e"], "%Y%m%d")
+        assert (end - start).days == 2      # 사흘 범위(양끝 포함)
+
+    def test_no_dates_when_not_configured(self):
+        from app.services.reference.sources.data_go_kr import _date_params
+
+        assert _date_params({}) == {}
+
+    @pytest.mark.parametrize("code,must_say", [
+        ("NO_MANDATORY_REQUEST_PARAMETERS_ERROR", "필수 파라미터"),
+        ("THREE_DAYS_OVER_ERROR", "3일"),
+    ])
+    def test_new_errors_explained(self, code, must_say):
+        from app.services.reference.sources.data_go_kr import _error_guide
+
+        assert must_say in _error_guide('{"errMsg":"%s"}' % code)
+
+
+class TestHtmlStripped:
+    """보도자료 본문은 HTML 로 온다. 그대로 두면 참조 하나가 프롬프트를 다 먹는다."""
+
+    def test_tags_removed(self):
+        from app.services.reference.sources.data_go_kr import _plain
+
+        html = "<p>총투자액 58억 달러</p><br><figure><figcaption>사진</figcaption></figure>"
+        assert _plain(html) == "총투자액 58억 달러 사진"
+
+    def test_entities_removed(self):
+        from app.services.reference.sources.data_go_kr import _plain
+
+        assert "nbsp" not in _plain("이&nbsp;제철소는")
+
+    def test_length_capped(self):
+        from app.services.reference.sources.data_go_kr import _plain
+
+        assert len(_plain("가" * 900, 700)) == 701      # 700 + 말줄임
+
+    def test_non_string_untouched(self):
+        from app.services.reference.sources.data_go_kr import _plain
+
+        assert _plain(None) is None
+        assert _plain(123) == 123
+
+
+class TestSavedRowsDrift:
+    """프리셋을 고쳐도 이미 저장된 행은 따라오지 않는다.
+
+    사용자는 옛 주소로 계속 시험하고 있었고, 테스트 결과에 호출 주소가
+    없어 알아내는 데 오래 걸렸다.
+    """
+
+    def test_test_result_shows_endpoint(self):
+        src = (ROOT / "app/routers/external_sources.py").read_text(
+            encoding="utf-8")
+        assert '"endpoint": row.endpoint' in src
+
+    def test_screen_prints_endpoint(self):
+        assert "호출 주소" in JS or "d.endpoint" in JS

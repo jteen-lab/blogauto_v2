@@ -214,8 +214,10 @@ async def test_source(
     # 질의는 먼저 만든다. 오류로 빠져나가는 길에서도 화면이 무엇을 물었는지
     # 보여줘야 한다 — 예전에는 오류 응답에 query 가 없어 "undefined" 가 떴다.
     plan = build_plan(request.query)
+    # 어떤 주소를 불렀는지 보여 준다. 이게 없어서 "저장된 주소가 옛 값"
+    # 이라는 사실을 알아내는 데 오래 걸렸다(2026-09-07).
     base = {"query": plan.primary, "entities": plan.entities, "count": 0,
-            "preview": ""}
+            "preview": "", "endpoint": row.endpoint}
 
     if not (row.adapter or "").strip():
         return {**base, "ok": False,
