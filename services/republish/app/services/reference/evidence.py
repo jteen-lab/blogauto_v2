@@ -75,6 +75,8 @@ class Evidence:
     official_docs: int = 0           # 공식 도메인 자료 수
     total_docs: int = 0              # 관련 자료 수
     fresh_docs: int = 0              # 12개월 이내 자료 수
+    company_known: Optional[bool] = None  # 회사가 공시 목록에 있나
+    figures: List[str] = field(default_factory=list)  # 2곳 이상에서 겹친 수치
     reasons: List[str] = field(default_factory=list)
 
     @property
@@ -91,6 +93,7 @@ class Evidence:
         return {"grade": self.grade, "official_hit": self.official_hit,
                 "official_docs": self.official_docs,
                 "total_docs": self.total_docs, "fresh_docs": self.fresh_docs,
+                "company_known": self.company_known, "figures": self.figures,
                 "reasons": self.reasons}
 
     def summary(self) -> str:
@@ -146,11 +149,33 @@ def _is_fresh(raw: Any) -> bool:
     return False
 
 
+# 수치로 볼 낱말. 단위가 붙은 것만 센다 — "3" 은 무엇이든 될 수 있다.
+_FIGURE = re.compile(
+    r"\d+(?:\.\d+)?\s*(?:%|퍼센트|만원|억원|천만원|년|개월|배)")
+
+
+def corroborated_figures(documents: Sequence[Any]) -> List[str]:
+    """서로 다른 출처 2곳 이상에서 똑같이 나온 수치.
+
+    블로그는 서로 베낀다. 그래도 한 곳에만 있는 값보다는 낫다. 여기 없는
+    수치는 프롬프트에서 쓰지 못하게 막는다.
+    """
+    seen: Dict[str, set] = {}
+    for doc in documents or ():
+        host = (urlsplit(getattr(doc, "url", "") or "").hostname or "").lower()
+        text = f"{getattr(doc, 'summary', '')} {getattr(doc, 'title', '')}"
+        for raw in _FIGURE.findall(text):
+            seen.setdefault(raw.replace(" ", ""), set()).add(host or raw)
+    return sorted(v for v, hosts in seen.items() if len(hosts) >= MIN_SOURCES)
+
+
 def evaluate(
     topics: Sequence[str],
     title: str,
     official_hit: bool,
     documents: Sequence[Any],
+    postdates: Optional[Dict[str, str]] = None,
+    company_known: Optional[bool] = None,
 ) -> Evidence:
     """근거를 모아 등급을 매긴다.
 
@@ -158,7 +183,11 @@ def evaluate(
         topics: 이 글의 주제·하위주제 이름
         title: 제목
         official_hit: 공식 API 가 이 상품을 찾았나
-        documents: 관련성 관문을 통과한 자료(url·postdate 를 본다)
+        documents: 관련성 관문을 통과한 자료(url 을 본다)
+        postdates: url → 발행일. 요약본에는 날짜가 없어 검색 단계의
+            값을 받아 쓴다. 없으면 요약문의 연도로 대신 본다.
+        company_known: 제목의 회사가 공시 목록에 있나
+            (True 확인 / False 목록에 없음 / None 회사명 없음·모름)
 
     Returns:
         Evidence
@@ -170,17 +199,31 @@ def evaluate(
     docs = list(documents or [])
     official_docs = sum(
         1 for d in docs if is_official(getattr(d, "url", "") or ""))
-    fresh_docs = sum(
-        1 for d in docs
-        if _is_fresh(getattr(d, "postdate", None)
-                     or getattr(d, "published", None)))
+    dates = postdates or {}
+    fresh_docs = sum(1 for d in docs if _is_fresh(
+        getattr(d, "postdate", None) or getattr(d, "published", None)
+        or dates.get(getattr(d, "url", "") or "")
+        or getattr(d, "summary", "")))
 
     found = Evidence(official_hit=official_hit, official_docs=official_docs,
-                     total_docs=len(docs), fresh_docs=fresh_docs)
+                     total_docs=len(docs), fresh_docs=fresh_docs,
+                     company_known=company_known,
+                     figures=corroborated_figures(docs))
 
     if official_hit:
         found.grade = GRADE_A
         found.reasons.append("공식 공시에서 이 상품을 찾음")
+        return found
+
+    if company_known is False:
+        found.reasons.append("회사가 공시 목록에서 확인되지 않음")
+        if len(docs) >= MIN_SOURCES and fresh_docs >= 1:
+            found.grade = GRADE_B
+            found.reasons.append(f"자료 {len(docs)}건(최근 {fresh_docs}건)")
+            return found
+        found.grade = GRADE_C
+        found.reasons.append("교차 확인 부족")
+        logger.info("[EVIDENCE] C 등급 | '%s' | %s", title[:40], found.summary())
         return found
 
     if official_docs >= 1:
@@ -191,7 +234,9 @@ def evaluate(
     if len(docs) >= MIN_SOURCES and fresh_docs >= 1:
         found.grade = GRADE_B
         found.reasons.append(
-            f"자료 {len(docs)}건(최근 {fresh_docs}건) — 수치는 쓰지 않음")
+            f"자료 {len(docs)}건(최근 {fresh_docs}건)"
+            + (f", 교차 확인된 수치 {len(found.figures)}개"
+               if found.figures else ", 교차 확인된 수치 없음"))
         return found
 
     found.grade = GRADE_C
@@ -210,22 +255,45 @@ def evaluate(
 def directive(found: Evidence) -> str:
     """등급에 맞는 프롬프트 지시문.
 
-    A 는 수치를 쓰게 하고, B 는 확인처로 돌린다. 같은 프롬프트로 두 경우를
-    다루면 자료가 없을 때 AI 가 빈칸을 상상으로 채운다.
+    A 는 공시값을 쓰게 하고, B 는 **2곳 이상에서 겹친 수치만** 쓰게 한다.
+    같은 프롬프트로 두 경우를 다루면 자료가 없을 때 AI 가 빈칸을 상상으로
+    채운다.
     """
     if found.grade == GRADE_A:
         return (
             "■ 수치 사용\n"
             "- 위 공식 자료의 값만 씁니다. 기관 공시 기준임을 밝히세요.\n"
             "- 공식 자료에 없는 항목은 \"공식 안내 확인\" 으로 두세요.")
-    if found.grade == GRADE_B:
-        return (
-            "■ 수치 사용 (중요)\n"
-            "- 이 상품은 **공식 공시에서 확인되지 않았습니다.**\n"
+
+    if found.grade != GRADE_B:
+        return ""
+
+    lines = ["■ 수치 사용 (중요)",
+             "- 이 상품은 **공식 공시에서 확인되지 않았습니다.**"]
+
+    if found.company_known is False:
+        lines.append(
+            "- 이 회사는 금융감독원 공시 자료에서 **확인하지 못했습니다.**\n"
+            "  등록업체가 아니라는 뜻은 아닙니다. 제도권 여부를 어느 쪽으로도\n"
+            "  단정하지 말고, 금융소비자 정보포털 파인의 제도권 금융회사"
+            " 조회에서\n"
+            "  독자가 직접 확인하도록 안내하세요.")
+
+    if found.figures:
+        joined = ", ".join(found.figures[:12])
+        lines.append(
+            f"- 아래 수치는 서로 다른 자료 2곳 이상에서 같게 나왔습니다."
+            f" **이 값만** 쓸 수 있습니다: {joined}\n"
+            "  쓸 때는 \"공개된 자료 기준\" 임을 밝히고, 확정된 조건이"
+            " 아님을 적으세요.")
+    else:
+        lines.append(
             "- 금리·한도·수수료 같은 숫자를 쓰지 마세요. 참고자료에 있어도\n"
-            "  출처가 확인되지 않은 값이므로 쓰지 않습니다.\n"
-            "- 대신 무엇을 어디서 확인해야 하는지 알려 주세요\n"
-            "  (해당 금융사 공식 홈페이지, 금융감독원 금융상품통합비교공시,\n"
-            "   금융소비자 정보포털 파인의 제도권 금융회사 조회).\n"
-            "- 상품의 존재나 조건을 단정하지 말고 \"확인이 필요하다\" 로 씁니다.")
-    return ""
+            "  한 곳에서만 나온 값이라 확인되지 않았습니다.")
+
+    lines.append(
+        "- 대신 무엇을 어디서 확인해야 하는지 알려 주세요\n"
+        "  (해당 금융사 공식 홈페이지, 금융감독원 금융상품통합비교공시,\n"
+        "   금융소비자 정보포털 파인).")
+    lines.append("- 상품의 존재나 조건을 단정하지 말고 \"확인이 필요하다\" 로 씁니다.")
+    return "\n".join(lines)
