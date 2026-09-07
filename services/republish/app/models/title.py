@@ -102,6 +102,15 @@ class MainTitle(Base):
         DateTime(timezone=True), nullable=True, index=True,
         comment="시의성 만료 시각(뉴스 소재 제목)")
     source_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    # 근거 부족 보류(evidence C). 지우지 않고 세어 둔다 — 삭제하면 우리가
+    # 놓친 잘못을 확인할 방법이 사라진다. 3회면 검토 목록에 올린다.
+    hold_count: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False, index=True,
+        comment="근거 부족으로 생성을 보류한 횟수")
+    last_held_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="마지막 보류 시각")
+    hold_reason: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True, comment="마지막 보류 사유")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
