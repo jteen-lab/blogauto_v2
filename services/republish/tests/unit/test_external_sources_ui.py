@@ -442,10 +442,12 @@ class TestUnverifiedEndpoint:
         for row in presets.PRESETS:
             assert row["endpoint"], f"{row['code']} 에 주소가 없다"
 
-    def test_unconfirmed_preset_removed(self):
+    def test_welfare_confirmed_and_restored(self):
+        """미리보기 URL 을 받아 확정한 뒤 되살렸다(2026-09-07)."""
         from app.services.reference.sources import presets
 
-        assert presets.get("welfare_loan") == {}
+        found = presets.get("welfare_loan")
+        assert found and "B553701" in found["endpoint"]
 
     def test_confirmed_preset_is_locked(self):
         """실호출로 확정했으므로 잠근다 — 열어 두면 옛 주소를 다시 넣는다."""
@@ -740,3 +742,60 @@ class TestPastedPreviewUrl:
         from app.services.reference.sources.data_go_kr import ERROR_GUIDE
 
         assert "미리보기" in ERROR_GUIDE["NO_OPENAPI_SERVICE_ERROR"]
+
+
+class TestWelfareLoanSpec:
+    """경로에 서비스명이 **두 번** 들어간다.
+
+    그래서 144개 조합 탐색으로도 못 찾았고, 사용자가 포털 미리보기
+    URL 을 알려 줘서 확정했다(2026-09-07).
+    """
+
+    def _preset(self):
+        from app.services.reference.sources import presets
+
+        return presets.get("welfare_loan")
+
+    def test_service_name_repeats(self):
+        endpoint = self._preset()["endpoint"]
+        parts = endpoint.split("/")
+        # 기관코드 뒤에 서비스명이 두 번 오고 오퍼레이션이 붙는다
+        assert parts[-3:] == ["LoanProductSearchingInfo",
+                              "LoanProductSearchingInfo",
+                              "getLoanProductSearchingInfo"]
+
+    def test_field_names_are_lowercase_abbreviations(self):
+        """응답 필드는 finprdnm·lnlmt 처럼 소문자 축약형이다."""
+        field_map = self._preset()["options"]["field_map"]
+        assert field_map["상품명"] == "finprdnm"
+        assert field_map["대출한도(만원)"] == "lnlmt"
+        assert field_map["취급기관"] == "ofrinstnm"
+
+    def test_items_path_is_standard(self):
+        assert self._preset()["options"]["items_path"] == [
+            "response", "body", "items", "item"]
+
+    def test_keywords_cover_actual_products(self):
+        """실제 응답에 사잇돌·햇살론이 들어 있다."""
+        words = self._preset()["match_keywords"]
+        assert "햇살론" in words and "사잇돌" in words
+
+
+class TestConfirmUrl:
+    """확인처는 독자가 열 수 있는 곳이어야 한다."""
+
+    def test_api_endpoint_not_used_as_link(self):
+        src = (ROOT / "app/services/reference/sources/data_go_kr.py").read_text(
+            encoding="utf-8")
+        block = src[src.index("def _to_facts("):]
+        assert "site_url" in block
+        assert "else endpoint," not in block
+
+    @pytest.mark.parametrize("code,host", [
+        ("welfare_loan", "kinfa.or.kr"),
+        ("policy_briefing", "korea.kr"),
+    ])
+    def test_presets_give_a_human_site(self, code, host):
+        from app.services.reference.sources import presets
+
+        assert host in presets.get(code)["options"]["site_url"]

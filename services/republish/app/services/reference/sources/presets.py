@@ -86,6 +86,42 @@ PRESETS: List[Dict[str, Any]] = [
         "key_hint": "금감원 오픈API 인증키",
     },
     {
+        # 실호출로 확정(2026-09-07). 경로에 서비스명이 **두 번** 들어간다 —
+        # 그래서 탐색으로는 못 찾았고 사용자가 미리보기 URL 을 알려 줬다.
+        #   .../B553701/LoanProductSearchingInfo
+        #             /LoanProductSearchingInfo/getLoanProductSearchingInfo
+        # 응답은 XML, 항목은 <item>, 필드는 소문자 축약형(finprdnm 등).
+        "code": "welfare_loan",
+        "name": "서민금융진흥원 대출상품한눈에",
+        "adapter": ADAPTER_DATA_GO_KR,
+        "endpoint": ("https://apis.data.go.kr/B553701/"
+                     "LoanProductSearchingInfo/LoanProductSearchingInfo/"
+                     "getLoanProductSearchingInfo"),
+        "options": {
+            "items_path": ["response", "body", "items", "item"],
+            "title_field": "finprdnm",
+            "field_map": {
+                "상품명": "finprdnm",
+                "취급기관": "ofrinstnm",
+                "대출한도(만원)": "lnlmt",
+                "금리구분": "irtCtg",
+                "금리(%)": "irt",
+                "대출기간(년)": "maxtotlntrm",
+                "상환방식": "rdptmthd",
+                "용도": "usge",
+                "지원대상": "trgt",
+                "지원조건": "suprtgtdtlcond",
+                "지역": "rsdAreaPamtEqltIstm",
+            },
+            "rows": 100, "max_facts": 3, "field_chars": 300,
+            "site_url": "https://www.kinfa.or.kr/",
+        },
+        "match_topics": ["금융/대출", "정부지원금/복지"],
+        "match_keywords": ["햇살론", "사잇돌", "서민금융", "정책자금",
+                           "저신용", "미소금융", "새희망"],
+        "key_hint": "공공데이터포털 일반 인증키",
+    },
+    {
         # 실호출로 확정한 규격(2026-09-07). 짐작으로 적었다가 두 번 틀렸다.
         #   주소   .../policyNewsService2/policyNewsList2
         #   필수   startDate·endDate (YYYYMMDD)
@@ -110,6 +146,7 @@ PRESETS: List[Dict[str, Any]] = [
             # 날짜가 필수이고 범위가 3일을 넘으면 거절한다
             "date_range_days": 3,
             "date_params": {"start": "startDate", "end": "endDate"},
+            "site_url": "https://www.korea.kr/",
             "rows": 20, "max_facts": 3,
         },
         "match_topics": ["정부지원금/복지", "시니어/노후", "세금/절세"],

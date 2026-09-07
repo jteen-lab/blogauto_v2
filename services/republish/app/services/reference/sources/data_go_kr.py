@@ -343,6 +343,8 @@ def _to_facts(items: List[Any], options: Dict[str, Any],
     title_field = options.get("title_field")
     field_map: Dict[str, str] = options.get("field_map") or {}
     url_field = options.get("url_field")
+    # 항목에 URL 이 없는 API 는 기관 홈페이지를 확인처로 준다
+    site_url = options.get("site_url") or ""
     date_field = options.get("date_field")
     limit = int(options.get("max_facts", 3))
 
@@ -368,7 +370,9 @@ def _to_facts(items: List[Any], options: Dict[str, Any],
             title=title or source_name,
             fields=fields,
             source_name=source_name,
-            url=str(item.get(url_field) or "") if url_field else endpoint,
+            # 확인처가 없으면 API 주소를 쓰지 않는다. 독자가 열 수 없는
+            # 주소(인증키가 필요한 엔드포인트)를 보여 줘 봐야 소용없다.
+            url=(str(item.get(url_field) or "") if url_field else site_url),
             published=str(item.get(date_field) or "") if date_field else "",
         ))
         if len(facts) >= limit:
