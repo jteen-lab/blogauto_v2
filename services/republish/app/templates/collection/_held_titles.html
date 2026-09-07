@@ -1,0 +1,133 @@
+{#
+  보류 제목 검토 — 근거를 못 찾아 글을 만들지 못한 제목.
+
+  **지우지 않는다.** 다음 회차에 다시 뽑히면 그때 자료가 있을 수 있고,
+  지워 버리면 우리가 놓친 잘못을 확인할 방법이 사라진다. 세 번 보류된
+  것만 여기 올라온다.
+
+  순서도: docs/flowcharts/evidence_hold.md
+#}
+<div x-data="heldTitles()" x-init="load()" class="mb-4">
+  <details class="border rounded-lg"
+           :class="items.length ? 'border-amber-300 bg-amber-50/40' : 'border-gray-200'">
+    <summary class="px-3 py-2 text-sm text-gray-700 cursor-pointer select-none">
+      🔎 검토 필요 — 근거를 못 찾아 보류된 제목
+      <span x-show="items.length" class="ml-1 px-1.5 py-0.5 rounded-full text-xs bg-amber-100 text-amber-800"
+            x-text="`${items.length}건`"></span>
+      <span x-show="pending" class="ml-1 text-xs text-gray-400"
+            x-text="`(쌓이는 중 ${pending}건)`"></span>
+    </summary>
+
+    <div class="p-3 border-t space-y-3"
+         :class="items.length ? 'border-amber-200' : 'border-gray-200'">
+      <p class="text-xs text-gray-600">
+        금융·보험·세금처럼 <b>수치가 곧 사실인 주제</b>에서 공식 출처를 찾지 못하면
+        글을 만들지 않고 제목을 남깁니다. 다음 회차에 다시 시도하고,
+        <b x-text="`${threshold}회`"></b> 보류되면 여기 올라옵니다.
+        확인되지 않은 금리·한도를 사실처럼 쓰는 것이 더 위험합니다.
+      </p>
+
+      <div x-show="!items.length && !loading" class="text-sm text-gray-400 py-4 text-center">
+        검토할 제목이 없습니다.
+      </div>
+
+      <div x-show="items.length" class="overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead class="bg-white">
+            <tr>
+              <th class="px-2 py-2 w-8">
+                <input type="checkbox" @change="toggleAll($event.target.checked)"
+                       :checked="selected.length === items.length && items.length">
+              </th>
+              <th class="px-2 py-2 text-left font-medium text-gray-600">제목</th>
+              <th class="px-2 py-2 text-left font-medium text-gray-600">니치</th>
+              <th class="px-2 py-2 text-right font-medium text-gray-600">보류</th>
+              <th class="px-2 py-2 text-left font-medium text-gray-600">사유</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-amber-100">
+            <template x-for="row in items" :key="row.id">
+              <tr class="hover:bg-white/60">
+                <td class="px-2 py-1.5">
+                  <input type="checkbox" :value="row.id" x-model.number="selected">
+                </td>
+                <td class="px-2 py-1.5 max-w-[320px] truncate" x-text="row.title"></td>
+                <td class="px-2 py-1.5 text-gray-500 whitespace-nowrap"
+                    x-text="[row.topic, row.subtopic].filter(Boolean).join(' > ') || '-'"></td>
+                <td class="px-2 py-1.5 text-right font-medium text-amber-700"
+                    x-text="`${row.hold_count}회`"></td>
+                <td class="px-2 py-1.5 text-gray-600" x-text="row.hold_reason || '-'"></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+
+      <div x-show="items.length" class="flex items-center gap-2 flex-wrap text-xs">
+        <button @click="resolve('reset')" :disabled="!selected.length || busy"
+                class="px-3 py-1.5 bg-accent text-white rounded-lg disabled:opacity-40">
+          다시 시도 <span x-text="selected.length ? `(${selected.length})` : ''"></span>
+        </button>
+        <button @click="resolve('archive')" :disabled="!selected.length || busy"
+                class="px-3 py-1.5 border border-gray-300 bg-white rounded-lg disabled:opacity-40">
+          보관 (더 쓰지 않음)
+        </button>
+        <span class="text-gray-500" x-text="msg"></span>
+      </div>
+      <p x-show="items.length" class="text-xs text-gray-400">
+        <b>다시 시도</b>는 보류 횟수를 0으로 되돌립니다 — 자료가 생겼거나 제목을 고쳤을 때.
+        <b>보관</b>은 목록에서 내리되 <b>지우지 않습니다</b>.
+      </p>
+    </div>
+  </details>
+</div>
+
+<script>
+function heldTitles() {
+    return {
+        items: [], pending: 0, threshold: 3,
+        selected: [], loading: false, busy: false, msg: '',
+
+        async load() {
+            this.loading = true;
+            try {
+                const r = await fetch('/api/v1/data/held-titles',
+                                      { credentials: 'include' });
+                if (r.ok) {
+                    const d = await r.json();
+                    this.items = d.items || [];
+                    this.pending = d.pending || 0;
+                    this.threshold = d.threshold || 3;
+                }
+            } catch (e) { /* 목록이 없어도 화면은 떠야 한다 */ }
+            finally { this.loading = false; this.selected = []; }
+        },
+
+        toggleAll(on) {
+            this.selected = on ? this.items.map(r => r.id) : [];
+        },
+
+        async resolve(action) {
+            if (!this.selected.length) return;
+            if (action === 'archive'
+                && !confirm(`${this.selected.length}건을 보관할까요? 목록에서 내려가지만 지워지지 않습니다.`)) {
+                return;
+            }
+            this.busy = true; this.msg = '';
+            try {
+                const r = await fetch('/api/v1/data/held-titles/resolve', {
+                    method: 'POST', credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids: this.selected, action }),
+                });
+                const d = await r.json();
+                this.msg = r.ok
+                    ? `${d.changed}건 ${action === 'reset' ? '다시 시도' : '보관'}`
+                    : (d.detail || '실패');
+                if (r.ok) await this.load();
+            } catch (e) { this.msg = '오류가 발생했습니다'; }
+            finally { this.busy = false; }
+        },
+    };
+}
+</script>
