@@ -177,9 +177,14 @@ class TestErrorResponse:
 
 
 class TestPresetEndpoint:
-    def test_preset_leaves_endpoint_empty(self):
-        """안내 문구를 넣으면 그게 주소로 저장된다."""
-        assert "this.form.endpoint = '';" in JS
+    def test_preset_never_puts_prose_in_endpoint(self):
+        """안내 문구를 넣으면 그게 주소로 저장된다.
+
+        지금은 고칠 수 있는 프리셋에 **실제 주소**를 미리 채운다.
+        빈칸을 주면 사용자가 무엇을 복사해야 할지 모른다.
+        """
+        assert "this.form.endpoint = p.default_endpoint || '';" in JS
+        assert "프리셋 사용" not in JS
 
 
 class TestFssMultiProduct:
@@ -392,7 +397,7 @@ class TestPortalErrors:
 
     @pytest.mark.parametrize("code,must_say", [
         ("SERVICE_KEY_IS_NOT_REGISTERED_ERROR", "활용신청"),
-        ("NO_OPENAPI_SERVICE_ERROR", "요청주소"),
+        ("APPLICATION_ERROR", "제공기관"),
         ("LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR", "한도"),
         ("DEADLINE_HAS_EXPIRED_ERROR", "연장"),
     ])
@@ -419,24 +424,28 @@ class TestPortalErrors:
         """포털은 오류를 200 으로도 준다."""
         src = (ROOT / "app/services/reference/sources/data_go_kr.py").read_text(
             encoding="utf-8")
-        assert (src.index("guide = _error_guide(response.text)")
+        assert (src.index("guide = _error_guide(response.text, ")
                 < src.index("if response.status_code != 200:"))
 
 
 class TestUnverifiedEndpoint:
-    """확인하지 않은 주소를 프리셋에 넣어 NO_OPENAPI_SERVICE_ERROR 가 났다."""
+    """확인하지 않은 주소를 프리셋에 넣어 NO_OPENAPI_SERVICE_ERROR 가 났다.
 
-    def test_welfare_preset_has_no_guessed_url(self):
+    지금은 사용자가 포털에서 확인한 주소를 넣되, 오퍼레이션이 API 마다
+    다르므로 화면에서 고칠 수 있게 둔다.
+    """
+
+    def test_welfare_uses_portal_endpoint(self):
         from app.services.reference.sources import presets
 
-        assert presets.get("welfare_loan")["endpoint"] == ""
+        assert "B553701" in presets.get("welfare_loan")["endpoint"]
 
-    def test_listing_flags_missing_endpoint(self):
+    def test_portal_presets_stay_editable(self):
         from app.services.reference.sources import presets
 
         found = {p["code"]: p for p in presets.listing()}
         assert found["welfare_loan"]["needs_endpoint"] is True
-        assert found["policy_briefing"]["needs_endpoint"] is False
+        assert found["policy_briefing"]["needs_endpoint"] is True
 
     def test_user_endpoint_survives_preset(self):
         """프리셋 값으로 덮으면 빈 주소가 된다."""
@@ -452,3 +461,100 @@ class TestUnverifiedEndpoint:
     def test_screen_unlocks_endpoint(self):
         assert "form.needsEndpoint" in MODAL
         assert "needsEndpoint" in JS
+
+
+class TestXmlResponse:
+    """포털은 API 마다 JSON·XML 이 갈린다. 한쪽만 지원하면 그 API 는 못 쓴다.
+
+    서민금융진흥원은 returnType=JSON 을 보내도 XML 로 돌려준다.
+    """
+
+    PATH = ["response", "body", "items", "item"]
+
+    def test_xml_items_parsed(self):
+        from app.services.reference.sources.data_go_kr import _extract
+
+        xml = ("<response><body><items>"
+               "<item><fncPrdNm>햇살론</fncPrdNm><lnLmt>2000만원</lnLmt></item>"
+               "</items></body></response>")
+        assert _extract(xml, self.PATH) == [
+            {"fncPrdNm": "햇살론", "lnLmt": "2000만원"}]
+
+    def test_empty_xml_is_empty_not_none(self):
+        """0건과 '못 읽음' 은 다른 상황이라 메시지도 달라야 한다."""
+        from app.services.reference.sources.data_go_kr import _extract
+
+        xml = "<response><body><items/><totalCount>0</totalCount></body></response>"
+        assert _extract(xml, self.PATH) == []
+
+    def test_json_still_works(self):
+        from app.services.reference.sources.data_go_kr import _extract
+
+        body = '{"response":{"body":{"items":{"item":[{"a":"1"}]}}}}'
+        assert _extract(body, self.PATH) == [{"a": "1"}]
+
+    def test_zero_rows_message(self):
+        src = (ROOT / "app/services/reference/sources/data_go_kr.py").read_text(
+            encoding="utf-8")
+        assert "결과가 0건입니다" in src
+
+
+class TestOperationMissing:
+    """포털의 'End Point' 는 서비스 주소다. 오퍼레이션을 붙여야 호출된다."""
+
+    @pytest.mark.parametrize("url,is_base", [
+        ("https://apis.data.go.kr/1371000/policyNewsService2", True),
+        ("https://apis.data.go.kr/B553701/LoanProductSearchingInfo", True),
+        ("https://apis.data.go.kr/1371000/policyNewsService2/policyNewsList",
+         False),
+    ])
+    def test_detects_service_base(self, url, is_base):
+        from app.services.reference.sources.data_go_kr import (
+            looks_like_service_base,
+        )
+
+        assert looks_like_service_base(url) is is_base
+
+    def test_guide_says_operation_missing(self):
+        """'주소가 없다' 가 아니라 '오퍼레이션이 빠졌다' 여야 고칠 수 있다."""
+        from app.services.reference.sources.data_go_kr import _error_guide
+
+        guide = _error_guide(
+            "NO_OPENAPI_SERVICE_ERROR",
+            "https://apis.data.go.kr/1371000/policyNewsService2")
+        assert "오퍼레이션" in guide
+
+    def test_full_url_keeps_generic_guide(self):
+        from app.services.reference.sources.data_go_kr import _error_guide
+
+        guide = _error_guide(
+            "NO_OPENAPI_SERVICE_ERROR",
+            "https://apis.data.go.kr/1371000/policyNewsService2/policyNewsList")
+        assert "오퍼레이션" not in guide
+
+
+class TestEditableEndpoint:
+    def test_portal_presets_are_editable(self):
+        from app.services.reference.sources import presets
+
+        found = {p["code"]: p for p in presets.listing()}
+        for code in ("policy_briefing", "welfare_loan"):
+            assert found[code]["needs_endpoint"] is True
+            assert found[code]["default_endpoint"]
+
+    def test_fss_preset_stays_locked(self):
+        """금감원은 주소가 확정돼 있다."""
+        from app.services.reference.sources import presets
+
+        found = {p["code"]: p for p in presets.listing()}
+        assert found["fss_all"]["needs_endpoint"] is False
+
+    def test_user_endpoint_wins(self):
+        from app.routers.external_sources import (
+            SourceRequest, _resolve_preset,
+        )
+
+        req = SourceRequest(code="brief", name="n", preset="policy_briefing",
+                            endpoint="https://apis.data.go.kr/1371000/svc/op")
+        _resolve_preset(req)
+        assert req.endpoint == "https://apis.data.go.kr/1371000/svc/op"

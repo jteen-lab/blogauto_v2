@@ -89,8 +89,13 @@ PRESETS: List[Dict[str, Any]] = [
         "code": "policy_briefing",
         "name": "정책브리핑 정책뉴스·보도자료",
         "adapter": ADAPTER_DATA_GO_KR,
-        "endpoint": ("https://apis.data.go.kr/1371000/policyNewsService/"
+        # 사용자가 포털에서 확인한 End Point 는 policyNewsService2 다
+        # (v1 주소로 넣었다가 NO_OPENAPI_SERVICE_ERROR 가 났다).
+        # 오퍼레이션 이름은 상세 페이지마다 다를 수 있어 화면에서 고칠 수
+        # 있게 둔다 — 짐작으로 박아 두면 또 같은 오류를 본다.
+        "endpoint": ("https://apis.data.go.kr/1371000/policyNewsService2/"
                      "policyNewsList"),
+        "editable_endpoint": True,
         "options": {
             "query_field": "title",
             "items_path": ["response", "body", "items", "item"],
@@ -114,9 +119,12 @@ PRESETS: List[Dict[str, Any]] = [
         # 한다 — 기관 코드가 API 마다 달라 짐작으로 적으면
         # NO_OPENAPI_SERVICE_ERROR 가 난다(실제로 그랬다).
         "code": "welfare_loan",
-        "name": "서민금융진흥원 대출상품한눈에 (주소 직접 입력)",
+        "name": "서민금융진흥원 대출상품한눈에 (주소 확인 필요)",
         "adapter": ADAPTER_DATA_GO_KR,
-        "endpoint": "",
+        # 포털 End Point 는 .../B553701/LoanProductSearchingInfo 이고
+        # 그 뒤에 오퍼레이션이 붙는다. 상세 페이지에서 확인해 넣는다.
+        "endpoint": "https://apis.data.go.kr/B553701/LoanProductSearchingInfo",
+        "editable_endpoint": True,
         "options": {
             "query_field": "fncPrdNm",
             "items_path": ["response", "body", "items", "item"],
@@ -172,7 +180,12 @@ def listing() -> List[Dict[str, Any]]:
          "match_topics": p["match_topics"],
          "match_keywords": p["match_keywords"],
          "key_hint": p.get("key_hint", ""),
-         # 주소를 확정하지 못한 프리셋은 사용자가 직접 넣어야 한다
-         "needs_endpoint": not p.get("endpoint")}
+         # 주소를 확정하지 못했거나 오퍼레이션이 API 마다 다른 프리셋은
+         # 사용자가 화면에서 고칠 수 있어야 한다
+         "needs_endpoint": (not p.get("endpoint")
+                            or bool(p.get("editable_endpoint"))),
+         # 고칠 수 있는 주소는 미리 채워 준다
+         "default_endpoint": (p.get("endpoint", "")
+                              if p.get("editable_endpoint") else "")}
         for p in PRESETS
     ]

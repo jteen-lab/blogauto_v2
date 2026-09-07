@@ -13,6 +13,8 @@
 """
 from __future__ import annotations
 
+import re
+import xml.etree.ElementTree as ET
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -86,7 +88,7 @@ class DataGoKrAdapter(SourceAdapter):
                                 error=f"호출 실패: {e}")
 
         # 포털은 오류를 200 으로도, 4xx 로도 준다. 본문의 코드를 먼저 본다.
-        guide = _error_guide(response.text)
+        guide = _error_guide(response.text, source.endpoint)
         if guide:
             return SourceResult(code=source.code, name=name, error=guide)
 
@@ -95,36 +97,122 @@ class DataGoKrAdapter(SourceAdapter):
                 code=source.code, name=name,
                 error=f"HTTP {response.status_code}: {response.text[:120]}")
 
-        try:
-            payload = response.json()
-        except Exception:  # noqa: BLE001 — XML 로 오는 경우가 있다
+        # 포털 API 는 JSON 만 주는 곳, XML 만 주는 곳이 섞여 있다.
+        # returnType=JSON 을 보내도 XML 로 오는 API 가 있다.
+        items = _extract(response.text,
+                         options.get("items_path") or DEFAULT_ITEMS_PATH)
+        if items is None:
             return SourceResult(
                 code=source.code, name=name,
-                error="JSON 이 아닌 응답입니다. 주소 끝에 returnType=JSON 이 "
-                      "필요한 API 일 수 있습니다.")
-
-        items = _dig(payload, options.get("items_path") or DEFAULT_ITEMS_PATH)
-        if items is None:
-            return SourceResult(code=source.code, name=name,
-                                error="응답에서 목록을 찾지 못했습니다")
-        if isinstance(items, dict):
-            items = [items]
+                error="응답에서 목록을 찾지 못했습니다. options.items_path 를 "
+                      "응답 구조에 맞게 지정해야 할 수 있습니다.")
+        if not items:
+            return SourceResult(
+                code=source.code, name=name,
+                error="호출은 성공했지만 결과가 0건입니다. "
+                      "이 API 는 검색 조건이 다르거나 데이터가 없을 수 있습니다.")
 
         facts = _to_facts(items, options, entities, name,
                           getattr(source, "endpoint", ""))
         return SourceResult(code=source.code, name=name, facts=facts)
 
 
-def _error_guide(text: str) -> str:
+def looks_like_service_base(endpoint: str) -> bool:
+    """포털이 보여 주는 "End Point" 만 넣었는가.
+
+    포털 상세 화면의 End Point 는 **서비스 주소**다. 실제 호출에는 그 뒤에
+    오퍼레이션 이름이 붙는다.
+
+        End Point  https://apis.data.go.kr/1371000/policyNewsService2
+        요청 주소   https://apis.data.go.kr/1371000/policyNewsService2/policyNewsList
+
+    기관코드 뒤 경로가 한 조각뿐이면 오퍼레이션이 빠진 것으로 본다.
+    """
+    raw = (endpoint or "").strip("/ ")
+    if not raw:
+        return False        # 주소가 없는 것이지 오퍼레이션 문제가 아니다
+    path = re.sub(r"^https?://[^/]+/", "", raw)
+    parts = [p for p in path.split("/") if p]
+    return len(parts) <= 2      # 기관코드 + 서비스명
+
+
+def _error_guide(text: str, endpoint: str = "") -> str:
     """응답 본문에서 포털 오류 코드를 찾아 할 일로 바꾼다.
 
     코드를 그대로 보여 주면 사용자가 무엇을 고쳐야 할지 알 수 없다.
     """
     body = text or ""
     for code, guide in ERROR_GUIDE.items():
-        if code in body:
-            return f"{guide} (코드: {code})"
+        if code not in body:
+            continue
+        if code == "NO_OPENAPI_SERVICE_ERROR" and looks_like_service_base(
+                endpoint):
+            return (
+                "주소에 **오퍼레이션 이름**이 빠졌습니다. 포털 상세 페이지의 "
+                "End Point 는 서비스 주소이고, 그 뒤에 오퍼레이션(예: "
+                "policyNewsList)을 붙여야 호출됩니다. 상세 페이지의 "
+                "'요청 주소' 또는 오퍼레이션 목록에서 확인하세요. "
+                f"(코드: {code})")
+        return f"{guide} (코드: {code})"
     return ""
+
+
+def _extract(text: str, path: List[str]) -> Optional[List[dict]]:
+    """JSON 이든 XML 이든 항목 목록을 꺼낸다.
+
+    포털은 API 마다 형식이 다르고, returnType=JSON 을 보내도 XML 로
+    돌려주는 곳이 있다(서민금융진흥원). 한쪽만 지원하면 그 API 는 못 쓴다.
+    """
+    body = (text or "").strip()
+    if not body:
+        return None
+
+    if body.startswith("{") or body.startswith("["):
+        import json
+
+        try:
+            payload = json.loads(body)
+        except Exception:  # noqa: BLE001
+            return None
+        found = _dig(payload, path)
+        if found is None:
+            return None
+        if isinstance(found, dict):
+            return [found]
+        return [f for f in found if isinstance(f, dict)]
+
+    if body.startswith("<"):
+        return _from_xml(body, path)
+    return None
+
+
+def _from_xml(body: str, path: List[str]) -> Optional[List[dict]]:
+    """XML 응답에서 항목을 꺼낸다.
+
+    경로 마지막 조각(보통 `item`)을 찾는다. XML 은 같은 이름의 형제
+    노드가 여러 개이므로 경로를 그대로 따라가지 않고 이름으로 찾는다.
+    """
+    try:
+        root = ET.fromstring(body)
+    except ET.ParseError:
+        return None
+
+    leaf = path[-1] if path else "item"
+    nodes = root.iter(leaf)
+    out: List[dict] = []
+    for node in nodes:
+        row = {child.tag: (child.text or "").strip() for child in node}
+        if row:
+            out.append(row)
+    if out:
+        return out
+    # `item` 이 없는 응답도 있다. items 아래 아무 자식이나 훑는다.
+    for holder in root.iter("items"):
+        for child in holder:
+            row = {sub.tag: (sub.text or "").strip() for sub in child}
+            if row:
+                out.append(row)
+    return out
 
 
 def _dig(payload: Any, path: List[str]) -> Optional[Any]:

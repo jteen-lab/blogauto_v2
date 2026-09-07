@@ -45,8 +45,9 @@ function externalSources() {
             this.keyHint = p.key_hint || '인증키';
             // 주소·options 는 서버가 프리셋에서 채운다. 화면에는 잠긴 채로
             // 비워 둔다 — 안내 문구를 넣으면 그게 주소로 저장될 수 있다.
-            this.form.endpoint = '';
-            // 주소를 확정하지 못한 프리셋은 사용자가 직접 넣어야 한다.
+            // 고칠 수 있는 프리셋은 주소를 미리 채워 준다. 빈칸을 주면
+            // 사용자가 포털에서 무엇을 복사해야 할지 모른다.
+            this.form.endpoint = p.default_endpoint || '';
             this.form.needsEndpoint = !!p.needs_endpoint;
             this.msg = '';
         },
