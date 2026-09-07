@@ -732,9 +732,10 @@
                                         </select>
                                     </label>
                                     <label class="text-xs text-gray-500">
-                                        주소 <span class="text-gray-400" x-show="form.preset">(프리셋이 설정)</span>
+                                        주소 <span class="text-gray-400" x-show="form.preset && !form.needsEndpoint">(프리셋이 설정)</span>
+                                        <span class="text-amber-600" x-show="form.needsEndpoint">(포털 요청주소를 복사해 넣으세요)</span>
                                         <input type="text" x-model="form.endpoint"
-                                               :disabled="!!form.preset"
+                                               :disabled="!!form.preset && !form.needsEndpoint"
                                                class="mt-0.5 w-full text-sm border-gray-300 rounded py-1 disabled:bg-gray-100 disabled:text-gray-400">
                                     </label>
                                 </div>

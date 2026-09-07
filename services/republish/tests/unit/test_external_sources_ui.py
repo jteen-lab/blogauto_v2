@@ -381,3 +381,74 @@ class TestCompanyMustMatch:
 
         assert _company_of(["우리아파트론", "우리은행"]) == "우리은행"
         assert _company_of(["전기차", "충전"]) is None
+
+
+class TestPortalErrors:
+    """영문 오류 코드를 그대로 보여 주면 무엇을 고쳐야 할지 알 수 없다.
+
+    사용자 보고(2026-09-07): SERVICE_KEY_IS_NOT_REGISTERED_ERROR /
+    NO_OPENAPI_SERVICE_ERROR 를 받고 멈췄다.
+    """
+
+    @pytest.mark.parametrize("code,must_say", [
+        ("SERVICE_KEY_IS_NOT_REGISTERED_ERROR", "활용신청"),
+        ("NO_OPENAPI_SERVICE_ERROR", "요청주소"),
+        ("LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR", "한도"),
+        ("DEADLINE_HAS_EXPIRED_ERROR", "연장"),
+    ])
+    def test_guide_is_actionable(self, code, must_say):
+        from app.services.reference.sources.data_go_kr import _error_guide
+
+        guide = _error_guide('{"errMsg": "%s"}' % code)
+        assert must_say in guide
+        assert code in guide          # 원문 코드도 함께 남긴다
+
+    def test_key_error_mentions_both_key_forms(self):
+        """Encoding 키를 넣으면 이 오류가 난다."""
+        from app.services.reference.sources.data_go_kr import _error_guide
+
+        guide = _error_guide("SERVICE_KEY_IS_NOT_REGISTERED_ERROR")
+        assert "Decoding" in guide and "Encoding" in guide
+
+    def test_normal_response_has_no_guide(self):
+        from app.services.reference.sources.data_go_kr import _error_guide
+
+        assert _error_guide('{"response":{"body":{"items":[]}}}') == ""
+
+    def test_checked_before_status_code(self):
+        """포털은 오류를 200 으로도 준다."""
+        src = (ROOT / "app/services/reference/sources/data_go_kr.py").read_text(
+            encoding="utf-8")
+        assert (src.index("guide = _error_guide(response.text)")
+                < src.index("if response.status_code != 200:"))
+
+
+class TestUnverifiedEndpoint:
+    """확인하지 않은 주소를 프리셋에 넣어 NO_OPENAPI_SERVICE_ERROR 가 났다."""
+
+    def test_welfare_preset_has_no_guessed_url(self):
+        from app.services.reference.sources import presets
+
+        assert presets.get("welfare_loan")["endpoint"] == ""
+
+    def test_listing_flags_missing_endpoint(self):
+        from app.services.reference.sources import presets
+
+        found = {p["code"]: p for p in presets.listing()}
+        assert found["welfare_loan"]["needs_endpoint"] is True
+        assert found["policy_briefing"]["needs_endpoint"] is False
+
+    def test_user_endpoint_survives_preset(self):
+        """프리셋 값으로 덮으면 빈 주소가 된다."""
+        from app.routers.external_sources import (
+            SourceRequest, _resolve_preset,
+        )
+
+        req = SourceRequest(code="welfare", name="n", preset="welfare_loan",
+                            endpoint="https://apis.data.go.kr/B553701/x")
+        _resolve_preset(req)
+        assert req.endpoint == "https://apis.data.go.kr/B553701/x"
+
+    def test_screen_unlocks_endpoint(self):
+        assert "form.needsEndpoint" in MODAL
+        assert "needsEndpoint" in JS

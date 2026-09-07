@@ -200,7 +200,7 @@ async def test_source(
             if not found:
                 raise HTTPException(status_code=422, detail="모르는 프리셋")
             adapter_code = found["adapter"]
-            endpoint = found["endpoint"]
+            endpoint = found.get("endpoint") or endpoint
             options = found.get("options") or {}
         # 이름을 "테스트" 로 두면 미리보기에 "[공식 자료 — 테스트]" 가
         # 찍혀, 실제로 무엇을 조회했는지 알 수 없다.
@@ -264,7 +264,10 @@ def _resolve_preset(request: SourceRequest) -> None:
         raise HTTPException(status_code=422,
                             detail=f"모르는 프리셋: {request.preset}")
     request.adapter = found["adapter"]
-    request.endpoint = found["endpoint"]
+    # 주소를 확정하지 못한 프리셋(기관 코드가 API 마다 다르다)은 사용자가
+    # 넣은 값을 그대로 쓴다. 프리셋 값으로 덮으면 빈 주소가 된다.
+    if found.get("endpoint"):
+        request.endpoint = found["endpoint"]
     request.options = found.get("options") or {}
     if not request.match_topics:
         request.match_topics = list(found.get("match_topics") or [])

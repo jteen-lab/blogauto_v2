@@ -46,6 +46,8 @@ function externalSources() {
             // 주소·options 는 서버가 프리셋에서 채운다. 화면에는 잠긴 채로
             // 비워 둔다 — 안내 문구를 넣으면 그게 주소로 저장될 수 있다.
             this.form.endpoint = '';
+            // 주소를 확정하지 못한 프리셋은 사용자가 직접 넣어야 한다.
+            this.form.needsEndpoint = !!p.needs_endpoint;
             this.msg = '';
         },
 
@@ -102,8 +104,9 @@ function externalSources() {
             if (!this.form.preset && !this.form.adapter) {
                 return '어댑터를 고르세요 (프리셋을 선택하면 자동으로 정해집니다)';
             }
-            if (!this.form.preset && !this.form.endpoint) {
-                return '주소를 입력하세요';
+            if ((!this.form.preset || this.form.needsEndpoint)
+                && !this.form.endpoint) {
+                return '주소를 입력하세요 (포털 상세 페이지의 요청주소)';
             }
             if (!this.form.auth_key && !this.form.has_key) {
                 return '인증키를 입력하세요';
@@ -206,7 +209,7 @@ function _blankForm() {
     return {
         id: null, preset: '', code: '', name: '', adapter: '',
         endpoint: '', auth_key: '', has_key: false, options: {},
-        topics: '', keywords: '', enabled: true,
+        topics: '', keywords: '', enabled: true, needsEndpoint: false,
     };
 }
 

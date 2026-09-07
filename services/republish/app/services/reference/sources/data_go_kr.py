@@ -28,6 +28,27 @@ DEFAULT_ROWS = 10
 # 응답에서 항목 목록까지 가는 기본 경로
 DEFAULT_ITEMS_PATH = ["response", "body", "items", "item"]
 
+# 포털 공통 오류 코드 → 무엇을 해야 하는지.
+#
+# 원문은 "SERVICE_KEY_IS_NOT_REGISTERED_ERROR" 처럼 영문 상수라 사용자가
+# 무엇을 고쳐야 할지 알 수 없다. 실제로 이 오류를 받고 멈췄다.
+ERROR_GUIDE = {
+    "SERVICE_KEY_IS_NOT_REGISTERED_ERROR": (
+        "이 API 에 활용신청이 안 됐거나 키 형식이 다릅니다. "
+        "① 공공데이터포털에서 해당 API 의 [활용신청]을 눌렀는지 확인하고 "
+        "② 인증키를 Decoding ↔ Encoding 으로 바꿔 넣어 보세요."),
+    "NO_OPENAPI_SERVICE_ERROR": (
+        "그 주소에 API 가 없습니다. 공공데이터포털 상세 페이지의 "
+        "'요청주소'를 그대로 복사해 넣으세요."),
+    "APPLICATION_ERROR": "제공기관 쪽 오류입니다. 잠시 후 다시 시도하세요.",
+    "LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR": (
+        "오늘 호출 한도를 넘었습니다. 개발계정은 하루 1,000회입니다."),
+    "DEADLINE_HAS_EXPIRED_ERROR": (
+        "활용신청 기간이 끝났습니다. 포털에서 연장 신청하세요."),
+    "UNREGISTERED_IP_ERROR": "등록되지 않은 IP 입니다. 포털에서 IP 를 등록하세요.",
+    "SERVICE_ACCESS_DENIED_ERROR": "이 API 에 대한 접근 권한이 없습니다.",
+}
+
 
 class DataGoKrAdapter(SourceAdapter):
     """공공데이터포털 REST API."""
@@ -64,6 +85,11 @@ class DataGoKrAdapter(SourceAdapter):
             return SourceResult(code=source.code, name=name,
                                 error=f"호출 실패: {e}")
 
+        # 포털은 오류를 200 으로도, 4xx 로도 준다. 본문의 코드를 먼저 본다.
+        guide = _error_guide(response.text)
+        if guide:
+            return SourceResult(code=source.code, name=name, error=guide)
+
         if response.status_code != 200:
             return SourceResult(
                 code=source.code, name=name,
@@ -72,8 +98,10 @@ class DataGoKrAdapter(SourceAdapter):
         try:
             payload = response.json()
         except Exception:  # noqa: BLE001 — XML 로 오는 경우가 있다
-            return SourceResult(code=source.code, name=name,
-                                error="JSON 이 아닌 응답")
+            return SourceResult(
+                code=source.code, name=name,
+                error="JSON 이 아닌 응답입니다. 주소 끝에 returnType=JSON 이 "
+                      "필요한 API 일 수 있습니다.")
 
         items = _dig(payload, options.get("items_path") or DEFAULT_ITEMS_PATH)
         if items is None:
@@ -85,6 +113,18 @@ class DataGoKrAdapter(SourceAdapter):
         facts = _to_facts(items, options, entities, name,
                           getattr(source, "endpoint", ""))
         return SourceResult(code=source.code, name=name, facts=facts)
+
+
+def _error_guide(text: str) -> str:
+    """응답 본문에서 포털 오류 코드를 찾아 할 일로 바꾼다.
+
+    코드를 그대로 보여 주면 사용자가 무엇을 고쳐야 할지 알 수 없다.
+    """
+    body = text or ""
+    for code, guide in ERROR_GUIDE.items():
+        if code in body:
+            return f"{guide} (코드: {code})"
+    return ""
 
 
 def _dig(payload: Any, path: List[str]) -> Optional[Any]:

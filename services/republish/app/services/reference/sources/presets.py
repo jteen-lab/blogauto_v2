@@ -110,11 +110,13 @@ PRESETS: List[Dict[str, Any]] = [
         "key_hint": "공공데이터포털 일반 인증키(Decoding)",
     },
     {
+        # 주소를 비워 둔다. 포털 상세 페이지의 '요청주소' 를 복사해 넣어야
+        # 한다 — 기관 코드가 API 마다 달라 짐작으로 적으면
+        # NO_OPENAPI_SERVICE_ERROR 가 난다(실제로 그랬다).
         "code": "welfare_loan",
-        "name": "서민금융진흥원 대출상품한눈에",
+        "name": "서민금융진흥원 대출상품한눈에 (주소 직접 입력)",
         "adapter": ADAPTER_DATA_GO_KR,
-        "endpoint": ("https://apis.data.go.kr/B190001/"
-                     "loanProductInfo/loanProductList"),
+        "endpoint": "",
         "options": {
             "query_field": "fncPrdNm",
             "items_path": ["response", "body", "items", "item"],
@@ -129,7 +131,8 @@ PRESETS: List[Dict[str, Any]] = [
         },
         "match_topics": ["금융/대출", "정부지원금/복지"],
         "match_keywords": ["햇살론", "서민금융", "정책자금", "저신용"],
-        "key_hint": "공공데이터포털 일반 인증키(Decoding)",
+        "key_hint": "공공데이터포털 일반 인증키(Decoding). 주소는 포털 상세 "
+                    "페이지의 '요청주소'를 복사해 넣으세요",
     },
 ]
 
@@ -168,6 +171,8 @@ def listing() -> List[Dict[str, Any]]:
         {"code": p["code"], "name": p["name"], "adapter": p["adapter"],
          "match_topics": p["match_topics"],
          "match_keywords": p["match_keywords"],
-         "key_hint": p.get("key_hint", "")}
+         "key_hint": p.get("key_hint", ""),
+         # 주소를 확정하지 못한 프리셋은 사용자가 직접 넣어야 한다
+         "needs_endpoint": not p.get("endpoint")}
         for p in PRESETS
     ]
