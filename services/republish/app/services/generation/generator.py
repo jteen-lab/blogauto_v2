@@ -256,6 +256,7 @@ class ContentGenerator:
         # 카테고리/키워드 정보 (프롬프트 플레이스홀더용)
         category_name = ""
         keywords_text = ""
+        topic_names: list[str] = []
         if source_title.subtopic_id or source_title.topic_id:
             from ...models.category import Topic, SubTopic
             if source_title.subtopic_id:
@@ -266,10 +267,27 @@ class ContentGenerator:
                         f"{topic.name} > {subtopic.name}" if topic
                         else subtopic.name
                     )
+                    topic_names = [n for n in
+                                   (getattr(topic, "name", None),
+                                    subtopic.name) if n]
             elif source_title.topic_id:
                 topic = await self.db.get(Topic, source_title.topic_id)
                 if topic:
                     category_name = topic.name
+                    topic_names = [topic.name]
+
+        # 근거 등급 — 수치가 곧 사실인 주제에서 확인 안 된 값을 쓰지 않는다.
+        # C 등급이면 글을 만들지 않고 제목을 재고에 남긴다(삭제하지 않는다).
+        evidence, evidence_directive = await self._grade_evidence(
+            topic_names, working_title, ref_result, source_title)
+        if evidence is not None and evidence.hold:
+            elapsed = int(time.time() - start_time)
+            return GenerationResult(
+                success=False,
+                generation_time_seconds=elapsed,
+                error=f"근거 부족으로 보류: {evidence.summary()}",
+                warnings=[f"보류 {source_title.hold_count}회차"],
+            )
         if source_title.keywords:
             # 수동 입력된 키워드 우선 (POST /titles 로 만든 케이스)
             try:
@@ -305,7 +323,8 @@ class ContentGenerator:
         content_result = await generate_content_with_meta(
             ai_service=self.ai_service,
             title=working_title,
-            reference_injection=ref_result.to_prompt_injection(),
+            reference_injection=_with_directive(
+                ref_result.to_prompt_injection(), evidence_directive),
             settings=settings,
             blog=blog,
             category_name=category_name,
@@ -542,6 +561,43 @@ class ContentGenerator:
             warnings=pipeline_warnings,
         )
 
+    async def _grade_evidence(self, topic_names, working_title, ref_result,
+                              source_title):
+        """근거 등급을 매기고, C 면 제목에 보류를 기록한다.
+
+        **삭제하지 않는다.** 다음 회차에 다시 뽑히면 그때 자료가 있을 수
+        있다. 3회 보류되면 검토 목록에 올라간다.
+
+        Returns:
+            (Evidence|None, 프롬프트 지시문)
+        """
+        from datetime import datetime as _dt
+
+        from ..reference.evidence import GRADE_NONE, directive, evaluate
+
+        try:
+            found = evaluate(
+                topic_names, working_title,
+                official_hit=bool(getattr(ref_result, "official", "")),
+                documents=getattr(ref_result, "summaries", None) or [],
+            )
+        except Exception as e:  # noqa: BLE001 — 판정 실패로 생성을 막지 않는다
+            logger.warning(f"[GENERATOR] 근거 판정 실패: {e}")
+            return None, ""
+
+        if found.grade == GRADE_NONE:
+            return found, ""
+
+        if found.hold:
+            source_title.hold_count = (source_title.hold_count or 0) + 1
+            source_title.last_held_at = _dt.now()
+            source_title.hold_reason = found.summary()
+            await self.db.commit()
+            logger.warning(
+                "[GENERATOR] 근거 부족 보류 %d회 | '%s' | %s",
+                source_title.hold_count, working_title[:40], found.summary())
+        return found, directive(found)
+
     async def _generate_image_with_retry(
         self,
         blog: Blog,
@@ -590,3 +646,13 @@ class ContentGenerator:
                 await asyncio.sleep(wait)
 
         return None
+
+
+def _with_directive(injection: str, directive: str) -> str:
+    """참조자료 뒤에 등급 지시문을 붙인다.
+
+    지시문만 있고 자료가 없을 수도 있다(B 등급인데 공식 자료가 없는 경우).
+    그때도 "숫자를 쓰지 말라" 는 지시는 전달돼야 한다.
+    """
+    parts = [p for p in (injection, directive) if p]
+    return "\n\n".join(parts)
