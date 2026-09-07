@@ -335,3 +335,76 @@ class TestResultAssembly:
         )
 
         assert ReferenceCollectionResult(count=0).to_prompt_injection() == ""
+
+
+class TestGenericWordsCannotMatch:
+    """일반어만으로 상품이 잡히면 **다른 상품**이 공식 자료가 된다.
+
+    실측(2026-09-07): "AK론 대출 금리와 조건은 어떻게 비교해야 할까" 글에
+    우리은행 신용대출상품이 붙었다. 개체가 ['비교해야','AK론','대출'] 인데
+    AK론이 공시에 없자 '대출' 로 넓혀져 아무거나 잡혔다.
+    """
+
+    BASE = [
+        {"fin_co_no": "1", "fin_prdt_cd": "A", "kor_co_nm": "우리은행",
+         "fin_prdt_nm": "협약금리 外 신용대출상품"},
+        {"fin_co_no": "1", "fin_prdt_cd": "B", "kor_co_nm": "우리은행",
+         "fin_prdt_nm": "협약금리 外 신용대출상품"},
+        {"fin_co_no": "1", "fin_prdt_cd": "C", "kor_co_nm": "우리은행",
+         "fin_prdt_nm": "우리아파트론"},
+    ]
+
+    def test_unknown_product_returns_nothing(self):
+        """공시에 없는 상품이면 빈손이어야 한다."""
+        from app.services.reference.sources.fss_finlife import _match_products
+
+        assert _match_products(self.BASE, "", ["AK론", "대출", "금리"]) == []
+
+    def test_all_generic_returns_nothing(self):
+        from app.services.reference.sources.fss_finlife import _match_products
+
+        assert _match_products(self.BASE, "", ["대출", "금리", "조건"]) == []
+
+    def test_specific_product_still_matches(self):
+        from app.services.reference.sources.fss_finlife import _match_products
+
+        hit = _match_products(self.BASE, "",
+                              ["우리아파트론", "우리은행", "대출"])
+        assert [h["fin_prdt_nm"] for h in hit] == ["우리아파트론"]
+
+    def test_company_alone_still_works(self):
+        """회사만 특정돼도 그 회사 상품은 사실이 어긋나지 않는다."""
+        from app.services.reference.sources.fss_finlife import _match_products
+
+        hit = _match_products(self.BASE, "", ["우리은행", "대출"])
+        assert hit and all(h["kor_co_nm"] == "우리은행" for h in hit)
+
+    def test_same_name_shown_once(self):
+        """상품코드가 달라도 회사·이름이 같으면 화면엔 똑같이 보인다."""
+        from app.services.reference.sources.fss_finlife import _match_products
+
+        hit = _match_products(self.BASE, "", ["우리은행", "대출"])
+        names = [h["fin_prdt_nm"] for h in hit]
+        assert len(names) == len(set(names))
+
+
+class TestVerbEndings:
+    """서술어가 개체로 뽑히면 검색·매칭이 통째로 어긋난다."""
+
+    @pytest.mark.parametrize("title,unwanted", [
+        ("AK론 대출 금리와 조건은 어떻게 비교해야 할까", "비교해야"),
+        ("무직자도 가능한 신용대출 비상금 확인하세요", "확인하세요"),
+        ("전세대출 얼마나 나올까", "나올까"),
+    ])
+    def test_verb_forms_excluded(self, title, unwanted):
+        from app.services.reference.query_builder import build
+
+        assert unwanted not in build(title).entities
+
+    def test_ak_loan_entity_order(self):
+        """상품명이 첫 개체여야 검색이 그것을 중심으로 돈다."""
+        from app.services.reference.query_builder import build
+
+        assert build(
+            "AK론 대출 금리와 조건은 어떻게 비교해야 할까"
+        ).entities[0] == "AK론"

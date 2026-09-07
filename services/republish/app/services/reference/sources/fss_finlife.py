@@ -193,6 +193,18 @@ class FssFinlifeAdapter(SourceAdapter):
         return SourceResult(code=source.code, name=name, facts=facts)
 
 
+# 상품을 특정하지 못하는 일반어. 이 말들로만 조회하면 아무 상품이나 걸린다.
+#
+# 실측(2026-09-07): "AK론 대출 금리와 조건" 글에 **우리은행 신용대출상품**
+# 이 공식 자료로 붙었다. 개체가 ['비교해야','AK론','대출'] 이었는데
+# 'AK론' 이 공시에 없자 '대출' 로 넓혀져 아무거나 잡힌 것이다.
+GENERIC_WORDS = {
+    "대출", "금리", "조건", "한도", "상품", "신청", "비교", "이자",
+    "상환", "기간", "서류", "자격", "심사", "승인", "방법", "정보",
+    "안내", "종류", "혜택", "우대", "수수료", "적금", "예금", "저축",
+    "신용", "담보", "보증", "약정", "가능", "필요", "확인",
+}
+
 # 금융회사 이름의 꼬리. 제목에서 기관을 알아보는 데 쓴다.
 # 인터넷은행은 "뱅크" 로 끝난다(케이뱅크·카카오뱅크·토스뱅크). "은행" 만
 # 보면 이들이 회사로 인식되지 않아, 회사 제약이 통째로 풀린다.
@@ -248,6 +260,14 @@ def _match_products(base_list: List[dict], query: str,
 
     pool = base_list
     company = _company_of(targets)
+
+    # 상품을 가리키는 말만 남긴다. 일반어는 아무 상품에나 걸린다.
+    specific = [t for t in targets
+                if t not in GENERIC_WORDS and t != company]
+    if not specific and not company:
+        # 상품도 회사도 특정 못 한다. 아무거나 주는 것보다 빈손이 낫다.
+        logger.info("[FSS] 특정 불가 — 빈손 | 개체=%s", targets)
+        return []
     if company:
         pool = [item for item in base_list
                 if _same_company(company, item.get("kor_co_nm", ""))]
@@ -255,7 +275,10 @@ def _match_products(base_list: List[dict], query: str,
             logger.info("[FSS] 회사 미일치 — 빈손 | 제목회사='%s'", company)
             return []
         # 회사를 좁혔으면 상품명만 남는다. 회사명 자체는 빼고 비교한다.
-        targets = [t for t in targets if t != company] or [company]
+        targets = specific or [company]
+    else:
+        # 회사가 없으면 상품명으로만 찾는다. 일반어는 이미 뺐다.
+        targets = specific
 
     # 좁은 것부터: 첫 개체(가장 고유) → 전체 개체
     for scope in (targets[:1], targets):
@@ -282,8 +305,9 @@ def _dedupe(items: List[dict]) -> List[dict]:
     """
     seen, out = set(), []
     for item in items:
-        key = (item.get("fin_co_no"), item.get("fin_prdt_cd"),
-               item.get("fin_prdt_nm"))
+        # 상품코드가 달라도 회사·이름이 같으면 화면에는 똑같이 보인다.
+        # 실제로 "우리은행 협약금리 外 신용대출상품" 이 두 번 실렸다.
+        key = (item.get("fin_co_no"), item.get("fin_prdt_nm"))
         if key in seen:
             continue
         seen.add(key)
