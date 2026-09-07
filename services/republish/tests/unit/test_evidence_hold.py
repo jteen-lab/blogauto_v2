@@ -175,3 +175,141 @@ class TestScreen:
 
     def test_explains_why_not_deleted(self):
         assert "지워지지 않습니다" in self.HTML or "지우지 않습니다" in self.HTML
+
+
+class TestCompanyCheck:
+    """회사가 실재하는가 — 금감원 공시 참여 목록(2026-09-07 실측 173곳)."""
+
+    @pytest.mark.parametrize("title_name,listed,expected", [
+        ("우리은행", "우리은행", True),
+        ("NH농협은행", "농협은행주식회사", True),        # 영문 접두어
+        ("카카오뱅크", "주식회사 카카오뱅크", True),      # 법인 표기
+        ("OK캐피탈", "오케이캐피탈 ㈜", True),           # 영문 → 한글
+        ("오케이저축은행", "OK저축은행", True),          # 한글 → 영문
+        ("행복드림저축은행", "드림저축은행", False),      # 한글 접두어는 다른 회사
+        ("신한은행", "신한카드㈜", False),
+        ("우리은행", "우리금융저축은행", False),
+    ])
+    def test_matching(self, title_name, listed, expected):
+        from app.services.reference.company import same_company
+
+        assert same_company(title_name, listed) is expected
+
+    @pytest.mark.asyncio
+    async def test_no_company_in_title_is_unknown(self):
+        from app.services.reference.company import verify
+
+        found = await verify("key", None)
+        assert found.known is None, "회사명이 없으면 모름이다"
+        assert found.unverified is False
+
+    @pytest.mark.asyncio
+    async def test_no_key_does_not_accuse(self):
+        """인증키가 없다고 회사를 미확인으로 몰지 않는다."""
+        from app.services.reference.company import verify
+
+        assert (await verify("", "우리은행")).known is None
+
+    def test_extraction(self):
+        from app.services.reference.company import company_in
+
+        assert company_in("우리은행 신용대출 한도") == "우리은행"
+        assert company_in("전세자금대출 조건 정리") is None
+
+    def test_unverified_company_needs_corroboration(self):
+        """확인 못한 회사는 공식 문서 1건 지름길을 못 쓴다."""
+        held = evaluate(["금융/대출"], TITLE, False,
+                        _docs("https://www.fss.or.kr/a"), company_known=False)
+        assert held.grade == GRADE_C
+
+        passed = evaluate(["금융/대출"], TITLE, False,
+                          _docs("https://www.fss.or.kr/a",
+                                "https://blog.naver.com/b"),
+                          company_known=False)
+        assert passed.grade == GRADE_B
+
+    def test_directive_never_declares_illegal(self):
+        """실재하는 회사를 못 찾았을 뿐일 수 있다. 단정하면 허위가 된다."""
+        text = directive(Evidence(grade=GRADE_B, company_known=False))
+        assert "확인하지 못했습니다" in text
+        assert "등록업체가 아니라는 뜻은 아닙니다" in text
+        assert "불법" not in text
+
+
+class TestCorroboration:
+    """교차 확인 — 2곳 이상에서 같은 값이 나올 때만 수치를 쓴다."""
+
+    def _doc(self, url, summary):
+        return SimpleNamespace(url=url, summary=summary, title="",
+                               postdate="20260901")
+
+    def test_two_sources_agreeing(self):
+        from app.services.reference.evidence import corroborated_figures
+
+        found = corroborated_figures([
+            self._doc("https://a.com/1", "금리 연 6.0%, 한도 5000만원"),
+            self._doc("https://b.com/2", "연 6.0% 수준이고 최대 5000만원"),
+        ])
+        assert "6.0%" in found and "5000만원" in found
+
+    def test_single_source_is_not_corroborated(self):
+        from app.services.reference.evidence import corroborated_figures
+
+        assert corroborated_figures([
+            self._doc("https://a.com/1", "금리 연 6.0%"),
+            self._doc("https://b.com/2", "조건이 까다롭다"),
+        ]) == []
+
+    def test_same_site_twice_is_not_two_sources(self):
+        """같은 사이트 두 글은 한 출처다."""
+        from app.services.reference.evidence import corroborated_figures
+
+        assert corroborated_figures([
+            self._doc("https://a.com/1", "연 6.0%"),
+            self._doc("https://a.com/2", "연 6.0%"),
+        ]) == []
+
+    def test_bare_numbers_ignored(self):
+        """단위 없는 숫자는 무엇이든 될 수 있다."""
+        from app.services.reference.evidence import corroborated_figures
+
+        assert corroborated_figures([
+            self._doc("https://a.com/1", "3가지 조건 5단계"),
+            self._doc("https://b.com/2", "3가지 조건 5단계"),
+        ]) == []
+
+    def test_directive_lists_allowed_figures(self):
+        text = directive(Evidence(grade=GRADE_B, figures=["6.0%", "5000만원"]))
+        assert "6.0%" in text and "5000만원" in text
+        assert "이 값만" in text
+
+    def test_directive_forbids_when_uncorroborated(self):
+        text = directive(Evidence(grade=GRADE_B))
+        assert "숫자를 쓰지 마세요" in text
+
+
+class TestFreshnessSource:
+    """요약본에는 날짜가 없다 — 검색 단계의 날짜표를 받아 쓴다."""
+
+    def test_postdates_map_is_used(self):
+        docs = [SimpleNamespace(url="https://a.com/1", summary="", title=""),
+                SimpleNamespace(url="https://b.com/2", summary="", title="")]
+        stale = evaluate(["금융/대출"], TITLE, False, docs)
+        assert stale.fresh_docs == 0, "날짜가 없으면 최신으로 치지 않는다"
+
+        fresh = evaluate(["금융/대출"], TITLE, False, docs,
+                         postdates={"https://a.com/1": "20260801"})
+        assert fresh.fresh_docs == 1
+        assert fresh.grade == GRADE_B
+
+    def test_collector_carries_postdates(self):
+        src = (ROOT / "app/services/generation/reference_collector.py"
+               ).read_text(encoding="utf-8")
+        assert "postdates = {r.link" in src
+        assert "postdates=postdates" in src
+
+    def test_generator_passes_them(self):
+        src = (ROOT / "app/services/generation/generator.py").read_text(
+            encoding="utf-8")
+        assert "postdates=getattr(ref_result" in src
+        assert "company_known=getattr(ref_result" in src
