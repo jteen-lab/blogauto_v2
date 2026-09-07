@@ -43,8 +43,9 @@ ERROR_GUIDE = {
         "② 방금 신청했다면 반영에 최대 1시간이 걸립니다. "
         "③ 같은 기관의 다른 데이터셋을 신청한 것은 아닌지 확인하세요."),
     "NO_OPENAPI_SERVICE_ERROR": (
-        "그 주소에 API 가 없습니다. 공공데이터포털 상세 페이지의 "
-        "'요청주소'를 그대로 복사해 넣으세요."),
+        "그 주소에 API 가 없습니다(폐기됐거나 경로가 다름). 포털 상세 "
+        "페이지에서 [미리보기]를 눌러 열린 창의 **주소창 URL 전체**를 "
+        "복사해 넣으세요 — 파라미터가 붙어 있어도 됩니다."),
     "APPLICATION_ERROR": "제공기관 쪽 오류입니다. 잠시 후 다시 시도하세요.",
     "LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR": (
         "오늘 호출 한도를 넘었습니다. 개발계정은 하루 1,000회입니다."),
@@ -90,8 +91,14 @@ class DataGoKrAdapter(SourceAdapter):
         params.update(_date_params(options))
         params.update(options.get("extra_params") or {})
 
+        # 포털 '미리보기' 주소를 그대로 붙여넣는 일이 흔하다. 그 주소에는
+        # serviceKey·numOfRows 가 이미 붙어 있어, 우리가 또 붙이면 값이
+        # 두 번 들어가 거절당한다. 붙어 있는 값은 살리고 겹치면 우리 값을 쓴다.
+        endpoint, preset_params = _split_query(source.endpoint)
+        merged = {**preset_params, **params}
+
         try:
-            response = await _call(source.endpoint, params)
+            response = await _call(endpoint, merged)
         except Exception as e:  # noqa: BLE001
             return SourceResult(code=source.code, name=name,
                                 error=f"호출 실패: {e}")
@@ -124,6 +131,31 @@ class DataGoKrAdapter(SourceAdapter):
         facts = _to_facts(items, options, entities, name,
                           getattr(source, "endpoint", ""))
         return SourceResult(code=source.code, name=name, facts=facts)
+
+
+def _split_query(endpoint: str) -> tuple:
+    """주소에 붙은 질의문자열을 떼어 낸다.
+
+    포털 미리보기 URL 은 `...?serviceKey=...&numOfRows=10` 형태다.
+    사용자가 그대로 붙여넣어도 동작해야 한다 — 어디를 잘라야 하는지
+    아는 것은 우리 쪽 일이지 사용자 일이 아니다.
+
+    Returns:
+        (주소, 이미 붙어 있던 파라미터)
+    """
+    from urllib.parse import parse_qsl, urlsplit, urlunsplit
+
+    raw = (endpoint or "").strip()
+    if "?" not in raw:
+        return raw, {}
+
+    parts = urlsplit(raw)
+    existing = {k: v for k, v in parse_qsl(parts.query, keep_blank_values=False)}
+    # 인증키는 등록된 것을 쓴다. 주소에 남은 것은 옛 키일 수 있다.
+    existing.pop("serviceKey", None)
+    existing.pop("ServiceKey", None)
+    clean = urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+    return clean, existing
 
 
 async def _call(endpoint: str, params: Dict[str, Any]):

@@ -429,39 +429,41 @@ class TestPortalErrors:
 
 
 class TestUnverifiedEndpoint:
-    """확인하지 않은 주소를 프리셋에 넣어 NO_OPENAPI_SERVICE_ERROR 가 났다.
+    """확인하지 않은 주소는 프리셋에 두지 않는다.
 
-    지금은 사용자가 포털에서 확인한 주소를 넣되, 오퍼레이션이 API 마다
-    다르므로 화면에서 고칠 수 있게 둔다.
+    B190001 은 내가 지어낸 값이었고, 사용자가 알려 준 B553701 도 실호출로
+    확인하니 "서비스가 없거나 폐기됨" 이었다(144개 조합 탐색). 주소를
+    모르는 API 를 목록에 두면 사용자가 또 같은 오류를 본다.
     """
 
-    def test_welfare_uses_portal_endpoint(self):
+    def test_every_preset_endpoint_is_verified(self):
         from app.services.reference.sources import presets
 
-        assert "B553701" in presets.get("welfare_loan")["endpoint"]
+        for row in presets.PRESETS:
+            assert row["endpoint"], f"{row['code']} 에 주소가 없다"
 
-    def test_unconfirmed_preset_stays_editable(self):
-        """주소를 확정하지 못한 것만 열어 둔다.
+    def test_unconfirmed_preset_removed(self):
+        from app.services.reference.sources import presets
 
-        정책브리핑은 실호출로 확정했으므로 잠근다 — 열어 두면 사용자가
-        옛 주소를 다시 넣을 수 있다.
-        """
+        assert presets.get("welfare_loan") == {}
+
+    def test_confirmed_preset_is_locked(self):
+        """실호출로 확정했으므로 잠근다 — 열어 두면 옛 주소를 다시 넣는다."""
         from app.services.reference.sources import presets
 
         found = {p["code"]: p for p in presets.listing()}
-        assert found["welfare_loan"]["needs_endpoint"] is True
         assert found["policy_briefing"]["needs_endpoint"] is False
 
     def test_user_endpoint_survives_preset(self):
-        """프리셋 값으로 덮으면 빈 주소가 된다."""
+        """사용자가 넣은 주소를 프리셋이 덮어쓰면 안 된다."""
         from app.routers.external_sources import (
             SourceRequest, _resolve_preset,
         )
 
-        req = SourceRequest(code="welfare", name="n", preset="welfare_loan",
-                            endpoint="https://apis.data.go.kr/B553701/x")
+        req = SourceRequest(code="brief", name="n", preset="policy_briefing",
+                            endpoint="https://apis.data.go.kr/1371000/a/b")
         _resolve_preset(req)
-        assert req.endpoint == "https://apis.data.go.kr/B553701/x"
+        assert req.endpoint == "https://apis.data.go.kr/1371000/a/b"
 
     def test_screen_unlocks_endpoint(self):
         assert "form.needsEndpoint" in MODAL
@@ -539,12 +541,11 @@ class TestOperationMissing:
 
 
 class TestEditableEndpoint:
-    def test_unconfirmed_preset_is_editable(self):
+    def test_all_presets_locked_now(self):
+        """확인한 것만 남겼으므로 전부 잠긴다. 미확인 API 는 직접 입력."""
         from app.services.reference.sources import presets
 
-        found = {p["code"]: p for p in presets.listing()}
-        assert found["welfare_loan"]["needs_endpoint"] is True
-        assert found["welfare_loan"]["default_endpoint"]
+        assert all(not p["needs_endpoint"] for p in presets.listing())
 
     def test_fss_preset_stays_locked(self):
         """금감원은 주소가 확정돼 있다."""
@@ -698,3 +699,44 @@ class TestSavedRowsDrift:
 
     def test_screen_prints_endpoint(self):
         assert "호출 주소" in JS or "d.endpoint" in JS
+
+
+class TestPastedPreviewUrl:
+    """포털 '미리보기' 주소를 그대로 붙여넣는 일이 흔하다.
+
+    그 주소에는 serviceKey·numOfRows 가 이미 붙어 있다. 우리가 또 붙이면
+    값이 두 번 들어가 거절당한다. 어디를 잘라야 하는지 아는 것은 우리
+    쪽 일이지 사용자 일이 아니다.
+    """
+
+    def test_plain_url_untouched(self):
+        from app.services.reference.sources.data_go_kr import _split_query
+
+        url = "https://apis.data.go.kr/B553701/svc/op"
+        assert _split_query(url) == (url, {})
+
+    def test_query_split_off(self):
+        from app.services.reference.sources.data_go_kr import _split_query
+
+        clean, params = _split_query(
+            "https://apis.data.go.kr/x/y?serviceKey=OLD&numOfRows=10&pageNo=1")
+        assert clean == "https://apis.data.go.kr/x/y"
+        assert params == {"numOfRows": "10", "pageNo": "1"}
+
+    def test_old_key_dropped(self):
+        """주소에 남은 키는 옛 값일 수 있다. 등록된 키를 쓴다."""
+        from app.services.reference.sources.data_go_kr import _split_query
+
+        _, params = _split_query("https://x/y?serviceKey=OLD&a=1")
+        assert "serviceKey" not in params
+
+    def test_our_params_win(self):
+        """겹치면 우리 값을 쓴다 — 날짜·행수는 어댑터가 계산한다."""
+        src = (ROOT / "app/services/reference/sources/data_go_kr.py").read_text(
+            encoding="utf-8")
+        assert "merged = {**preset_params, **params}" in src
+
+    def test_error_guide_points_to_preview(self):
+        from app.services.reference.sources.data_go_kr import ERROR_GUIDE
+
+        assert "미리보기" in ERROR_GUIDE["NO_OPENAPI_SERVICE_ERROR"]
