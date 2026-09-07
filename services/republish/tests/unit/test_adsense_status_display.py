@@ -39,35 +39,43 @@ def _index(*pairs):
     return {d: _site(d, s) for d, s in pairs}
 
 
-def test_getting_ready_shows_preparing_by_default():
-    """애드센스가 준비 중이라고 하면 기본은 '준비 중'."""
+def test_getting_ready_shows_review():
+    """애드센스가 준비 중이면 이미 신청한 것이므로 '심사 중'.
+
+    2026-09-07 변경. 예전에는 내부 저장값으로 준비중/심사중을 갈랐다.
+    애드센스가 바뀌어도 화면이 안 바뀌어 사용자가 혼란스러웠다.
+    """
     idx = _index(("moneyjjoaa.blogspot.com", "GETTING_READY"))
     v = resolve_display_status(_blog("https://moneyjjoaa.blogspot.com/"), idx)
-    assert v["status"] == ST_PREPARING
-    assert v["state"] == "GETTING_READY"
+    assert v["status"] == ST_APPLIED
+    assert v["state"] == "GETTING_READY", "원문은 그대로 남긴다"
 
 
 def test_user_marked_applied_shows_review():
-    """사용자가 신청했다고 기록하면 같은 원문 상태여도 '심사 중'."""
+    """내부 기록이 무엇이든 같은 원문 상태면 같은 표시."""
     idx = _index(("soojaknam.blogspot.com", "GETTING_READY"))
     v = resolve_display_status(
         _blog("https://soojaknam.blogspot.com/", ST_APPLIED), idx)
     assert v["status"] == ST_APPLIED
-    assert v["state"] == "GETTING_READY", "원문은 그대로 준비 중이다"
+    assert v["state"] == "GETTING_READY"
 
 
-def test_same_remote_state_can_differ_by_local_record():
-    """세 블로그가 같은 원문 상태인데 표시가 갈리는 상황 자체를 문서화한다."""
+def test_same_remote_state_shows_the_same():
+    """같은 원문 상태면 내부 기록이 달라도 표시가 같아야 한다.
+
+    예전에는 여기서 표시가 갈렸다. 애드센스 화면에는 셋 다 "준비 중" 인데
+    blogauto 는 준비중·심사중으로 나뉘어, 갱신해도 안 바뀌었다.
+    """
     idx = _index(
         ("guntamoney.blogspot.com", "GETTING_READY"),
-        ("moneyjjoaa.blogspot.com", "GETTING_READY"),
         ("soojaknam.blogspot.com", "GETTING_READY"),
     )
     a = resolve_display_status(_blog("https://guntamoney.blogspot.com/"), idx)
     b = resolve_display_status(
         _blog("https://soojaknam.blogspot.com/", ST_APPLIED), idx)
     assert a["state"] == b["state"] == "GETTING_READY"
-    assert a["status"] != b["status"], "차이는 내부 기록에서만 온다"
+    assert a["status"] == b["status"] == ST_APPLIED
+    assert a["source"] == "adsense", "내부 기록이 아니라 애드센스가 근거다"
 
 
 def test_ready_wins_over_local_record():

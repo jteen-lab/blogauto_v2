@@ -126,7 +126,7 @@ class AdsenseAccountService:
         """
         from ...models.blog import Blog
         from .adsense_status_resolver import (
-            ST_APPLIED, ST_ATTENTION, ST_PREPARING, resolve_display_status,
+            ST_ATTENTION, resolve_display_status,
         )
 
         index = await self.sites_index(user_id)
@@ -144,9 +144,6 @@ class AdsenseAccountService:
             verdict = resolve_display_status(blog, index)
             new_status = verdict["status"]
 
-            # 사용자가 신청했다고 표시한 상태는 유지
-            if new_status == ST_PREPARING and blog.adsense_status == ST_APPLIED:
-                continue
             # '확인 필요'는 표시 전용 — 저장 상태는 건드리지 않는다
             if new_status == ST_ATTENTION:
                 continue

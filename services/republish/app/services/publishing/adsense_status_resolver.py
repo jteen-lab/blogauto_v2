@@ -9,10 +9,18 @@
 
 | 사이트 state | 표시 |
 |---|---|
-| READY(준비됨) | **승인** — 다른 설정과 무관하게 최우선 |
-| GETTING_READY / REQUIRES_REVIEW(준비 중) | blogauto 설정에 따라 준비중 / 심사중 |
+| READY(준비됨) | **승인** |
+| GETTING_READY / REQUIRES_REVIEW(준비 중) | **심사중** |
 | NEEDS_ATTENTION(주의 필요) | **확인 필요**(별도 표시) |
 | 목록에 없음(상위 도메인까지 탐색 후에도) | 미신청 |
+
+**표시는 애드센스 상태만 본다(2026-09-07 사용자 확정).** 예전에는 준비 중을
+받아 놓고 blogauto 내부 저장값으로 준비중/심사중을 갈랐다. 그래서 애드센스
+화면에는 "준비 중" 인데 blogauto 는 "준비중" 으로 남고, 갱신해도 바뀌지
+않았다 — 갱신은 애드센스를 읽지만 표시는 내부값을 봤기 때문이다.
+
+애드센스에 사이트가 등록돼 "준비 중" 이면 이미 신청한 것이므로 심사중이다.
+`preparing` 은 옛 데이터 표시용으로만 남긴다.
 """
 from typing import Any, Dict, Iterable, Optional, Tuple
 
@@ -23,7 +31,9 @@ logger = get_logger("adsense_status_resolver", "app.log")
 
 # blogauto 표시 상태
 ST_NONE = "none"            # 미신청
-ST_PREPARING = "preparing"  # 준비중
+# 준비중: 애드센스 판정에서는 더 이상 나오지 않는다. 옛 데이터가 남아
+# 있을 수 있어 표시 목록에는 유지한다.
+ST_PREPARING = "preparing"  # 준비중(레거시)
 ST_APPLIED = "applied"      # 심사중
 ST_APPROVED = "approved"    # 승인
 ST_ATTENTION = "attention"  # 확인 필요
@@ -105,12 +115,11 @@ def resolve_display_status(
         }
 
     if state in (STATE_GETTING_READY, STATE_REQUIRES_REVIEW):
-        # 준비 중 — 내부 설정으로 준비중/심사중을 가른다
-        local = (getattr(blog, "adsense_status", None) or ST_NONE)
-        status = ST_APPLIED if local == ST_APPLIED else ST_PREPARING
+        # 준비 중 = 이미 신청해 애드센스가 검토하는 단계다. 내부 설정을
+        # 보지 않는다 — 보면 애드센스가 바뀌어도 화면이 안 바뀐다.
         return {
-            "status": status, "state": state,
-            "source": "local", "inherited_from": parent,
+            "status": ST_APPLIED, "state": state,
+            "source": "adsense", "inherited_from": parent,
         }
 
     # 알 수 없는 state — 내부 값을 그대로 쓰되 원문을 남긴다
