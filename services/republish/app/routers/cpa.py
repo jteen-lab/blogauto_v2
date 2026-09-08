@@ -152,6 +152,42 @@ async def reparse_offer(
             "found": found["found"]}
 
 
+@router.post("/offers/{offer_id}/extract")
+async def extract_rules(
+    offer_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """원문에서 규칙을 뽑는다.
+
+    뽑고 나면 **확인 전 상태로 되돌린다.** 규칙이 바뀌었으니 사람이 다시 봐야
+    한다. 미분류 줄과 충돌은 그대로 실어 보낸다 — 숨기면 검사되지 않는 것을
+    검사된 줄로 안다.
+    """
+    from ..services.ai.ai_service import AIService
+    from ..services.cpa.conflicts import detect, legal_vs_offer
+    from ..services.cpa.rule_extractor import extract
+
+    offer = await _get(db, offer_id)
+    found = await extract(AIService(db), offer.raw_text)
+
+    offer.rules = found["rules"]
+    offer.unmatched = found["unmatched"]
+    offer.conflicts = detect(offer.raw_text, found["rules"]) + \
+        legal_vs_offer(found["rules"])
+    if found["verticals"] and not offer.vertical:
+        offer.vertical = ",".join(found["verticals"])
+    offer.status = ST_DRAFT
+    offer.confirmed_at = None
+    await db.commit()
+    await db.refresh(offer)
+
+    logger.info("[CPA] 규칙 추출 | %s | 규칙 %d · 미분류 %d · 충돌 %d",
+                offer.name, len(offer.rules or []),
+                len(offer.unmatched or []), len(offer.conflicts or []))
+    return {"success": True, "offer": offer.to_dict()}
+
+
 @router.patch("/offers/{offer_id}")
 async def update_offer(
     offer_id: int,
@@ -227,3 +263,130 @@ async def _get(db: AsyncSession, offer_id: int) -> CpaOffer:
     if not offer or offer.is_deleted:
         raise HTTPException(status_code=404, detail="오퍼를 찾을 수 없습니다")
     return offer
+
+
+# ── 제목·글·상담페이지 ────────────────────────────────────
+
+class TitleReq(BaseModel):
+    """제목 재고 생성."""
+
+    limit: int = Field(default=40, ge=1, le=200)
+    topic_id: Optional[int] = None
+    subtopic_id: Optional[int] = None
+
+
+@router.post("/offers/{offer_id}/titles")
+async def make_titles(
+    offer_id: int,
+    payload: TitleReq,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """오퍼에서 제목 재고를 만든다.
+
+    만든 제목에는 `cpa_offer_id` 가 붙는다. 이 값이 있으면 **그 오퍼 전용**
+    이라, 애드센스 블로그가 뽑아 쓰지 않는다.
+    """
+    from ..models.title import MainTitle
+    from ..services.cpa.title_builder import build
+
+    offer = await _get(db, offer_id)
+    if not offer.usable:
+        raise HTTPException(
+            status_code=400,
+            detail="확인되지 않았거나 재확인 기한이 지난 오퍼입니다")
+
+    found = build(offer, limit=payload.limit)
+    existing = {
+        row for row in (await db.execute(
+            select(MainTitle.title).where(
+                MainTitle.cpa_offer_id == offer_id))).scalars().all()
+    }
+
+    added = 0
+    for title in found["titles"]:
+        if title in existing:
+            continue
+        db.add(MainTitle(
+            title=title, status="available", source="cpa",
+            cpa_offer_id=offer_id,
+            topic_id=payload.topic_id, subtopic_id=payload.subtopic_id))
+        added += 1
+    await db.commit()
+
+    logger.info("[CPA] 제목 생성 | %s | %d개(규칙에 걸림 %d)",
+                offer.name, added, len(found["skipped"]))
+    return {"success": True, "added": added,
+            "keywords": found["keywords"],
+            "skipped": found["skipped"]}
+
+
+@router.get("/offers/{offer_id}/prompt")
+async def offer_prompt(
+    offer_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """이 오퍼로 글을 쓸 때 붙는 지시문. 사람이 미리 볼 수 있어야 한다."""
+    from ..services.cpa.prompt import build, summary
+
+    offer = await _get(db, offer_id)
+    return {"prompt": build(offer), "summary": summary(offer)}
+
+
+class CheckReq(BaseModel):
+    """발행 전 검증."""
+
+    title: str = ""
+    body: str = ""
+
+
+@router.post("/offers/{offer_id}/check")
+async def check_content(
+    offer_id: int,
+    payload: CheckReq,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """글이 규칙을 지켰나. 막을 때는 어느 규칙에 걸렸는지까지 돌려준다."""
+    from ..models.cpa_offer import CpaOffer as _Offer
+    from ..services.cpa.gate import check
+
+    offer = await _get(db, offer_id)
+    others = [
+        url for url in (await db.execute(
+            select(_Offer.landing_url).where(
+                _Offer.id != offer_id,
+                _Offer.is_deleted.is_(False)))).scalars().all() if url
+    ]
+    return check(offer, payload.title, payload.body, others).to_dict()
+
+
+class PageReq(BaseModel):
+    """상담 페이지 미리보기."""
+
+    intro: str = ""
+    post_id: Optional[int] = None
+    blog_id: Optional[int] = None
+
+
+@router.post("/offers/{offer_id}/consult-page")
+async def consult_page(
+    offer_id: int,
+    payload: PageReq,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """상담 페이지 HTML 을 만든다.
+
+    얇으면 `thin=true` 로 알린다. 얇은 중개 페이지는 검색엔진이 걸러내고,
+    나중에 유료 광고를 붙일 때 승인되지 않는다.
+    """
+    from ..services.cpa.consult_page import build
+    from ..services.cpa.subid import apply
+
+    offer = await _get(db, offer_id)
+    url = apply(offer.landing_url or "", offer,
+                payload.post_id, payload.blog_id)
+    found = build(offer, url, payload.intro)
+    return {**found, "landing_url": url}

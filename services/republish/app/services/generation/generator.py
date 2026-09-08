@@ -276,6 +276,16 @@ class ContentGenerator:
                     category_name = topic.name
                     topic_names = [topic.name]
 
+        # CPA 오퍼 — 제목이 오퍼에 속하면 그 규칙이 글 전체를 지배한다.
+        # 확인되지 않은 오퍼로는 만들지 않는다. 규정 위반이 된다.
+        cpa_offer, cpa_directive = await self._cpa_offer(source_title)
+        if cpa_offer is False:
+            elapsed = int(time.time() - start_time)
+            return GenerationResult(
+                success=False, generation_time_seconds=elapsed,
+                error="CPA 오퍼가 확인되지 않았거나 재확인 기한이 지났습니다",
+                warnings=["오퍼 확인 후 다시 시도하세요"])
+
         # 근거 등급 — 수치가 곧 사실인 주제에서 확인 안 된 값을 쓰지 않는다.
         # C 등급이면 글을 만들지 않고 제목을 재고에 남긴다(삭제하지 않는다).
         evidence, evidence_directive = await self._grade_evidence(
@@ -324,7 +334,9 @@ class ContentGenerator:
             ai_service=self.ai_service,
             title=working_title,
             reference_injection=_with_directive(
-                ref_result.to_prompt_injection(), evidence_directive),
+                _with_directive(ref_result.to_prompt_injection(),
+                                evidence_directive),
+                cpa_directive),
             settings=settings,
             blog=blog,
             category_name=category_name,
@@ -344,6 +356,18 @@ class ContentGenerator:
         # 테마가 제목을 <h1> 으로 출력하는데 본문에도 같은 제목이 들어가
         # 두 번 보인다. 게이트를 껐어도 이건 정리한다(순수 표시 문제).
         content_markdown = _strip_h1(content_markdown, working_title)
+
+        # 4-2. CPA 규칙 검증 — 프롬프트를 어겨도 여기서 잡는다.
+        # AI 는 지시를 어긴다. 지시(프롬프트)와 검사(게이트) 두 층으로 간다.
+        if cpa_offer:
+            cpa_block = await self._cpa_check(
+                cpa_offer, working_title, content_markdown)
+            if cpa_block:
+                elapsed = int(time.time() - start_time)
+                return GenerationResult(
+                    success=False, generation_time_seconds=elapsed,
+                    error=f"CPA 규칙 위반으로 보류: {cpa_block}",
+                    warnings=[f"오퍼: {cpa_offer.name}"])
 
         from .quality_gate import plain_len as _plain_len
 
@@ -560,6 +584,60 @@ class ContentGenerator:
             section_images=section_images,
             warnings=pipeline_warnings,
         )
+
+    async def _cpa_offer(self, source_title):
+        """이 제목이 CPA 오퍼에 속하나.
+
+        Returns:
+            (offer|None, 지시문). 오퍼가 있는데 쓸 수 없으면 (False, "")
+        """
+        offer_id = getattr(source_title, "cpa_offer_id", None)
+        # 정수가 아니면 오퍼가 없는 것이다. bool 은 int 의 하위형이라 따로 뺀다.
+        if isinstance(offer_id, bool) or not isinstance(offer_id, int) \
+                or offer_id <= 0:
+            return None, ""
+        try:
+            from ...models.cpa_offer import CpaOffer
+            from ..cpa.prompt import build as _cpa_prompt
+
+            offer = await self.db.get(CpaOffer, offer_id)
+            if not offer or offer.is_deleted or not offer.usable:
+                logger.warning("[GENERATOR] CPA 오퍼 사용 불가 | id=%s", offer_id)
+                return False, ""
+            return offer, _cpa_prompt(offer)
+        except Exception as e:  # noqa: BLE001
+            # 오퍼를 못 읽으면 규칙 없이 쓰게 된다. 그건 막아야 한다.
+            logger.error("[GENERATOR] CPA 오퍼 조회 실패 | %s", e)
+            return False, ""
+
+    async def _cpa_check(self, offer, title, body):
+        """CPA 규칙 검증. 막을 사유가 있으면 그 문자열을 돌려준다.
+
+        어느 규칙에 걸렸는지 로그에 남긴다. 조용히 멈추면 고장과 구분되지 않는다.
+        """
+        try:
+            from sqlalchemy import select as _select
+
+            from ...models.cpa_offer import CpaOffer
+            from ..cpa.gate import check as _check
+
+            others = [
+                url for url in (await self.db.execute(
+                    _select(CpaOffer.landing_url).where(
+                        CpaOffer.id != offer.id,
+                        CpaOffer.is_deleted.is_(False)))).scalars().all()
+                if url
+            ]
+            found = _check(offer, title, body, others)
+        except Exception as e:  # noqa: BLE001
+            # 검사에 실패했는데 통과시키면 규칙 없는 글이 나간다.
+            logger.error("[GENERATOR] CPA 검증 실패 | %s", e)
+            return f"검증 실패({e})"
+
+        if found.reviews:
+            logger.info("[GENERATOR] CPA 사람 확인 %d건 | '%s'",
+                        len(found.reviews), title[:40])
+        return found.summary() if found.blocked else ""
 
     async def _grade_evidence(self, topic_names, working_title, ref_result,
                               source_title):
