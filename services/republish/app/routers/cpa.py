@@ -173,6 +173,7 @@ async def extract_rules(
 
     offer.rules = found["rules"]
     offer.unmatched = found["unmatched"]
+    offer.note = found.get("ai_error") or None
     offer.conflicts = detect(offer.raw_text, found["rules"]) + \
         legal_vs_offer(found["rules"])
     if found["verticals"] and not offer.vertical:
@@ -185,6 +186,81 @@ async def extract_rules(
     logger.info("[CPA] 규칙 추출 | %s | 규칙 %d · 미분류 %d · 충돌 %d",
                 offer.name, len(offer.rules or []),
                 len(offer.unmatched or []), len(offer.conflicts or []))
+    return {"success": True, "offer": offer.to_dict()}
+
+
+class RuleIn(BaseModel):
+    """미분류 문장을 규칙으로 올리거나, 규칙을 직접 추가한다."""
+
+    type: str
+    scope: str = "all"
+    target: str = ""
+    value: str = ""
+    severity: str = "block"
+    source_quote: str = ""
+    drop_unmatched: Optional[str] = None
+
+
+@router.post("/offers/{offer_id}/rules")
+async def add_rule(
+    offer_id: int,
+    payload: RuleIn,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """규칙을 손으로 추가한다.
+
+    AI 가 못 읽은 문장을 그대로 두면 **검사되지 않는다.** 사람이 규칙으로
+    올릴 수 있어야 미분류가 실제로 줄어든다.
+    """
+    from ..models.cpa_offer import RULE_SCOPES, RULE_TYPES
+
+    offer = await _get(db, offer_id)
+    if payload.type not in RULE_TYPES:
+        raise HTTPException(status_code=400, detail=f"모르는 유형: {payload.type}")
+
+    rule = {
+        "type": payload.type,
+        "scope": payload.scope if payload.scope in RULE_SCOPES else "all",
+        "target": payload.target[:100], "value": payload.value[:300],
+        "source_quote": (payload.source_quote or payload.drop_unmatched
+                         or "")[:300],
+        "severity": payload.severity if payload.severity in
+        ("block", "warn", "review") else "block",
+    }
+    offer.rules = list(offer.rules or []) + [rule]
+    if payload.drop_unmatched:
+        offer.unmatched = [x for x in (offer.unmatched or [])
+                           if x != payload.drop_unmatched]
+    offer.status = ST_DRAFT      # 규칙이 바뀌었으니 다시 확인해야 한다
+    offer.confirmed_at = None
+    await db.commit()
+    await db.refresh(offer)
+    return {"success": True, "offer": offer.to_dict()}
+
+
+class IgnoreIn(BaseModel):
+    """검사할 필요 없는 문장을 목록에서 뺀다."""
+
+    line: str
+
+
+@router.post("/offers/{offer_id}/unmatched/ignore")
+async def ignore_unmatched(
+    offer_id: int,
+    payload: IgnoreIn,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """이 문장은 규칙이 아니라고 사람이 판단했다.
+
+    지우는 것이 아니라 **판단했다는 표시**다. 커버리지가 올라가 남은 것에
+    집중할 수 있다.
+    """
+    offer = await _get(db, offer_id)
+    offer.unmatched = [x for x in (offer.unmatched or []) if x != payload.line]
+    await db.commit()
+    await db.refresh(offer)
     return {"success": True, "offer": offer.to_dict()}
 
 
@@ -314,11 +390,23 @@ async def make_titles(
         added += 1
     await db.commit()
 
-    logger.info("[CPA] 제목 생성 | %s | %d개(규칙에 걸림 %d)",
-                offer.name, added, len(found["skipped"]))
+    # 0개일 때 이유를 말해야 사용자가 다음에 무엇을 할지 안다.
+    reason = ""
+    if added == 0:
+        if not found["keywords"]:
+            reason = ("오퍼에 추천 키워드가 없습니다. "
+                      "규칙에 content_axis 를 추가하거나 키워드를 직접 넣으세요.")
+        elif not found["titles"]:
+            reason = "만든 후보가 모두 규칙에 걸렸습니다."
+        else:
+            reason = f"후보 {len(found['titles'])}개가 모두 이미 있습니다."
+
+    logger.info("[CPA] 제목 생성 | %s | %d개(규칙에 걸림 %d) %s",
+                offer.name, added, len(found["skipped"]), reason)
     return {"success": True, "added": added,
             "keywords": found["keywords"],
-            "skipped": found["skipped"]}
+            "candidates": found["titles"],
+            "skipped": found["skipped"], "reason": reason}
 
 
 @router.get("/offers/{offer_id}/prompt")
