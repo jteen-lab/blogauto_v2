@@ -3115,35 +3115,42 @@ class FlowScheduler:
 
         inv_mgr = InventoryManager(db)
 
-        # 일일 횟수 제한 체크 (Phase 3)
+        # 오늘의 발행 상한 — 성장 프로파일과 색인 되먹임 중 **작은 값**.
+        # 되먹임을 발행에 거는 이유: 구글이 보는 것은 발행된 글이다.
+        # 생성까지 막으면 재고가 비어, 색인이 회복돼도 낼 글이 없다.
+        # 순서도: docs/flowcharts/index_feedback.md
+        from ..services.generation.index_feedback import (
+            IndexFeedback, cap_note, effective_cap, is_enabled as _idx_on,
+        )
+
+        idx_on = False
+        try:
+            idx_on = await _idx_on(db)
+        except Exception as e:  # noqa: BLE001 — 되먹임은 보조 장치다
+            logger.warning(f"[SCHED:PUBLISH] 되먹임 설정 조회 실패(무시) | {e}")
+
+        publish_caps: Dict[int, tuple] = {}
         if gp_context:
             for blog in blogs:
                 stage_params = gp_context.get_stage_for_blog(blog.id)
-                if (
-                    stage_params
-                    and stage_params.publish
-                    and stage_params.publish.daily_count
-                ):
-                    exceeded, today_count = await self._check_daily_limit(
-                        db, blog.id, "publish",
-                        stage_params.publish.daily_count,
-                    )
-                    if exceeded:
-                        logger.info(
-                            f"[SCHED:PUBLISH] 일일 한도 도달 | "
-                            f"blog={blog.name} | "
-                            f"today={today_count}/"
-                            f"{stage_params.publish.daily_count}"
-                        )
-                        return {
-                            "success": True,
-                            "skipped": True,
-                            "message": (
-                                f"일일 발행 한도 도달 "
-                                f"({today_count}/"
-                                f"{stage_params.publish.daily_count})"
-                            ),
-                        }
+                gp_daily = (
+                    stage_params.publish.daily_count
+                    if stage_params and stage_params.publish else None
+                )
+                verdict = None
+                if idx_on:
+                    try:
+                        verdict = await IndexFeedback(db).evaluate(
+                            blog.id, gp_daily)
+                    except Exception as e:  # noqa: BLE001
+                        logger.warning(
+                            f"[SCHED:PUBLISH] 색인 조회 실패(무시) | "
+                            f"blog={blog.name} | {e}")
+                publish_caps[blog.id] = (
+                    effective_cap(gp_daily, verdict),
+                    cap_note(gp_daily, verdict),
+                    verdict,
+                )
 
         success_count = 0
         fail_count = 0
@@ -3154,6 +3161,32 @@ class FlowScheduler:
             try:
                 stage_params = gp_context.get_stage_for_blog(blog.id) if gp_context else None
                 if not stage_params or not stage_params.publish.enabled:
+                    continue
+
+                # 오늘 상한에 닿았나. 한 블로그가 걸려도 **다른 블로그는
+                # 계속 간다** — 예전에는 여기서 return 해 플로우 전체가 멈췄다.
+                cap, note, verdict = publish_caps.get(
+                    blog.id, (None, "", None))
+                if verdict is not None and verdict.stop:
+                    msg = f"발행 정지 — {verdict.reason}"
+                elif cap:
+                    _, today_count = await self._check_daily_limit(
+                        db, blog.id, "publish", cap)
+                    msg = (f"발행 건너뜀 (오늘 {today_count}/{cap}){note}"
+                           if today_count >= cap else "")
+                else:
+                    msg = ""
+                if msg:
+                    logger.info(
+                        f"[SCHED:PUBLISH] {msg} | blog={blog.name}")
+                    await self._save_autorun_log(
+                        db=db, user_id=flow.user_id, flow_id=flow.id,
+                        flow_name=flow.name, module_name=gp_module_name,
+                        blog_name=blog.name,
+                        result={"success": True, "skipped": True,
+                                "message": msg},
+                        duration_ms=0, action="publish")
+                    skip_count += 1
                     continue
 
                 # 재고 ON/OFF 체크 (발행 가능 글 존재 여부)
