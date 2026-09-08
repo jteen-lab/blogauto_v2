@@ -168,14 +168,17 @@ async def test_other_blog_not_mixed(db, blog):
 
 
 def test_executor_wires_feedback():
-    """생성 경로에 연결돼 있지 않으면 판정해도 소용없다."""
+    """**발행** 경로에 연결돼 있지 않으면 판정해도 소용없다.
+
+    생성이 아니라 발행이다(2026-09-08). 구글이 보는 것은 발행된 글이고,
+    생성까지 막았더니 재고가 말라 색인이 회복돼도 낼 글이 없었다.
+    """
     from pathlib import Path
 
     src = (Path(__file__).resolve().parents[2]
-           / "app/services/generation/flow_generate_executor.py").read_text(
-        encoding="utf-8")
+           / "app/scheduler/flow_scheduler.py").read_text(encoding="utf-8")
     assert "IndexFeedback" in src
     assert "verdict.stop" in src
-    assert "verdict.cap" in src
-    # 막을 때 사유를 응답에 실어야 화면에서 알 수 있다
-    assert "index_feedback" in src
+    assert "effective_cap" in src
+    # 막을 때 사유를 로그에 실어야 화면에서 알 수 있다
+    assert "cap_note" in src

@@ -60,11 +60,17 @@ def test_day_boundary_math() -> None:
 
 
 def test_skip_message_shows_the_basis_and_gp_override() -> None:
-    """'제한' 이라고만 하면 GP 설정이 무시된 것처럼 보인다."""
-    src = (ROOT / "app/services/generation/flow_generate_executor.py").read_text(
+    """'제한' 이라고만 하면 GP 설정이 무시된 것처럼 보인다.
+
+    되먹임이 발행으로 옮겨가면서 문구도 발행 쪽에서 만든다.
+    """
+    src = (ROOT / "app/scheduler/flow_scheduler.py").read_text(
         encoding="utf-8")
-    assert "오늘(00시 기준)" in src
-    assert "성장 프로파일" in src and "색인 되먹임으로" in src
+    assert "발행 건너뜀 (오늘" in src
+
+    helper = (ROOT / "app/services/generation/index_feedback.py").read_text(
+        encoding="utf-8")
+    assert "성장 프로파일" in helper and "되먹임" in helper
 
 
 # ── 2. 즉시 실행 순서 ────────────────────────────────────

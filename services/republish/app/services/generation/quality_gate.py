@@ -6,7 +6,7 @@
 막을 때는 반드시 사유를 남긴다. 발행이 조용히 멈추면 고장과 구분되지 않는다.
 
 진단: docs/plans/search_visibility_all_blogs.md
-순서도: docs/flowcharts/index_feedback_and_quality_gate.md
+순서도: docs/flowcharts/index_feedback.md
 """
 from __future__ import annotations
 

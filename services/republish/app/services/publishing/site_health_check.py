@@ -6,7 +6,7 @@
 막지 않고 **알리기만** 한다. 이 조건들은 발행 자체를 못 하게 할 사유가 아니다.
 
 진단: docs/plans/search_visibility_all_blogs.md
-순서도: docs/flowcharts/index_feedback_and_quality_gate.md
+순서도: docs/flowcharts/index_feedback.md
 """
 from __future__ import annotations
 
