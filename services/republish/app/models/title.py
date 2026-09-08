@@ -85,6 +85,12 @@ class MainTitle(Base):
     last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     # 원본 정보
     source: Mapped[str] = mapped_column(String(50), default="transfer", comment="transfer/manual/crawl")
+
+    # CPA 오퍼에서 나온 제목. 이 값이 있으면 **그 오퍼 전용**이다.
+    # 애드센스 블로그가 CPA 제목을 뽑아 쓰면 규정 위반 글이 엉뚱한 곳에 나간다.
+    cpa_offer_id: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True, index=True,
+        comment="CPA 오퍼 ID (있으면 해당 오퍼 전용 제목)")
     source_temp_title_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # 정본 키워드 연결 — 확장 재조합이 "어떤 키워드로 넓힐지" 를 안다.
     candidate_id: Mapped[Optional[int]] = mapped_column(
