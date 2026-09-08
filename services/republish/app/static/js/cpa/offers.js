@@ -107,6 +107,35 @@ function cpaApp() {
             await this.load();
         },
 
+        async addRule(o, line, selectId) {
+            const el = document.getElementById(selectId);
+            const type = el ? el.value : '';
+            if (!type) { alert('유형을 먼저 고르세요.'); return; }
+            const value = prompt('규칙 값을 확인하세요 (낱말·문구·내용)', line) ;
+            if (value === null) return;
+            const r = await fetch(`/api/v1/cpa/offers/${o.id}/rules`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ type, value, target: value,
+                                       source_quote: line,
+                                       drop_unmatched: line }),
+            });
+            const d = await r.json();
+            if (!r.ok) { alert(d.detail || '추가 실패'); return; }
+            await this.load();
+        },
+
+        async ignore(o, line) {
+            const r = await fetch(`/api/v1/cpa/offers/${o.id}/unmatched/ignore`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ line }),
+            });
+            if (r.ok) await this.load();
+        },
+
         async makeTitles(o) {
             this.busy = true;
             try {
@@ -119,9 +148,17 @@ function cpaApp() {
                 const d = await r.json();
                 if (!r.ok) { alert(d.detail || '생성 실패'); return; }
                 // 규칙에 걸려 버린 후보를 함께 알린다. 왜 적게 나왔는지 알아야 한다.
-                alert(`제목 ${d.added}개 추가\n`
-                    + `키워드 ${(d.keywords || []).length}개\n`
-                    + `규칙에 걸려 제외 ${(d.skipped || []).length}개`);
+                // 0개일 때 이유를 말해야 다음에 무엇을 할지 안다.
+                const kw = d.keywords || [];
+                const lines = [`제목 ${d.added}개 추가`];
+                lines.push(kw.length
+                    ? `키워드 ${kw.length}개: ${kw.slice(0, 5).join(', ')}`
+                    : '키워드 없음');
+                if ((d.skipped || []).length) {
+                    lines.push(`규칙에 걸려 제외 ${d.skipped.length}개`);
+                }
+                if (d.reason) lines.push('', d.reason);
+                alert(lines.join('\n'));
             } finally {
                 this.busy = false;
             }

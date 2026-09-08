@@ -96,7 +96,9 @@
                     <div class="flex gap-2 shrink-0">
                         <button @click="extract(o)" :disabled="busy"
                                 class="text-sm border px-3 py-1.5 rounded disabled:opacity-50">규칙 뽑기</button>
-                        <button @click="open(o)" class="text-sm border px-3 py-1.5 rounded">확인</button>
+                        <button @click="open(o)" class="text-sm border px-3 py-1.5 rounded">
+                            <span x-text="openId === o.id ? '접기' : '자세히'"></span>
+                        </button>
                         <button x-show="o.usable" @click="makeTitles(o)" :disabled="busy"
                                 class="text-sm border px-3 py-1.5 rounded disabled:opacity-50">제목 생성</button>
                         <button x-show="o.status === 'draft' || o.status === 'recheck'"
@@ -129,6 +131,9 @@
                             <li x-show="o.advisory_count">
                                 · 사람이 봐야 할 항목 <b x-text="o.advisory_count"></b>건
                             </li>
+                            <li x-show="o.note" class="text-red-700">
+                                · <b x-text="o.note"></b>
+                            </li>
                             <li x-show="!o.ftc_notice">
                                 · <b>대가성 문구를 찾지 못했습니다</b> — 표시하지 않으면 위법입니다
                             </li>
@@ -140,10 +145,31 @@
                 <div x-show="showUnmatched === o.id" x-cloak class="px-4 pb-4">
                     <div class="border rounded bg-gray-50 p-3 max-h-64 overflow-auto">
                         <div class="text-xs text-gray-500 mb-2">
-                            규칙으로 바뀌지 않은 문장입니다. 이 내용은 검사에 쓰이지 않습니다.
+                            규칙으로 바뀌지 않은 문장입니다. <b>이 내용은 검사되지 않습니다.</b><br>
+                            유형을 골라 <b>규칙으로</b> 올리거나, 규칙이 아니면 <b>무시</b>로 빼세요.
                         </div>
                         <template x-for="(line, i) in o.unmatched" :key="i">
-                            <div class="text-xs py-0.5 border-b last:border-0" x-text="line"></div>
+                            <div class="text-xs py-1 border-b last:border-0 flex items-center gap-2">
+                                <span class="flex-1" x-text="line"></span>
+                                <select :id="`t-${o.id}-${i}`"
+                                        class="border rounded px-1 py-0.5 text-xs">
+                                    <option value="">유형 선택…</option>
+                                    <option value="must_not_include">금지 낱말</option>
+                                    <option value="must_include">필수 문구</option>
+                                    <option value="required_topic">필수 고지</option>
+                                    <option value="forbidden_topic">금지 주제</option>
+                                    <option value="content_source">사실 정보</option>
+                                    <option value="content_axis">추천 키워드</option>
+                                    <option value="conversion">대상 조건</option>
+                                    <option value="channel">매체 제한</option>
+                                    <option value="asset">사용 자료</option>
+                                    <option value="advisory">사람 확인</option>
+                                </select>
+                                <button @click="addRule(o, line, `t-${o.id}-${i}`)"
+                                        class="border px-2 py-0.5 rounded">규칙으로</button>
+                                <button @click="ignore(o, line)"
+                                        class="text-gray-400 px-1">무시</button>
+                            </div>
                         </template>
                     </div>
                 </div>
@@ -167,6 +193,11 @@
 
                 <!-- 상세 -->
                 <div x-show="openId === o.id" x-cloak class="border-t px-4 py-4 text-sm">
+                    <div x-show="!o.rules.length"
+                         class="mb-4 text-xs text-gray-500 border rounded p-3">
+                        규칙이 없습니다. 「규칙 뽑기」를 먼저 실행하세요.
+                        실행했는데도 비어 있으면 위 <b>확인 필요</b> 를 보세요.
+                    </div>
                     <div x-show="o.rules.length" class="mb-4">
                         <div class="text-xs text-gray-500 mb-1">
                             규칙 <span x-text="o.rules.length"></span>건 —
