@@ -111,62 +111,10 @@ class FlowGenerateExecutor:
                     blog.name, e,
                 )
 
-            # 색인 되먹임 — 검색 노출이 죽은 상태에서 계속 발행하면 신호가
-            # 더 나빠진다. 색인률이 낮으면 발행량을 줄이고, 오래 0이면 멈춘다.
-            # 표본이 적으면(새 블로그) 막지 않는다.
-            from .index_feedback import IndexFeedback, is_enabled as _idx_on
-
-            verdict = None
-            try:
-                if await _idx_on(self.db):
-                    base_daily = None
-                    if stage_params:
-                        base_daily = getattr(
-                            stage_params.generate, "daily_count", None)
-                    verdict = await IndexFeedback(self.db).evaluate(
-                        blog_id, base_daily)
-            except Exception as e:  # noqa: BLE001
-                # 색인 조회가 실패했다고 생성을 막으면 안 된다.
-                # 되먹임은 보조 장치이지 통과 조건이 아니다.
-                logger.warning(
-                    "[FLOW_GEN] 색인 되먹임 조회 실패(무시) | blog=%s | %s",
-                    blog.name, e,
-                )
-
-            if verdict is not None:
-                if verdict.stop:
-                    logger.warning(
-                        "[FLOW_GEN] 색인 되먹임으로 생성 정지 | blog=%s | %s",
-                        blog.name, verdict.reason,
-                    )
-                    return {
-                        "success": True, "skipped": True, "blocked": True,
-                        "message": f"생성 정지 ({verdict.reason})",
-                        "index_feedback": verdict.to_dict(),
-                    }
-                if verdict.cap is not None:
-                    try:
-                        made = await self._today_generated_count(blog_id)
-                    except Exception:  # noqa: BLE001
-                        made = 0
-                    if made >= verdict.cap:
-                        # 성장 프로파일 설정과 실제 상한이 다르면 그 사실을
-                        # 밝힌다. 지금까지는 "제한" 이라고만 해 GP 설정이
-                        # 무시된 것처럼 보였다.
-                        gp_note = ""
-                        if base_daily and base_daily != verdict.cap:
-                            gp_note = (
-                                f" · 성장 프로파일 {base_daily}개 → "
-                                f"색인 되먹임으로 {verdict.cap}개"
-                            )
-                        msg = (f"오늘(00시 기준) {made}/{verdict.cap}개 생성 — "
-                               f"{verdict.reason}{gp_note}")
-                        logger.info("[FLOW_GEN] %s | blog=%s", msg, blog.name)
-                        return {
-                            "success": True, "skipped": True,
-                            "message": msg,
-                            "index_feedback": verdict.to_dict(),
-                        }
+            # 색인 되먹임은 **발행 단계**에서 본다. 구글이 보는 것은
+            # 발행된 글이고, 재고로 쌓인 글은 검색 신호에 영향이 없다.
+            # 생성은 아래 min_inventory 재고 상한이 이미 막는다.
+            # 순서도: docs/flowcharts/index_feedback.md
 
             # 디스패치 시점에 결정된 title_id가 있으면 그것을 강제 사용.
             # 재고 정책은 블로그별이므로 글로벌 status='used'는 차단하지 않고
