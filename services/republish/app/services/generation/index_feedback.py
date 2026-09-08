@@ -7,8 +7,12 @@
 실제로 12개 블로그가 전부 색인 0건인 상태에서 하루 30개씩 발행하고 있었다.
 색인 점검 기능은 있었지만 그 결과가 발행 결정에 전혀 반영되지 않았다.
 
+**생성이 아니라 발행에 건다.** 구글이 보는 것은 발행된 글이고, 재고로
+쌓인 글은 검색 신호에 영향이 없다. 생성까지 막았더니 재고가 비어, 색인이
+회복돼도 낼 글이 없었다(2026-09-08 실측: 미발행 재고 0~3개).
+
 진단: docs/plans/search_visibility_all_blogs.md
-순서도: docs/flowcharts/index_feedback_and_quality_gate.md
+순서도: docs/flowcharts/index_feedback.md
 """
 from __future__ import annotations
 
@@ -39,6 +43,10 @@ CAP_POOR = 1             # 10% 미만이면 하루 1개
 STOP_AFTER_DAYS = 30
 
 SETTING_KEY = "index_feedback_enabled"
+# 정지는 따로 켠다. 실측(2026-09-08) 12개 블로그가 36~79일째 색인 0건이라
+# 조건을 그대로 적용하면 전 블로그 발행이 한 번에 멈춘다. 멈출지는 운영
+# 판단이므로 기본은 꺼 두고, 조건 충족 사실만 로그에 남긴다.
+SETTING_STOP_KEY = "index_feedback_stop_enabled"
 
 
 @dataclass
@@ -98,13 +106,18 @@ def _verdict(checked: int, indexed: int, oldest_days: int,
         )
     return IndexVerdict(
         checked, indexed, 0.0, 0, True,
-        f"{oldest_days}일간 색인 0건 — 생성을 멈춥니다. "
+        f"{oldest_days}일간 색인 0건 — 발행을 멈춥니다. "
         "발행을 늘리기 전에 콘텐츠 품질 점검이 필요합니다",
     )
 
 
 class IndexFeedback:
-    """블로그의 색인 상태를 읽어 발행 상한을 정한다."""
+    """블로그의 색인 상태를 읽어 **발행** 상한을 정한다.
+
+    생성은 보지 않는다. 구글이 보는 것은 발행된 글이고, 재고로 쌓인 글은
+    검색 신호에 영향이 없다. 생성은 `min_inventory` 재고 상한이 이미 막는다.
+    순서도: docs/flowcharts/index_feedback.md
+    """
 
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -120,7 +133,6 @@ class IndexFeedback:
                 func.count(SearchVisibilityUrl.id),
                 func.count(SearchVisibilityUrl.id).filter(
                     SearchVisibilityUrl.index_state == "indexed"),
-                func.min(SearchVisibilityUrl.published_at),
             ).where(
                 SearchVisibilityUrl.blog_id == blog_id,
                 SearchVisibilityUrl.index_state != "unknown",
@@ -128,21 +140,81 @@ class IndexFeedback:
             )
         )).one()
 
-        checked, indexed, oldest = row[0] or 0, row[1] or 0, row[2]
+        checked, indexed = row[0] or 0, row[1] or 0
+
+        # 색인 0건일 때만, **창을 걷고** 첫 점검 글까지 거슬러 잰다.
+        # 창(30일) 안에서 재면 값이 30을 넘을 수 없어 정지 조건이 영원히
+        # 성립하지 않는다(2026-09-08 실측: 12개 블로그 전부 29일차).
         oldest_days = 0
-        if oldest:
-            # PostgreSQL 은 aware, SQLite 는 naive 로 돌려준다.
-            # 섞어서 빼면 TypeError 가 난다(052 에서 겪은 문제).
-            if oldest.tzinfo is None:
-                oldest = oldest.replace(tzinfo=timezone.utc)
-            oldest_days = (datetime.now(timezone.utc) - oldest).days
+        if checked and not indexed:
+            oldest = (await self.db.execute(
+                select(func.min(SearchVisibilityUrl.published_at)).where(
+                    SearchVisibilityUrl.blog_id == blog_id,
+                    SearchVisibilityUrl.index_state != "unknown",
+                )
+            )).scalar()
+            if oldest:
+                # PostgreSQL 은 aware, SQLite 는 naive 로 돌려준다.
+                # 섞어서 빼면 TypeError 가 난다(052 에서 겪은 문제).
+                if oldest.tzinfo is None:
+                    oldest = oldest.replace(tzinfo=timezone.utc)
+                oldest_days = (datetime.now(timezone.utc) - oldest).days
 
         verdict = _verdict(checked, indexed, oldest_days, base_daily)
+        if verdict.stop and not await stop_enabled(self.db):
+            verdict = IndexVerdict(
+                verdict.checked, verdict.indexed, verdict.ratio,
+                CAP_POOR, False,
+                f"{oldest_days}일간 색인 0건 — 하루 {CAP_POOR}개로 제한"
+                f"(정지 조건 충족, 정지는 꺼져 있음)",
+            )
         if verdict.cap is not None or verdict.stop:
             logger.info(
                 "[INDEX_FEEDBACK] blog=%s | %s", blog_id, verdict.reason,
             )
         return verdict
+
+
+def effective_cap(gp_daily: Optional[int],
+                  verdict: Optional[IndexVerdict]) -> Optional[int]:
+    """오늘 실제로 허용할 발행 수. 둘 중 작은 값이다.
+
+    Args:
+        gp_daily: 성장 프로파일이 정한 하루 발행 수
+        verdict: 색인 되먹임 판정(None 이면 되먹임 꺼짐)
+
+    Returns:
+        상한. None 이면 제한 없음
+    """
+    caps = [c for c in (gp_daily, verdict.cap if verdict else None)
+            if c is not None]
+    return min(caps) if caps else None
+
+
+def cap_note(gp_daily: Optional[int],
+             verdict: Optional[IndexVerdict]) -> str:
+    """왜 줄었는지 한 줄로. 막을 때는 사유를 반드시 남긴다.
+
+    성장 프로파일 값과 실제 상한이 다르면 그 사실을 밝힌다. "제한" 이라고만
+    쓰면 GP 설정이 무시된 것처럼 보인다.
+    """
+    if verdict is None or verdict.cap is None:
+        return ""
+    note = f" — {verdict.reason}"
+    if gp_daily and gp_daily != verdict.cap:
+        note += (f" · 성장 프로파일 {gp_daily}개 → "
+                 f"되먹임 {verdict.cap}개")
+    return note
+
+
+async def stop_enabled(db: AsyncSession) -> bool:
+    """정지까지 적용할지. **기본 꺼짐** — 켜면 해당 블로그 발행이 멈춘다."""
+    from ..system_settings_service import SystemSettingsService
+
+    raw = await SystemSettingsService.get(SETTING_STOP_KEY, db)
+    if raw is None or raw == "":
+        return False
+    return str(raw).lower() in ("1", "true", "on", "yes")
 
 
 async def is_enabled(db: AsyncSession) -> bool:
