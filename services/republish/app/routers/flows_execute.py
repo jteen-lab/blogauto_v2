@@ -959,6 +959,50 @@ async def _execute_flow_background(
         logger.error(f"[FLOW_BG] 스택 트레이스: {traceback.format_exc()}")
 
 
+async def _resolve_blog_stages(db, flow, blogs) -> Dict[int, dict]:
+    """블로그별 성장 프로파일 단계를 Celery 로 보낼 dict 로.
+
+    스케줄러와 **같은 해석기**를 쓴다. 다른 방식으로 풀면 자동 실행과 수동
+    실행의 하루 횟수가 어긋난다.
+
+    Args:
+        db: DB 세션
+        flow: 대상 플로우
+        blogs: 대상 블로그 목록
+
+    Returns:
+        {blog_id: StageParams dict}. GP 가 없으면 빈 dict
+    """
+    from dataclasses import asdict
+
+    from app.services.generation.flow_execution_context import StageParams
+    from app.services.generation.growth_profile_resolver import (
+        GrowthProfileResolver,
+    )
+
+    gp_settings = None
+    for link in flow.module_links:
+        module = link.module
+        if module and module.module_type and (
+                module.module_type.code == "growth_profile"):
+            gp_settings = module.settings or {}
+            break
+    stages = (gp_settings or {}).get("stages") or []
+    if not stages:
+        return {}
+
+    active_hours = GrowthProfileResolver.count_active_hours(
+        gp_settings.get("schedule_matrix"))
+    out: Dict[int, dict] = {}
+    for blog in blogs:
+        stage_dict = GrowthProfileResolver.resolve_stage_for_blog(
+            blog.total_post_count or 0, stages)
+        if stage_dict:
+            out[blog.id] = asdict(
+                StageParams.from_stage_dict(stage_dict, active_hours))
+    return out
+
+
 async def _build_growth_profile_context(
     modules_by_type: Dict[str, List[Module]],
     blogs: list,
@@ -2109,6 +2153,11 @@ async def execute_single_module(
 
         execution_id = str(uuid.uuid4())
 
+        # 성장 프로파일을 워커까지 들려 보낸다. 예전에는 None 을 넘겨
+        # 수동 실행만 GP 가 통째로 빠졌고, 동작로그에 "성장 프로파일 N개 →
+        # 되먹임 M개" 사유가 안 찍혀 원인을 알 수 없었다(2026-09-08).
+        blog_stage_map = await _resolve_blog_stages(db, flow, blogs)
+
         # Celery 기능 플래그 체크
         
         if await _use_celery("use_celery_generation", db):
@@ -2153,7 +2202,7 @@ async def execute_single_module(
                         priority=PRIORITY_CRITICAL,
                         flow_id=flow_id,
                         user_id=current_user.id,
-                        stage_params_dict=None,
+                        stage_params_dict=blog_stage_map.get(blog.id),
                         force=True,
                     )
                     task_ids.append(task_id)
