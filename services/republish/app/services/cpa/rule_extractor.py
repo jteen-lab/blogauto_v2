@@ -33,6 +33,30 @@ _NOISE = re.compile(r"^[\s*※#\-=~_·●○◆▶★☆\d\.\)\(]*$")
 # 한 번에 보낼 최대 줄 수. 너무 길면 AI 가 뒤쪽을 흘린다.
 BATCH = 60
 
+# provider 를 안 넘기면 AIService 가 "제공자 미지정" 으로 호출조차 하지 않는다.
+# 실측(2026-09-08): 이 때문에 이사스토리 추출이 통째로 0건이었다.
+DEFAULT_PROVIDERS = ("openai", "google", "deepseek")
+
+
+async def _pick_provider(db) -> Optional[str]:
+    """쓸 수 있는 AI 를 고른다. 활성 키가 있는 것 중 앞선 것."""
+    try:
+        from sqlalchemy import select
+
+        from ...models.ai_api_key import AIApiKey
+
+        rows = (await db.execute(
+            select(AIApiKey.provider).where(AIApiKey.status == "active")
+        )).scalars().all()
+        alive = {str(r) for r in rows}
+        for name in DEFAULT_PROVIDERS:
+            if name in alive:
+                return name
+        return next(iter(alive), None)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[CPA_EXTRACT] AI 키 조회 실패 | %s", e)
+        return None
+
 PROMPT = """다음은 CPA 제휴 마케팅 프로모션의 광고주 안내문입니다.
 각 줄을 "글을 쓸 때 지켜야 할 규칙"으로 바꾸세요.
 
@@ -61,7 +85,15 @@ PROMPT = """다음은 CPA 제휴 마케팅 프로모션의 광고주 안내문�
 강도(severity)는 block(어기면 발행 불가), warn(경고), review(사람 확인)입니다.
 법 위반이 되는 것은 block, 권고는 review 입니다.
 
-규칙으로 바꿀 수 없는 줄(인사말·소개 문장 등)은 결과에 넣지 마세요.
+**광고주 소개 문단은 반드시 content_source 로 만드세요.** 글에 쓸 사실이
+거기 있습니다. 여러 줄이면 줄마다 하나씩 만드세요.
+"이사 불가지역", "나이 제한", "○일 이후 미승인" 같은 대상 제한은 conversion
+으로 만드세요. 대상이 아닌 사람을 부르면 수익이 0 이 됩니다.
+"~할 수 있습니다", "~상이할 수 있습니다" 같은 고지는 required_topic 입니다.
+다운로드 링크·이미지 자료는 asset 입니다.
+
+인사말("캠페인 많은 홍보 부탁드립니다")과 제목 줄만 결과에서 빼세요.
+나머지는 되도록 규칙으로 만드세요 — 빠진 줄은 검사되지 않습니다.
 
 JSON 배열만 출력하세요. 설명하지 마세요.
 [{"line": 원문줄번호, "type": "...", "scope": "...", "target": "...",
@@ -105,25 +137,52 @@ def _valid(rule: Any, lines: Sequence[str]) -> Optional[dict]:
     if isinstance(index, int) and 0 <= index - 1 < len(lines):
         quote = lines[index - 1]
 
+    target = str(rule.get("target") or "")[:100]
+    value = str(rule.get("value") or "")[:300]
+    # 사실 정보·고지는 value 를 비우고 target 만 채워 오는 일이 잦다.
+    # 비어 있으면 프롬프트에도 게이트에도 쓸 수 없다.
+    if not value and kind in ("content_source", "required_topic",
+                              "content_axis", "conversion", "advisory"):
+        value = (target or quote)[:300]
+
     return {
-        "type": kind, "scope": scope,
-        "target": str(rule.get("target") or "")[:100],
-        "value": str(rule.get("value") or "")[:300],
-        "source_quote": quote[:300],
-        "severity": severity,
+        "type": kind, "scope": scope, "target": target, "value": value,
+        "source_quote": quote[:300], "severity": severity,
     }
 
 
+# 따옴표를 빼먹은 값. 실측(2026-09-08): openai 가 {"type": required_topic}
+# 처럼 돌려줘 파싱이 통째로 실패했고, 조용히 규칙 0건이 됐다.
+_BARE = re.compile(r'(:\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*[,}])')
+
+
+def _repair(text: str) -> str:
+    """따옴표 없는 값에 따옴표를 씌운다. true/false/null 은 그대로 둔다."""
+    def fix(m):
+        word = m.group(2)
+        if word in ("true", "false", "null"):
+            return m.group(0)
+        return f'{m.group(1)}"{word}"{m.group(3)}'
+
+    return _BARE.sub(fix, text)
+
+
 def _parse_response(text: str, lines: Sequence[str]) -> List[dict]:
-    """AI 응답에서 JSON 배열을 건져낸다."""
+    """AI 응답에서 JSON 배열을 건져낸다. 깨져 있으면 한 번 고쳐 본다."""
     body = (text or "").strip()
     start, end = body.find("["), body.rfind("]")
     if start < 0 or end <= start:
         return []
+    chunk = body[start:end + 1]
     try:
-        raw = json.loads(body[start:end + 1])
+        raw = json.loads(chunk)
     except Exception:  # noqa: BLE001
-        return []
+        try:
+            raw = json.loads(_repair(chunk))
+            logger.info("[CPA_EXTRACT] 깨진 JSON 복구 성공")
+        except Exception:  # noqa: BLE001
+            logger.warning("[CPA_EXTRACT] JSON 파싱 실패 | %s", chunk[:120])
+            return []
     if not isinstance(raw, list):
         return []
     out = []
@@ -132,6 +191,16 @@ def _parse_response(text: str, lines: Sequence[str]) -> List[dict]:
         if found:
             out.append(found)
     return out
+
+
+def _text_of(result: Any) -> str:
+    """AIService 응답에서 본문을 꺼낸다. dict·객체·문자열 다 온다."""
+    if isinstance(result, str):
+        return result
+    if isinstance(result, dict):
+        return str(result.get("content") or result.get("text") or "")
+    return str(getattr(result, "content", None)
+               or getattr(result, "text", "") or "")
 
 
 async def extract(ai_service: Any, raw_text: str,
@@ -146,14 +215,25 @@ async def extract(ai_service: Any, raw_text: str,
 
     Returns:
         {"rules": [...], "unmatched": [...], "verticals": [...],
-         "coverage": 0.0~1.0}
+         "coverage": 0.0~1.0, "ai_error": str}
         `unmatched` 는 규칙이 되지 못한 줄이다. **검사되지 않는다.**
+        `ai_error` 가 있으면 AI 추출이 실패한 것이다 — 법정 사전만 남는다.
     """
     lines = _lines(raw_text)
     if not lines:
-        return {"rules": [], "unmatched": [], "verticals": [], "coverage": None}
+        return {"rules": [], "unmatched": [], "verticals": [],
+                "coverage": None, "ai_error": ""}
+
+    if not provider:
+        provider = await _pick_provider(getattr(ai_service, "db", None))
+    if not provider:
+        logger.error("[CPA_EXTRACT] 쓸 수 있는 AI 가 없다 — 추출 불가")
+        return {"rules": [], "unmatched": lines, "verticals": [],
+                "coverage": 0.0,
+                "ai_error": "활성 AI 키가 없어 규칙을 뽑지 못했습니다"}
 
     rules: List[dict] = []
+    ai_error = ""
     for start in range(0, len(lines), BATCH):
         chunk = lines[start:start + BATCH]
         numbered = "\n".join(f"{start + i + 1}. {line}"
@@ -163,14 +243,33 @@ async def extract(ai_service: Any, raw_text: str,
             result = await ai_service.generate(
                 prompt=PROMPT % numbered, provider=provider, model=model,
                 max_tokens=4000, temperature=0.1)
-        except Exception as e:  # noqa: BLE001 — 추출 실패로 등록을 막지 않는다
+        except Exception as e:  # noqa: BLE001 — 등록 자체는 막지 않는다
             logger.warning("[CPA_EXTRACT] 호출 실패 | %s", e)
+            ai_error = f"AI 호출 실패: {e}"
             continue
-        text = result if isinstance(result, str) else (
-            getattr(result, "content", None) or getattr(result, "text", "")
-            or (result or {}).get("content", "")
-            if isinstance(result, dict) else "")
-        rules.extend(_parse_response(str(text), lines))
+        if not result:
+            # AIService 는 실패를 None 으로 돌려준다. 조용히 넘기면
+            # "규칙이 없는 오퍼" 로 보여 사용자가 원인을 알 수 없다.
+            ai_error = "AI 응답이 비었습니다 (제공자·키 확인 필요)"
+            logger.error("[CPA_EXTRACT] 빈 응답 | provider=%s", provider)
+            continue
+        text = _text_of(result)
+        found = _parse_response(str(text), lines)
+        if not found:
+            # 형식이 깨진 것이지 내용이 없는 게 아니다. 한 번 더 부른다.
+            try:
+                retry = await ai_service.generate(
+                    prompt=PROMPT % numbered + "\n\n반드시 올바른 JSON 만 출력하세요.",
+                    provider=provider, model=model,
+                    max_tokens=4000, temperature=0.0)
+            except Exception as e:  # noqa: BLE001
+                retry = None
+                ai_error = f"재시도 실패: {e}"
+            if retry:
+                found = _parse_response(str(_text_of(retry)), lines)
+            if not found:
+                ai_error = ai_error or "AI 응답을 규칙으로 바꾸지 못했습니다"
+        rules.extend(found)
 
     used = {r["source_quote"] for r in rules if r["source_quote"]}
     unmatched = [line for line in lines if line not in used]
@@ -184,5 +283,10 @@ async def extract(ai_service: Any, raw_text: str,
                 len(lines), len(rules), len(unmatched),
                 int((coverage or 0) * 100), verticals)
 
+    if not any(r for r in rules
+               if not str(r.get("source_quote", "")).startswith("[법정]")):
+        ai_error = ai_error or "AI 가 규칙을 하나도 만들지 못했습니다"
+
     return {"rules": rules, "unmatched": unmatched,
-            "verticals": verticals, "coverage": coverage}
+            "verticals": verticals, "coverage": coverage,
+            "ai_error": ai_error}
