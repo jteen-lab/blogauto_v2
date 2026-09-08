@@ -12,6 +12,9 @@ function cpaApp() {
         filter: '',
         showForm: false,
         openId: null,
+        showUnmatched: null,
+        showConflicts: null,
+        preview: '',
         rawText: '',
         busy: false,
         STATES: [
@@ -53,6 +56,26 @@ function cpaApp() {
             }
         },
 
+        async extract(o) {
+            if (!confirm(`"${o.name}" 의 원문에서 규칙을 뽑습니다.\n\n`
+                + '뽑고 나면 승인 전 상태로 되돌아갑니다. 규칙이 바뀌었으니 다시 확인해야 합니다.')) return;
+            this.busy = true;
+            try {
+                const r = await fetch(`/api/v1/cpa/offers/${o.id}/extract`, {
+                    method: 'POST', credentials: 'include',
+                });
+                const d = await r.json();
+                if (!r.ok) { alert(d.detail || '추출 실패'); return; }
+                const off = d.offer;
+                alert(`규칙 ${off.rules.length}건\n`
+                    + `미분류 ${off.unmatched.length}개 (검사되지 않음)\n`
+                    + `충돌 ${off.conflicts.length}건`);
+                await this.load();
+            } finally {
+                this.busy = false;
+            }
+        },
+
         async open(o) {
             if (this.openId === o.id) { this.openId = null; return; }
             const r = await fetch(`/api/v1/cpa/offers/${o.id}`, { credentials: 'include' });
@@ -82,6 +105,49 @@ function cpaApp() {
             const d = await r.json();
             if (!r.ok) { alert(d.detail || '승인 실패'); return; }
             await this.load();
+        },
+
+        async makeTitles(o) {
+            this.busy = true;
+            try {
+                const r = await fetch(`/api/v1/cpa/offers/${o.id}/titles`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ limit: 40 }),
+                });
+                const d = await r.json();
+                if (!r.ok) { alert(d.detail || '생성 실패'); return; }
+                // 규칙에 걸려 버린 후보를 함께 알린다. 왜 적게 나왔는지 알아야 한다.
+                alert(`제목 ${d.added}개 추가\n`
+                    + `키워드 ${(d.keywords || []).length}개\n`
+                    + `규칙에 걸려 제외 ${(d.skipped || []).length}개`);
+            } finally {
+                this.busy = false;
+            }
+        },
+
+        async showPrompt(o) {
+            const r = await fetch(`/api/v1/cpa/offers/${o.id}/prompt`, {
+                credentials: 'include' });
+            if (!r.ok) return;
+            const d = await r.json();
+            this.preview = d.prompt || '(지시문 없음)';
+        },
+
+        async showPage(o) {
+            const r = await fetch(`/api/v1/cpa/offers/${o.id}/consult-page`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ intro: '' }),
+            });
+            if (!r.ok) return;
+            const d = await r.json();
+            const warn = d.thin
+                ? `⚠ 얇습니다 (${d.chars}자) — 부족: ${(d.missing || []).join(', ')}\n\n`
+                : `분량 ${d.chars}자\n\n`;
+            this.preview = warn + d.html;
         },
 
         stateLabel(o) {

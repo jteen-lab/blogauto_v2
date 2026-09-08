@@ -94,7 +94,11 @@
                         </div>
                     </div>
                     <div class="flex gap-2 shrink-0">
+                        <button @click="extract(o)" :disabled="busy"
+                                class="text-sm border px-3 py-1.5 rounded disabled:opacity-50">규칙 뽑기</button>
                         <button @click="open(o)" class="text-sm border px-3 py-1.5 rounded">확인</button>
+                        <button x-show="o.usable" @click="makeTitles(o)" :disabled="busy"
+                                class="text-sm border px-3 py-1.5 rounded disabled:opacity-50">제목 생성</button>
                         <button x-show="o.status === 'draft' || o.status === 'recheck'"
                                 @click="confirm_(o)"
                                 class="text-sm bg-primary text-white px-3 py-1.5 rounded">승인</button>
@@ -111,10 +115,16 @@
                                 (자유 서술 규칙 추출은 다음 단계)
                             </li>
                             <li x-show="o.unmatched.length">
-                                · 미분류 문장 <b x-text="o.unmatched.length"></b>개 — 검사되지 않습니다
+                                · 미분류 문장 <b x-text="o.unmatched.length"></b>개 —
+                                <b>검사되지 않습니다</b>
+                                <button @click="showUnmatched = (showUnmatched === o.id ? null : o.id)"
+                                        class="underline ml-1">보기</button>
                             </li>
                             <li x-show="o.conflicts.length">
-                                · 충돌 <b x-text="o.conflicts.length"></b>건
+                                · 충돌 <b x-text="o.conflicts.length"></b>건 —
+                                <b>사람이 판단해야 합니다</b>
+                                <button @click="showConflicts = (showConflicts === o.id ? null : o.id)"
+                                        class="underline ml-1">보기</button>
                             </li>
                             <li x-show="o.advisory_count">
                                 · 사람이 봐야 할 항목 <b x-text="o.advisory_count"></b>건
@@ -126,8 +136,57 @@
                     </div>
                 </div>
 
+                <!-- 미분류 문장 -->
+                <div x-show="showUnmatched === o.id" x-cloak class="px-4 pb-4">
+                    <div class="border rounded bg-gray-50 p-3 max-h-64 overflow-auto">
+                        <div class="text-xs text-gray-500 mb-2">
+                            규칙으로 바뀌지 않은 문장입니다. 이 내용은 검사에 쓰이지 않습니다.
+                        </div>
+                        <template x-for="(line, i) in o.unmatched" :key="i">
+                            <div class="text-xs py-0.5 border-b last:border-0" x-text="line"></div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- 충돌 -->
+                <div x-show="showConflicts === o.id" x-cloak class="px-4 pb-4">
+                    <div class="border border-red-200 rounded bg-red-50 p-3 space-y-2">
+                        <template x-for="(c, i) in o.conflicts" :key="i">
+                            <div class="text-xs">
+                                <div class="font-medium text-red-900" x-text="c.hint"></div>
+                                <div class="text-red-700 mt-0.5">
+                                    규칙: <span x-text="c.rule_quote"></span>
+                                </div>
+                                <div class="text-red-700" x-show="c.text_quote">
+                                    본문: <span x-text="c.text_quote"></span>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
                 <!-- 상세 -->
                 <div x-show="openId === o.id" x-cloak class="border-t px-4 py-4 text-sm">
+                    <div x-show="o.rules.length" class="mb-4">
+                        <div class="text-xs text-gray-500 mb-1">
+                            규칙 <span x-text="o.rules.length"></span>건 —
+                            차단 <span x-text="o.counts.block"></span> ·
+                            경고 <span x-text="o.counts.warn"></span> ·
+                            확인 <span x-text="o.counts.review"></span>
+                        </div>
+                        <div class="border rounded max-h-72 overflow-auto">
+                            <template x-for="(r, i) in o.rules" :key="i">
+                                <div class="px-2 py-1 text-xs border-b last:border-0 flex gap-2">
+                                    <span class="shrink-0 w-32 text-gray-500" x-text="r.type"></span>
+                                    <span class="shrink-0 w-14 text-gray-400" x-text="r.scope"></span>
+                                    <span class="shrink-0 w-10"
+                                          :class="r.severity === 'block' ? 'text-red-600' : 'text-amber-600'"
+                                          x-text="r.severity === 'block' ? '차단' : (r.severity === 'warn' ? '경고' : '확인')"></span>
+                                    <span class="truncate" x-text="r.value || r.target"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <div class="text-xs text-gray-500 mb-1">전환</div>
@@ -151,6 +210,18 @@
                                    class="w-full border rounded px-2 py-1 text-xs">
                         </div>
                     </div>
+                    <div class="mt-4 flex gap-2">
+                        <button @click="showPrompt(o)" class="text-xs border px-2 py-1 rounded">
+                            글 지시문 보기
+                        </button>
+                        <button @click="showPage(o)" class="text-xs border px-2 py-1 rounded">
+                            상담 페이지 미리보기
+                        </button>
+                    </div>
+                    <pre x-show="preview" x-cloak
+                         class="mt-2 bg-gray-50 border rounded p-3 text-xs whitespace-pre-wrap max-h-80 overflow-auto"
+                         x-text="preview"></pre>
+
                     <details class="mt-4">
                         <summary class="cursor-pointer text-xs text-gray-500">원문 보기</summary>
                         <pre class="mt-2 bg-gray-50 border rounded p-3 text-xs whitespace-pre-wrap"
