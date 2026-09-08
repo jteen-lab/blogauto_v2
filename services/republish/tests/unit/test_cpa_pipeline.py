@@ -348,3 +348,101 @@ class TestWiring:
         assert "cpa_offer_id" in model
         api = (ROOT / "app/routers/cpa.py").read_text(encoding="utf-8")
         assert "cpa_offer_id=offer_id" in api
+
+
+# ── 추출 실패를 숨기지 않는다 ──────────────────────────
+
+class TestExtractionRobustness:
+    """실측(2026-09-08): 이사스토리 추출이 통째로 0건이었다.
+
+    원인 둘. provider 를 안 넘겨 AI 가 호출조차 안 됐고, 응답 JSON 이
+    깨졌을 때 조용히 0건이 됐다. 둘 다 화면에는 "규칙 없는 오퍼" 로 보였다.
+    """
+
+    def test_repairs_unquoted_values(self):
+        """openai 가 {"type": required_topic} 처럼 돌려준다."""
+        from app.services.cpa.rule_extractor import _parse_response
+
+        bad = ('[{"line": 1, "type": required_topic, "scope": all, '
+               '"target": "고지", "severity": warn}]')
+        got = _parse_response(bad, ["원문 줄"])
+        assert len(got) == 1
+        assert got[0]["type"] == "required_topic"
+        assert got[0]["severity"] == "warn"
+
+    def test_keeps_true_false_null(self):
+        from app.services.cpa.rule_extractor import _repair
+        import json
+
+        assert json.loads(_repair('[{"a": true, "b": null}]'))[0]["a"] is True
+
+    def test_empty_value_filled_from_target(self):
+        """content_source 는 value 를 비우고 target 만 채워 오는 일이 잦다."""
+        from app.services.cpa.rule_extractor import _valid
+
+        got = _valid({"type": "content_source", "target": "서면역 1분거리",
+                      "value": ""}, [])
+        assert got["value"] == "서면역 1분거리"
+
+    def test_block_types_keep_empty_value(self):
+        """금지어는 값이 비면 규칙이 아니다. 채우면 엉뚱한 것을 막는다."""
+        from app.services.cpa.rule_extractor import _valid
+
+        got = _valid({"type": "must_not_include", "target": "설명",
+                      "value": ""}, [])
+        assert got["value"] == ""
+
+    def test_provider_default_documented(self):
+        src = (ROOT / "app/services/cpa/rule_extractor.py").read_text(
+            encoding="utf-8")
+        assert "_pick_provider" in src
+        assert "DEFAULT_PROVIDERS" in src
+
+    def test_failure_is_surfaced(self):
+        """조용히 0건이 되면 사용자는 원인을 알 수 없다."""
+        src = (ROOT / "app/services/cpa/rule_extractor.py").read_text(
+            encoding="utf-8")
+        assert "ai_error" in src
+        api = (ROOT / "app/routers/cpa.py").read_text(encoding="utf-8")
+        assert 'found.get("ai_error")' in api
+
+
+class TestUnmatchedWorkflow:
+    """미분류를 보여주기만 하면 사용자가 할 수 있는 일이 없다."""
+
+    SRC = (ROOT / "app/routers/cpa.py").read_text(encoding="utf-8")
+    HTML = (ROOT / "app/templates/cpa/index.html").read_text(encoding="utf-8")
+
+    def test_can_promote_to_rule(self):
+        assert "async def add_rule" in self.SRC
+        assert "drop_unmatched" in self.SRC
+
+    def test_can_ignore(self):
+        assert "async def ignore_unmatched" in self.SRC
+
+    def test_adding_a_rule_requires_reconfirm(self):
+        """규칙이 바뀌면 승인 상태를 유지하면 안 된다."""
+        block = self.SRC[self.SRC.index("async def add_rule"):]
+        block = block[:block.index("class IgnoreIn")]
+        assert "ST_DRAFT" in block
+
+    def test_screen_offers_the_actions(self):
+        assert "규칙으로" in self.HTML and "무시" in self.HTML
+
+    def test_unknown_type_rejected(self):
+        assert "모르는 유형" in self.SRC
+
+
+class TestTitleFeedback:
+    """'제목 0개 추가' 만 보여주면 무엇을 해야 할지 알 수 없다."""
+
+    SRC = (ROOT / "app/routers/cpa.py").read_text(encoding="utf-8")
+
+    def test_reason_when_no_keywords(self):
+        assert "추천 키워드가 없습니다" in self.SRC
+
+    def test_reason_when_all_duplicated(self):
+        assert "이미 있습니다" in self.SRC
+
+    def test_reason_when_all_blocked(self):
+        assert "모두 규칙에 걸렸습니다" in self.SRC
