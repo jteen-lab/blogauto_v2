@@ -90,6 +90,12 @@ class CpaOffer(Base):
     # 오퍼 내부 모순·사전 충돌
     conflicts = Column(JSON, nullable=True, default=list)
 
+    # 이 오퍼가 **쓰는** 하위주제. 소유가 아니라 참조다 —
+    # 애드센스 블로그도 같은 하위주제를 계속 쓴다.
+    # 주제 단위로 잡으면 그 니치를 쓰던 블로그가 통째로 넘어간다
+    # (실측: 생활 정보 = 제목 879건·블로그 7개).
+    subtopic_ids = Column(JSON, nullable=True, default=list)
+
     # 이 오퍼를 담당하는 블로그. 비면 아무도 이 오퍼의 제목을 쓰지 않는다.
     # 애드센스 블로그가 CPA 제목을 가져가면 규정 위반 글이 엉뚱한 곳에 나간다.
     blog_ids = Column(JSON, nullable=True, default=list)
@@ -164,6 +170,7 @@ class CpaOffer(Base):
             "landing_url": self.landing_url or "",
             "images": self.images or [],
             "blog_ids": self.blog_ids or [],
+            "subtopic_ids": self.subtopic_ids or [],
             "status": self.status, "usable": self.usable,
             "overdue": self.overdue, "coverage": self.coverage,
             "counts": self.counts(),
