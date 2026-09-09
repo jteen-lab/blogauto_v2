@@ -216,17 +216,24 @@ class TestCompanyCheck:
         assert company_in("우리은행 신용대출 한도") == "우리은행"
         assert company_in("전세자금대출 조건 정리") is None
 
-    def test_unverified_company_needs_corroboration(self):
-        """확인 못한 회사는 공식 문서 1건 지름길을 못 쓴다."""
-        held = evaluate(["금융/대출"], TITLE, False,
-                        _docs("https://www.fss.or.kr/a"), company_known=False)
-        assert held.grade == GRADE_C
+    def test_unverified_company_does_not_lower_the_grade(self):
+        """공시 목록은 173곳뿐이다. 대부업·중개업·신협은 애초에 없다.
 
-        passed = evaluate(["금융/대출"], TITLE, False,
-                          _docs("https://www.fss.or.kr/a",
-                                "https://blog.naver.com/b"),
-                          company_known=False)
-        assert passed.grade == GRADE_B
+        실측(2026-09-09): 이 규칙으로 9건이 막혔는데 진짜로 막았어야 할
+        것은 하나도 없었다 — '에스앤에스파이낸셜대부'(등록 대부업자),
+        '어르신 교통카드'(회사가 아님). 등급은 문서 근거로만 정한다.
+        """
+        for known in (True, False, None):
+            found = evaluate(["금융/대출"], TITLE, False,
+                             _docs("https://www.fss.or.kr/a"),
+                             company_known=known)
+            assert found.grade == GRADE_B, f"company_known={known}"
+            assert found.hold is False
+
+    def test_caution_still_reaches_the_prompt(self):
+        """등급은 안 낮추되 주의는 남긴다."""
+        text = directive(Evidence(grade=GRADE_B, company_known=False))
+        assert "확인하지 못했습니다" in text
 
     def test_directive_never_declares_illegal(self):
         """실재하는 회사를 못 찾았을 뿐일 수 있다. 단정하면 허위가 된다."""

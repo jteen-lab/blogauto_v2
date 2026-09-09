@@ -215,16 +215,19 @@ def evaluate(
         found.reasons.append("공식 공시에서 이 상품을 찾음")
         return found
 
-    if company_known is False:
-        found.reasons.append("회사가 공시 목록에서 확인되지 않음")
-        if len(docs) >= MIN_SOURCES and fresh_docs >= 1:
-            found.grade = GRADE_B
-            found.reasons.append(f"자료 {len(docs)}건(최근 {fresh_docs}건)")
-            return found
-        found.grade = GRADE_C
-        found.reasons.append("교차 확인 부족")
-        logger.info("[EVIDENCE] C 등급 | '%s' | %s", title[:40], found.summary())
-        return found
+    # 회사가 공시 목록에 없다고 등급을 낮추지 않는다.
+    #
+    # 그 목록은 금융상품한눈에에 참여하는 173곳뿐이다(은행18·여전48·
+    # 저축은행80·보험20·금투7). 등록 대부업자 수천 곳, 중개업, 신협,
+    # 새마을금고는 애초에 들어 있지 않다.
+    #
+    # 실측(2026-09-09): 이 규칙으로 9건이 막혔는데 **진짜로 막았어야 할
+    # 것은 하나도 없었다.** '에스앤에스파이낸셜대부'(등록 대부업자),
+    # '어르신 교통카드'(회사가 아님) 같은 것들이었다. AK론도 자료 0건으로
+    # 이미 C였다 — 회사 확인이 잡은 게 아니다.
+    #
+    # 회사 미확인은 **프롬프트 주의문구**로만 다룬다(directive 참조).
+    # 등급은 문서 근거로 정한다.
 
     if official_docs >= 1:
         found.grade = GRADE_B
