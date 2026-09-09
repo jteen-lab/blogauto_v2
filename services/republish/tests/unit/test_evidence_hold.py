@@ -313,3 +313,62 @@ class TestFreshnessSource:
             encoding="utf-8")
         assert "postdates=getattr(ref_result" in src
         assert "company_known=getattr(ref_result" in src
+
+
+class TestDigestPathCounted:
+    """통합 요약을 쓰면 summaries 가 빈다 — 그걸 자료 수로 세면 안 된다.
+
+    2026-09-09 군타: 관문2를 10건이 통과했는데도 "관련 자료를 찾지 못함" 으로
+    3회 연속 보류됐다. 인생꿀팁도 같은 증상. 자료를 모으고도 발행이 멈췄다.
+    """
+
+    def _result(self, **kw):
+        from app.services.generation.reference_collector import (
+            ReferenceCollectionResult,
+        )
+
+        base = dict(count=1, summaries=[], sources=[], digest="")
+        base.update(kw)
+        return ReferenceCollectionResult(**base)
+
+    def test_digest_path_uses_source_urls(self):
+        got = self._result(digest="정리문",
+                           sources=["https://a.com/1", "https://b.com/2"])
+        assert [d.url for d in got.evidence_documents()] == [
+            "https://a.com/1", "https://b.com/2"]
+
+    def test_summary_path_still_used(self):
+        docs = [SimpleNamespace(url="https://c.com/1", summary="x")]
+        assert self._result(summaries=docs).evidence_documents() == docs
+
+    def test_empty_when_nothing_collected(self):
+        assert self._result().evidence_documents() == []
+
+    def test_blank_urls_dropped(self):
+        got = self._result(digest="x", sources=["", "https://a.com/1", None])
+        assert len(got.evidence_documents()) == 1
+
+    def test_grade_changes_with_the_fix(self):
+        """같은 수집 결과가 C(보류)에서 B(생성)로 바뀐다."""
+        held = evaluate(["재테크/돈관리"], "20대 적금 추천 우대금리", False,
+                        self._result(digest="정리문").evidence_documents())
+        assert held.grade == GRADE_C
+
+        passed = evaluate(
+            ["재테크/돈관리"], "20대 적금 추천 우대금리", False,
+            self._result(digest="정리문", sources=[
+                "https://blog.naver.com/a", "https://x.tistory.com/b",
+                "https://www.fss.or.kr/c"]).evidence_documents())
+        assert passed.grade == GRADE_B
+        assert passed.hold is False
+
+    def test_digest_forbids_numbers(self):
+        """여러 문서를 한 덩어리로 합쳤으니 출처별 교차 확인은 못 한다."""
+        got = self._result(digest="연 6.0% 라고 합니다",
+                           sources=["https://a.com/1", "https://b.com/2"])
+        assert all(not d.summary for d in got.evidence_documents())
+
+    def test_generator_uses_the_helper(self):
+        src = (ROOT / "app/services/generation/generator.py").read_text(
+            encoding="utf-8")
+        assert "evidence_documents()" in src
