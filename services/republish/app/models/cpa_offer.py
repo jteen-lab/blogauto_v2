@@ -90,6 +90,10 @@ class CpaOffer(Base):
     # 오퍼 내부 모순·사전 충돌
     conflicts = Column(JSON, nullable=True, default=list)
 
+    # 이 오퍼를 담당하는 블로그. 비면 아무도 이 오퍼의 제목을 쓰지 않는다.
+    # 애드센스 블로그가 CPA 제목을 가져가면 규정 위반 글이 엉뚱한 곳에 나간다.
+    blog_ids = Column(JSON, nullable=True, default=list)
+
     landing_url = Column(String(500), nullable=True)
     subid_param = Column(String(50), nullable=True, comment="서브아이디 파라미터")
 
@@ -152,6 +156,7 @@ class CpaOffer(Base):
             "rules": self.rules or [], "unmatched": self.unmatched or [],
             "conflicts": self.conflicts or [],
             "landing_url": self.landing_url or "",
+            "blog_ids": self.blog_ids or [],
             "status": self.status, "usable": self.usable,
             "overdue": self.overdue, "coverage": self.coverage,
             "counts": self.counts(),
