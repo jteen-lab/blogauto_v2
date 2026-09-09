@@ -8,7 +8,6 @@ import pathlib
 
 import pytest
 
-from app.models.category import Topic
 from app.models.title import MainTitle, TempTitle
 from app.services.cpa import scope
 
@@ -32,16 +31,16 @@ class TestCondition:
         cond = scope.condition(model, wanted, topics, has_offer_column=offer)
         return str(cond) if cond is not None else ""
 
-    def test_cpa_matches_niche_or_own_offer(self):
+    def test_cpa_matches_referenced_subtopic_or_own_offer(self):
         sql = self._sql(MainTitle, "cpa", {5, 7}, offer=True)
-        assert "topic_id IN" in sql and "cpa_offer_id IS NOT NULL" in sql
+        assert "subtopic_id IN" in sql and "cpa_offer_id IS NOT NULL" in sql
 
     def test_adsense_is_the_complement(self):
         sql = self._sql(MainTitle, "adsense", {5}, offer=True)
         assert sql.startswith("NOT (")
 
-    def test_null_topic_stays_in_adsense(self):
-        """주제 없는 일반 제목이 빠지면 목록이 통째로 어긋난다.
+    def test_null_subtopic_stays_in_adsense(self):
+        """하위주제 없는 일반 제목이 빠지면 목록이 통째로 어긋난다.
 
         NULL 가드가 없으면 `topic_id IN (...)` 이 NULL 이 되고
         NOT(NULL) 도 NULL 이라 그 행이 사라진다.
@@ -54,20 +53,23 @@ class TestCondition:
         assert self._sql(MainTitle, "cpa", set()) == "main_titles.id IS NULL"
         assert self._sql(MainTitle, "adsense", set()) == ""
 
-    def test_topic_uses_its_own_column(self):
-        assert "cpa_offer_id IS NOT NULL" in str(
-            scope.topic_condition(Topic, "cpa"))
-        assert "cpa_offer_id IS NULL" in str(
-            scope.topic_condition(Topic, "adsense"))
+    def test_topic_filter_is_derived(self):
+        """주제는 소유되지 않는다. 오퍼가 쓰는 하위주제로 파생 판정한다."""
+        from types import SimpleNamespace as NS
+
+        rows = [NS(id=1), NS(id=2)]
+        assert [t.id for t in scope.topic_filter(rows, "cpa", {1})] == [1]
+        assert [t.id for t in scope.topic_filter(rows, "adsense", {1})] == [2]
+        assert len(scope.topic_filter(rows, "all", {1})) == 2
 
 
 class TestRowJudgement:
-    def test_niche_decides(self):
+    def test_referenced_subtopic_decides(self):
         assert scope.is_cpa_row(5, {5, 7}) is True
         assert scope.is_cpa_row(9, {5, 7}) is False
 
     def test_own_offer_wins(self):
-        """오퍼가 직접 붙은 제목은 니치가 없어도 CPA 다."""
+        """오퍼가 만든 제목은 하위주제가 없어도 CPA 다."""
         assert scope.is_cpa_row(None, set(), own_offer_id=3) is True
 
     def test_no_topic_no_offer(self):
@@ -79,9 +81,9 @@ class TestRowJudgement:
 
 
 class TestMark:
-    ROWS = [{"topic_id": 5, "cpa_offer_id": None},
-            {"topic_id": 9, "cpa_offer_id": None},
-            {"topic_id": None, "cpa_offer_id": 3}]
+    ROWS = [{"subtopic_id": 5, "cpa_offer_id": None},
+            {"subtopic_id": 9, "cpa_offer_id": None},
+            {"subtopic_id": None, "cpa_offer_id": 3}]
 
     def test_labels_every_row(self):
         out = scope.mark(self.ROWS, {5})
@@ -141,25 +143,40 @@ class TestPageMoved:
         assert "_cpa_offers.html" in page
 
 
-class TestNiche:
-    """니치가 곧 구분 축이다. 오퍼 1개 = 니치 1개."""
+class TestSubtopicReference:
+    """소유가 아니라 참조다.
 
-    SRC = (ROOT / "app/routers/cpa.py").read_text(encoding="utf-8")
+    니치를 오퍼에 배타 귀속시키면 그 니치를 쓰던 블로그가 통째로 넘어간다.
+    실측(2026-09-09): '생활 정보' 제목 879건·블로그 7개, '금융/대출' 을
+    붙였더니 정식제목 1,023건이 CPA 로 넘어갔다.
+    """
+
     ASSETS = (ROOT / "app/routers/cpa_assets.py").read_text(encoding="utf-8")
+    SRC = (ROOT / "app/routers/cpa.py").read_text(encoding="utf-8")
+    HTML = (ROOT / "app/templates/collection/_cpa_offers.html").read_text(
+        encoding="utf-8")
 
-    def test_link_endpoint(self):
-        assert "async def set_niche" in self.ASSETS
+    def test_endpoint_takes_subtopics(self):
+        assert "async def set_subtopics" in self.ASSETS
 
-    def test_one_to_one_enforced(self):
-        assert "이미 다른 오퍼의 니치입니다" in self.ASSETS
-        assert "row.cpa_offer_id = None" in self.ASSETS
+    def test_exclusive_binding_is_gone(self):
+        model = (ROOT / "app/models/category.py").read_text(encoding="utf-8")
+        assert "cpa_offer_id" not in model, "주제는 소유되지 않는다"
 
-    def test_titles_inherit_the_niche(self):
-        """제목에 니치가 안 붙으면 화면에서 CPA 로 표시되지 않는다."""
-        assert "Topic.cpa_offer_id == offer_id" in self.SRC
-        assert "topic_id=topic_id" in self.SRC
+    def test_only_existing_subtopics_kept(self):
+        """지워진 하위주제를 참조하면 제목이 안 뽑힌다."""
+        assert "실재하는 것만 남긴다" in self.ASSETS
 
-    def test_screen_warns_without_niche(self):
-        html = (ROOT / "app/templates/collection/_cpa_offers.html").read_text(
-            encoding="utf-8")
-        assert "니치가 없습니다" in html
+    def test_new_subtopic_needs_a_topic(self):
+        """자동 생성은 하지 않는다 — 트리가 지저분해진다."""
+        assert "새 하위주제를 만들 주제를 고르세요" in self.ASSETS
+
+    def test_titles_inherit_the_subtopic(self):
+        assert "offer.subtopic_ids[0]" in self.SRC
+        assert "subtopic_id=subtopic_id" in self.SRC
+
+    def test_screen_says_it_is_a_reference(self):
+        assert "소유가 아니라 참조" in self.HTML
+
+    def test_screen_warns_without_subtopics(self):
+        assert "쓸 하위주제가 없습니다" in self.HTML
