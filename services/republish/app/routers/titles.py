@@ -126,6 +126,8 @@ async def list_main_titles(
     matching_filter: Optional[str] = Query(None, description="매칭 필터: all/matched/unmatched"),
     sort_field: Optional[str] = Query("created_at", description="정렬 필드"),
     sort_dir: Optional[str] = Query("desc", description="정렬 방향"),
+    scope: Optional[str] = Query(
+        "all", description="구분: all(기본)/adsense/cpa"),
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_user),
 ):
@@ -202,6 +204,18 @@ async def list_main_titles(
         elif matching_filter == "unmatched":
             # 매칭되지 않은 제목만 (독립 포스트)
             query = query.where(~MainTitle.id.in_(matched_title_ids_subq))
+
+    # CPA 구분 — 화면에서 거르면 페이지 수가 어긋난다. DB 에서 건다.
+    from ..services.cpa.scope import (
+        badge as _badge, condition as _scope_cond, cpa_topic_ids,
+        is_cpa_row as _is_cpa,
+    )
+
+    cpa_topics = await cpa_topic_ids(db)
+    scope_cond = _scope_cond(MainTitle, scope, cpa_topics,
+                             has_offer_column=True)
+    if scope_cond is not None:
+        query = query.where(scope_cond)
 
     # 전체 개수
     count_query = select(func.count()).select_from(query.subquery())
@@ -329,6 +343,8 @@ async def list_main_titles(
                 image_url=cp.image_url,
                 has_content=bool(cp.content_html),
             )
+        item.is_cpa = _is_cpa(t.topic_id, cpa_topics, t.cpa_offer_id)
+        item.scope_label = _badge(item.is_cpa)
         items.append(item)
 
     return MainTitleListResponse(

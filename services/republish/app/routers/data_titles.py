@@ -66,6 +66,9 @@ class TempTitleResponse(BaseModel):
     domain: Optional[str] = None
     candidate_id: Optional[int] = None
     expires_at: Optional[datetime] = None
+    # 숨기지 않고 표시한다. 니치(주제)가 구분 축이다.
+    is_cpa: bool = False
+    scope_label: str = "애드센스"
 
     class Config:
         from_attributes = True
@@ -162,6 +165,8 @@ async def list_temp_titles(
         None, description="이 도메인에서 온 제목만 — 모아서 정리할 때 쓴다"),
     sort_field: Optional[str] = Query("created_at", description="정렬 필드"),
     sort_dir: Optional[str] = Query("desc", description="정렬 방향 (asc/desc)"),
+    scope: Optional[str] = Query(
+        "all", description="구분: all(기본)/adsense/cpa"),
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_user),
 ):
@@ -171,6 +176,13 @@ async def list_temp_titles(
         f"[TEMP_TITLES] 조회 요청 - search={search}, status={status}, "
         f"topic_id={topic_id} (type={type(topic_id).__name__}), subtopic_id={subtopic_id}, page={page}"
     )
+
+    from ..services.cpa.scope import (
+        badge as _badge, condition as _scope_cond, cpa_topic_ids,
+        is_cpa_row as _is_cpa,
+    )
+
+    cpa_topics = await cpa_topic_ids(db)
 
     query = select(TempTitle)
 
@@ -202,6 +214,10 @@ async def list_temp_titles(
             query = query.where(TempTitle.collection_stage.in_(codes))
 
     # 전체 개수
+    scope_cond = _scope_cond(TempTitle, scope, cpa_topics)
+    if scope_cond is not None:
+        query = query.where(scope_cond)
+
     count_query = select(func.count()).select_from(query.subquery())
     total = (await db.execute(count_query)).scalar() or 0
 
@@ -264,6 +280,8 @@ async def list_temp_titles(
             item.category_path = f"{item.topic_name} - {item.subtopic_name}"
         elif item.topic_name:
             item.category_path = item.topic_name
+        item.is_cpa = _is_cpa(t.topic_id, cpa_topics)
+        item.scope_label = _badge(item.is_cpa)
         items.append(item)
 
     return TempTitleListResponse(

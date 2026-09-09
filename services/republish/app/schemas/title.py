@@ -102,6 +102,9 @@ class MainTitleResponse(MainTitleBase):
     last_used_at: Optional[datetime] = None
     source: str
     source_url: Optional[str] = None
+    # 숨기지 않고 표시한다. 니치(주제)가 구분 축이다.
+    is_cpa: bool = False
+    scope_label: str = "애드센스"
     created_at: datetime
     updated_at: datetime
     # 재조합 결과면 원본을 가리킨다. 그룹은 원본 것을 승계하므로 같은

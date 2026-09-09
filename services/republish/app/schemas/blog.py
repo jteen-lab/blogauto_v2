@@ -187,6 +187,9 @@ class BlogListResponse(BaseModel):
     matched_count: int = Field(0, description="매칭된 포스트 수")
     # GP 구간 분류용 - 플랫폼 누적 글 수
     total_post_count: int = Field(0, description="플랫폼 누적 발행 글 수")
+    # 숨기지 않고 표시한다. 오퍼가 담당으로 지정한 블로그인가.
+    is_cpa: bool = Field(False, description="CPA 담당 블로그")
+    scope_label: str = Field("애드센스", description="구분 배지")
     last_crawled_at: Optional[datetime] = Field(None, description="마지막 크롤링 시간")
     last_matched_at: Optional[datetime] = Field(None, description="마지막 매칭 시간")
     created_at: datetime = Field(..., description="생성일시")

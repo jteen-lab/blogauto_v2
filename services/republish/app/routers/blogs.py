@@ -8,12 +8,12 @@ Features:
 - 요청 검증 및 응답
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List
+from typing import List, Optional
 
 from ..core.database import get_db_session
 from ..services.blog_service import BlogService
@@ -80,11 +80,24 @@ async def create_blog(
     responses=responses,
 )
 async def get_blogs(
+    scope: Optional[str] = Query(
+        "all", description="구분: all(기본)/adsense/cpa"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> BlogListWrapper:
+    """블로그 목록. CPA 담당 블로그에는 배지를 붙인다(숨기지 않는다)."""
+    from ..services.cpa.scope import ALL, CPA, badge, cpa_blog_ids
+
     blog_service = BlogService(db)
     blogs = await blog_service.get_user_blogs(current_user)
+
+    owned = await cpa_blog_ids(db)
+    for item in blogs:
+        item.is_cpa = item.id in owned
+        item.scope_label = badge(item.is_cpa)
+    if scope and scope != ALL:
+        want = scope == CPA
+        blogs = [b for b in blogs if b.is_cpa == want]
     return BlogListWrapper(blogs=blogs)
 
 

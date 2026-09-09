@@ -7,11 +7,12 @@ Features:
 - 계층적 데이터 조회
 - 요청 검증 및 응답
 """
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import (APIRouter, Depends, HTTPException, Query,
+                     Request, status)
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List
+from typing import List, Optional
 
 from ..core.database import get_db_session
 from ..services.category_service import CategoryService
@@ -77,12 +78,24 @@ async def create_topic(
     responses=responses
 )
 async def get_topics(
+    scope: Optional[str] = Query(
+        "all", description="구분: all(기본)/adsense/cpa"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session)
 ) -> List[TopicResponse]:
-    """주제 목록 조회"""
+    """주제 목록 조회.
+
+    주제가 곧 CPA 구분 축이다. 기본은 전체 — 숨기지 않는다.
+    """
+    from ..services.cpa.scope import ADSENSE, ALL, CPA
+
     category_service = CategoryService(db)
-    return await category_service.get_user_topics(current_user)
+    topics = await category_service.get_user_topics(current_user)
+    if not scope or scope == ALL:
+        return topics
+    want_cpa = scope == CPA
+    return [t for t in topics
+            if bool(getattr(t, "cpa_offer_id", None)) == want_cpa]
 
 
 @router.get(
