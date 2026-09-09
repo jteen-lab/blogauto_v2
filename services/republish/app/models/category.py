@@ -26,6 +26,11 @@ class Topic(Base):
     order = Column(Integer, default=0, comment="정렬 순서")
 
     # 소프트 삭제
+    # 이 주제가 어느 CPA 오퍼의 니치인가. NULL 이면 애드센스 쪽이다.
+    # 오퍼 1개 = 니치 1개. 키워드·제목은 topic_id 로 여기에 매달린다.
+    cpa_offer_id = Column(Integer, nullable=True, index=True,
+                          comment="CPA 오퍼 ID (있으면 그 오퍼의 니치)")
+
     is_deleted = Column(Boolean, default=False, index=True)
 
     # 시간 정보
