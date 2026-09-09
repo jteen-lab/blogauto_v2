@@ -411,7 +411,7 @@ class TestUnmatchedWorkflow:
     """미분류를 보여주기만 하면 사용자가 할 수 있는 일이 없다."""
 
     SRC = (ROOT / "app/routers/cpa.py").read_text(encoding="utf-8")
-    HTML = (ROOT / "app/templates/cpa/index.html").read_text(encoding="utf-8")
+    HTML = (ROOT / "app/templates/collection/_cpa_offers.html").read_text(encoding="utf-8")
 
     def test_can_promote_to_rule(self):
         assert "async def add_rule" in self.SRC
@@ -460,7 +460,7 @@ class TestOfferBlogWiring:
     INV = (ROOT / "app/services/generation/inventory_trigger.py").read_text(
         encoding="utf-8")
     API = (ROOT / "app/routers/cpa.py").read_text(encoding="utf-8")
-    HTML = (ROOT / "app/templates/cpa/index.html").read_text(encoding="utf-8")
+    HTML = (ROOT / "app/templates/collection/_cpa_offers.html").read_text(encoding="utf-8")
 
     def _cond(self, categories=(), offers=()):
         from app.services.generation.title_scope import title_condition

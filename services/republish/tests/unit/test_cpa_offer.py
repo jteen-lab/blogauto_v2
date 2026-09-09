@@ -180,11 +180,18 @@ class TestTaxonomy:
 
 
 class TestScreen:
-    HTML = (ROOT / "app/templates/cpa/index.html").read_text(encoding="utf-8")
+    HTML = (ROOT / "app/templates/collection/_cpa_offers.html").read_text(encoding="utf-8")
 
-    def test_menu_registered(self):
+    def test_lives_in_data_management(self):
+        """별도 페이지가 아니라 데이터 관리의 한 탭이다.
+
+        화면을 따로 두면 기존 흐름 밖에 새 로직이 생긴다(2026-09-09 정리).
+        """
         base = (ROOT / "app/templates/base.html").read_text(encoding="utf-8")
-        assert base.count('href="/cpa"') == 2, "PC·모바일 메뉴 둘 다"
+        assert 'href="/cpa"' not in base
+        page = (ROOT / "app/templates/collection/index.html").read_text(
+            encoding="utf-8")
+        assert "_cpa_offers.html" in page
 
     def test_warns_when_no_rules(self):
         """규칙 0건이면 검사가 거의 없다는 것을 밝혀야 한다."""
