@@ -372,3 +372,46 @@ class TestDigestPathCounted:
         src = (ROOT / "app/services/generation/generator.py").read_text(
             encoding="utf-8")
         assert "evidence_documents()" in src
+
+
+class TestWeakCompanyTails:
+    """'~카드' 로 끝난다고 다 금융회사가 아니다.
+
+    2026-09-09 실측: "인천 이음카드 잔액조회" 글이 '이음카드' 를 회사로
+    보고, 공시 목록에 없다는 이유로 근거 판정이 엄격해져 보류됐다.
+    지역화폐·바우처는 애초에 금융회사가 아니다.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("name", ["이음카드", "문화누리카드", "○○조합"])
+    async def test_weak_tail_is_unknown_not_false(self, name, monkeypatch):
+        from app.services.reference import company
+
+        async def fake(_key):
+            return ["우리은행", "현대카드㈜"]
+
+        monkeypatch.setattr(company, "_load_names", fake)
+        found = await company.verify("key", name)
+        assert found.known is None, "없다고 단정하면 글이 막힌다"
+        assert found.unverified is False
+
+    @pytest.mark.asyncio
+    async def test_real_card_company_still_verifies(self, monkeypatch):
+        from app.services.reference import company
+
+        async def fake(_key):
+            return ["현대카드㈜"]
+
+        monkeypatch.setattr(company, "_load_names", fake)
+        assert (await company.verify("key", "현대카드")).known is True
+
+    @pytest.mark.asyncio
+    async def test_strong_tail_still_flags(self, monkeypatch):
+        """은행·캐피탈은 목록에 없으면 미확인이 맞다."""
+        from app.services.reference import company
+
+        async def fake(_key):
+            return ["우리은행"]
+
+        monkeypatch.setattr(company, "_load_names", fake)
+        assert (await company.verify("key", "없는저축은행")).known is False

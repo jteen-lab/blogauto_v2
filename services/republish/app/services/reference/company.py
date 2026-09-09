@@ -36,6 +36,12 @@ GROUPS = ("020000", "030200", "030300", "050000", "060000")
 # 목록은 자주 바뀌지 않는다. 글 한 편마다 5번 부르지 않는다.
 CACHE_TTL = 6 * 60 * 60
 
+# 이 꼬리로 끝나는 이름은 금융회사라고 단정하기 어렵다.
+# "인천 이음카드"(지역화폐)·"문화누리카드"(바우처)가 회사로 잡혀,
+# 공시 목록에 없다는 이유로 글이 보류됐다(2026-09-09 실측).
+# 진짜 카드사(현대카드 등)는 목록에 있어 그대로 확인된다.
+WEAK_TAILS = ("카드", "조합", "금고")
+
 _cache: Dict[str, Any] = {"at": 0.0, "names": []}
 
 
@@ -181,6 +187,15 @@ async def verify(key: str, title_company: Optional[str]) -> CompanyCheck:
         if same_company(title_company, listed):
             return CompanyCheck(name=title_company, known=True, matched=listed,
                                 reason=f"공시 참여 회사 확인({listed})")
+
+    if any(title_company.endswith(tail) for tail in WEAK_TAILS):
+        # 회사가 아닐 가능성이 크다. 없다고 단정하지 않는다 —
+        # 단정하면 지역화폐·바우처 글이 근거 부족으로 막힌다.
+        logger.info("[COMPANY] 회사인지 불확실 | %s", title_company)
+        return CompanyCheck(
+            name=title_company,
+            reason=f"'{title_company}' 은(는) 회사 이름이 아닐 수 있어 "
+                   f"확인하지 않음")
 
     logger.info("[COMPANY] 미확인 회사 | %s", title_company)
     return CompanyCheck(name=title_company, known=False,
