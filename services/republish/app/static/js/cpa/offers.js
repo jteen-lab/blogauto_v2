@@ -15,7 +15,8 @@ function cpaApp() {
         showUnmatched: null,
         showConflicts: null,
         preview: '',
-        blogs: [],
+        tpl: null,
+        criticalMissing: [],
         topics: [],
         rawText: '',
         busy: false,
@@ -27,25 +28,8 @@ function cpaApp() {
         ],
         form: { network: 'adlix', offer_code: '', recheck_days: 30, raw_text: '' },
 
-        async loadBlogs() {
-            const r = await fetch('/api/v1/blogs', { credentials: 'include' });
-            if (!r.ok) return;
-            const d = await r.json();
-            this.blogs = (d.blogs || []).map(b => ({ id: b.id, name: b.name }));
-        },
 
-        blogNames(o) {
-            return (o.blog_ids || [])
-                .map(id => (this.blogs.find(b => b.id === id) || {}).name || `#${id}`)
-                .join(', ');
-        },
 
-        async toggleBlog(o, blogId, checked) {
-            const next = checked
-                ? [...new Set([...(o.blog_ids || []), blogId])]
-                : (o.blog_ids || []).filter(x => x !== blogId);
-            await this.patch(o, { blog_ids: next });
-        },
 
         async loadTopics() {
             const r = await fetch('/api/v1/categories/topics', { credentials: 'include' });
@@ -77,7 +61,6 @@ function cpaApp() {
         },
 
         async load() {
-            if (!this.blogs.length) await this.loadBlogs();
             if (!this.topics.length) await this.loadTopics();
             const q = this.filter ? `?status=${this.filter}` : '';
             const r = await fetch(`/api/v1/cpa/offers${q}`, { credentials: 'include' });
@@ -138,6 +121,8 @@ function cpaApp() {
             if (!r.ok) return;
             const d = await r.json();
             this.rawText = d.raw_text || '';
+            this.tpl = d.template || null;
+            this.criticalMissing = d.critical_missing || [];
             this.openId = o.id;
         },
 
@@ -241,6 +226,30 @@ function cpaApp() {
                 ? `⚠ 얇습니다 (${d.chars}자) — 부족: ${(d.missing || []).join(', ')}\n\n`
                 : `분량 ${d.chars}자\n\n`;
             this.preview = warn + d.html;
+        },
+
+        async uploadImage(o, ev) {
+            const file = ev.target.files && ev.target.files[0];
+            if (!file) return;
+            const form = new FormData();
+            form.append('file', file);
+            const r = await fetch(`/api/v1/cpa/offers/${o.id}/images`, {
+                method: 'POST', credentials: 'include', body: form,
+            });
+            const d = await r.json();
+            ev.target.value = '';
+            if (!r.ok) { alert(d.detail || '업로드 실패'); return; }
+            o.images = d.images;
+        },
+
+        async removeImage(o, index) {
+            if (!confirm('이 이미지를 뺍니다. 파일도 지워집니다.')) return;
+            const r = await fetch(`/api/v1/cpa/offers/${o.id}/images/${index}`, {
+                method: 'DELETE', credentials: 'include',
+            });
+            const d = await r.json();
+            if (!r.ok) { alert(d.detail || '삭제 실패'); return; }
+            o.images = d.images;
         },
 
         stateLabel(o) {

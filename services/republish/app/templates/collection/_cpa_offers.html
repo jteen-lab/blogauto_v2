@@ -84,9 +84,6 @@
                             니치
                             <b x-text="o.niche_name || '미지정'"
                                :class="o.niche_name ? '' : 'text-red-600'"></b> ·
-                            담당 블로그
-                            <b x-text="blogNames(o) || '미지정'"
-                               :class="o.blog_ids.length ? '' : 'text-red-600'"></b> ·
                             규칙 <b x-text="o.rules.length"></b>건 ·
                             커버리지 <b x-text="o.coverage === null ? '—' : Math.round(o.coverage*100) + '%'"></b> ·
                             재확인 <b x-text="dday(o.recheck_due)"></b>
@@ -136,10 +133,6 @@
                             <li x-show="!o.niche_name" class="text-red-700">
                                 · <b>니치가 없습니다</b> — 니치를 지정해야
                                 키워드·제목이 이 오퍼 것으로 구분됩니다
-                            </li>
-                            <li x-show="!o.blog_ids.length" class="text-red-700">
-                                · <b>담당 블로그가 없습니다</b> — 지정하지 않으면
-                                어떤 블로그도 이 오퍼의 제목을 쓰지 않습니다
                             </li>
                             <li x-show="!o.ftc_notice">
                                 · <b>대가성 문구를 찾지 못했습니다</b> — 표시하지 않으면 위법입니다
@@ -200,6 +193,72 @@
 
                 <!-- 상세 -->
                 <div x-show="openId === o.id" x-cloak class="border-t px-4 py-4 text-sm">
+                    <!-- 정형 규칙 칸 — 무엇이 비었는지 보이게 한다 -->
+                    <div x-show="tpl" x-cloak class="mb-4">
+                        <div class="text-xs text-gray-500 mb-1">
+                            정형 항목 <b x-text="`${tpl?.filled ?? 0}/${tpl?.total ?? 0}`"></b> 채움
+                            <span x-show="criticalMissing.length" class="text-red-600 ml-1">
+                                · 필수 누락: <b x-text="criticalMissing.join(', ')"></b>
+                            </span>
+                        </div>
+                        <div class="border rounded divide-y max-h-80 overflow-auto">
+                            <template x-for="sl in (tpl?.slots || [])" :key="sl.key">
+                                <div class="px-2 py-1.5 text-xs flex gap-2 items-start"
+                                     :class="!sl.count && sl.critical ? 'bg-red-50' : ''">
+                                    <span class="w-40 shrink-0"
+                                          :class="sl.count ? 'text-gray-700' : 'text-gray-400'">
+                                        <span x-text="sl.count ? '✓' : '·'"></span>
+                                        <span x-text="sl.label"></span>
+                                    </span>
+                                    <span class="flex-1">
+                                        <template x-if="sl.count">
+                                            <span x-text="sl.rules.map(r => r.value || r.target).join(' · ').slice(0, 90)"></span>
+                                        </template>
+                                        <template x-if="!sl.count">
+                                            <span class="text-gray-400" x-text="sl.hint"></span>
+                                        </template>
+                                    </span>
+                                </div>
+                            </template>
+                        </div>
+                        <div x-show="(tpl?.extras || []).length" class="mt-2">
+                            <div class="text-xs text-gray-500 mb-1">
+                                정형 칸에 없는 규칙 <b x-text="(tpl?.extras || []).length"></b>건 —
+                                확인 후 두거나 빼세요
+                            </div>
+                            <div class="border rounded bg-amber-50 p-2 space-y-1">
+                                <template x-for="(e, i) in (tpl?.extras || [])" :key="i">
+                                    <div class="text-xs">
+                                        <span class="text-gray-500" x-text="e.type"></span>
+                                        <span x-text="e.value || e.target"></span>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 오퍼 이미지 -->
+                    <div class="mb-4">
+                        <div class="text-xs text-gray-500 mb-1">
+                            오퍼 이미지 — 글 생성 때 이 목록에서만 씁니다
+                        </div>
+                        <div class="flex flex-wrap gap-2 mb-2">
+                            <template x-for="(img, i) in (o.images || [])" :key="i">
+                                <div class="border rounded p-1 text-xs">
+                                    <img :src="`/api/v1/cpa/offers/${o.id}/images/${i}/file`"
+                                         class="h-16 w-24 object-cover mb-1">
+                                    <div class="truncate w-24" x-text="img.name"></div>
+                                    <button @click="removeImage(o, i)" class="text-red-600">빼기</button>
+                                </div>
+                            </template>
+                            <div x-show="!(o.images || []).length" class="text-xs text-gray-400">
+                                등록된 이미지가 없습니다.
+                            </div>
+                        </div>
+                        <input type="file" accept="image/*" class="text-xs"
+                               @change="uploadImage(o, $event)">
+                    </div>
+
                     <div x-show="!o.rules.length"
                          class="mb-4 text-xs text-gray-500 border rounded p-3">
                         규칙이 없습니다. 「규칙 뽑기」를 먼저 실행하세요.
@@ -238,26 +297,6 @@
                             </div>
                         </div>
                         <div>
-                            <div class="text-xs text-gray-500 mb-1">
-                                니치
-                            <b x-text="o.niche_name || '미지정'"
-                               :class="o.niche_name ? '' : 'text-red-600'"></b> ·
-                            담당 블로그 — <b>지정하면 그 블로그는 CPA 전용</b>이 됩니다<br>
-                                <span class="text-gray-400">일반 제목은 더 이상 쓰지 않습니다</span>
-                            </div>
-                            <div class="border rounded p-2 mb-3 max-h-32 overflow-auto">
-                                <template x-for="b in blogs" :key="b.id">
-                                    <label class="flex items-center gap-2 text-xs py-0.5">
-                                        <input type="checkbox" :value="b.id"
-                                               :checked="o.blog_ids.includes(b.id)"
-                                               @change="toggleBlog(o, b.id, $event.target.checked)">
-                                        <span x-text="b.name"></span>
-                                    </label>
-                                </template>
-                                <div x-show="!blogs.length" class="text-xs text-gray-400">
-                                    블로그 목록을 불러오지 못했습니다.
-                                </div>
-                            </div>
                             <div class="text-xs text-gray-500 mb-1">공정위 대가성 문구</div>
                             <input :value="o.ftc_notice"
                                    @change="patch(o, {ftc_notice: $event.target.value})"
