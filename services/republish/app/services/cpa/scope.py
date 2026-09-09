@@ -3,8 +3,12 @@
 **숨기지 않고 표시한다.** 전수 조사(2026-09-09) 결과 구분이 필요한 것은
 5종뿐이고 7종은 공유해도 된다. 모드 전환은 공유해도 될 것까지 숨긴다.
 
-구분 축은 **니치(주제)** 다. 오퍼 1개 = 니치 1개. 키워드·임시제목·정식
-제목이 이미 `topic_id` 를 들고 있어 컬럼을 더 만들지 않는다.
+구분 축은 **오퍼가 참조하는 하위주제** 다. 소유가 아니다 — 애드센스도 같은
+하위주제를 계속 쓴다. 주제 단위로 잡으면 그 니치를 쓰던 블로그가 통째로
+넘어간다(실측: '생활 정보' 제목 879건·블로그 7개).
+
+정식제목만 예외로 배타다. 오퍼가 만든 제목(`cpa_offer_id`)은 애드센스
+블로그가 쓰면 규정 위반 글이 엉뚱한 곳에 나간다.
 
 판정을 여기 모으는 이유: `cpa_offer_id` 하나를 세 곳(세는 곳·목록·고르는
 곳)에 흩어 넣었다가 한 곳을 빠뜨렸다. 같은 실수를 반복하지 않는다.
@@ -13,13 +17,12 @@
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List, Optional, Set
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Set
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.logger import get_logger
-from ...models.category import Topic
 
 logger = get_logger("cpa_scope", "app.log")
 
@@ -33,18 +36,48 @@ FILTERS = (ALL, ADSENSE, CPA)
 LABEL = {True: "CPA", False: "애드센스"}
 
 
-async def cpa_topic_ids(db: AsyncSession) -> Set[int]:
-    """CPA 니치인 주제 ID.
+async def cpa_subtopic_ids(db: AsyncSession) -> Set[int]:
+    """CPA 오퍼가 **쓰는** 하위주제 ID.
 
-    수가 적다(주제 23개). 목록 화면마다 한 번 부르면 된다.
+    소유가 아니라 참조다. 여기 있다고 애드센스가 못 쓰는 것이 아니다.
     """
     try:
+        from ...models.cpa_offer import CpaOffer
+
         rows = (await db.execute(
-            select(Topic.id).where(Topic.cpa_offer_id.isnot(None))
+            select(CpaOffer.subtopic_ids).where(
+                CpaOffer.is_deleted.is_(False))
         )).scalars().all()
-        return {int(r) for r in rows}
+        out: Set[int] = set()
+        for ids in rows:
+            for one in (ids or []):
+                try:
+                    out.add(int(one))
+                except (TypeError, ValueError):
+                    continue
+        return out
     except Exception as e:  # noqa: BLE001 — 판정 실패로 목록을 막지 않는다
-        logger.warning("[SCOPE] CPA 주제 조회 실패 | %s", e)
+        logger.warning("[SCOPE] CPA 하위주제 조회 실패 | %s", e)
+        return set()
+
+
+async def cpa_topic_ids(db: AsyncSession) -> Set[int]:
+    """CPA 오퍼가 쓰는 하위주제가 속한 주제 ID.
+
+    주제 자체는 CPA 것이 아니다. "이 오퍼가 쓰는 중" 표시에만 쓴다.
+    """
+    subs = await cpa_subtopic_ids(db)
+    if not subs:
+        return set()
+    try:
+        from ...models.category import SubTopic
+
+        rows = (await db.execute(
+            select(SubTopic.topic_id).where(SubTopic.id.in_(list(subs)))
+        )).scalars().all()
+        return {int(r) for r in rows if r}
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[SCOPE] 주제 역참조 실패 | %s", e)
         return set()
 
 
@@ -72,21 +105,24 @@ async def cpa_blog_ids(db: AsyncSession) -> Set[int]:
         return set()
 
 
-def is_cpa_row(topic_id: Optional[int], cpa_topics: Set[int],
+def is_cpa_row(subtopic_id: Optional[int], cpa_subtopics: Set[int],
                own_offer_id: Optional[int] = None) -> bool:
-    """이 행이 CPA 것인가.
+    """이 행이 CPA 오퍼와 얽혀 있나.
+
+    **배타가 아니다.** 오퍼가 쓰는 하위주제의 일반 제목은 애드센스도 쓴다.
+    배지는 "오퍼가 쓰는 중" 이라는 뜻이지 "CPA 전용" 이 아니다.
 
     Args:
-        topic_id: 행의 주제 ID
-        cpa_topics: `cpa_topic_ids()` 결과
-        own_offer_id: 행이 직접 들고 있는 오퍼 ID(정식제목 등)
+        subtopic_id: 행의 하위주제 ID
+        cpa_subtopics: `cpa_subtopic_ids()` 결과
+        own_offer_id: 행이 직접 들고 있는 오퍼 ID(오퍼 전용 제목)
 
     Returns:
-        True 면 CPA
+        True 면 CPA 와 얽혀 있다
     """
     if own_offer_id:
         return True
-    return bool(topic_id) and int(topic_id) in cpa_topics
+    return bool(subtopic_id) and int(subtopic_id) in cpa_subtopics
 
 
 def badge(is_cpa: bool) -> str:
@@ -101,15 +137,15 @@ def keep(is_cpa: bool, wanted: Optional[str]) -> bool:
     return (wanted == CPA) == bool(is_cpa)
 
 
-def mark(rows: Iterable[Dict[str, Any]], cpa_topics: Set[int],
+def mark(rows: Iterable[Dict[str, Any]], cpa_subtopics: Set[int],
          wanted: Optional[str] = None,
-         topic_key: str = "topic_id",
+         topic_key: str = "subtopic_id",
          offer_key: str = "cpa_offer_id") -> List[Dict[str, Any]]:
     """목록에 배지를 붙이고 필터를 적용한다.
 
     Args:
         rows: dict 목록
-        cpa_topics: CPA 주제 ID 모음
+        cpa_subtopics: CPA 오퍼가 쓰는 하위주제 ID
         wanted: all|adsense|cpa (없으면 전체)
         topic_key/offer_key: 각 행에서 주제·오퍼를 읽을 키
 
@@ -118,14 +154,15 @@ def mark(rows: Iterable[Dict[str, Any]], cpa_topics: Set[int],
     """
     out: List[Dict[str, Any]] = []
     for row in rows or []:
-        flag = is_cpa_row(row.get(topic_key), cpa_topics, row.get(offer_key))
+        flag = is_cpa_row(row.get(topic_key), cpa_subtopics,
+                          row.get(offer_key))
         if not keep(flag, wanted):
             continue
         out.append({**row, "is_cpa": flag, "scope_label": badge(flag)})
     return out
 
 
-def condition(model: Any, wanted: Optional[str], cpa_topics: Set[int],
+def condition(model: Any, wanted: Optional[str], cpa_subtopics: Set[int],
               has_offer_column: bool = False) -> Optional[Any]:
     """목록 질의에 붙일 조건.
 
@@ -134,7 +171,7 @@ def condition(model: Any, wanted: Optional[str], cpa_topics: Set[int],
     Args:
         model: MainTitle · TempTitle · Keyword 등
         wanted: all|adsense|cpa (없거나 all 이면 조건 없음)
-        cpa_topics: CPA 니치 주제 ID
+        cpa_subtopics: CPA 오퍼가 쓰는 하위주제 ID
         has_offer_column: 그 모델이 `cpa_offer_id` 를 직접 들고 있나
 
     Returns:
@@ -145,13 +182,13 @@ def condition(model: Any, wanted: Optional[str], cpa_topics: Set[int],
     if not wanted or wanted == ALL or wanted not in FILTERS:
         return None
 
-    topic_col = getattr(model, "topic_id", None)
+    sub_col = getattr(model, "subtopic_id", None)
     parts = []
-    if topic_col is not None and cpa_topics:
-        # NULL 가드가 없으면 주제 없는 행에서 IN 이 NULL 이 되고,
+    if sub_col is not None and cpa_subtopics:
+        # NULL 가드가 없으면 하위주제 없는 행에서 IN 이 NULL 이 되고,
         # NOT(NULL) 도 NULL 이라 애드센스 목록에서 통째로 빠진다.
-        parts.append(and_(topic_col.isnot(None),
-                          topic_col.in_(list(cpa_topics))))
+        parts.append(and_(sub_col.isnot(None),
+                          sub_col.in_(list(cpa_subtopics))))
     if has_offer_column:
         parts.append(model.cpa_offer_id.isnot(None))
 
@@ -168,9 +205,11 @@ def _never(model: Any) -> Any:
     return model.id.is_(None)
 
 
-def topic_condition(model: Any, wanted: Optional[str]) -> Optional[Any]:
-    """주제 자체를 거를 때. 주제는 자기 컬럼으로 판정한다."""
+def topic_filter(topics: Sequence[Any], wanted: Optional[str],
+                 cpa_topics: Set[int]) -> List[Any]:
+    """주제 목록을 거른다. 주제는 소유되지 않으므로 파생으로 판정한다."""
     if not wanted or wanted == ALL or wanted not in FILTERS:
-        return None
-    return (model.cpa_offer_id.isnot(None) if wanted == CPA
-            else model.cpa_offer_id.is_(None))
+        return list(topics or [])
+    want_cpa = wanted == CPA
+    return [t for t in (topics or [])
+            if (int(getattr(t, "id", 0)) in cpa_topics) == want_cpa]

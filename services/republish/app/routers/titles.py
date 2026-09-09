@@ -207,12 +207,12 @@ async def list_main_titles(
 
     # CPA 구분 — 화면에서 거르면 페이지 수가 어긋난다. DB 에서 건다.
     from ..services.cpa.scope import (
-        badge as _badge, condition as _scope_cond, cpa_topic_ids,
+        badge as _badge, condition as _scope_cond, cpa_subtopic_ids,
         is_cpa_row as _is_cpa,
     )
 
-    cpa_topics = await cpa_topic_ids(db)
-    scope_cond = _scope_cond(MainTitle, scope, cpa_topics,
+    cpa_subs = await cpa_subtopic_ids(db)
+    scope_cond = _scope_cond(MainTitle, scope, cpa_subs,
                              has_offer_column=True)
     if scope_cond is not None:
         query = query.where(scope_cond)
@@ -343,7 +343,7 @@ async def list_main_titles(
                 image_url=cp.image_url,
                 has_content=bool(cp.content_html),
             )
-        item.is_cpa = _is_cpa(t.topic_id, cpa_topics, t.cpa_offer_id)
+        item.is_cpa = _is_cpa(t.subtopic_id, cpa_subs, t.cpa_offer_id)
         item.scope_label = _badge(item.is_cpa)
         items.append(item)
 

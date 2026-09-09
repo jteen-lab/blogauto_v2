@@ -45,8 +45,6 @@ class TopicUpdateRequest(BaseModel):
 
 
 class TopicResponse(BaseModel):
-    """주제. cpa_offer_id 가 있으면 그 오퍼의 니치다."""
-
     """주제 응답"""
     id: int
     user_id: int
@@ -57,8 +55,7 @@ class TopicResponse(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     deleted_at: Optional[datetime] = None
-    # 숨기지 않고 표시한다 — 니치가 곧 구분 축이다
-    cpa_offer_id: Optional[int] = None
+
 
     # 하위 항목 수
     subtopic_count: Optional[int] = Field(default=0, description="하위 주제 개수")

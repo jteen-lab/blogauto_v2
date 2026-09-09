@@ -178,11 +178,11 @@ async def list_temp_titles(
     )
 
     from ..services.cpa.scope import (
-        badge as _badge, condition as _scope_cond, cpa_topic_ids,
+        badge as _badge, condition as _scope_cond, cpa_subtopic_ids,
         is_cpa_row as _is_cpa,
     )
 
-    cpa_topics = await cpa_topic_ids(db)
+    cpa_subs = await cpa_subtopic_ids(db)
 
     query = select(TempTitle)
 
@@ -214,7 +214,7 @@ async def list_temp_titles(
             query = query.where(TempTitle.collection_stage.in_(codes))
 
     # 전체 개수
-    scope_cond = _scope_cond(TempTitle, scope, cpa_topics)
+    scope_cond = _scope_cond(TempTitle, scope, cpa_subs)
     if scope_cond is not None:
         query = query.where(scope_cond)
 
@@ -280,7 +280,7 @@ async def list_temp_titles(
             item.category_path = f"{item.topic_name} - {item.subtopic_name}"
         elif item.topic_name:
             item.category_path = item.topic_name
-        item.is_cpa = _is_cpa(t.topic_id, cpa_topics)
+        item.is_cpa = _is_cpa(t.subtopic_id, cpa_subs)
         item.scope_label = _badge(item.is_cpa)
         items.append(item)
 

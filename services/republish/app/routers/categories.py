@@ -85,17 +85,15 @@ async def get_topics(
 ) -> List[TopicResponse]:
     """주제 목록 조회.
 
-    주제가 곧 CPA 구분 축이다. 기본은 전체 — 숨기지 않는다.
+    "CPA" 는 그 주제 아래 하위주제를 오퍼가 쓰고 있다는 뜻이지, 그 주제가
+    CPA 전용이라는 뜻이 아니다. 기본은 전체 — 숨기지 않는다.
     """
-    from ..services.cpa.scope import ADSENSE, ALL, CPA
+    from ..services.cpa.scope import cpa_topic_ids, topic_filter
 
     category_service = CategoryService(db)
     topics = await category_service.get_user_topics(current_user)
-    if not scope or scope == ALL:
-        return topics
-    want_cpa = scope == CPA
-    return [t for t in topics
-            if bool(getattr(t, "cpa_offer_id", None)) == want_cpa]
+    # 주제는 소유되지 않는다. 오퍼가 쓰는 하위주제로 파생 판정한다.
+    return topic_filter(topics, scope, await cpa_topic_ids(db))
 
 
 @router.get(
