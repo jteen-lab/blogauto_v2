@@ -141,6 +141,59 @@ class TestWiring:
         assert "담당 블로그를 먼저 지정하세요" not in self.API
 
 
+class TestDetailStaysFresh:
+    """화면이 낡은 정형 항목을 보여주면 **채운 칸을 못 채운 칸으로 읽는다.**
+
+    실측(2026-09-09 안과 오퍼): 규칙 97건을 뽑아 정형 항목이 17/19 가 됐는데,
+    화면은 뽑기 전 값인 3/19 를 계속 보여줬다. `extract()` 가 목록만 새로
+    고치고 상세를 다시 부르지 않았기 때문이다.
+
+    **동작마다 갱신을 기억하게 두면 또 잊는다.** 목록을 고치는 모든 길이
+    지나가는 `load()` 한 곳에서 상세도 함께 새로 고친다.
+    """
+
+    JS = (ROOT / "app/static/js/cpa/offers.js").read_text(encoding="utf-8")
+    HTML = (ROOT / "app/templates/collection/_cpa_offers.html").read_text(
+        encoding="utf-8")
+
+    def _body(self, name):
+        """함수 하나의 본문. 다음 함수 정의 앞까지."""
+        start = self.JS.index(f"async {name}(")
+        rest = self.JS[start:]
+        end = rest.find("\n        },")
+        return rest[:end]
+
+    def test_detail_fetch_is_one_function(self):
+        """상세를 받는 곳이 둘이면 한쪽만 고치는 일이 생긴다."""
+        assert "async fetchDetail(" in self.JS
+        assert self.JS.count("this.tpl = d.template") == 1
+
+    def test_load_refreshes_the_open_detail(self):
+        """목록을 새로 고치면 열린 상세도 같이 새로워져야 한다."""
+        body = self._body("load")
+        assert "this.openId" in body and "fetchDetail" in body
+
+    def test_extract_shows_the_result(self):
+        """뽑고 나서 접힌 채로 두면 사람이 결과를 못 본다."""
+        body = self._body("extract")
+        assert "this.openId = off.id" in body
+        assert "정형 항목" in body, "뽑은 뒤 채움 수를 알려야 한다"
+
+    def test_open_uses_the_shared_fetch(self):
+        body = self._body("open")
+        assert "fetchDetail" in body
+
+    def test_close_clears_the_old_template(self):
+        """남겨두면 다른 오퍼 카드에 옛 정형 항목이 비친다."""
+        assert "closeDetail()" in self.JS
+        block = self.JS[self.JS.index("closeDetail() {"):]
+        assert "this.tpl = null" in block[:300]
+
+    def test_script_is_cache_busted(self):
+        """?v= 를 안 올리면 브라우저가 옛 파일을 계속 쓴다 — 증상이 그대로다."""
+        assert "/static/js/cpa/offers.js?v=" in self.HTML
+
+
 class TestImages:
     API = (ROOT / "app/routers/cpa_assets.py").read_text(encoding="utf-8")
 
