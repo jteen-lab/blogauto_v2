@@ -11,10 +11,11 @@ import random
 from typing import Optional, List, Tuple, Set
 from dataclasses import dataclass
 
-from sqlalchemy import select, func, or_
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...models.title import MainTitle
+from .title_scope import owned_offer_ids, title_condition
 from ...models.crawled_post import CrawledPost
 from ...models.category import BlogCategory
 from .inventory_category_mixin import InventoryCategoryMixin
@@ -164,11 +165,14 @@ class InventoryTrigger(InventoryCategoryMixin):
                 f"subtopic_ids={subtopic_ids} | topic_only_ids={topic_only_ids}"
             )
 
+        # 이 블로그가 담당하는 CPA 오퍼. 없으면 CPA 제목을 하나도 안 뽑는다.
+        cpa_ids = await owned_offer_ids(self.db, blog_id)
+
         # 1차: 매칭 + 카테고리 일치 제목
         matched_titles = await self._query_titles_list(
             blog_id_str, category_conditions,
             matched_only=True, limit=limit,
-            sibling_blog_ids=sibling_ids,
+            sibling_blog_ids=sibling_ids, cpa_offer_ids=cpa_ids,
         )
 
         # 2차: 부족하면 카테고리 일치 available 제목 보충 (매칭 무관)
@@ -179,7 +183,7 @@ class InventoryTrigger(InventoryCategoryMixin):
                 blog_id_str, category_conditions,
                 matched_only=False, limit=remaining,
                 exclude_ids=exclude_ids,
-                sibling_blog_ids=sibling_ids,
+                sibling_blog_ids=sibling_ids, cpa_offer_ids=cpa_ids,
             )
             matched_titles.extend(fallback_titles)
 
@@ -188,7 +192,7 @@ class InventoryTrigger(InventoryCategoryMixin):
             matched_titles = await self._query_titles_list(
                 blog_id_str, [],
                 matched_only=False, limit=limit,
-                sibling_blog_ids=sibling_ids,
+                sibling_blog_ids=sibling_ids, cpa_offer_ids=cpa_ids,
             )
 
         return matched_titles
@@ -239,8 +243,10 @@ class InventoryTrigger(InventoryCategoryMixin):
         if topic_only_ids:
             category_conditions.append(
                 MainTitle.topic_id.in_(list(topic_only_ids)))
-        if category_conditions:
-            conditions.append(or_(*category_conditions))
+        # 꺼내는 기준과 같아야 한다. 다르면 못 꺼낼 제목을 재고로 세어
+        # "재고 충분" 으로 판단하고 생성이 굶는다(키워드 관리 검토서 D-5).
+        conditions.append(title_condition(
+            category_conditions, await owned_offer_ids(self.db, blog_id)))
 
         count = (await self.db.execute(
             select(func.count(MainTitle.id)).where(*conditions)
@@ -259,6 +265,7 @@ class InventoryTrigger(InventoryCategoryMixin):
         limit: int,
         exclude_ids: Optional[List[int]] = None,
         sibling_blog_ids: Optional[List[int]] = None,
+        cpa_offer_ids: Optional[List[int]] = None,
     ) -> List[MainTitle]:
         """
         필터 조건 조합으로 제목 목록 조회 (블로그별 재고 정책)
@@ -269,6 +276,8 @@ class InventoryTrigger(InventoryCategoryMixin):
             matched_only: True면 매칭 제목만, False면 카테고리 일치 제목 전체
             limit: 최대 조회 수
             exclude_ids: 제외할 제목 ID 목록
+            cpa_offer_ids: 이 블로그가 담당하는 CPA 오퍼 ID. 비면 CPA 제목을
+                하나도 뽑지 않는다.
 
         Returns:
             MainTitle 목록
@@ -285,8 +294,8 @@ class InventoryTrigger(InventoryCategoryMixin):
             conditions.append(MainTitle.matched_blog_ids.isnot(None))
             conditions.append(MainTitle.matched_blog_ids.contains(blog_id_str))
 
-        if category_conditions:
-            conditions.append(or_(*category_conditions))
+        # CPA 격리·연결. 판단은 title_scope 에 모아 둔다.
+        conditions.append(title_condition(category_conditions, cpa_offer_ids))
 
         if exclude_ids:
             conditions.append(MainTitle.id.notin_(exclude_ids))
