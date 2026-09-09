@@ -145,13 +145,14 @@ class TestNiche:
     """니치가 곧 구분 축이다. 오퍼 1개 = 니치 1개."""
 
     SRC = (ROOT / "app/routers/cpa.py").read_text(encoding="utf-8")
+    ASSETS = (ROOT / "app/routers/cpa_assets.py").read_text(encoding="utf-8")
 
     def test_link_endpoint(self):
-        assert "async def set_niche" in self.SRC
+        assert "async def set_niche" in self.ASSETS
 
     def test_one_to_one_enforced(self):
-        assert "이미 다른 오퍼의 니치입니다" in self.SRC
-        assert "row.cpa_offer_id = None" in self.SRC
+        assert "이미 다른 오퍼의 니치입니다" in self.ASSETS
+        assert "row.cpa_offer_id = None" in self.ASSETS
 
     def test_titles_inherit_the_niche(self):
         """제목에 니치가 안 붙으면 화면에서 CPA 로 표시되지 않는다."""

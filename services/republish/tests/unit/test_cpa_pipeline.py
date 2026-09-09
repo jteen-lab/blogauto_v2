@@ -273,6 +273,10 @@ class TestConsultPage:
         html = build_page(offer(), "https://ex.com/l")["html"]
         assert html.index("애드릭스 수익") < html.index("<h2>")
 
+    def test_page_api_moved_to_assets(self):
+        assert "consult-page" in (
+            ROOT / "app/routers/cpa_assets.py").read_text(encoding="utf-8")
+
     def test_thin_page_flagged(self):
         """바깥 링크를 다 없애도 쓸모 있어야 한다. 아니면 브릿지 페이지다."""
         found = build_page(offer(), "https://ex.com/l")
@@ -515,15 +519,20 @@ class TestOfferBlogWiring:
         block = self.SCOPE[self.SCOPE.index("except Exception"):]
         assert "return []" in block
 
-    def test_titles_require_a_blog(self):
-        """담당 블로그가 없으면 제목만 쌓이고 글은 영영 안 나온다."""
-        assert "담당 블로그를 먼저 지정하세요" in self.API
+    def test_blog_link_is_not_handled_here(self):
+        """블로그 연결은 이 화면에서 다루지 않는다(2026-09-09 정리).
 
-    def test_titles_are_matched_to_the_blogs(self):
-        assert "matched_blog_ids=json.dumps(blog_ids)" in self.API
+        오퍼 화면은 규칙과 자료만 다루고, 어느 블로그가 쓸지는 다른 곳에서
+        정한다. 격리 조건 자체는 그대로 살아 있어야 한다.
+        """
+        assert "toggleBlog" not in self.HTML
+        assert "담당 블로그" not in self.HTML
 
-    def test_screen_warns_when_unassigned(self):
-        assert "담당 블로그가 없습니다" in self.HTML
+    def test_isolation_still_enforced(self):
+        """화면에서 뺐다고 격리까지 풀리면 안 된다."""
+        assert "MainTitle.cpa_offer_id.is_(None)" in self.SCOPE
+        assert "blog_id in (r.blog_ids or [])" in self.SCOPE
 
-    def test_screen_lets_you_assign(self):
-        assert "toggleBlog" in self.HTML
+    def test_titles_carry_matching_when_blogs_exist(self):
+        assert "matched_blog_ids=json.dumps(blog_ids) if blog_ids else None" \
+            in self.API
