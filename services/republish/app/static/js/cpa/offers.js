@@ -15,6 +15,7 @@ function cpaApp() {
         showUnmatched: null,
         showConflicts: null,
         preview: '',
+        blogs: [],
         rawText: '',
         busy: false,
         STATES: [
@@ -25,7 +26,28 @@ function cpaApp() {
         ],
         form: { network: 'adlix', offer_code: '', recheck_days: 30, raw_text: '' },
 
+        async loadBlogs() {
+            const r = await fetch('/api/v1/blogs', { credentials: 'include' });
+            if (!r.ok) return;
+            const d = await r.json();
+            this.blogs = (d.blogs || []).map(b => ({ id: b.id, name: b.name }));
+        },
+
+        blogNames(o) {
+            return (o.blog_ids || [])
+                .map(id => (this.blogs.find(b => b.id === id) || {}).name || `#${id}`)
+                .join(', ');
+        },
+
+        async toggleBlog(o, blogId, checked) {
+            const next = checked
+                ? [...new Set([...(o.blog_ids || []), blogId])]
+                : (o.blog_ids || []).filter(x => x !== blogId);
+            await this.patch(o, { blog_ids: next });
+        },
+
         async load() {
+            if (!this.blogs.length) await this.loadBlogs();
             const q = this.filter ? `?status=${this.filter}` : '';
             const r = await fetch(`/api/v1/cpa/offers${q}`, { credentials: 'include' });
             if (!r.ok) return;

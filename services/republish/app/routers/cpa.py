@@ -5,8 +5,9 @@
 
 순서도: docs/flowcharts/cpa_offer.md
 """
+import json
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -48,6 +49,7 @@ class OfferPatch(BaseModel):
     subid_param: Optional[str] = None
     ftc_notice: Optional[str] = None
     conversion: Optional[dict] = None
+    blog_ids: Optional[List[int]] = None
     note: Optional[str] = None
 
 
@@ -371,6 +373,14 @@ async def make_titles(
         raise HTTPException(
             status_code=400,
             detail="확인되지 않았거나 재확인 기한이 지난 오퍼입니다")
+    blog_ids = list(offer.blog_ids or [])
+    if not blog_ids:
+        # 담당 블로그가 없으면 어떤 블로그도 이 제목을 뽑지 않는다.
+        # 제목만 쌓이고 글은 영영 안 나온다.
+        raise HTTPException(
+            status_code=400,
+            detail="담당 블로그를 먼저 지정하세요. 지정하지 않으면 "
+                   "어떤 블로그도 이 오퍼의 제목을 쓰지 않습니다.")
 
     found = build(offer, limit=payload.limit)
     existing = {
@@ -386,6 +396,8 @@ async def make_titles(
         db.add(MainTitle(
             title=title, status="available", source="cpa",
             cpa_offer_id=offer_id,
+            matched_blog_ids=json.dumps(blog_ids),
+            matched_count=len(blog_ids),
             topic_id=payload.topic_id, subtopic_id=payload.subtopic_id))
         added += 1
     await db.commit()

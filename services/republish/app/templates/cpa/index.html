@@ -88,6 +88,9 @@
                                   x-text="o.network + (o.offer_code ? ' · ' + o.offer_code : '')"></span>
                         </div>
                         <div class="text-xs text-gray-500 mt-1">
+                            담당 블로그
+                            <b x-text="blogNames(o) || '미지정'"
+                               :class="o.blog_ids.length ? '' : 'text-red-600'"></b> ·
                             규칙 <b x-text="o.rules.length"></b>건 ·
                             커버리지 <b x-text="o.coverage === null ? '—' : Math.round(o.coverage*100) + '%'"></b> ·
                             재확인 <b x-text="dday(o.recheck_due)"></b>
@@ -133,6 +136,10 @@
                             </li>
                             <li x-show="o.note" class="text-red-700">
                                 · <b x-text="o.note"></b>
+                            </li>
+                            <li x-show="!o.blog_ids.length" class="text-red-700">
+                                · <b>담당 블로그가 없습니다</b> — 지정하지 않으면
+                                어떤 블로그도 이 오퍼의 제목을 쓰지 않습니다
                             </li>
                             <li x-show="!o.ftc_notice">
                                 · <b>대가성 문구를 찾지 못했습니다</b> — 표시하지 않으면 위법입니다
@@ -231,6 +238,22 @@
                             </div>
                         </div>
                         <div>
+                            <div class="text-xs text-gray-500 mb-1">
+                                담당 블로그 — 이 블로그들만 이 오퍼의 제목을 씁니다
+                            </div>
+                            <div class="border rounded p-2 mb-3 max-h-32 overflow-auto">
+                                <template x-for="b in blogs" :key="b.id">
+                                    <label class="flex items-center gap-2 text-xs py-0.5">
+                                        <input type="checkbox" :value="b.id"
+                                               :checked="o.blog_ids.includes(b.id)"
+                                               @change="toggleBlog(o, b.id, $event.target.checked)">
+                                        <span x-text="b.name"></span>
+                                    </label>
+                                </template>
+                                <div x-show="!blogs.length" class="text-xs text-gray-400">
+                                    블로그 목록을 불러오지 못했습니다.
+                                </div>
+                            </div>
                             <div class="text-xs text-gray-500 mb-1">공정위 대가성 문구</div>
                             <input :value="o.ftc_notice"
                                    @change="patch(o, {ftc_notice: $event.target.value})"
