@@ -116,6 +116,41 @@ _HINTS: List[tuple] = [
 ]
 
 
+# AI 가 유형을 고르는 데 한계가 있다. 실측(2026-09-09 안과 오퍼): 규칙
+# 60건 중 41건이 must_not_include 로 몰려, 후기 금지·검색광고 금지·심의
+# 배너가 전부 "금지 낱말" 칸에 들어갔다. 프롬프트를 고쳐도 되풀이된다.
+#
+# 그래서 **신호로 바로잡는다.** 사람이 읽으면 명백한 것만 옮긴다.
+_RETYPE: List[tuple] = [
+    ("forbidden_topic", ("후기", "경험담", "치료경험", "비용 오픈", "비용 공개",
+                         "자세한 비용", "수술후기")),
+    ("pattern", ("전화번호", "할인율", "할인비용", "수술건수", "건수 1위")),
+    ("channel", ("검색광고", "파워링크", "파워컨텐츠", "플레이스", "인스타그램",
+                 "페이스북", "네이버밴드", "어플 광고", "포털사이트", "SNS")),
+    ("asset", ("배너", "바이럴 이미지", "이미지 자료", "다운로드", "모자이크")),
+    ("advisory", ("부탁드립니다", "양해", "성의 있는", "감사하겠습니다")),
+]
+
+# 이 유형만 바로잡는다. 나머지는 AI 판단을 존중한다 —
+# 몰리는 것만 문제이지 제대로 고른 것까지 흔들면 안 된다.
+_RETYPE_FROM = ("must_not_include", "required_topic", "must_include")
+
+
+def retype(rule: Dict[str, Any]) -> Dict[str, Any]:
+    """신호가 분명하면 유형을 바로잡는다."""
+    kind = (rule or {}).get("type")
+    if kind not in _RETYPE_FROM:
+        return rule
+    blob = f"{rule.get('value') or ''} {rule.get('target') or ''} " \
+           f"{rule.get('source_quote') or ''}"
+    for new_kind, words in _RETYPE:
+        if any(word in blob for word in words):
+            if new_kind == kind:
+                return rule
+            return {**rule, "type": new_kind}
+    return rule
+
+
 def _slot_for(rule: Dict[str, Any]) -> Optional[str]:
     """이 규칙이 들어갈 칸. 없으면 None(= 칸 밖 규칙)."""
     kind = (rule or {}).get("type")
@@ -134,13 +169,20 @@ def _slot_for(rule: Dict[str, Any]) -> Optional[str]:
     return _DEFAULT.get(kind)
 
 
-def assign(rules: Sequence[dict],
-           ftc_notice: str = "") -> Dict[str, Any]:
+def assign(rules: Sequence[dict], ftc_notice: str = "",
+           conversion: Optional[Dict[str, Any]] = None,
+           notice_position: str = "") -> Dict[str, Any]:
     """추출된 규칙을 정형 칸에 넣는다.
+
+    **고정 서식에서 뽑은 것을 AI 결과와 합친다.** 미승인 조건·접수 항목·
+    문구 위치는 `offer_parser` 가 정확히 뽑는데, 그것을 칸에 넣지 않으면
+    빈 칸으로 보여 사람이 놓친 줄 안다(2026-09-09 실측 11/19).
 
     Args:
         rules: 추출·수기 추가된 규칙
-        ftc_notice: 고정 서식에서 뽑은 대가성 문구(있으면 그 칸을 채운다)
+        ftc_notice: 고정 서식에서 뽑은 대가성 문구
+        conversion: 고정 서식의 전환 정보(미승인 조건·접수 항목)
+        notice_position: 고정 서식이 정한 문구 위치
 
     Returns:
         {"slots": [...], "extras": [...], "missing": [...], "filled": n}
@@ -150,12 +192,34 @@ def assign(rules: Sequence[dict],
     buckets: Dict[str, List[dict]] = {s["key"]: [] for s in SLOTS}
     extras: List[dict] = []
 
-    for rule in rules or []:
+    for raw in rules or []:
+        rule = retype(raw)
         key = _slot_for(rule)
         if key:
             buckets[key].append(rule)
         else:
             extras.append(rule)
+
+    fields = (conversion or {}).get("fields") or []
+    rejects = (conversion or {}).get("reject_reasons") or []
+    if (fields or rejects) and not buckets["targeting"]:
+        buckets["targeting"].append({
+            "type": "conversion", "scope": "all", "target": "전환 조건",
+            "value": (f"접수: {', '.join(fields)}" if fields else "")
+                     + (f" / 미승인: {', '.join(rejects)}" if rejects else ""),
+            "severity": "review",
+            "source_quote": "[고정 서식] 전환 정보",
+        })
+
+    if notice_position and not buckets["notice_position"]:
+        label = ("제목 앞 [광고] 또는 본문 첫 부분"
+                 if notice_position == "title_or_body_start"
+                 else "본문 첫 부분")
+        buckets["notice_position"].append({
+            "type": "position", "scope": "all", "target": "대가성 문구",
+            "value": label, "severity": "block",
+            "source_quote": "[고정 서식] 공정위 2024-12-01 개정",
+        })
 
     if ftc_notice and not buckets["ftc_notice"]:
         buckets["ftc_notice"].append({

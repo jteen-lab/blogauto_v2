@@ -161,3 +161,66 @@ class TestImages:
     def test_delete_removes_the_file(self):
         block = self.API[self.API.index("async def delete_image"):]
         assert "unlink" in block
+
+
+class TestRetype:
+    """AI 는 유형을 must_not_include 로 몰아넣는다.
+
+    실측(2026-09-09 안과 오퍼): 규칙 60건 중 41건이 그 유형이라 후기 금지·
+    검색광고 금지·심의 배너가 전부 '금지 낱말' 칸에 들어갔다. 프롬프트를
+    고쳐도 되풀이되므로 신호로 바로잡는다.
+    """
+
+    @pytest.mark.parametrize("value,quote,expected", [
+        ("수술후기", "6. 수술후기 광고는 불법", "forbidden_topic"),
+        ("자세한 비용", "3. 자세한 비용 오픈 금지", "forbidden_topic"),
+        ("전화번호", "9. 대표전화번호가 아닌 전화번호", "pattern"),
+        ("할인율", "2. 할인율, 할인비용", "pattern"),
+        ("파워링크", "7. 포털사이트 검색광고 금지", "channel"),
+        ("인스타그램", "10. SNS 광고", "channel"),
+    ])
+    def test_signals_fix_the_type(self, value, quote, expected):
+        from app.services.cpa.rule_template import retype
+
+        got = retype({"type": "must_not_include", "value": value,
+                      "source_quote": quote})
+        assert got["type"] == expected
+
+    def test_plain_banned_word_untouched(self):
+        from app.services.cpa.rule_template import retype
+
+        got = retype({"type": "must_not_include", "value": "최고",
+                      "source_quote": "4. 최상급 표현 사용불가"})
+        assert got["type"] == "must_not_include"
+
+    def test_only_the_crowded_types_are_retyped(self):
+        """제대로 고른 것까지 흔들면 안 된다."""
+        from app.services.cpa.rule_template import retype
+
+        got = retype({"type": "content_source", "value": "후기가 많은 병원",
+                      "source_quote": "*내용"})
+        assert got["type"] == "content_source"
+
+
+class TestFixedSectionMerged:
+    """고정 서식으로 뽑은 것을 칸에 안 넣으면 빈 칸으로 보여 놓친 줄 안다."""
+
+    def test_conversion_fills_targeting(self):
+        out = assign([], conversion={"fields": ["이름", "핸드폰번호"],
+                                     "reject_reasons": ["오류", "중복"]})
+        by = {s["key"]: s for s in out["slots"]}
+        assert by["targeting"]["count"] == 1
+        assert "이름" in by["targeting"]["rules"][0]["value"]
+
+    def test_notice_position_filled(self):
+        out = assign([], notice_position="title_or_body_start")
+        by = {s["key"]: s for s in out["slots"]}
+        assert "[광고]" in by["notice_position"]["rules"][0]["value"]
+
+    def test_extracted_rule_wins_over_fixed(self):
+        """AI 가 이미 뽑았으면 덮어쓰지 않는다."""
+        out = assign([R("position", "본문 첫 부분")],
+                     notice_position="title_or_body_start")
+        by = {s["key"]: s for s in out["slots"]}
+        assert by["notice_position"]["count"] == 1
+        assert by["notice_position"]["rules"][0]["value"] == "본문 첫 부분"

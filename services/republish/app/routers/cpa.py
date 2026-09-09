@@ -108,7 +108,8 @@ async def create_offer(
         name=found["name"],
         vertical=payload.vertical,
         raw_text=payload.raw_text,
-        conversion=found["conversion"],
+        conversion={**found["conversion"],
+                    "notice_position": found["notice_position"]},
         ftc_notice=found["ftc_notice"],
         rules=[], unmatched=[], conflicts=[],
         landing_url=payload.landing_url,
@@ -143,7 +144,8 @@ async def reparse_offer(
 
     found = parse(offer.raw_text)
     offer.name = found["name"]
-    offer.conversion = found["conversion"]
+    offer.conversion = {**found["conversion"],
+                        "notice_position": found["notice_position"]}
     offer.ftc_notice = found["ftc_notice"]
     offer.status = ST_DRAFT
     offer.confirmed_at = None
@@ -340,7 +342,10 @@ async def get_offer(
     from ..services.cpa.rule_template import assign, critical_missing
 
     offer = await _get(db, offer_id)
-    template = assign(offer.rules or [], offer.ftc_notice or "")
+    template = assign(offer.rules or [], offer.ftc_notice or "",
+                      conversion=offer.conversion or {},
+                      notice_position=(offer.conversion or {}).get(
+                          "notice_position", "title_or_body_start"))
     return {"offer": offer.to_dict(), "raw_text": offer.raw_text,
             "template": template,
             "critical_missing": critical_missing(template)}
