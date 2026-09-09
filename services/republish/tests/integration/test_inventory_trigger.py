@@ -292,6 +292,7 @@ class TestFindAvailableTitles:
         # 3) _query_titles_list(보충) -> 폴백 1개
         mock_db.execute = AsyncMock(side_effect=build_execute_side_effect([
             ("scalars_all", []),                    # BlogCategory 조회 (없음)
+            ("scalars_all", []),                    # 담당 CPA 오퍼 (없음)
             ("scalars_all", [matched_1, matched_2]),  # 1차 매칭 제목
             ("scalars_all", [fallback]),               # 2차 보충 제목
         ]))

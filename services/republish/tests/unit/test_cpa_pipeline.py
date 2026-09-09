@@ -446,3 +446,82 @@ class TestTitleFeedback:
 
     def test_reason_when_all_blocked(self):
         assert "모두 규칙에 걸렸습니다" in self.SRC
+
+
+class TestOfferBlogWiring:
+    """제목을 만들어도 아무 블로그가 뽑지 못했다(2026-09-09 실측).
+
+    이사스토리 제목 5개가 available 로 쌓였는데 글 생성으로 넘어가지 않았다.
+    빠진 것이 둘 — 일반 블로그로부터의 격리, 담당 블로그와의 연결.
+    """
+
+    SCOPE = (ROOT / "app/services/generation/title_scope.py").read_text(
+        encoding="utf-8")
+    INV = (ROOT / "app/services/generation/inventory_trigger.py").read_text(
+        encoding="utf-8")
+    API = (ROOT / "app/routers/cpa.py").read_text(encoding="utf-8")
+    HTML = (ROOT / "app/templates/cpa/index.html").read_text(encoding="utf-8")
+
+    def _cond(self, categories=(), offers=()):
+        from app.services.generation.title_scope import title_condition
+
+        return str(title_condition(list(categories), list(offers)))
+
+    def test_plain_blogs_cannot_pick_cpa_titles(self):
+        """카테고리 조건이 없는 블로그는 CPA 제목까지 후보로 잡았다."""
+        sql = self._cond()
+        assert "cpa_offer_id IS NULL" in sql
+
+    def test_owning_blog_can_pick_them(self):
+        sql = self._cond(offers=[3])
+        assert "cpa_offer_id IN" in sql
+        assert "cpa_offer_id IS NULL" in sql, "일반 제목도 계속 후보다"
+
+    def test_cpa_titles_bypass_category(self):
+        """CPA 제목에는 주제가 없다. 카테고리로 거르면 영원히 탈락한다."""
+        from app.models.title import MainTitle
+
+        sql = self._cond(categories=[MainTitle.topic_id.in_([7])], offers=[3])
+        # 카테고리는 일반 제목 쪽에만 붙는다
+        head, _, tail = sql.partition(" OR ")
+        assert "topic_id IN" in head and "IS NULL" in head
+        assert "topic_id" not in tail
+
+    def test_category_still_applies_to_plain_titles(self):
+        from app.models.title import MainTitle
+
+        sql = self._cond(categories=[MainTitle.topic_id.in_([7])])
+        assert "topic_id IN" in sql and "cpa_offer_id IS NULL" in sql
+
+    def test_count_matches_pick(self):
+        """세는 기준과 꺼내는 기준이 다르면 재고 판단이 어긋난다."""
+        block = self.INV[self.INV.index("async def count_available_titles"):]
+        head = block[:block.index("async def ", 20)]
+        assert "title_condition(" in head
+
+    def test_pick_uses_the_same_helper(self):
+        block = self.INV[self.INV.index("async def _query_titles_list"):]
+        assert "title_condition(" in block
+
+    def test_only_usable_offers_are_owned(self):
+        """확인 전 오퍼의 제목을 뽑으면 생성기가 다시 막아 헛돈다."""
+        block = self.SCOPE[self.SCOPE.index("async def owned_offer_ids"):]
+        assert "r.usable" in block
+        assert "blog_id in (r.blog_ids or [])" in block
+
+    def test_offer_lookup_failure_does_not_block(self):
+        block = self.SCOPE[self.SCOPE.index("except Exception"):]
+        assert "return []" in block
+
+    def test_titles_require_a_blog(self):
+        """담당 블로그가 없으면 제목만 쌓이고 글은 영영 안 나온다."""
+        assert "담당 블로그를 먼저 지정하세요" in self.API
+
+    def test_titles_are_matched_to_the_blogs(self):
+        assert "matched_blog_ids=json.dumps(blog_ids)" in self.API
+
+    def test_screen_warns_when_unassigned(self):
+        assert "담당 블로그가 없습니다" in self.HTML
+
+    def test_screen_lets_you_assign(self):
+        assert "toggleBlog" in self.HTML
