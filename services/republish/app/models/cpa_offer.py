@@ -94,6 +94,12 @@ class CpaOffer(Base):
     # 애드센스 블로그가 CPA 제목을 가져가면 규정 위반 글이 엉뚱한 곳에 나간다.
     blog_ids = Column(JSON, nullable=True, default=list)
 
+    # 오퍼가 제공한 이미지(스크린샷·심의 배너). 글 생성 때 쓴다.
+    # 심의 배너 외 이미지를 쓰면 위반인 오퍼가 있어, 쓸 수 있는 것을
+    # 미리 등록해 둔다.
+    images = Column(JSON, nullable=True, default=list,
+                    comment="[{path, name, note}]")
+
     landing_url = Column(String(500), nullable=True)
     subid_param = Column(String(50), nullable=True, comment="서브아이디 파라미터")
 
@@ -156,6 +162,7 @@ class CpaOffer(Base):
             "rules": self.rules or [], "unmatched": self.unmatched or [],
             "conflicts": self.conflicts or [],
             "landing_url": self.landing_url or "",
+            "images": self.images or [],
             "blog_ids": self.blog_ids or [],
             "status": self.status, "usable": self.usable,
             "overdue": self.overdue, "coverage": self.coverage,

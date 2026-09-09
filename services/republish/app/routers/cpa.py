@@ -9,7 +9,8 @@ import json
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import (APIRouter, Depends, File, Form, HTTPException,
+                     Query, UploadFile)
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -191,59 +192,6 @@ async def extract_rules(
     return {"success": True, "offer": offer.to_dict()}
 
 
-class NicheIn(BaseModel):
-    """오퍼의 니치(주제). 오퍼 1개 = 니치 1개."""
-
-    topic_id: Optional[int] = None
-    name: Optional[str] = None
-
-
-@router.post("/offers/{offer_id}/niche")
-async def set_niche(
-    offer_id: int,
-    payload: NicheIn,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db_session),
-) -> dict:
-    """오퍼에 니치를 붙인다. 없으면 이름으로 새로 만든다.
-
-    **니치가 곧 구분 축이다.** 키워드·임시제목·정식제목이 topic_id 로 여기
-    매달리므로, 이 연결이 있어야 화면에서 CPA 로 표시된다.
-    """
-    from ..models.category import Topic
-
-    offer = await _get(db, offer_id)
-
-    topic = None
-    if payload.topic_id:
-        topic = await db.get(Topic, payload.topic_id)
-        if not topic:
-            raise HTTPException(status_code=404, detail="주제를 찾을 수 없습니다")
-    elif (payload.name or "").strip():
-        topic = Topic(user_id=current_user.id, name=payload.name.strip(),
-                      description=f"CPA 오퍼: {offer.name}")
-        db.add(topic)
-        await db.flush()
-    else:
-        raise HTTPException(status_code=400, detail="주제를 고르거나 이름을 주세요")
-
-    if topic.cpa_offer_id and topic.cpa_offer_id != offer_id:
-        raise HTTPException(
-            status_code=400,
-            detail="이미 다른 오퍼의 니치입니다. 오퍼 1개 = 니치 1개입니다.")
-
-    # 이 오퍼가 쓰던 다른 니치는 떼어 낸다 — 1:1 을 지킨다
-    for row in (await db.execute(
-            select(Topic).where(Topic.cpa_offer_id == offer_id))).scalars():
-        if row.id != topic.id:
-            row.cpa_offer_id = None
-
-    topic.cpa_offer_id = offer_id
-    await db.commit()
-    logger.info("[CPA] 니치 연결 | %s ↔ %s", offer.name, topic.name)
-    return {"success": True, "topic": {"id": topic.id, "name": topic.name}}
-
-
 class RuleIn(BaseModel):
     """미분류 문장을 규칙으로 올리거나, 규칙을 직접 추가한다."""
 
@@ -384,9 +332,18 @@ async def get_offer(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    """오퍼 하나. 원문까지 함께 준다 — 확인 화면이 대조해야 한다."""
+    """오퍼 하나. 원문과 정형 칸 배정까지 준다.
+
+    칸을 보여줘야 **무엇을 못 뽑았는지** 알 수 있다. 유형별로만 늘어놓으면
+    "이 오퍼엔 원래 없는 것" 과 "AI 가 놓친 것" 이 구분되지 않는다.
+    """
+    from ..services.cpa.rule_template import assign, critical_missing
+
     offer = await _get(db, offer_id)
-    return {"offer": offer.to_dict(), "raw_text": offer.raw_text}
+    template = assign(offer.rules or [], offer.ftc_notice or "")
+    return {"offer": offer.to_dict(), "raw_text": offer.raw_text,
+            "template": template,
+            "critical_missing": critical_missing(template)}
 
 
 async def _get(db: AsyncSession, offer_id: int) -> CpaOffer:
@@ -426,14 +383,8 @@ async def make_titles(
         raise HTTPException(
             status_code=400,
             detail="확인되지 않았거나 재확인 기한이 지난 오퍼입니다")
-    blog_ids = list(offer.blog_ids or [])
-    if not blog_ids:
-        # 담당 블로그가 없으면 어떤 블로그도 이 제목을 뽑지 않는다.
-        # 제목만 쌓이고 글은 영영 안 나온다.
-        raise HTTPException(
-            status_code=400,
-            detail="담당 블로그를 먼저 지정하세요. 지정하지 않으면 "
-                   "어떤 블로그도 이 오퍼의 제목을 쓰지 않습니다.")
+    # 블로그 연결은 이 화면에서 다루지 않는다. 매칭은 비워 둔다.
+    blog_ids: List[int] = list(offer.blog_ids or [])
 
     # 오퍼의 니치를 제목에 붙인다. 니치가 구분 축이라 이게 없으면
     # 화면에서 CPA 로 표시되지 않는다.
@@ -457,7 +408,7 @@ async def make_titles(
         db.add(MainTitle(
             title=title, status="available", source="cpa",
             cpa_offer_id=offer_id,
-            matched_blog_ids=json.dumps(blog_ids),
+            matched_blog_ids=json.dumps(blog_ids) if blog_ids else None,
             matched_count=len(blog_ids),
             topic_id=topic_id, subtopic_id=payload.subtopic_id))
         added += 1
@@ -521,33 +472,3 @@ async def check_content(
                 _Offer.is_deleted.is_(False)))).scalars().all() if url
     ]
     return check(offer, payload.title, payload.body, others).to_dict()
-
-
-class PageReq(BaseModel):
-    """상담 페이지 미리보기."""
-
-    intro: str = ""
-    post_id: Optional[int] = None
-    blog_id: Optional[int] = None
-
-
-@router.post("/offers/{offer_id}/consult-page")
-async def consult_page(
-    offer_id: int,
-    payload: PageReq,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db_session),
-) -> dict:
-    """상담 페이지 HTML 을 만든다.
-
-    얇으면 `thin=true` 로 알린다. 얇은 중개 페이지는 검색엔진이 걸러내고,
-    나중에 유료 광고를 붙일 때 승인되지 않는다.
-    """
-    from ..services.cpa.consult_page import build
-    from ..services.cpa.subid import apply
-
-    offer = await _get(db, offer_id)
-    url = apply(offer.landing_url or "", offer,
-                payload.post_id, payload.blog_id)
-    found = build(offer, url, payload.intro)
-    return {**found, "landing_url": url}
