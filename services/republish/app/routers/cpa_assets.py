@@ -5,7 +5,7 @@
 
 순서도: docs/flowcharts/cpa_offer.md
 """
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import (APIRouter, Depends, File, Form, HTTPException,
                      UploadFile)
@@ -130,57 +130,58 @@ async def delete_image(
     return {"success": True, "images": images}
 
 
-class NicheIn(BaseModel):
-    """오퍼의 니치(주제). 오퍼 1개 = 니치 1개."""
+class SubtopicsIn(BaseModel):
+    """오퍼가 쓸 하위주제. 소유가 아니라 참조다."""
 
-    topic_id: Optional[int] = None
-    name: Optional[str] = None
+    subtopic_ids: List[int] = []
+    new_name: Optional[str] = None
+    new_topic_id: Optional[int] = None
 
 
-@router.post("/offers/{offer_id}/niche")
-async def set_niche(
+@router.post("/offers/{offer_id}/subtopics")
+async def set_subtopics(
     offer_id: int,
-    payload: NicheIn,
+    payload: SubtopicsIn,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    """오퍼에 니치를 붙인다. 없으면 이름으로 새로 만든다.
+    """오퍼가 쓸 하위주제를 정한다.
 
-    **니치가 곧 구분 축이다.** 키워드·임시제목·정식제목이 topic_id 로 여기
-    매달리므로, 이 연결이 있어야 화면에서 CPA 로 표시된다.
+    **소유하지 않는다.** 애드센스 블로그도 같은 하위주제를 계속 쓴다.
+    주제 단위로 잡으면 그 니치를 쓰던 블로그가 통째로 넘어간다
+    (실측: '생활 정보' 제목 879건·블로그 7개).
+
+    `new_name` 을 주면 그 이름으로 하위주제를 만들어 함께 붙인다.
+    자동 생성은 하지 않는다 — 카테고리 트리가 지저분해진다.
     """
-    from ..models.category import Topic
+    from ..models.category import SubTopic, Topic
 
     offer = await _get(db, offer_id)
+    picked = [int(x) for x in (payload.subtopic_ids or [])]
 
-    topic = None
-    if payload.topic_id:
-        topic = await db.get(Topic, payload.topic_id)
+    if (payload.new_name or "").strip():
+        if not payload.new_topic_id:
+            raise HTTPException(
+                status_code=400, detail="새 하위주제를 만들 주제를 고르세요")
+        topic = await db.get(Topic, payload.new_topic_id)
         if not topic:
             raise HTTPException(status_code=404, detail="주제를 찾을 수 없습니다")
-    elif (payload.name or "").strip():
-        topic = Topic(user_id=current_user.id, name=payload.name.strip(),
-                      description=f"CPA 오퍼: {offer.name}")
-        db.add(topic)
+        made = SubTopic(topic_id=topic.id, name=payload.new_name.strip(),
+                        description=f"CPA 오퍼: {offer.name}")
+        db.add(made)
         await db.flush()
-    else:
-        raise HTTPException(status_code=400, detail="주제를 고르거나 이름을 주세요")
+        picked.append(made.id)
 
-    if topic.cpa_offer_id and topic.cpa_offer_id != offer_id:
-        raise HTTPException(
-            status_code=400,
-            detail="이미 다른 오퍼의 니치입니다. 오퍼 1개 = 니치 1개입니다.")
+    # 실재하는 것만 남긴다 — 지워진 하위주제를 참조하면 제목이 안 뽑힌다
+    alive = {row for row in (await db.execute(
+        select(SubTopic.id).where(SubTopic.id.in_(picked or [0]))
+    )).scalars().all()} if picked else set()
 
-    # 이 오퍼가 쓰던 다른 니치는 떼어 낸다 — 1:1 을 지킨다
-    for row in (await db.execute(
-            select(Topic).where(Topic.cpa_offer_id == offer_id))).scalars():
-        if row.id != topic.id:
-            row.cpa_offer_id = None
-
-    topic.cpa_offer_id = offer_id
+    offer.subtopic_ids = sorted(alive)
     await db.commit()
-    logger.info("[CPA] 니치 연결 | %s ↔ %s", offer.name, topic.name)
-    return {"success": True, "topic": {"id": topic.id, "name": topic.name}}
+    await db.refresh(offer)
+    logger.info("[CPA] 하위주제 참조 | %s | %s", offer.name, offer.subtopic_ids)
+    return {"success": True, "subtopic_ids": offer.subtopic_ids}
 
 
 class PageReq(BaseModel):

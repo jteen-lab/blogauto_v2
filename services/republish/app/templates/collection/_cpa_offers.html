@@ -81,9 +81,9 @@
                                   x-text="o.network + (o.offer_code ? ' · ' + o.offer_code : '')"></span>
                         </div>
                         <div class="text-xs text-gray-500 mt-1">
-                            니치
-                            <b x-text="o.niche_name || '미지정'"
-                               :class="o.niche_name ? '' : 'text-red-600'"></b> ·
+                            하위주제
+                            <b x-text="(o.subtopic_ids || []).length + '개'"
+                               :class="(o.subtopic_ids || []).length ? '' : 'text-red-600'"></b> ·
                             규칙 <b x-text="o.rules.length"></b>건 ·
                             커버리지 <b x-text="o.coverage === null ? '—' : Math.round(o.coverage*100) + '%'"></b> ·
                             재확인 <b x-text="dday(o.recheck_due)"></b>
@@ -130,9 +130,9 @@
                             <li x-show="o.note" class="text-red-700">
                                 · <b x-text="o.note"></b>
                             </li>
-                            <li x-show="!o.niche_name" class="text-red-700">
-                                · <b>니치가 없습니다</b> — 니치를 지정해야
-                                키워드·제목이 이 오퍼 것으로 구분됩니다
+                            <li x-show="!(o.subtopic_ids || []).length" class="text-red-700">
+                                · <b>쓸 하위주제가 없습니다</b> — 지정해야
+                                키워드·제목이 같은 자리에 모입니다
                             </li>
                             <li x-show="!o.ftc_notice">
                                 · <b>대가성 문구를 찾지 못했습니다</b> — 표시하지 않으면 위법입니다
@@ -297,6 +297,34 @@
                             </div>
                         </div>
                         <div>
+                            <div class="text-xs text-gray-500 mb-1">
+                                쓸 하위주제 — <b>소유가 아니라 참조</b>입니다.
+                                애드센스도 같은 하위주제를 계속 씁니다.
+                            </div>
+                            <div class="border rounded p-2 mb-2 max-h-40 overflow-auto">
+                                <template x-for="sub in subtopics" :key="sub.id">
+                                    <label class="flex items-center gap-2 text-xs py-0.5">
+                                        <input type="checkbox" :value="sub.id"
+                                               :checked="(o.subtopic_ids || []).includes(sub.id)"
+                                               @change="toggleSubtopic(o, sub.id, $event.target.checked)">
+                                        <span x-text="sub.topic_name + ' > ' + sub.name"></span>
+                                    </label>
+                                </template>
+                                <div x-show="!subtopics.length" class="text-xs text-gray-400">
+                                    하위주제를 불러오지 못했습니다.
+                                </div>
+                            </div>
+                            <div class="flex gap-2 mb-3">
+                                <select :id="`newtopic-${o.id}`"
+                                        class="flex-1 border rounded px-2 py-1 text-xs">
+                                    <option value="">새 하위주제를 만들 주제…</option>
+                                    <template x-for="t in topics" :key="t.id">
+                                        <option :value="t.id" x-text="t.name"></option>
+                                    </template>
+                                </select>
+                                <button @click="newSubtopic(o)"
+                                        class="border px-2 py-1 rounded text-xs">새로 만들기</button>
+                            </div>
                             <div class="text-xs text-gray-500 mb-1">공정위 대가성 문구</div>
                             <input :value="o.ftc_notice"
                                    @change="patch(o, {ftc_notice: $event.target.value})"

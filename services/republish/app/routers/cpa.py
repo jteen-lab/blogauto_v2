@@ -391,13 +391,17 @@ async def make_titles(
     # 블로그 연결은 이 화면에서 다루지 않는다. 매칭은 비워 둔다.
     blog_ids: List[int] = list(offer.blog_ids or [])
 
-    # 오퍼의 니치를 제목에 붙인다. 니치가 구분 축이라 이게 없으면
-    # 화면에서 CPA 로 표시되지 않는다.
-    from ..models.category import Topic
+    # 오퍼가 쓰는 하위주제를 제목에 붙인다. 이게 있어야 키워드·제목이
+    # 같은 자리에 모이고, 화면에서 "이 오퍼가 쓰는 중" 으로 보인다.
+    from ..models.category import SubTopic
 
-    niche = (await db.execute(
-        select(Topic).where(Topic.cpa_offer_id == offer_id))).scalars().first()
-    topic_id = payload.topic_id or (niche.id if niche else None)
+    subtopic_id = payload.subtopic_id
+    if not subtopic_id and (offer.subtopic_ids or []):
+        subtopic_id = int(offer.subtopic_ids[0])
+    topic_id = payload.topic_id
+    if subtopic_id and not topic_id:
+        found = await db.get(SubTopic, subtopic_id)
+        topic_id = found.topic_id if found else None
 
     found = build(offer, limit=payload.limit)
     existing = {
@@ -415,7 +419,7 @@ async def make_titles(
             cpa_offer_id=offer_id,
             matched_blog_ids=json.dumps(blog_ids) if blog_ids else None,
             matched_count=len(blog_ids),
-            topic_id=topic_id, subtopic_id=payload.subtopic_id))
+            topic_id=topic_id, subtopic_id=subtopic_id))
         added += 1
     await db.commit()
 

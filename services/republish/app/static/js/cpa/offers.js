@@ -18,6 +18,7 @@ function cpaApp() {
         tpl: null,
         criticalMissing: [],
         topics: [],
+        subtopics: [],
         rawText: '',
         busy: false,
         STATES: [
@@ -35,30 +36,50 @@ function cpaApp() {
             const r = await fetch('/api/v1/categories/topics', { credentials: 'include' });
             if (!r.ok) return;
             this.topics = await r.json();
+            // 하위주제는 주제별로 받아 하나로 합친다
+            const all = [];
+            for (const t of this.topics) {
+                const sub = await fetch(
+                    `/api/v1/categories/topics/${t.id}/subtopics`,
+                    { credentials: 'include' });
+                if (!sub.ok) continue;
+                for (const one of await sub.json()) {
+                    all.push({ id: one.id, name: one.name, topic_name: t.name });
+                }
+            }
+            this.subtopics = all;
         },
 
-        async setNiche(o, create = false) {
-            let body;
-            if (create) {
-                const name = prompt('새 니치 이름', o.name);
-                if (!name) return;
-                body = { name };
-            } else {
-                const el = document.getElementById(`niche-${o.id}`);
-                if (!el || !el.value) { alert('주제를 고르세요.'); return; }
-                body = { topic_id: Number(el.value) };
-            }
-            const r = await fetch(`/api/v1/cpa/offers/${o.id}/niche`, {
+        async saveSubtopics(o, ids, newName = null, newTopicId = null) {
+            const r = await fetch(`/api/v1/cpa/offers/${o.id}/subtopics`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
-                body: JSON.stringify(body),
+                body: JSON.stringify({ subtopic_ids: ids, new_name: newName,
+                                       new_topic_id: newTopicId }),
             });
             const d = await r.json();
-            if (!r.ok) { alert(d.detail || '연결 실패'); return; }
-            await this.loadTopics();
-            await this.load();
+            if (!r.ok) { alert(d.detail || '저장 실패'); return; }
+            o.subtopic_ids = d.subtopic_ids;
         },
+
+        async toggleSubtopic(o, id, checked) {
+            const next = checked
+                ? [...new Set([...(o.subtopic_ids || []), id])]
+                : (o.subtopic_ids || []).filter(x => x !== id);
+            await this.saveSubtopics(o, next);
+        },
+
+        async newSubtopic(o) {
+            const el = document.getElementById(`newtopic-${o.id}`);
+            if (!el || !el.value) { alert('주제를 먼저 고르세요.'); return; }
+            const name = prompt('새 하위주제 이름', o.name);
+            if (!name) return;
+            await this.saveSubtopics(o, o.subtopic_ids || [], name,
+                                     Number(el.value));
+            await this.loadTopics();
+        },
+
 
         async load() {
             if (!this.topics.length) await this.loadTopics();
@@ -66,10 +87,7 @@ function cpaApp() {
             const r = await fetch(`/api/v1/cpa/offers${q}`, { credentials: 'include' });
             if (!r.ok) return;
             const d = await r.json();
-            this.items = (d.items || []).map(o => ({
-                ...o,
-                niche_name: (this.topics.find(t => t.cpa_offer_id === o.id) || {}).name || '',
-            }));
+            this.items = d.items || [];
             this.counts = d.counts || {};
         },
 
