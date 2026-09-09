@@ -15,7 +15,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...models.title import MainTitle
-from .title_scope import owned_offer_ids, title_condition
+from .title_scope import log_empty, owned_offer_ids, title_condition
 from ...models.crawled_post import CrawledPost
 from ...models.category import BlogCategory
 from .inventory_category_mixin import InventoryCategoryMixin
@@ -373,17 +373,20 @@ class InventoryTrigger(InventoryCategoryMixin):
                 MainTitle.topic_id.in_(list(topic_only_ids))
             )
 
+        # 담당 CPA 오퍼. 있으면 그 오퍼 제목만 뽑는다.
+        cpa_ids = await owned_offer_ids(self.db, blog_id)
+
         logger.info(
             f"[INVENTORY] 제목 검색 시작 | blog_id={blog_id} | "
             f"카테고리소스={category_source} | "
-            f"has_category={has_category} | "
+            f"has_category={has_category} | cpa={cpa_ids} | "
             f"subtopic_ids={subtopic_ids} | topic_only_ids={topic_only_ids}"
         )
 
         # 1차: 매칭 + 카테고리(subtopic) 일치 제목
         title = await self._query_title_with_filters(
             blog_id_str, category_conditions, matched_only=True,
-            sibling_blog_ids=sibling_ids,
+            sibling_blog_ids=sibling_ids, cpa_offer_ids=cpa_ids,
         )
         if title:
             logger.info(f"[INVENTORY] 제목 선택: 1차(매칭+카테고리) | id={title.id}")
@@ -392,7 +395,7 @@ class InventoryTrigger(InventoryCategoryMixin):
         # 2차: 카테고리(subtopic) 일치 available 제목 (매칭 무관)
         title = await self._query_title_with_filters(
             blog_id_str, category_conditions, matched_only=False,
-            sibling_blog_ids=sibling_ids,
+            sibling_blog_ids=sibling_ids, cpa_offer_ids=cpa_ids,
         )
         if title:
             logger.info(f"[INVENTORY] 제목 선택: 2차(카테고리만) | id={title.id}")
@@ -405,7 +408,7 @@ class InventoryTrigger(InventoryCategoryMixin):
                 topic_cond = [MainTitle.topic_id.in_(list(topic_ids_all))]
                 title = await self._query_title_with_filters(
                     blog_id_str, topic_cond, matched_only=False,
-                    sibling_blog_ids=sibling_ids,
+                    sibling_blog_ids=sibling_ids, cpa_offer_ids=cpa_ids,
                 )
                 if title:
                     logger.info(
@@ -424,7 +427,7 @@ class InventoryTrigger(InventoryCategoryMixin):
         # 카테고리 미설정 블로그 → 전체 available 폴백
         title = await self._query_title_with_filters(
             blog_id_str, [], matched_only=False,
-            sibling_blog_ids=sibling_ids,
+            sibling_blog_ids=sibling_ids, cpa_offer_ids=cpa_ids,
         )
         if not title:
             logger.warning(f"[INVENTORY] 전체폴백 실패 | blog_id={blog_id}")
@@ -436,6 +439,7 @@ class InventoryTrigger(InventoryCategoryMixin):
         category_conditions: list,
         matched_only: bool,
         sibling_blog_ids: Optional[List[int]] = None,
+        cpa_offer_ids: Optional[List[int]] = None,
     ) -> Optional[MainTitle]:
         """
         필터 조건 조합으로 후보 제목 조회 후 랜덤 1개 선택
@@ -449,6 +453,7 @@ class InventoryTrigger(InventoryCategoryMixin):
             blog_id_str: 블로그 ID 문자열
             category_conditions: 카테고리 OR 조건 리스트
             matched_only: True면 매칭 제목만, False면 카테고리 일치 제목 전체
+            cpa_offer_ids: 담당 CPA 오퍼. 있으면 그 오퍼 제목만 뽑는다.
 
         Returns:
             MainTitle 또는 None (랜덤 선택)
@@ -467,8 +472,9 @@ class InventoryTrigger(InventoryCategoryMixin):
             conditions.append(MainTitle.matched_blog_ids.isnot(None))
             conditions.append(MainTitle.matched_blog_ids.contains(blog_id_str))
 
-        if category_conditions:
-            conditions.append(or_(*category_conditions))
+        # 여기도 세는 곳과 같은 조건을 써야 한다. 빠뜨렸더니 재고는 CPA
+        # 5개로 세면서 일반 제목을 뽑았다(2026-09-09 실측).
+        conditions.append(title_condition(category_conditions, cpa_offer_ids))
 
         query = (
             select(MainTitle)
@@ -478,22 +484,11 @@ class InventoryTrigger(InventoryCategoryMixin):
         result = await self.db.execute(query)
         candidates = list(result.scalars().all())
 
+        logger.info(f"[INVENTORY] 제목 후보 {len(candidates)}개 | "
+                    f"blog={blog_id_str} | matched_only={matched_only} | "
+                    f"cpa={cpa_offer_ids} | cat={len(category_conditions)}")
         if not candidates:
-            avail_r = await self.db.execute(
-                select(func.count(MainTitle.id)).where(
-                    MainTitle.status != "archived"))
-            excl_r = await self.db.execute(
-                select(func.count()).select_from(
-                    self._published_title_ids_subquery(blog_id_str).subquery()))
-            logger.info(
-                f"[INVENTORY] 제목 후보 0개 | "
-                f"blog={blog_id_str} | matched_only={matched_only} | "
-                f"category={len(category_conditions)}개 | "
-                f"비archived전체={avail_r.scalar() or 0} | "
-                f"이블로그사용제외={excl_r.scalar() or 0}")
-        else:
-            logger.info(
-                f"[INVENTORY] 제목 후보 {len(candidates)}개 | "
-                f"blog={blog_id_str} | matched_only={matched_only}")
+            await log_empty(self.db, blog_id_str,
+                            self._published_title_ids_subquery(blog_id_str))
 
         return random.choice(candidates) if candidates else None

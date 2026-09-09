@@ -87,6 +87,7 @@ class TestInventoryCheck:
         mock_db.execute = AsyncMock(side_effect=build_execute_side_effect([
             ("scalar", 0),
             ("scalars_all", []),            # BlogCategory 없음
+            ("scalars_all", []),  # 담당 CPA 오퍼 없음
             ("scalars_all", [sample_title]),  # 1차 매칭 제목
         ]))
 
@@ -130,6 +131,7 @@ class TestInventoryCheck:
         mock_db.execute = AsyncMock(side_effect=build_execute_side_effect([
             ("scalar", 0),
             ("scalars_all", []),       # BlogCategory 없음
+            ("scalars_all", []),  # 담당 CPA 오퍼 없음
             ("scalars_all", [title]),  # 1차 매칭 제목
         ]))
 
@@ -158,6 +160,7 @@ class TestInventoryCheck:
         # 2) _query_title_with_filters(matched_only=True) → 매칭 제목
         mock_db.execute = AsyncMock(side_effect=build_execute_side_effect([
             ("scalar", 0),
+            ("scalars_all", []),       # 담당 CPA 오퍼 없음
             ("scalars_all", [title]),  # 1차 매칭+카테고리 제목
         ]))
 
@@ -180,6 +183,7 @@ class TestInventoryCheck:
         mock_db.execute = AsyncMock(side_effect=build_execute_side_effect([
             ("scalar", 0),
             ("scalars_all", []),       # BlogCategory 없음
+            ("scalars_all", []),  # 담당 CPA 오퍼 없음
             ("scalars_all", [title]),  # 1차 매칭 제목
         ]))
 
@@ -202,6 +206,7 @@ class TestInventoryCheck:
         mock_db.execute = AsyncMock(side_effect=build_execute_side_effect([
             ("scalar", 0),
             ("scalars_all", []),  # BlogCategory 없음
+            ("scalars_all", []),  # 담당 CPA 오퍼 없음
             ("scalars_all", []),  # 1차 매칭: 없음
             ("scalars_all", []),  # 2차 폴백: 없음
             ("scalars_all", []),  # 3차 전체 폴백: 없음
@@ -230,6 +235,7 @@ class TestInventoryCheck:
         mock_db.execute = AsyncMock(side_effect=build_execute_side_effect([
             ("scalar", 0),
             ("scalars_all", []),         # BlogCategory 없음
+            ("scalars_all", []),  # 담당 CPA 오퍼 없음
             ("scalars_all", [matched]),  # 1차 매칭: 있음
         ]))
 
@@ -249,6 +255,7 @@ class TestInventoryCheck:
         mock_db.execute = AsyncMock(side_effect=build_execute_side_effect([
             ("scalar", 0),
             ("scalars_all", []),  # BlogCategory 없음
+            ("scalars_all", []),  # 담당 CPA 오퍼 없음
             ("scalars_all", []),  # 1차 매칭: 없음
             ("scalars_all", []),  # 2차 폴백: 없음
             ("scalars_all", []),  # 3차 전체 폴백: 없음

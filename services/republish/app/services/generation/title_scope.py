@@ -83,3 +83,20 @@ def title_condition(category_conditions: Sequence[Any],
     if category_conditions:
         plain = and_(plain, or_(*category_conditions))
     return plain
+
+
+async def log_empty(db: AsyncSession, blog_id_str: str, used_subquery: Any) -> None:
+    """제목 후보가 0개일 때 어디서 걸렸는지 남긴다.
+
+    조용히 비면 재고가 없는 것인지 조건이 틀린 것인지 구분할 수 없다.
+    """
+    from sqlalchemy import func
+
+    total = (await db.execute(
+        select(func.count(MainTitle.id))
+        .where(MainTitle.status != "archived"))).scalar() or 0
+    used = (await db.execute(
+        select(func.count()).select_from(used_subquery.subquery())
+    )).scalar() or 0
+    logger.info("[SCOPE] 후보 0개 원인 | blog=%s | 비archived전체=%s | "
+                "이블로그사용제외=%s", blog_id_str, total, used)
