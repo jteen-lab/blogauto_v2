@@ -191,6 +191,59 @@ async def extract_rules(
     return {"success": True, "offer": offer.to_dict()}
 
 
+class NicheIn(BaseModel):
+    """오퍼의 니치(주제). 오퍼 1개 = 니치 1개."""
+
+    topic_id: Optional[int] = None
+    name: Optional[str] = None
+
+
+@router.post("/offers/{offer_id}/niche")
+async def set_niche(
+    offer_id: int,
+    payload: NicheIn,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """오퍼에 니치를 붙인다. 없으면 이름으로 새로 만든다.
+
+    **니치가 곧 구분 축이다.** 키워드·임시제목·정식제목이 topic_id 로 여기
+    매달리므로, 이 연결이 있어야 화면에서 CPA 로 표시된다.
+    """
+    from ..models.category import Topic
+
+    offer = await _get(db, offer_id)
+
+    topic = None
+    if payload.topic_id:
+        topic = await db.get(Topic, payload.topic_id)
+        if not topic:
+            raise HTTPException(status_code=404, detail="주제를 찾을 수 없습니다")
+    elif (payload.name or "").strip():
+        topic = Topic(user_id=current_user.id, name=payload.name.strip(),
+                      description=f"CPA 오퍼: {offer.name}")
+        db.add(topic)
+        await db.flush()
+    else:
+        raise HTTPException(status_code=400, detail="주제를 고르거나 이름을 주세요")
+
+    if topic.cpa_offer_id and topic.cpa_offer_id != offer_id:
+        raise HTTPException(
+            status_code=400,
+            detail="이미 다른 오퍼의 니치입니다. 오퍼 1개 = 니치 1개입니다.")
+
+    # 이 오퍼가 쓰던 다른 니치는 떼어 낸다 — 1:1 을 지킨다
+    for row in (await db.execute(
+            select(Topic).where(Topic.cpa_offer_id == offer_id))).scalars():
+        if row.id != topic.id:
+            row.cpa_offer_id = None
+
+    topic.cpa_offer_id = offer_id
+    await db.commit()
+    logger.info("[CPA] 니치 연결 | %s ↔ %s", offer.name, topic.name)
+    return {"success": True, "topic": {"id": topic.id, "name": topic.name}}
+
+
 class RuleIn(BaseModel):
     """미분류 문장을 규칙으로 올리거나, 규칙을 직접 추가한다."""
 
@@ -382,6 +435,14 @@ async def make_titles(
             detail="담당 블로그를 먼저 지정하세요. 지정하지 않으면 "
                    "어떤 블로그도 이 오퍼의 제목을 쓰지 않습니다.")
 
+    # 오퍼의 니치를 제목에 붙인다. 니치가 구분 축이라 이게 없으면
+    # 화면에서 CPA 로 표시되지 않는다.
+    from ..models.category import Topic
+
+    niche = (await db.execute(
+        select(Topic).where(Topic.cpa_offer_id == offer_id))).scalars().first()
+    topic_id = payload.topic_id or (niche.id if niche else None)
+
     found = build(offer, limit=payload.limit)
     existing = {
         row for row in (await db.execute(
@@ -398,7 +459,7 @@ async def make_titles(
             cpa_offer_id=offer_id,
             matched_blog_ids=json.dumps(blog_ids),
             matched_count=len(blog_ids),
-            topic_id=payload.topic_id, subtopic_id=payload.subtopic_id))
+            topic_id=topic_id, subtopic_id=payload.subtopic_id))
         added += 1
     await db.commit()
 
