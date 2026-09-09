@@ -657,7 +657,9 @@ class ContentGenerator:
             found = evaluate(
                 topic_names, working_title,
                 official_hit=bool(getattr(ref_result, "official", "")),
-                documents=getattr(ref_result, "summaries", None) or [],
+                documents=(ref_result.evidence_documents()
+                           if hasattr(ref_result, "evidence_documents")
+                           else getattr(ref_result, "summaries", None) or []),
                 postdates=getattr(ref_result, "postdates", None) or {},
                 company_known=getattr(ref_result, "company_known", None),
             )

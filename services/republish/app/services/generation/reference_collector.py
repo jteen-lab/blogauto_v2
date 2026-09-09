@@ -8,8 +8,9 @@
 """
 import logging
 from datetime import datetime
-from typing import Optional, List
+from typing import Any, List, Optional
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,6 +44,22 @@ class ReferenceCollectionResult:
     # 제목의 회사가 금감원 공시 목록에 있나 (True/False/None 모름)
     company_known: Optional[bool] = None
     company_note: str = ""
+
+    def evidence_documents(self) -> List[Any]:
+        """근거 판정에 쓸 자료 목록.
+
+        **통합 요약(digest)을 쓰면 `summaries` 가 빈다.** 그것을 자료 수로
+        세면 자료를 10건 모으고도 "찾지 못함" 이 되어 발행이 보류된다.
+        실제로 그렇게 됐다(2026-09-09 군타·인생꿀팁, 제목 2건이 3회 보류).
+
+        요약본이 있으면 그것을, 없으면 수집한 URL 로 자료를 센다.
+        통합 요약은 여러 문서를 한 덩어리로 합친 것이라 **출처별 수치 교차
+        확인은 할 수 없다** — 그래서 본문을 싣지 않는다(수치 사용 금지 쪽).
+        """
+        if self.summaries:
+            return list(self.summaries)
+        return [SimpleNamespace(url=url, summary="", title="")
+                for url in (self.sources or []) if url]
 
     def to_prompt_injection(self) -> str:
         """프롬프트에 주입할 형태로 변환.
