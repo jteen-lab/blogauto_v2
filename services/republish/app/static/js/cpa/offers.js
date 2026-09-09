@@ -89,6 +89,36 @@ function cpaApp() {
             const d = await r.json();
             this.items = d.items || [];
             this.counts = d.counts || {};
+            // 열려 있는 상세도 같이 새로 고친다.
+            // **여기서 하지 않으면 각 동작이 저마다 잊는다.** 실제로 규칙 97건을
+            // 뽑고도 화면은 뽑기 전 값인 정형 항목 3/19 를 계속 보여줬다
+            // (2026-09-09 안과 오퍼). 목록을 고치는 모든 길이 이 함수를 지나므로
+            // 상세 갱신도 여기 한 곳에 둔다.
+            if (!this.openId) return;
+            if (this.items.some(x => x.id === this.openId)) {
+                await this.fetchDetail(this.openId);
+            } else {
+                this.closeDetail();
+            }
+        },
+
+        /** 상세(원문·정형 항목·필수 누락)를 받아 화면 상태에 넣는다. */
+        async fetchDetail(id) {
+            const r = await fetch(`/api/v1/cpa/offers/${id}`, { credentials: 'include' });
+            if (!r.ok) return false;
+            const d = await r.json();
+            this.rawText = d.raw_text || '';
+            this.tpl = d.template || null;
+            this.criticalMissing = d.critical_missing || [];
+            return true;
+        },
+
+        /** 상세를 닫는다. 남겨두면 다른 오퍼에 옛 정형 항목이 비친다. */
+        closeDetail() {
+            this.openId = null;
+            this.tpl = null;
+            this.criticalMissing = [];
+            this.rawText = '';
         },
 
         async create() {
@@ -124,23 +154,25 @@ function cpaApp() {
                 const d = await r.json();
                 if (!r.ok) { alert(d.detail || '추출 실패'); return; }
                 const off = d.offer;
+                // 뽑은 결과를 **그 자리에서 펼친다.** 목록만 새로 고치면 접혀 있던
+                // 상세가 뽑기 전 정형 항목을 그대로 보여줘, 채워진 칸을 못 채운 것으로
+                // 읽는다(2026-09-09 안과 오퍼: 실제 17/19 를 3/19 로 봤다).
+                this.openId = off.id;
+                await this.load();
                 alert(`규칙 ${off.rules.length}건\n`
+                    + `정형 항목 ${this.tpl?.filled ?? 0}/${this.tpl?.total ?? 0} 채움\n`
+                    + (this.criticalMissing.length
+                        ? `필수 누락: ${this.criticalMissing.join(', ')}\n` : '')
                     + `미분류 ${off.unmatched.length}개 (검사되지 않음)\n`
                     + `충돌 ${off.conflicts.length}건`);
-                await this.load();
             } finally {
                 this.busy = false;
             }
         },
 
         async open(o) {
-            if (this.openId === o.id) { this.openId = null; return; }
-            const r = await fetch(`/api/v1/cpa/offers/${o.id}`, { credentials: 'include' });
-            if (!r.ok) return;
-            const d = await r.json();
-            this.rawText = d.raw_text || '';
-            this.tpl = d.template || null;
-            this.criticalMissing = d.critical_missing || [];
+            if (this.openId === o.id) { this.closeDetail(); return; }
+            if (!await this.fetchDetail(o.id)) return;
             this.openId = o.id;
         },
 
