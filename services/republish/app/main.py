@@ -57,7 +57,6 @@ from .routers.analytics import router as analytics_router  # 유입 분석
 from .routers.external_sources import router as external_sources_router  # 1차 출처 API
 from .routers.held_titles import router as held_titles_router  # 보류 제목 검토
 from .routers.cpa import router as cpa_router  # CPA 오퍼
-from .routers.cpa_pages import router as cpa_page_router
 from .routers.style_templates import router as style_templates_router  # 제목 스타일 템플릿
 from .routers.taxonomy import router as taxonomy_router  # 분류표 관리
 from .routers.title_recombine import router as title_recombine_router  # 수동 재조합
@@ -346,7 +345,6 @@ app.include_router(analytics_router, prefix=settings.api_v1_prefix)
 app.include_router(external_sources_router, prefix=settings.api_v1_prefix)
 app.include_router(held_titles_router, prefix=settings.api_v1_prefix)
 app.include_router(cpa_router, prefix=settings.api_v1_prefix)
-app.include_router(cpa_page_router)
 app.include_router(style_templates_router, prefix=settings.api_v1_prefix)
 app.include_router(taxonomy_router, prefix=settings.api_v1_prefix)
 app.include_router(title_recombine_router, prefix=settings.api_v1_prefix)

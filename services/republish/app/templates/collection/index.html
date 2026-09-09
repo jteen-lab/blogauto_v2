@@ -398,6 +398,12 @@
                 <span class="ml-1 text-xs" x-text="`(${stats.filter?.total || 0})`"></span>
             </button>
             <button
+                @click="switchTab('offers')"
+                :class="{'active': activeTab === 'offers'}"
+                class="tab-btn">
+                🎯 CPA 오퍼
+            </button>
+            <button
                 @click="switchTab('domains')"
                 :class="{'active': activeTab === 'domains'}"
                 class="tab-btn">
@@ -429,6 +435,11 @@
         <!-- 필터설정 탭 -->
         <div x-show="activeTab === 'filters'" class="tab-content" :class="{'active': activeTab === 'filters'}">
             {% include "collection/_filters.html" %}
+        </div>
+
+        <!-- CPA 오퍼 탭 -->
+        <div x-show="activeTab === 'offers'" class="tab-content" :class="{'active': activeTab === 'offers'}">
+            {% include "collection/_cpa_offers.html" %}
         </div>
 
         <!-- 니치 도메인 탭 -->

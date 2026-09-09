@@ -239,7 +239,12 @@
                            오분류를 낳은 키워드가 그대로 남아 같은 일이
                            반복된다. '수정' 버튼이 제목과 니치를 함께 다룬다. #}
                         <td>
-                            <div class="font-medium truncate max-w-md" x-text="title.title"></div>
+                            <div class="flex items-center gap-1.5">
+                                <span x-show="title.is_cpa"
+                                      class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 shrink-0"
+                                      x-text="title.scope_label"></span>
+                                <div class="font-medium truncate max-w-md" x-text="title.title"></div>
+                            </div>
                             <div x-show="title.source_keyword" class="text-xs text-gray-400 mt-0.5">
                                 키워드: <span x-text="title.source_keyword"></span>
                             </div>

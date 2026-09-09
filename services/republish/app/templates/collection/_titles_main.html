@@ -411,6 +411,9 @@
                                                         <span class="text-xs text-gray-500" x-text="'(' + row.group_member_count + ')'"></span>
                                                     </button>
                                                 </template>
+                                                <span x-show="row.is_cpa"
+                                                      class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 shrink-0"
+                                                      x-text="row.scope_label"></span>
                                                 <span class="font-medium truncate max-w-md" x-text="row.title"></span>
                                                 <!-- 정리 권장 표시. 저품질 재고를 한 번 걷어내기 위한 것이라
                                                      정리가 끝나면 쓰지 않게 된다. -->

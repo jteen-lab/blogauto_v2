@@ -11,6 +11,9 @@
                 <span class="text-white font-medium text-xs" x-text="blog.platform === 'wordpress' ? 'WP' : 'BL'"></span>
             </div>
             <h4 class="font-semibold truncate" x-text="blog.name"></h4>
+            <span x-show="blog.is_cpa"
+                  class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 shrink-0"
+                  x-text="blog.scope_label"></span>
         </div>
 
         <div class="flex gap-1 flex-shrink-0">

@@ -16,6 +16,7 @@ function cpaApp() {
         showConflicts: null,
         preview: '',
         blogs: [],
+        topics: [],
         rawText: '',
         busy: false,
         STATES: [
@@ -46,13 +47,46 @@ function cpaApp() {
             await this.patch(o, { blog_ids: next });
         },
 
+        async loadTopics() {
+            const r = await fetch('/api/v1/categories/topics', { credentials: 'include' });
+            if (!r.ok) return;
+            this.topics = await r.json();
+        },
+
+        async setNiche(o, create = false) {
+            let body;
+            if (create) {
+                const name = prompt('새 니치 이름', o.name);
+                if (!name) return;
+                body = { name };
+            } else {
+                const el = document.getElementById(`niche-${o.id}`);
+                if (!el || !el.value) { alert('주제를 고르세요.'); return; }
+                body = { topic_id: Number(el.value) };
+            }
+            const r = await fetch(`/api/v1/cpa/offers/${o.id}/niche`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify(body),
+            });
+            const d = await r.json();
+            if (!r.ok) { alert(d.detail || '연결 실패'); return; }
+            await this.loadTopics();
+            await this.load();
+        },
+
         async load() {
             if (!this.blogs.length) await this.loadBlogs();
+            if (!this.topics.length) await this.loadTopics();
             const q = this.filter ? `?status=${this.filter}` : '';
             const r = await fetch(`/api/v1/cpa/offers${q}`, { credentials: 'include' });
             if (!r.ok) return;
             const d = await r.json();
-            this.items = d.items || [];
+            this.items = (d.items || []).map(o => ({
+                ...o,
+                niche_name: (this.topics.find(t => t.cpa_offer_id === o.id) || {}).name || '',
+            }));
             this.counts = d.counts || {};
         },
 
