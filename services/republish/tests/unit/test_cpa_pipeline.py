@@ -472,20 +472,22 @@ class TestOfferBlogWiring:
         sql = self._cond()
         assert "cpa_offer_id IS NULL" in sql
 
-    def test_owning_blog_can_pick_them(self):
+    def test_owning_blog_uses_only_offer_titles(self):
+        """담당 블로그는 CPA 전용이다.
+
+        일반 제목을 섞으면 CPA 제목이 영영 순번이 오지 않는다.
+        실측(2026-09-09): 일반 4,401개 대 CPA 5개, 조회는 오래된 순 50개.
+        """
         sql = self._cond(offers=[3])
         assert "cpa_offer_id IN" in sql
-        assert "cpa_offer_id IS NULL" in sql, "일반 제목도 계속 후보다"
+        assert "IS NULL" not in sql, "일반 제목이 섞이면 CPA 가 밀린다"
 
     def test_cpa_titles_bypass_category(self):
         """CPA 제목에는 주제가 없다. 카테고리로 거르면 영원히 탈락한다."""
         from app.models.title import MainTitle
 
         sql = self._cond(categories=[MainTitle.topic_id.in_([7])], offers=[3])
-        # 카테고리는 일반 제목 쪽에만 붙는다
-        head, _, tail = sql.partition(" OR ")
-        assert "topic_id IN" in head and "IS NULL" in head
-        assert "topic_id" not in tail
+        assert "topic_id" not in sql
 
     def test_category_still_applies_to_plain_titles(self):
         from app.models.title import MainTitle
