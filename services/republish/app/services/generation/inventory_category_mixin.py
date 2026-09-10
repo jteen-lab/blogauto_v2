@@ -9,7 +9,7 @@
 import logging
 from typing import List, Optional, Set, Tuple
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 
 from ...models.category import BlogCategory
 from ...models.crawled_post import CrawledPost
@@ -141,6 +141,60 @@ class InventoryCategoryMixin:
                 topic_only_ids.add(bc.topic_id)
 
         return subtopic_ids, topic_only_ids
+
+    async def _publishable_inventory(self, blog_id: int) -> Tuple[int, int]:
+        """(발행 가능한 재고 수, 전체 재고 수).
+
+        **세는 쪽과 꺼내는 쪽이 어긋나면 교착이 난다.** 재고는 전체로 세면서
+        발행은 카테고리로 거르면, 카테고리 밖 글이 재고 자리를 차지한 채
+        생성은 "재고 충분" 으로 건너뛰고 발행은 "발행할 글 없음" 으로 생성을
+        기다린다. **둘 다 영원히 움직이지 않는다.**
+
+        실측(수작남): 재고 3건이 전부 블로그 카테고리 밖 하위주제
+        (문화 정보 2 · 월급 관리 1)라 8/31 발행을 끝으로 열흘간 생성도
+        발행도 멈췄다.
+
+        조건은 `InventoryManager.get_post_for_publish()` 와 같다 —
+        카테고리가 없거나 매칭 정보가 없는 글은 그대로 후보로 둔다.
+
+        Args:
+            blog_id: 블로그 ID
+
+        Returns:
+            (발행 가능 수, 전체 수). 카테고리 미설정이면 두 값이 같다.
+        """
+        base = [
+            CrawledPost.blog_id == blog_id,
+            CrawledPost.source == "generated",
+            CrawledPost.published_at.is_(None),
+        ]
+        total = (await self.db.execute(
+            select(func.count(CrawledPost.id)).where(*base)
+        )).scalar() or 0
+
+        subtopic_ids, topic_only_ids = \
+            await self._get_blog_category_filter_ids(blog_id)
+        cat_conds = []
+        if subtopic_ids:
+            cat_conds.append(MainTitle.subtopic_id.in_(list(subtopic_ids)))
+        if topic_only_ids:
+            cat_conds.append(MainTitle.topic_id.in_(list(topic_only_ids)))
+        if not cat_conds:
+            # 카테고리를 안 정한 블로그는 전부 발행 대상이다.
+            # 여기서 0 을 돌려주면 무한 생성이 된다.
+            return total, total
+
+        allowed = select(MainTitle.id).where(or_(*cat_conds))
+        publishable = (await self.db.execute(
+            select(func.count(CrawledPost.id)).where(
+                *base,
+                or_(
+                    CrawledPost.matched_main_title_id.is_(None),
+                    CrawledPost.matched_main_title_id.in_(allowed),
+                ),
+            )
+        )).scalar() or 0
+        return publishable, total
 
     async def _resolve_siblings(
         self, blog_id: int, module_settings: Optional[dict],
