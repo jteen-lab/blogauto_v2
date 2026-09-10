@@ -313,21 +313,20 @@ class InventoryTrigger(InventoryCategoryMixin):
         return list(result.scalars().all())
 
     async def _get_inventory_count(self, blog_id: int) -> int:
-        """
-        블로그의 현재 CrawledPost 재고 수량 조회
+        """블로그의 **발행 가능한** CrawledPost 재고 수량.
 
-        source='generated'이고 아직 발행되지 않은 글의 수를 반환합니다.
+        발행할 수 없는 글은 재고가 아니다. 전체로 세면 카테고리 밖 글이
+        재고 자리를 차지해 생성은 건너뛰고 발행은 생성을 기다리는 교착이
+        난다(수작남 사례 — `_publishable_inventory` 주석 참조).
         """
-        query = (
-            select(func.count(CrawledPost.id))
-            .where(
-                CrawledPost.blog_id == blog_id,
-                CrawledPost.source == "generated",
-                CrawledPost.published_at.is_(None),
+        publishable, total = await self._publishable_inventory(blog_id)
+        if publishable != total:
+            logger.info(
+                f"[INVENTORY] blog_id={blog_id} | "
+                f"발행 가능 {publishable} / 전체 {total} — "
+                f"카테고리 밖 {total - publishable}건은 재고로 세지 않음"
             )
-        )
-        result = await self.db.execute(query)
-        return result.scalar() or 0
+        return publishable
 
     async def _find_available_title(
         self, blog_id: int,
