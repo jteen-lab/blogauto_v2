@@ -127,37 +127,12 @@ async def _async_generate_via_executor(
         except Exception as log_err:
             logger.warning(f"[GENERATE] AutorunLog 저장 실패: {log_err}")
 
-        # 스케줄 상태 업데이트: 성공 시 last_success_at만 갱신
-        # record_execution은 스케줄러의 _execute_module_callback()에서 디스패치 시점에 처리
+        # 워커의 실제 결과로 플로우 상태를 바로잡는다.
+        # 스케줄러는 디스패치 시점에 이미 성공으로 적었다 — 큐에 넣는 데
+        # 성공했다는 뜻일 뿐이다. 자세한 근거는 celery_flow_state 모듈 주석.
         try:
-            from sqlalchemy import select, and_
-            from app.models.flow_blog import FlowBlog
-            from app.models.flow_execution_state import FlowExecutionState
-
-            is_ok = result.get("success") and not result.get("skipped")
-            if is_ok:
-                fb_result = await db.execute(
-                    select(FlowBlog.flow_id).where(FlowBlog.blog_id == blog_id)
-                )
-                for (fid,) in fb_result.fetchall():
-                    st_result = await db.execute(
-                        select(FlowExecutionState).where(and_(
-                            FlowExecutionState.flow_id == fid,
-                            FlowExecutionState.action_type == "generate",
-                        ))
-                    )
-                    st = st_result.scalar_one_or_none()
-                    if st:
-                        from datetime import datetime
-                        import pytz
-                        st.last_success_at = datetime.now(
-                            pytz.timezone('Asia/Seoul')
-                        )
-                        await db.commit()
-                        logger.info(
-                            f"[CELERY:GENERATE] last_success_at 갱신 | "
-                            f"flow_id={fid}"
-                        )
+            from app.core.celery_flow_state import sync_state
+            await sync_state(db, blog_id, "generate", result)
         except Exception as se:
             logger.warning(f"[CELERY:GENERATE] 상태 업데이트 실패: {se}")
 
@@ -334,7 +309,20 @@ def generate_content(
             f"[TASK:GENERATE] 예외 | blog={blog_id} | {exc}"
         )
         if self.request.retries < self.max_retries:
-            raise self.retry(exc=exc)
+            # **재시도에서는 제목을 고정하지 않는다.**
+            # 실패 사유가 제목에 딸린 것이면(근거 부족·중복 등) 같은 제목으로
+            # 다시 걸어 봐야 결과가 같다. 실측(2026-09-09 머니조아):
+            # '에스앤에스파이낸셜대부' 제목이 근거 부족으로 3회 연속 실패했고,
+            # 세 번 모두 같은 제목이었다. 그날 글은 한 편도 못 만들었다.
+            # title_id=0 이면 워커가 재고에서 다시 고른다.
+            raise self.retry(
+                exc=exc,
+                kwargs={
+                    "blog_id": blog_id, "module_id": module_id,
+                    "title_id": 0, "flow_id": flow_id, "user_id": user_id,
+                    "stage_params_dict": stage_params_dict, "force": force,
+                },
+            )
         raise
     finally:
         blog_lock.release(blog_id, "generate")
