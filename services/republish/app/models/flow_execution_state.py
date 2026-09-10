@@ -188,6 +188,26 @@ class FlowExecutionState(Base):
         """실행 잠금 해제"""
         self.is_running = False
 
+    def record_worker_failure(self) -> None:
+        """워커에서 실제 작업이 실패했음을 기록한다.
+
+        스케줄러는 **Celery 에 넘긴 순간** 성공으로 적는다(`record_execution(True)`).
+        큐에 넣는 데 성공했다는 뜻일 뿐이라, 워커에서 글 생성이 실패해도 통계는
+        성공으로 남는다.
+
+        실측(2026-09-09 머니조아): 생성이 3회 연속 실패했는데 상태는
+        `성공 2 · 실패 0 · 연속실패 0` 이었다. 실패한 줄 아무도 몰랐고,
+        다음 실행은 정상 주기대로 하루 뒤로 잡혀 **하루가 통째로 날아갔다.**
+
+        그래서 낙관적으로 적은 성공 한 건을 실패로 되돌린다. `total_executions`
+        는 그대로 둔다 — 실행 횟수 자체는 맞기 때문이다. 연속 실패가 쌓이면
+        스케줄러의 일시정지 임계값(5회)이 제 역할을 한다.
+        """
+        if (self.successful_executions or 0) > 0:
+            self.successful_executions -= 1
+        self.failed_executions = (self.failed_executions or 0) + 1
+        self.consecutive_failures = (self.consecutive_failures or 0) + 1
+
     def record_execution(self, success: bool) -> None:
         """실행 기록. 성공/실패 모두 last_executed_at 갱신 (스케줄 진행 보장).
 
