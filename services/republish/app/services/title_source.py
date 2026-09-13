@@ -18,6 +18,10 @@ from typing import Dict, List
 # 생성 계열
 SRC_KEYWORD_MODULE = "keyword_module"   # L1 — 채택 키워드 기반 AI 생성
 SRC_NEWS_GEN = "news_gen"               # L3 — 뉴스 요지 + 니치 결합
+# L4 — 커뮤니티 질문의 **상황**에서 발굴. 키워드로는 나오지 않는 주제를
+# 만드는 유일한 경로다("같은 건물 2층→3층"은 「이사 견적」에서 도출되지
+# 않는다). 재조합을 거치지 않는다 — 원본 제목이 없기 때문이다.
+SRC_QUESTION = "question_mining"
 
 # 수집 계열
 SRC_TITLE_COLLECT = "title_collect"     # ① 채택 키워드로 검색해 수집
@@ -27,7 +31,7 @@ SRC_DOMAIN_EXTRACT = "domain_extract"   # ② 저장된 도메인에서 추출
 SRC_BULK_COLLECT = "bulk_collect"
 SRC_NEWS_COLLECT = "news_collect"
 
-GENERATED = (SRC_KEYWORD_MODULE, SRC_NEWS_GEN)
+GENERATED = (SRC_KEYWORD_MODULE, SRC_NEWS_GEN, SRC_QUESTION)
 COLLECTED = (SRC_TITLE_COLLECT, SRC_DOMAIN_EXTRACT)
 LEGACY = (SRC_BULK_COLLECT, SRC_NEWS_COLLECT)
 ALL_SOURCES = GENERATED + COLLECTED + LEGACY
@@ -35,6 +39,7 @@ ALL_SOURCES = GENERATED + COLLECTED + LEGACY
 LABEL: Dict[str, str] = {
     SRC_KEYWORD_MODULE: "생성 · 키워드",
     SRC_NEWS_GEN: "생성 · 뉴스",
+    SRC_QUESTION: "발굴 · 질문",
     SRC_TITLE_COLLECT: "수집 · 검색",
     SRC_DOMAIN_EXTRACT: "수집 · 도메인",
     SRC_BULK_COLLECT: "옛 대량수집",
@@ -45,6 +50,7 @@ LABEL: Dict[str, str] = {
 TONE: Dict[str, str] = {
     SRC_KEYWORD_MODULE: "bg-emerald-100 text-emerald-700",
     SRC_NEWS_GEN: "bg-teal-100 text-teal-700",
+    SRC_QUESTION: "bg-amber-100 text-amber-700",
     SRC_TITLE_COLLECT: "bg-blue-100 text-blue-700",
     SRC_DOMAIN_EXTRACT: "bg-indigo-100 text-indigo-700",
     SRC_BULK_COLLECT: "bg-gray-100 text-gray-500",
