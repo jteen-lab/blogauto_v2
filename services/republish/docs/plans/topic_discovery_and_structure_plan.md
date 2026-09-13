@@ -645,3 +645,78 @@ raw_path = config.get("template_image")
 - 기존 수집은 **이미 "재고 → 각도 신호"로 전환 중**. 질문 발굴은 그 위에
   **상황 축**을 얹는 것이지 대체가 아닙니다
 - 소스 추가 위치를 **`keyword_lab`(주제) / `reference`(근거)** 로 분리
+
+---
+
+# 구현 완료 기록 (2026-09-13)
+
+1~4단계를 모두 반영했습니다. **신규 테스트 141건 통과, 기존 회귀 0건**
+(작업 전 커밋 `45a3356` 에서도 실패하던 10건은 그대로).
+
+## 만든 것
+
+| 단계 | 파일 | 줄 | 역할 |
+|---|---|---|---|
+| 1 | `keyword_lab/sources/base.py` | 135 | `SRC_NAVER_KIN/CAFE`, `SITUATION_SOURCES` |
+| 1 | `keyword_lab/sources/community.py` | 254 | 지식iN·카페 질문 수집, 홍보글 배제 |
+| 1 | `keyword_lab/sources/registry.py` | 209 | 디스패치 + 검색량 보강 제외 |
+| 1 | `reference_search_service.py` | 224 | 6개 소스 + `search_many()` |
+| 2 | `title_source.py` | 88 | `SRC_QUESTION` |
+| 2 | `keyword_lab/situation.py` | 161 | 상황 추출·지문·중복 대조 |
+| 2 | `keyword_lab/question_miner.py` | 210 | 수집→상황→제목→TitleGate |
+| 3 | `reference/evidence_checklist.py` | 285 | 목록 생성·판정·재검색 정책 |
+| 3 | `reference/checklist_runner.py` | 169 | 병렬 검색·진입점 |
+| 3 | `generation/quality_gate.py` | 233 | AI 흔적 검사 |
+| 4 | `generation/variant_picker.py` | 169 | 변형 선택 공용 |
+| 4 | `generation/prompt_rotation.py` | 171 | 목적 분기 + 로테이션 |
+| 4 | `generation/module_scope.py` | 111 | 모듈 담당 범위 라우팅 |
+| 4 | `generation/template_image_service.py` | 474 | 템플릿 복수화 |
+| 연결 | `generation/reference_collector.py` | 486 | 체크리스트 물림 |
+| 연결 | `generation/flow_generate_executor.py` | 473 | 로테이션 물림 |
+
+전부 500줄 미만입니다.
+
+## 켜는 법
+
+**체크리스트** — 참조 설정에 넣습니다. 기본은 꺼짐.
+
+```json
+"evidence_checklist": {"enabled": true, "ai_provider": "openai"}
+```
+
+**프롬프트 로테이션** — 모듈 설정.
+
+```json
+"prompt_rotation": {
+  "enabled": true, "mode": "sequential",
+  "variants": [
+    {"code": "howto-guide", "purpose": "adsense", "topic_ids": [24]},
+    {"template": "직접 쓴 프롬프트", "purpose": "cpa"}
+  ]
+}
+```
+
+**템플릿 이미지 복수** — 블로그 `overlay_config`.
+
+```json
+"template_images": [{"path": "blogs/21/t1.png", "topic_ids": [24]},
+                    {"path": "blogs/21/t2.png"}],
+"template_image_mode": "random"
+```
+
+**커뮤니티 소스** — 키워드 모듈 설정의 `sources` 에 `naver_kin`,
+`naver_cafe` 를 넣습니다.
+
+**AI 흔적 차단** — 경고가 기본. 차단하려면
+`"quality_gate": {"trace_blocks": true}`.
+
+## 남은 것
+
+- **니치별 모듈 분리 UI** — 백엔드 라우팅(`module_scope`)은 끝났습니다.
+  블로그 선택 시 니치가 전부 잡히는 화면 동작을 부분 선택으로 바꿔야
+  전담 모듈을 만들 수 있습니다.
+- **질문 발굴 실행 경로** — `QuestionMiner` 는 완성됐지만 오토런·라우터에
+  물리지 않았습니다. 지문 보관 위치(모듈 설정 vs 실행 상태)를 정해야 합니다.
+- **모델 배분 실측** — 체크리스트 생성·판정은 판단 작업이라 가성비 모델이
+  제대로 못 할 수 있습니다. 켜기 전에 같은 제목으로 A/B 가 필요합니다.
+- **도메인 통크롤 감축** — 12만 건 쌓고 31건 사용. 별도 판단 사항.
