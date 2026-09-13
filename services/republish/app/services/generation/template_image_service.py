@@ -117,8 +117,9 @@ class TemplateImageService:
         """
         from . import variant_picker as vp
 
-        items = [i for i in (config.get("template_images") or [])
-                 if isinstance(i, dict) and i.get("path")]
+        from ..blog_settings_template_slots import for_picker
+
+        items = for_picker(config)
         if not items:
             return None
 
