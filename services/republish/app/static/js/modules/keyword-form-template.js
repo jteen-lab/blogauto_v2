@@ -74,6 +74,11 @@ window.getKeywordFormTemplate = function () {
                     </div>
 
                     <div class="text-xs font-medium text-gray-500 mb-1">확장 — 시드에서 가지를 뻗는다</div>
+                    <p class="text-xs text-gray-400 mb-2 leading-relaxed">
+                        자동완성·팬아웃은 <b>검색창에 치는 쿼리</b>를 줍니다("이사 견적 어떻게").
+                        지식iN·카페는 <b>사람이 쓴 문장</b>이라 상황이 실려 있습니다
+                        ("2층에서 3층, 엘베 없음, 장롱 3짝"). 주제를 넓히려면 아래 둘을 켜세요.
+                    </p>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
                         <label class="flex items-start gap-2 text-sm text-gray-500">
                             <input type="checkbox" checked disabled class="rounded mt-0.5">
@@ -94,6 +99,14 @@ window.getKeywordFormTemplate = function () {
                         <label class="flex items-start gap-2 text-sm text-gray-700">
                             <input type="checkbox" x-model="formData.keyword.src_gsc" class="rounded mt-0.5">
                             <span>서치콘솔 실측 쿼리 <span class="text-xs text-gray-500">(속성 등록 필요)</span></span>
+                        </label>
+                        <label class="flex items-start gap-2 text-sm text-gray-700">
+                            <input type="checkbox" x-model="formData.keyword.src_naver_kin" class="rounded mt-0.5">
+                            <span>지식iN 질문 <span class="text-xs text-gray-500">(상황이 붙은 문장 · 주제 확장)</span></span>
+                        </label>
+                        <label class="flex items-start gap-2 text-sm text-gray-700">
+                            <input type="checkbox" x-model="formData.keyword.src_naver_cafe" class="rounded mt-0.5">
+                            <span>카페 질문 <span class="text-xs text-gray-500">(홍보글 자동 배제)</span></span>
                         </label>
                         <label class="flex items-start gap-2 text-sm text-gray-700">
                             <input type="checkbox" x-model="formData.keyword.src_google_planner" class="rounded mt-0.5">

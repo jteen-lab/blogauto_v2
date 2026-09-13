@@ -188,6 +188,8 @@ function moduleFormApp(module = null, moduleType = null) {
                 src_google_suggest: (initialModule?.settings?.keyword?.sources || []).includes('google_suggest'),
                 src_question_fanout: (initialModule?.settings?.keyword?.sources || []).includes('question_fanout'),
                 src_gsc: (initialModule?.settings?.keyword?.sources || []).includes('gsc'),
+                src_naver_kin: (initialModule?.settings?.keyword?.sources || []).includes('naver_kin'),
+                src_naver_cafe: (initialModule?.settings?.keyword?.sources || []).includes('naver_cafe'),
                 src_google_planner: (initialModule?.settings?.keyword?.sources || []).includes('google_planner'),
                 src_google_trends: (initialModule?.settings?.keyword?.sources || []).includes('google_trends'),
                 enrich_limit: initialModule?.settings?.keyword?.enrich_limit ?? 100,
@@ -1143,6 +1145,8 @@ function moduleFormApp(module = null, moduleType = null) {
                  ['src_google_suggest', 'google_suggest'],
                  ['src_question_fanout', 'question_fanout'],
                  ['src_gsc', 'gsc'],
+                 ['src_naver_kin', 'naver_kin'],
+                 ['src_naver_cafe', 'naver_cafe'],
                  ['src_google_planner', 'google_planner'],
                  ['src_google_trends', 'google_trends']].forEach(([flag, code]) => {
                     if (k[flag]) sources.push(code);
