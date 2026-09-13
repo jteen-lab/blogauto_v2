@@ -16,8 +16,9 @@ from typing import Any, Dict, List, Optional
 
 from ....core.logger import get_logger
 from .base import (
-    SRC_GOOGLE_PLANNER, SRC_GOOGLE_SUGGEST, SRC_GOOGLE_TRENDING,
-    SRC_GOOGLE_TRENDS, SRC_GSC, SRC_NAVER_DATALAB, SRC_NAVER_SUGGEST,
+    SITUATION_SOURCES, SRC_GOOGLE_PLANNER, SRC_GOOGLE_SUGGEST,
+    SRC_GOOGLE_TRENDING, SRC_GOOGLE_TRENDS, SRC_GSC, SRC_NAVER_CAFE,
+    SRC_NAVER_DATALAB, SRC_NAVER_KIN, SRC_NAVER_SUGGEST,
     SRC_QUESTION_FANOUT, KeywordIdea, dedupe,
 )
 
@@ -106,6 +107,13 @@ async def _run_source(code: str, db: Any, user_settings: Any, blog: Any,
 
         return await questions.collect(seeds, "naver")
 
+    if code in (SRC_NAVER_KIN, SRC_NAVER_CAFE):
+        # 사람이 쓴 질문. 팬아웃(치는 쿼리)과 층이 다르다 — 여기서만
+        # 상황이 나온다. 참조 검색과 같은 자격증명을 쓴다.
+        from . import community
+
+        return await community.collect(user_settings, seeds, code)
+
     if code == SRC_GOOGLE_PLANNER:
         from . import google_ads
 
@@ -151,7 +159,11 @@ async def enrich_volumes(user_settings: Any, ideas: List[KeywordIdea],
     """
     from ...naver_ads_service import NaverAdsService
 
-    targets = [i for i in ideas if i.search_volume is None][:limit]
+    # 커뮤니티 질문은 쿼리가 아니라 문장이다. 검색광고에 넣으면 공백 때문에
+    # 거부당하고(11001) 호출만 태운다. 아예 대상에서 뺀다.
+    targets = [i for i in ideas
+               if i.search_volume is None
+               and i.source not in SITUATION_SOURCES][:limit]
     if not targets:
         return {"filled": 0, "api_calls": 0, "errors": []}
 
