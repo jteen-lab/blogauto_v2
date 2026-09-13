@@ -233,6 +233,14 @@ class FlowGenerateExecutor:
                         "threshold": check_result.threshold,
                     }
 
+            # 2.5 프롬프트 로테이션 — 같은 블로그·같은 니치라도 글마다
+            # 구조를 바꾼다. 한 구조로 계속 나가면 패턴이 보인다.
+            # 제목이 정해진 뒤라야 주제·키워드별 고정 모드를 쓸 수 있다.
+            # 승인용 프롬프트가 걸린 상태면 그쪽이 이긴다 — 승인이 더 급하다.
+            module_settings = self._apply_rotation(
+                module_settings, blog, locals().get("title"), title_id,
+            )
+
             # 3. ContentGenerator로 글 생성
             text_replace_enabled = module_settings.get(
                 "substitution", {}
@@ -291,6 +299,38 @@ class FlowGenerateExecutor:
                 "message": msg,
                 "error": str(e),
             }
+
+    def _apply_rotation(self, module_settings: dict, blog,
+                        title, title_id: int = 0) -> dict:
+        """프롬프트 변형을 적용한다. 쓰지 않으면 원본 그대로.
+
+        커서는 모듈 설정이 아니라 호출 시점 값을 쓴다. 설정에 저장하면
+        동시 실행에서 두 워커가 같은 번호를 읽는다. 여기서는 오늘 생성
+        수를 커서로 쓴다 — 순번이 자연스럽게 돌고 경합이 없다.
+        """
+        from . import adsense_prompt_switch as _aps
+        from . import prompt_rotation as _rot
+
+        if _aps.should_use_approval(module_settings, blog):
+            return module_settings
+
+        topic_id = getattr(title, "topic_id", None) if title else None
+        keyword = (getattr(title, "title", "") or "") if title else ""
+        # 커서는 누적 발행 수. 글마다 1씩 늘어나 순번이 자연스럽게 돌고,
+        # 두 워커가 동시에 읽어도 같은 값이면 제목이 달라 결과가 갈린다.
+        # 그마저 없으면 제목 id 를 쓴다(단조 증가라 순번 역할을 한다).
+        cursor = int(getattr(blog, "total_post_count", 0) or 0) or int(
+            title_id or 0)
+        updated = _rot.apply(module_settings, blog, topic_id=topic_id,
+                             keyword=keyword, cursor=cursor)
+        picked = updated.get("_rotation")
+        if picked:
+            logger.info(
+                "[FLOW_GEN] 프롬프트 변형 | blog=%s | %s | %s",
+                getattr(blog, "name", "?"), picked.get("purpose"),
+                picked.get("reason"),
+            )
+        return updated
 
     async def _today_generated_count(self, blog_id: int) -> int:
         """**오늘(KST 00:00~24:00)** 이 블로그로 생성한 글 수.
