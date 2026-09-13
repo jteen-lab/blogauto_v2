@@ -34,6 +34,38 @@ RISKY_PATTERNS = (
 )
 
 
+# ── AI 흔적 ────────────────────────────────────────────────────────────
+# 모델이 습관적으로 쓰는 표현들. 뜻이 틀린 게 아니라 **사람이 안 쓰는
+# 말**이라 티가 난다. 수작업으로 글 11편을 쓰며 실제로 걸러낸 목록이다.
+#
+# 판정은 차단이 아니라 경고다. 니치에 따라 자연스러운 말도 있어서
+# 일괄 차단하면 멀쩡한 글이 막힌다. 모듈 설정으로 차단 전환할 수 있다.
+AI_CLICHES = (
+    "권합니다", "하시는 게 좋", "이 부분", "핵심은 ", "경우가 많습니다",
+    "가능성이 높", "인 셈입", "라고 보시면", "필요가 있", "중요합니다",
+    "만만치 않", "다양한 ", "효율적으로", "극대화", "적극 활용",
+    "간과할 수 없", "빼놓을 수 없", "바람직합니다", "유의하시기",
+)
+
+# 모델이 찍는 특수문자. 사람은 키보드로 이렇게 안 친다.
+AI_MARKS = (
+    ("…", "말줄임표(…)"),
+    ("ㆍ", "가운뎃점(ㆍ)"),
+    ("∙", "가운뎃점(∙)"),
+)
+
+# 본문에 섞이면 안 되는 조각. 스타일은 테마가 갖고 있어야 한다.
+FORBIDDEN_HTML = (
+    ("<blockquote", "인용문 태그"),
+    ("<style", "인라인 스타일"),
+    ("target=", "새 창 속성"),
+    ("rel=", "rel 속성"),
+)
+
+# 상투어가 이 수를 넘으면 경고한다. 한두 개는 자연스럽다.
+CLICHE_THRESHOLD = 3
+
+
 @dataclass
 class GateResult:
     """게이트 판정. blocked 면 발행하지 않는다."""
@@ -115,10 +147,43 @@ def strip_duplicate_h1(markdown: str, title: str) -> str:
     return rest
 
 
+def find_cliches(markdown: str) -> List[str]:
+    """쓰인 AI 상투어 목록. 빈도 순으로 돌려준다."""
+    text = markdown or ""
+    hit = [(word, text.count(word)) for word in AI_CLICHES if word in text]
+    hit.sort(key=lambda kv: kv[1], reverse=True)
+    return [f"{w}({n})" for w, n in hit]
+
+
+def check_ai_traces(markdown: str) -> List[str]:
+    """AI 흔적을 찾는다. 사유 목록을 돌려준다(빈 목록이면 깨끗하다)."""
+    found: List[str] = []
+    text = markdown or ""
+
+    hits = find_cliches(text)
+    if len(hits) >= CLICHE_THRESHOLD:
+        found.append(f"AI 상투어 {len(hits)}종: {', '.join(hits[:6])}")
+
+    for mark, name in AI_MARKS:
+        if mark in text:
+            found.append(f"{name} 사용")
+
+    for tag, name in FORBIDDEN_HTML:
+        if tag in text:
+            found.append(f"{name} 포함")
+
+    return found
+
+
 def evaluate(
     title: str, markdown: str, min_chars: int = MIN_BODY_CHARS,
+    trace_blocks: bool = False,
 ) -> GateResult:
-    """생성 결과를 검사한다(중복 제목 검사는 DB가 필요해 호출자가 더한다)."""
+    """생성 결과를 검사한다(중복 제목 검사는 DB가 필요해 호출자가 더한다).
+
+    Args:
+        trace_blocks: True 면 AI 흔적도 차단 사유로 올린다. 기본은 경고.
+    """
     result = GateResult()
 
     too_short = check_length(markdown, min_chars)
@@ -129,6 +194,14 @@ def evaluate(
     risky = check_risky_topic(title)
     if risky:
         result.warnings.append(risky)
+
+    traces = check_ai_traces(markdown)
+    if traces:
+        if trace_blocks:
+            result.blocked = True
+            result.reasons.extend(traces)
+        else:
+            result.warnings.extend(traces)
 
     return result
 
@@ -144,6 +217,9 @@ def resolve_settings(module_settings: Optional[dict]) -> Dict[str, Any]:
     return {
         "enabled": True if enabled is None else bool(enabled),
         "min_chars": int(gate.get("min_chars") or MIN_BODY_CHARS),
+        # AI 흔적을 차단 사유로 올릴지. 기본은 경고만 — 니치에 따라
+        # 자연스러운 표현이 있어서 일괄 차단하면 멀쩡한 글이 막힌다.
+        "trace_blocks": bool(gate.get("trace_blocks")),
     }
 
 
