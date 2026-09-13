@@ -36,6 +36,9 @@ from ..schemas.blog_settings import (
     AISettingsResponse,
     BlogSettingsResponse,
 )
+from ..services.blog_settings_template_slots import (
+    slot_drop as _slot_drop, slot_path as _slot_path, slot_put as _slot_put,
+)
 from ..services.blog_settings_service import (
     get_blog_or_404,
     validate_file_extension,
@@ -342,6 +345,7 @@ async def save_image_settings(
 async def get_image_file(
     blog_id: int,
     file_type: str = Query(..., pattern="^(template|font)$", description="파일 타입"),
+    slot: int = Query(0, ge=0, le=9, description="템플릿 슬롯(0=기본)"),
     db: AsyncSession = Depends(get_db_session)
 ) -> FileResponse:
     """이미지/폰트 파일 조회 (인증 없이 접근 가능)."""
@@ -354,8 +358,7 @@ async def get_image_file(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="블로그를 찾을 수 없습니다")
 
     overlay_config = blog.overlay_config or {}
-    config_key = "template_image" if file_type == "template" else "font_file"
-    file_path_str = overlay_config.get(config_key)
+    file_path_str = _slot_path(overlay_config, file_type, slot)
 
     if not file_path_str:
         raise HTTPException(
@@ -400,6 +403,7 @@ async def get_image_file(
 async def upload_image_file(
     blog_id: int,
     file_type: str = Query(..., pattern="^(template|font)$", description="파일 타입"),
+    slot: int = Query(0, ge=0, le=9, description="템플릿 슬롯(0=기본)"),
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session)
@@ -411,13 +415,12 @@ async def upload_image_file(
     allowed_ext = ALLOWED_IMAGE_EXTENSIONS if file_type == "template" else ALLOWED_FONT_EXTENSIONS
     ext = validate_file_extension(file.filename, allowed_ext)
 
-    # 파일 저장
-    relative_path = save_uploaded_file(file, blog_id, file_type, ext)
+    # 파일 저장 (템플릿은 슬롯별로 이름이 갈린다)
+    relative_path = save_uploaded_file(file, blog_id, file_type, ext, slot)
 
     # overlay_config에 파일 경로 업데이트
-    overlay_config = dict(blog.overlay_config or {})
-    config_key = "template_image" if file_type == "template" else "font_file"
-    overlay_config[config_key] = relative_path
+    overlay_config = _slot_put(blog.overlay_config, file_type, slot,
+                               relative_path)
 
     blog.overlay_config = overlay_config
     flag_modified(blog, 'overlay_config')
@@ -428,6 +431,7 @@ async def upload_image_file(
     return {
         "success": True,
         "file_type": file_type,
+        "slot": slot,
         "file_path": relative_path,
         "message": f"{file_type} 파일이 업로드되었습니다"
     }
@@ -441,6 +445,7 @@ async def upload_image_file(
 async def delete_image_file(
     blog_id: int,
     file_type: str = Query(..., pattern="^(template|font)$", description="파일 타입"),
+    slot: int = Query(0, ge=0, le=9, description="템플릿 슬롯(0=기본)"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session)
 ) -> dict:
@@ -448,8 +453,7 @@ async def delete_image_file(
     blog = await get_blog_or_404(blog_id, current_user, db)
 
     overlay_config = blog.overlay_config or {}
-    config_key = "template_image" if file_type == "template" else "font_file"
-    file_path_str = overlay_config.get(config_key)
+    file_path_str = _slot_path(overlay_config, file_type, slot)
 
     if not file_path_str:
         raise HTTPException(
@@ -461,8 +465,7 @@ async def delete_image_file(
     delete_uploaded_file(file_path_str, blog_id)
 
     # overlay_config에서 경로 제거
-    overlay_config = dict(overlay_config)  # 새 dict로 복사
-    overlay_config.pop(config_key, None)
+    overlay_config = _slot_drop(overlay_config, file_type, slot)
     blog.overlay_config = overlay_config
     flag_modified(blog, 'overlay_config')
     await db.commit()

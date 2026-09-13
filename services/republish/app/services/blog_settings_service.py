@@ -154,7 +154,8 @@ def save_uploaded_file(
     file,
     blog_id: int,
     file_type: str,
-    ext: str
+    ext: str,
+    slot: int = 0
 ) -> str:
     """
     업로드된 파일 저장.
@@ -164,6 +165,8 @@ def save_uploaded_file(
         blog_id: 블로그 ID
         file_type: 파일 타입 (template, font)
         ext: 파일 확장자
+        slot: 템플릿 슬롯(0=기본). 0 이 아니면 파일 이름이 갈라져
+            두 번째 업로드가 첫 번째를 덮어쓰지 않는다.
 
     Returns:
         str: 저장된 파일의 상대 경로
@@ -171,7 +174,9 @@ def save_uploaded_file(
     Raises:
         HTTPException: 파일 저장 실패 시
     """
-    safe_filename = f"{file_type}_{blog_id}{ext}"
+    from .blog_settings_template_slots import filename_for
+
+    safe_filename = filename_for(file_type, blog_id, ext, slot)
     file_path = get_upload_path(blog_id, file_type, safe_filename)
 
     try:
