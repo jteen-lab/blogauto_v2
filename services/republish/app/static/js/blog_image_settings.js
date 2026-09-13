@@ -53,6 +53,8 @@ function imageSettingsApp() {
         // 오버레이 설정
         overlayConfig: {
             template_image: null,
+            template_images: [],
+            template_image_mode: 'random',
             font_file: null,
             font_size: 64,
             line_height: 1.25,
@@ -75,6 +77,7 @@ function imageSettingsApp() {
         templatePreviewUrl: '',
         loadedFont: null,
         templateImage: null,
+        extraCacheBust: 0,
 
         // 메시지 표시 헬퍼
         showMessage(message, type = 'info') {
@@ -231,6 +234,8 @@ function imageSettingsApp() {
             // 매번 기본값에서 시작해 서버 응답으로만 재구성한다.
             const defaults = {
                 template_image: null,
+                template_images: [],
+                template_image_mode: 'random',
                 font_file: null,
                 font_size: 64,
                 line_height: 1.25,
@@ -253,6 +258,16 @@ function imageSettingsApp() {
                 ...config,
                 // file path는 서버 응답에 키가 없으면 명시적으로 null
                 template_image: config.template_image || null,
+                // 추가 배경 — 없으면 빈 목록이라 기존 단수 경로로 동작한다
+                template_images: Array.isArray(config.template_images)
+                    ? config.template_images.map(r => ({
+                        slot: r.slot,
+                        path: r.path,
+                        topic_ids: r.topic_ids || [],
+                        keywords: r.keywords || []
+                    }))
+                    : [],
+                template_image_mode: config.template_image_mode || 'random',
                 font_file: config.font_file || null,
                 padding: config.padding || defaults.padding
             };
@@ -308,6 +323,90 @@ function imageSettingsApp() {
         handleTemplateUpload(event) {
             if (event.target.files.length > 0) {
                 this.uploadTemplateFile(event.target.files[0]);
+            }
+        },
+
+        // 추가 배경 미리보기 URL (슬롯별)
+        extraPreviewUrl(slot) {
+            const blogId = this.getBlogId();
+            return `/api/v1/blogs/${blogId}/settings/image/file`
+                + `?file_type=template&slot=${slot}&t=${this.extraCacheBust || 0}`;
+        },
+
+        handleExtraTemplateUpload(event) {
+            if (event.target.files.length > 0) {
+                this.uploadExtraTemplate(event.target.files[0]);
+                event.target.value = '';
+            }
+        },
+
+        // 빈 슬롯 하나를 찾아 올린다. 슬롯이 갈라져야 파일이 안 덮인다.
+        async uploadExtraTemplate(file) {
+            const blogId = this.getBlogId();
+            if (!blogId) return;
+
+            const rows = this.overlayConfig.template_images || [];
+            const used = new Set(rows.map(r => Number(r.slot)));
+            let slot = 0;
+            for (let i = 1; i <= 9; i++) {
+                if (!used.has(i)) { slot = i; break; }
+            }
+            if (!slot) {
+                this.showMessage('추가 배경은 9장까지입니다.', 'error');
+                return;
+            }
+            if (file.size > 5 * 1024 * 1024) {
+                this.showMessage('파일 크기는 5MB 이하여야 합니다.', 'error');
+                return;
+            }
+
+            this.uploadingTemplate = true;
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                const response = await fetch(
+                    `/api/v1/blogs/${blogId}/settings/image/upload`
+                    + `?file_type=template&slot=${slot}`,
+                    { method: 'POST', body: formData }
+                );
+                if (response.ok) {
+                    const data = await response.json();
+                    this.overlayConfig.template_images = [
+                        ...rows,
+                        { slot, path: data.file_path, topic_ids: [], keywords: [] }
+                    ].sort((a, b) => a.slot - b.slot);
+                    this.extraCacheBust = Date.now();
+                    this.showMessage(`추가 배경 ${slot}번이 업로드되었습니다.`, 'success');
+                } else {
+                    this.showMessage('추가 배경 업로드에 실패했습니다.', 'error');
+                }
+            } catch (e) {
+                console.error('추가 배경 업로드 실패:', e);
+                this.showMessage('추가 배경 업로드에 실패했습니다.', 'error');
+            } finally {
+                this.uploadingTemplate = false;
+            }
+        },
+
+        async deleteExtraTemplate(slot) {
+            const blogId = this.getBlogId();
+            if (!blogId) return;
+            try {
+                const response = await fetch(
+                    `/api/v1/blogs/${blogId}/settings/image/file`
+                    + `?file_type=template&slot=${slot}`,
+                    { method: 'DELETE' }
+                );
+                if (response.ok) {
+                    this.overlayConfig.template_images =
+                        (this.overlayConfig.template_images || [])
+                            .filter(r => Number(r.slot) !== Number(slot));
+                    this.showMessage(`추가 배경 ${slot}번을 삭제했습니다.`, 'success');
+                } else {
+                    this.showMessage('추가 배경 삭제에 실패했습니다.', 'error');
+                }
+            } catch (e) {
+                console.error('추가 배경 삭제 실패:', e);
             }
         },
 
@@ -584,6 +683,7 @@ function imageSettingsApp() {
                     const t = v.trim();
                     return t || def;
                 };
+                const VALID_TPL_MODE = ['random', 'sequential', 'by_niche', 'by_keyword'];
                 const oc = overlayWithoutPaths;
                 const safePadding = (oc.padding && typeof oc.padding === 'object') ? oc.padding : {};
                 const normalizedOverlay = {
@@ -606,6 +706,22 @@ function imageSettingsApp() {
                         top: clampInt(safePadding.top, 0, 9999, 80),
                         bottom: clampInt(safePadding.bottom, 0, 9999, 80),
                     },
+                    // 추가 배경 — 경로는 업로드가 만들지만 조건(주제·키워드)과
+                    // 선택 방식은 화면에서 고치므로 함께 보낸다. 여기서 빼면
+                    // 저장 한 번에 조건이 날아간다.
+                    template_images: (oc.template_images || [])
+                        .filter(r => r && r.path)
+                        .map(r => ({
+                            slot: parseInt(r.slot, 10) || 0,
+                            path: r.path,
+                            topic_ids: (r.topic_ids || [])
+                                .map(n => parseInt(n, 10))
+                                .filter(n => Number.isInteger(n)),
+                            keywords: (r.keywords || [])
+                                .map(k => String(k).trim()).filter(Boolean),
+                        })),
+                    template_image_mode: VALID_TPL_MODE.includes(oc.template_image_mode)
+                        ? oc.template_image_mode : 'random',
                 };
 
                 const payload = {
