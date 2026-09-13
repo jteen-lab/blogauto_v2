@@ -92,7 +92,24 @@ function createPromptModuleState() {
             aiModel: 'gpt-4.1-mini',
             summaryStyle: 'concise',
             algorithmType: 'textrank',
-            maxLength: 500
+            maxLength: 500,
+            // 근거 체크리스트 — 검색 전에 무엇을 알아야 하는지 정한다.
+            // 호출이 2배가 되므로 기본은 꺼짐.
+            checklistEnabled: false,
+            checklistProvider: ''
+        },
+
+        // 프롬프트 로테이션 — 같은 니치라도 글마다 구조를 바꾼다
+        rotation: {
+            enabled: false,
+            mode: 'random',
+            purpose: '',
+            variants: []
+        },
+
+        // 품질 게이트 — AI 흔적을 차단 사유로 올릴지
+        qualityGate: {
+            traceBlocks: false
         },
 
         internalLinks: {
@@ -205,7 +222,33 @@ const promptModuleMethods = {
                 aiModel: ref.ai_model || 'gpt-4.1-mini',
                 summaryStyle: ref.summary_style || 'concise',
                 algorithmType: ref.algorithm_type || 'textrank',
-                maxLength: ref.max_length ?? 500
+                maxLength: ref.max_length ?? 500,
+                checklistEnabled: !!(ref.evidence_checklist || {}).enabled,
+                checklistProvider: (ref.evidence_checklist || {}).ai_provider || ''
+            };
+        }
+
+        // 프롬프트 로테이션 — 저장은 배열, 화면은 쉼표 문자열로 다룬다
+        if (settings.prompt_rotation) {
+            const rot = settings.prompt_rotation;
+            this.promptModule.rotation = {
+                enabled: !!rot.enabled,
+                mode: rot.mode || 'random',
+                purpose: rot.purpose || '',
+                variants: (rot.variants || []).map(v => ({
+                    label: v.label || '',
+                    template: v.template || '',
+                    purpose: v.purpose || '',
+                    topic_ids_text: (v.topic_ids || []).join(','),
+                    keywords_text: (v.keywords || []).join(',')
+                }))
+            };
+        }
+
+        // 품질 게이트
+        if (settings.quality_gate) {
+            this.promptModule.qualityGate = {
+                traceBlocks: !!settings.quality_gate.trace_blocks
             };
         }
 
@@ -561,7 +604,12 @@ const promptModuleMethods = {
                 ai_model: this.promptModule.reference.aiModel,
                 summary_style: this.promptModule.reference.summaryStyle,
                 algorithm_type: this.promptModule.reference.algorithmType,
-                max_length: this.promptModule.reference.maxLength
+                max_length: this.promptModule.reference.maxLength,
+                evidence_checklist: {
+                    enabled: !!this.promptModule.reference.checklistEnabled,
+                    // 비우면 위 요약 AI 를 물려받는다(checklist_runner 가 처리)
+                    ai_provider: this.promptModule.reference.checklistProvider || ''
+                }
             },
             // 제목 재조합 설정
             title_recombine: {
@@ -596,6 +644,29 @@ const promptModuleMethods = {
                     mode: this.promptModule.contentGeneration.renewalMode || 'inherit',
                     text: this.promptModule.contentGeneration.renewalText || ''
                 }
+            },
+            // 프롬프트 로테이션 — 변형은 서버가 읽는 모양으로 바꿔 보낸다.
+            // 화면은 쉼표 문자열로 받고, 저장할 때 배열로 편다.
+            prompt_rotation: {
+                enabled: !!this.promptModule.rotation.enabled,
+                mode: this.promptModule.rotation.mode || 'random',
+                purpose: this.promptModule.rotation.purpose || '',
+                variants: (this.promptModule.rotation.variants || [])
+                    .filter(v => v && String(v.template || '').trim())
+                    .map(v => ({
+                        label: (v.label || '').trim(),
+                        template: String(v.template).trim(),
+                        purpose: v.purpose || '',
+                        topic_ids: String(v.topic_ids_text || '').split(',')
+                            .map(x => parseInt(x.trim(), 10))
+                            .filter(n => Number.isInteger(n)),
+                        keywords: String(v.keywords_text || '').split(',')
+                            .map(x => x.trim()).filter(Boolean)
+                    }))
+            },
+            // 품질 게이트 — AI 흔적을 차단 사유로 올릴지
+            quality_gate: {
+                trace_blocks: !!this.promptModule.qualityGate.traceBlocks
             },
             // 내부링크 설정
             internal_links: {
