@@ -26,6 +26,15 @@ from ...schemas.reference_collection import DocumentSummary
 logger = logging.getLogger(__name__)
 
 
+def _outline_block(outline: list) -> str:
+    """뼈대 지시문. 항목이 다르면 구조가 달라진다."""
+    body = "\n".join(f"- {t}" for t in outline)
+    return ("[글의 뼈대]\n"
+            "아래 항목을 순서대로 다룹니다. 각 항목을 소제목 하나로 풉니다.\n"
+            f"{body}\n"
+            "자료에 없는 항목은 지어내지 말고 건너뜁니다.\n\n")
+
+
 @dataclass
 class ReferenceCollectionResult:
     """참조자료 수집 결과"""
@@ -41,6 +50,8 @@ class ReferenceCollectionResult:
     trace: dict = field(default_factory=dict)
     # url → 발행일. 요약본에는 날짜가 없어 검색 단계의 값을 실어 보낸다.
     postdates: dict = field(default_factory=dict)
+    # 채워진 체크리스트 항목. 소제목 뼈대가 된다(비면 기존 구조 그대로).
+    outline: list = field(default_factory=list)
     # 제목의 회사가 금감원 공시 목록에 있나 (True/False/None 모름)
     company_known: Optional[bool] = None
     company_note: str = ""
@@ -68,6 +79,10 @@ class ReferenceCollectionResult:
         AI 가 참고할지 베낄지 출처를 출력할지 스스로 정했다.
         """
         blocks: List[str] = []
+        # 뼈대를 맨 앞에 둔다. 자료보다 먼저 읽어야 구조가 잡힌다.
+        # digest 든 summaries 든 분기와 무관하게 붙는다.
+        if self.outline:
+            blocks.append(_outline_block(self.outline).rstrip())
         if self.official:
             blocks.append(self.official)
 
@@ -216,11 +231,18 @@ class ReferenceCollector:
         entities = list(entities or [])
         trace: dict = {}
 
-        # 검색
-        search_results = await ReferenceSearchService(
-            user_settings
-        ).search_webdoc(query, max_search)
+        # 검색 — 체크리스트가 켜져 있으면 항목별로 나눠 던진다.
+        # 근거가 필요한 글은 "무엇을 알아야 하나" 를 먼저 정해야 찾을 곳이
+        # 갈린다(법 근거를 웹문서에서 찾으면 블로그 글이 근거가 된다).
+        from ..reference.checklist_runner import collect_evidence
+
+        search_service = ReferenceSearchService(user_settings)
+        search_results, sheet = await collect_evidence(
+            self.ai_service, search_service, query, title, settings,
+            max_search)
         ref.total_searched = len(search_results)
+        if sheet is not None:
+            trace["checklist"] = sheet.to_dict()
 
         # ② 관문 1 — 제목·설명에 개체가 없는 결과를 뺀다(크롤링 전이라 공짜)
         before = len(search_results)
@@ -331,6 +353,7 @@ class ReferenceCollector:
             count=count,
             summaries=summaries,
             postdates=postdates,
+            outline=(sheet.outline() if sheet is not None else []),
             company_known=company.known,
             company_note=company.reason,
             sources=digest_sources or [s.url for s in summaries],
