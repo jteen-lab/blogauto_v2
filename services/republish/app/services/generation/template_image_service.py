@@ -49,17 +49,26 @@ class TemplateImageService:
 
     async def generate(
         self, title: str, blog, blog_id: int,
+        topic_id: Optional[int] = None, keyword: str = "",
+        cursor: int = 0,
     ) -> Optional[dict]:
         """
         배경 위에 제목 텍스트를 합성하여 이미지 생성
+
+        템플릿을 여러 장 등록하면 글마다 다른 배경을 쓴다. 대표 이미지가
+        매번 같으면 목록에서 한 블로그의 글이 한눈에 묶여 보인다.
 
         Args:
             title: 포스트 제목
             blog: Blog 객체 (overlay_config 사용)
             blog_id: 블로그 ID
+            topic_id: 하위 주제. 주제별 고정 모드에 쓴다
+            keyword: 키워드별 고정 모드에 쓴다
+            cursor: 순번 모드의 현재 위치
 
         Returns:
-            dict: {"image_url": str, "provider": str, "model": None}
+            dict: {"image_url": str, "provider": str, "model": None,
+                   "template_index": int|None}
             또는 None (실패 시)
         """
         try:
@@ -75,8 +84,10 @@ class TemplateImageService:
             f"[TEMPLATE_IMAGE] overlay_config 키 목록: {list(config.keys())}"
         )
 
+        picked = self._pick_template(config, topic_id, keyword, cursor)
+
         try:
-            image = self._compose_image(title, config)
+            image = self._compose_image(title, config, picked)
             local_path = self._save_image(image, blog_id)
 
             if local_path:
@@ -87,6 +98,8 @@ class TemplateImageService:
                     "image_url": local_path,
                     "provider": "template",
                     "model": None,
+                    "template_index": (picked or {}).get("index"),
+                    "template_next_cursor": (picked or {}).get("next_cursor"),
                 }
             return None
 
@@ -94,13 +107,39 @@ class TemplateImageService:
             logger.error(f"[TEMPLATE_IMAGE] 이미지 합성 실패: {e}")
             return None
 
-    def _compose_image(self, title: str, config: dict):
+    def _pick_template(self, config: dict, topic_id, keyword: str,
+                       cursor: int) -> Optional[dict]:
+        """쓸 배경을 고른다.
+
+        `template_images` 가 없으면 None 을 돌려주고, 호출부는 기존
+        `template_image` 단수 키를 쓴다. **하위 호환이 여기서 끝난다** —
+        이미 단수로 운영 중인 블로그를 건드리지 않는다.
+        """
+        from . import variant_picker as vp
+
+        items = [i for i in (config.get("template_images") or [])
+                 if isinstance(i, dict) and i.get("path")]
+        if not items:
+            return None
+
+        got = vp.pick(items, config.get("template_image_mode"),
+                      topic_id=topic_id, keyword=keyword, cursor=cursor)
+        if got is None:
+            return None
+        logger.info("[TEMPLATE_IMAGE] 배경 선택 | %s | %s",
+                    got.reason, got.item.get("path"))
+        return {"path": got.item.get("path"), "index": got.index,
+                "next_cursor": got.next_cursor}
+
+    def _compose_image(self, title: str, config: dict,
+                       picked: Optional[dict] = None):
         """
         이미지 합성 실행
 
         Args:
             title: 오버레이할 텍스트
             config: Blog.overlay_config 설정
+            picked: 고른 배경(없으면 config 의 단수 키를 쓴다)
 
         Returns:
             PIL.Image 객체
@@ -118,7 +157,7 @@ class TemplateImageService:
         vertical_align = config.get("vertical_align", "center")
 
         # 배경 이미지 생성/로드
-        image = self._create_background(config)
+        image = self._create_background(config, picked)
         width, height = image.size
 
         draw = ImageDraw.Draw(image)
@@ -214,11 +253,12 @@ class TemplateImageService:
         )
         return None
 
-    def _create_background(self, config: dict):
+    def _create_background(self, config: dict,
+                           picked: Optional[dict] = None):
         """배경 이미지 로드(원본 크기) 또는 단색 배경 생성"""
         from PIL import Image
 
-        raw_path = config.get("template_image")
+        raw_path = (picked or {}).get("path") or config.get("template_image")
         bg_path = self._resolve_media_path(raw_path) if raw_path else None
         logger.debug(
             f"[TEMPLATE_IMAGE] 배경 이미지 경로: "
