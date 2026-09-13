@@ -28,12 +28,21 @@ SRC_GOOGLE_TRENDING = "google_trending"
 SRC_NAVER_DATALAB = "naver_datalab"
 # 질문 팬아웃 — 의문사를 붙여 자동완성에 되묻는다(PAA 대체)
 SRC_QUESTION_FANOUT = "question_fanout"
+# 커뮤니티 질문 — 사람이 **쓴 문장**. 팬아웃(치는 쿼리)과 층이 다르다.
+# 팬아웃은 "이사 견적 어떻게" 까지고, 여기서만 "2층에서 3층, 엘베 없음,
+# 장롱 3짝" 같은 **상황**이 나온다. 주제를 넓히는 유일한 소스다.
+SRC_NAVER_KIN = "naver_kin"
+SRC_NAVER_CAFE = "naver_cafe"
 
 ALL_SOURCES = (
     SRC_NAVER_ADS, SRC_NAVER_SUGGEST, SRC_GOOGLE_SUGGEST,
     SRC_GOOGLE_PLANNER, SRC_GOOGLE_TRENDS, SRC_GSC,
     SRC_GOOGLE_TRENDING, SRC_NAVER_DATALAB, SRC_QUESTION_FANOUT,
+    SRC_NAVER_KIN, SRC_NAVER_CAFE,
 )
+
+# 상황이 붙은 질문을 주는 소스. 주제 확장에 쓰고, 검색량 보강 대상이 아니다.
+SITUATION_SOURCES = (SRC_NAVER_KIN, SRC_NAVER_CAFE)
 
 # 소스 → 어느 엔진의 지표인지
 SOURCE_ENGINE = {
@@ -46,6 +55,8 @@ SOURCE_ENGINE = {
     SRC_GOOGLE_TRENDING: "google",
     SRC_NAVER_DATALAB: "naver",
     SRC_QUESTION_FANOUT: "naver",
+    SRC_NAVER_KIN: "naver",
+    SRC_NAVER_CAFE: "naver",
 }
 
 # 사람이 읽을 이름
@@ -59,6 +70,8 @@ SOURCE_LABEL = {
     SRC_GOOGLE_TRENDING: "구글 실시간 인기(발견)",
     SRC_NAVER_DATALAB: "네이버 데이터랩(트렌드 검증)",
     SRC_QUESTION_FANOUT: "질문 팬아웃(의문사 확장)",
+    SRC_NAVER_KIN: "지식iN 질문(상황)",
+    SRC_NAVER_CAFE: "카페 질문(상황)",
 }
 
 # 키워드 길이 상한. 문장이 통째로 들어오면 키워드가 아니다.
