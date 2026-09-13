@@ -297,6 +297,15 @@ class ModuleService:
                     # 요청에 필드가 있고 값이 None이면 명시적으로 None 설정
                     update_data[field] = None
 
+            # settings 는 화면이 통째로 새로 만들어 보낸다. 화면에 입력란이
+            # 없는 블록(예: prompt_rotation)이 저장 한 번에 사라지지 않도록
+            # 기존 것과 병합한다. 최상위 키 단위로만 본다.
+            if "settings" in update_data:
+                from .modules.settings_merge import merge as _merge_settings
+
+                update_data["settings"] = _merge_settings(
+                    module.settings, update_data["settings"])
+
             logger.debug(f"[UPDATE_MODULE] 업데이트 필드: {list(update_data.keys())}")
 
             for field, value in update_data.items():
