@@ -119,3 +119,51 @@ async def run(ai: Any, search: Any, title: str, provider: str,
                 title[:30], sheet.coverage * 100, len(out.results),
                 out.ai_calls)
     return out
+
+
+CHECKLIST_KEY = "evidence_checklist"
+
+
+def is_enabled(settings: Optional[Dict[str, Any]]) -> bool:
+    """참조 설정에서 체크리스트를 켰는가. 기본은 꺼짐.
+
+    호출이 늘어나는 기능이라 기본값을 켜 두지 않는다. 근거가 중요한
+    니치(법·제도·금융)부터 켜는 것이 맞다.
+    """
+    return bool(((settings or {}).get(CHECKLIST_KEY) or {}).get("enabled"))
+
+
+async def collect_evidence(ai: Any, search: Any, query: str, title: str,
+                           settings: Optional[Dict[str, Any]],
+                           max_search: int = 30):
+    """검색 단계를 대신한다.
+
+    체크리스트가 꺼져 있으면 기존 단일 웹문서 검색 그대로다. 켜져 있으면
+    항목별로 나눠 던지고 목록을 함께 돌려준다.
+
+    Returns:
+        (search_results, Checklist 또는 None)
+    """
+    if not is_enabled(settings):
+        return await search.search_webdoc(query, max_search), None
+
+    cfg = (settings or {}).get(CHECKLIST_KEY) or {}
+    provider = cfg.get("ai_provider") or settings.get("ai_provider")
+    model = cfg.get("ai_model") or settings.get("ai_model")
+    if not provider:
+        logger.info("[CHECKLIST_RUN] AI 미지정 — 기존 검색으로 간다")
+        return await search.search_webdoc(query, max_search), None
+
+    got = await run(ai, search, title or query, provider, model)
+    if not got.sheet.items:
+        return await search.search_webdoc(query, max_search), None
+
+    # 체크리스트가 자료를 거의 못 채웠으면 기존 검색으로 보충한다.
+    if not got.usable:
+        logger.info("[CHECKLIST_RUN] 채움 %.0f%% — 기존 검색으로 보충",
+                    got.sheet.coverage * 100)
+        extra = await search.search_webdoc(query, max_search)
+        known = {getattr(r, "link", "") for r in got.results}
+        got.results.extend(r for r in extra
+                           if (getattr(r, "link", "") or "") not in known)
+    return got.results, got.sheet
