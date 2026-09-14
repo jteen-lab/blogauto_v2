@@ -1,4 +1,4 @@
-"""작업대 — 모듈을 올려놓고 돌려본 뒤, 반영할지 버릴지 정하는 화면.
+"""모듈 테스터 — 모듈을 담아 돌려본 뒤, 반영할지 버릴지 정하는 화면.
 
 계획서: docs/plans/test_workbench_plan.md
 순서도: docs/flowcharts/test_workbench.md
@@ -26,7 +26,7 @@ from ..services.workbench.runner import EXCLUDED, SUPPORTED, WorkbenchRunner
 
 logger = get_logger("workbench_router", "app.log")
 
-router = APIRouter(prefix="/api/v1/workbench", tags=["작업대"])
+router = APIRouter(prefix="/api/v1/workbench", tags=["모듈 테스터"])
 page_router = APIRouter(tags=["페이지"])
 templates = Jinja2Templates(directory="app/templates")
 
@@ -72,11 +72,19 @@ class PresetSaveRequest(BaseModel):
     config: Dict[str, Any]
 
 
-@page_router.get("/workbench")
-async def workbench_page(request: Request):
-    """작업대 화면."""
+@page_router.get("/module-tester")
+async def module_tester_page(request: Request):
+    """모듈 테스터 화면."""
     return templates.TemplateResponse(
         "workbench/index.html", {"request": request})
+
+
+@page_router.get("/workbench", include_in_schema=False)
+async def workbench_redirect():
+    """옛 주소 — 즐겨찾기·링크를 살린다."""
+    from fastapi.responses import RedirectResponse
+
+    return RedirectResponse(url="/module-tester", status_code=307)
 
 
 @router.get("/catalog", summary="담을 수 있는 모듈·블로그 목록")
@@ -84,7 +92,7 @@ async def catalog(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    """왼쪽 패널이 보여줄 재료 — 타입별 모듈과 블로그."""
+    """담기 시트가 보여줄 재료 — 타입별 모듈과 블로그."""
     rows = (await db.execute(
         select(Module, ModuleType.code)
         .join(ModuleType, Module.module_type_id == ModuleType.id)
