@@ -171,8 +171,10 @@ class WorkbenchRunner:
         if module_type == "title_gen":
             from ..title_collect.workbench import TitleWorkbench
 
+            # force — 재고 충분 스킵을 우회한다. 작업대는 "돌면 어떻게
+            # 되는지"를 보러 오는 자리라 스킵되면 확인할 게 없다.
             summary = await TitleWorkbench(rs, self.user_id).run_for_module(
-                settings, [blog] if blog else [])
+                settings, [blog] if blog else [], force=True)
             captured = await capture.capture_titles(rs, since)
             return self._outcome(module_type, summary, captured)
 
