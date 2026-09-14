@@ -1,182 +1,172 @@
 {% extends "base.html" %}
 
-{% block title %}작업대 - BlogAuto V2{% endblock %}
+{% block title %}모듈 테스터 - BlogAuto V2{% endblock %}
 
 {% block extra_css %}
 <style>
-    .wb-grid { display: grid; gap: 1rem; grid-template-columns: 1fr; }
-    @media (min-width: 1280px) {
-        .wb-grid { grid-template-columns: 280px minmax(0,1fr) 380px; }
-    }
-    .wb-card { background:#fff; border:1px solid #e5e7eb; border-radius:.5rem; }
-    .wb-chip { font-size:.7rem; padding:.1rem .45rem; border-radius:9999px; }
-    .wb-items { max-height: 340px; overflow-y:auto; }
-    .wb-preview-frame { width:100%; height:520px; border:0; background:#fff; }
-    [x-cloak] { display:none !important; }
+    [x-cloak] { display: none !important; }
+    .mt-items { max-height: 380px; overflow-y: auto; }
+    .mt-preview-frame { width: 100%; height: calc(100vh - 300px); border: 0; background: #fff; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div x-data="workbench()" x-init="init()" x-cloak class="max-w-[1700px] mx-auto px-4 py-6">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4"
+     x-data="moduleTester()" x-init="init()" x-cloak>
 
-    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div>
-            <h1 class="text-xl font-bold text-gray-900">작업대</h1>
+    <!-- 헤더 -->
+    <div class="flex items-center justify-between mb-4">
+        <div class="flex-1">
+            <h2 class="text-2xl font-bold text-gray-900">모듈 테스터</h2>
             <p class="text-sm text-gray-500 mt-1">
-                모듈을 올려놓고 한 번 돌려본 뒤, 결과를 보고 반영할지 버릴지 정합니다.
-                <b>반영을 누르기 전에는 아무것도 남지 않습니다.</b>
+                모듈을 담아 한 번 돌려보고, 결과를 보고 반영할지 버릴지 정합니다.
+                <b>반영 전에는 아무것도 남지 않습니다.</b>
             </p>
         </div>
-        <div class="flex items-center gap-2">
-            <select x-model="presetPick" @change="loadPreset()"
-                    class="px-2 py-1.5 border border-gray-300 rounded text-sm">
-                <option value="">프리셋 불러오기…</option>
-                <template x-for="p in presets" :key="p.name">
-                    <option :value="p.name" x-text="p.name"></option>
-                </template>
-            </select>
-            <button @click="savePreset()"
-                    class="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50">
-                현재 구성 저장</button>
-            <button @click="discardAll()"
-                    class="px-3 py-1.5 text-sm text-red-600 border border-red-300 rounded hover:bg-red-50">
-                전체 폐기</button>
+        <div class="hidden md:flex items-center gap-2">
+            <button @click="openSheet('blog')"
+                    class="inline-flex items-center px-4 py-2 border-2 border-accent rounded-md text-sm font-bold text-accent hover:bg-accent-lt focus:outline-none transition-colors">
+                <svg class="-ml-1 mr-2 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/>
+                </svg>
+                블로그 추가
+            </button>
+            <button @click="openSheet('module')"
+                    class="inline-flex items-center px-4 py-2 border-2 border-accent rounded-md text-sm font-bold text-accent hover:bg-accent-lt focus:outline-none transition-colors">
+                <svg class="-ml-1 mr-2 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/>
+                </svg>
+                모듈 추가
+            </button>
         </div>
     </div>
 
-    <div class="wb-grid">
+    <!-- 모바일 플로팅 버튼 -->
+    <button @click="openSheet('module')"
+            class="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-white border-2 border-accent text-accent hover:bg-accent-lt rounded-2xl shadow-lg flex items-center justify-center text-2xl font-bold z-40 transition-colors">
+        +
+    </button>
 
-        <!-- ══ 좌: 구성 ══ -->
-        <div class="space-y-4">
-            <div class="wb-card p-4">
-                <h2 class="text-sm font-semibold text-gray-900 mb-2">블로그</h2>
-                <select x-model.number="blogId" @change="loadPreviewCss()"
-                        class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm">
-                    <option :value="null">선택 안 함</option>
-                    <template x-for="b in catalog.blogs" :key="b.id">
-                        <option :value="b.id" x-text="b.name + ' (' + b.platform + ')'"></option>
+    <!-- 담긴 것 요약 -->
+    <div class="bg-gray-50 rounded-lg px-4 py-3 mb-4">
+        <div class="flex flex-wrap items-center gap-2">
+            <template x-for="b in blogs" :key="'b'+b.id">
+                <span class="inline-flex items-center gap-2 rounded-xl px-3 py-2 shadow-sm bg-primary-lt text-primary text-sm font-medium">
+                    <span x-text="b.name"></span>
+                    <button @click="removeBlog(b.id)" class="text-primary hover:opacity-60">&times;</button>
+                </span>
+            </template>
+            <template x-for="(s, i) in steps" :key="s.uid">
+                <span class="inline-flex items-center gap-2 rounded-xl px-3 py-2 shadow-sm bg-accent-lt text-accent text-sm font-medium">
+                    <span class="font-bold" x-text="(i+1)"></span>
+                    <span x-text="typeLabel[s.type]"></span>
+                    <span class="text-xs opacity-70" x-text="s.moduleName"></span>
+                    <button @click="steps.splice(i,1)" class="text-accent hover:opacity-60">&times;</button>
+                </span>
+            </template>
+            <span x-show="!blogs.length && !steps.length" class="text-sm text-gray-400">
+                오른쪽 위 버튼으로 블로그와 모듈을 담으세요.
+            </span>
+
+            <div class="ml-auto flex items-center gap-2">
+                <select x-model="presetPick" @change="loadPreset()"
+                        class="text-sm border-gray-300 rounded-md shadow-sm focus:border-accent focus:ring-accent py-1.5 pr-8">
+                    <option value="">프리셋…</option>
+                    <template x-for="p in presets" :key="p.name">
+                        <option :value="p.name" x-text="p.name"></option>
                     </template>
                 </select>
-                <p class="text-xs text-gray-400 mt-1">글 생성은 블로그가 있어야 돕니다.</p>
-            </div>
-
-            <div class="wb-card p-4">
-                <h2 class="text-sm font-semibold text-gray-900 mb-2">모듈 담기</h2>
-                <div class="space-y-2">
-                    <template x-for="t in typeOrder" :key="t">
-                        <div>
-                            <label class="text-xs font-medium text-gray-600"
-                                   x-text="typeLabel[t]"></label>
-                            <div class="flex gap-1 mt-0.5">
-                                <select :id="'pick-'+t"
-                                        class="flex-1 min-w-0 px-2 py-1 border border-gray-300 rounded text-sm">
-                                    <template x-for="m in (catalog.modules[t] || [])" :key="m.id">
-                                        <option :value="m.id" x-text="m.name"></option>
-                                    </template>
-                                </select>
-                                <button @click="addStep(t)"
-                                        class="px-2 py-1 text-sm text-indigo-700 border border-indigo-300 rounded hover:bg-indigo-50">
-                                    담기</button>
-                            </div>
-                        </div>
-                    </template>
-                </div>
-                <p class="text-xs text-gray-400 mt-2 leading-relaxed">
-                    담은 순서가 단계 순서입니다. 문의폼·재발행은 되돌릴 수 없어
-                    작업대에서 지원하지 않습니다.
-                </p>
-            </div>
-
-            <!-- 소스 패널 -->
-            <div class="wb-card p-4">
-                <h2 class="text-sm font-semibold text-gray-900 mb-2">
-                    소스 — 지식iN·카페 질문</h2>
-                <div class="flex gap-1">
-                    <input type="text" x-model="sourceQuery" @keyup.enter="searchSources()"
-                           placeholder="니치 키워드 (예: 이사 견적)"
-                           class="flex-1 min-w-0 px-2 py-1.5 border border-gray-300 rounded text-sm">
-                    <button @click="searchSources()" :disabled="sourceLoading"
-                            class="px-3 py-1.5 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50">
-                        검색</button>
-                </div>
-                <p class="text-xs text-red-500 mt-1" x-show="sourceError" x-text="sourceError"></p>
-                <div class="wb-items mt-2 space-y-1.5">
-                    <template x-for="(q, qi) in sourceItems" :key="qi">
-                        <label class="flex items-start gap-2 p-2 rounded border text-xs cursor-pointer"
-                               :class="q.checked ? 'border-indigo-400 bg-indigo-50' : 'border-gray-200'">
-                            <input type="checkbox" x-model="q.checked" class="mt-0.5 rounded">
-                            <span class="min-w-0">
-                                <span class="wb-chip bg-gray-100 text-gray-600" x-text="q.source_label"></span>
-                                <span class="wb-chip bg-amber-100 text-amber-700" x-show="q.has_situation">상황</span>
-                                <span class="block text-gray-800 mt-0.5" x-text="q.title"></span>
-                                <span class="block text-gray-400" x-text="(q.signals||[]).join(' · ')"></span>
-                            </span>
-                        </label>
-                    </template>
-                </div>
-                <p class="text-xs text-gray-500 mt-2" x-show="checkedQuestions().length">
-                    <b x-text="checkedQuestions().length"></b>건 선택 —
-                    글 생성 단계를 실행하면 이 제목들로 만듭니다 (회차당 최대 3편).
-                </p>
+                <button @click="savePreset()" class="btn-outline-primary">구성 저장</button>
+                <button @click="discardAll()"
+                        class="px-3 py-2 text-sm font-medium text-red-600 border border-red-300 rounded-md hover:bg-red-50 transition-colors">
+                    전체 폐기
+                </button>
             </div>
         </div>
+    </div>
 
-        <!-- ══ 중: 단계와 결과 ══ -->
-        <div class="space-y-4 min-w-0">
-            <div x-show="!steps.length" class="wb-card p-8 text-center text-gray-400 text-sm">
-                왼쪽에서 모듈을 담으면 단계가 생깁니다.
-            </div>
+    <!-- 소스 -->
+    <div class="bg-white border border-gray-200 rounded-lg px-4 py-3 mb-4">
+        <div class="flex flex-wrap items-center gap-2">
+            <button @click="openSheet('source')" class="btn-outline-primary">
+                지식iN·카페에서 질문 가져오기
+            </button>
+            <template x-for="(q, qi) in pickedQuestions" :key="'q'+qi">
+                <span class="inline-flex items-center gap-2 rounded-xl px-3 py-1.5 shadow-sm bg-amber-50 text-amber-800 text-xs">
+                    <span class="max-w-[280px] truncate" x-text="q.title"></span>
+                    <button @click="pickedQuestions.splice(qi,1)" class="hover:opacity-60">&times;</button>
+                </span>
+            </template>
+            <span x-show="!pickedQuestions.length" class="text-sm text-gray-400">
+                고른 질문이 글 생성의 제목이 됩니다 (회차당 최대 3편).
+            </span>
+        </div>
+    </div>
 
-            <template x-for="(s, i) in steps" :key="s.uid">
-                <div class="wb-card p-4">
-                    <div class="flex flex-wrap items-center justify-between gap-2">
-                        <div class="flex items-center gap-2">
-                            <span class="wb-chip bg-indigo-100 text-indigo-700"
-                                  x-text="'단계 ' + (i+1)"></span>
-                            <b class="text-sm" x-text="typeLabel[s.type]"></b>
-                            <span class="text-xs text-gray-500" x-text="s.moduleName"></span>
-                        </div>
-                        <div class="flex items-center gap-1.5">
-                            <button @click="runStep(i)" :disabled="s.running"
-                                    class="px-3 py-1 text-sm bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50">
-                                <span x-show="!s.running">실행</span>
-                                <span x-show="s.running">실행 중…</span>
-                            </button>
-                            <button @click="steps.splice(i,1)"
-                                    class="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded">빼기</button>
-                        </div>
+    <!-- 단계 -->
+    <div x-show="!steps.length"
+         class="bg-white border border-gray-200 rounded-lg py-16 text-center text-gray-400 text-sm">
+        모듈을 담으면 단계가 생깁니다.
+    </div>
+
+    <div class="space-y-4">
+        <template x-for="(s, i) in steps" :key="s.uid">
+            <div class="bg-white border border-gray-200 rounded-lg">
+                <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-gray-100">
+                    <div class="flex items-center gap-2">
+                        <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-accent text-white text-xs font-bold"
+                              x-text="i+1"></span>
+                        <b class="text-sm text-gray-900" x-text="typeLabel[s.type]"></b>
+                        <span class="text-xs text-gray-500" x-text="s.moduleName"></span>
                     </div>
+                    <div class="flex items-center gap-2">
+                        <button @click="runStep(i)" :disabled="s.running" class="btn-primary">
+                            <span x-show="!s.running">실행</span>
+                            <span x-show="s.running">실행 중…</span>
+                        </button>
+                        <button @click="steps.splice(i,1)"
+                                class="px-2 py-1.5 text-sm text-gray-500 hover:text-red-600 hover:bg-red-50 rounded">
+                            빼기
+                        </button>
+                    </div>
+                </div>
 
-                    <p class="text-xs text-gray-500 mt-1" x-show="i > 0">
-                        앞 단계에서 <b x-text="selectedOf(i-1).length"></b>건을 골랐다면
-                        그것으로 실행됩니다.
+                <div class="px-4 py-3">
+                    <p class="text-xs text-gray-500" x-show="i > 0 && selectedOf(i-1).length">
+                        앞 단계에서 고른 <b x-text="selectedOf(i-1).length"></b>건으로 실행됩니다.
                     </p>
 
                     <template x-if="s.outcome">
-                        <div class="mt-3">
-                            <p class="text-sm" :class="s.outcome.success ? 'text-gray-700' : 'text-red-600'"
+                        <div>
+                            <p class="text-sm mb-2"
+                               :class="s.outcome.success ? 'text-gray-700' : 'text-red-600'"
                                x-text="s.outcome.message"></p>
 
-                            <div class="flex items-center gap-1.5 mt-2 text-xs">
+                            <div class="flex flex-wrap items-center gap-1.5 mb-2">
                                 <template x-for="f in ['all','kept','excluded']" :key="f">
                                     <button @click="s.filter = f"
-                                            class="px-2 py-1 rounded border"
-                                            :class="s.filter === f ? 'bg-gray-800 text-white border-gray-800' : 'border-gray-300 text-gray-600'"
+                                            class="px-2.5 py-1 rounded-md border text-xs font-medium transition-colors"
+                                            :class="s.filter === f
+                                                ? 'bg-accent text-white border-accent'
+                                                : 'border-gray-300 text-gray-600 hover:bg-gray-50'"
                                             x-text="filterLabel(f) + ' ' + countOf(s, f)"></button>
                                 </template>
-                                <span class="text-gray-400 ml-2" x-show="s.outcome.captured.clipped"
-                                      x-text="'표시 상한 초과 ' + s.outcome.captured.clipped + '건 생략'"></span>
+                                <span class="text-xs text-gray-400 ml-1" x-show="s.clipped"
+                                      x-text="'표시 상한 초과 ' + s.clipped + '건 생략'"></span>
                             </div>
 
-                            <div class="wb-items mt-2 divide-y divide-gray-100 border border-gray-200 rounded">
+                            <div class="border border-gray-200 rounded-md divide-y divide-gray-100 mt-items">
                                 <template x-for="(item, ii) in itemsFor(s)" :key="ii">
-                                    <div class="flex items-start gap-2 p-2 text-xs"
+                                    <div class="flex items-start gap-2 px-3 py-2 text-xs"
                                          :class="item.excluded ? 'bg-red-50/40' : ''">
                                         <input type="checkbox" x-model="item.checked"
-                                               :disabled="item.excluded" class="mt-0.5 rounded">
+                                               :disabled="item.excluded"
+                                               class="mt-0.5 rounded border-gray-300 text-accent focus:ring-accent">
                                         <div class="min-w-0 flex-1">
                                             <span class="text-gray-800" x-text="item.text"></span>
-                                            <span class="block text-gray-400">
+                                            <span class="block text-gray-400 mt-0.5">
+                                                <span x-show="item.blogName"
+                                                      x-text="item.blogName + ' · '"></span>
                                                 <span x-text="item.source || item.kind"></span>
                                                 <span x-show="item.search_volume"
                                                       x-text="' · 검색량 ' + item.search_volume"></span>
@@ -187,69 +177,186 @@
                                             </span>
                                         </div>
                                         <button x-show="item.kind === 'post' && !item.excluded"
-                                                @click="showPreview(s, item)"
-                                                class="px-2 py-0.5 text-indigo-600 hover:bg-indigo-50 rounded shrink-0">
-                                            미리보기</button>
+                                                @click="showPreview(item)"
+                                                class="shrink-0 px-2 py-1 text-accent hover:bg-accent-lt rounded">
+                                            미리보기
+                                        </button>
                                     </div>
                                 </template>
+                                <div x-show="!itemsFor(s).length"
+                                     class="px-3 py-6 text-center text-xs text-gray-400">
+                                    표시할 항목이 없습니다.
+                                </div>
                             </div>
 
-                            <div class="flex flex-wrap items-center gap-2 mt-2">
+                            <div class="flex flex-wrap items-center gap-2 mt-3">
                                 <button @click="applyStep(i)" :disabled="s.applying"
-                                        class="px-3 py-1.5 text-sm bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50"
+                                        class="px-3 py-2 text-sm font-medium text-white bg-primary rounded-md hover:opacity-90 disabled:opacity-50 transition-opacity"
                                         x-text="applyLabel(s)"></button>
                                 <span class="text-xs text-gray-500"
                                       x-text="selectedOf(i).length + '건 선택됨'"></span>
-                                <span class="text-xs text-emerald-700" x-show="s.applyMessage"
+                                <span class="text-xs" x-show="s.applyMessage"
+                                      :class="s.applyMessage.startsWith('실패') ? 'text-red-600' : 'text-primary'"
                                       x-text="s.applyMessage"></span>
                             </div>
                         </div>
                     </template>
                 </div>
-            </template>
+            </div>
+        </template>
+    </div>
+
+    <!-- ══════════ 하단 시트 ══════════ -->
+    <div x-show="sheet" @click="closeSheet()" x-transition.opacity
+         class="fixed inset-0 bg-black bg-opacity-50 z-40"></div>
+
+    <div class="fixed inset-x-0 bottom-0 h-[calc(100vh-70px)] bg-white rounded-t-2xl shadow-2xl z-50
+                transform transition-transform duration-300 ease-out flex flex-col"
+         :class="sheet ? 'translate-y-0' : 'translate-y-full'">
+
+        <div class="flex justify-center pt-3 pb-2 shrink-0">
+            <div class="w-12 h-1 bg-gray-300 rounded-full"></div>
         </div>
 
-        <!-- ══ 우: 미리보기와 반영 ══ -->
-        <div class="space-y-4">
-            <div class="wb-card p-4">
-                <div class="flex items-center justify-between mb-2">
-                    <h2 class="text-sm font-semibold text-gray-900">미리보기</h2>
-                    <label class="text-xs text-gray-500 flex items-center gap-1 cursor-pointer">
-                        <input type="checkbox" x-model="editMode" class="rounded">
+        <div class="flex justify-between items-center px-4 py-3 border-b border-gray-200 shrink-0">
+            <h3 class="text-lg font-semibold text-gray-900" x-text="sheetTitle()"></h3>
+            <button @click="closeSheet()"
+                    class="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-4">
+
+            <!-- 블로그 선택 -->
+            <div x-show="sheet === 'blog'" class="space-y-1.5">
+                <template x-for="b in catalog.blogs" :key="b.id">
+                    <label class="flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors"
+                           :class="hasBlog(b.id) ? 'border-primary bg-primary-lt' : 'border-gray-200 hover:bg-gray-50'">
+                        <input type="checkbox" :checked="hasBlog(b.id)" @change="toggleBlog(b)"
+                               class="rounded border-gray-300 text-primary focus:ring-primary">
+                        <span class="text-sm text-gray-800" x-text="b.name"></span>
+                        <span class="text-xs text-gray-400" x-text="b.platform"></span>
+                    </label>
+                </template>
+            </div>
+
+            <!-- 모듈 선택 -->
+            <div x-show="sheet === 'module'" class="space-y-4">
+                <template x-for="t in typeOrder" :key="t">
+                    <div>
+                        <p class="text-xs font-semibold text-gray-500 mb-1.5" x-text="typeLabel[t]"></p>
+                        <div class="space-y-1.5">
+                            <template x-for="m in (catalog.modules[t] || [])" :key="m.id">
+                                <button @click="addStep(t, m); closeSheet()"
+                                        class="w-full flex items-center justify-between px-3 py-2.5 rounded-lg border border-gray-200 hover:border-accent hover:bg-accent-lt text-left transition-colors">
+                                    <span class="text-sm text-gray-800" x-text="m.name"></span>
+                                    <span class="text-xs text-accent font-medium">담기</span>
+                                </button>
+                            </template>
+                            <p x-show="!(catalog.modules[t] || []).length"
+                               class="text-xs text-gray-400 px-1">이 타입의 모듈이 없습니다.</p>
+                        </div>
+                    </div>
+                </template>
+                <p class="text-xs text-gray-400 leading-relaxed pt-2 border-t border-gray-100">
+                    담은 순서가 단계 순서입니다. 문의폼·재발행은 되돌릴 수 없어 지원하지 않습니다.
+                </p>
+            </div>
+
+            <!-- 소스 검색 -->
+            <div x-show="sheet === 'source'">
+                <div class="flex gap-2 mb-3">
+                    <input type="text" x-model="sourceQuery" @keyup.enter="searchSources()"
+                           placeholder="니치 키워드 (예: 이사 견적)"
+                           class="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm focus:border-accent focus:ring-accent">
+                    <button @click="searchSources()" :disabled="sourceLoading" class="btn-primary">
+                        <span x-show="!sourceLoading">검색</span>
+                        <span x-show="sourceLoading">검색 중…</span>
+                    </button>
+                </div>
+                <p class="text-xs text-red-500 mb-2" x-show="sourceError" x-text="sourceError"></p>
+                <div class="space-y-1.5">
+                    <template x-for="(q, qi) in sourceItems" :key="qi">
+                        <label class="flex items-start gap-2.5 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors"
+                               :class="q.checked ? 'border-amber-400 bg-amber-50' : 'border-gray-200 hover:bg-gray-50'">
+                            <input type="checkbox" x-model="q.checked"
+                                   class="mt-0.5 rounded border-gray-300 text-amber-600 focus:ring-amber-500">
+                            <span class="min-w-0 text-xs">
+                                <span class="inline-block px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600"
+                                      x-text="q.source_label"></span>
+                                <span class="inline-block px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700"
+                                      x-show="q.has_situation">상황</span>
+                                <span class="block text-sm text-gray-800 mt-1" x-text="q.title"></span>
+                                <span class="block text-gray-400 mt-0.5" x-text="(q.signals||[]).join(' · ')"></span>
+                            </span>
+                        </label>
+                    </template>
+                    <p x-show="!sourceItems.length && !sourceLoading"
+                       class="text-xs text-gray-400 text-center py-8">
+                        검색어를 넣으면 실제 사람이 올린 질문을 가져옵니다.
+                    </p>
+                </div>
+            </div>
+
+            <!-- 미리보기 -->
+            <div x-show="sheet === 'preview'">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                    <p class="text-sm font-medium text-gray-800" x-text="preview.title"></p>
+                    <label class="text-xs text-gray-500 flex items-center gap-1.5 cursor-pointer">
+                        <input type="checkbox" x-model="editMode"
+                               class="rounded border-gray-300 text-accent focus:ring-accent">
                         본문 고치기
                     </label>
                 </div>
-                <div x-show="!preview.html" class="text-center text-gray-400 text-sm py-16">
-                    글 생성 결과에서 미리보기를 누르면 여기 뜹니다.
-                </div>
-                <template x-if="preview.html">
-                    <div>
-                        <p class="text-sm font-medium text-gray-800 mb-2" x-text="preview.title"></p>
-                        <iframe x-show="!editMode" class="wb-preview-frame border border-gray-200 rounded"
-                                :srcdoc="previewDoc()"></iframe>
-                        <textarea x-show="editMode" x-model="preview.html" rows="22"
-                                  class="w-full px-2 py-1.5 border border-gray-300 rounded text-xs font-mono"></textarea>
-                        <div class="flex flex-wrap gap-2 mt-3">
-                            <button @click="applyPost('save')"
-                                    class="px-3 py-1.5 text-sm bg-emerald-600 text-white rounded hover:bg-emerald-700">
-                                반영 — 발행대기글로 저장</button>
-                            <button @click="applyPost('now')"
-                                    class="px-3 py-1.5 text-sm text-orange-700 border border-orange-300 rounded hover:bg-orange-50">
-                                즉시 발행…</button>
-                            <button @click="copyHtml()"
-                                    class="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50">
-                                HTML 복사</button>
-                        </div>
-                        <p class="text-xs mt-2" :class="postMessage.startsWith('실패') ? 'text-red-600' : 'text-emerald-700'"
-                           x-text="postMessage"></p>
+                <iframe x-show="!editMode" class="mt-preview-frame border border-gray-200 rounded-md"
+                        :srcdoc="previewDoc()"></iframe>
+                <textarea x-show="editMode" x-model="preview.html" rows="20"
+                          class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs font-mono focus:border-accent focus:ring-accent"></textarea>
+                <p class="text-xs mt-2" x-show="postMessage"
+                   :class="postMessage.startsWith('실패') ? 'text-red-600' : 'text-primary'"
+                   x-text="postMessage"></p>
+            </div>
+        </div>
+
+        <!-- 시트 하단 버튼 -->
+        <div class="px-4 py-3 border-t border-gray-200 bg-gray-50 shrink-0">
+            <div class="flex gap-2">
+                <button @click="closeSheet()"
+                        class="flex-1 py-2.5 px-4 text-sm text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                    닫기
+                </button>
+
+                <button x-show="sheet === 'source'" @click="applyPickedQuestions()"
+                        class="flex-1 py-2.5 px-4 text-sm text-white bg-primary rounded-lg hover:opacity-90 transition-opacity font-medium"
+                        x-text="'담기 (' + checkedQuestions().length + ')'"></button>
+
+                <template x-if="sheet === 'preview'">
+                    <div class="flex-1 flex gap-2">
+                        <button @click="copyHtml()"
+                                class="flex-1 py-2.5 px-3 text-sm text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                            HTML 복사
+                        </button>
+                        <button @click="applyPost('now')"
+                                class="flex-1 py-2.5 px-3 text-sm text-orange-700 border border-orange-300 rounded-lg hover:bg-orange-50">
+                            즉시 발행
+                        </button>
+                        <button @click="applyPost('save')"
+                                class="flex-1 py-2.5 px-3 text-sm text-white bg-primary rounded-lg hover:opacity-90 font-medium">
+                            발행대기글로 저장
+                        </button>
                     </div>
                 </template>
             </div>
         </div>
+
+        <div class="h-safe-area-inset-bottom shrink-0"></div>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<script src="/static/js/workbench.js?v=20260914wb"></script>
+<script src="/static/js/workbench.js?v=20260914mt"></script>
 {% endblock %}
