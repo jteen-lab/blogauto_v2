@@ -109,7 +109,9 @@ function createPromptModuleState() {
 
         // 품질 게이트 — AI 흔적을 차단 사유로 올릴지
         qualityGate: {
-            traceBlocks: false
+            traceBlocks: false,
+            minChars: null,
+            minSections: null
         },
 
         internalLinks: {
@@ -248,7 +250,9 @@ const promptModuleMethods = {
         // 품질 게이트
         if (settings.quality_gate) {
             this.promptModule.qualityGate = {
-                traceBlocks: !!settings.quality_gate.trace_blocks
+                traceBlocks: !!settings.quality_gate.trace_blocks,
+                minChars: settings.quality_gate.min_chars || null,
+                minSections: settings.quality_gate.min_sections || null
             };
         }
 
@@ -370,6 +374,28 @@ const promptModuleMethods = {
     },
 
     // 애드센스 니치 topic 토글 (F4)
+    /** 분량 기준을 저장 모양으로 만든다. 비운 칸은 빼서 기본값이 쓰이게 한다. */
+    buildQualityGate() {
+        const g = this.promptModule.qualityGate || {};
+        const out = { trace_blocks: !!g.traceBlocks };
+        const chars = parseInt(g.minChars, 10);
+        if (chars > 0) out.min_chars = chars;
+        const sections = parseInt(g.minSections, 10);
+        if (sections > 0) out.min_sections = sections;
+        return out;
+    },
+
+    /** 지금 값이면 모델에게 무엇을 요구하게 되는지 미리 보여준다. */
+    lengthTargetHint() {
+        const g = this.promptModule.qualityGate || {};
+        const min = parseInt(g.minChars, 10) || 1800;
+        const sections = parseInt(g.minSections, 10) || 6;
+        const target = Math.round(min * 1.4 / 100) * 100;
+        const per = Math.max(250, Math.floor(target / sections / 10) * 10);
+        return '모델에게 요구할 목표: 본문 ' + target.toLocaleString() + '자 이상 · '
+             + '소제목 ' + sections + '개 이상 · 소제목마다 ' + per.toLocaleString() + '자 이상';
+    },
+
     isNicheTopicSelected(topicId) {
         return this.promptModule.adsense.nicheTopicIds.includes(topicId);
     },
@@ -665,9 +691,7 @@ const promptModuleMethods = {
                     }))
             },
             // 품질 게이트 — AI 흔적을 차단 사유로 올릴지
-            quality_gate: {
-                trace_blocks: !!this.promptModule.qualityGate.traceBlocks
-            },
+            quality_gate: this.buildQualityGate(),
             // 내부링크 설정
             internal_links: {
                 enabled: this.promptModule.internalLinks.enabled,
