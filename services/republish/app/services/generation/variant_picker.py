@@ -85,13 +85,37 @@ def _matches_purpose(item: Dict[str, Any], purpose: Optional[str]) -> bool:
     return want == (purpose or "").strip().lower()
 
 
-def _matches_keyword(item: Dict[str, Any], keyword: str) -> bool:
-    """keywords 가 비어 있으면 항상 통과. 부분 일치로 본다."""
-    marks = item.get("keywords") or []
+def keyword_score(item: Dict[str, Any], keyword: str) -> int:
+    """이 변형이 제목과 얼마나 맞는가. 0 이면 안 맞는다.
+
+    **한 규칙 안의 `+` 는 모두 들어 있어야 한다(조합).** 단어 하나로
+    가르면 겹친다 — 템플릿1 이 `이사`, 템플릿2 가 `청소` 면 「이사 청소」
+    에 둘 다 걸리고, 「방청소」 처럼 엉뚱한 말에도 걸린다.
+    `이사+견적` 과 `이사+청소` 로 적으면 그 겹침이 사라진다.
+
+    쉼표로 나눈 규칙끼리는 **둘 중 하나만** 맞으면 된다.
+        "이사+견적, 이사+비용"  →  (이사 그리고 견적) 또는 (이사 그리고 비용)
+
+    Returns:
+        맞은 규칙 중 가장 구체적인 것의 낱말 수. 조건이 없으면 0
+    """
+    marks = [str(m).strip() for m in (item.get("keywords") or []) if str(m).strip()]
     if not marks:
+        return 0
+    text = keyword or ""
+    best = 0
+    for rule in marks:
+        parts = [p.strip() for p in rule.split("+") if p.strip()]
+        if parts and all(p in text for p in parts):
+            best = max(best, len(parts))
+    return best
+
+
+def _matches_keyword(item: Dict[str, Any], keyword: str) -> bool:
+    """keywords 가 비어 있으면 항상 통과."""
+    if not (item.get("keywords") or []):
         return True
-    text = (keyword or "")
-    return any(str(m) in text for m in marks if m)
+    return keyword_score(item, keyword) > 0
 
 
 def candidates(items: Sequence[Dict[str, Any]], *,
@@ -142,6 +166,16 @@ def pick(items: Sequence[Dict[str, Any]], mode: Any = DEFAULT_MODE, *,
         return None
 
     picked_mode = normalize_mode(mode)
+
+    # 키워드별에서 여럿이 맞으면 **더 구체적인 것**이 이긴다.
+    # 「이사 청소」에 `이사` 와 `이사+청소` 가 다 맞으면 뒤쪽을 쓴다 —
+    # 그러라고 조합으로 적은 것이다.
+    if picked_mode == MODE_BY_KEYWORD and len(pool) > 1:
+        scores = [keyword_score(i, keyword) for i in pool]
+        top = max(scores)
+        if top > 0:
+            pool = [i for i, sc in zip(pool, scores) if sc == top]
+
     size = len(pool)
 
     if picked_mode == MODE_SEQUENTIAL:
