@@ -12,7 +12,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from ...core.logger import get_logger
 from . import evidence_checklist as ck
@@ -133,6 +133,24 @@ def is_enabled(settings: Optional[Dict[str, Any]]) -> bool:
     return bool(((settings or {}).get(CHECKLIST_KEY) or {}).get("enabled"))
 
 
+def _pick_ai(cfg: Dict[str, Any],
+             settings: Dict[str, Any]) -> Tuple[Optional[str], Optional[str]]:
+    """판정에 쓸 제공자와 모델.
+
+    **모델은 제공자가 같을 때만 물려받는다.** 체크리스트에 제공자만
+    적고 모델을 비워 두면 참조 쪽 모델명이 딸려 와, deepseek 에게
+    OpenAI 모델명을 넘기는 일이 생긴다 — 매번 400 이 나고 판정이
+    통째로 빈칸이 된다(2026-09-15에 그 상태였다).
+
+    물려받지 않으면 제공자의 기본 모델이 쓰인다.
+    """
+    provider = cfg.get("ai_provider") or settings.get("ai_provider")
+    model = cfg.get("ai_model")
+    if not model and provider == settings.get("ai_provider"):
+        model = settings.get("ai_model")
+    return provider, model
+
+
 async def collect_evidence(ai: Any, search: Any, query: str, title: str,
                            settings: Optional[Dict[str, Any]],
                            max_search: int = 30):
@@ -148,8 +166,7 @@ async def collect_evidence(ai: Any, search: Any, query: str, title: str,
         return await search.search_webdoc(query, max_search), None
 
     cfg = (settings or {}).get(CHECKLIST_KEY) or {}
-    provider = cfg.get("ai_provider") or settings.get("ai_provider")
-    model = cfg.get("ai_model") or settings.get("ai_model")
+    provider, model = _pick_ai(cfg, settings)
     if not provider:
         logger.info("[CHECKLIST_RUN] AI 미지정 — 기존 검색으로 간다")
         return await search.search_webdoc(query, max_search), None
