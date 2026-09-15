@@ -7,6 +7,7 @@ AIKeyManager를 사용하여 키 관리 및 자동 전환을 지원합니다.
 설계 문서: generation_module_workplan.md - Phase 2 - 2.2.3
 """
 import logging
+import time
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,10 +17,14 @@ from ...schemas.ai_api_key import AIProvider
 
 logger = logging.getLogger(__name__)
 
-# AI 호출 자체 타임아웃(초). Celery generate_content soft_time_limit(300s)
+# AI 호출 자체 타임아웃(초). Celery generate_content soft_time_limit
 # 보다 충분히 짧게 두어, AI 호출이 hang 해도 task 전체가 soft limit 에 걸려
 # SQLAlchemy mapper 를 깨뜨리는 일을 막는다.
-AI_CALL_TIMEOUT: float = 60.0
+#
+# 60초로는 긴 글을 못 끝낸다 — 분량 목표를 4,200자로 올린 뒤 실측에서
+# 글쓰기 호출이 60초를 넘겨 실패했다(2026-09-15). 늘리면서 Celery 쪽
+# 제한(600s)도 함께 올렸다. 한쪽만 늘리면 다른 쪽에서 잘린다.
+AI_CALL_TIMEOUT: float = 180.0
 
 
 class AIService:
@@ -178,6 +183,7 @@ class AIService:
                     )
             return None
 
+        started = time.monotonic()
         try:
             if provider == AIProvider.OPENAI:
                 # OpenAI: top_p, frequency_penalty, presence_penalty 지원 (top_k 미지원)
@@ -227,6 +233,12 @@ class AIService:
 
             if content:
                 await self.key_manager.mark_key_used(key.id)
+                logger.info(
+                    "[AI_SERVICE] %s/%s | %.1f초 | %d자 (제한 %.0f초)",
+                    provider.value, used_model,
+                    time.monotonic() - started, len(content),
+                    AI_CALL_TIMEOUT,
+                )
                 return {
                     "content": content,
                     "model": used_model,
@@ -237,6 +249,10 @@ class AIService:
 
         except Exception as e:
             error_msg = str(e)
+            logger.warning(
+                "[AI_SERVICE] %s 호출 실패 | %.1f초 경과 | %s",
+                provider.value, time.monotonic() - started, error_msg[:120],
+            )
             if "rate" in error_msg.lower() or "429" in error_msg:
                 next_key = await self.key_manager.mark_key_rate_limited(key.id)
                 if next_key:
