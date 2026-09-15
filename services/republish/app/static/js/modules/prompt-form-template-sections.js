@@ -442,30 +442,27 @@ function getPromptContentGenSection() {
                                             여기서 정한 값이 <b>프롬프트에 쓴 분량 문구보다 우선</b>합니다.
                                             프롬프트에 "4,000자로 쓰세요"라고 적어도 이 값이 이깁니다.
                                         </p>
-                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                                        <div class="mt-3">
                                             <label class="block">
                                                 <span class="text-xs text-gray-700">발행 최소 분량 (자)</span>
                                                 <input type="number" min="800" max="8000" step="100"
                                                        x-model.number="promptModule.qualityGate.minChars"
                                                        placeholder="1800"
-                                                       class="mt-1 w-full px-3 py-2 border border-gray-300 rounded text-sm focus:border-sky-500 focus:ring-sky-500">
+                                                       class="mt-1 w-full sm:w-64 px-3 py-2 border border-gray-300 rounded text-sm focus:border-sky-500 focus:ring-sky-500">
                                                 <span class="block text-xs text-gray-500 mt-1">
                                                     이보다 짧으면 발행되지 않습니다. 비우면 1,800자.
-                                                </span>
-                                            </label>
-                                            <label class="block">
-                                                <span class="text-xs text-gray-700">소제목 최소 개수</span>
-                                                <input type="number" min="3" max="12" step="1"
-                                                       x-model.number="promptModule.qualityGate.minSections"
-                                                       placeholder="6"
-                                                       class="mt-1 w-full px-3 py-2 border border-gray-300 rounded text-sm focus:border-sky-500 focus:ring-sky-500">
-                                                <span class="block text-xs text-gray-500 mt-1">
-                                                    비우면 6개.
+                                                    <b>섹션 수와 섹션별 분량은 위 구조(패턴)가 정합니다.</b>
                                                 </span>
                                             </label>
                                         </div>
+
                                         <p class="text-xs text-sky-800 bg-sky-100 rounded px-3 py-2 mt-3 leading-relaxed"
                                            x-text="lengthTargetHint()"></p>
+                                        <p class="text-xs text-gray-500 mt-1.5 leading-relaxed">
+                                            최대 토큰은 <b>모델이 한 번에 뱉을 수 있는 상한</b>입니다.
+                                            여기서 정한 분량에 모자라면 <b>생성할 때 자동으로 올려</b> 씁니다 —
+                                            따로 맞추지 않으셔도 됩니다.
+                                        </p>
                                     </div>
 
                                     <!-- AI 흔적 검사 -->

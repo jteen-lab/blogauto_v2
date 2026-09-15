@@ -110,8 +110,7 @@ function createPromptModuleState() {
         // 품질 게이트 — AI 흔적을 차단 사유로 올릴지
         qualityGate: {
             traceBlocks: false,
-            minChars: null,
-            minSections: null
+            minChars: null
         },
 
         internalLinks: {
@@ -251,8 +250,7 @@ const promptModuleMethods = {
         if (settings.quality_gate) {
             this.promptModule.qualityGate = {
                 traceBlocks: !!settings.quality_gate.trace_blocks,
-                minChars: settings.quality_gate.min_chars || null,
-                minSections: settings.quality_gate.min_sections || null
+                minChars: settings.quality_gate.min_chars || null
             };
         }
 
@@ -380,8 +378,8 @@ const promptModuleMethods = {
         const out = { trace_blocks: !!g.traceBlocks };
         const chars = parseInt(g.minChars, 10);
         if (chars > 0) out.min_chars = chars;
-        const sections = parseInt(g.minSections, 10);
-        if (sections > 0) out.min_sections = sections;
+        // 섹션 수는 담지 않는다 — 구조(패턴)가 정하는 값이라
+        // 여기서 또 지시하면 둘이 다른 숫자를 부른다.
         return out;
     },
 
@@ -389,11 +387,10 @@ const promptModuleMethods = {
     lengthTargetHint() {
         const g = this.promptModule.qualityGate || {};
         const min = parseInt(g.minChars, 10) || 1800;
-        const sections = parseInt(g.minSections, 10) || 6;
         const target = Math.round(min * 1.4 / 100) * 100;
-        const per = Math.max(250, Math.floor(target / sections / 10) * 10);
-        return '모델에게 요구할 목표: 본문 ' + target.toLocaleString() + '자 이상 · '
-             + '소제목 ' + sections + '개 이상 · 소제목마다 ' + per.toLocaleString() + '자 이상';
+        const tokens = Math.round(target * 1.8) + 500;
+        return '모델에게 요구할 목표: 본문 ' + target.toLocaleString() + '자 이상'
+             + ' (출력 토큰 약 ' + tokens.toLocaleString() + ' 필요)';
     },
 
     isNicheTopicSelected(topicId) {
