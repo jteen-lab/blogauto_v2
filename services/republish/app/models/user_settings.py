@@ -55,6 +55,10 @@ class UserSettings(Base):
 
     # 네이버 검색 API 설정 (블로그 검색 결과 수집)
     naver_search_client_id = Column(String(255), nullable=True)
+    # 법제처 국가법령정보 공동활용 인증값(OC). 사용자가 정한 아이디
+    # 문자열이라 마스킹하지 않는다 — 비밀값이 아니다.
+    law_api_oc = Column(String(100), nullable=True,
+                        comment="법제처 OPEN API 인증값(OC)")
     naver_search_client_secret = Column(String(255), nullable=True)
 
     # Google Blogger OAuth 설정
