@@ -151,6 +151,22 @@ async def generate_content_with_meta(
     # 세부 설정: 모듈 설정 -> 기본값
     temperature = cg.get("temperature", 0.7)
     max_tokens = cg.get("max_tokens", 4000)
+
+    # 분량 목표에 견줘 출력 상한이 모자라면 올린다.
+    # 두 값을 따로 두면 "4,200자로 쓰라"고 해 놓고 4,096토큰에서 잘린다 —
+    # 사람이 둘의 관계를 외우고 맞춰야 하는 설정은 언젠가 어긋난다.
+    if not skip_length_directive:
+        from .length_directive import needed_tokens as _needed
+        from .quality_gate import resolve_settings as _gate
+
+        _cfg = _gate(settings)
+        want = _needed(_cfg["min_chars"], settings) if _cfg["enabled"] else 0
+        if want > max_tokens:
+            logger.info(
+                "[GENERATOR] 출력 상한 %d → %d (목표 분량에 맞춤) | blog=%s",
+                max_tokens, want, blog.name)
+            max_tokens = want
+
     system_prompt = cg.get("system_prompt") or None
     top_p = cg.get("top_p")
     top_k = cg.get("top_k")
