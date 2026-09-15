@@ -384,13 +384,44 @@ const promptModuleMethods = {
     },
 
     /** 지금 값이면 모델에게 무엇을 요구하게 되는지 미리 보여준다. */
-    lengthTargetHint() {
-        const g = this.promptModule.qualityGate || {};
-        const min = parseInt(g.minChars, 10) || 1800;
-        const target = Math.round(min * 1.4 / 100) * 100;
-        const tokens = Math.round(target * 1.8) + 500;
-        return '모델에게 요구할 목표: 본문 ' + target.toLocaleString() + '자 이상'
-             + ' (출력 토큰 약 ' + tokens.toLocaleString() + ' 필요)';
+    // ── 분량 계산 ─────────────────────────────────────────
+    // 서버(length_directive)와 같은 셈을 쓴다. 한쪽만 바뀌면
+    // 화면이 말하는 숫자와 실제가 어긋난다.
+    CHARS_PER_TOKEN: 1.5,
+    TOKEN_MARGIN: 500,
+
+    /** ② 모델에게 요구할 목표 — 최소 분량의 1.4배 */
+    targetChars() {
+        const min = parseInt(this.promptModule.qualityGate?.minChars, 10) || 1800;
+        return Math.round(min * 1.4 / 100) * 100;
+    },
+
+    /** ③ 최대 토큰으로 쓸 수 있는 글자 수 */
+    limitChars() {
+        const tok = parseInt(this.promptModule.contentGeneration?.maxTokens, 10) || 4000;
+        return Math.round(Math.max(0, tok - this.TOKEN_MARGIN) * this.CHARS_PER_TOKEN);
+    },
+
+    /** 목표가 한계를 넘는가 */
+    isOverLimit() {
+        return this.targetChars() > this.limitChars();
+    },
+
+    /** 지금 값이면 결과가 어떻게 되는지 한 문장으로 */
+    lengthVerdict() {
+        const min = parseInt(this.promptModule.qualityGate?.minChars, 10) || 1800;
+        const target = this.targetChars();
+        const limit = this.limitChars();
+        if (this.isOverLimit()) {
+            const need = Math.round(target / this.CHARS_PER_TOKEN) + this.TOKEN_MARGIN;
+            return '목표 ' + target.toLocaleString() + '자가 한계 '
+                 + limit.toLocaleString() + '자를 넘습니다. '
+                 + '글을 만들 때 최대 토큰을 ' + need.toLocaleString()
+                 + '으로 자동으로 올려 씁니다 — 직접 올려 두셔도 됩니다.';
+        }
+        return target.toLocaleString() + '자 안팎의 글이 나옵니다. '
+             + min.toLocaleString() + '자 미만이면 발행되지 않고, '
+             + '한계 ' + limit.toLocaleString() + '자 안에 들어 잘리지 않습니다.';
     },
 
     isNicheTopicSelected(topicId) {

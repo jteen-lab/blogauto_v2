@@ -227,10 +227,9 @@ function getPromptContentGenSection() {
                                     <!-- Max Tokens -->
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 mb-2">최대 토큰</label>
-                                        <input type="number"
-                                               x-model.number="promptModule.contentGeneration.maxTokens"
-                                               min="100" max="128000"
-                                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                                        <p class="text-sm text-gray-500 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg">
+                                            아래 <b>본문 분량</b>에서 함께 다룹니다
+                                        </p>
                                     </div>
 
                                     <!-- 시스템 프롬프트 -->
@@ -440,29 +439,62 @@ function getPromptContentGenSection() {
                                         <b class="text-sm text-gray-900">본문 분량</b>
                                         <p class="text-xs text-gray-600 mt-1 leading-relaxed">
                                             여기서 정한 값이 <b>프롬프트에 쓴 분량 문구보다 우선</b>합니다.
-                                            프롬프트에 "4,000자로 쓰세요"라고 적어도 이 값이 이깁니다.
+                                            섹션 수와 섹션별 분량은 위 <b>구조(패턴)</b>가 정합니다.
                                         </p>
-                                        <div class="mt-3">
+
+                                        <!-- ① 사람이 정하는 값 -->
+                                        <div class="mt-3 bg-white rounded-lg border border-sky-200 p-3">
                                             <label class="block">
-                                                <span class="text-xs text-gray-700">발행 최소 분량 (자)</span>
-                                                <input type="number" min="800" max="8000" step="100"
-                                                       x-model.number="promptModule.qualityGate.minChars"
-                                                       placeholder="1800"
-                                                       class="mt-1 w-full sm:w-64 px-3 py-2 border border-gray-300 rounded text-sm focus:border-sky-500 focus:ring-sky-500">
+                                                <span class="text-xs font-semibold text-gray-700">① 발행 최소 분량</span>
+                                                <span class="flex items-center gap-2 mt-1">
+                                                    <input type="number" min="800" max="12000" step="100"
+                                                           x-model.number="promptModule.qualityGate.minChars"
+                                                           placeholder="1800"
+                                                           class="w-32 px-3 py-2 border border-gray-300 rounded text-sm focus:border-sky-500 focus:ring-sky-500">
+                                                    <span class="text-sm text-gray-600">자</span>
+                                                </span>
                                                 <span class="block text-xs text-gray-500 mt-1">
                                                     이보다 짧으면 발행되지 않습니다. 비우면 1,800자.
-                                                    <b>섹션 수와 섹션별 분량은 위 구조(패턴)가 정합니다.</b>
                                                 </span>
                                             </label>
                                         </div>
 
-                                        <p class="text-xs text-sky-800 bg-sky-100 rounded px-3 py-2 mt-3 leading-relaxed"
-                                           x-text="lengthTargetHint()"></p>
-                                        <p class="text-xs text-gray-500 mt-1.5 leading-relaxed">
-                                            최대 토큰은 <b>모델이 한 번에 뱉을 수 있는 상한</b>입니다.
-                                            여기서 정한 분량에 모자라면 <b>생성할 때 자동으로 올려</b> 씁니다 —
-                                            따로 맞추지 않으셔도 됩니다.
-                                        </p>
+                                        <div class="text-center text-sky-400 text-lg leading-none my-1">↓</div>
+
+                                        <!-- ② 자동으로 정해지는 목표 -->
+                                        <div class="bg-white rounded-lg border border-sky-200 p-3">
+                                            <span class="text-xs font-semibold text-gray-700">② 모델에게 요구할 목표</span>
+                                            <span class="block text-lg font-bold text-sky-700 mt-0.5"
+                                                  x-text="targetChars().toLocaleString() + '자 이상'"></span>
+                                            <span class="block text-xs text-gray-500 mt-1">
+                                                최소 분량의 1.4배. 요구한 만큼 정확히 나오지 않아 여유를 둡니다.
+                                            </span>
+                                        </div>
+
+                                        <div class="text-center text-sky-400 text-lg leading-none my-1">↓</div>
+
+                                        <!-- ③ 한 번에 쓸 수 있는 한계 -->
+                                        <div class="bg-white rounded-lg border border-sky-200 p-3">
+                                            <span class="text-xs font-semibold text-gray-700">③ 한 번에 쓸 수 있는 한계</span>
+                                            <span class="block text-lg font-bold text-gray-700 mt-0.5"
+                                                  x-text="'약 ' + limitChars().toLocaleString() + '자'"></span>
+                                            <label class="flex items-center gap-2 mt-2">
+                                                <span class="text-xs text-gray-500">최대 토큰</span>
+                                                <input type="number" min="100" max="128000" step="256"
+                                                       x-model.number="promptModule.contentGeneration.maxTokens"
+                                                       class="w-28 px-2 py-1.5 border border-gray-300 rounded text-sm focus:border-sky-500 focus:ring-sky-500">
+                                                <span class="text-xs text-gray-400">토큰은 모델이 세는 단위입니다</span>
+                                            </label>
+                                        </div>
+
+                                        <!-- 결과 -->
+                                        <div class="mt-3 rounded-lg px-3 py-2.5 text-xs leading-relaxed"
+                                             :class="isOverLimit()
+                                                 ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                                 : 'bg-emerald-100 text-emerald-900 border border-emerald-300'">
+                                            <b x-text="isOverLimit() ? '목표가 한계를 넘습니다' : '지금 설정이면'"></b>
+                                            <span class="block mt-1" x-text="lengthVerdict()"></span>
+                                        </div>
                                     </div>
 
                                     <!-- AI 흔적 검사 -->
