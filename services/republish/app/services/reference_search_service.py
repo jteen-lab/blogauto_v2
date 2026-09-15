@@ -105,6 +105,13 @@ class ReferenceSearchService:
             logger.warning(f"[REF_SEARCH] 모르는 소스: {source}")
             return []
 
+        # 법 근거는 원문에서 가져온다. 인증값이 없거나 조회가 비면
+        # 아래 네이버 전문자료로 돌아간다 — 글이 막히지 않아야 한다.
+        if source == "law":
+            found = await self._search_law(query, count)
+            if found:
+                return found
+
         if not self.is_configured():
             logger.error("[REF_SEARCH] API 키가 설정되지 않았습니다")
             return []
@@ -146,6 +153,37 @@ class ReferenceSearchService:
             else:
                 out[(src, q)] = result
         return out
+
+    async def _search_law(self, query: str,
+                          count: int = 30) -> List[SearchResult]:
+        """법제처에서 판례와 법령을 함께 찾는다.
+
+        판례가 법리를, 법령이 조문을 준다. 어느 쪽이 필요한지 미리
+        알 수 없어 둘 다 던지고 나온 것을 합친다.
+        """
+        oc = getattr(self._settings, "law_api_oc", None)
+        if not oc or not (query or "").strip():
+            return []
+        try:
+            from .reference.law_api import (
+                TARGET_LAW, TARGET_PREC, collect,
+            )
+
+            half = max(3, count // 2)
+            got = await asyncio.gather(
+                collect(oc, query, TARGET_PREC, half),
+                collect(oc, query, TARGET_LAW, half),
+                return_exceptions=True)
+            out: List[SearchResult] = []
+            for item in got:
+                if isinstance(item, list):
+                    out.extend(item)
+            if out:
+                logger.info("[REF_SEARCH] 법제처 '%s' | %d건", query, len(out))
+            return out
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[REF_SEARCH] 법제처 조회 실패 | %s", e)
+            return []
 
     async def _call_api(self, endpoint: str, params: dict) -> Optional[dict]:
         """API 호출 (재시도 포함)"""
