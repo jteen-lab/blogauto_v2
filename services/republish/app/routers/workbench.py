@@ -213,6 +213,21 @@ async def apply_post(
         link_id=body.link_id)
 
 
+def _preview_selectors(selector: str, cfg: dict) -> List[str]:
+    """미리보기에 쓸 선택자들.
+
+    버튼 스타일은 `a.button` 으로 저장돼 있는데 글에 붙는 버튼은
+    `div.button-link` 안의 링크다. 그대로 두면 미리보기에서만 버튼이
+    맨몸으로 보인다 — 같은 스타일을 양쪽에 건다.
+    """
+    out = [selector]
+    if selector == "a.button" and ".button-link" not in cfg:
+        out.append(".button-link a")
+    elif selector == "a.button:hover" and ".button-link" not in cfg:
+        out.append(".button-link a:hover")
+    return out
+
+
 @router.get("/preview-css", summary="블로그 스타일 CSS (미리보기용)")
 async def preview_css(
     blog_id: int,
@@ -231,7 +246,8 @@ async def preview_css(
         decls = "; ".join(
             f"{k}: {v}px" if k in _PX_PROPS else f"{k}: {v}"
             for k, v in props.items())
-        lines.append(f".wb-preview {selector} {{ {decls}; }}")
+        for target in _preview_selectors(selector, cfg):
+            lines.append(f".wb-preview {target} {{ {decls}; }}")
     return {"css": "\n".join(lines)}
 
 
