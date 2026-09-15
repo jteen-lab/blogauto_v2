@@ -48,6 +48,14 @@ class RunRequest(BaseModel):
     settings_override: Optional[Dict[str, Any]] = None
     title_texts: Optional[List[str]] = None
     chain_keywords: Optional[List[str]] = None
+    questions: Optional[List[Dict[str, Any]]] = Field(
+        None, description="제목과 같은 순서의 질문 본문")
+
+
+class QuestionBodyRequest(BaseModel):
+    """고른 질문의 본문을 가져온다."""
+
+    links: List[str] = Field(..., description="질문 페이지 주소 (최대 5건)")
 
 
 class ApplyKeywordsRequest(BaseModel):
@@ -174,6 +182,7 @@ async def run_module(
         settings_override=body.settings_override,
         title_texts=body.title_texts,
         chain_keywords=body.chain_keywords,
+        questions=body.questions,
         keep=False)
     return outcome.to_dict()
 
@@ -194,6 +203,24 @@ async def search_sources(
     picked = [s.strip() for s in (sources or "").split(",") if s.strip()]
     return await source_svc.search_questions(
         settings, query, picked or None, limit, start)
+
+
+@router.post("/question-body", summary="고른 질문의 본문 가져오기")
+async def fetch_question_body(
+    body: QuestionBodyRequest,
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """질문 페이지를 열어 질문 본문과 답변을 뽑는다.
+
+    **고른 것만** 부른다 — 목록을 통째로 긁으면 한 번에 수 MB 를 받고
+    차단 위험도 생긴다. 실패해도 오류를 올리지 않는다(제목만으로도
+    글은 나온다).
+    """
+    from ..services.workbench.question_body import fetch_bodies
+
+    rows = await fetch_bodies(body.links)
+    got = len([r for r in rows if r.get("question") or r.get("answer")])
+    return {"success": True, "items": rows, "fetched": got}
 
 
 @router.post("/apply/keywords", summary="반영 — 키워드를 풀에 채택")
