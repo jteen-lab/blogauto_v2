@@ -30,6 +30,9 @@ class PromoLink(Base):
     notice = Column(String(300), nullable=True, default=DEFAULT_NOTICE,
                     comment="맨 앞에 붙는 고지문. 비우면 고지문 없음")
 
+    keywords = Column(String(500), nullable=True,
+                      comment="이 링크를 쓸 키워드 조합. 예: 이사+견적, 이사+비용")
+
     blog_id = Column(Integer, ForeignKey("blogs.id", ondelete="CASCADE"),
                      nullable=True, index=True,
                      comment="이 블로그 전용. 비우면 모든 블로그 공용")
@@ -51,6 +54,7 @@ class PromoLink(Base):
             "url": self.url,
             "button_text": self.button_text,
             "notice": self.notice or "",
+            "keywords": self.keywords or "",
             "blog_id": self.blog_id,
             "cpa_offer_id": self.cpa_offer_id,
             "is_active": self.is_active,
