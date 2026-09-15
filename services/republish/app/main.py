@@ -80,6 +80,7 @@ from .routers.keyword_lab import (
     router as keyword_lab_router,
     page_router as keyword_lab_page_router,
 )
+from .routers.promo_links import router as promo_links_router  # 홍보 링크
 from .routers.workbench import (
     router as workbench_router,
     page_router as workbench_page_router,
@@ -369,6 +370,7 @@ app.include_router(ai_api_keys_router)  # AI API 키 다계정 관리 (prefix �
 app.include_router(ai_models_router)  # AI 모델 카탈로그 (prefix 포함)
 app.include_router(post_cleanup_router)  # 발행글 정리 (prefix 포함)
 app.include_router(keyword_lab_router)  # 키워드 관리 (prefix 포함)
+app.include_router(promo_links_router)  # 홍보 링크 (버튼 주소 목록)
 app.include_router(workbench_router)  # 작업대 (리허설 실행·반영)
 app.include_router(reference_collection_router, prefix=settings.api_v1_prefix)  # 참조자료 수집
 app.include_router(growth_profile_router, prefix=settings.api_v1_prefix)  # Growth Profile
