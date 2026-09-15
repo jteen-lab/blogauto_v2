@@ -435,6 +435,39 @@ function getPromptContentGenSection() {
                                         </div>
                                     </div>
 
+                                    <!-- 분량 기준 -->
+                                    <div class="p-4 bg-sky-50 border border-sky-200 rounded-lg">
+                                        <b class="text-sm text-gray-900">본문 분량</b>
+                                        <p class="text-xs text-gray-600 mt-1 leading-relaxed">
+                                            여기서 정한 값이 <b>프롬프트에 쓴 분량 문구보다 우선</b>합니다.
+                                            프롬프트에 "4,000자로 쓰세요"라고 적어도 이 값이 이깁니다.
+                                        </p>
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                                            <label class="block">
+                                                <span class="text-xs text-gray-700">발행 최소 분량 (자)</span>
+                                                <input type="number" min="800" max="8000" step="100"
+                                                       x-model.number="promptModule.qualityGate.minChars"
+                                                       placeholder="1800"
+                                                       class="mt-1 w-full px-3 py-2 border border-gray-300 rounded text-sm focus:border-sky-500 focus:ring-sky-500">
+                                                <span class="block text-xs text-gray-500 mt-1">
+                                                    이보다 짧으면 발행되지 않습니다. 비우면 1,800자.
+                                                </span>
+                                            </label>
+                                            <label class="block">
+                                                <span class="text-xs text-gray-700">소제목 최소 개수</span>
+                                                <input type="number" min="3" max="12" step="1"
+                                                       x-model.number="promptModule.qualityGate.minSections"
+                                                       placeholder="6"
+                                                       class="mt-1 w-full px-3 py-2 border border-gray-300 rounded text-sm focus:border-sky-500 focus:ring-sky-500">
+                                                <span class="block text-xs text-gray-500 mt-1">
+                                                    비우면 6개.
+                                                </span>
+                                            </label>
+                                        </div>
+                                        <p class="text-xs text-sky-800 bg-sky-100 rounded px-3 py-2 mt-3 leading-relaxed"
+                                           x-text="lengthTargetHint()"></p>
+                                    </div>
+
                                     <!-- AI 흔적 검사 -->
                                     <div class="p-4 bg-rose-50 border border-rose-200 rounded-lg">
                                         <label class="flex items-start gap-2 cursor-pointer">
