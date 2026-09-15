@@ -93,6 +93,7 @@ function settingsApp() {
         googleTrendsSample: [],
 
         // 네이버 검색 API 상태
+        showBraveApiKey: false,
         showNaverSearchClientId: false,
         showNaverSearchClientSecret: false,
         testingNaverSearch: false,
@@ -210,6 +211,9 @@ function settingsApp() {
             has_naver_ads_api: false,
             // 법제처 국가법령정보 (OC는 비밀값이 아니라 마스킹하지 않는다)
             law_api_oc: '',
+            // Brave 검색 (클로드가 쓰는 검색과 같은 곳)
+            brave_api_key: '',
+            has_brave_api: false,
             // 네이버 검색 API
             naver_search_client_id: '',
             naver_search_client_secret: '',
@@ -274,6 +278,8 @@ function settingsApp() {
                         has_naver_ads_api: data.has_naver_ads_api || false,
                         // 네이버 검색 API
                         law_api_oc: data.law_api_oc || '',
+                        brave_api_key: data.brave_api_key || '',
+                        has_brave_api: data.has_brave_api || false,
                         naver_search_client_id: data.naver_search_client_id || '',
                         naver_search_client_secret: data.naver_search_client_secret || '',
                         has_naver_search_api: data.has_naver_search_api || false,
@@ -354,6 +360,9 @@ function settingsApp() {
 
                 // 네이버 검색 API 키
                 payload.law_api_oc = this.form.law_api_oc || '';
+                if (this.form.brave_api_key && !this.isMaskedKey(this.form.brave_api_key)) {
+                    payload.brave_api_key = this.form.brave_api_key;
+                }
                 if (this.form.naver_search_client_id && !this.isMaskedKey(this.form.naver_search_client_id)) {
                     payload.naver_search_client_id = this.form.naver_search_client_id;
                 }
@@ -437,6 +446,8 @@ function settingsApp() {
                         this.form.has_naver_ads_api = result.data.has_naver_ads_api || false;
                         // 네이버 검색 API
                         this.form.law_api_oc = result.data.law_api_oc || '';
+                        this.form.brave_api_key = result.data.brave_api_key || '';
+                        this.form.has_brave_api = result.data.has_brave_api || false;
                         this.form.naver_search_client_id = result.data.naver_search_client_id || '';
                         this.form.naver_search_client_secret = result.data.naver_search_client_secret || '';
                         this.form.has_naver_search_api = result.data.has_naver_search_api || false;
@@ -647,6 +658,9 @@ function settingsApp() {
                 // 먼저 설정을 저장 (새로 입력된 값이 있을 수 있으므로)
                 const payload = {};
                 payload.law_api_oc = this.form.law_api_oc || '';
+                if (this.form.brave_api_key && !this.isMaskedKey(this.form.brave_api_key)) {
+                    payload.brave_api_key = this.form.brave_api_key;
+                }
                 if (this.form.naver_search_client_id && !this.isMaskedKey(this.form.naver_search_client_id)) {
                     payload.naver_search_client_id = this.form.naver_search_client_id;
                 }
