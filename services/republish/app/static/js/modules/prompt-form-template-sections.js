@@ -285,6 +285,21 @@ function getPromptContentGenSection() {
                                                 </select>
                                             </div>
                                             <p class="text-xs text-gray-500 flex-1 min-w-40" x-text="rotationHint()"></p>
+                                            <div class="w-full text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded px-3 py-2 leading-relaxed"
+                                                 x-show="promptModule.rotation.mode === 'by_keyword'" x-transition>
+                                                <b>키워드는 조합으로 적습니다.</b>
+                                                <code class="px-1 bg-white rounded">이사+견적</code> 처럼 <b>+</b> 로 묶으면
+                                                <b>둘 다 들어간 제목</b>에만 걸립니다.
+                                                쉼표로 나누면 그중 하나만 맞아도 됩니다 —
+                                                <code class="px-1 bg-white rounded">이사+견적, 이사+비용</code>
+                                                <span class="block mt-1 text-amber-800">
+                                                    단어 하나만 적으면 겹칩니다. <code class="px-1 bg-white rounded">이사</code> 와
+                                                    <code class="px-1 bg-white rounded">청소</code> 로 나누면 「이사 청소」에 둘 다 걸리고,
+                                                    「방청소」 같은 말에도 걸립니다.
+                                                    여럿이 맞으면 <b>더 구체적인 쪽</b>이 이깁니다.
+                                                    아무것도 안 맞으면 템플릿 1 이 그대로 쓰입니다.
+                                                </span>
+                                            </div>
                                         </div>
 
                                         <!-- 템플릿 1 (기본) -->
@@ -317,7 +332,7 @@ function getPromptContentGenSection() {
                                                        class="flex-1 min-w-40 px-2 py-1 border border-gray-300 rounded">
                                                 <input type="text" x-model="promptModule.rotation.base.keywords_text"
                                                        x-show="promptModule.rotation.mode === 'by_keyword'"
-                                                       placeholder="이 템플릿을 쓸 키워드 (예: 이사,견적 · 비우면 전체)"
+                                                       placeholder="예: 이사+견적, 이사+비용 · 비우면 전체"
                                                        class="flex-1 min-w-40 px-2 py-1 border border-amber-300 bg-amber-50 rounded">
                                             </div>
                                         </div>
@@ -353,7 +368,7 @@ function getPromptContentGenSection() {
                                                                class="flex-1 min-w-40 px-2 py-1 border border-gray-300 rounded">
                                                         <input type="text" x-model="v.keywords_text"
                                                                x-show="promptModule.rotation.mode === 'by_keyword'"
-                                                               placeholder="이 템플릿을 쓸 키워드 (예: 청소,입주 · 비우면 전체)"
+                                                               placeholder="예: 이사+청소, 입주+청소 · 비우면 전체"
                                                                class="flex-1 min-w-40 px-2 py-1 border border-amber-300 bg-amber-50 rounded">
                                                     </div>
                                                 </div>
