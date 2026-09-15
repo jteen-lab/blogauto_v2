@@ -63,7 +63,6 @@ USER_PROMPT = """제목: {title}
 - "STEP", "단계 1", 구분선(---) 같은 메타 텍스트를 출력하지 않습니다
 - 해시태그를 쓰지 않습니다
 - 참고한 곳을 밝히지 않습니다 (지식인·카페 등을 언급하지 않습니다)
-- 본문 4500~5500자로 씁니다
 - 한 번에 끝까지 완성합니다
 ────────────────────────────────────────
 
@@ -90,6 +89,8 @@ USER_PROMPT = """제목: {title}
   위 이름을 그대로 쓰지 말고 주제에 맞게 바꿉니다
 ────────────────────────────────────────"""
 
+# 분량은 프롬프트가 아니라 옵션(quality_gate.min_chars)이 정한다.
+# 프롬프트에 글자 수를 적어도 분량 지시문이 덮어써서 헛말이 된다.
 SETTINGS = {
     "blogs": [BLOG_ID],
     "link_mode": "blog",
@@ -116,7 +117,8 @@ SETTINGS = {
     },
     # 근거 체크리스트 — 쟁점을 먼저 세우고 항목별로 나눠 찾는다
     "evidence_checklist": {"enabled": True},
-    "quality_gate": {"enabled": True, "trace_blocks": False},
+    "quality_gate": {"enabled": True, "trace_blocks": False,
+                     "min_chars": 3000},
     "title_recombine": {
         "enabled": True,
         "min_length": 25,
@@ -141,6 +143,7 @@ SETTINGS = {
     "content_generation": {
         "enabled": True,
         "provider": "openai",
+        # 모자라면 분량 목표에 맞춰 자동으로 올라간다
         "max_tokens": 8192,
         "temperature": 0.8,
         "top_p": 0.9,
