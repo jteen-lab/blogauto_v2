@@ -100,6 +100,27 @@ async def workbench_redirect():
     return RedirectResponse(url="/module-tester", status_code=307)
 
 
+#: 화면에 보일 모듈 타입 이름
+TYPE_LABELS = {
+    "keyword": "키워드",
+    "title_gen": "제목 생성/수집",
+    "data": "제목 이관",
+    "generate": "글 생성",
+    "prompt": "글 생성",
+    "contact_form": "문의폼",
+    "growth_profile": "성장 프로파일",
+}
+
+
+def _unsupported_reason(code: str) -> str:
+    """담을 수 없는 이유. 담기 버튼 옆에 그대로 보여준다."""
+    if code in EXCLUDED:
+        return "되돌릴 수 없어 지원하지 않습니다"
+    if code not in SUPPORTED:
+        return "테스터에서 돌릴 수 없는 종류입니다"
+    return ""
+
+
 @router.get("/catalog", summary="담을 수 있는 모듈·블로그 목록")
 async def catalog(
     current_user: User = Depends(get_current_user),
@@ -109,13 +130,23 @@ async def catalog(
     rows = (await db.execute(
         select(Module, ModuleType.code)
         .join(ModuleType, Module.module_type_id == ModuleType.id)
-        .where(Module.user_id == current_user.id,
-               ModuleType.code.in_(SUPPORTED))
+        .where(Module.user_id == current_user.id)
         .order_by(ModuleType.code, Module.name))).all()
+
+    # 타입별 묶음(옛 화면 호환)과 전체 목록을 함께 준다. 전체 목록이
+    # 있어야 타입 하나가 빠져도 모듈이 화면에서 사라지지 않는다.
     modules: Dict[str, list] = {}
+    all_modules: List[dict] = []
     for module, code in rows:
-        modules.setdefault(code, []).append(
-            {"id": module.id, "name": module.name})
+        item = {"id": module.id, "name": module.name, "type": code,
+                "type_label": TYPE_LABELS.get(code, code),
+                "description": (module.description or "")[:120],
+                "supported": code in SUPPORTED,
+                "reason": _unsupported_reason(code)}
+        all_modules.append(item)
+        if code in SUPPORTED:
+            modules.setdefault(code, []).append(
+                {"id": module.id, "name": module.name})
 
     blogs = (await db.execute(
         select(Blog).where(Blog.user_id == current_user.id,
@@ -123,6 +154,7 @@ async def catalog(
         .order_by(Blog.name))).scalars().all()
     return {
         "modules": modules,
+        "all_modules": all_modules,
         "blogs": [{"id": b.id, "name": b.name,
                    "platform": getattr(b, "platform", "")} for b in blogs],
         "excluded": list(EXCLUDED),
