@@ -222,8 +222,8 @@ def recombine_title(
     name="tasks.generate_content",
     max_retries=2,
     default_retry_delay=60,
-    soft_time_limit=300,
-    time_limit=360,
+    soft_time_limit=600,
+    time_limit=720,
     acks_late=True,
     reject_on_worker_lost=True,
 )
