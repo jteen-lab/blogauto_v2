@@ -29,12 +29,14 @@ function moduleTester() {
         },
         sheet: null,          // blog | module | source | link | preview
         sourceQuery: '', sourceItems: [], sourceError: '', sourceLoading: false,
+        sourceNextStart: null, sourceLastQuery: '',
         pickedQuestions: [],
         links: [], pickedLink: null, linkSaving: false, linkMessage: '',
         linkForm: { name: '', url: '', button_text: '',
                     notice: '이 포스팅은 애드릭스 수익을 위해 작성되었습니다.',
                     blogOnly: false },
         preview: { title: '', html: '', imageUrl: null, raw: '' },
+        previewItem: null, previewStep: null,
         previewCss: '', editMode: false, postMessage: '',
         presets: [], presetPick: '',
         _uid: 0,
@@ -319,7 +321,8 @@ function moduleTester() {
         },
 
         // ── 미리보기·글 반영 ─────────────────────────────────
-        async showPreview(item) {
+        async showPreview(item, step = null) {
+            this.previewItem = item; this.previewStep = step;
             this.preview = {
                 title: item.text, html: item.html || '',
                 imageUrl: item.image_url || null, raw: item.html || '',
@@ -374,8 +377,26 @@ function moduleTester() {
                         link_id: this.pickedLink?.id ?? null, mode,
                     }),
                 });
-                this.postMessage = got.message || '반영됨';
+                if (got.success === false) {
+                    this.postMessage = got.message || '실패';
+                    return;
+                }
+                this._dropPreviewed(got.message || '반영됨');
             } catch (e) { this.postMessage = '실패: ' + e.message; }
+        },
+        /** 반영이 끝난 글은 화면에서 치운다.
+         *  남겨 두면 같은 글을 두 번 반영하게 된다. */
+        _dropPreviewed(message) {
+            const step = this.previewStep, item = this.previewItem;
+            if (step && item) {
+                const at = (step.items || []).indexOf(item);
+                if (at >= 0) step.items.splice(at, 1);
+                step.applyMessage = message;
+            }
+            this.previewItem = null; this.previewStep = null;
+            this.preview = { title: '', html: '', imageUrl: null, raw: '' };
+            this.postMessage = '';
+            this.closeSheet();
         },
         async copyHtml() {
             try {
@@ -385,15 +406,28 @@ function moduleTester() {
         },
 
         // ── 소스 ─────────────────────────────────────────────
-        async searchSources() {
+        async searchSources(more = false) {
             const q = (this.sourceQuery || '').trim();
             if (q.length < 2) { this.sourceError = '검색어가 너무 짧습니다'; return; }
+            // 검색어가 바뀌면 처음부터. 더 보기면 이어서.
+            const start = (more && q === this.sourceLastQuery)
+                ? (this.sourceNextStart || 1) : 1;
             this.sourceLoading = true; this.sourceError = '';
             try {
                 const got = await this._json(
-                    '/api/v1/workbench/sources?query=' + encodeURIComponent(q));
-                this.sourceItems = (got.items || []).map(i =>
+                    '/api/v1/workbench/sources?query=' + encodeURIComponent(q)
+                    + '&start=' + start);
+                const rows = (got.items || []).map(i =>
                     Object.assign({ checked: false }, i));
+                if (start === 1) {
+                    this.sourceItems = rows;
+                } else {
+                    // 같은 글이 겹쳐 오면 한 번만 남긴다
+                    const seen = new Set(this.sourceItems.map(i => i.link));
+                    this.sourceItems.push(...rows.filter(i => !seen.has(i.link)));
+                }
+                this.sourceNextStart = got.next_start || null;
+                this.sourceLastQuery = q;
                 this.sourceError = got.error || '';
             } catch (e) { this.sourceError = e.message; }
             finally { this.sourceLoading = false; }
