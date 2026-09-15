@@ -80,7 +80,8 @@ class WorkbenchRunner:
                   settings_override: Optional[dict] = None,
                   title_texts: Optional[List[str]] = None,
                   chain_keywords: Optional[List[str]] = None,
-                  keep: bool = False) -> RunOutcome:
+                  keep: bool = False,
+                  questions: Optional[List[dict]] = None) -> RunOutcome:
         """모듈을 한 번 돌린다.
 
         Args:
@@ -92,6 +93,8 @@ class WorkbenchRunner:
             chain_keywords: 앞 단계에서 고른 키워드 — 제목 생성이 이걸
                 채택 키워드처럼 쓴다(리허설이라 되돌리면 같이 사라진다)
             keep: True 면 되돌리지 않고 실제 저장(반영 단계가 쓴다)
+            questions: 제목과 같은 순서의 질문 본문. 있으면 그 상황을
+                프롬프트 앞에 얹는다 — 제목만으로는 조건이 빠진다
 
         Returns:
             RunOutcome — 전량 목록과 집계 포함
@@ -119,7 +122,8 @@ class WorkbenchRunner:
             if chain_keywords:
                 await self._seed_keywords(rs, chain_keywords, blog)
             outcome = await self._dispatch(
-                rs, module_type, module, settings, blog, title_texts, since)
+                rs, module_type, module, settings, blog, title_texts, since,
+                questions)
         except Exception as e:  # noqa: BLE001
             logger.error("[WORKBENCH] 실행 오류 | %s | %s", module_type, e)
             await rs.discard()
@@ -158,7 +162,8 @@ class WorkbenchRunner:
     async def _dispatch(self, rs: RehearsalSession, module_type: str,
                         module: Module, settings: dict, blog: Optional[Blog],
                         title_texts: Optional[List[str]],
-                        since: datetime) -> RunOutcome:
+                        since: datetime,
+                        questions: Optional[List[dict]] = None) -> RunOutcome:
         """타입별로 실제 실행기를 부른다."""
         if module_type == "keyword":
             from ..keyword_lab.runner import KeywordModuleRunner
@@ -194,12 +199,14 @@ class WorkbenchRunner:
             return RunOutcome(module_type, False,
                               message="글 생성은 블로그를 골라야 합니다")
         return await self._run_generate(rs, module, settings, blog,
-                                        title_texts, since)
+                                        title_texts, since, questions)
 
     async def _run_generate(self, rs: RehearsalSession, module: Module,
                             settings: dict, blog: Blog,
                             title_texts: Optional[List[str]],
-                            since: datetime) -> RunOutcome:
+                            since: datetime,
+                            questions: Optional[List[dict]] = None
+                            ) -> RunOutcome:
         """실제 발행 길(FlowGenerateExecutor)로 글을 만든다.
 
         체인 제목이 있으면 리허설 세션에 재고 제목으로 넣고 그 id 를 강제
@@ -207,8 +214,8 @@ class WorkbenchRunner:
         """
         from ..generation.flow_generate_executor import FlowGenerateExecutor
 
-        probe = Module(id=module.id, name=module.name,
-                       user_id=module.user_id, settings=settings)
+        from ..generation.source_question import attach as _attach_q
+
         executor = FlowGenerateExecutor(rs, self.user_id)
         items: List[dict] = []
         summaries: List[dict] = []
@@ -223,7 +230,12 @@ class WorkbenchRunner:
                 await rs.flush()
                 force_ids.append(row.id)
 
-        for fid in force_ids:
+        for idx, fid in enumerate(force_ids):
+            # 제목마다 붙는 질문이 다르다 — 설정을 회차마다 새로 만든다
+            asked = (questions or [])[idx] if idx < len(questions or []) else None
+            probe = Module(id=module.id, name=module.name,
+                           user_id=module.user_id,
+                           settings=_attach_q(settings, asked))
             summary = await executor.execute_for_blog(
                 probe, blog, force=True, force_title_id=fid)
             summaries.append(summary)

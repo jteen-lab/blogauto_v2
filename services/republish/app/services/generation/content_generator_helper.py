@@ -97,6 +97,15 @@ async def generate_content_with_meta(
             blog.name,
         )
 
+    # 글을 쓰게 된 질문이 있으면 맨 앞에 둔다. 상황을 먼저 읽어야
+    # 구조가 그 상황에 맞춰진다(자료보다 앞).
+    from .source_question import SETTING_KEY as _SQ_KEY, build as _sq_block
+
+    _question = _sq_block(settings.get(_SQ_KEY))
+    if _question and "[이 글을 쓰게 된 질문]" not in full_prompt:
+        full_prompt = f"{_question}\n\n{full_prompt}"
+        logger.info("[GENERATOR] 질문 본문 주입 | blog=%s", blog.name)
+
     # 리뉴얼 추가 지침을 프롬프트 말미에 결합
     if extra_instruction:
         full_prompt = f"{full_prompt}\n\n{extra_instruction}"
