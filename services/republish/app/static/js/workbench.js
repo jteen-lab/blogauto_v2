@@ -30,6 +30,7 @@ function moduleTester() {
         sheet: null,          // blog | module | source | link | preview
         sourceQuery: '', sourceItems: [], sourceError: '', sourceLoading: false,
         sourceNextStart: null, sourceLastQuery: '',
+        bodyLoading: false,
         pickedQuestions: [],
         links: [], pickedLink: null, linkSaving: false, linkMessage: '',
         linkForm: { name: '', url: '', button_text: '',
@@ -152,8 +153,13 @@ function moduleTester() {
             } else if (picked.length) {
                 base.title_texts = picked.map(p => p.text).slice(0, this.MAX_POSTS);
             } else if (base.module_type === 'generate' && this.pickedQuestions.length) {
-                base.title_texts = this.pickedQuestions
-                    .map(q => q.title).slice(0, this.MAX_POSTS);
+                const rows = this.pickedQuestions.slice(0, this.MAX_POSTS);
+                base.title_texts = rows.map(q => q.title);
+                // 본문을 받아 둔 질문이 있으면 제목과 짝을 맞춰 보낸다.
+                // 없는 자리는 null — 그 글은 제목만으로 쓴다.
+                if (rows.some(q => q.body)) {
+                    base.questions = rows.map(q => q.body || null);
+                }
             }
 
             s.running = true; s.applyMessage = '';
@@ -433,6 +439,37 @@ function moduleTester() {
             finally { this.sourceLoading = false; }
         },
         checkedQuestions() { return this.sourceItems.filter(i => i.checked); },
+        /** 체크한 질문의 본문을 가져온다.
+         *  고른 것만 부른다 — 목록을 통째로 긁으면 한 번에 수 MB 다. */
+        async fetchQuestionBodies() {
+            const picked = this.checkedQuestions();
+            if (!picked.length) {
+                this.sourceError = '내용을 가져올 질문을 먼저 체크하세요';
+                return;
+            }
+            this.bodyLoading = true; this.sourceError = '';
+            try {
+                const got = await this._json('/api/v1/workbench/question-body', {
+                    method: 'POST',
+                    body: JSON.stringify({ links: picked.map(q => q.link) }),
+                });
+                const byLink = {};
+                for (const row of (got.items || [])) byLink[row.link] = row;
+                let ok = 0;
+                for (const q of picked) {
+                    const row = byLink[q.link];
+                    if (row && (row.question || row.answer)) {
+                        q.body = { question: row.question, answer: row.answer };
+                        ok += 1;
+                    } else {
+                        q.bodyError = (row && row.error) || '본문을 못 가져왔습니다';
+                    }
+                }
+                this.sourceError = ok ? ''
+                    : '본문을 가져오지 못했습니다 — 제목만으로 진행됩니다';
+            } catch (e) { this.sourceError = '실패: ' + e.message; }
+            finally { this.bodyLoading = false; }
+        },
         applyPickedQuestions() {
             this.pickedQuestions = this.checkedQuestions().slice();
             this.closeSheet();

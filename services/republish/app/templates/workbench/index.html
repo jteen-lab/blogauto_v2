@@ -93,6 +93,7 @@
             </button>
             <template x-for="(q, qi) in pickedQuestions" :key="'q'+qi">
                 <span class="inline-flex items-center gap-2 rounded-xl px-3 py-1.5 shadow-sm bg-amber-50 text-amber-800 text-xs">
+                    <span x-show="q.body" class="text-emerald-600 font-bold">본문</span>
                     <span class="max-w-[280px] truncate" x-text="q.title"></span>
                     <button @click="pickedQuestions.splice(qi,1)" class="hover:opacity-60">&times;</button>
                 </span>
@@ -361,6 +362,16 @@
                                    @click.stop
                                    class="inline-block mt-1 text-accent hover:underline"
                                    x-show="q.link">원문 보기</a>
+                                <span x-show="q.body" class="block mt-2 p-2 rounded bg-emerald-50 border border-emerald-200">
+                                    <span class="block text-emerald-800 font-medium">본문을 가져왔습니다</span>
+                                    <span class="block text-gray-700 mt-1 leading-relaxed"
+                                          x-text="q.body?.question"></span>
+                                    <span class="block text-gray-500 mt-1 leading-relaxed"
+                                          x-show="q.body?.answer"
+                                          x-text="'달린 답: ' + (q.body?.answer || '')"></span>
+                                </span>
+                                <span x-show="q.bodyError" class="block mt-1 text-red-500"
+                                      x-text="q.bodyError"></span>
                             </span>
                         </label>
                     </template>
@@ -478,9 +489,19 @@
                     닫기
                 </button>
 
-                <button x-show="sheet === 'source'" @click="applyPickedQuestions()"
-                        class="flex-1 py-2.5 px-4 text-sm text-white bg-primary rounded-lg hover:opacity-90 transition-opacity font-medium"
-                        x-text="'담기 (' + checkedQuestions().length + ')'"></button>
+                <template x-if="sheet === 'source'">
+                    <div class="flex-1 flex gap-2">
+                        <button @click="fetchQuestionBodies()"
+                                :disabled="bodyLoading || !checkedQuestions().length"
+                                class="flex-1 py-2.5 px-3 text-sm text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition-colors">
+                            <span x-show="!bodyLoading">내용 가져오기</span>
+                            <span x-show="bodyLoading">가져오는 중…</span>
+                        </button>
+                        <button @click="applyPickedQuestions()"
+                                class="flex-1 py-2.5 px-3 text-sm text-white bg-primary rounded-lg hover:opacity-90 transition-opacity font-medium"
+                                x-text="'담기 (' + checkedQuestions().length + ')'"></button>
+                    </div>
+                </template>
 
                 <template x-if="sheet === 'preview'">
                     <div class="flex-1 flex gap-2">
@@ -507,5 +528,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="/static/js/workbench.js?v=20260915q2"></script>
+<script src="/static/js/workbench.js?v=20260915qb"></script>
 {% endblock %}
