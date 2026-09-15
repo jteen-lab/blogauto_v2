@@ -15,17 +15,21 @@ from typing import Any, Dict, Optional
 # 여유를 조금 더 두어 1.4배로 잡는다.
 DEFAULT_MARGIN = 1.4
 
-# 소제목 1개당 실측 중앙 231자. 6구획이면 1,386자로 임계에 못 미친다.
-# 통과율은 7구획 71%, 10구획 93%지만 11구획은 36%로 오히려 낮다 —
-# 구획만 늘리면 얕아지므로 구획 수와 구획당 분량을 함께 지시한다.
-DEFAULT_SECTIONS = 6
+# 구획(소제목) 수는 **여기서 정하지 않는다.**
+# 프롬프트 빌더의 섹션 패턴(P1 은 A~F 여섯 개 …)과 구조 약속이 이미
+# 섹션 수와 섹션당 분량을 지시한다. 여기서 또 말하면 둘이 다른 숫자를
+# 불러 모델이 어느 쪽을 따를지 헷갈린다. 분량만 말한다.
 
-# 한 구획이 이보다 짧으면 나눈 의미가 없다.
-MIN_SECTION_CHARS = 250
+# 목표 분량에서 필요한 출력 토큰을 잡을 때 쓰는 배수.
+# 한국어는 1글자가 대략 1.5토큰이고, 표·목록 기호가 더 붙는다.
+TOKENS_PER_CHAR = 1.8
+
+# 서두·마무리처럼 분량과 무관하게 붙는 몫
+TOKEN_MARGIN = 500
 
 
 def resolve(min_chars: int, module_settings: Optional[dict] = None) -> Dict[str, Any]:
-    """임계값에서 목표 분량·구획 수·구획당 분량을 계산한다."""
+    """임계값에서 목표 분량을 계산한다. 구획 수는 다루지 않는다."""
     gate = ((module_settings or {}).get("quality_gate") or {})
 
     try:
@@ -34,21 +38,19 @@ def resolve(min_chars: int, module_settings: Optional[dict] = None) -> Dict[str,
         margin = DEFAULT_MARGIN
     margin = max(1.0, min(2.0, margin))
 
-    try:
-        sections = int(gate.get("min_sections") or DEFAULT_SECTIONS)
-    except (TypeError, ValueError):
-        sections = DEFAULT_SECTIONS
-    sections = max(3, min(12, sections))
-
     target = int(round(min_chars * margin / 100.0)) * 100  # 100자 단위로 정리
-    per_section = max(MIN_SECTION_CHARS, target // sections // 10 * 10)
+    return {"target": target, "min_chars": min_chars}
 
-    return {
-        "target": target,
-        "sections": sections,
-        "per_section": per_section,
-        "min_chars": min_chars,
-    }
+
+def needed_tokens(min_chars: int,
+                  module_settings: Optional[dict] = None) -> int:
+    """목표 분량을 쓰려면 출력 토큰이 얼마나 필요한가.
+
+    분량만 올리고 최대 토큰을 그대로 두면 글이 중간에 잘린다. 두 값이
+    따로 놀지 않도록 여기서 한 번에 계산한다.
+    """
+    target = resolve(min_chars, module_settings)["target"]
+    return int(target * TOKENS_PER_CHAR) + TOKEN_MARGIN
 
 
 def build(min_chars: int, module_settings: Optional[dict] = None) -> str:
@@ -62,12 +64,9 @@ def build(min_chars: int, module_settings: Optional[dict] = None) -> str:
         "■ 분량 기준 (위의 다른 분량 언급보다 이 기준이 우선합니다)\n"
         f"- 본문 전체 {plan['target']:,}자 이상. "
         f"{plan['min_chars']:,}자 미만이면 발행되지 않습니다.\n"
-        f"- 소제목(##) {plan['sections']}개 이상으로 나누고, "
-        f"각 소제목 아래 본문을 {plan['per_section']:,}자 이상 쓰세요.\n"
+        "- 위에 적힌 구조(섹션 수와 섹션별 분량)를 지키면서 채웁니다.\n"
         "- 분량은 내용으로 채웁니다. 앞서 쓴 내용을 되풀이하거나, "
-        "같은 말을 바꿔 쓰거나, 목차·요약만 늘려 채우지 마세요.\n"
-        "- 각 소제목은 서로 다른 질문에 답해야 합니다. "
-        "한 소주제를 여러 구획으로 쪼개 분량을 만들지 마세요."
+        "같은 말을 바꿔 쓰거나, 목차·요약만 늘려 채우지 마세요."
     )
 
 
@@ -90,7 +89,7 @@ def continuation_prompt(
         f"{draft}\n"
         "--- 초안 끝 ---\n\n"
         "초안에 **이어서** 쓸 부분만 출력하세요. 다음을 지키세요.\n"
-        f"- 새로운 소제목(##)을 추가해 최소 {shortfall:,}자를 더 씁니다.\n"
+        f"- 초안이 다루지 않은 부분을 이어 최소 {shortfall:,}자를 더 씁니다.\n"
         "- 초안에 이미 나온 소제목·내용을 다시 쓰지 마세요. "
         "초안이 다루지 않은 질문을 새로 다룹니다.\n"
         "- 초안을 다시 출력하지 말고, 이어질 내용만 출력하세요.\n"
