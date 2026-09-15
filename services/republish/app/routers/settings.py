@@ -79,6 +79,7 @@ class SettingsUpdateRequest(BaseModel):
     # 네이버 검색 API
     naver_search_client_id: Optional[str] = Field(None, max_length=255)
     law_api_oc: Optional[str] = Field(None, max_length=100)
+    brave_api_key: Optional[str] = Field(None, max_length=255)
     naver_search_client_secret: Optional[str] = Field(None, max_length=255)
     # 네이버 데이터랩 API
     naver_datalab_client_id: Optional[str] = Field(None, max_length=255)
@@ -168,6 +169,8 @@ async def get_settings(db: AsyncSession = Depends(get_db_session)):
             "naver_search_client_id": settings.masked_naver_search_client_id,
             # 인증값(OC)은 비밀값이 아니라 그대로 보여준다
             "law_api_oc": settings.law_api_oc,
+            "brave_api_key": settings.masked_brave_api_key,
+            "has_brave_api": settings.has_brave_api,
             "naver_search_client_secret": settings.masked_naver_search_client_secret,
             "has_naver_search_api": settings.has_naver_search_api,
             # 네이버 데이터랩 API
@@ -296,6 +299,9 @@ async def update_settings(
         # 인증값은 비워서 지울 수 있어야 한다 — 키처럼 가리지 않는다
         if request.law_api_oc is not None:
             settings.law_api_oc = request.law_api_oc.strip() or None
+
+        if request.brave_api_key is not None and request.brave_api_key != "":
+            settings.brave_api_key = request.brave_api_key
             logger.info(f"[SETTINGS] 네이버 검색 Client ID 업데이트: user_id={user_id}")
 
         if request.naver_search_client_secret is not None and request.naver_search_client_secret != "":
