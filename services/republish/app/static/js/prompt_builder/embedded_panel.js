@@ -14,6 +14,13 @@ window.getPromptBuilderEmbeddedHTML = function () {
          x-data="createPromptBuilderState({
              mode: 'embedded',
              onApply: (text, snapshot) => {
+                 // 템플릿이 여럿이면 어디에 넣을지 고른 대로 간다.
+                 // 0 = 기본(사용자 프롬프트 템플릿), 1.. = 변형
+                 const at = parseInt(promptModule.builderTarget, 10) || 0;
+                 if (at > 0) {
+                     const v = (promptModule.rotation.variants || [])[at - 1];
+                     if (v) { v.template = text; return; }
+                 }
                  promptModule.contentGeneration.userPromptTemplate = text;
                  // 어떤 프리셋·항목을 골랐는지 함께 보관한다(복원·강조용).
                  promptModule.contentGeneration.builderSelection = snapshot || null;
@@ -192,13 +199,25 @@ window.getPromptBuilderEmbeddedHTML = function () {
             <div class="bg-white border rounded-lg p-3">
                 <div class="flex items-center justify-between mb-2">
                     <h3 class="text-sm font-semibold text-gray-800">완성 프롬프트 미리보기</h3>
-                    <div class="flex items-center gap-2">
+                    <div class="flex flex-wrap items-center gap-2">
                         <span class="text-xs text-gray-500">
                             <span x-text="charCount"></span>자 · <span x-text="lineCount"></span>줄
                         </span>
+                        <label class="flex items-center gap-1.5"
+                               x-show="(promptModule.rotation.variants || []).length">
+                            <span class="text-xs text-gray-600">반영할 곳</span>
+                            <select x-model="promptModule.builderTarget"
+                                    class="px-2 py-1 border border-gray-300 rounded text-xs">
+                                <option value="0">템플릿 1 (기본)</option>
+                                <template x-for="(v, i) in (promptModule.rotation.variants || [])" :key="i">
+                                    <option :value="i + 1"
+                                            x-text="'템플릿 ' + (i + 2) + (v.label ? ' — ' + v.label : '')"></option>
+                                </template>
+                            </select>
+                        </label>
                         <button type="button" @click="applyToTemplate()" :disabled="!isComplete()"
                                 class="px-3 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed">
-                            <span x-show="!justApplied">사용자 프롬프트 템플릿에 반영</span>
+                            <span x-show="!justApplied" x-text="builderTargetLabel()"></span>
                             <span x-show="justApplied">반영됨!</span>
                         </button>
                     </div>
