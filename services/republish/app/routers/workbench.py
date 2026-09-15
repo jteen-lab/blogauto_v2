@@ -19,6 +19,7 @@ from ..models.module_type import ModuleType
 from ..models.user import User
 from ..models.user_settings import UserSettings
 from ..routers.auth import get_current_user
+from ..services.promo import link_service
 from ..services.workbench import apply as apply_svc
 from ..services.workbench import presets as preset_svc
 from ..services.workbench import sources as source_svc
@@ -65,6 +66,18 @@ class ApplyPostRequest(BaseModel):
     image_url: Optional[str] = None
     module_id: Optional[int] = None
     mode: str = Field("save", description="save=발행대기글 | now=즉시 발행")
+    link_id: Optional[int] = Field(
+        None, description="붙인 홍보 링크. 추적값을 저장 뒤에 채운다")
+
+
+class AssembleRequest(BaseModel):
+    """미리보기용 조립 요청."""
+
+    html: str
+    title: str = ""
+    image_url: Optional[str] = None
+    link_id: Optional[int] = None
+    blog_id: Optional[int] = None
 
 
 class PresetSaveRequest(BaseModel):
@@ -168,6 +181,23 @@ async def apply_titles(
     return await apply_svc.apply_titles(db, current_user.id, body.titles)
 
 
+@router.post("/assemble", summary="고지문·표지·버튼을 붙인 완성본")
+async def assemble_post(
+    body: AssembleRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """미리보기가 쓰는 조립. 저장도 같은 결과를 쓴다.
+
+    링크를 고르지 않으면 고지문·버튼이 둘 다 빠진다(정보성 글).
+    """
+    html, link = await link_service.build_html(
+        db, body.html, link_id=body.link_id, image_url=body.image_url,
+        title=body.title, blog_id=body.blog_id)
+    return {"success": True, "html": html,
+            "link_name": link.name if link else ""}
+
+
 @router.post("/apply/post", summary="반영 — 글을 발행대기글로(선택 시 즉시 발행)")
 async def apply_post(
     body: ApplyPostRequest,
@@ -179,7 +209,8 @@ async def apply_post(
         raise HTTPException(404, "블로그를 찾을 수 없습니다")
     return await apply_svc.apply_post(
         db, body.blog_id, body.title, body.html,
-        image_url=body.image_url, module_id=body.module_id, mode=body.mode)
+        image_url=body.image_url, module_id=body.module_id, mode=body.mode,
+        link_id=body.link_id)
 
 
 @router.get("/preview-css", summary="블로그 스타일 CSS (미리보기용)")
