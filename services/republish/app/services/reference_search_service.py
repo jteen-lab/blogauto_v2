@@ -112,20 +112,29 @@ class ReferenceSearchService:
             if found:
                 return found
 
-        if not self.is_configured():
-            logger.error("[REF_SEARCH] API 키가 설정되지 않았습니다")
-            return []
-
         if not query or len(query.strip()) < 2:
             logger.warning("[REF_SEARCH] 검색어가 너무 짧습니다")
             return []
 
-        logger.info(f"[REF_SEARCH] {source} 검색: '{query}' (count={count})")
-        params = {"query": query.strip(), "display": min(count, 100),
-                  "start": 1, "sort": self.SORT.get(source, "sim")}
-        response_data = await self._call_api(endpoint, params)
+        # 일반 자료는 네이버와 Brave 를 함께 쓴다. 네이버가 한국 로컬을,
+        # Brave 가 그 밖을 가져온다 — 어느 한쪽만으로는 덜 찬다.
+        extra: List[SearchResult] = []
+        if source == "web":
+            extra = await self._search_brave(query, count)
 
-        return self._parse_response(response_data) if response_data else []
+        rows: List[SearchResult] = []
+        if self.is_configured():
+            logger.info(f"[REF_SEARCH] {source} 검색: '{query}' (count={count})")
+            params = {"query": query.strip(), "display": min(count, 100),
+                      "start": 1, "sort": self.SORT.get(source, "sim")}
+            response_data = await self._call_api(endpoint, params)
+            if response_data:
+                rows = self._parse_response(response_data)
+        elif not extra:
+            logger.error("[REF_SEARCH] API 키가 설정되지 않았습니다")
+            return []
+
+        return _merge(rows, extra)
 
     async def search_many(self, plan: List[tuple],
                           count: int = 20) -> dict:
@@ -153,6 +162,20 @@ class ReferenceSearchService:
             else:
                 out[(src, q)] = result
         return out
+
+    async def _search_brave(self, query: str,
+                            count: int = 20) -> List[SearchResult]:
+        """Brave 에서 찾는다. 키가 없으면 빈 목록."""
+        key = getattr(self._settings, "brave_api_key", None)
+        if not key:
+            return []
+        try:
+            from .reference.brave_search import collect
+
+            return await collect(key, query, count)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[REF_SEARCH] Brave 조회 실패 | %s", e)
+            return []
 
     async def _search_law(self, query: str,
                           count: int = 30) -> List[SearchResult]:
@@ -260,3 +283,20 @@ class ReferenceSearchService:
             return {"success": False, "error": "검색 결과가 없습니다"}
         except Exception as e:
             return {"success": False, "error": str(e)}
+
+
+def _merge(*groups: List[SearchResult]) -> List[SearchResult]:
+    """여러 곳의 결과를 합친다. 같은 주소는 하나만 남긴다.
+
+    앞에 온 묶음이 이긴다 — 먼저 넣은 쪽의 설명이 대개 더 길다.
+    """
+    seen = set()
+    out: List[SearchResult] = []
+    for group in groups:
+        for row in group or []:
+            key = (row.link or "").rstrip("/")
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            out.append(row)
+    return out
