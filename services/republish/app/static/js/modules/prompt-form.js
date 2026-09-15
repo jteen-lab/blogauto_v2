@@ -100,7 +100,9 @@ function createPromptModuleState() {
         },
 
         // 프롬프트 로테이션 — 같은 니치라도 글마다 구조를 바꾼다
+        builderTarget: 0,   // 빌더 반영 대상 (0=기본, 1..=변형)
         rotation: {
+            base: { purpose: '', topic_ids_text: '', keywords_text: '' },
             enabled: false,
             mode: 'random',
             purpose: '',
@@ -232,17 +234,27 @@ const promptModuleMethods = {
         // 프롬프트 로테이션 — 저장은 배열, 화면은 쉼표 문자열로 다룬다
         if (settings.prompt_rotation) {
             const rot = settings.prompt_rotation;
+            const rows = (rot.variants || []).map(v => ({
+                label: v.label || '',
+                template: v.template || '',
+                purpose: v.purpose || '',
+                topic_ids_text: (v.topic_ids || []).join(','),
+                keywords_text: (v.keywords || []).join(','),
+                is_base: !!v.is_base
+            }));
+            // 첫 변형은 기본 템플릿을 복사해 둔 것이다. 화면에서는
+            // 사용자 프롬프트 템플릿 칸이 그 자리를 맡으므로 떼어낸다.
+            const base = rows.length && rows[0].is_base ? rows.shift() : null;
             this.promptModule.rotation = {
                 enabled: !!rot.enabled,
                 mode: rot.mode || 'random',
                 purpose: rot.purpose || '',
-                variants: (rot.variants || []).map(v => ({
-                    label: v.label || '',
-                    template: v.template || '',
-                    purpose: v.purpose || '',
-                    topic_ids_text: (v.topic_ids || []).join(','),
-                    keywords_text: (v.keywords || []).join(',')
-                }))
+                base: {
+                    purpose: base ? base.purpose : '',
+                    topic_ids_text: base ? base.topic_ids_text : '',
+                    keywords_text: base ? base.keywords_text : ''
+                },
+                variants: rows
             };
         }
 
@@ -372,6 +384,92 @@ const promptModuleMethods = {
     },
 
     // 애드센스 니치 topic 토글 (F4)
+    /** 빌더 반영 버튼에 쓸 문구 — 어디에 들어가는지 버튼이 말해 준다. */
+    builderTargetLabel() {
+        const at = parseInt(this.promptModule.builderTarget, 10) || 0;
+        if (at > 0) return '템플릿 ' + (at + 1) + '에 반영';
+        return (this.promptModule.rotation.variants || []).length
+            ? '템플릿 1 (기본)에 반영' : '사용자 프롬프트 템플릿에 반영';
+    },
+
+    /** 변형을 하나 더. 기본 템플릿과 같은 모양이 아래에 붙는다. */
+    addPromptVariant() {
+        this.promptModule.rotation.variants.push({
+            label: '', template: '', purpose: '',
+            topic_ids_text: '', keywords_text: ''
+        });
+    },
+
+    /** 지금 설정이면 어떻게 도는지 한 줄로. */
+    rotationHint() {
+        const r = this.promptModule.rotation || {};
+        const total = this.promptTemplateCount();
+        if (total < 2) {
+            return '템플릿이 1개라 로테이션이 돌지 않습니다 — 변형을 추가하세요.';
+        }
+        if (r.mode === 'by_keyword') {
+            return '템플릿 ' + total + '개 · 제목의 키워드와 맞는 템플릿을 씁니다. '
+                 + '키워드를 비운 템플릿은 아무 때나 뽑힙니다.';
+        }
+        if (r.mode === 'by_niche') {
+            return '템플릿 ' + total + '개 · 하위 주제마다 고정된 템플릿을 씁니다.';
+        }
+        if (r.mode === 'sequential') {
+            return '템플릿 ' + total + '개 · 글마다 차례로 돌아갑니다.';
+        }
+        return '템플릿 ' + total + '개 · 글마다 무작위로 고릅니다.';
+    },
+
+    /** 기본 + 변형 중 내용이 있는 것의 개수 */
+    promptTemplateCount() {
+        const base = String(
+            this.promptModule.contentGeneration.userPromptTemplate || '').trim();
+        const rows = (this.promptModule.rotation.variants || [])
+            .filter(v => String(v.template || '').trim());
+        return (base ? 1 : 0) + rows.length;
+    },
+
+    /** 변형 하나를 서버가 읽는 모양으로. 화면은 쉼표 문자열로 받는다. */
+    _variantOut(v, isBase) {
+        return {
+            label: (v.label || '').trim() || (isBase ? '기본' : ''),
+            template: String(v.template || '').trim(),
+            purpose: v.purpose || '',
+            topic_ids: String(v.topic_ids_text || '').split(',')
+                .map(x => parseInt(x.trim(), 10))
+                .filter(n => Number.isInteger(n)),
+            keywords: String(v.keywords_text || '').split(',')
+                .map(x => x.trim()).filter(Boolean),
+            ...(isBase ? { is_base: true } : {})
+        };
+    },
+
+    /** 로테이션을 저장 모양으로 만든다.
+     *
+     *  화면의 템플릿 1 은 '사용자 프롬프트 템플릿' 칸 자체다. 로테이션이
+     *  켜져 있으면 그것도 후보 중 하나여야 하므로 **첫 변형으로 복사해
+     *  보낸다.** 서버는 변형 목록에서만 고르기 때문이다.
+     */
+    buildRotation() {
+        const r = this.promptModule.rotation || {};
+        const rows = (r.variants || [])
+            .filter(v => v && String(v.template || '').trim())
+            .map(v => this._variantOut(v, false));
+
+        const baseText = String(
+            this.promptModule.contentGeneration.userPromptTemplate || '').trim();
+        if (r.enabled && baseText) {
+            rows.unshift(this._variantOut(
+                { ...(r.base || {}), template: baseText }, true));
+        }
+        return {
+            enabled: !!r.enabled,
+            mode: r.mode || 'random',
+            purpose: r.purpose || '',
+            variants: rows
+        };
+    },
+
     /** 분량 기준을 저장 모양으로 만든다. 비운 칸은 빼서 기본값이 쓰이게 한다. */
     buildQualityGate() {
         const g = this.promptModule.qualityGate || {};
@@ -701,23 +799,7 @@ const promptModuleMethods = {
             },
             // 프롬프트 로테이션 — 변형은 서버가 읽는 모양으로 바꿔 보낸다.
             // 화면은 쉼표 문자열로 받고, 저장할 때 배열로 편다.
-            prompt_rotation: {
-                enabled: !!this.promptModule.rotation.enabled,
-                mode: this.promptModule.rotation.mode || 'random',
-                purpose: this.promptModule.rotation.purpose || '',
-                variants: (this.promptModule.rotation.variants || [])
-                    .filter(v => v && String(v.template || '').trim())
-                    .map(v => ({
-                        label: (v.label || '').trim(),
-                        template: String(v.template).trim(),
-                        purpose: v.purpose || '',
-                        topic_ids: String(v.topic_ids_text || '').split(',')
-                            .map(x => parseInt(x.trim(), 10))
-                            .filter(n => Number.isInteger(n)),
-                        keywords: String(v.keywords_text || '').split(',')
-                            .map(x => x.trim()).filter(Boolean)
-                    }))
-            },
+            prompt_rotation: this.buildRotation(),
             // 품질 게이트 — AI 흔적을 차단 사유로 올릴지
             quality_gate: this.buildQualityGate(),
             // 내부링크 설정
