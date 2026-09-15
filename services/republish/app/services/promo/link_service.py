@@ -41,21 +41,47 @@ async def pick_by_keyword(db: AsyncSession, title: str,
             (PromoLink.blog_id.is_(None)) | (PromoLink.blog_id == blog_id))
     rows = (await db.execute(stmt)).scalars().all()
 
-    best, best_score = None, 0
+    best, best_rank = None, None
     for row in rows:
         marks = [m.strip() for m in (row.keywords or "").split(",") if m.strip()]
         if not marks:
             continue
-        score = keyword_score({"keywords": marks}, text)
-        if score > best_score:
-            best, best_score = row, score
+        rank = _rank(marks, text)
+        if rank and (best_rank is None or rank > best_rank):
+            best, best_rank = row, rank
 
     if best is None:
         logger.info("[PROMO_LINK] 맞는 링크 없음 | %s", text[:30])
     else:
         logger.info("[PROMO_LINK] 자동 선택 | %s → %s (일치 %d낱말)",
-                    text[:30], best.name, best_score)
+                    text[:30], best.name, best_rank[0])
     return best
+
+
+def _rank(marks: list, text: str) -> Optional[tuple]:
+    """맞은 정도. 큰 쪽이 이긴다. 안 맞으면 None.
+
+    낱말 수가 같아 갈리지 않을 때가 있다 — 「이사 청소 … 가격」 에는
+    `이사+청소` 와 `이사+가격` 이 둘 다 2낱말로 맞는다. 그때는
+    **제목 앞쪽에 몰린 쪽**을 고른다. 제목의 앞이 주제를 말한다.
+    """
+    from ..generation.variant_picker import keyword_score
+
+    words = keyword_score({"keywords": marks}, text)
+    if words <= 0:
+        return None
+
+    # 맞은 규칙 중 가장 구체적인 것의 낱말 위치를 본다
+    spread = None
+    for rule in marks:
+        parts = [p.strip() for p in str(rule).split("+") if p.strip()]
+        if len(parts) != words or not all(p in text for p in parts):
+            continue
+        total = sum(text.find(p) for p in parts)
+        spread = total if spread is None else min(spread, total)
+
+    # 위치 합이 작을수록(앞쪽일수록) 앞에 오도록 부호를 뒤집는다
+    return (words, -(spread if spread is not None else 9999))
 
 
 async def load(db: AsyncSession, link_id: Optional[int]) -> Optional[PromoLink]:
