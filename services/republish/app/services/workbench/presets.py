@@ -35,8 +35,16 @@ async def _load(db: Any) -> List[Dict[str, Any]]:
 
 
 async def _save(db: Any, rows: List[Dict[str, Any]]) -> None:
+    """저장하고 **반드시 커밋한다.**
+
+    설정 저장 함수는 커밋하지 않고 메모리에만 값을 얹는다(여러 개를
+    모아 한 번에 커밋하라고 그렇게 돼 있다). 커밋을 빠뜨리면 그
+    프로세스가 살아 있는 동안에는 멀쩡해 보이다가, 컨테이너가 다시
+    뜨는 순간 통째로 사라진다 — 실제로 그렇게 잃었다(2026-09-15).
+    """
     await SystemSettingsService.set(
         STORE_KEY, json.dumps(rows, ensure_ascii=False), db)
+    await db.commit()
 
 
 async def list_presets(db: Any) -> List[Dict[str, Any]]:
