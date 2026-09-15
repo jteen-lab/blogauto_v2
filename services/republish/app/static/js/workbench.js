@@ -33,9 +33,10 @@ function moduleTester() {
         bodyLoading: false,
         pickedQuestions: [],
         links: [], pickedLink: null, linkSaving: false, linkMessage: '',
-        linkForm: { name: '', url: '', button_text: '',
+        linkForm: { name: '', url: '', button_text: '', keywords: '',
                     notice: '이 포스팅은 애드릭스 수익을 위해 작성되었습니다.',
                     blogOnly: false },
+        linkAuto: false,   // 제목의 키워드로 링크를 고를지
         preview: { title: '', html: '', imageUrl: null, raw: '' },
         previewItem: null, previewStep: null,
         previewCss: '', editMode: false, postMessage: '',
@@ -269,27 +270,36 @@ function moduleTester() {
             } catch (e) { console.error('링크 로드 실패:', e); }
         },
         pickLink(l) {
-            this.pickedLink = l; this.rememberLink(); this.closeSheet();
+            this.pickedLink = l; this.linkAuto = false;
+            this.rememberLink(); this.closeSheet();
+            if (this.preview.raw) this.assemble();
+        },
+        /** 제목의 키워드로 고르게 한다. 글마다 다른 링크가 붙는다. */
+        useAutoLink() {
+            this.linkAuto = true; this.pickedLink = null;
+            this.rememberLink(); this.closeSheet();
             if (this.preview.raw) this.assemble();
         },
         clearLink() {
-            this.pickedLink = null; this.rememberLink(); this.closeSheet();
+            this.pickedLink = null; this.linkAuto = false;
+            this.rememberLink(); this.closeSheet();
             if (this.preview.raw) this.assemble();
         },
         /** 고른 링크를 기억해 둔다. 테스트마다 다시 고르지 않아도 된다. */
         rememberLink() {
             try {
-                if (this.pickedLink) {
-                    localStorage.setItem('mt_link_id', String(this.pickedLink.id));
-                } else {
-                    localStorage.removeItem('mt_link_id');
-                }
+                const v = this.linkAuto ? 'auto'
+                    : (this.pickedLink ? String(this.pickedLink.id) : '');
+                if (v) localStorage.setItem('mt_link_id', v);
+                else localStorage.removeItem('mt_link_id');
             } catch (e) { /* 저장이 막힌 브라우저 — 기억만 안 될 뿐 */ }
         },
         /** 지난번에 고른 링크를 되살린다. */
         restoreLink() {
             try {
-                const id = parseInt(localStorage.getItem('mt_link_id') || '', 10);
+                const raw = localStorage.getItem('mt_link_id') || '';
+                if (raw === 'auto') { this.linkAuto = true; return; }
+                const id = parseInt(raw, 10);
                 if (id) this.pickedLink = this.links.find(l => l.id === id) || null;
             } catch (e) { /* 무시 */ }
         },
@@ -306,13 +316,15 @@ function moduleTester() {
                         name: f.name.trim(), url: f.url.trim(),
                         button_text: f.button_text.trim(),
                         notice: f.notice.trim(),
+                        keywords: (f.keywords || '').trim(),
                         blog_id: f.blogOnly ? (this.blogs[0]?.id ?? null) : null,
                     }),
                 });
                 this.links.unshift(got.link);
                 this.pickedLink = got.link; this.rememberLink();
                 this.linkForm = { name: '', url: '', button_text: '',
-                                  notice: f.notice, blogOnly: f.blogOnly };
+                                  keywords: '', notice: f.notice,
+                                  blogOnly: f.blogOnly };
                 this.linkMessage = '등록했습니다. 이 링크가 선택되었습니다.';
             } catch (e) { this.linkMessage = '실패: ' + e.message; }
             finally { this.linkSaving = false; }
@@ -351,7 +363,7 @@ function moduleTester() {
                     body: JSON.stringify({
                         html: this.preview.raw, title: this.preview.title,
                         image_url: this.preview.imageUrl,
-                        link_id: this.pickedLink?.id ?? null,
+                        link_id: this.linkAuto ? 'auto' : (this.pickedLink?.id ?? null),
                         blog_id: this.blogs[0]?.id ?? null,
                     }),
                 });
@@ -380,7 +392,7 @@ function moduleTester() {
                     body: JSON.stringify({
                         blog_id: blog.id, title: this.preview.title,
                         html: this.preview.html, image_url: this.preview.imageUrl,
-                        link_id: this.pickedLink?.id ?? null, mode,
+                        link_id: this.linkAuto ? 'auto' : (this.pickedLink?.id ?? null), mode,
                     }),
                 });
                 if (got.success === false) {
@@ -488,7 +500,7 @@ function moduleTester() {
             const config = {
                 blog_ids: this.blogs.map(b => b.id),
                 steps: this.steps.map(s => ({ type: s.type, module_id: s.moduleId })),
-                link_id: this.pickedLink?.id ?? null,
+                link_id: this.linkAuto ? 'auto' : (this.pickedLink?.id ?? null),
             };
             try {
                 await this._json('/api/v1/workbench/presets', {
@@ -504,10 +516,15 @@ function moduleTester() {
             const ids = cfg.blog_ids || (cfg.blog_id ? [cfg.blog_id] : []);
             this.blogs = this.catalog.blogs.filter(b => ids.includes(b.id));
             this.loadPreviewCss();
-            if (cfg.link_id) {
+            if (cfg.link_id === 'auto') {
+                this.linkAuto = true; this.pickedLink = null;
+                this.rememberLink();
+            } else if (cfg.link_id) {
+                this.linkAuto = false;
                 this.pickedLink = this.links.find(l => l.id === cfg.link_id) || null;
                 this.rememberLink();
             }
+            this.loadLinks();   // 담은 블로그 전용 링크까지 다시 받는다
             this.steps = (cfg.steps || []).map(st => ({
                 uid: ++this._uid, type: st.type, moduleId: st.module_id,
                 moduleName: (this.catalog.all_modules || [])
