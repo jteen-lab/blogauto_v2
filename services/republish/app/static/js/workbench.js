@@ -19,10 +19,10 @@
 function moduleTester() {
     return {
         // ── 상태 ─────────────────────────────────────────────
-        catalog: { modules: {}, blogs: [] },
+        catalog: { modules: {}, all_modules: [], blogs: [] },
         blogs: [],            // 담긴 블로그 [{id,name,platform}]
         steps: [],            // {uid,type,moduleId,moduleName,outcome,items,clipped,filter,...}
-        typeOrder: ['keyword', 'title_gen', 'data', 'generate'],
+        moduleQuery: '', moduleTypeFilter: '',
         typeLabel: {
             keyword: '키워드', title_gen: '제목 생성/수집',
             data: '제목 이관', generate: '글 생성', prompt: '글 생성',
@@ -77,6 +77,30 @@ function moduleTester() {
             return { blog: '블로그 선택', module: '모듈 담기',
                      source: '지식iN·카페 질문', link: '홍보 링크',
                      preview: '미리보기' }[this.sheet] || '';
+        },
+
+        // ── 모듈 표 ──────────────────────────────────────────
+        /** 종류 필터에 쓸 목록. 실제로 있는 종류만 낸다. */
+        moduleTypes() {
+            const seen = {};
+            for (const m of (this.catalog.all_modules || [])) {
+                if (!seen[m.type]) {
+                    seen[m.type] = { code: m.type, label: m.type_label, count: 0 };
+                }
+                seen[m.type].count += 1;
+            }
+            return Object.values(seen);
+        },
+        /** 이름 검색과 종류 필터를 적용한 목록. 담을 수 있는 것이 위로 온다. */
+        filteredModules() {
+            const q = (this.moduleQuery || '').trim().toLowerCase();
+            const t = this.moduleTypeFilter;
+            return (this.catalog.all_modules || [])
+                .filter(m => (!t || m.type === t)
+                    && (!q || m.name.toLowerCase().includes(q)))
+                .sort((a, b) => (b.supported - a.supported)
+                    || a.type_label.localeCompare(b.type_label)
+                    || a.name.localeCompare(b.name));
         },
 
         // ── 블로그 ───────────────────────────────────────────
@@ -233,15 +257,33 @@ function moduleTester() {
                 const q = this.blogs[0] ? '?blog_id=' + this.blogs[0].id : '';
                 const got = await this._json('/api/v1/promo-links' + q);
                 this.links = got.items || [];
+                if (!this.pickedLink) this.restoreLink();
             } catch (e) { console.error('링크 로드 실패:', e); }
         },
         pickLink(l) {
-            this.pickedLink = l; this.closeSheet();
+            this.pickedLink = l; this.rememberLink(); this.closeSheet();
             if (this.preview.raw) this.assemble();
         },
         clearLink() {
-            this.pickedLink = null; this.closeSheet();
+            this.pickedLink = null; this.rememberLink(); this.closeSheet();
             if (this.preview.raw) this.assemble();
+        },
+        /** 고른 링크를 기억해 둔다. 테스트마다 다시 고르지 않아도 된다. */
+        rememberLink() {
+            try {
+                if (this.pickedLink) {
+                    localStorage.setItem('mt_link_id', String(this.pickedLink.id));
+                } else {
+                    localStorage.removeItem('mt_link_id');
+                }
+            } catch (e) { /* 저장이 막힌 브라우저 — 기억만 안 될 뿐 */ }
+        },
+        /** 지난번에 고른 링크를 되살린다. */
+        restoreLink() {
+            try {
+                const id = parseInt(localStorage.getItem('mt_link_id') || '', 10);
+                if (id) this.pickedLink = this.links.find(l => l.id === id) || null;
+            } catch (e) { /* 무시 */ }
         },
         async createLink() {
             const f = this.linkForm;
@@ -260,7 +302,7 @@ function moduleTester() {
                     }),
                 });
                 this.links.unshift(got.link);
-                this.pickedLink = got.link;
+                this.pickedLink = got.link; this.rememberLink();
                 this.linkForm = { name: '', url: '', button_text: '',
                                   notice: f.notice, blogOnly: f.blogOnly };
                 this.linkMessage = '등록했습니다. 이 링크가 선택되었습니다.';
@@ -370,11 +412,12 @@ function moduleTester() {
             } catch (e) { console.error('프리셋 로드 실패:', e); }
         },
         async savePreset() {
-            const name = prompt('프리셋 이름 (구성만 저장됩니다 — 결과물은 저장되지 않습니다)');
+            const name = prompt('프리셋 이름 (블로그·모듈·링크 구성만 저장됩니다 — 결과물은 저장되지 않습니다)');
             if (!name) return;
             const config = {
                 blog_ids: this.blogs.map(b => b.id),
                 steps: this.steps.map(s => ({ type: s.type, module_id: s.moduleId })),
+                link_id: this.pickedLink?.id ?? null,
             };
             try {
                 await this._json('/api/v1/workbench/presets', {
@@ -390,9 +433,13 @@ function moduleTester() {
             const ids = cfg.blog_ids || (cfg.blog_id ? [cfg.blog_id] : []);
             this.blogs = this.catalog.blogs.filter(b => ids.includes(b.id));
             this.loadPreviewCss();
+            if (cfg.link_id) {
+                this.pickedLink = this.links.find(l => l.id === cfg.link_id) || null;
+                this.rememberLink();
+            }
             this.steps = (cfg.steps || []).map(st => ({
                 uid: ++this._uid, type: st.type, moduleId: st.module_id,
-                moduleName: (this.catalog.modules[st.type] || [])
+                moduleName: (this.catalog.all_modules || [])
                     .find(m => m.id === st.module_id)?.name || ('#' + st.module_id),
                 outcome: null, items: [], clipped: 0, filter: 'all',
                 running: false, applying: false, applyMessage: '',
