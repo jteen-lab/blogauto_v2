@@ -20,9 +20,11 @@ DEFAULT_MARGIN = 1.4
 # 섹션 수와 섹션당 분량을 지시한다. 여기서 또 말하면 둘이 다른 숫자를
 # 불러 모델이 어느 쪽을 따를지 헷갈린다. 분량만 말한다.
 
-# 목표 분량에서 필요한 출력 토큰을 잡을 때 쓰는 배수.
-# 한국어는 1글자가 대략 1.5토큰이고, 표·목록 기호가 더 붙는다.
-TOKENS_PER_CHAR = 1.8
+# 출력 토큰 1개가 담는 한국어 글자 수.
+# 실측(최근 30일 372편, 상한 4,096토큰): 최대 7,501자가 나왔다 —
+# 1토큰이 최소 1.8자를 담았다는 뜻이다. 상한에 얼마나 근접했는지는
+# 알 수 없으니 **보수적으로 1.5자**로 잡는다.
+CHARS_PER_TOKEN = 1.5
 
 # 서두·마무리처럼 분량과 무관하게 붙는 몫
 TOKEN_MARGIN = 500
@@ -50,7 +52,17 @@ def needed_tokens(min_chars: int,
     따로 놀지 않도록 여기서 한 번에 계산한다.
     """
     target = resolve(min_chars, module_settings)["target"]
-    return int(target * TOKENS_PER_CHAR) + TOKEN_MARGIN
+    return int(target / CHARS_PER_TOKEN) + TOKEN_MARGIN
+
+
+def chars_for_tokens(max_tokens: int) -> int:
+    """출력 상한으로 쓸 수 있는 글자 수. 화면에 글자로 보여줄 때 쓴다.
+
+    토큰은 사람이 가늠하기 어려운 단위다. 설정 화면에서는 늘 글자로
+    환산해 보여준다.
+    """
+    usable = max(0, int(max_tokens or 0) - TOKEN_MARGIN)
+    return int(usable * CHARS_PER_TOKEN)
 
 
 def build(min_chars: int, module_settings: Optional[dict] = None) -> str:
