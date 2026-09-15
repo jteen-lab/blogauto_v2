@@ -171,7 +171,7 @@ async def main() -> None:
             module = Module(
                 user_id=USER_ID, module_type_id=type_id, name=MODULE_NAME,
                 description="이사노트 — 겪어본 사람의 1인칭 경험담",
-                settings=SETTINGS, params={})
+                settings=SETTINGS)
             db.add(module)
             action = "만들었습니다"
         else:
