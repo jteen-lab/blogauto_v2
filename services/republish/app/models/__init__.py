@@ -87,6 +87,7 @@ from .adsense_account import AdsenseAccount, AdsenseSite
 # 검색 노출 3종(S1 IndexNow · S2 사이트맵 · S6 색인 점검) 원장
 from .external_source import ExternalSource
 from .cpa_offer import CpaOffer
+from .promo_link import PromoLink
 from .post_metric import PostMetricDaily
 from .search_visibility import SearchVisibilityUrl
 from .keyword_candidate import KeywordCandidate
@@ -168,6 +169,7 @@ __all__ = [
     "AdsenseSite",
     "ExternalSource",
     "CpaOffer",
+    "PromoLink",
     "PostMetricDaily",
     "SearchVisibilityUrl",
     "KeywordCandidate",
