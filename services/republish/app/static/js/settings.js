@@ -208,6 +208,8 @@ function settingsApp() {
             naver_ads_secret_key: '',
             naver_ads_customer_id: '',
             has_naver_ads_api: false,
+            // 법제처 국가법령정보 (OC는 비밀값이 아니라 마스킹하지 않는다)
+            law_api_oc: '',
             // 네이버 검색 API
             naver_search_client_id: '',
             naver_search_client_secret: '',
@@ -271,6 +273,7 @@ function settingsApp() {
                         naver_ads_customer_id: data.naver_ads_customer_id || '',
                         has_naver_ads_api: data.has_naver_ads_api || false,
                         // 네이버 검색 API
+                        law_api_oc: data.law_api_oc || '',
                         naver_search_client_id: data.naver_search_client_id || '',
                         naver_search_client_secret: data.naver_search_client_secret || '',
                         has_naver_search_api: data.has_naver_search_api || false,
@@ -350,6 +353,7 @@ function settingsApp() {
                 }
 
                 // 네이버 검색 API 키
+                payload.law_api_oc = this.form.law_api_oc || '';
                 if (this.form.naver_search_client_id && !this.isMaskedKey(this.form.naver_search_client_id)) {
                     payload.naver_search_client_id = this.form.naver_search_client_id;
                 }
@@ -432,6 +436,7 @@ function settingsApp() {
                         this.form.naver_ads_customer_id = result.data.naver_ads_customer_id || '';
                         this.form.has_naver_ads_api = result.data.has_naver_ads_api || false;
                         // 네이버 검색 API
+                        this.form.law_api_oc = result.data.law_api_oc || '';
                         this.form.naver_search_client_id = result.data.naver_search_client_id || '';
                         this.form.naver_search_client_secret = result.data.naver_search_client_secret || '';
                         this.form.has_naver_search_api = result.data.has_naver_search_api || false;
@@ -641,6 +646,7 @@ function settingsApp() {
             try {
                 // 먼저 설정을 저장 (새로 입력된 값이 있을 수 있으므로)
                 const payload = {};
+                payload.law_api_oc = this.form.law_api_oc || '';
                 if (this.form.naver_search_client_id && !this.isMaskedKey(this.form.naver_search_client_id)) {
                     payload.naver_search_client_id = this.form.naver_search_client_id;
                 }

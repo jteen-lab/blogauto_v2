@@ -1097,6 +1097,32 @@
 
                     <hr class="border-gray-200">
 
+                    <!-- 법제처 국가법령정보 -->
+                    <div class="space-y-4">
+                        <h4 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                            <svg class="w-4 h-4 text-indigo-600" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 3L2 8l10 5 10-5-10-5zm0 7.5L4.21 6.62 12 2.74l7.79 3.88L12 10.5zM2 11v6l10 5 10-5v-6l-10 5-10-5z"/>
+                            </svg>
+                            법제처 국가법령정보
+                            <span x-show="form.law_api_oc" class="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full">연동됨</span>
+                        </h4>
+                        <p class="text-xs text-gray-500 -mt-2">
+                            법 근거가 필요한 글에서 <strong class="text-primary">판례와 법령 조문을 원문</strong>으로 가져옵니다.
+                            비워 두면 지금처럼 네이버 전문자료로 찾습니다.
+                        </p>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">API 인증값 (OC)</label>
+                            <input type="text" x-model="form.law_api_oc"
+                                   placeholder="신청할 때 정한 값 (보통 이메일 앞부분)"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-accent">
+                            <p class="mt-1 text-xs text-gray-500">
+                                국가법령정보 공동활용에서 OPEN API를 신청할 때 정한 값입니다.
+                                비밀번호가 아니라 아이디에 가까워 가리지 않고 보여 줍니다.
+                            </p>
+                        </div>
+                    </div>
+
                     <!-- 네이버 검색 API 설정 -->
                     <div class="space-y-4">
                         <h4 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
@@ -1645,4 +1671,4 @@
 </div>
 
 <script src="/static/js/ai_keys.js?v=20260423e"></script>
-<script src="/static/js/settings.js?v=20260901_indexfb"></script>
+<script src="/static/js/settings.js?v=20260915law"></script>
