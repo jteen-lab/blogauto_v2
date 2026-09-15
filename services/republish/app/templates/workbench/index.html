@@ -103,6 +103,25 @@
         </div>
     </div>
 
+    <!-- 홍보 링크 -->
+    <div class="bg-white border border-gray-200 rounded-lg px-4 py-3 mb-4">
+        <div class="flex flex-wrap items-center gap-2">
+            <button @click="openSheet('link')" class="btn-outline-primary">
+                링크 추가
+            </button>
+            <template x-if="pickedLink">
+                <span class="inline-flex items-center gap-2 rounded-xl px-3 py-1.5 shadow-sm bg-emerald-50 text-emerald-800 text-xs">
+                    <span x-text="pickedLink.name"></span>
+                    <span class="opacity-60" x-text="pickedLink.button_text"></span>
+                    <button @click="pickedLink = null" class="hover:opacity-60">&times;</button>
+                </span>
+            </template>
+            <span x-show="!pickedLink" class="text-sm text-gray-400">
+                고르지 않으면 고지문과 버튼이 붙지 않습니다 (정보성 글).
+            </span>
+        </div>
+    </div>
+
     <!-- 단계 -->
     <div x-show="!steps.length"
          class="bg-white border border-gray-200 rounded-lg py-16 text-center text-gray-400 text-sm">
@@ -301,10 +320,76 @@
                 </div>
             </div>
 
+            <!-- 홍보 링크 -->
+            <div x-show="sheet === 'link'" class="space-y-4">
+                <div>
+                    <p class="text-xs font-semibold text-gray-500 mb-2">등록된 링크</p>
+                    <div class="space-y-1.5">
+                        <button @click="clearLink()"
+                                class="w-full text-left px-3 py-2.5 rounded-lg border transition-colors"
+                                :class="!pickedLink ? 'border-accent bg-accent-lt' : 'border-gray-200 hover:bg-gray-50'">
+                            <span class="text-sm font-medium text-gray-900">붙이지 않음</span>
+                            <span class="block text-xs text-gray-500 mt-0.5">정보성 글 — 고지문·버튼 없음</span>
+                        </button>
+                        <template x-for="l in links" :key="'l'+l.id">
+                            <div class="flex items-center gap-2">
+                                <button @click="pickLink(l)"
+                                        class="flex-1 text-left px-3 py-2.5 rounded-lg border transition-colors"
+                                        :class="pickedLink && pickedLink.id === l.id ? 'border-accent bg-accent-lt' : 'border-gray-200 hover:bg-gray-50'">
+                                    <span class="text-sm font-medium text-gray-900" x-text="l.name"></span>
+                                    <span class="block text-xs text-gray-500 mt-0.5 truncate" x-text="l.button_text + ' · ' + l.url"></span>
+                                </button>
+                                <button @click="deleteLink(l)"
+                                        class="shrink-0 px-2 py-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded">
+                                    &times;
+                                </button>
+                            </div>
+                        </template>
+                        <p x-show="!links.length" class="text-xs text-gray-400 px-1 py-3">
+                            등록된 링크가 없습니다. 아래에서 추가하세요.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="border-t border-gray-200 pt-4">
+                    <p class="text-xs font-semibold text-gray-500 mb-2">새 링크 등록</p>
+                    <div class="space-y-2">
+                        <input x-model="linkForm.name" placeholder="이름 (예: 이사 견적 비교)"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:border-accent focus:ring-accent">
+                        <input x-model="linkForm.url" placeholder="주소 (https://…)"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:border-accent focus:ring-accent">
+                        <input x-model="linkForm.button_text" placeholder="버튼 문구 (예: 이사 견적 무료로 비교하기)"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:border-accent focus:ring-accent">
+                        <input x-model="linkForm.notice" placeholder="고지문 (비우면 고지문 없음)"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:border-accent focus:ring-accent">
+                        <label class="flex items-center gap-2 text-xs text-gray-600">
+                            <input type="checkbox" x-model="linkForm.blogOnly"
+                                   class="rounded border-gray-300 text-accent focus:ring-accent">
+                            담은 블로그에서만 쓰기
+                        </label>
+                        <button @click="createLink()" :disabled="linkSaving"
+                                class="w-full py-2 text-sm text-white bg-accent rounded-md hover:opacity-90 disabled:opacity-50 transition-opacity">
+                            <span x-show="!linkSaving">등록</span>
+                            <span x-show="linkSaving">저장 중…</span>
+                        </button>
+                        <p class="text-xs" x-show="linkMessage"
+                           :class="linkMessage.startsWith('실패') ? 'text-red-600' : 'text-primary'"
+                           x-text="linkMessage"></p>
+                    </div>
+                </div>
+            </div>
+
             <!-- 미리보기 -->
             <div x-show="sheet === 'preview'">
                 <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-                    <p class="text-sm font-medium text-gray-800" x-text="preview.title"></p>
+                    <div class="min-w-0">
+                        <p class="text-sm font-medium text-gray-800" x-text="preview.title"></p>
+                        <p class="text-xs mt-0.5"
+                           :class="pickedLink ? 'text-emerald-700' : 'text-gray-400'"
+                           x-text="pickedLink
+                                ? '고지문·버튼 붙음 — ' + pickedLink.name
+                                : '정보성 글 — 고지문·버튼 없음'"></p>
+                    </div>
                     <label class="text-xs text-gray-500 flex items-center gap-1.5 cursor-pointer">
                         <input type="checkbox" x-model="editMode"
                                class="rounded border-gray-300 text-accent focus:ring-accent">
@@ -358,5 +443,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="/static/js/workbench.js?v=20260914mt"></script>
+<script src="/static/js/workbench.js?v=20260915pl"></script>
 {% endblock %}

@@ -27,10 +27,14 @@ function moduleTester() {
             keyword: '키워드', title_gen: '제목 생성/수집',
             data: '제목 이관', generate: '글 생성', prompt: '글 생성',
         },
-        sheet: null,          // blog | module | source | preview
+        sheet: null,          // blog | module | source | link | preview
         sourceQuery: '', sourceItems: [], sourceError: '', sourceLoading: false,
         pickedQuestions: [],
-        preview: { title: '', html: '', imageUrl: null },
+        links: [], pickedLink: null, linkSaving: false, linkMessage: '',
+        linkForm: { name: '', url: '', button_text: '',
+                    notice: '이 포스팅은 애드릭스 수익을 위해 작성되었습니다.',
+                    blogOnly: false },
+        preview: { title: '', html: '', imageUrl: null, raw: '' },
         previewCss: '', editMode: false, postMessage: '',
         presets: [], presetPick: '',
         _uid: 0,
@@ -39,7 +43,8 @@ function moduleTester() {
         MAX_POSTS: 3,
 
         async init() {
-            await Promise.all([this.loadCatalog(), this.loadPresets()]);
+            await Promise.all([this.loadCatalog(), this.loadPresets(),
+                               this.loadLinks()]);
         },
 
         async _json(url, opts) {
@@ -70,14 +75,15 @@ function moduleTester() {
         },
         sheetTitle() {
             return { blog: '블로그 선택', module: '모듈 담기',
-                     source: '지식iN·카페 질문', preview: '미리보기' }[this.sheet] || '';
+                     source: '지식iN·카페 질문', link: '홍보 링크',
+                     preview: '미리보기' }[this.sheet] || '';
         },
 
         // ── 블로그 ───────────────────────────────────────────
         hasBlog(id) { return this.blogs.some(b => b.id === id); },
         toggleBlog(b) {
             if (this.hasBlog(b.id)) this.removeBlog(b.id);
-            else { this.blogs.push(b); this.loadPreviewCss(); }
+            else { this.blogs.push(b); this.loadPreviewCss(); this.loadLinks(); }
         },
         removeBlog(id) {
             this.blogs = this.blogs.filter(b => b.id !== id);
@@ -221,14 +227,85 @@ function moduleTester() {
             finally { s.applying = false; }
         },
 
+        // ── 홍보 링크 ────────────────────────────────────────
+        async loadLinks() {
+            try {
+                const q = this.blogs[0] ? '?blog_id=' + this.blogs[0].id : '';
+                const got = await this._json('/api/v1/promo-links' + q);
+                this.links = got.items || [];
+            } catch (e) { console.error('링크 로드 실패:', e); }
+        },
+        pickLink(l) {
+            this.pickedLink = l; this.closeSheet();
+            if (this.preview.raw) this.assemble();
+        },
+        clearLink() {
+            this.pickedLink = null; this.closeSheet();
+            if (this.preview.raw) this.assemble();
+        },
+        async createLink() {
+            const f = this.linkForm;
+            if (!f.name.trim() || !f.url.trim() || !f.button_text.trim()) {
+                this.linkMessage = '실패: 이름·주소·버튼 문구는 필요합니다'; return;
+            }
+            this.linkSaving = true; this.linkMessage = '';
+            try {
+                const got = await this._json('/api/v1/promo-links', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        name: f.name.trim(), url: f.url.trim(),
+                        button_text: f.button_text.trim(),
+                        notice: f.notice.trim(),
+                        blog_id: f.blogOnly ? (this.blogs[0]?.id ?? null) : null,
+                    }),
+                });
+                this.links.unshift(got.link);
+                this.pickedLink = got.link;
+                this.linkForm = { name: '', url: '', button_text: '',
+                                  notice: f.notice, blogOnly: f.blogOnly };
+                this.linkMessage = '등록했습니다. 이 링크가 선택되었습니다.';
+            } catch (e) { this.linkMessage = '실패: ' + e.message; }
+            finally { this.linkSaving = false; }
+        },
+        async deleteLink(l) {
+            if (!confirm('"' + l.name + '" 링크를 목록에서 뺄까요?')) return;
+            try {
+                await this._json('/api/v1/promo-links/' + l.id, { method: 'DELETE' });
+                this.links = this.links.filter(x => x.id !== l.id);
+                if (this.pickedLink && this.pickedLink.id === l.id) this.pickedLink = null;
+            } catch (e) { this.linkMessage = '실패: ' + e.message; }
+        },
+
         // ── 미리보기·글 반영 ─────────────────────────────────
-        showPreview(item) {
+        async showPreview(item) {
             this.preview = {
                 title: item.text, html: item.html || '',
-                imageUrl: item.image_url || null,
+                imageUrl: item.image_url || null, raw: item.html || '',
             };
             this.postMessage = ''; this.editMode = false;
             this.openSheet('preview');
+            await this.assemble();
+        },
+        /** 고지문·표지·버튼을 서버에서 붙인다.
+         *  미리보기와 저장이 갈리지 않도록 조립 지점은 여기 하나다. */
+        async assemble() {
+            if (!this.preview.raw) return;
+            if (this.editMode) {
+                this.postMessage = '본문을 고치는 중이라 다시 조립하지 않았습니다.';
+                return;
+            }
+            try {
+                const got = await this._json('/api/v1/workbench/assemble', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        html: this.preview.raw, title: this.preview.title,
+                        image_url: this.preview.imageUrl,
+                        link_id: this.pickedLink?.id ?? null,
+                        blog_id: this.blogs[0]?.id ?? null,
+                    }),
+                });
+                this.preview.html = got.html || this.preview.raw;
+            } catch (e) { this.postMessage = '실패: 조립 오류 ' + e.message; }
         },
         previewDoc() {
             const base = 'body{margin:16px;font-family:system-ui,sans-serif;'
@@ -252,7 +329,7 @@ function moduleTester() {
                     body: JSON.stringify({
                         blog_id: blog.id, title: this.preview.title,
                         html: this.preview.html, image_url: this.preview.imageUrl,
-                        mode,
+                        link_id: this.pickedLink?.id ?? null, mode,
                     }),
                 });
                 this.postMessage = got.message || '반영됨';
