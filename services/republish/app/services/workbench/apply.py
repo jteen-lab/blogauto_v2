@@ -14,6 +14,8 @@
 """
 from __future__ import annotations
 
+import json
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 
@@ -23,6 +25,7 @@ from ...core.logger import get_logger
 from ...models.crawled_post import CrawledPost
 from ...models.generation_history import GenerationHistory
 from ...models.keyword_candidate import KeywordCandidate
+from ...models.title import MainTitle
 
 logger = get_logger("workbench_apply", "app.log")
 
@@ -77,6 +80,52 @@ async def apply_titles(db: AsyncSession, user_id: int,
                         f"미분류 {outcome.get('queued', 0)}건")}
 
 
+async def _ensure_main_title(db: AsyncSession, blog_id: int,
+                             text: str) -> Optional[int]:
+    """글이 붙을 정식제목을 확보한다.
+
+    발행대기글은 **정식제목에 매달려야** 정식제목 화면에 뜬다. 카운트는
+    발행글을 직접 세는데 목록은 정식제목을 거치기 때문이다. 이걸
+    빠뜨리면 "카운트 2건, 목록 0건" 이 된다(2026-09-15에 그랬다).
+
+    같은 제목이 이미 재고에 있으면 그것을 쓴다 — 같은 제목으로 정식제목이
+    둘 생기면 중복 검사가 헛돈다.
+    """
+    from sqlalchemy import select
+
+    label = (text or "").strip()
+    if not label:
+        return None
+    found = (await db.execute(
+        select(MainTitle).where(MainTitle.title == label).limit(1)
+    )).scalar_one_or_none()
+    if found is None:
+        found = MainTitle(title=label, source="manual", status="available")
+        db.add(found)
+        await db.flush()
+        logger.info("[WORKBENCH] 정식제목 신규 | id=%s | %s",
+                    found.id, label[:30])
+
+    # 이 블로그가 쓴 제목임을 남긴다. 재고 화면이 이 값으로 매칭을 본다.
+    ids = _blog_ids(found.matched_blog_ids)
+    if blog_id not in ids:
+        ids.append(blog_id)
+        found.matched_blog_ids = json.dumps(ids)
+        found.matched_count = len(ids)
+    found.use_count = (found.use_count or 0) + 1
+    found.last_used_at = datetime.now(timezone.utc)
+    return found.id
+
+
+def _blog_ids(raw: Optional[str]) -> List[int]:
+    """matched_blog_ids 는 JSON 문자열이다. 깨져 있으면 빈 목록."""
+    try:
+        got = json.loads(raw) if raw else []
+        return [int(x) for x in got] if isinstance(got, list) else []
+    except (TypeError, ValueError):
+        return []
+
+
 async def apply_post(db: AsyncSession, blog_id: int, title: str, html: str,
                      image_url: Optional[str] = None,
                      module_id: Optional[int] = None,
@@ -99,9 +148,12 @@ async def apply_post(db: AsyncSession, blog_id: int, title: str, html: str,
     db.add(history)
     await db.flush()
 
+    main_id = await _ensure_main_title(db, blog_id, text)
+
     post = CrawledPost(
         blog_id=blog_id, title=text, source="generated",
         generation_history_id=history.id, match_status="matched",
+        matched_main_title_id=main_id,
         match_score=100.0, image_url=image_url, content_html=body)
     db.add(post)
     await db.flush()
