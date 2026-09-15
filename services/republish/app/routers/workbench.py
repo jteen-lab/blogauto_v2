@@ -182,7 +182,9 @@ async def run_module(
 async def search_sources(
     query: str = Query(..., min_length=1),
     sources: Optional[str] = Query(None, description="쉼표 구분 소스 코드"),
-    limit: int = Query(20, ge=1, le=50),
+    limit: int = Query(30, ge=1, le=100),
+    start: int = Query(1, ge=1, le=1000,
+                       description="몇 번째 결과부터 — 더 보기에 쓴다"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
@@ -191,7 +193,7 @@ async def search_sources(
     )).scalar_one_or_none()
     picked = [s.strip() for s in (sources or "").split(",") if s.strip()]
     return await source_svc.search_questions(
-        settings, query, picked or None, limit)
+        settings, query, picked or None, limit, start)
 
 
 @router.post("/apply/keywords", summary="반영 — 키워드를 풀에 채택")

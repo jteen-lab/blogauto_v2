@@ -24,7 +24,8 @@ SOURCE_LABEL = {SRC_NAVER_KIN: "지식iN", SRC_NAVER_CAFE: "카페"}
 
 async def search_questions(user_settings: Any, query: str,
                            sources: List[str] | None = None,
-                           limit: int = 20) -> Dict[str, Any]:
+                           limit: int = 20,
+                           start: int = 1) -> Dict[str, Any]:
     """질문을 검색해 화면 목록으로 돌려준다.
 
     Args:
@@ -32,9 +33,11 @@ async def search_questions(user_settings: Any, query: str,
         query: 검색어(니치 키워드)
         sources: 소스 코드 목록. 비우면 지식iN·카페 둘 다
         limit: 소스당 최대 건수
+        start: 몇 번째 결과부터. 같은 검색어로 더 보려면 올린다
 
     Returns:
-        {"items": [...], "by_source": {소스: 건수}, "error": str|None}
+        {"items": [...], "by_source": {소스: 건수}, "next_start": int|None,
+         "error": str|None}
     """
     if not community.is_configured(user_settings):
         return {"items": [], "by_source": {},
@@ -49,7 +52,8 @@ async def search_questions(user_settings: Any, query: str,
     by_source: Dict[str, int] = {}
     for code in picked:
         rows = await community.collect_questions(
-            user_settings, [text], code, limit_per_seed=limit)
+            user_settings, [text], code, limit_per_seed=limit,
+            start=start)
         by_source[code] = len(rows)
         for row in rows:
             sit = situation.extract(row.text)
@@ -65,6 +69,14 @@ async def search_questions(user_settings: Any, query: str,
 
     # 상황이 붙은 질문을 앞으로 — 고를 가치가 높은 것부터 보인다
     items.sort(key=lambda i: (not i["has_situation"],))
-    logger.info("[WORKBENCH] 질문 검색 | '%s' → %d건 %s",
-                text, len(items), by_source)
-    return {"items": items, "by_source": by_source, "error": None}
+
+    # 더 볼 것이 남았나. 어느 소스든 요청한 만큼 왔으면 다음 묶음이 있다.
+    # (질문이 아닌 글을 걸러내 건수가 줄므로 받은 원본 기준으로 본다)
+    next_start = start + limit
+    if next_start > community.MAX_START or not items:
+        next_start = None
+
+    logger.info("[WORKBENCH] 질문 검색 | '%s' %d번째부터 → %d건 %s",
+                text, start, len(items), by_source)
+    return {"items": items, "by_source": by_source,
+            "start": start, "next_start": next_start, "error": None}

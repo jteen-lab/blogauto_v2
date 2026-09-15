@@ -41,6 +41,9 @@ TIMEOUT = 10.0
 CALL_DELAY = 0.3
 PER_SEED_LIMIT = 30
 
+#: 네이버가 받는 시작 위치 상한. 넘기면 400 이 온다.
+MAX_START = 1000
+
 # 질문으로 볼 신호. 하나라도 있어야 한다.
 QUESTION_MARKS = (
     "?", "？", "어떻게", "어떤", "어디", "얼마", "언제", "왜", "무엇", "뭐",
@@ -166,14 +169,20 @@ def is_configured(user_settings: Any) -> bool:
 async def fetch(user_settings: Any, seed: str, source: str,
                 limit: int = PER_SEED_LIMIT,
                 client: Optional[httpx.AsyncClient] = None,
-                ) -> List[CommunityQuestion]:
-    """시드 하나로 질문을 긁는다. 실패는 빈 목록 — 회차를 죽이지 않는다."""
+                start: int = 1) -> List[CommunityQuestion]:
+    """시드 하나로 질문을 긁는다. 실패는 빈 목록 — 회차를 죽이지 않는다.
+
+    Args:
+        start: 몇 번째 결과부터. 같은 검색어로 더 보려면 이 값을 올린다.
+            네이버는 1~1000 까지 받는다.
+    """
     url = ENDPOINT.get(source)
     if not url or not is_configured(user_settings):
         return []
 
     params = {"query": seed.strip(), "display": min(limit, 100),
-              "start": 1, "sort": "date"}
+              "start": max(1, min(int(start or 1), MAX_START)),
+              "sort": "date"}
     own = client is None
     client = client or httpx.AsyncClient(timeout=TIMEOUT)
     try:
@@ -215,13 +224,16 @@ def _to_questions(items: List[dict], seed: str,
 
 async def collect_questions(user_settings: Any, seeds: List[str], source: str,
                             limit_per_seed: int = PER_SEED_LIMIT,
-                            ) -> List[CommunityQuestion]:
-    """시드 목록에서 질문을 모은다(2단계 상황 추출의 입력)."""
+                            start: int = 1) -> List[CommunityQuestion]:
+    """시드 목록에서 질문을 모은다(2단계 상황 추출의 입력).
+
+    `start` 를 올리면 같은 검색어로 다음 묶음을 가져온다.
+    """
     out: List[CommunityQuestion] = []
     async with httpx.AsyncClient(timeout=TIMEOUT) as client:
         for seed in seeds:
             out.extend(await fetch(user_settings, seed, source,
-                                   limit_per_seed, client))
+                                   limit_per_seed, client, start))
             await asyncio.sleep(CALL_DELAY)
     logger.info("[COMMUNITY] %s | 시드 %d개 → 질문 %d개",
                 source, len(seeds), len(out))
