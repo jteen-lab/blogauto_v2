@@ -241,20 +241,129 @@ function getPromptContentGenSection() {
                                                   placeholder="당신은 전문 블로그 작성자입니다..."></textarea>
                                     </div>
 
-                                    <!-- 사용자 프롬프트 템플릿 -->
+                                    <!-- 사용자 프롬프트 템플릿 (+ 로테이션) -->
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-700 mb-2">
-                                            사용자 프롬프트 템플릿
-                                            <span class="text-xs text-gray-500">(변수: {title}, {keywords}, {category}, {reference_materials})</span>
-                                        </label>
-                                        <textarea x-model="promptModule.contentGeneration.userPromptTemplate"
-                                                  rows="4"
-                                                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-sm font-mono"
-                                                  placeholder="제목: {title}
+                                        <div class="flex flex-wrap items-start justify-between gap-2 mb-2">
+                                            <label class="block text-sm font-medium text-gray-700">
+                                                사용자 프롬프트 템플릿
+                                                <span class="text-xs text-gray-500">(변수: {title}, {keywords}, {category}, {reference_materials})</span>
+                                            </label>
+                                            <label class="flex items-center gap-1.5 cursor-pointer shrink-0">
+                                                <input type="checkbox"
+                                                       x-model="promptModule.rotation.enabled"
+                                                       class="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500">
+                                                <span class="text-sm text-gray-700">프롬프트 로테이션</span>
+                                            </label>
+                                        </div>
+
+                                        <p class="text-xs text-gray-600 mb-2 leading-relaxed" x-show="promptModule.rotation.enabled" x-transition>
+                                            글마다 <b>구조를 바꿉니다.</b> 한 구조로 계속 나가면 검색 쪽에서 패턴이 보입니다.
+                                            아래 템플릿이 <b>2개 이상</b>이어야 돌아갑니다.
+                                        </p>
+
+                                        <!-- 로테이션 설정 -->
+                                        <div x-show="promptModule.rotation.enabled" x-transition
+                                             class="flex flex-wrap items-end gap-3 mb-3 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
+                                            <div>
+                                                <label class="block text-xs font-medium text-gray-700 mb-1">선택 방식</label>
+                                                <select x-model="promptModule.rotation.mode"
+                                                        class="px-2 py-1.5 border border-gray-300 rounded text-sm">
+                                                    <option value="random">무작위 — 매 글 다르게</option>
+                                                    <option value="sequential">순번 — 차례대로 돌림</option>
+                                                    <option value="by_niche">하위 주제별 — 주제마다 고정</option>
+                                                    <option value="by_keyword">키워드별 — 키워드마다 고정</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs font-medium text-gray-700 mb-1">글의 목적</label>
+                                                <select x-model="promptModule.rotation.purpose"
+                                                        class="px-2 py-1.5 border border-gray-300 rounded text-sm">
+                                                    <option value="">블로그 상태로 추정</option>
+                                                    <option value="adsense">애드센스</option>
+                                                    <option value="cpa">CPA</option>
+                                                    <option value="info">정보성</option>
+                                                </select>
+                                            </div>
+                                            <p class="text-xs text-gray-500 flex-1 min-w-40" x-text="rotationHint()"></p>
+                                        </div>
+
+                                        <!-- 템플릿 1 (기본) -->
+                                        <div class="rounded-lg"
+                                             :class="promptModule.rotation.enabled ? 'border border-indigo-200 p-3 bg-white' : ''">
+                                            <div class="flex items-center justify-between mb-1.5" x-show="promptModule.rotation.enabled">
+                                                <b class="text-xs text-indigo-700">템플릿 1 (기본)</b>
+                                                <span class="text-xs text-gray-400">비우면 로테이션에서 빠집니다</span>
+                                            </div>
+                                            <textarea x-model="promptModule.contentGeneration.userPromptTemplate"
+                                                      rows="4"
+                                                      class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-sm font-mono"
+                                                      placeholder="제목: {title}
 
 위 제목으로 블로그 글을 작성해주세요.
 카테고리: {category}
 키워드: {keywords}"></textarea>
+                                            <div class="flex flex-wrap items-center gap-2 text-xs mt-2"
+                                                 x-show="promptModule.rotation.enabled" x-transition>
+                                                <select x-model="promptModule.rotation.base.purpose"
+                                                        class="px-2 py-1 border border-gray-300 rounded">
+                                                    <option value="">목적 무관</option>
+                                                    <option value="adsense">애드센스 전용</option>
+                                                    <option value="cpa">CPA 전용</option>
+                                                    <option value="info">정보성 전용</option>
+                                                </select>
+                                                <input type="text" x-model="promptModule.rotation.base.topic_ids_text"
+                                                       x-show="promptModule.rotation.mode === 'by_niche'"
+                                                       placeholder="주제 ID (예: 24,25 · 비우면 전체)"
+                                                       class="flex-1 min-w-40 px-2 py-1 border border-gray-300 rounded">
+                                                <input type="text" x-model="promptModule.rotation.base.keywords_text"
+                                                       x-show="promptModule.rotation.mode === 'by_keyword'"
+                                                       placeholder="이 템플릿을 쓸 키워드 (예: 이사,견적 · 비우면 전체)"
+                                                       class="flex-1 min-w-40 px-2 py-1 border border-amber-300 bg-amber-50 rounded">
+                                            </div>
+                                        </div>
+
+                                        <!-- 템플릿 2.. (변형) -->
+                                        <div class="space-y-2 mt-2" x-show="promptModule.rotation.enabled" x-transition>
+                                            <template x-for="(v, i) in promptModule.rotation.variants" :key="i">
+                                                <div class="p-3 bg-white border border-indigo-200 rounded-lg">
+                                                    <div class="flex items-center justify-between gap-2 mb-1.5">
+                                                        <b class="text-xs text-indigo-700" x-text="'템플릿 ' + (i + 2)"></b>
+                                                        <div class="flex items-center gap-2">
+                                                            <input type="text" x-model="v.label"
+                                                                   :placeholder="'이름 (선택)'"
+                                                                   class="w-32 px-2 py-1 border border-gray-300 rounded text-xs">
+                                                            <button type="button" @click="promptModule.rotation.variants.splice(i, 1)"
+                                                                    class="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded">삭제</button>
+                                                        </div>
+                                                    </div>
+                                                    <textarea x-model="v.template" rows="4"
+                                                              placeholder="이 템플릿으로 쓸 프롬프트를 적습니다. 비우면 건너뜁니다."
+                                                              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-sm font-mono"></textarea>
+                                                    <div class="flex flex-wrap items-center gap-2 text-xs mt-2">
+                                                        <select x-model="v.purpose"
+                                                                class="px-2 py-1 border border-gray-300 rounded">
+                                                            <option value="">목적 무관</option>
+                                                            <option value="adsense">애드센스 전용</option>
+                                                            <option value="cpa">CPA 전용</option>
+                                                            <option value="info">정보성 전용</option>
+                                                        </select>
+                                                        <input type="text" x-model="v.topic_ids_text"
+                                                               x-show="promptModule.rotation.mode === 'by_niche'"
+                                                               placeholder="주제 ID (예: 24,25 · 비우면 전체)"
+                                                               class="flex-1 min-w-40 px-2 py-1 border border-gray-300 rounded">
+                                                        <input type="text" x-model="v.keywords_text"
+                                                               x-show="promptModule.rotation.mode === 'by_keyword'"
+                                                               placeholder="이 템플릿을 쓸 키워드 (예: 청소,입주 · 비우면 전체)"
+                                                               class="flex-1 min-w-40 px-2 py-1 border border-amber-300 bg-amber-50 rounded">
+                                                    </div>
+                                                </div>
+                                            </template>
+
+                                            <button type="button" @click="addPromptVariant()"
+                                                    class="px-3 py-1.5 text-sm text-indigo-700 border border-indigo-300 rounded hover:bg-indigo-100">
+                                                + 변형 추가
+                                            </button>
+                                        </div>
                                     </div>
 
                                     <!-- 재발행 리뉴얼 프롬프트 -->
@@ -347,90 +456,6 @@ function getPromptContentGenSection() {
                                                     <span>다양함 (100)</span>
                                                 </div>
                                             </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- 프롬프트 로테이션 -->
-                                    <div class="p-4 bg-indigo-50 border border-indigo-200 rounded-lg space-y-3">
-                                        <label class="flex items-start gap-2 cursor-pointer">
-                                            <input type="checkbox"
-                                                   x-model="promptModule.rotation.enabled"
-                                                   class="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 mt-0.5">
-                                            <span class="text-sm">
-                                                <b class="text-gray-900">프롬프트 로테이션</b>
-                                                <span class="block text-xs text-gray-600 mt-1 leading-relaxed">
-                                                    같은 블로그·같은 니치라도 글마다 <b>구조를 바꿉니다.</b>
-                                                    한 구조로 계속 나가면 검색 쪽에서 패턴이 보입니다.
-                                                    변형이 <b>2개 이상</b>이어야 동작합니다.
-                                                </span>
-                                            </span>
-                                        </label>
-
-                                        <div x-show="promptModule.rotation.enabled" x-transition class="pl-6 space-y-3">
-                                            <div class="flex flex-wrap items-center gap-3">
-                                                <div>
-                                                    <label class="block text-xs font-medium text-gray-700 mb-1">선택 방식</label>
-                                                    <select x-model="promptModule.rotation.mode"
-                                                            class="px-2 py-1.5 border border-gray-300 rounded text-sm">
-                                                        <option value="random">무작위 — 매 글 다르게</option>
-                                                        <option value="sequential">순번 — 차례대로 돌림</option>
-                                                        <option value="by_niche">하위 주제별 — 주제마다 고정</option>
-                                                        <option value="by_keyword">키워드별 — 키워드마다 고정</option>
-                                                    </select>
-                                                </div>
-                                                <div>
-                                                    <label class="block text-xs font-medium text-gray-700 mb-1">글의 목적</label>
-                                                    <select x-model="promptModule.rotation.purpose"
-                                                            class="px-2 py-1.5 border border-gray-300 rounded text-sm">
-                                                        <option value="">블로그 상태로 추정</option>
-                                                        <option value="adsense">애드센스</option>
-                                                        <option value="cpa">CPA</option>
-                                                        <option value="info">정보성</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-
-                                            <div class="space-y-2">
-                                                <template x-for="(v, i) in promptModule.rotation.variants" :key="i">
-                                                    <div class="p-3 bg-white border border-indigo-200 rounded space-y-2">
-                                                        <div class="flex items-center justify-between gap-2">
-                                                            <input type="text" x-model="v.label"
-                                                                   :placeholder="'변형 ' + (i + 1) + ' 이름'"
-                                                                   class="flex-1 px-2 py-1 border border-gray-300 rounded text-sm">
-                                                            <button type="button" @click="promptModule.rotation.variants.splice(i, 1)"
-                                                                    class="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded">삭제</button>
-                                                        </div>
-                                                        <textarea x-model="v.template" rows="4"
-                                                                  placeholder="이 변형으로 쓸 프롬프트를 적습니다. 비우면 이 변형은 건너뜁니다."
-                                                                  class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm font-mono"></textarea>
-                                                        <div class="flex flex-wrap items-center gap-2 text-xs">
-                                                            <select x-model="v.purpose"
-                                                                    class="px-2 py-1 border border-gray-300 rounded">
-                                                                <option value="">목적 무관</option>
-                                                                <option value="adsense">애드센스 전용</option>
-                                                                <option value="cpa">CPA 전용</option>
-                                                                <option value="info">정보성 전용</option>
-                                                            </select>
-                                                            <input type="text" x-model="v.topic_ids_text"
-                                                                   placeholder="주제 ID (예: 24,25 · 비우면 전체)"
-                                                                   class="flex-1 min-w-40 px-2 py-1 border border-gray-300 rounded">
-                                                            <input type="text" x-model="v.keywords_text"
-                                                                   placeholder="키워드 (예: 이사,청소 · 비우면 전체)"
-                                                                   class="flex-1 min-w-40 px-2 py-1 border border-gray-300 rounded">
-                                                        </div>
-                                                    </div>
-                                                </template>
-                                            </div>
-
-                                            <button type="button"
-                                                    @click="promptModule.rotation.variants.push({label:'', template:'', purpose:'', topic_ids_text:'', keywords_text:''})"
-                                                    class="px-3 py-1.5 text-sm text-indigo-700 border border-indigo-300 rounded hover:bg-indigo-100">
-                                                + 변형 추가
-                                            </button>
-                                            <p class="text-xs text-gray-500"
-                                               x-text="promptModule.rotation.variants.length < 2
-                                                       ? '변형이 2개 미만이라 로테이션이 동작하지 않습니다. 위 기본 프롬프트가 그대로 쓰입니다.'
-                                                       : '변형 ' + promptModule.rotation.variants.length + '개 · 애드센스 승인용 프롬프트가 걸린 상태면 그쪽이 우선합니다.'"></p>
                                         </div>
                                     </div>
 
