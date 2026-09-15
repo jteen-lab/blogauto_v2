@@ -74,8 +74,8 @@ class ApplyPostRequest(BaseModel):
     image_url: Optional[str] = None
     module_id: Optional[int] = None
     mode: str = Field("save", description="save=발행대기글 | now=즉시 발행")
-    link_id: Optional[int] = Field(
-        None, description="붙인 홍보 링크. 추적값을 저장 뒤에 채운다")
+    link_id: Optional[Any] = Field(
+        None, description='붙인 홍보 링크. "auto" 면 제목의 키워드로 고른다')
 
 
 class AssembleRequest(BaseModel):
@@ -84,7 +84,7 @@ class AssembleRequest(BaseModel):
     html: str
     title: str = ""
     image_url: Optional[str] = None
-    link_id: Optional[int] = None
+    link_id: Optional[Any] = None
     blog_id: Optional[int] = None
 
 

@@ -130,7 +130,7 @@ async def apply_post(db: AsyncSession, blog_id: int, title: str, html: str,
                      image_url: Optional[str] = None,
                      module_id: Optional[int] = None,
                      mode: str = PUBLISH_SAVE,
-                     link_id: Optional[int] = None) -> Dict[str, Any]:
+                     link_id: Optional[Any] = None) -> Dict[str, Any]:
     """확인한 글을 발행대기글로 저장한다. mode="now" 면 발행까지 건다.
 
     저장 모양은 생성기의 저장부(generator.py 7·8단계)와 같게 맞춘다 —
@@ -161,7 +161,7 @@ async def apply_post(db: AsyncSession, blog_id: int, title: str, html: str,
 
     # 추적값은 글 번호가 나온 뒤에야 만들 수 있다. 저장 직후 한 번 갈아
     # 끼운다 — 오퍼와 이어진 링크에만 해당한다.
-    body = await _retrack(db, body, link_id, post.id, blog_id)
+    body = await _retrack(db, body, link_id, post.id, blog_id, text)
     post.content_html = body
     history.content_html = body
 
@@ -178,15 +178,18 @@ async def apply_post(db: AsyncSession, blog_id: int, title: str, html: str,
     return result
 
 
-async def _retrack(db: AsyncSession, html: str, link_id: Optional[int],
-                   post_id: int, blog_id: int) -> str:
+async def _retrack(db: AsyncSession, html: str, link_id: Optional[Any],
+                   post_id: int, blog_id: int, title: str = "") -> str:
     """버튼 주소에 글 번호를 넣는다. 오퍼가 없으면 그대로 둔다."""
     if not link_id:
         return html
     try:
         from ..promo import link_service
 
-        link = await link_service.load(db, link_id)
+        if str(link_id) == link_service.AUTO:
+            link = await link_service.pick_by_keyword(db, title, blog_id)
+        else:
+            link = await link_service.load(db, link_id)
         if link is None or not link.cpa_offer_id:
             return html
         url = await link_service.tracked_url(

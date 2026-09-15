@@ -28,6 +28,9 @@ class LinkIn(BaseModel):
     url: str = Field(..., min_length=4, max_length=500)
     button_text: str = Field(..., min_length=1, max_length=200)
     notice: Optional[str] = Field(DEFAULT_NOTICE, max_length=300)
+    keywords: Optional[str] = Field(
+        None, max_length=500,
+        description="이 링크를 쓸 키워드 조합. 예: 이사+견적, 이사+비용")
     blog_id: Optional[int] = None
     cpa_offer_id: Optional[int] = None
 
@@ -39,6 +42,7 @@ class LinkPatch(BaseModel):
     url: Optional[str] = Field(None, max_length=500)
     button_text: Optional[str] = Field(None, max_length=200)
     notice: Optional[str] = Field(None, max_length=300)
+    keywords: Optional[str] = Field(None, max_length=500)
     blog_id: Optional[int] = None
     cpa_offer_id: Optional[int] = None
     is_active: Optional[bool] = None
@@ -78,6 +82,7 @@ async def create_link(
         name=payload.name.strip(), url=payload.url.strip(),
         button_text=payload.button_text.strip(),
         notice=(payload.notice or "").strip() or None,
+        keywords=(payload.keywords or "").strip() or None,
         blog_id=payload.blog_id, cpa_offer_id=payload.cpa_offer_id)
     db.add(link)
     await db.commit()
