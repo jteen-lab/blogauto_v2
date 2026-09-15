@@ -59,6 +59,9 @@ class UserSettings(Base):
     # 문자열이라 마스킹하지 않는다 — 비밀값이 아니다.
     law_api_oc = Column(String(100), nullable=True,
                         comment="법제처 OPEN API 인증값(OC)")
+    # Brave 검색 구독 토큰. 진짜 비밀값이라 가려서 보여 준다.
+    brave_api_key = Column(String(255), nullable=True,
+                           comment="Brave Search API 토큰")
     naver_search_client_secret = Column(String(255), nullable=True)
 
     # Google Blogger OAuth 설정
@@ -190,6 +193,20 @@ class UserSettings(Base):
         )
 
     @property
+    def masked_brave_api_key(self) -> Optional[str]:
+        """가린 Brave 토큰"""
+        if not self.brave_api_key:
+            return None
+        if len(self.brave_api_key) <= 8:
+            return "****"
+        return f"{self.brave_api_key[:4]}****{self.brave_api_key[-4:]}"
+
+    @property
+    def has_brave_api(self) -> bool:
+        """Brave 검색을 쓸 수 있나"""
+        return bool(self.brave_api_key)
+
+    @property
     def masked_naver_search_client_id(self) -> Optional[str]:
         """마스킹된 네이버 검색 Client ID"""
         if not self.naver_search_client_id:
@@ -303,6 +320,8 @@ class UserSettings(Base):
             "naver_datalab_client_secret": self.masked_naver_datalab_client_secret,
             "has_naver_datalab_api": self.has_naver_datalab_api,
             # 네이버 검색 API
+            "brave_api_key": self.masked_brave_api_key,
+            "has_brave_api": self.has_brave_api,
             "naver_search_client_id": self.masked_naver_search_client_id,
             "naver_search_client_secret": self.masked_naver_search_client_secret,
             "has_naver_search_api": self.has_naver_search_api,
