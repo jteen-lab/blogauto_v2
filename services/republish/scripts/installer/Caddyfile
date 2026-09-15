@@ -24,7 +24,9 @@ http://{$PUBLIC_HOST} {
         # 큰 업로드 (이미지/폰트)
         transport http {
             read_buffer 8KB
-            response_header_timeout 60s
+            # 글 생성은 자료 수집 + AI 호출로 3분 가까이 걸린다.
+            # 60초면 정상 응답도 504로 잘린다(2026-09-15 실측 198초).
+            response_header_timeout 300s
         }
     }
 
