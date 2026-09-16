@@ -119,18 +119,23 @@
                     <span x-show="autoPicked.done && !autoPicked.name" class="opacity-70">
                         맞는 링크 없음 — 정보성 글
                     </span>
-                    <button @click="clearLink()" class="hover:opacity-60">&times;</button>
+                    <button @click="openSheet('link')" class="hover:opacity-60 underline">바꾸기</button>
                 </span>
             </template>
             <template x-if="pickedLink && !linkAuto">
                 <span class="inline-flex items-center gap-2 rounded-xl px-3 py-1.5 shadow-sm bg-emerald-50 text-emerald-800 text-xs">
+                    <b>고정</b>
                     <span x-text="pickedLink.name"></span>
                     <span class="opacity-60" x-text="pickedLink.button_text"></span>
-                    <button @click="clearLink()" class="hover:opacity-60">&times;</button>
+                    <button @click="resetLink()" title="자동으로 되돌리기"
+                            class="hover:opacity-60">&times;</button>
                 </span>
             </template>
-            <span x-show="!pickedLink && !linkAuto" class="text-sm text-gray-400">
-                고르지 않으면 고지문과 버튼이 붙지 않습니다 (정보성 글).
+            <span x-show="!pickedLink && !linkAuto" class="inline-flex items-center gap-2 text-sm text-gray-500">
+                붙이지 않음 — 고지문·버튼 없는 정보성 글로 나갑니다.
+                <button @click="resetLink()" class="text-accent underline hover:opacity-70">
+                    자동으로 되돌리기
+                </button>
             </span>
         </div>
     </div>
@@ -482,6 +487,6 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="/static/js/workbench-links.js?v=20260916auto2"></script>
-<script src="/static/js/workbench.js?v=20260916auto2"></script>
+<script src="/static/js/workbench-links.js?v=20260916auto3"></script>
+<script src="/static/js/workbench.js?v=20260916auto3"></script>
 {% endblock %}

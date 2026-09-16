@@ -13,7 +13,7 @@
 const PROMO_DEFAULT_NOTICE = '이 포스팅은 애드릭스 수익을 위해 작성되었습니다.';
 
 /** 선택을 기억하는 자리. 옛 키(mt_link_id)와 일부러 다르다. */
-const LINK_CHOICE_KEY = 'mt_link_choice';
+const LINK_CHOICE_KEY = 'mt_link_choice_v2';
 
 /** 빈 등록 칸. */
 function emptyLinkForm(notice, blogOnly) {
@@ -57,19 +57,27 @@ function promoLinkPart() {
             this.rememberLink(); this.closeSheet();
             if (this.preview.raw) this.assemble();
         },
+        /** 시트에서 고르는 "붙이지 않음" — 정보성 글로 못박는다. */
         clearLink() {
             this.pickedLink = null; this.linkAuto = false;
             this.autoPicked = { name: '', rule: '', done: false };
             this.rememberLink(); this.closeSheet();
             if (this.preview.raw) this.assemble();
         },
+        /** 칩의 × — 고른 것을 무르고 **기본(자동)** 으로 돌아간다.
+         *
+         *  예전에는 이 자리가 "붙이지 않음"으로 굳었다. 무르려고 누른
+         *  것이 링크를 영영 끄는 동작이면 되돌릴 길이 보이지 않는다.
+         */
+        resetLink() { this.useAutoLink(); },
         /** 고른 링크를 기억해 둔다. 테스트마다 다시 고르지 않아도 된다. */
         rememberLink() {
             try {
                 const v = this.linkAuto ? 'auto'
                     : (this.pickedLink ? String(this.pickedLink.id) : 'none');
                 localStorage.setItem(LINK_CHOICE_KEY, v);
-                localStorage.removeItem('mt_link_id');   // 옛 기억은 버린다
+                localStorage.removeItem('mt_link_id');       // 옛 기억은 버린다
+                localStorage.removeItem('mt_link_choice');
             } catch (e) { /* 저장이 막힌 브라우저 — 기억만 안 될 뿐 */ }
         },
         /** 지난번 선택을 되살린다. **고른 적이 없으면 자동이다.**
@@ -160,10 +168,15 @@ function promoLinkPart() {
                 method: 'POST', body: JSON.stringify(this._linkBody(null)),
             });
             this.links.unshift(got.link);
-            this.pickedLink = got.link; this.linkAuto = false;
-            this.rememberLink();
+            if (!(got.link.keywords || '').trim()) {
+                // 키워드가 없으면 자동으로는 영영 안 걸린다 — 그때만 고정
+                this.pickedLink = got.link; this.linkAuto = false;
+                this.rememberLink();
+            }
             this.linkForm = emptyLinkForm(f.notice, f.blogOnly);
-            this.linkMessage = '등록했습니다. 이 링크가 선택되었습니다.';
+            this.linkMessage = (got.link.keywords || '').trim()
+                ? '등록했습니다. 제목이 맞으면 저절로 붙습니다.'
+                : '등록했습니다. 키워드가 없어 이 링크로 고정했습니다.';
         },
         async _patchLink() {
             const id = this.linkEditId;

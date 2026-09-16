@@ -424,7 +424,8 @@ function moduleTester() {
             const config = {
                 blog_ids: this.blogs.map(b => b.id),
                 steps: this.steps.map(s => ({ type: s.type, module_id: s.moduleId })),
-                link_id: this.linkAuto ? 'auto' : (this.pickedLink?.id ?? null),
+                // 링크는 담지 않는다. 프리셋에 박힌 링크 하나가 되살아나
+                // 제목과 상관없이 모든 글에 같은 버튼을 달았다
             };
             try {
                 await this._json('/api/v1/workbench/presets', {
@@ -440,14 +441,7 @@ function moduleTester() {
             const ids = cfg.blog_ids || (cfg.blog_id ? [cfg.blog_id] : []);
             this.blogs = this.catalog.blogs.filter(b => ids.includes(b.id));
             this.loadPreviewCss();
-            if (cfg.link_id === 'auto') {
-                this.linkAuto = true; this.pickedLink = null;
-                this.rememberLink();
-            } else if (cfg.link_id) {
-                this.linkAuto = false;
-                this.pickedLink = this.links.find(l => l.id === cfg.link_id) || null;
-                this.rememberLink();
-            }
+            // 옛 프리셋에 남은 link_id 는 읽지 않는다 — 링크는 제목이 고른다
             this.loadLinks();   // 담은 블로그 전용 링크까지 다시 받는다
             this.steps = (cfg.steps || []).map(st => ({
                 uid: ++this._uid, type: st.type, moduleId: st.module_id,
