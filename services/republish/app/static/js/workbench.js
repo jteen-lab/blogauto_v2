@@ -32,11 +32,8 @@ function moduleTester() {
         sourceNextStart: null, sourceLastQuery: '',
         bodyLoading: false,
         pickedQuestions: [],
-        links: [], pickedLink: null, linkSaving: false, linkMessage: '',
-        linkForm: { name: '', url: '', button_text: '', keywords: '',
-                    notice: '이 포스팅은 애드릭스 수익을 위해 작성되었습니다.',
-                    blogOnly: false },
-        linkAuto: false,   // 제목의 키워드로 링크를 고를지
+        // 홍보 링크(상태·등록·수정)는 workbench-links.js 에 있다
+        ...promoLinkPart(),
         preview: { title: '', html: '', imageUrl: null, raw: '' },
         previewItem: null, previewStep: null,
         previewCss: '', editMode: false, postMessage: '',
@@ -258,84 +255,6 @@ function moduleTester() {
                 s.applyMessage = got.message || '반영됨';
             } catch (e) { s.applyMessage = '실패: ' + e.message; }
             finally { s.applying = false; }
-        },
-
-        // ── 홍보 링크 ────────────────────────────────────────
-        async loadLinks() {
-            try {
-                const q = this.blogs[0] ? '?blog_id=' + this.blogs[0].id : '';
-                const got = await this._json('/api/v1/promo-links' + q);
-                this.links = got.items || [];
-                if (!this.pickedLink) this.restoreLink();
-            } catch (e) { console.error('링크 로드 실패:', e); }
-        },
-        pickLink(l) {
-            this.pickedLink = l; this.linkAuto = false;
-            this.rememberLink(); this.closeSheet();
-            if (this.preview.raw) this.assemble();
-        },
-        /** 제목의 키워드로 고르게 한다. 글마다 다른 링크가 붙는다. */
-        useAutoLink() {
-            this.linkAuto = true; this.pickedLink = null;
-            this.rememberLink(); this.closeSheet();
-            if (this.preview.raw) this.assemble();
-        },
-        clearLink() {
-            this.pickedLink = null; this.linkAuto = false;
-            this.rememberLink(); this.closeSheet();
-            if (this.preview.raw) this.assemble();
-        },
-        /** 고른 링크를 기억해 둔다. 테스트마다 다시 고르지 않아도 된다. */
-        rememberLink() {
-            try {
-                const v = this.linkAuto ? 'auto'
-                    : (this.pickedLink ? String(this.pickedLink.id) : '');
-                if (v) localStorage.setItem('mt_link_id', v);
-                else localStorage.removeItem('mt_link_id');
-            } catch (e) { /* 저장이 막힌 브라우저 — 기억만 안 될 뿐 */ }
-        },
-        /** 지난번에 고른 링크를 되살린다. */
-        restoreLink() {
-            try {
-                const raw = localStorage.getItem('mt_link_id') || '';
-                if (raw === 'auto') { this.linkAuto = true; return; }
-                const id = parseInt(raw, 10);
-                if (id) this.pickedLink = this.links.find(l => l.id === id) || null;
-            } catch (e) { /* 무시 */ }
-        },
-        async createLink() {
-            const f = this.linkForm;
-            if (!f.name.trim() || !f.url.trim() || !f.button_text.trim()) {
-                this.linkMessage = '실패: 이름·주소·버튼 문구는 필요합니다'; return;
-            }
-            this.linkSaving = true; this.linkMessage = '';
-            try {
-                const got = await this._json('/api/v1/promo-links', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        name: f.name.trim(), url: f.url.trim(),
-                        button_text: f.button_text.trim(),
-                        notice: f.notice.trim(),
-                        keywords: (f.keywords || '').trim(),
-                        blog_id: f.blogOnly ? (this.blogs[0]?.id ?? null) : null,
-                    }),
-                });
-                this.links.unshift(got.link);
-                this.pickedLink = got.link; this.rememberLink();
-                this.linkForm = { name: '', url: '', button_text: '',
-                                  keywords: '', notice: f.notice,
-                                  blogOnly: f.blogOnly };
-                this.linkMessage = '등록했습니다. 이 링크가 선택되었습니다.';
-            } catch (e) { this.linkMessage = '실패: ' + e.message; }
-            finally { this.linkSaving = false; }
-        },
-        async deleteLink(l) {
-            if (!confirm('"' + l.name + '" 링크를 목록에서 뺄까요?')) return;
-            try {
-                await this._json('/api/v1/promo-links/' + l.id, { method: 'DELETE' });
-                this.links = this.links.filter(x => x.id !== l.id);
-                if (this.pickedLink && this.pickedLink.id === l.id) this.pickedLink = null;
-            } catch (e) { this.linkMessage = '실패: ' + e.message; }
         },
 
         // ── 미리보기·글 반영 ─────────────────────────────────
