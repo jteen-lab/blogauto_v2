@@ -219,6 +219,7 @@ const promptModuleMethods = {
                 stylePrompts: settings.title_recombine.style_prompts || {},
                 variants: (settings.title_recombine.variants || []).map(v => ({
                     label: v.label || '',
+                    templates: Array.isArray(v.templates) ? v.templates : [],
                     selectedStyles: v.styles || [],
                     minLength: v.min_length || 0,
                     maxLength: v.max_length || 0,
@@ -808,9 +809,12 @@ const promptModuleMethods = {
                 variants: (this.promptModule.titleRecombine.variants || [])
                     .filter(v => (v.selectedStyles || []).length
                         || (v.customPrompt || '').trim()
-                        || v.minLength || v.maxLength)
+                        || v.minLength || v.maxLength
+                        || (v.templates || []).length)
                     .map(v => ({
                         label: (v.label || '').trim(),
+                        // 고른 템플릿 번호. 비면 제자리(묶음 2 → 템플릿 2)
+                        templates: v.templates || [],
                         styles: v.selectedStyles || [],
                         min_length: v.minLength || 0,
                         max_length: v.maxLength || 0,

@@ -106,16 +106,18 @@ function getPromptTitleSection() {
                                     <p class="text-xs text-gray-600 leading-relaxed bg-blue-50 border border-blue-200 rounded-lg px-3 py-2"
                                        x-show="promptModule.rotation.enabled" x-transition>
                                         프롬프트 템플릿이 <b>제목의 키워드로 갈립니다.</b>
-                                        제목 설정도 <b>같은 번호의 묶음</b>을 씁니다 —
-                                        템플릿 2 가 걸리면 묶음 2 로 제목을 만듭니다.
-                                        묶음이 없으면 묶음 1 을 씁니다.
+                                        제목 설정도 <b>묶음</b>으로 갈립니다.
+                                        묶음마다 <b>쓸 템플릿을 고르세요</b> — 고르지 않으면
+                                        제자리(묶음 2 → 템플릿 2)에 쓰이고, 아무도 맡지 않은
+                                        템플릿은 묶음 1 을 씁니다.
                                     </p>
 
                                     <!-- 묶음 1 (기본) -->
                                     <div class="p-4 bg-gray-50 rounded-lg space-y-4"
                                          :class="promptModule.rotation.enabled ? 'border border-blue-200' : ''">
                                         <b class="block text-xs text-blue-700" x-show="promptModule.rotation.enabled">
-                                            묶음 1 (템플릿 1 · 기본)
+                                            묶음 1 (기본)
+                                            <span class="font-normal text-gray-500" x-text="bundleAssignText(-1)"></span>
                                         </b>
                                         ${getTitleBundleFields('promptModule.titleRecombine', { withTemplatePicker: true })}
                                     </div>
@@ -125,7 +127,7 @@ function getPromptTitleSection() {
                                         <template x-for="(b, bi) in promptModule.titleRecombine.variants" :key="'tb' + bi">
                                             <div class="p-4 bg-white border border-blue-200 rounded-lg space-y-4">
                                                 <div class="flex items-center justify-between gap-2">
-                                                    <b class="text-xs text-blue-700" x-text="'묶음 ' + (bi + 2) + ' (템플릿 ' + (bi + 2) + ')'"></b>
+                                                    <b class="text-xs text-blue-700" x-text="'묶음 ' + (bi + 2)"></b>
                                                     <div class="flex items-center gap-2">
                                                         <input type="text" x-model="b.label" placeholder="이름 (선택)"
                                                                class="w-32 px-2 py-1 border border-gray-300 rounded text-xs">
@@ -133,10 +135,27 @@ function getPromptTitleSection() {
                                                                 class="px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded">삭제</button>
                                                     </div>
                                                 </div>
-                                                <p class="text-xs text-amber-700"
-                                                   x-show="bi + 2 > promptTemplateCount()">
-                                                    ⚠️ 템플릿 <span x-text="bi + 2"></span> 이 없습니다 — 이 묶음은 쓰이지 않습니다.
-                                                </p>
+
+                                                <!-- 어느 템플릿에 쓸지 고른다. 안 고르면 제자리 -->
+                                                <div class="flex flex-wrap items-center gap-1.5 p-2 bg-blue-50 border border-blue-200 rounded">
+                                                    <span class="text-xs font-medium text-gray-700">쓸 템플릿</span>
+                                                    <template x-for="n in promptTemplateCount()" :key="'bt' + bi + '-' + n">
+                                                        <button type="button" @click="toggleBundleTemplate(b, n)"
+                                                                class="w-7 h-7 text-xs rounded border transition-colors"
+                                                                :class="(b.templates || []).includes(n)
+                                                                    ? 'border-blue-500 bg-blue-600 text-white font-semibold'
+                                                                    : 'border-gray-300 bg-white text-gray-600 hover:bg-blue-100'"
+                                                                x-text="n"></button>
+                                                    </template>
+                                                    <button type="button" x-show="(b.templates || []).length"
+                                                            @click="b.templates = []"
+                                                            class="px-2 py-1 text-xs text-gray-500 underline hover:text-gray-800">
+                                                        고른 것 지우기
+                                                    </button>
+                                                    <span class="text-xs w-full"
+                                                          :class="bundleTemplates(bi).length ? 'text-gray-600' : 'text-amber-800'"
+                                                          x-text="bundleAssignText(bi)"></span>
+                                                </div>
                                                 ${getTitleBundleFields('b', {})}
                                             </div>
                                         </template>
@@ -146,7 +165,7 @@ function getPromptTitleSection() {
                                         </button>
                                         <p class="text-xs text-gray-500">
                                             지금 프롬프트 템플릿은 <b x-text="promptTemplateCount()"></b>개입니다.
-                                            묶음을 비워 두면 그 번호의 템플릿은 <b>묶음 1</b> 로 제목을 만듭니다.
+                                            한 템플릿을 여러 묶음이 고르면 <b>위에 있는 묶음</b>이 쓰입니다.
                                         </p>
                                     </div>
                                 </div>
@@ -171,12 +190,57 @@ const titleBundleMethods = {
         else list.push(styleValue);
     },
 
-    /** 제목 묶음 하나 더. 템플릿 번호와 짝이 되도록 뒤에 붙인다. */
+    /** 제목 묶음 하나 더. 템플릿을 고르지 않으면 제자리에 쓰인다. */
     addTitleBundle() {
         this.promptModule.titleRecombine.variants.push({
-            label: '', selectedStyles: [], minLength: 0, maxLength: 0,
-            customPrompt: '', stylePrompts: {}
+            label: '', templates: [], selectedStyles: [], minLength: 0,
+            maxLength: 0, customPrompt: '', stylePrompts: {}
         });
+    },
+
+    /** 이 묶음이 쓸 템플릿을 집거나 놓는다. */
+    toggleBundleTemplate(bundle, number) {
+        if (!Array.isArray(bundle.templates)) bundle.templates = [];
+        const at = bundle.templates.indexOf(number);
+        if (at !== -1) bundle.templates.splice(at, 1);
+        else bundle.templates.push(number);
+        bundle.templates.sort((a, b) => a - b);
+    },
+
+    /** 템플릿 N 이 쓸 묶음. 0 이면 묶음 1(기본). 서버 규칙과 같다.
+     *  고른 묶음이 먼저고, 없으면 제자리 묶음이 맡는다. 제자리라도
+     *  다른 템플릿을 골랐으면 비켜 준다.
+     */
+    titleBundleFor(number) {
+        const rows = this.promptModule.titleRecombine.variants || [];
+        for (let i = 0; i < rows.length; i++) {
+            if ((rows[i].templates || []).includes(number)) return i + 1;
+        }
+        if (number < 2 || number - 2 >= rows.length) return 0;
+        const row = rows[number - 2];
+        return (row.templates || []).length ? 0 : number - 1;
+    },
+
+    /** 이 묶음이 실제로 맡는 템플릿 번호들. bi 는 -1 이면 묶음 1(기본). */
+    bundleTemplates(bi) {
+        const out = [];
+        for (let n = 1; n <= this.promptTemplateCount(); n++) {
+            if (this.titleBundleFor(n) === bi + 1) out.push(n);
+        }
+        return out;
+    },
+
+    /** 화면에 적을 한 줄 — 이 묶음이 어느 템플릿에 쓰이는지. */
+    bundleAssignText(bi) {
+        const mine = this.bundleTemplates(bi);
+        if (!mine.length) {
+            return bi < 0
+                ? '· 아무도 맡지 않은 템플릿에 쓰입니다'
+                : '⚠️ 맡은 템플릿이 없습니다 — 이 묶음은 쓰이지 않습니다.';
+        }
+        const how = bi >= 0 && !(this.promptModule.titleRecombine.variants[bi].templates || []).length
+            ? ' (제자리)' : '';
+        return '템플릿 ' + mine.join('·') + ' 에 쓰입니다' + how;
     },
 
     /** 프롬프트 템플릿이 몇 개인가 — 묶음이 남는지 알려 주려고 센다. */
