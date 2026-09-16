@@ -10,14 +10,19 @@
       "enabled": true,
       "styles": ["practical"],          # 묶음 1(기본) = 지금 있던 값 그대로
       "variants": [
-        {"label": "청소용", "styles": ["question"], "min_length": 20,
-         "max_length": 35, "style_prompts": {...}, "custom_prompt": "..."}
+        {"label": "청소용", "templates": [2, 4], "styles": ["question"],
+         "min_length": 20, "max_length": 35, "style_prompts": {...},
+         "custom_prompt": "..."}
       ]
     }
 
-`variants[0]` 이 템플릿 2 와 짝이다(템플릿 1 은 최상위 값). 템플릿 3 이
-걸렸는데 묶음 3 이 없으면 **묶음 1** 로 물러선다 — 제목이 안 만들어지는
-것보다 낫다.
+짝은 두 가지로 정해진다.
+
+    templates 를 적으면   그 템플릿에서만 쓰인다(제자리는 포기)
+    비워 두면             제자리 — variants[0] 은 템플릿 2 와 짝
+
+템플릿 3 이 걸렸는데 맡은 묶음이 없으면 **묶음 1**(최상위 값)로 물러선다
+— 제목이 안 만들어지는 것보다 낫다.
 
 순서도: docs/flowcharts/title_recombine_rotation.md
 """
@@ -44,15 +49,50 @@ def bundles(settings: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
 
 
+def wanted(bundle: Dict[str, Any]) -> List[int]:
+    """이 묶음이 집어 든 템플릿 번호들. 안 골랐으면 빈 목록."""
+    raw = bundle.get("templates")
+    if not isinstance(raw, list):
+        return []
+    out = []
+    for item in raw:
+        try:
+            num = int(item)
+        except (TypeError, ValueError):
+            continue
+        if num >= 1 and num not in out:
+            out.append(num)
+    return out
+
+
 def pick(settings: Optional[Dict[str, Any]],
          index: int) -> Optional[Dict[str, Any]]:
-    """템플릿 번호에 짝지어진 묶음. 0(기본)이거나 없으면 None."""
-    if not index or index < 1:
-        return None
+    """이 템플릿이 쓸 묶음. 없으면 None(묶음 1 = 최상위 값을 쓴다).
+
+    Args:
+        settings: 모듈 설정
+        index: 고른 템플릿의 자리(0 = 템플릿 1)
+
+    고른 템플릿이 있는 묶음이 먼저다. 아무도 안 집었으면 제자리 묶음이
+    맡는데, **제 자리라도 다른 템플릿을 골랐으면 비켜 준다** — 두 군데서
+    쓰이면 어느 쪽이 맞는지 알 수 없다.
+    """
     rows = bundles(settings)
-    if index - 1 >= len(rows):
+    if not rows:
         return None
-    return rows[index - 1]
+
+    number = (index or 0) + 1
+
+    # 1) 이 템플릿을 집어 든 묶음 — 여럿이면 위에 있는 쪽
+    for row in rows:
+        if number in wanted(row):
+            return row
+
+    # 2) 제자리 묶음. 템플릿 1 의 자리는 최상위 값이라 여기 없다
+    if not index or index < 1 or index - 1 >= len(rows):
+        return None
+    row = rows[index - 1]
+    return None if wanted(row) else row
 
 
 def apply(settings: Dict[str, Any], index: int) -> Dict[str, Any]:
@@ -76,8 +116,9 @@ def apply(settings: Dict[str, Any], index: int) -> Dict[str, Any]:
 
     updated = dict(settings)
     updated[KEY] = block
-    logger.info("[TITLE_BUNDLE] 묶음 %d 적용 | %s | 바뀐 칸=%s",
-                index + 1, bundle.get("label") or "이름 없음", ",".join(used))
+    logger.info("[TITLE_BUNDLE] 템플릿 %d → 묶음 '%s' | 고른 템플릿=%s | 바뀐 칸=%s",
+                index + 1, bundle.get("label") or "이름 없음",
+                wanted(bundle) or "제자리", ",".join(used))
     return updated
 
 
