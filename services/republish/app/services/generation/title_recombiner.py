@@ -155,6 +155,7 @@ class TitleRecombiner:
         model: Optional[str] = None,
         style: Optional[str] = None,
         keywords: Optional[list] = None,
+        settings_override: Optional[dict] = None,
     ) -> RecombineResult:
         """
         제목 재조합 실행
@@ -167,6 +168,10 @@ class TitleRecombiner:
             style: 제목 스타일 (emotional, practical, question, viral, minimal)
             keywords: 지켜야 할 핵심어. 재조합이 원본 문자열만 보면 검색
                 되는 말이 빠질 수 있다(계획서 §4-5 B)
+            settings_override: 호출자가 해석한 모듈 설정. 프롬프트 템플릿이
+                갈리면 제목 묶음도 같은 번호로 갈리는데, 여기서 DB 원본을
+                다시 읽으면 그 선택이 버려진다
+                (순서도: docs/flowcharts/title_recombine_rotation.md)
 
         Returns:
             RecombineResult: 재조합 결과
@@ -186,7 +191,9 @@ class TitleRecombiner:
         if not module:
             raise ValueError(f"모듈을 찾을 수 없습니다: id={module_id}")
 
-        settings = module.settings or {}
+        # 호출자가 해석한 설정이 있으면 그것을 쓴다(제목 묶음 선택 반영)
+        settings = (settings_override if settings_override is not None
+                    else (module.settings or {}))
 
         # 제목 재조합 활성화 여부 확인 (새/구 형식 호환)
         title_enabled = False

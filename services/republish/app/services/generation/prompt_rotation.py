@@ -158,7 +158,12 @@ def apply(settings: Dict[str, Any], blog: Any, *,
     generation["user_prompt_template"] = got["template"]
     updated["content_generation"] = generation
     updated["_rotation"] = {k: v for k, v in got.items() if k != "template"}
-    return updated
+
+    # 제목 묶음도 같은 번호를 따라간다. 본문만 갈리고 제목은 한 틀에서
+    # 나오면, 뼈대가 다른 글에 같은 제목 스타일이 붙는다.
+    from . import title_recombine_rotation as _title_bundle
+
+    return _title_bundle.apply(updated, got["index"])
 
 
 def describe(settings: Optional[Dict[str, Any]]) -> str:

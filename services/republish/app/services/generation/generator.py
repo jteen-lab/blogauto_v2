@@ -192,6 +192,8 @@ class ContentGenerator:
                 style=selected_style,
                 # 핵심어가 빠지면 검색에 안 잡힌다(계획서 §4-5 B)
                 keywords=title_keywords(source_title),
+                # 프롬프트 템플릿이 갈렸으면 제목 묶음도 그 번호를 쓴다
+                settings_override=settings,
             )
         # 기존 제목과 겹치면 원본을 쓴다(계획서 §4-5 C). 재조합은 관문
         # 밖이라 여기서 안 걸면 같은 글이 두 번 나간다.
