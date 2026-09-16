@@ -30,7 +30,11 @@ DEFAULT_TITLE_PROMPT = (
     "- 원본의 핵심 키워드를 유지\n"
     "- 자연스러운 한국어 문장\n"
     "- 검색엔진 최적화를 고려\n"
-    "- 제목만 출력 (부가 설명 없이)"
+    "- 제목만 출력 (부가 설명 없이)\n"
+    "- **원본 제목에 없는 숫자·금액·평수·지명·상품명을 넣지 마세요.**\n"
+    "  아래 지시에 나오는 예시는 문장의 형태를 보여줄 뿐입니다.\n"
+    "  예시에 적힌 숫자와 낱말을 제목으로 옮기지 마세요.\n"
+    "- 원본에 숫자가 없으면 숫자 없이 씁니다. 지어내지 않습니다."
 )
 
 # 스타일별 지시. **분위기가 아니라 형태**를 말한다.
@@ -234,7 +238,9 @@ class TitleRecombiner:
         if instruction:
             full_prompt += (
                 f"\n\n[스타일: {STYLE_LABELS.get(style, style)}] {instruction}"
-                "\n위 규칙과 충돌하면 스타일을 우선하세요.")
+                "\n위 규칙과 충돌하면 스타일을 우선하세요."
+                "\n단, 예시는 형태만 참고합니다. 예시에 나온 숫자·금액·"
+                "고유명사를 옮기면 원본과 상관없는 제목이 됩니다.")
             logger.debug(f"[RECOMBINE] 스타일 적용 | style={style}")
 
         # 3. AI 호출
@@ -284,6 +290,11 @@ class TitleRecombiner:
         # 통제를 벗어난다.
         recombined = await self._fit_length(
             recombined, full_prompt, length_range, provider, model)
+
+        # 지시문 예시의 숫자가 제목으로 옮겨 붙는 일이 있다. 원본에 없는
+        # 금액·평수는 지어낸 사실이라 그대로 내보낼 수 없다.
+        recombined = await self._drop_borrowed(
+            original_title, recombined, full_prompt, provider, model)
 
         logger.info(
             f"[RECOMBINE] 완료 | 원본: '{original_title[:30]}' "
@@ -421,6 +432,40 @@ class TitleRecombiner:
         if retried and fits_length(retried, low, high):
             return retried
         return retried or title
+
+    async def _drop_borrowed(self, original: str, title: str,
+                             base_prompt: str, provider: Optional[str],
+                             model: Optional[str]) -> str:
+        """원본에 없는 금액·평수가 붙었으면 한 번 다시 청한다.
+
+        두 번은 하지 않는다. 다시 받은 것도 물려 있으면 그 수치만 덜어
+        낸다 — 제목이 안 나오는 것보다 낫다.
+        """
+        from .title_borrowed import borrowed, strip_borrowed
+
+        taken = borrowed(original, title)
+        if not taken:
+            return title
+
+        logger.warning("[RECOMBINE] 남의 수치가 섞였다 | %s | 빌려온 것=%s",
+                       title, taken)
+        hint = (f"방금 만든 제목에 원본에 없는 수치({', '.join(taken)})가 "
+                "들어갔습니다. 지시문 예시의 숫자를 옮긴 것입니다.\n"
+                "원본 제목에 있는 말만으로 다시 쓰세요. 제목만 출력하세요.")
+        try:
+            result = await self.ai_service.generate(
+                prompt=f"{base_prompt}\n\n{hint}",
+                provider=provider, model=model,
+                max_tokens=200, temperature=0.7)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[RECOMBINE] 재요청 실패: %s", e)
+            return strip_borrowed(original, title)
+
+        retried = self._clean_title((result or {}).get("content") or "")
+        if retried and not borrowed(original, retried):
+            logger.info("[RECOMBINE] 다시 만든 제목으로 | %s", retried)
+            return retried
+        return strip_borrowed(original, retried or title)
 
     async def _batch_styles(self, module, styles: list, original_title: str,
                             provider: Optional[str], model: Optional[str],
