@@ -145,7 +145,18 @@ def candidates(items: Sequence[Dict[str, Any]], *,
     if loose:
         logger.info("[VARIANT] 조건 일치 없음 — 공용 변형 %d개로 물러섬",
                     len(loose))
-    return loose
+        return loose
+
+    # 목적은 **마지막에 포기한다.** 변형마다 목적을 걸어 두고 위쪽 목적이
+    # 다르게 추정되면 셋 다 빠져 로테이션이 통째로 죽는다(이사노트가 그랬다).
+    # 목적이 갈라 놓은 뼈대보다 "키워드에 맞는 프롬프트로 쓴다"가 먼저다.
+    ignored = [i for i in rows
+               if _matches_topic(i, topic_id) and _matches_keyword(i, keyword)]
+    if ignored:
+        logger.warning(
+            "[VARIANT] 목적(%s)에 맞는 변형이 없어 목적을 무시한다 — "
+            "변형별 목적 설정을 확인하세요 | 후보 %d개", purpose, len(ignored))
+    return ignored
 
 
 def pick(items: Sequence[Dict[str, Any]], mode: Any = DEFAULT_MODE, *,
