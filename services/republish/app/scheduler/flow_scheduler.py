@@ -1172,6 +1172,15 @@ class FlowScheduler:
 
         return today_count >= daily_count, today_count
 
+    def _tomorrow_morning(self) -> datetime:
+        """다음 날 아침. 활성 시간표가 없을 때 쓰는 자리.
+
+        상한에 걸렸는데 다음 시각을 못 잡으면 스케줄이 비어 곧바로 되묻는
+        자리로 돌아간다. 그래서 반드시 무언가를 돌려준다.
+        """
+        tomorrow = datetime.now(KST) + timedelta(days=1)
+        return tomorrow.replace(hour=9, minute=0, second=0, microsecond=0)
+
     def _get_next_day_active_start(
         self, gp_settings: dict
     ) -> Optional[datetime]:
@@ -1587,23 +1596,30 @@ class FlowScheduler:
                             f"Recheck={recheck_time.strftime('%H:%M:%S')}"
                         )
                     elif (
-                        "일일" in result.get("message", "")
-                        and "한도" in result.get("message", "")
+                        result.get("daily_cap_reached")
+                        or (
+                            "일일" in result.get("message", "")
+                            and "한도" in result.get("message", "")
+                        )
                     ):
-                        # 일일 한도: 다음 날 첫 활성 시간으로 스케줄
+                        # 오늘 상한에 닿았다. 되물어도 날짜가 바뀌기 전에는
+                        # 같은 답이라 다음 날 첫 활성 시간까지 쉰다.
+                        # 매트릭스가 없어 시각을 못 구하면 내일 아침으로
+                        # 잡는다 — 잡지 않으면 곧바로 되묻는 자리로 돌아간다.
                         state.record_execution(True)
                         state.release_execution_lock()
-                        next_day_active = self._get_next_day_active_start(
-                            gp_settings
+                        next_day_active = (
+                            self._get_next_day_active_start(gp_settings)
+                            or self._tomorrow_morning()
                         )
-                        if next_day_active:
-                            await self._schedule_at_time(
-                                flow, action_type=action_type,
-                                state=state, run_time=next_day_active,
-                            )
+                        await self._schedule_at_time(
+                            flow, action_type=action_type,
+                            state=state, run_time=next_day_active,
+                        )
                         logger.info(
-                            f"[FLOW_SCHEDULER] 일일 한도 → 다음 날 스케줄 | "
+                            f"[FLOW_SCHEDULER] 오늘 상한 → 다음 날까지 쉼 | "
                             f"FlowID={flow_id} | ActionType={action_type} | "
+                            f"사유={result.get('message', '')[:60]} | "
                             f"NextDay={next_day_active}"
                         )
                     elif result.get("hold"):
@@ -3156,6 +3172,10 @@ class FlowScheduler:
         fail_count = 0
         hold_count = 0
         skip_count = 0
+        # 오늘 상한에 닿았거나 정지 조건에 걸린 블로그. 재고 대기와 **다르다** —
+        # 재고는 곧 생길 수 있지만 상한은 날짜가 바뀌어야 풀린다.
+        cap_count = 0
+        cap_note = ""
         for blog in blogs:
             blog_start = datetime.now()
             try:
@@ -3177,6 +3197,8 @@ class FlowScheduler:
                 else:
                     msg = ""
                 if msg:
+                    cap_count += 1
+                    cap_note = cap_note or msg
                     logger.info(
                         f"[SCHED:PUBLISH] {msg} | blog={blog.name}")
                     await self._save_autorun_log(
@@ -3186,7 +3208,6 @@ class FlowScheduler:
                         result={"success": True, "skipped": True,
                                 "message": msg},
                         duration_ms=0, action="publish")
-                    skip_count += 1
                     continue
 
                 # 재고 ON/OFF 체크 (발행 가능 글 존재 여부)
@@ -3374,8 +3395,15 @@ class FlowScheduler:
                     duration_ms=blog_duration, action="publish")
 
         # 모든 블로그가 hold/skip인 경우 결과에 플래그 전파
-        all_hold = hold_count > 0 and success_count == 0 and fail_count == 0 and skip_count == 0
-        all_skip = skip_count > 0 and success_count == 0 and fail_count == 0 and hold_count == 0
+        done = success_count + fail_count
+        all_hold = (hold_count > 0 and done == 0
+                    and skip_count == 0 and cap_count == 0)
+        all_skip = (skip_count > 0 and done == 0
+                    and hold_count == 0 and cap_count == 0)
+        # 상한에 걸린 블로그만 남았다면 오늘은 더 해 볼 것이 없다.
+        # 되물어도 같은 답이라 다음 날 첫 활성 시간까지 쉰다.
+        all_capped = (cap_count > 0 and done == 0
+                      and hold_count == 0 and skip_count == 0)
 
         result = {
             "success": fail_count == 0,
@@ -3384,10 +3412,15 @@ class FlowScheduler:
                 f"실패 {fail_count}/{len(blogs)}"
                 + (f", 보류 {hold_count}" if hold_count else "")
                 + (f", 재고대기 {skip_count}" if skip_count else "")
+                + (f", 상한 {cap_count}" if cap_count else "")
             ),
         }
 
-        if all_hold:
+        if all_capped:
+            result["daily_cap_reached"] = True
+            result["skipped"] = True
+            result["message"] = cap_note or result["message"]
+        elif all_hold:
             result["hold"] = True
         elif all_skip:
             result["skip_interval"] = True
@@ -3433,6 +3466,9 @@ class FlowScheduler:
                 break
 
         success_count = 0
+        # 오늘 한도에 닿은 블로그. 날짜가 바뀌어야 풀린다
+        cap_count = 0
+        cap_note = ""
         fail_count = 0
         for blog in blogs:
             blog_start = datetime.now()
@@ -3455,7 +3491,12 @@ class FlowScheduler:
                             f"today={today_count}/"
                             f"{stage_params.republish.daily_count}"
                         )
-                        # 한도 도달 시 다음 날 재스케줄을 위한 message 사용
+                        # 오늘은 더 해 볼 것이 없다. 되물어도 같은 답이라
+                        # 결과에 담아 다음 날까지 쉬게 한다.
+                        cap_count += 1
+                        cap_note = cap_note or (
+                            f"재발행 일일 한도 도달 ({today_count}/"
+                            f"{stage_params.republish.daily_count})")
                         continue
 
                 if await _use_celery("use_celery_publish", db):
@@ -3522,10 +3563,19 @@ class FlowScheduler:
                     result={"success": False, "message": str(e)},
                     duration_ms=blog_duration, action="republish")
 
-        return {
+        result = {
             "success": fail_count == 0,
-            "message": f"재발행 성공 {success_count}/{len(blogs)}, 실패 {fail_count}/{len(blogs)}"
+            "message": (
+                f"재발행 성공 {success_count}/{len(blogs)}, "
+                f"실패 {fail_count}/{len(blogs)}"
+                + (f", 상한 {cap_count}" if cap_count else "")
+            ),
         }
+        if cap_count and success_count == 0 and fail_count == 0:
+            result["daily_cap_reached"] = True
+            result["skipped"] = True
+            result["message"] = cap_note or result["message"]
+        return result
 
     async def _execute_republish_for_blog(self, blog: Blog) -> Dict[str, Any]:
         """
