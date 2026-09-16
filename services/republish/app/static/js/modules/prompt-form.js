@@ -28,7 +28,9 @@ function createPromptModuleState() {
             minLength: 0,
             maxLength: 0,
             // 스타일별 지시. 비우면 기본값을 쓴다.
-            stylePrompts: {}
+            stylePrompts: {},
+            // 묶음 2.. — 프롬프트 템플릿 2.. 와 짝이다(묶음 1 = 위 값들)
+            variants: []
         },
 
         // 스타일 템플릿(서버에서 받는다)
@@ -60,6 +62,12 @@ function createPromptModuleState() {
             { value: 'claude', label: 'Claude' },
             { value: 'gemini', label: 'Gemini' }
         ],
+
+        // 구획별 최소 글자수 — 값은 여기 한 곳에만 산다.
+        // 빌더는 이것을 읽어 '구조 약속' 문구를 만든다. 두 군데서 고칠 수
+        // 있으면 발행 최소 분량과 다시 어긋난다.
+        // 순서도: docs/flowcharts/min_length_placement.md
+        builderChars: { intro: 200, section: 250, outro: 200, sections: 0 },
 
         contentGeneration: {
             // 빌더에서 고른 축 코드(복원·강조용). 텍스트만으론 무엇을 골랐는지 알 수 없다.
@@ -208,7 +216,15 @@ const promptModuleMethods = {
                 customPrompt: settings.title_recombine.custom_prompt || '',
                 minLength: settings.title_recombine.min_length || 0,
                 maxLength: settings.title_recombine.max_length || 0,
-                stylePrompts: settings.title_recombine.style_prompts || {}
+                stylePrompts: settings.title_recombine.style_prompts || {},
+                variants: (settings.title_recombine.variants || []).map(v => ({
+                    label: v.label || '',
+                    selectedStyles: v.styles || [],
+                    minLength: v.min_length || 0,
+                    maxLength: v.max_length || 0,
+                    customPrompt: v.custom_prompt || '',
+                    stylePrompts: v.style_prompts || {}
+                }))
             };
         }
 
@@ -284,6 +300,17 @@ const promptModuleMethods = {
                 renewalMode: (cg.renewal_prompt && cg.renewal_prompt.mode) || 'inherit',
                 renewalText: (cg.renewal_prompt && cg.renewal_prompt.text) || '',
                 showAdvanced: false
+            };
+            // 구획별 최소 글자수. 따로 저장된 값이 우선, 없으면 빌더 스냅샷
+            // (옛 모듈은 스냅샷에만 있다), 그것도 없으면 기본값.
+            const snap = cg.builder_selection || {};
+            const bc = cg.builder_chars || {};
+            const num = (v, d) => (Number.isFinite(v) ? v : d);
+            this.promptModule.builderChars = {
+                intro: num(bc.intro, num(snap.introChars, 200)),
+                section: num(bc.section, num(snap.sectionChars, 250)),
+                outro: num(bc.outro, num(snap.outroChars, 200)),
+                sections: 0
             };
         }
 
@@ -595,6 +622,9 @@ const promptModuleMethods = {
         const idx = this.promptModule.selectedCategories.findIndex(c => c.topic_id === cat.topic_id && c.subtopic_id === cat.subtopic_id);
         if (idx !== -1) { this.promptModule.selectedCategories.splice(idx, 1); this.onCategoryChange(); }
     },
+    // 제목 묶음·분량 계산 메서드는 prompt-form-title-section.js 로 옮겼다
+    ...titleBundleMethods,
+
     toggleTitleStyle(styleValue) {
         const idx = this.promptModule.titleRecombine.selectedStyles.indexOf(styleValue);
         if (idx !== -1) this.promptModule.titleRecombine.selectedStyles.splice(idx, 1);
@@ -772,10 +802,21 @@ const promptModuleMethods = {
                 min_length: this.promptModule.titleRecombine.minLength || 0,
                 max_length: this.promptModule.titleRecombine.maxLength || 0,
                 // 빈 값은 보내지 않는다 — 저장해 두면 기본값으로 못 돌아간다
-                style_prompts: Object.fromEntries(
-                    Object.entries(this.promptModule.titleRecombine.stylePrompts || {})
-                        .filter(([, v]) => v && String(v).trim())
-                        .map(([k, v]) => [k, String(v).trim()]))
+                style_prompts: this.cleanStylePrompts(
+                    this.promptModule.titleRecombine.stylePrompts),
+                // 묶음 2.. — 빈 묶음은 보내지 않는다
+                variants: (this.promptModule.titleRecombine.variants || [])
+                    .filter(v => (v.selectedStyles || []).length
+                        || (v.customPrompt || '').trim()
+                        || v.minLength || v.maxLength)
+                    .map(v => ({
+                        label: (v.label || '').trim(),
+                        styles: v.selectedStyles || [],
+                        min_length: v.minLength || 0,
+                        max_length: v.maxLength || 0,
+                        custom_prompt: (v.customPrompt || '').trim(),
+                        style_prompts: this.cleanStylePrompts(v.stylePrompts)
+                    }))
             },
             // 글 생성 설정
             content_generation: {
@@ -791,6 +832,12 @@ const promptModuleMethods = {
                 user_prompt_template: this.promptModule.contentGeneration.userPromptTemplate,
                 // 어떤 프리셋·항목을 골랐는지 함께 저장한다(다시 열었을 때 강조 복원).
                 builder_selection: this.promptModule.contentGeneration.builderSelection || null,
+                // 구획별 최소 글자수 — 반영 버튼을 누르지 않아도 남는다
+                builder_chars: {
+                    intro: this.promptModule.builderChars.intro,
+                    section: this.promptModule.builderChars.section,
+                    outro: this.promptModule.builderChars.outro
+                },
                 // 재발행 리뉴얼 프롬프트 (mode: inherit|new|additional)
                 renewal_prompt: {
                     mode: this.promptModule.contentGeneration.renewalMode || 'inherit',
