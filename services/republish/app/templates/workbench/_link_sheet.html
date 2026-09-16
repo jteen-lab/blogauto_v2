@@ -1,0 +1,96 @@
+{# 홍보 링크 시트 — 고르기·등록·고치기. 순서도: docs/flowcharts/promo_link_auto.md #}
+<div x-show="sheet === 'link'" class="space-y-4">
+    <div>
+        <p class="text-xs font-semibold text-gray-500 mb-2">등록된 링크</p>
+        <div class="space-y-1.5">
+            <button @click="useAutoLink()"
+                    class="w-full text-left px-3 py-2.5 rounded-lg border transition-colors"
+                    :class="linkAuto ? 'border-accent bg-accent-lt' : 'border-gray-200 hover:bg-gray-50'">
+                <span class="text-sm font-medium text-gray-900">키워드로 자동</span>
+                <span class="block text-xs text-gray-500 mt-0.5">
+                    글 제목에 맞는 링크를 골라 붙입니다.
+                    맞는 것이 없으면 붙이지 않습니다.
+                </span>
+            </button>
+            <button @click="clearLink()"
+                    class="w-full text-left px-3 py-2.5 rounded-lg border transition-colors"
+                    :class="(!pickedLink && !linkAuto) ? 'border-accent bg-accent-lt' : 'border-gray-200 hover:bg-gray-50'">
+                <span class="text-sm font-medium text-gray-900">붙이지 않음</span>
+                <span class="block text-xs text-gray-500 mt-0.5">정보성 글 — 고지문·버튼 없음</span>
+            </button>
+            <template x-for="l in links" :key="'l'+l.id">
+                <div class="flex items-center gap-1.5"
+                     :class="linkEditId === l.id ? 'ring-2 ring-indigo-300 rounded-lg' : ''">
+                    <button @click="pickLink(l)"
+                            class="flex-1 min-w-0 text-left px-3 py-2.5 rounded-lg border transition-colors"
+                            :class="pickedLink && pickedLink.id === l.id ? 'border-accent bg-accent-lt' : 'border-gray-200 hover:bg-gray-50'">
+                        <span class="text-sm font-medium text-gray-900" x-text="l.name"></span>
+                        <span class="block text-xs text-gray-500 mt-0.5 truncate" x-text="l.button_text + ' · ' + l.url"></span>
+                        <span class="block text-xs mt-0.5"
+                              :class="l.keywords ? 'text-indigo-600' : 'text-gray-400'"
+                              x-text="l.keywords ? ('키워드: ' + l.keywords) : '키워드 없음 — 자동 선택에서 빠집니다'"></span>
+                    </button>
+                    <button @click="editLink(l)" title="고치기"
+                            class="shrink-0 px-2 py-2 text-xs rounded transition-colors"
+                            :class="linkEditId === l.id
+                                ? 'text-indigo-700 bg-indigo-50 font-semibold'
+                                : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'">
+                        고치기
+                    </button>
+                    <button @click="deleteLink(l)" title="목록에서 빼기"
+                            class="shrink-0 px-2 py-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded">
+                        &times;
+                    </button>
+                </div>
+            </template>
+            <p x-show="!links.length" class="text-xs text-gray-400 px-1 py-3">
+                등록된 링크가 없습니다. 아래에서 추가하세요.
+            </p>
+        </div>
+    </div>
+
+    <div class="border-t border-gray-200 pt-4">
+        <div class="flex items-center justify-between mb-2">
+            <p class="text-xs font-semibold"
+               :class="linkEditId ? 'text-indigo-700' : 'text-gray-500'"
+               x-text="linkEditId ? '링크 고치기' : '새 링크 등록'"></p>
+            <button x-show="linkEditId" @click="cancelEditLink()"
+                    class="text-xs text-gray-500 hover:text-gray-800 underline">
+                고치기 그만두기
+            </button>
+        </div>
+        <div class="space-y-2">
+            <input x-model="linkForm.name" placeholder="이름 (예: 이사 견적 비교)"
+                   class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:border-accent focus:ring-accent">
+            <input x-model="linkForm.url" placeholder="주소 (https://…)"
+                   class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:border-accent focus:ring-accent">
+            <input x-model="linkForm.button_text" placeholder="버튼 문구 (예: 이사 견적 무료로 비교하기)"
+                   class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:border-accent focus:ring-accent">
+            <input x-model="linkForm.notice" placeholder="고지문 (비우면 고지문 없음)"
+                   class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:border-accent focus:ring-accent">
+            <input x-model="linkForm.keywords"
+                   placeholder="키워드 조합 (예: 이사+견적, 이사+비용)"
+                   class="w-full px-3 py-2 border border-indigo-300 bg-indigo-50 rounded-md text-sm focus:border-accent focus:ring-accent">
+            <p class="text-xs text-gray-500 -mt-1 leading-relaxed">
+                <b>키워드로 자동</b>을 쓸 때 이 링크가 걸릴 조건입니다.
+                <code class="px-1 bg-white rounded">+</code> 로 묶으면 둘 다 들어간 제목에만,
+                쉼표로 나누면 그중 하나만 맞아도 됩니다.
+                비우면 자동 선택에서 빠집니다.
+            </p>
+            <label class="flex items-center gap-2 text-xs text-gray-600">
+                <input type="checkbox" x-model="linkForm.blogOnly"
+                       class="rounded border-gray-300 text-accent focus:ring-accent">
+                담은 블로그에서만 쓰기
+            </label>
+            <button @click="saveLink()" :disabled="linkSaving"
+                    class="w-full py-2 text-sm text-white rounded-md hover:opacity-90 disabled:opacity-50 transition-opacity"
+                    :class="linkEditId ? 'bg-indigo-600' : 'bg-accent'">
+                <span x-show="!linkSaving" x-text="linkEditId ? '고친 내용 저장' : '등록'"></span>
+                <span x-show="linkSaving">저장 중…</span>
+            </button>
+            <p class="text-xs" x-show="linkMessage"
+               :class="linkMessage.startsWith('실패') ? 'text-red-600' : 'text-primary'"
+               x-text="linkMessage"></p>
+        </div>
+    </div>
+</div>
