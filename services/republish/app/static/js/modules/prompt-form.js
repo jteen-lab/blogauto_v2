@@ -29,6 +29,8 @@ function createPromptModuleState() {
             maxLength: 0,
             // 스타일별 지시. 비우면 기본값을 쓴다.
             stylePrompts: {},
+            // 니치 고르개(화면 전용 · 저장하지 않는다)
+            styleTemplate: '', styleTemplateHint: '',
             // 묶음 2.. — 프롬프트 템플릿 2.. 와 짝이다(묶음 1 = 위 값들)
             variants: []
         },
@@ -217,6 +219,7 @@ const promptModuleMethods = {
                 minLength: settings.title_recombine.min_length || 0,
                 maxLength: settings.title_recombine.max_length || 0,
                 stylePrompts: settings.title_recombine.style_prompts || {},
+                styleTemplate: '', styleTemplateHint: '',
                 variants: (settings.title_recombine.variants || []).map(v => ({
                     label: v.label || '',
                     templates: Array.isArray(v.templates) ? v.templates : [],
@@ -224,7 +227,8 @@ const promptModuleMethods = {
                     minLength: v.min_length || 0,
                     maxLength: v.max_length || 0,
                     customPrompt: v.custom_prompt || '',
-                    stylePrompts: v.style_prompts || {}
+                    stylePrompts: v.style_prompts || {},
+                    styleTemplate: '', styleTemplateHint: ''
                 }))
             };
         }
@@ -644,14 +648,9 @@ const promptModuleMethods = {
     },
 
     /** 고른 템플릿으로 다섯 칸을 채운다. 채운 뒤 개별 수정할 수 있다. */
+    /** 옛 진입점 — 묶음 1 에 적용한다. */
     applyStyleTemplate() {
-        const code = this.promptModule.styleTemplate;
-        if (!code) return;
-        const found = (this.promptModule.styleTemplates || [])
-            .find(t => t.code === code);
-        if (!found) return;
-        this.promptModule.titleRecombine.stylePrompts = { ...found.prompts };
-        this.promptModule.styleTemplateHint = `${found.label} 적용됨`;
+        this.applyStyleTemplateTo(this.promptModule.titleRecombine);
     },
 
     /** 모듈이 고른 블로그의 니치로 템플릿을 고른다.
@@ -659,29 +658,9 @@ const promptModuleMethods = {
      *  금융 블로그에 맛집용 지시가 들어가면 제목이 어긋난다. 맞는 것이
      *  없으면 고르지 않는다 — 짐작하면 엉뚱한 지시가 들어간다.
      */
+    /** 옛 진입점 — 묶음 1 에 추천을 받아 온다. */
     async recommendStyleTemplate() {
-        const blogs = this.promptModule.selectedBlogs || [];
-        if (!blogs.length) {
-            this.promptModule.styleTemplateHint = '블로그를 먼저 고르세요';
-            return;
-        }
-        await this.loadStyleTemplates();
-        try {
-            const r = await fetch(
-                `/api/v1/recombine-templates/recommend?blog_ids=${blogs.join(',')}`,
-                { credentials: 'include' });
-            if (!r.ok) return;
-            const d = await r.json();
-            if (!d.code) {
-                this.promptModule.styleTemplateHint = d.reason || '';
-                return;
-            }
-            this.promptModule.styleTemplate = d.code;
-            this.promptModule.titleRecombine.stylePrompts = { ...d.prompts };
-            this.promptModule.styleTemplateHint = d.reason || '';
-        } catch (e) {
-            this.promptModule.styleTemplateHint = '추천을 받지 못했습니다';
-        }
+        await this.recommendStyleTemplateFor(this.promptModule.titleRecombine);
     },
 
     // 프롬프트 모듈 유효성 검증
@@ -810,7 +789,9 @@ const promptModuleMethods = {
                     .filter(v => (v.selectedStyles || []).length
                         || (v.customPrompt || '').trim()
                         || v.minLength || v.maxLength
-                        || (v.templates || []).length)
+                        || (v.templates || []).length
+                        // 니치 지시만 부어 둔 묶음도 살린다
+                        || Object.keys(v.stylePrompts || {}).length)
                     .map(v => ({
                         label: (v.label || '').trim(),
                         // 고른 템플릿 번호. 비면 제자리(묶음 2 → 템플릿 2)

@@ -10,9 +10,12 @@
  * 순서도: docs/flowcharts/title_recombine_rotation.md
  */
 
-/** 한 묶음의 칸들. `p` 는 값이 사는 경로(묶음 1 이면 최상위, 2.. 면 x-for 변수). */
+/** 한 묶음의 칸들. `p` 는 값이 사는 경로(묶음 1 이면 최상위, 2.. 면 x-for 변수).
+ *
+ *  니치 고르개는 **묶음마다** 둔다. 묶음을 나눈 이유가 니치가 다르기
+ *  때문인데 고르개가 한 군데만 있으면 나눈 의미가 없다.
+ */
 function getTitleBundleFields(p, opts) {
-    const withTemplatePicker = !!(opts && opts.withTemplatePicker);
     return `
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-2">제목 스타일 선택</label>
@@ -45,21 +48,20 @@ function getTitleBundleFields(p, opts) {
         <div>
             <div class="flex flex-wrap items-center gap-2 mb-2">
                 <label class="text-sm font-medium text-gray-700">스타일별 지시 (선택)</label>
-                ${withTemplatePicker ? `
-                <select x-model="promptModule.styleTemplate"
-                        @change="applyStyleTemplate()"
+                <select x-model="${p}.styleTemplate"
+                        @change="applyStyleTemplateTo(${p})"
                         class="px-2 py-1 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500">
                     <option value="">템플릿 선택…</option>
                     <template x-for="t in promptModule.styleTemplates" :key="t.code">
                         <option :value="t.code" x-text="t.label"></option>
                     </template>
                 </select>
-                <button type="button" @click="recommendStyleTemplate()"
+                <button type="button" @click="recommendStyleTemplateFor(${p})"
                         class="px-2 py-1 text-xs text-blue-600 border border-blue-200 rounded hover:bg-blue-50">
                     니치로 추천
                 </button>
-                <span x-show="promptModule.styleTemplateHint" class="text-xs text-gray-500"
-                      x-text="promptModule.styleTemplateHint"></span>` : ''}
+                <span x-show="${p}.styleTemplateHint" class="text-xs text-gray-500"
+                      x-text="${p}.styleTemplateHint"></span>
             </div>
             <div class="space-y-1.5">
                 <template x-for="style in promptModule.titleStyles" :key="style.value">
@@ -119,7 +121,7 @@ function getPromptTitleSection() {
                                             묶음 1 (기본)
                                             <span class="font-normal text-gray-500" x-text="bundleAssignText(-1)"></span>
                                         </b>
-                                        ${getTitleBundleFields('promptModule.titleRecombine', { withTemplatePicker: true })}
+                                        ${getTitleBundleFields('promptModule.titleRecombine')}
                                     </div>
 
                                     <!-- 묶음 2.. -->
@@ -156,7 +158,7 @@ function getPromptTitleSection() {
                                                           :class="bundleTemplates(bi).length ? 'text-gray-600' : 'text-amber-800'"
                                                           x-text="bundleAssignText(bi)"></span>
                                                 </div>
-                                                ${getTitleBundleFields('b', {})}
+                                                ${getTitleBundleFields('b')}
                                             </div>
                                         </template>
                                         <button type="button" @click="addTitleBundle()"
@@ -194,8 +196,47 @@ const titleBundleMethods = {
     addTitleBundle() {
         this.promptModule.titleRecombine.variants.push({
             label: '', templates: [], selectedStyles: [], minLength: 0,
-            maxLength: 0, customPrompt: '', stylePrompts: {}
+            maxLength: 0, customPrompt: '', stylePrompts: {},
+            // 니치 고르개는 묶음마다 따로 기억한다(화면 전용)
+            styleTemplate: '', styleTemplateHint: ''
         });
+    },
+
+    /** 고른 니치 템플릿의 지시를 이 묶음에 붓는다. */
+    applyStyleTemplateTo(target) {
+        const code = target.styleTemplate;
+        if (!code) return;
+        const found = (this.promptModule.styleTemplates || [])
+            .find(t => t.code === code);
+        if (!found) return;
+        target.stylePrompts = { ...found.prompts };
+        target.styleTemplateHint = `${found.label} 적용됨`;
+    },
+
+    /** 담은 블로그의 니치로 이 묶음에 맞는 템플릿을 받아 온다. */
+    async recommendStyleTemplateFor(target) {
+        const blogs = this.promptModule.selectedBlogs || [];
+        if (!blogs.length) {
+            target.styleTemplateHint = '블로그를 먼저 고르세요';
+            return;
+        }
+        await this.loadStyleTemplates();
+        try {
+            const r = await fetch(
+                `/api/v1/recombine-templates/recommend?blog_ids=${blogs.join(',')}`,
+                { credentials: 'include' });
+            if (!r.ok) return;
+            const d = await r.json();
+            if (!d.code) {
+                target.styleTemplateHint = d.reason || '';
+                return;
+            }
+            target.styleTemplate = d.code;
+            target.stylePrompts = { ...d.prompts };
+            target.styleTemplateHint = d.reason || '';
+        } catch (e) {
+            target.styleTemplateHint = '추천을 받지 못했습니다';
+        }
     },
 
     /** 이 묶음이 쓸 템플릿을 집거나 놓는다. */
