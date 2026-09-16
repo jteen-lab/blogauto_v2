@@ -55,6 +55,10 @@ class Picked:
     mode: str
     next_cursor: int
     reason: str = ""
+    #: 원본 목록에서의 자리. `index` 는 **걸러낸 후보 안의** 자리라
+    #: 후보가 하나만 남으면 늘 0 이다. 몇 번째 변형인지 알아야 하는
+    #: 쪽(제목 묶음 짝짓기·로그)은 이 값을 쓴다.
+    source_index: int = -1
 
     def to_dict(self) -> Dict[str, Any]:
         return {"index": self.index, "mode": self.mode,
@@ -191,8 +195,13 @@ def pick(items: Sequence[Dict[str, Any]], mode: Any = DEFAULT_MODE, *,
         index = random.randrange(size)
         reason = f"무작위 {index + 1}/{size}"
 
-    return Picked(item=pool[index], index=index, mode=picked_mode,
-                  next_cursor=int(cursor or 0) + 1, reason=reason)
+    item = pool[index]
+    # 같은 내용의 변형이 둘일 수 있어 값이 아니라 그 자체로 찾는다
+    source = next((n for n, raw in enumerate(items or []) if raw is item),
+                  index)
+    return Picked(item=item, index=index, mode=picked_mode,
+                  next_cursor=int(cursor or 0) + 1, reason=reason,
+                  source_index=source)
 
 
 def _stable_index(key: str, size: int) -> int:

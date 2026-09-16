@@ -128,13 +128,16 @@ def select(settings: Optional[Dict[str, Any]], blog: Any, *,
     template = prompt_of(got.item)
     if not template:
         logger.warning("[PROMPT_ROTATION] 변형 %d 의 프롬프트가 비었다 | %s",
-                       got.index, got.item.get("code"))
+                       got.source_index + 1, got.item.get("code"))
         return None
 
-    logger.info("[PROMPT_ROTATION] %s | %s | %s",
+    # 자리는 **원본 기준**이다. 걸러낸 뒤의 자리를 쓰면 후보가 하나만
+    # 남았을 때 늘 템플릿 1 로 읽혀 제목 묶음이 따라오지 못한다.
+    at = got.source_index if got.source_index >= 0 else got.index
+    logger.info("[PROMPT_ROTATION] %s | %s | %s | 템플릿 %d",
                 PURPOSE_LABEL.get(purpose, purpose),
-                vp.MODE_LABEL.get(got.mode, got.mode), got.reason)
-    return {"template": template, "index": got.index, "mode": got.mode,
+                vp.MODE_LABEL.get(got.mode, got.mode), got.reason, at + 1)
+    return {"template": template, "index": at, "mode": got.mode,
             "next_cursor": got.next_cursor, "purpose": purpose,
             "reason": got.reason,
             "label": got.item.get("label") or got.item.get("code") or ""}
