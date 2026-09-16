@@ -314,4 +314,49 @@ NICHE_PRESETS: List[Dict[str, object]] = [
         "persona": "P-Neutral", "reader": "R-Decision",
         "pattern": "P9", "tone": "T-Compare",
     },
+
+    # ── 이사/청소 (2026-09-16 추가) ──────────────────────────
+    # 네 개가 서로 다른 사람이 쓴 것처럼 갈리게 짰다.
+    #   비용   겪어본 선배가 견적서를 뜯어본다   (경험 + 숫자)
+    #   청소   문제 해결사가 사례를 늘어놓는다   (사례 대조)
+    #   준비   실무 안내자가 순서를 잡아 준다    (절차 + 기한)
+    #   생활   옆집 사람이 방법을 알려 준다      (실행 + 재료)
+    {
+        "code": "n-move-cost",
+        "label": "💸 이사 견적·비용 · 겪어본선배/결정·P4·구체사례",
+        "categories": "이사/청소 › 이사 견적·비용 · 이사짐센터 · 원룸·소형이사",
+        "match_topics": ['이사/청소'],
+        "match_subtopics": ['이사 견적·비용', '이사짐센터', '원룸·소형이사'],
+        "persona": "P-Peer", "reader": "R-Decision",
+        "pattern": "P4", "tone": "T-Case", "common": "C-Story",
+    },
+    {
+        "code": "n-move-clean",
+        "label": "🧹 입주·퇴실 청소 · 문제해결사/결정·P5·선택지대비",
+        "categories": "이사/청소 › 입주·이사청소 · 에어컨·가전청소",
+        "match_topics": ['이사/청소'],
+        "match_subtopics": ['입주·이사청소', '에어컨·가전청소'],
+        "persona": "P-Fixer", "reader": "R-Decision",
+        "pattern": "P5", "tone": "T-Compare", "common": "C-Story",
+    },
+    {
+        "code": "n-move-prep",
+        "label": "📦 이사 준비·행정 · 실무안내자/실행직전·P3·시기맥락",
+        "categories": "이사/청소 › 이사 준비·체크리스트 · 전입신고·이사 행정",
+        "match_topics": ['이사/청소'],
+        "match_subtopics": ['이사 준비·체크리스트', '전입신고·이사 행정'],
+        "persona": "P-Guide", "reader": "R-Applicant",
+        "pattern": "P3", "tone": "T-Season", "common": "C-Plain",
+    },
+    {
+        "code": "n-move-housekeep",
+        "label": "🧴 생활 청소 노하우 · 친구/입문·P7·증상묘사",
+        "categories": "이사/청소 › 생활 청소 노하우",
+        "match_topics": ['이사/청소'],
+        "match_subtopics": ['생활 청소 노하우'],
+        # P8(레시피)은 재료·온도를 요구해 청소에 어색하다. 얼룩·곰팡이처럼
+        # 증상에서 출발하는 주제라 P7(문제해결·진단)이 맞는다.
+        "persona": "P-Friend", "reader": "R-Beginner",
+        "pattern": "P7", "tone": "T-Symptom", "common": "C-Story",
+    },
 ]
