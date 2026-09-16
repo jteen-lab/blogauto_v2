@@ -287,6 +287,11 @@ function moduleTester() {
                     }),
                 });
                 this.preview.html = got.html || this.preview.raw;
+                if (got.link_auto) {
+                    // 자동은 글마다 다르다 — 무엇이 왜 붙었는지 받아 적는다
+                    this.autoPicked = { name: got.link_name || '',
+                                        rule: got.link_rule || '', done: true };
+                }
             } catch (e) { this.postMessage = '실패: 조립 오류 ' + e.message; }
         },
         previewDoc() {

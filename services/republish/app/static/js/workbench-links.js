@@ -12,6 +12,9 @@
 /** 고지문 기본값 — 서버 모델의 DEFAULT_NOTICE 와 같게 둔다. */
 const PROMO_DEFAULT_NOTICE = '이 포스팅은 애드릭스 수익을 위해 작성되었습니다.';
 
+/** 선택을 기억하는 자리. 옛 키(mt_link_id)와 일부러 다르다. */
+const LINK_CHOICE_KEY = 'mt_link_choice';
+
 /** 빈 등록 칸. */
 function emptyLinkForm(notice, blogOnly) {
     return {
@@ -28,7 +31,9 @@ function promoLinkPart() {
         links: [], pickedLink: null, linkSaving: false, linkMessage: '',
         linkForm: emptyLinkForm(),
         linkEditId: null,  // 고치는 중인 링크. null 이면 새로 등록
-        linkAuto: false,   // 제목의 키워드로 링크를 고를지
+        linkAuto: true,    // 제목의 키워드로 링크를 고를지 — 기본이 자동이다
+        // 자동이 실제로 무엇을 골랐는지. 서버가 조립하며 알려 준다
+        autoPicked: { name: '', rule: '', done: false },
 
         // ── 목록·선택 ────────────────────────────────────────
         async loadLinks() {
@@ -41,17 +46,20 @@ function promoLinkPart() {
         },
         pickLink(l) {
             this.pickedLink = l; this.linkAuto = false;
+            this.autoPicked = { name: '', rule: '', done: false };
             this.rememberLink(); this.closeSheet();
             if (this.preview.raw) this.assemble();
         },
         /** 제목의 키워드로 고르게 한다. 글마다 다른 링크가 붙는다. */
         useAutoLink() {
             this.linkAuto = true; this.pickedLink = null;
+            this.autoPicked = { name: '', rule: '', done: false };
             this.rememberLink(); this.closeSheet();
             if (this.preview.raw) this.assemble();
         },
         clearLink() {
             this.pickedLink = null; this.linkAuto = false;
+            this.autoPicked = { name: '', rule: '', done: false };
             this.rememberLink(); this.closeSheet();
             if (this.preview.raw) this.assemble();
         },
@@ -59,19 +67,44 @@ function promoLinkPart() {
         rememberLink() {
             try {
                 const v = this.linkAuto ? 'auto'
-                    : (this.pickedLink ? String(this.pickedLink.id) : '');
-                if (v) localStorage.setItem('mt_link_id', v);
-                else localStorage.removeItem('mt_link_id');
+                    : (this.pickedLink ? String(this.pickedLink.id) : 'none');
+                localStorage.setItem(LINK_CHOICE_KEY, v);
+                localStorage.removeItem('mt_link_id');   // 옛 기억은 버린다
             } catch (e) { /* 저장이 막힌 브라우저 — 기억만 안 될 뿐 */ }
         },
-        /** 지난번에 고른 링크를 되살린다. */
+        /** 지난번 선택을 되살린다. **고른 적이 없으면 자동이다.**
+         *
+         *  옛 기억(mt_link_id)은 읽지 않는다. 자동이 생기기 전에 고른
+         *  링크 하나가 계속 살아나 모든 글에 같은 링크를 붙였다.
+         */
         restoreLink() {
-            try {
-                const raw = localStorage.getItem('mt_link_id') || '';
-                if (raw === 'auto') { this.linkAuto = true; return; }
-                const id = parseInt(raw, 10);
-                if (id) this.pickedLink = this.links.find(l => l.id === id) || null;
-            } catch (e) { /* 무시 */ }
+            let raw = '';
+            try { raw = localStorage.getItem(LINK_CHOICE_KEY) || ''; }
+            catch (e) { /* 읽기가 막힌 브라우저 — 자동으로 간다 */ }
+            if (raw === 'none') { this.linkAuto = false; this.pickedLink = null; return; }
+            const id = parseInt(raw, 10);
+            if (id) {
+                const found = this.links.find(l => l.id === id) || null;
+                if (found) { this.pickedLink = found; this.linkAuto = false; return; }
+            }
+            this.linkAuto = true; this.pickedLink = null;
+        },
+        /** 미리보기에 적을 한 줄 — 무엇이 왜 붙었는지. */
+        linkLabel() {
+            if (this.linkAuto) {
+                if (!this.autoPicked.done) return '자동 · 판정 전';
+                if (!this.autoPicked.name) {
+                    return '자동 · 맞는 링크 없음 — 정보성 글로 나갑니다';
+                }
+                return '자동 · ' + this.autoPicked.name
+                    + (this.autoPicked.rule ? ' (' + this.autoPicked.rule + ')' : '');
+            }
+            if (this.pickedLink) return '고정 · ' + this.pickedLink.name;
+            return '정보성 글 — 고지문·버튼 없음';
+        },
+        /** 이 글에 고지문·버튼이 실제로 붙었나. */
+        linkAttached() {
+            return this.linkAuto ? !!this.autoPicked.name : !!this.pickedLink;
         },
 
         // ── 등록·수정 ────────────────────────────────────────

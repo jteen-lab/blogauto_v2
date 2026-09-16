@@ -113,7 +113,12 @@
             <template x-if="linkAuto">
                 <span class="inline-flex items-center gap-2 rounded-xl px-3 py-1.5 shadow-sm bg-indigo-50 text-indigo-800 text-xs">
                     <b>키워드로 자동</b>
-                    <span class="opacity-70">글마다 맞는 링크가 붙습니다</span>
+                    <span class="opacity-70" x-show="!autoPicked.done">글마다 맞는 링크가 붙습니다</span>
+                    <span x-show="autoPicked.done && autoPicked.name" class="font-medium"
+                          x-text="autoPicked.name + (autoPicked.rule ? ' (' + autoPicked.rule + ')' : '')"></span>
+                    <span x-show="autoPicked.done && !autoPicked.name" class="opacity-70">
+                        맞는 링크 없음 — 정보성 글
+                    </span>
                     <button @click="clearLink()" class="hover:opacity-60">&times;</button>
                 </span>
             </template>
@@ -410,10 +415,8 @@
                     <div class="min-w-0">
                         <p class="text-sm font-medium text-gray-800" x-text="preview.title"></p>
                         <p class="text-xs mt-0.5"
-                           :class="pickedLink ? 'text-emerald-700' : 'text-gray-400'"
-                           x-text="pickedLink
-                                ? '고지문·버튼 붙음 — ' + pickedLink.name
-                                : '정보성 글 — 고지문·버튼 없음'"></p>
+                           :class="linkAttached() ? 'text-emerald-700' : 'text-gray-400'"
+                           x-text="linkLabel()"></p>
                     </div>
                     <label class="text-xs text-gray-500 flex items-center gap-1.5 cursor-pointer">
                         <input type="checkbox" x-model="editMode"
@@ -479,6 +482,6 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="/static/js/workbench-links.js?v=20260916edit"></script>
-<script src="/static/js/workbench.js?v=20260916edit"></script>
+<script src="/static/js/workbench-links.js?v=20260916auto2"></script>
+<script src="/static/js/workbench.js?v=20260916auto2"></script>
 {% endblock %}
