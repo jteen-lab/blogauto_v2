@@ -317,6 +317,12 @@ function getPromptContentGenSection() {
 위 제목으로 블로그 글을 작성해주세요.
 카테고리: {category}
 키워드: {keywords}"></textarea>
+                                            <p x-show="promptModule.rotation.enabled && variantUnreachable(promptModule.rotation.base)"
+                                               x-transition
+                                               class="text-xs text-amber-900 bg-amber-100 border border-amber-300 rounded px-2 py-1.5 mt-2 leading-relaxed">
+                                                ⚠️ 이 템플릿은 <b>쓰이지 않습니다.</b>
+                                                위에서 고정한 목적과 이 템플릿의 목적이 다릅니다.
+                                            </p>
                                             <div class="flex flex-wrap items-center gap-2 text-xs mt-2"
                                                  x-show="promptModule.rotation.enabled" x-transition>
                                                 <select x-model="promptModule.rotation.base.purpose"
@@ -342,7 +348,8 @@ function getPromptContentGenSection() {
                                             <template x-for="(v, i) in promptModule.rotation.variants" :key="i">
                                                 <div class="p-3 bg-white border border-indigo-200 rounded-lg">
                                                     <div class="flex items-center justify-between gap-2 mb-1.5">
-                                                        <b class="text-xs text-indigo-700" x-text="'템플릿 ' + (i + 2)"></b>
+                                                        <b class="text-xs" x-text="'템플릿 ' + (i + 2)"
+                                                           :class="variantUnreachable(v) ? 'text-amber-700' : 'text-indigo-700'"></b>
                                                         <div class="flex items-center gap-2">
                                                             <input type="text" x-model="v.label"
                                                                    :placeholder="'이름 (선택)'"
@@ -354,6 +361,13 @@ function getPromptContentGenSection() {
                                                     <textarea x-model="v.template" rows="4"
                                                               placeholder="이 템플릿으로 쓸 프롬프트를 적습니다. 비우면 건너뜁니다."
                                                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-sm font-mono"></textarea>
+                                                    <p x-show="variantUnreachable(v)" x-transition
+                                                       class="text-xs text-amber-900 bg-amber-100 border border-amber-300 rounded px-2 py-1.5 leading-relaxed">
+                                                        ⚠️ 이 템플릿은 <b>쓰이지 않습니다.</b>
+                                                        위에서 글의 목적을 <b x-text="purposeLabel(promptModule.rotation.purpose)"></b>로
+                                                        고정했는데 이 템플릿은 <b x-text="purposeLabel(v.purpose)"></b> 전용입니다.
+                                                        목적을 맞추거나 위를 "블로그 상태로 추정"으로 두세요.
+                                                    </p>
                                                     <div class="flex flex-wrap items-center gap-2 text-xs mt-2">
                                                         <select x-model="v.purpose"
                                                                 class="px-2 py-1 border border-gray-300 rounded">

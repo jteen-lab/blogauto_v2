@@ -192,6 +192,25 @@ const titleBundleMethods = {
         else list.push(styleValue);
     },
 
+    /** 이 템플릿이 목적 때문에 영영 안 걸리는가.
+     *
+     *  로테이션 위쪽에서 목적을 고정해 두면, 목적이 다른 템플릿은
+     *  후보에서 통째로 걸러진다. 화면이 말해 주지 않으면 적어 두고도
+     *  왜 안 쓰이는지 알 수 없다(이사 노하우 템플릿이 그랬다).
+     */
+    variantUnreachable(v) {
+        if (!this.promptModule.rotation.enabled) return false;
+        const fixed = (this.promptModule.rotation.purpose || '').trim();
+        const own = ((v || {}).purpose || '').trim();
+        return !!(fixed && own && own !== fixed);
+    },
+
+    /** 목적 코드를 사람 말로. */
+    purposeLabel(code) {
+        return { adsense: '애드센스', cpa: 'CPA', info: '정보성' }[code]
+            || '목적 무관';
+    },
+
     /** 제목 묶음 하나 더. 템플릿을 고르지 않으면 제자리에 쓰인다. */
     addTitleBundle() {
         this.promptModule.titleRecombine.variants.push({
