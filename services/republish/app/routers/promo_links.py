@@ -48,12 +48,36 @@ class LinkPatch(BaseModel):
     is_active: Optional[bool] = None
 
 
+#: 비우면 "없음"으로 치는 칸 — 빈 문자열은 None 으로 바꿔 넣는다
+_EMPTY_IS_NONE = ("notice", "keywords")
+
+#: 비울 수 없는 칸 — 공백만 보내면 거절한다
+_REQUIRED = ("name", "url", "button_text")
+
+
 async def _get(db: AsyncSession, link_id: int) -> PromoLink:
     """없으면 404."""
     link = await db.get(PromoLink, link_id)
     if link is None:
         raise HTTPException(404, "링크를 찾을 수 없습니다")
     return link
+
+
+def _clean(field: str, value: object) -> object:
+    """넣기 전에 다듬는다.
+
+    화면에서 칸을 지우면 빈 문자열이 온다. 키워드를 지운 링크는
+    자동 선택에서 빠져야 하는데, 빈 문자열이 그대로 들어가면 "없음"
+    으로 읽히지 않는다.
+    """
+    if not isinstance(value, str):
+        return value
+    text = value.strip()
+    if field in _REQUIRED and not text:
+        raise HTTPException(400, "이름·주소·버튼 문구는 비울 수 없습니다")
+    if field in _EMPTY_IS_NONE and not text:
+        return None
+    return text
 
 
 @router.get("", summary="링크 목록")
@@ -98,12 +122,15 @@ async def update_link(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    """보낸 값만 바꾼다."""
+    """보낸 값만 바꾼다. 안 보낸 칸은 그대로 둔다."""
     link = await _get(db, link_id)
-    for field, value in payload.model_dump(exclude_unset=True).items():
-        setattr(link, field, value)
+    changed = payload.model_dump(exclude_unset=True)
+    for field, value in changed.items():
+        setattr(link, field, _clean(field, value))
     await db.commit()
     await db.refresh(link)
+    logger.info("[PROMO_LINK] 수정 | id=%s | %s", link_id,
+                ", ".join(changed.keys()) or "없음")
     return {"success": True, "link": link.to_dict()}
 
 
