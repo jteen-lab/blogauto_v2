@@ -256,6 +256,11 @@ async def assemble_post(
         db, body.html, link_id=body.link_id, image_url=body.image_url,
         title=body.title, blog_id=body.blog_id)
     auto = str(body.link_id) == link_service.AUTO
+    # 무엇을 받아 무엇을 붙였는지 남긴다 — 화면이 자동을 보냈는지
+    # 고정 번호를 보냈는지 로그가 없으면 원인을 못 가린다
+    logger.info("[PROMO_LINK] 조립 | link_id=%r | 제목=%s | 붙은 링크=%s",
+                body.link_id, (body.title or "")[:30],
+                link.name if link else "없음")
     # 자동은 글마다 결과가 다르다. 무엇이 왜 붙었는지 화면이 적어야 한다
     return {"success": True, "html": html,
             "link_name": link.name if link else "",
