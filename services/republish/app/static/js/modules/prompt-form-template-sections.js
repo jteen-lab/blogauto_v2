@@ -501,9 +501,53 @@ function getPromptContentGenSection() {
 
                                         <div class="text-center text-sky-400 text-lg leading-none my-1">↓</div>
 
-                                        <!-- ② 자동으로 정해지는 목표 -->
+                                        <!-- ② 구획별 최소 글자수 (빌더에서 옮겨 왔다) -->
                                         <div class="bg-white rounded-lg border border-sky-200 p-3">
-                                            <span class="text-xs font-semibold text-gray-700">② 모델에게 요구할 목표</span>
+                                            <span class="text-xs font-semibold text-gray-700">② 구획별 최소 글자수</span>
+                                            <span class="block text-xs text-gray-500 mt-0.5 mb-2">
+                                                프롬프트의 <b>구조 약속</b>이 되는 값입니다 — 「도입 200자+」처럼 들어갑니다.
+                                                섹션 수는 위 <b>구조(패턴)</b>가 정합니다.
+                                            </span>
+                                            <div class="grid grid-cols-3 gap-2">
+                                                <label class="text-xs text-gray-600">도입
+                                                    <input type="number" min="0" step="10"
+                                                           x-model.number="promptModule.builderChars.intro"
+                                                           class="mt-0.5 w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:border-sky-500 focus:ring-sky-500"></label>
+                                                <label class="text-xs text-gray-600">섹션당
+                                                    <input type="number" min="0" step="10"
+                                                           x-model.number="promptModule.builderChars.section"
+                                                           class="mt-0.5 w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:border-sky-500 focus:ring-sky-500"></label>
+                                                <label class="text-xs text-gray-600">마치며
+                                                    <input type="number" min="0" step="10"
+                                                           x-model.number="promptModule.builderChars.outro"
+                                                           class="mt-0.5 w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:border-sky-500 focus:ring-sky-500"></label>
+                                            </div>
+                                            <span class="block text-xs mt-2"
+                                                  :class="structureShortfall() ? 'text-amber-800' : 'text-gray-600'">
+                                                <template x-if="structureTotal()">
+                                                    <span>
+                                                        구조 합계 <b x-text="structureTotal().toLocaleString() + '자'"></b>
+                                                        <span class="text-gray-400" x-text="'(섹션 ' + promptModule.builderChars.sections + '개 기준)'"></span>
+                                                    </span>
+                                                </template>
+                                                <template x-if="!structureTotal()">
+                                                    <span class="text-gray-400">섹션 패턴을 고르면 구조 합계를 계산합니다.</span>
+                                                </template>
+                                            </span>
+                                            <span x-show="structureShortfall()" x-transition
+                                                  class="block text-xs text-amber-900 bg-amber-100 border border-amber-300 rounded px-2 py-1.5 mt-1.5 leading-relaxed">
+                                                ⚠️ 구조 합계가 아래 목표보다
+                                                <b x-text="structureShortfall().toLocaleString() + '자'"></b> 모자랍니다.
+                                                구조 약속만 지키면 <b>발행 최소 분량에 걸려 발행되지 않습니다</b> —
+                                                섹션당 글자수를 올리거나 발행 최소 분량을 낮추세요.
+                                            </span>
+                                        </div>
+
+                                        <div class="text-center text-sky-400 text-lg leading-none my-1">↓</div>
+
+                                        <!-- ③ 자동으로 정해지는 목표 -->
+                                        <div class="bg-white rounded-lg border border-sky-200 p-3">
+                                            <span class="text-xs font-semibold text-gray-700">③ 모델에게 요구할 목표</span>
                                             <span class="block text-lg font-bold text-sky-700 mt-0.5"
                                                   x-text="targetChars().toLocaleString() + '자 이상'"></span>
                                             <span class="block text-xs text-gray-500 mt-1">
@@ -515,7 +559,7 @@ function getPromptContentGenSection() {
 
                                         <!-- ③ 한 번에 쓸 수 있는 한계 -->
                                         <div class="bg-white rounded-lg border border-sky-200 p-3">
-                                            <span class="text-xs font-semibold text-gray-700">③ 한 번에 쓸 수 있는 한계</span>
+                                            <span class="text-xs font-semibold text-gray-700">④ 한 번에 쓸 수 있는 한계</span>
                                             <span class="block text-lg font-bold text-gray-700 mt-0.5"
                                                   x-text="'약 ' + limitChars().toLocaleString() + '자'"></span>
                                             <label class="flex items-center gap-2 mt-2">

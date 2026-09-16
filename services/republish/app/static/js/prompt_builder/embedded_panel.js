@@ -73,7 +73,16 @@ window.getPromptBuilderEmbeddedHTML = function () {
                          restoreFrom(promptModule.contentGeneration.builderSelection,
                                      promptModule.contentGeneration.userPromptTemplate);
                      }
-                 })">
+                 })"
+         x-effect="
+             // 구획별 최소 글자수는 본문 분량 칸이 주인이다. 여기서 또
+             // 고칠 수 있으면 발행 최소 분량과 어긋난 줄 모른다.
+             introChars = promptModule.builderChars.intro;
+             sectionChars = promptModule.builderChars.section;
+             outroChars = promptModule.builderChars.outro;
+             // 섹션 수는 패턴이 정한다 — 합계를 내려면 폼이 알아야 한다
+             promptModule.builderChars.sections = derivedSectionCount;
+         ">
 
         <button type="button"
                 @click="expanded = !expanded"
@@ -172,20 +181,19 @@ window.getPromptBuilderEmbeddedHTML = function () {
                 <p class="text-[10px] text-gray-500 mt-1">선택한 섹션 패턴이 정하며, 구조 약속도 이 값과 일치합니다.</p>
             </div>
 
-            <!-- 최소 글자수 -->
-            <div class="bg-white border rounded-lg p-3" :class="fullPromptOverride ? 'opacity-50' : ''">
-                <h3 class="text-sm font-semibold text-gray-800 mb-2">최소 글자수</h3>
-                <div class="grid grid-cols-3 gap-2">
-                    <label class="text-[10px] text-gray-600">도입
-                        <input type="number" min="0" step="10" x-model.number="introChars" :disabled="fullPromptLocked"
-                               class="mt-0.5 w-full px-1.5 py-1 text-xs border border-gray-300 rounded disabled:bg-gray-100"></label>
-                    <label class="text-[10px] text-gray-600">섹션당
-                        <input type="number" min="0" step="10" x-model.number="sectionChars" :disabled="fullPromptLocked"
-                               class="mt-0.5 w-full px-1.5 py-1 text-xs border border-gray-300 rounded disabled:bg-gray-100"></label>
-                    <label class="text-[10px] text-gray-600">마치며
-                        <input type="number" min="0" step="10" x-model.number="outroChars" :disabled="fullPromptLocked"
-                               class="mt-0.5 w-full px-1.5 py-1 text-xs border border-gray-300 rounded disabled:bg-gray-100"></label>
-                </div>
+            <!-- 최소 글자수는 고급 설정 · 본문 분량으로 옮겼다.
+                 발행 최소 분량과 나란히 놓여야 어긋난 것이 보인다. -->
+            <div class="bg-white border rounded-lg p-3">
+                <h3 class="text-sm font-semibold text-gray-800">구획별 최소 글자수</h3>
+                <p class="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                    도입 <b x-text="introChars"></b>자 ·
+                    섹션당 <b x-text="sectionChars"></b>자 ·
+                    마치며 <b x-text="outroChars"></b>자
+                    <span class="block mt-1 text-gray-400">
+                        고급 설정 › <b>본문 분량</b>에서 고칩니다 — 발행 최소 분량과
+                        나란히 놓아야 어긋난 것이 보입니다.
+                    </span>
+                </p>
             </div>
 
             <!-- 5축 라디오 + EDIT -->
