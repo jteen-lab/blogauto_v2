@@ -73,6 +73,12 @@ def assemble(html: str, link: Optional[Any] = None,
     if not body:
         return ""
 
+    # 항목마다 쪼개진 목록을 하나로 되돌린다. 조립은 미리보기·저장·재발행이
+    # 함께 지나는 자리라, 다른 경로로 만들어진 옛 본문도 여기서 고쳐진다.
+    from ..generation.markdown_lists import renumber
+
+    body = renumber(body)
+
     blocks = []
 
     notice = (getattr(link, "notice", "") or "").strip() if link else ""

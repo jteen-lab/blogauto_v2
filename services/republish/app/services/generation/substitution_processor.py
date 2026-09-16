@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...models.blog import Blog
 from ..placeholders import apply_placeholders
+from . import markdown_lists as md_lists
 
 logger = logging.getLogger(__name__)
 
@@ -167,12 +168,16 @@ class SubstitutionProcessor:
                 html_lines.append("</tbody></table>")
                 in_table = False
 
-            # 리스트 종료 체크
-            if in_list and not re.match(r'^[\-\*]\s', stripped):
+            # 리스트 종료 체크.
+            # **빈 줄 하나로 닫지 않는다.** AI 가 항목 사이에 빈 줄을 넣어
+            # 쓰면 목록이 항목마다 쪼개져 화면에 전부 "1." 로 보인다.
+            if (in_list and not re.match(r'^[\-\*]\s', stripped)
+                    and not md_lists.bullet_continues(lines, i)):
                 html_lines.append("</ul>")
                 in_list = False
 
-            if in_ordered_list and not re.match(r'^\d+\.\s', stripped):
+            if (in_ordered_list and not re.match(r'^\d+\.\s', stripped)
+                    and not md_lists.ordered_continues(lines, i)):
                 html_lines.append("</ol>")
                 in_ordered_list = False
 
@@ -182,6 +187,9 @@ class SubstitutionProcessor:
                 in_blockquote = False
 
             # 빈 줄
+            if not stripped and (in_list or in_ordered_list):
+                continue   # 목록을 잇는 중 — 사이에 아무것도 넣지 않는다
+
             if not stripped:
                 # 목차 섹션 종료: 자동 생성 목차 출력
                 if in_toc:
