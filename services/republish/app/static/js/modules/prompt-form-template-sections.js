@@ -361,6 +361,13 @@ function getPromptContentGenSection() {
                                                     <textarea x-model="v.template" rows="4"
                                                               placeholder="이 템플릿으로 쓸 프롬프트를 적습니다. 비우면 건너뜁니다."
                                                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 text-sm font-mono"></textarea>
+                                                    <p x-show="variantPurposeRisky(v)" x-transition
+                                                       class="text-xs text-gray-600 bg-gray-100 border border-gray-300 rounded px-2 py-1.5 leading-relaxed">
+                                                        이 템플릿은 <b x-text="purposeLabel(v.purpose)"></b> 전용입니다.
+                                                        위 <b>글의 목적</b>이 "블로그 상태로 추정"이라,
+                                                        블로그가 다른 목적으로 판정되면 <b>이 템플릿이 빠집니다.</b>
+                                                        목적을 안 가릴 거라면 아래 칸을 "목적 무관"으로 두세요.
+                                                    </p>
                                                     <p x-show="variantUnreachable(v)" x-transition
                                                        class="text-xs text-amber-900 bg-amber-100 border border-amber-300 rounded px-2 py-1.5 leading-relaxed">
                                                         ⚠️ 이 템플릿은 <b>쓰이지 않습니다.</b>

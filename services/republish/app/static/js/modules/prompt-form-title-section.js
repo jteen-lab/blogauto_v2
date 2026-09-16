@@ -205,6 +205,18 @@ const titleBundleMethods = {
         return !!(fixed && own && own !== fixed);
     },
 
+    /** 목적을 걸어 두었는데 위쪽이 "블로그 상태로 추정" 인가.
+     *
+     *  이때는 추정된 목적과 다른 변형이 통째로 빠진다. 무엇으로 추정될지는
+     *  블로그마다 달라 화면이 단정할 수 없으니 "그럴 수 있다" 고만 알린다.
+     */
+    variantPurposeRisky(v) {
+        if (!this.promptModule.rotation.enabled) return false;
+        const fixed = (this.promptModule.rotation.purpose || '').trim();
+        const own = ((v || {}).purpose || '').trim();
+        return !fixed && !!own;
+    },
+
     /** 목적 코드를 사람 말로. */
     purposeLabel(code) {
         return { adsense: '애드센스', cpa: 'CPA', info: '정보성' }[code]
