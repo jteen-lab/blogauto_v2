@@ -255,8 +255,12 @@ async def assemble_post(
     html, link = await link_service.build_html(
         db, body.html, link_id=body.link_id, image_url=body.image_url,
         title=body.title, blog_id=body.blog_id)
+    auto = str(body.link_id) == link_service.AUTO
+    # 자동은 글마다 결과가 다르다. 무엇이 왜 붙었는지 화면이 적어야 한다
     return {"success": True, "html": html,
-            "link_name": link.name if link else ""}
+            "link_name": link.name if link else "",
+            "link_auto": auto,
+            "link_rule": link_service.matched_rule(link, body.title) if auto else ""}
 
 
 @router.post("/apply/post", summary="반영 — 글을 발행대기글로(선택 시 즉시 발행)")

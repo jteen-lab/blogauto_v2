@@ -84,6 +84,24 @@ def _rank(marks: list, text: str) -> Optional[tuple]:
     return (words, -(spread if spread is not None else 9999))
 
 
+def matched_rule(link: Optional[PromoLink], title: str) -> str:
+    """그 링크가 걸린 규칙. 왜 이게 붙었는지 화면에 적기 위한 값이다.
+
+    여러 규칙이 맞으면 `_rank` 와 같은 기준(가장 구체적인 것)을 쓴다.
+    링크가 없거나 규칙이 없으면 빈 문자열.
+    """
+    if link is None:
+        return ""
+    text = (title or "").strip()
+    marks = [m.strip() for m in (link.keywords or "").split(",") if m.strip()]
+    best, best_len = "", 0
+    for rule in marks:
+        parts = [p.strip() for p in rule.split("+") if p.strip()]
+        if parts and all(p in text for p in parts) and len(parts) > best_len:
+            best, best_len = rule, len(parts)
+    return best
+
+
 async def load(db: AsyncSession, link_id: Optional[int]) -> Optional[PromoLink]:
     """고른 링크를 가져온다. 안 골랐으면 None(정보성 글)."""
     if not link_id:
