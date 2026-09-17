@@ -286,12 +286,18 @@ class SubstitutionProcessor:
                 continue
 
             # 순서 리스트
-            ol_match = re.match(r'^\d+\.\s+(.+)$', stripped)
+            ol_match = re.match(r'^(\d+)\.\s+(.+)$', stripped)
             if ol_match:
                 if not in_ordered_list:
-                    html_lines.append("<ol>")
+                    # 질문·답변이 번갈아 오는 자주 묻는 질문처럼, 항목 사이에
+                    # 문단이 끼면 목록이 나뉜다. 그때 새 목록은 다시 1 부터
+                    # 세어 화면에 전부 "1." 로 보인다. 원문에 적힌 번호를
+                    # 그대로 이어 준다.
+                    start = int(ol_match.group(1))
+                    html_lines.append(
+                        "<ol>" if start == 1 else f'<ol start="{start}">')
                     in_ordered_list = True
-                text = self._inline_format(ol_match.group(1))
+                text = self._inline_format(ol_match.group(2))
                 html_lines.append(f"<li>{text}</li>")
                 continue
 

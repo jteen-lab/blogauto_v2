@@ -62,10 +62,36 @@ def ordered_continues(lines: Sequence[str], index: int) -> bool:
 
 
 def renumber(html: str) -> str:
-    """이미 만들어진 HTML 에서 붙어 있는 목록을 하나로 합친다.
+    """이미 만들어진 HTML 을 손본다.
 
-    `</ol>` 바로 뒤에 `<ol>` 이 오면 사이에 아무것도 없다는 뜻이다.
-    지난 글에 남은 것을 손보거나, 다른 경로로 만들어진 HTML 을 고칠 때 쓴다.
+    1) `</ol>` 바로 뒤에 `<ol>` 이 오면 사이에 아무것도 없다는 뜻이라 합친다.
+    2) 사이에 문단이 끼어 나뉜 목록은 합칠 수 없다(문단이 목록 안으로 들어가
+       버린다). 대신 **번호를 이어 준다** — 두 번째 목록부터 `start` 를 매겨
+       화면에서 1, 2, 3 으로 읽히게 한다.
     """
     merged = re.sub(r'</ol>\s*<ol>', '', html or "")
-    return re.sub(r'</ul>\s*<ul>', '', merged)
+    merged = re.sub(r'</ul>\s*<ul>', '', merged)
+    return _continue_numbers(merged)
+
+
+def _continue_numbers(html: str) -> str:
+    """나뉜 번호 목록에 이어지는 start 를 매긴다.
+
+    `<ol>` 이 여럿이면 앞 목록의 항목 수만큼 더한 번호에서 시작한다.
+    이미 `start` 가 있는 목록은 손대지 않는다 — 원문 번호가 우선이다.
+    """
+    if html.count("<ol") < 2:
+        return html
+
+    out = []
+    seen = 0
+    for chunk in re.split(r'(<ol[^>]*>.*?</ol>)', html, flags=re.S):
+        if not chunk.startswith("<ol"):
+            out.append(chunk)
+            continue
+        items = chunk.count("<li>")
+        if seen and chunk.startswith("<ol>"):
+            chunk = f'<ol start="{seen + 1}">' + chunk[len("<ol>"):]
+        seen += items
+        out.append(chunk)
+    return "".join(out)
