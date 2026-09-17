@@ -67,7 +67,8 @@ STYLE_LABELS: dict[str, str] = {
 def build_base_prompt(original_title: str,
                       extra_text: Optional[str] = None,
                       keywords: Optional[list] = None,
-                      length: Optional[tuple] = None) -> str:
+                      length: Optional[tuple] = None,
+                      question: Optional[dict] = None) -> str:
     """스타일 지시를 뺀 공통 프롬프트.
 
     단일 호출과 배치 호출이 **같은 본문**을 쓴다. 따로 만들면 한쪽만
@@ -85,17 +86,44 @@ def build_base_prompt(original_title: str,
             prompt = note + "\n\n"
     prompt += DEFAULT_TITLE_PROMPT.replace("{title}", original_title)
 
+    # 어디서 온 제목이냐에 따라 다듬는 권한이 다르다. 질문 제목은 낱말을
+    # 붙들면 맥락 없는 제목이 된다(순서도 title_rewrite_by_source.md).
+    from . import title_rewrite
+
+    block = title_rewrite.build_block(question)
+    if block:
+        prompt += "\n\n" + block
+
     # 핵심어를 명시한다. 이게 없으면 재조합이 검색되는 말을 흘린다.
     picked = [k for k in (keywords or []) if k and str(k).strip()][:5]
     if picked:
-        prompt += ("\n\n반드시 유지할 핵심어: "
+        label = ("참고할 핵심어: "
+                 if title_rewrite.resolve_mode(question) != title_rewrite.MODE_POLISH
+                 else "반드시 유지할 핵심어: ")
+        prompt += ("\n\n" + label
                    + ", ".join(str(k) for k in picked)
-                   + "\n이 말들이 제목에서 빠지면 검색에 잡히지 않습니다.")
+                   + title_rewrite.keyword_rule(question))
 
     if extra_text and extra_text.strip():
         extra = extra_text.strip().replace("{title}", original_title)
         prompt += f"\n\n추가 지시사항:\n{extra}"
     return prompt
+
+
+def _question_body_block(question: Optional[dict]) -> str:
+    """재조합에 넘길 질문 본문. 길면 자른다 — 제목 한 줄을 만드는 일이다."""
+    if not isinstance(question, dict):
+        return ""
+    body = (question.get("question") or "").strip()[:600]
+    answer = (question.get("answer") or "").strip()[:300]
+    if not body and not answer:
+        return ""
+    lines = ["[질문자가 쓴 내용]"]
+    if body:
+        lines.append(body)
+    if answer:
+        lines.append(f"(달린 답 일부: {answer})")
+    return "\n".join(lines)
 
 
 def style_instruction(style: Optional[str],
@@ -229,8 +257,22 @@ class TitleRecombiner:
             )
 
         # 2. 프롬프트 구성 (기본 프롬프트 + 추가 지시사항)
+        from .source_question import SETTING_KEY as _Q_KEY
+        from . import title_rewrite
+
+        question = settings.get(_Q_KEY)
         full_prompt = build_base_prompt(
-            original_title, title_prompt_text, keywords, length_range)
+            original_title, title_prompt_text, keywords, length_range,
+            question=question)
+
+        # 본문이 있으면 그것이 재료다 — 제목만 보고 고치면 맥락이 없다
+        body_block = _question_body_block(question)
+        if body_block:
+            full_prompt += "\n\n" + body_block
+        logger.info("[RECOMBINE] 갈래=%s | 소스=%s",
+                    title_rewrite.MODE_LABEL.get(
+                        title_rewrite.resolve_mode(question), "?"),
+                    title_rewrite.source_of(question) or "없음")
 
         # 스타일 지시. **이 스타일 것만** 넣는다 — 다섯 개를 다 넣으면
         # AI 가 전부 지키려 해서 결과가 같아진다(실제로 그랬다).
@@ -484,8 +526,15 @@ class TitleRecombiner:
         overrides = tr.get("style_prompts") or {}
 
         length = parse_length(tr)
+        from .source_question import SETTING_KEY as _Q_KEY
+
+        question = settings.get(_Q_KEY)
         base = build_base_prompt(
-            original_title, tr.get("custom_prompt"), None, length)
+            original_title, tr.get("custom_prompt"), None, length,
+            question=question)
+        body_block = _question_body_block(question)
+        if body_block:
+            base += "\n\n" + body_block
         prompt = build_prompt(
             base, picked, STYLE_LABELS,
             {code: style_instruction(code, overrides) for code in picked})

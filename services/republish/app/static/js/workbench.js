@@ -169,11 +169,11 @@ function moduleTester() {
             } else if (base.module_type === 'generate' && this.pickedQuestions.length) {
                 const rows = this.pickedQuestions.slice(0, this.MAX_POSTS);
                 base.title_texts = rows.map(q => q.title);
-                // 본문을 받아 둔 질문이 있으면 제목과 짝을 맞춰 보낸다.
-                // 없는 자리는 null — 그 글은 제목만으로 쓴다.
-                if (rows.some(q => q.body)) {
-                    base.questions = rows.map(q => q.body || null);
-                }
+                // 제목과 짝을 맞춰 보낸다. **본문이 없어도 보낸다** —
+                // 카페 비공개처럼 본문을 못 가져와도 질문 제목은 질문 제목이라,
+                // 어디서 왔는지를 알아야 제목을 알맞게 다시 쓴다.
+                base.questions = rows.map(q => Object.assign(
+                    {}, q.body || {}, { source: q.source || '' }));
             }
 
             s.running = true; s.applyMessage = '';
