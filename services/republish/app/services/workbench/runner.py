@@ -262,6 +262,9 @@ class WorkbenchRunner:
             "excluded": not summary.get("success", False),
             "reason": summary.get("error") or (
                 summary.get("message") if not summary.get("success") else ""),
+            # 이 글 한 건의 실행 요약. 화면이 글마다 따로 보여 주고,
+            # 반영이 끝나면 그 글 것만 지운다.
+            "message": summary.get("message") or "",
         }
         post_id = summary.get("crawling_post_id")
         if post_id:

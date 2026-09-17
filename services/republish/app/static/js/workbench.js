@@ -349,7 +349,7 @@ function moduleTester() {
             if (step && item) {
                 const at = (step.items || []).indexOf(item);
                 if (at >= 0) step.items.splice(at, 1);
-                step.applyMessage = message;
+                this._refreshStepOutcome(step, message);
             }
             this.previewItem = null; this.previewStep = null;
             this.preview = { title: '', html: '', imageUrl: null, raw: '' };
@@ -358,6 +358,32 @@ function moduleTester() {
             // 다음 글을 고를 때 앞의 것이 섞인다.
             this.releaseSources();
             this.closeSheet();
+        },
+        /** 반영이 끝난 글의 자취를 지운다.
+         *
+         *  실행 요약에 「제목 … 본문 3724자」가 남아 있으면 이미 내보낸 글이
+         *  아직 여기 있는 것처럼 보인다. 남은 글들의 요약만 다시 세운다.
+         *  남은 글이 없으면 단계를 비운다.
+         */
+        _refreshStepOutcome(step, message) {
+            const left = (step.items || []).length;
+            if (!left) {
+                step.outcome = null;
+                step.clipped = 0;
+                step.filter = 'all';
+                step.applyMessage = message;
+                return;
+            }
+            const lines = (step.items || [])
+                .map(it => (it.blogName ? it.blogName + ': ' : '') + (it.message || ''))
+                .filter(t => t.trim());
+            if (step.outcome) {
+                step.outcome = {
+                    success: true,
+                    message: lines.join(' / ') || ('남은 글 ' + left + '건'),
+                };
+            }
+            step.applyMessage = message + ' · 남은 글 ' + left + '건';
         },
         async copyHtml() {
             try {
@@ -400,6 +426,27 @@ function moduleTester() {
             finally { this.sourceLoading = false; }
         },
         checkedQuestions() { return this.sourceItems.filter(i => i.checked); },
+        /** 체크한 순간 본문을 가져온다. 버튼을 한 번 더 누르게 하면
+         *  잊고 그냥 생성해 제목만으로 글이 나간다. */
+        async onQuestionCheck(q) {
+            if (!q.checked) return;
+            if (q.body) { q.bodyOpen = true; return; }
+            if (!q.link || q.bodyLoading) return;
+            q.bodyLoading = true; q.bodyError = '';
+            try {
+                const got = await this._json('/api/v1/workbench/question-body', {
+                    method: 'POST', body: JSON.stringify({ links: [q.link] }),
+                });
+                const row = (got.items || [])[0];
+                if (row && (row.question || row.answer)) {
+                    q.body = { question: row.question, answer: row.answer };
+                    q.bodyOpen = true;
+                } else {
+                    q.bodyError = (row && row.error) || '본문을 못 가져왔습니다';
+                }
+            } catch (e) { q.bodyError = '실패: ' + e.message; }
+            finally { q.bodyLoading = false; }
+        },
         /** 체크한 질문의 본문을 가져온다.
          *  고른 것만 부른다 — 목록을 통째로 긁으면 한 번에 수 MB 다. */
         async fetchQuestionBodies() {

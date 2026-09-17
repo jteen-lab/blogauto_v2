@@ -368,6 +368,7 @@
                         <label class="flex items-start gap-2.5 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors"
                                :class="q.checked ? 'border-amber-400 bg-amber-50' : 'border-gray-200 hover:bg-gray-50'">
                             <input type="checkbox" x-model="q.checked"
+                                   @change="onQuestionCheck(q)"
                                    class="mt-0.5 rounded border-gray-300 text-amber-600 focus:ring-amber-500">
                             <span class="min-w-0 text-xs">
                                 <span class="inline-block px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600"
@@ -382,6 +383,9 @@
                                    @click.stop
                                    class="inline-block mt-1 text-accent hover:underline"
                                    x-show="q.link">원문 보기</a>
+                                <span x-show="q.bodyLoading" class="block mt-2 text-emerald-700">
+                                    본문을 가져오는 중…
+                                </span>
                                 <span x-show="q.body && !q.bodyOpen" class="block mt-2">
                                     <button type="button" @click.prevent.stop="q.bodyOpen = true"
                                             class="text-emerald-700 underline hover:opacity-70">
@@ -466,7 +470,7 @@
                         <button @click="fetchQuestionBodies()"
                                 :disabled="bodyLoading || !checkedQuestions().length"
                                 class="flex-1 py-2.5 px-3 text-sm text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition-colors">
-                            <span x-show="!bodyLoading">내용 가져오기</span>
+                            <span x-show="!bodyLoading">내용 다시 가져오기</span>
                             <span x-show="bodyLoading">가져오는 중…</span>
                         </button>
                         <button @click="applyPickedQuestions()"
@@ -500,6 +504,6 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="/static/js/workbench-links.js?v=20260917qsrc"></script>
-<script src="/static/js/workbench.js?v=20260917qsrc"></script>
+<script src="/static/js/workbench-links.js?v=20260917auto"></script>
+<script src="/static/js/workbench.js?v=20260917auto"></script>
 {% endblock %}
