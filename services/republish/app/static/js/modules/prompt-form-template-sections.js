@@ -271,7 +271,7 @@ function getPromptContentGenSection() {
                                                     <option value="random">무작위 — 매 글 다르게</option>
                                                     <option value="sequential">순번 — 차례대로 돌림</option>
                                                     <option value="by_niche">하위 주제별 — 주제마다 고정</option>
-                                                    <option value="by_keyword">키워드별 — 키워드마다 고정</option>
+                                                    <option value="by_keyword">키워드별 — 맞는 것 중에서 무작위</option>
                                                 </select>
                                             </div>
                                             <div>

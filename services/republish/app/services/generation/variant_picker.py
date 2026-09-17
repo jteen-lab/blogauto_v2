@@ -11,7 +11,7 @@
     sequential  순번대로 (커서는 호출부가 보관한다 — 동시 실행 경합을
                 피하려면 모듈 설정이 아니라 실행 상태에 둬야 한다)
     by_niche    하위 주제별로 고정
-    by_keyword  키워드 패턴별로 고정
+    by_keyword  키워드로 후보를 좁히고 그 안에서 무작위
 
 **후보가 없으면 None 을 돌려준다.** 호출부는 기존 단수 설정으로 폴백한다.
 이게 하위 호환의 전부다.
@@ -200,8 +200,13 @@ def pick(items: Sequence[Dict[str, Any]], mode: Any = DEFAULT_MODE, *,
         index = _stable_index(str(topic_id or ""), size)
         reason = f"주제 {topic_id} 고정"
     elif picked_mode == MODE_BY_KEYWORD:
-        index = _stable_index(keyword or "", size)
-        reason = "키워드 고정"
+        # 키워드로 후보를 좁힌 뒤, **그 안에서는 무작위로** 고른다.
+        # 같은 키워드에 템플릿을 둘 이상 둔 이유가 "글마다 다르게" 이기
+        # 때문이다. 제목으로 고정하면 같은 제목은 늘 같은 구조가 되고,
+        # 어느 글이 어디로 갈지 사람이 알 수도 없다(2026-09-17 변경).
+        index = random.randrange(size)
+        reason = (f"키워드 후보 {size}개 중 무작위 {index + 1}"
+                  if size > 1 else "키워드 일치")
     else:
         index = random.randrange(size)
         reason = f"무작위 {index + 1}/{size}"
@@ -216,7 +221,7 @@ def pick(items: Sequence[Dict[str, Any]], mode: Any = DEFAULT_MODE, *,
 
 
 def _stable_index(key: str, size: int) -> int:
-    """같은 키면 항상 같은 자리. 주제·키워드별 고정에 쓴다."""
+    """같은 키면 항상 같은 자리. 하위 주제별 고정에 쓴다."""
     if not key:
         return 0
     digest = hashlib.sha1(key.encode("utf-8")).hexdigest()
