@@ -30,6 +30,7 @@ function moduleTester() {
         sheet: null,          // blog | module | source | link | preview
         sourceQuery: '', sourceItems: [], sourceError: '', sourceLoading: false,
         sourceNextStart: null, sourceLastQuery: '',
+        sourceScrollTop: 0,   // 질문 목록에서 보던 자리
         bodyLoading: false,
         pickedQuestions: [],
         // 홍보 링크(상태·등록·수정)는 workbench-links.js 에 있다
@@ -69,10 +70,25 @@ function moduleTester() {
         openSheet(name) {
             this.sheet = name;
             document.body.style.overflow = 'hidden';
+            // 질문 목록은 보던 자리에서 다시 열린다. 맨 위로 튕기면
+            // 아래쪽에서 고르던 사람은 같은 곳을 다시 찾아 내려가야 한다.
+            if (name === 'source') {
+                this.$nextTick(() => {
+                    const box = this.$refs.sourceScroll;
+                    if (box) box.scrollTop = this.sourceScrollTop || 0;
+                });
+            }
         },
         closeSheet() {
+            this._rememberSourceScroll();
             this.sheet = null;
             document.body.style.overflow = '';
+        },
+        /** 질문 목록에서 어디까지 내려갔는지 적어 둔다. */
+        _rememberSourceScroll() {
+            if (this.sheet !== 'source') return;
+            const box = this.$refs.sourceScroll;
+            if (box) this.sourceScrollTop = box.scrollTop;
         },
         sheetTitle() {
             return { blog: '블로그 선택', module: '모듈 담기',
@@ -338,6 +354,9 @@ function moduleTester() {
             this.previewItem = null; this.previewStep = null;
             this.preview = { title: '', html: '', imageUrl: null, raw: '' };
             this.postMessage = '';
+            // 반영이 끝났으면 고른 질문을 놓아 준다. 체크가 남아 있으면
+            // 다음 글을 고를 때 앞의 것이 섞인다.
+            this.releaseSources();
             this.closeSheet();
         },
         async copyHtml() {
@@ -363,6 +382,12 @@ function moduleTester() {
                     Object.assign({ checked: false }, i));
                 if (start === 1) {
                     this.sourceItems = rows;
+                    // 새 검색은 처음부터 본다
+                    this.sourceScrollTop = 0;
+                    this.$nextTick(() => {
+                        const box = this.$refs.sourceScroll;
+                        if (box) box.scrollTop = 0;
+                    });
                 } else {
                     // 같은 글이 겹쳐 오면 한 번만 남긴다
                     const seen = new Set(this.sourceItems.map(i => i.link));
@@ -396,6 +421,7 @@ function moduleTester() {
                     const row = byLink[q.link];
                     if (row && (row.question || row.answer)) {
                         q.body = { question: row.question, answer: row.answer };
+                        q.bodyOpen = true;
                         ok += 1;
                     } else {
                         q.bodyError = (row && row.error) || '본문을 못 가져왔습니다';
@@ -405,6 +431,15 @@ function moduleTester() {
                     : '본문을 가져오지 못했습니다 — 제목만으로 진행됩니다';
             } catch (e) { this.sourceError = '실패: ' + e.message; }
             finally { this.bodyLoading = false; }
+        },
+        /** 고른 질문을 놓는다. 가져온 본문은 접어 두되 버리지 않는다 —
+         *  다시 쓰려고 펼치면 부르지 않고 바로 보인다. */
+        releaseSources() {
+            (this.sourceItems || []).forEach(q => {
+                q.checked = false;
+                if (q.body) q.bodyOpen = false;
+            });
+            this.pickedQuestions = [];
         },
         applyPickedQuestions() {
             this.pickedQuestions = this.checkedQuestions().slice();

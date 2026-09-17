@@ -267,8 +267,10 @@
             </div>
         </div>
 
-        <div class="flex-1 overflow-y-auto">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div class="flex-1 min-h-0"
+             :class="sheet === 'source' ? 'overflow-hidden' : 'overflow-y-auto'">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4"
+                 :class="sheet === 'source' ? 'h-full flex flex-col' : ''">
 
             <!-- 블로그 선택 -->
             <div x-show="sheet === 'blog'" class="space-y-1.5">
@@ -349,8 +351,8 @@
             </div>
 
             <!-- 소스 검색 -->
-            <div x-show="sheet === 'source'">
-                <div class="flex gap-2 mb-3">
+            <div x-show="sheet === 'source'" class="h-full flex flex-col min-h-0">
+                <div class="flex gap-2 mb-3 shrink-0">
                     <input type="text" x-model="sourceQuery" @keyup.enter="searchSources()"
                            placeholder="니치 키워드 (예: 이사 견적)"
                            class="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm focus:border-accent focus:ring-accent">
@@ -359,8 +361,9 @@
                         <span x-show="sourceLoading">검색 중…</span>
                     </button>
                 </div>
-                <p class="text-xs text-red-500 mb-2" x-show="sourceError" x-text="sourceError"></p>
-                <div class="space-y-1.5">
+                <p class="text-xs text-red-500 mb-2 shrink-0" x-show="sourceError" x-text="sourceError"></p>
+                <div class="space-y-1.5 flex-1 min-h-0 overflow-y-auto pr-1"
+                     x-ref="sourceScroll">
                     <template x-for="(q, qi) in sourceItems" :key="qi">
                         <label class="flex items-start gap-2.5 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors"
                                :class="q.checked ? 'border-amber-400 bg-amber-50' : 'border-gray-200 hover:bg-gray-50'">
@@ -379,8 +382,18 @@
                                    @click.stop
                                    class="inline-block mt-1 text-accent hover:underline"
                                    x-show="q.link">원문 보기</a>
-                                <span x-show="q.body" class="block mt-2 p-2 rounded bg-emerald-50 border border-emerald-200">
-                                    <span class="block text-emerald-800 font-medium">본문을 가져왔습니다</span>
+                                <span x-show="q.body && !q.bodyOpen" class="block mt-2">
+                                    <button type="button" @click.prevent.stop="q.bodyOpen = true"
+                                            class="text-emerald-700 underline hover:opacity-70">
+                                        가져온 본문 펼치기
+                                    </button>
+                                </span>
+                                <span x-show="q.body && q.bodyOpen" class="block mt-2 p-2 rounded bg-emerald-50 border border-emerald-200">
+                                    <span class="flex items-center justify-between">
+                                        <span class="text-emerald-800 font-medium">본문을 가져왔습니다</span>
+                                        <button type="button" @click.prevent.stop="q.bodyOpen = false"
+                                                class="text-emerald-700 hover:opacity-70">접기</button>
+                                    </span>
                                     <span class="block text-gray-700 mt-1 leading-relaxed"
                                           x-text="q.body?.question"></span>
                                     <span class="block text-gray-500 mt-1 leading-relaxed"
@@ -487,6 +500,6 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="/static/js/workbench-links.js?v=20260916auto3"></script>
-<script src="/static/js/workbench.js?v=20260916auto3"></script>
+<script src="/static/js/workbench-links.js?v=20260917src"></script>
+<script src="/static/js/workbench.js?v=20260917src"></script>
 {% endblock %}
