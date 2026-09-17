@@ -75,23 +75,40 @@ def renumber(html: str) -> str:
 
 
 def _continue_numbers(html: str) -> str:
-    """나뉜 번호 목록에 이어지는 start 를 매긴다.
+    """**쪼개진** 번호 목록에만 이어지는 start 를 매긴다.
 
-    `<ol>` 이 여럿이면 앞 목록의 항목 수만큼 더한 번호에서 시작한다.
-    이미 `start` 가 있는 목록은 손대지 않는다 — 원문 번호가 우선이다.
+    쪼개졌다는 표시는 둘이다.
+
+    1. 소제목을 건너뛰지 않았다 — 소제목이 나오면 다른 이야기가 시작된
+       것이므로 번호를 처음부터 다시 센다.
+    2. 앞뒤 목록이 **항목 하나씩**이다 — 「번호 질문 → 답변 문단」이
+       번갈아 오면서 나뉜 모양이다.
+
+    이 둘을 안 보면 앞 섹션의 「확인할 것 8가지」를 세고 자주 묻는 질문이
+    9 번부터 시작한다(2026-09-17 고침). 멀쩡한 목록은 건드리지 않는다.
     """
     if html.count("<ol") < 2:
         return html
 
     out = []
-    seen = 0
-    for chunk in re.split(r'(<ol[^>]*>.*?</ol>)', html, flags=re.S):
+    seen = 0        # 지금 흐름에서 지나온 항목 수
+    prev_single = False
+    for chunk in re.split(r'(<ol[^>]*>.*?</ol>|<h[1-6][^>]*>)', html, flags=re.S):
+        if chunk.startswith("<h"):
+            # 소제목 — 여기서 이야기가 갈린다. 번호도 새로 센다
+            seen, prev_single = 0, False
+            out.append(chunk)
+            continue
         if not chunk.startswith("<ol"):
             out.append(chunk)
             continue
+
         items = chunk.count("<li>")
-        if seen and chunk.startswith("<ol>"):
+        single = items == 1
+        if seen and prev_single and single and chunk.startswith("<ol>"):
             chunk = f'<ol start="{seen + 1}">' + chunk[len("<ol>"):]
-        seen += items
+        # 항목이 여럿인 목록은 그 자체로 완결된 목록이라 흐름을 끊는다
+        seen = seen + items if single else 0
+        prev_single = single
         out.append(chunk)
     return "".join(out)
