@@ -117,10 +117,28 @@ function getPromptTitleSection() {
                                     <!-- 묶음 1 (기본) -->
                                     <div class="p-4 bg-gray-50 rounded-lg space-y-4"
                                          :class="promptModule.rotation.enabled ? 'border border-blue-200' : ''">
-                                        <b class="block text-xs text-blue-700" x-show="promptModule.rotation.enabled">
-                                            묶음 1 (기본)
-                                            <span class="font-normal text-gray-500" x-text="bundleAssignText(-1)"></span>
-                                        </b>
+                                        <div x-show="promptModule.rotation.enabled" class="space-y-2">
+                                            <b class="block text-xs text-blue-700">묶음 1 (기본)</b>
+                                            <div class="flex flex-wrap items-center gap-1.5 p-2 bg-blue-50 border border-blue-200 rounded">
+                                                <span class="text-xs font-medium text-gray-700">쓸 템플릿</span>
+                                                <template x-for="n in promptTemplateCount()" :key="'b1t' + n">
+                                                    <button type="button"
+                                                            @click="toggleBundleTemplate(promptModule.titleRecombine, n)"
+                                                            class="w-7 h-7 text-xs rounded border transition-colors"
+                                                            :class="(promptModule.titleRecombine.templates || []).includes(n)
+                                                                ? 'border-blue-500 bg-blue-600 text-white font-semibold'
+                                                                : 'border-gray-300 bg-white text-gray-600 hover:bg-blue-100'"
+                                                            x-text="n"></button>
+                                                </template>
+                                                <button type="button"
+                                                        x-show="(promptModule.titleRecombine.templates || []).length"
+                                                        @click="promptModule.titleRecombine.templates = []"
+                                                        class="px-2 py-1 text-xs text-gray-500 underline hover:text-gray-800">
+                                                    고른 것 지우기
+                                                </button>
+                                                <span class="text-xs w-full text-gray-600" x-text="bundleAssignText(-1)"></span>
+                                            </div>
+                                        </div>
                                         ${getTitleBundleFields('promptModule.titleRecombine')}
                                     </div>
 
@@ -284,6 +302,11 @@ const titleBundleMethods = {
      *  다른 템플릿을 골랐으면 비켜 준다.
      */
     titleBundleFor(number) {
+        // 묶음 1 이 집었으면 묶음 1 이다. 집어 두면 다른 묶음이 같은
+        // 번호를 집어도 이긴다(서버와 같은 규칙).
+        if ((this.promptModule.titleRecombine.templates || []).includes(number)) {
+            return 0;
+        }
         const rows = this.promptModule.titleRecombine.variants || [];
         for (let i = 0; i < rows.length; i++) {
             if ((rows[i].templates || []).includes(number)) return i + 1;
@@ -307,8 +330,11 @@ const titleBundleMethods = {
         const mine = this.bundleTemplates(bi);
         if (!mine.length) {
             return bi < 0
-                ? '· 아무도 맡지 않은 템플릿에 쓰입니다'
+                ? '아무도 맡지 않은 템플릿에 쓰입니다'
                 : '⚠️ 맡은 템플릿이 없습니다 — 이 묶음은 쓰이지 않습니다.';
+        }
+        if (bi < 0 && !(this.promptModule.titleRecombine.templates || []).length) {
+            return '템플릿 ' + mine.join('·') + ' 에 쓰입니다 (아무도 맡지 않은 자리)';
         }
         const how = bi >= 0 && !(this.promptModule.titleRecombine.variants[bi].templates || []).length
             ? ' (제자리)' : '';

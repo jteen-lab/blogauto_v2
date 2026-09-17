@@ -67,7 +67,7 @@ def wanted(bundle: Dict[str, Any]) -> List[int]:
 
 def pick(settings: Optional[Dict[str, Any]],
          index: int) -> Optional[Dict[str, Any]]:
-    """이 템플릿이 쓸 묶음. 없으면 None(묶음 1 = 최상위 값을 쓴다).
+    """이 템플릿이 쓸 묶음. None 이면 묶음 1(최상위 값)을 쓴다.
 
     Args:
         settings: 모듈 설정
@@ -78,10 +78,17 @@ def pick(settings: Optional[Dict[str, Any]],
     쓰이면 어느 쪽이 맞는지 알 수 없다.
     """
     rows = bundles(settings)
-    if not rows:
+    number = (index or 0) + 1
+
+    # 0) 묶음 1(최상위)이 이 템플릿을 집었으면 묶음 1 이다.
+    #    묶음 1 은 원래 아무도 맡지 않은 자리를 맡지만, 집어 두면
+    #    다른 묶음이 같은 번호를 집어도 묶음 1 이 이긴다.
+    base = (settings or {}).get(KEY) or {}
+    if number in wanted(base):
         return None
 
-    number = (index or 0) + 1
+    if not rows:
+        return None
 
     # 1) 이 템플릿을 집어 든 묶음 — 여럿이면 위에 있는 쪽
     for row in rows:
