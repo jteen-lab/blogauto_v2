@@ -75,6 +75,8 @@ function imageSettingsApp() {
         // 미리보기
         previewText: '미리보기 텍스트\n두 번째 줄',
         templatePreviewUrl: '',
+        // 미리보기에 쓰는 배경. 0 = 기본, 1.. = 추가 배경 슬롯
+        previewSlot: 0,
         loadedFont: null,
         templateImage: null,
         extraCacheBust: 0,
@@ -289,12 +291,23 @@ function imageSettingsApp() {
 
         loadTemplateImage() {
             if (!this.overlayConfig.template_image) return;
+            this.loadSlotImage(this.previewSlot || 0);
+        },
 
+        /** 이 슬롯의 배경을 미리보기 바탕으로 싣는다. */
+        loadSlotImage(slot) {
             const img = new Image();
             img.crossOrigin = 'anonymous';
             img.onload = () => { this.templateImage = img; this.updatePreview(); };
             img.onerror = () => console.error('[IMAGE_SETTINGS] 템플릿 이미지 로드 실패');
-            img.src = this.templatePreviewUrl;
+            img.src = slot ? this.extraPreviewUrl(slot) : this.templatePreviewUrl;
+        },
+
+        /** 배경을 클릭하면 그것으로 미리본다. 여러 장을 등록해 두면
+         *  어느 글에 어떤 글씨가 얹힐지 장마다 확인해야 한다. */
+        selectPreviewSlot(slot) {
+            this.previewSlot = slot;
+            this.loadSlotImage(slot);
         },
 
         async loadCustomFont() {
@@ -324,6 +337,13 @@ function imageSettingsApp() {
             if (event.target.files.length > 0) {
                 this.uploadTemplateFile(event.target.files[0]);
             }
+        },
+
+        /** 지금 미리보는 배경의 이름. 화면에 적는다. */
+        previewSlotLabel() {
+            return this.previewSlot
+                ? '추가 배경 ' + this.previewSlot + '번'
+                : '기본 배경';
         },
 
         // 추가 배경 미리보기 URL (슬롯별)
@@ -401,6 +421,10 @@ function imageSettingsApp() {
                     this.overlayConfig.template_images =
                         (this.overlayConfig.template_images || [])
                             .filter(r => Number(r.slot) !== Number(slot));
+                    // 지운 배경을 미리보고 있었으면 기본으로 돌아온다
+                    if (Number(this.previewSlot) === Number(slot)) {
+                        this.selectPreviewSlot(0);
+                    }
                     this.showMessage(`추가 배경 ${slot}번을 삭제했습니다.`, 'success');
                 } else {
                     this.showMessage('추가 배경 삭제에 실패했습니다.', 'error');
