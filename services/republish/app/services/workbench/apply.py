@@ -80,6 +80,54 @@ async def apply_titles(db: AsyncSession, user_id: int,
                         f"미분류 {outcome.get('queued', 0)}건")}
 
 
+async def _fill_category(db: AsyncSession, title: MainTitle,
+                         blog_id: int) -> None:
+    """제목의 주제·하위 주제를 채운다. 못 정하면 그대로 둔다.
+
+    1) 제목을 카테고리 키워드와 맞춰 본다(수집 제목과 같은 장치)
+    2) 못 맞추면 이 블로그가 쓰는 카테고리가 하나뿐일 때 그것으로
+
+    둘 다 아니면 미분류로 둔다 — 틀린 분류보다 빈 칸이 낫다.
+    순서도: docs/flowcharts/workbench_title_category.md
+    """
+    from sqlalchemy import select
+
+    from ...models.blog import Blog
+    from ...models.category import BlogCategory
+    from ..category_matcher_service import CategoryMatcherService
+
+    blog = await db.get(Blog, blog_id)
+    user_id = getattr(blog, "user_id", None)
+    try:
+        hit = await CategoryMatcherService(db, user_id=user_id).match_category(
+            title.title or "")
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[WORKBENCH] 카테고리 분류 실패(무시) | %s", e)
+        hit = None
+
+    if hit and hit.get("topic_id"):
+        title.topic_id = hit["topic_id"]
+        title.subtopic_id = hit.get("subtopic_id")
+        logger.info("[WORKBENCH] 제목 분류 | id=%s | %s",
+                    title.id, hit.get("category_path") or hit["topic_id"])
+        return
+
+    rows = (await db.execute(
+        select(BlogCategory).where(BlogCategory.blog_id == blog_id)
+    )).scalars().all()
+    active = [r for r in rows if getattr(r, "is_active", True) and r.topic_id]
+    # 여럿이면 어느 것인지 알 수 없다. 하나일 때만 쓴다.
+    if len(active) == 1:
+        title.topic_id = active[0].topic_id
+        title.subtopic_id = active[0].subtopic_id
+        logger.info("[WORKBENCH] 블로그 카테고리로 분류 | id=%s | topic=%s",
+                    title.id, title.topic_id)
+        return
+
+    logger.info("[WORKBENCH] 카테고리 못 정함(미분류) | id=%s | 후보 %d개",
+                title.id, len(active))
+
+
 async def _ensure_main_title(db: AsyncSession, blog_id: int,
                              text: str) -> Optional[int]:
     """글이 붙을 정식제목을 확보한다.
@@ -105,6 +153,11 @@ async def _ensure_main_title(db: AsyncSession, blog_id: int,
         await db.flush()
         logger.info("[WORKBENCH] 정식제목 신규 | id=%s | %s",
                     found.id, label[:30])
+
+    # 카테고리가 비면 거르는 화면·재고 계산에서 빠진다. 수집 제목을
+    # 분류할 때와 **같은 장치**로 채운다.
+    if found.topic_id is None:
+        await _fill_category(db, found, blog_id)
 
     # 이 블로그가 쓴 제목임을 남긴다. 재고 화면이 이 값으로 매칭을 본다.
     ids = _blog_ids(found.matched_blog_ids)
