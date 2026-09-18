@@ -171,6 +171,29 @@ function createPromptBuilderState(opts = {}) {
             };
         },
 
+        /** 이 본문이 어느 프리셋으로 채워졌는지. 못 찾으면 빈 문자열.
+         *
+         *  반영하는 순간에만 이름을 적어 두면 **이미 만들어 둔 템플릿**은
+         *  표시할 근거가 없다. 본문에 각 블록이 통째로 들어가므로 거꾸로
+         *  찾을 수 있다.
+         */
+        presetLabelOf(template) {
+            const text = String(template || '');
+            if (!text.trim()) return '';
+            // 전용 프롬프트 프리셋은 presets 목록에서 빠져 있다(승인용 설정에서
+            // 고른다). 되짚을 때는 원본 목록을 본다.
+            const full = (this.builtinPresets || []).find(
+                (p) => p.full_prompt && text.trim() === String(p.full_prompt).trim());
+            if (full) return full.label;
+            const sel = this.inferSelection(text);
+            if (!sel || !sel.persona) return '';
+            const hit = this.presets.find(
+                (p) => !p.full_prompt
+                    && p.persona === sel.persona && p.reader === sel.reader
+                    && p.pattern === sel.pattern && p.tone === sel.tone);
+            return hit ? hit.label : '';
+        },
+
         // 스냅샷이 있으면 그것을, 없으면 본문에서 되짚어 복원한다.
         restoreFrom(snapshot, template) {
             const hasSnap = snapshot && typeof snapshot === 'object'

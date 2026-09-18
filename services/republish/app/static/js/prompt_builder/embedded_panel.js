@@ -75,7 +75,10 @@ window.getPromptBuilderEmbeddedHTML = function () {
                          restoreFrom(promptModule.contentGeneration.builderSelection,
                                      promptModule.contentGeneration.userPromptTemplate);
                      }
-                 })"
+                 });
+                 // 템플릿 이름 옆에 「무엇으로 채웠는지」를 적으려면 폼이
+                 // 프리셋 목록을 알아야 한다. 빌더만 갖고 있으므로 넘겨 준다.
+                 promptModule.presetLabelOf = (text) => presetLabelOf(text)"
          x-effect="
              // 구획별 최소 글자수는 본문 분량 칸이 주인이다. 여기서 또
              // 고칠 수 있으면 발행 최소 분량과 어긋난 줄 모른다.

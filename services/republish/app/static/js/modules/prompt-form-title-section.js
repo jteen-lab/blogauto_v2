@@ -118,7 +118,12 @@ function getPromptTitleSection() {
                                     <div class="p-4 bg-gray-50 rounded-lg space-y-4"
                                          :class="promptModule.rotation.enabled ? 'border border-blue-200' : ''">
                                         <div x-show="promptModule.rotation.enabled" class="space-y-2">
-                                            <b class="block text-xs text-blue-700">묶음 1 (기본)</b>
+                                            <div class="flex items-center justify-between gap-2">
+                                                <b class="text-xs text-blue-700">묶음 1 (기본)</b>
+                                                <input type="text" x-model="promptModule.titleRecombine.label"
+                                                       placeholder="이름 (선택)"
+                                                       class="w-32 px-2 py-1 border border-gray-300 rounded text-xs">
+                                            </div>
                                             <div class="flex flex-wrap items-center gap-1.5 p-2 bg-blue-50 border border-blue-200 rounded">
                                                 <span class="text-xs font-medium text-gray-700">쓸 템플릿</span>
                                                 <template x-for="n in promptTemplateCount()" :key="'b1t' + n">
@@ -208,6 +213,17 @@ const titleBundleMethods = {
         const idx = list.indexOf(styleValue);
         if (idx !== -1) list.splice(idx, 1);
         else list.push(styleValue);
+    },
+
+    /** 이 템플릿을 무엇으로 채웠는지. 저장된 이름이 먼저고, 없으면
+     *  본문에서 되짚는다(빌더 패널이 심어 준 함수를 쓴다).
+     */
+    templatePreset(saved, template) {
+        const kept = (saved || '').trim();
+        if (kept) return kept;
+        if (typeof this.presetLabelOf !== 'function') return '';
+        try { return this.presetLabelOf(template) || ''; }
+        catch (e) { return ''; }
     },
 
     /** 이 템플릿이 목적 때문에 영영 안 걸리는가.

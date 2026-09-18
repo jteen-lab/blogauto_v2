@@ -30,6 +30,7 @@ function createPromptModuleState() {
             // 스타일별 지시. 비우면 기본값을 쓴다.
             stylePrompts: {},
             templates: [],   // 묶음 1 이 맡을 템플릿 번호
+            label: '',       // 묶음 1 이름(화면 표시용)
             // 니치 고르개(화면 전용 · 저장하지 않는다)
             styleTemplate: '', styleTemplateHint: '',
             // 묶음 2.. — 프롬프트 템플릿 2.. 와 짝이다(묶음 1 = 위 값들)
@@ -222,6 +223,7 @@ const promptModuleMethods = {
                 stylePrompts: settings.title_recombine.style_prompts || {},
                 templates: Array.isArray(settings.title_recombine.templates)
                     ? settings.title_recombine.templates : [],
+                label: settings.title_recombine.label || '',
                 styleTemplate: '', styleTemplateHint: '',
                 variants: (settings.title_recombine.variants || []).map(v => ({
                     label: v.label || '',
@@ -788,6 +790,7 @@ const promptModuleMethods = {
                 styles: this.promptModule.titleRecombine.selectedStyles,
                 // 묶음 1 이 맡을 템플릿. 비우면 아무도 안 맡은 자리를 맡는다
                 templates: this.promptModule.titleRecombine.templates || [],
+                label: (this.promptModule.titleRecombine.label || '').trim(),
                 count_per_style: this.promptModule.titleRecombine.countPerStyle,
                 custom_prompt: this.promptModule.titleRecombine.customPrompt,
                 min_length: this.promptModule.titleRecombine.minLength || 0,

@@ -308,9 +308,9 @@ function getPromptContentGenSection() {
                                             <div class="flex flex-wrap items-center justify-between gap-2 mb-1.5" x-show="promptModule.rotation.enabled">
                                                 <div class="flex items-center gap-2 min-w-0">
                                                     <b class="text-xs text-indigo-700 shrink-0">템플릿 1 (기본)</b>
-                                                    <span x-show="promptModule.rotation.base.presetLabel"
+                                                    <span x-show="templatePreset(promptModule.rotation.base.presetLabel, promptModule.contentGeneration.userPromptTemplate)"
                                                           class="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 truncate"
-                                                          x-text="promptModule.rotation.base.presetLabel"></span>
+                                                          x-text="templatePreset(promptModule.rotation.base.presetLabel, promptModule.contentGeneration.userPromptTemplate)"></span>
                                                 </div>
                                                 <div class="flex items-center gap-2">
                                                     <input type="text" x-model="promptModule.rotation.base.label"
@@ -361,9 +361,9 @@ function getPromptContentGenSection() {
                                                         <div class="flex items-center gap-2 min-w-0">
                                                             <b class="text-xs shrink-0" x-text="'템플릿 ' + (i + 2)"
                                                                :class="variantUnreachable(v) ? 'text-amber-700' : 'text-indigo-700'"></b>
-                                                            <span x-show="v.presetLabel"
+                                                            <span x-show="templatePreset(v.presetLabel, v.template)"
                                                                   class="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 truncate"
-                                                                  x-text="v.presetLabel"></span>
+                                                                  x-text="templatePreset(v.presetLabel, v.template)"></span>
                                                         </div>
                                                         <div class="flex items-center gap-2">
                                                             <input type="text" x-model="v.label"
