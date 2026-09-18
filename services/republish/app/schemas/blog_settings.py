@@ -79,6 +79,17 @@ class OverlayConfig(BaseModel):
     )
 
 
+    # ── 추가 배경(슬롯) ──────────────────────────────────────
+    # 화면이 보내는데 스키마에 없으면 저장에서 조용히 빠진다.
+    template_images: Optional[List[Dict[str, Any]]] = Field(
+        default=None, description="추가 배경 슬롯 [{slot,path,topic_ids,keywords}]")
+    template_image_mode: Optional[str] = Field(
+        default=None,
+        pattern="^(random|sequential|by_niche|by_keyword|by_prompt)$",
+        description="배경 고르는 방식")
+    template_image_topics: Optional[List[int]] = Field(
+        default=None, description="기본 배경이 맡는 하위 주제")
+
 class ImageSettingsRequest(BaseModel):
     """이미지 설정 요청 스키마."""
 

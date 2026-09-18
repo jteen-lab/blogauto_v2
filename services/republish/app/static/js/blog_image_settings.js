@@ -707,7 +707,8 @@ function imageSettingsApp() {
                     const t = v.trim();
                     return t || def;
                 };
-                const VALID_TPL_MODE = ['random', 'sequential', 'by_niche', 'by_keyword'];
+                const VALID_TPL_MODE = ['random', 'sequential', 'by_niche',
+                                        'by_keyword', 'by_prompt'];
                 const oc = overlayWithoutPaths;
                 const safePadding = (oc.padding && typeof oc.padding === 'object') ? oc.padding : {};
                 const normalizedOverlay = {
@@ -746,6 +747,10 @@ function imageSettingsApp() {
                         })),
                     template_image_mode: VALID_TPL_MODE.includes(oc.template_image_mode)
                         ? oc.template_image_mode : 'random',
+                    // 기본 배경이 맡는 주제. 화면에 칸이 없어도 실어 보내야
+                    // 저장 한 번에 날아가지 않는다.
+                    template_image_topics: (oc.template_image_topics || [])
+                        .map(n => parseInt(n, 10)).filter(n => Number.isInteger(n)),
                 };
 
                 const payload = {

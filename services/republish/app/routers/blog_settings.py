@@ -280,7 +280,11 @@ async def save_image_settings(
     existing_config, _ = sanitize_overlay_file_paths(
         blog_id, existing_config_raw,
     )
-    overlay_data = request.overlay_config.model_dump()
+    # 화면이 보낸 것만 덮고 **모르는 키는 지키다**. 통째로 갈아끼우면
+    # 화면에 칸이 없는 설정(추가 배경 조건 같은 것)이 저장 한 번에 사라진다.
+    overlay_data = dict(existing_config)
+    sent = request.overlay_config.model_dump(exclude_none=True)
+    overlay_data.update(sent)
     overlay_data["ai_image_service"] = request.ai_image_service
     overlay_data["cover_source"] = request.cover_source
     overlay_data["section_source"] = request.section_source
