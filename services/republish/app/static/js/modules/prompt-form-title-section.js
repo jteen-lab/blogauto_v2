@@ -10,6 +10,56 @@
  * 순서도: docs/flowcharts/title_recombine_rotation.md
  */
 
+/** 화면에 심어 둔 빌더 블록 데이터. 한 번만 읽어 둔다. */
+let _builderBlocks = null;
+
+function builderBlocks() {
+    if (_builderBlocks) return _builderBlocks;
+    const empty = { personas: [], readers: [], patterns: [], tones: [], presets: [] };
+    try {
+        const node = document.getElementById('prompt-builder-blocks-data');
+        // 아직 없으면 **캐시하지 않는다.** 빈 값으로 굳으면 화면이 그려진
+        // 뒤에도 이름이 영영 안 붙는다.
+        if (!node) return empty;
+        const d = JSON.parse(node.textContent);
+        _builderBlocks = {
+            personas: d.personas || [], readers: d.readers || [],
+            patterns: d.patterns || [], tones: d.tones || [],
+            presets: d.presets || [],
+        };
+    } catch (e) { return empty; }
+    return _builderBlocks;
+}
+
+/** 이 본문이 어느 프리셋으로 채워졌는지. 못 찾으면 빈 문자열.
+ *
+ *  빌더가 만든 프롬프트에는 각 블록 문장이 통째로 들어간다. 그래서
+ *  본문만 보고 거꾸로 찾을 수 있다 — 반영할 때 적어 두지 않았어도 된다.
+ */
+function presetLabelFromBody(template) {
+    const text = String(template || '');
+    if (!text.trim()) return '';
+    const b = builderBlocks();
+    const full = (b.presets || []).find(
+        p => p.full_prompt && text.trim() === String(p.full_prompt).trim());
+    if (full) return full.label;
+
+    const hit = (list) => {
+        const found = (list || []).find(
+            o => o.body && text.includes(String(o.body).trim()));
+        return found ? found.code : '';
+    };
+    const sel = {
+        persona: hit(b.personas), reader: hit(b.readers),
+        pattern: hit(b.patterns), tone: hit(b.tones),
+    };
+    if (!sel.persona) return '';
+    const preset = (b.presets || []).find(
+        p => !p.full_prompt && p.persona === sel.persona && p.reader === sel.reader
+            && p.pattern === sel.pattern && p.tone === sel.tone);
+    return preset ? preset.label : '';
+}
+
 /** 한 묶음의 칸들. `p` 는 값이 사는 경로(묶음 1 이면 최상위, 2.. 면 x-for 변수).
  *
  *  니치 고르개는 **묶음마다** 둔다. 묶음을 나눈 이유가 니치가 다르기
@@ -216,14 +266,15 @@ const titleBundleMethods = {
     },
 
     /** 이 템플릿을 무엇으로 채웠는지. 저장된 이름이 먼저고, 없으면
-     *  본문에서 되짚는다(빌더 패널이 심어 준 함수를 쓴다).
+     *  본문에서 되짚는다.
+     *
+     *  빌더 패널에 기대지 않는다 — 패널이 접혀 있거나 아직 안 그려졌으면
+     *  이름이 안 붙는다. 화면에 심어 둔 블록 데이터를 직접 읽는다.
      */
     templatePreset(saved, template) {
         const kept = (saved || '').trim();
         if (kept) return kept;
-        if (typeof this.presetLabelOf !== 'function') return '';
-        try { return this.presetLabelOf(template) || ''; }
-        catch (e) { return ''; }
+        return presetLabelFromBody(template);
     },
 
     /** 이 템플릿이 목적 때문에 영영 안 걸리는가.
