@@ -63,6 +63,7 @@ class ImageGenerator:
         self, blog: Blog, title: str, module_settings: dict,
         final_html: Optional[str] = None, keywords: str = "",
         subtopic_id: Optional[int] = None, cursor: int = 0,
+        prompt_index: Optional[int] = None,
     ) -> ImageResult:
         """
         블로그 설정에 따라 이미지 생성
@@ -76,6 +77,7 @@ class ImageGenerator:
             subtopic_id: 이 글의 하위 주제. 템플릿 배경을 하위 주제별로
                 고정할 때 쓴다 — 넘기지 않으면 늘 첫 배경만 쓰인다
             cursor: 순번 모드의 현재 위치
+            prompt_index: 이 글에 쓰인 프롬프트 템플릿의 자리
 
         Returns:
             ImageResult (both 모드: final_html에 섹션 이미지 삽입됨)
@@ -102,7 +104,7 @@ class ImageGenerator:
         try:
             result = await self._dispatch(
                 blog, title, img_settings, image_mode, final_html,
-                keywords, subtopic_id, cursor,
+                keywords, subtopic_id, cursor, prompt_index,
             )
             result.generation_time_seconds = int(time.time() - start_time)
             if result.success and result.image_url:
@@ -131,11 +133,12 @@ class ImageGenerator:
         keywords: str = "",
         subtopic_id: Optional[int] = None,
         cursor: int = 0,
+        prompt_index: Optional[int] = None,
     ) -> ImageResult:
         """image_mode에 따라 적절한 서비스로 라우팅"""
         if image_mode == "template":
             return await self._generate_template(
-                blog, title, subtopic_id, cursor)
+                blog, title, subtopic_id, cursor, prompt_index)
 
         if image_mode in ("openai", "ai"):
             return await self._generate_ai_with_overlay(
@@ -267,9 +270,10 @@ class ImageGenerator:
             if fallback and (not result.success or not result.image_url):
                 logger.info("[IMAGE_GEN] AI 실패 → 템플릿 폴백")
                 return await self._generate_template(
-                    blog, title, subtopic_id, cursor)
+                    blog, title, subtopic_id, cursor, prompt_index)
             return result
-        return await self._generate_template(blog, title, subtopic_id, cursor)
+        return await self._generate_template(
+            blog, title, subtopic_id, cursor, prompt_index)
 
     def _parse_sections(self, final_html: str) -> List[dict]:
         """
@@ -415,6 +419,7 @@ class ImageGenerator:
     async def _generate_template(
         self, blog: Blog, title: str,
         subtopic_id: Optional[int] = None, cursor: int = 0,
+        prompt_index: Optional[int] = None,
     ) -> ImageResult:
         """템플릿 이미지 서비스로 생성.
 
@@ -424,6 +429,7 @@ class ImageGenerator:
         result = await self.template_image.generate(
             title=title, blog=blog, blog_id=blog.id,
             topic_id=subtopic_id, keyword=title, cursor=cursor,
+            prompt_index=prompt_index,
         )
 
         if result:

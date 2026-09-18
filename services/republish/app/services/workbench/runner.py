@@ -228,6 +228,12 @@ class WorkbenchRunner:
                                 source="manual")
                 rs.add(row)
                 await rs.flush()
+                # 카테고리가 비면 배경 고르기·재고 계산에서 빠진다.
+                # 반영할 때와 같은 장치로 여기서 미리 채운다.
+                from .apply import _fill_category
+
+                await _fill_category(rs, row, blog.id if blog else 0,
+                                     module.id)
                 force_ids.append(row.id)
 
         for idx, fid in enumerate(force_ids):

@@ -18,6 +18,9 @@ from ...core.logger import get_logger
 
 logger = get_logger("template_image", "app.log")
 
+#: 프롬프트 템플릿 번호와 같은 자리의 배경을 쓰는 방식
+MODE_BY_PROMPT = "by_prompt"
+
 # 이미지 저장 경로 (config 기반)
 IMAGE_DIR = Path(settings.image_storage_dir)
 IMAGE_URL_PREFIX = settings.image_url_prefix
@@ -50,7 +53,7 @@ class TemplateImageService:
     async def generate(
         self, title: str, blog, blog_id: int,
         topic_id: Optional[int] = None, keyword: str = "",
-        cursor: int = 0,
+        cursor: int = 0, prompt_index: Optional[int] = None,
     ) -> Optional[dict]:
         """
         배경 위에 제목 텍스트를 합성하여 이미지 생성
@@ -65,6 +68,8 @@ class TemplateImageService:
             topic_id: 하위 주제. 주제별 고정 모드에 쓴다
             keyword: 키워드별 고정 모드에 쓴다
             cursor: 순번 모드의 현재 위치
+            prompt_index: 이 글에 쓰인 프롬프트 템플릿의 자리(0 = 템플릿 1).
+                "프롬프트별" 모드에서 같은 자리의 배경을 쓴다
 
         Returns:
             dict: {"image_url": str, "provider": str, "model": None,
@@ -84,7 +89,8 @@ class TemplateImageService:
             f"[TEMPLATE_IMAGE] overlay_config 키 목록: {list(config.keys())}"
         )
 
-        picked = self._pick_template(config, topic_id, keyword, cursor)
+        picked = self._pick_template(config, topic_id, keyword, cursor,
+                                     prompt_index)
 
         try:
             image = self._compose_image(title, config, picked)
@@ -108,7 +114,8 @@ class TemplateImageService:
             return None
 
     def _pick_template(self, config: dict, topic_id, keyword: str,
-                       cursor: int) -> Optional[dict]:
+                       cursor: int,
+                       prompt_index: Optional[int] = None) -> Optional[dict]:
         """쓸 배경을 고른다.
 
         `template_images` 가 없으면 None 을 돌려주고, 호출부는 기존
@@ -121,6 +128,19 @@ class TemplateImageService:
 
         items = for_picker(config)
         if not items:
+            return None
+
+        # 프롬프트 템플릿과 같은 자리의 배경을 쓴다. 글의 주제는 이미
+        # 프롬프트가 가려 놓았으므로 그 번호를 그대로 따르면 어긋나지 않는다.
+        if config.get("template_image_mode") == MODE_BY_PROMPT:
+            at = int(prompt_index or 0)
+            if 0 <= at < len(items):
+                logger.info("[TEMPLATE_IMAGE] 배경 선택 | 프롬프트 %d번 | %s",
+                            at + 1, items[at].get("path"))
+                return {"path": items[at].get("path"), "index": at,
+                        "next_cursor": cursor + 1}
+            logger.info("[TEMPLATE_IMAGE] 프롬프트 %d번에 맞는 배경이 없어 "
+                        "기본을 쓴다 | 배경 %d장", at + 1, len(items))
             return None
 
         got = vp.pick(items, config.get("template_image_mode"),

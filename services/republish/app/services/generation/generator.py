@@ -462,6 +462,9 @@ class ContentGenerator:
             # 배경을 여러 장 등록했으면 하위 주제로 고른다
             subtopic_id=getattr(source_title, "subtopic_id", None),
             image_cursor=int(getattr(blog, "total_post_count", 0) or 0),
+            # 프롬프트가 이미 주제를 갈라 놓았다. 그 번호를 따르면
+            # 제목에 카테고리가 없어도 배경이 주제와 어긋나지 않는다.
+            prompt_index=(settings.get("_rotation") or {}).get("index"),
         )
         if img_result and img_result.success and img_result.image_url:
             image_url = img_result.image_url
@@ -702,6 +705,7 @@ class ContentGenerator:
         max_retries: int = 2,
         subtopic_id: Optional[int] = None,
         image_cursor: int = 0,
+        prompt_index: Optional[int] = None,
     ) -> Optional[ImageResult]:
         """이미지 생성 (지수 백오프 재시도, 실패 시 None 반환)
 
@@ -714,6 +718,7 @@ class ContentGenerator:
             max_retries: 최대 재시도 횟수 (기본 2, 백오프 2초/4초)
             subtopic_id: 이 글의 하위 주제. 템플릿 배경을 하위 주제별로 고른다
             image_cursor: 순번 모드의 현재 위치
+            prompt_index: 이 글에 쓰인 프롬프트 템플릿의 자리
 
         Returns:
             성공 시 ImageResult, 모든 시도 실패 시 None
@@ -728,6 +733,7 @@ class ContentGenerator:
                     # 배경을 여러 장 등록했으면 하위 주제로 고른다.
                     # 넘기지 않으면 고를 기준이 없어 늘 첫 배경만 쓰인다.
                     subtopic_id=subtopic_id, cursor=image_cursor,
+                    prompt_index=prompt_index,
                 )
                 if result.success:
                     if attempt > 0:
