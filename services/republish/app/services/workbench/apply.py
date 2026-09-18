@@ -80,20 +80,71 @@ async def apply_titles(db: AsyncSession, user_id: int,
                         f"미분류 {outcome.get('queued', 0)}건")}
 
 
+async def _fill_from_module(db: AsyncSession, title: MainTitle,
+                            blog_id: int,
+                            module_id: Optional[int]) -> bool:
+    """이 모듈이 그 블로그에 걸어 둔 주제로 채운다. 채웠으면 True.
+
+    주제가 하나일 때만 쓴다. 하위 주제까지 하나면 그것도 채우고, 여럿이면
+    주제만 채운다 — 어느 하위 주제인지는 제목을 봐야 아는 일이다.
+    """
+    if not module_id:
+        return False
+    from ...models.module import Module
+
+    module = await db.get(Module, module_id)
+    rows = ((module.settings or {}).get("blog_category_map") or []) if module else []
+    mine = [r for r in rows
+            if isinstance(r, dict) and r.get("blog_id") == blog_id and r.get("topic_id")]
+    topics = {r["topic_id"] for r in mine}
+    if len(topics) != 1:
+        return False
+
+    title.topic_id = next(iter(topics))
+    subs = {r.get("subtopic_id") for r in mine if r.get("subtopic_id")}
+    title.subtopic_id = next(iter(subs)) if len(subs) == 1 else None
+    logger.info("[WORKBENCH] 모듈 카테고리로 분류 | id=%s | topic=%s sub=%s",
+                title.id, title.topic_id, title.subtopic_id)
+    return True
+
+
+async def _fill_from_blog(db: AsyncSession, title: MainTitle,
+                          blog_id: int) -> bool:
+    """블로그가 쓰는 카테고리가 하나뿐이면 그것으로. 채웠으면 True."""
+    from sqlalchemy import select
+
+    from ...models.category import BlogCategory
+
+    rows = (await db.execute(
+        select(BlogCategory).where(BlogCategory.blog_id == blog_id)
+    )).scalars().all()
+    active = [r for r in rows if getattr(r, "is_active", True) and r.topic_id]
+    # 여럿이면 어느 것인지 알 수 없다. 하나일 때만 쓴다.
+    if len(active) != 1:
+        return False
+    title.topic_id = active[0].topic_id
+    title.subtopic_id = active[0].subtopic_id
+    logger.info("[WORKBENCH] 블로그 카테고리로 분류 | id=%s | topic=%s",
+                title.id, title.topic_id)
+    return True
+
+
 async def _fill_category(db: AsyncSession, title: MainTitle,
-                         blog_id: int) -> None:
+                         blog_id: int,
+                         module_id: Optional[int] = None) -> None:
     """제목의 주제·하위 주제를 채운다. 못 정하면 그대로 둔다.
 
     1) 제목을 카테고리 키워드와 맞춰 본다(수집 제목과 같은 장치)
-    2) 못 맞추면 이 블로그가 쓰는 카테고리가 하나뿐일 때 그것으로
+    2) **이 모듈이 그 블로그에 걸어 둔 주제**가 하나뿐이면 그것으로 —
+       모듈을 니치 하나에 맞춰 쓰는 경우가 대부분이라 이게 잘 맞는다
+    3) 그래도 못 정하면 블로그가 쓰는 카테고리가 하나뿐일 때 그것으로
 
-    둘 다 아니면 미분류로 둔다 — 틀린 분류보다 빈 칸이 낫다.
+    다 아니면 미분류로 둔다 — 틀린 분류보다 빈 칸이 낫다.
     순서도: docs/flowcharts/workbench_title_category.md
     """
     from sqlalchemy import select
 
     from ...models.blog import Blog
-    from ...models.category import BlogCategory
     from ..category_matcher_service import CategoryMatcherService
 
     blog = await db.get(Blog, blog_id)
@@ -112,24 +163,15 @@ async def _fill_category(db: AsyncSession, title: MainTitle,
                     title.id, hit.get("category_path") or hit["topic_id"])
         return
 
-    rows = (await db.execute(
-        select(BlogCategory).where(BlogCategory.blog_id == blog_id)
-    )).scalars().all()
-    active = [r for r in rows if getattr(r, "is_active", True) and r.topic_id]
-    # 여럿이면 어느 것인지 알 수 없다. 하나일 때만 쓴다.
-    if len(active) == 1:
-        title.topic_id = active[0].topic_id
-        title.subtopic_id = active[0].subtopic_id
-        logger.info("[WORKBENCH] 블로그 카테고리로 분류 | id=%s | topic=%s",
-                    title.id, title.topic_id)
+    if await _fill_from_module(db, title, blog_id, module_id):
         return
-
-    logger.info("[WORKBENCH] 카테고리 못 정함(미분류) | id=%s | 후보 %d개",
-                title.id, len(active))
+    if not await _fill_from_blog(db, title, blog_id):
+        logger.info("[WORKBENCH] 카테고리 못 정함(미분류) | id=%s", title.id)
 
 
 async def _ensure_main_title(db: AsyncSession, blog_id: int,
-                             text: str) -> Optional[int]:
+                             text: str,
+                             module_id: Optional[int] = None) -> Optional[int]:
     """글이 붙을 정식제목을 확보한다.
 
     발행대기글은 **정식제목에 매달려야** 정식제목 화면에 뜬다. 카운트는
@@ -157,7 +199,7 @@ async def _ensure_main_title(db: AsyncSession, blog_id: int,
     # 카테고리가 비면 거르는 화면·재고 계산에서 빠진다. 수집 제목을
     # 분류할 때와 **같은 장치**로 채운다.
     if found.topic_id is None:
-        await _fill_category(db, found, blog_id)
+        await _fill_category(db, found, blog_id, module_id)
 
     # 이 블로그가 쓴 제목임을 남긴다. 재고 화면이 이 값으로 매칭을 본다.
     ids = _blog_ids(found.matched_blog_ids)
@@ -201,7 +243,7 @@ async def apply_post(db: AsyncSession, blog_id: int, title: str, html: str,
     db.add(history)
     await db.flush()
 
-    main_id = await _ensure_main_title(db, blog_id, text)
+    main_id = await _ensure_main_title(db, blog_id, text, module_id)
 
     post = CrawledPost(
         blog_id=blog_id, title=text, source="generated",
