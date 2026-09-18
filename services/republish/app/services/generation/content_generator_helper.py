@@ -253,4 +253,8 @@ async def extend_content(
     if lines and lines[0].strip().startswith(("이어서", "다음은", "추가로")):
         addition = "\n".join(lines[1:]).lstrip()
 
-    return f"{draft.rstrip()}\n\n{addition}"
+    # 초안이 이미 「마치며」로 끝났으면 그 뒤에 새 섹션이 붙는다. 내용은
+    # 쓸모 있으니 지우지 않고 마무리를 맨 끝으로 옮긴다.
+    from .closing_section import move_closing_last
+
+    return move_closing_last(f"{draft.rstrip()}\n\n{addition}")

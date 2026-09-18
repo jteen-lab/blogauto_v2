@@ -359,6 +359,13 @@ class ContentGenerator:
         # 두 번 보인다. 게이트를 껐어도 이건 정리한다(순수 표시 문제).
         content_markdown = _strip_h1(content_markdown, working_title)
 
+        # 마무리 뒤에 섹션이 더 붙는 일이 있다. AEO 지시가 「구조를 바꾸지
+        # 말고 맨 뒤에 자주 묻는 질문을 덧붙이라」 고 하는데, 구조가 마무리로
+        # 끝나면 그 뒤로 가기 때문이다. 내용은 두고 자리만 바로잡는다.
+        from .closing_section import move_closing_last
+
+        content_markdown = move_closing_last(content_markdown)
+
         # 4-2. CPA 규칙 검증 — 프롬프트를 어겨도 여기서 잡는다.
         # AI 는 지시를 어긴다. 지시(프롬프트)와 검사(게이트) 두 층으로 간다.
         if cpa_offer:
