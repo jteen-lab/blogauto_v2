@@ -459,6 +459,9 @@ class ContentGenerator:
             blog=blog, working_title=working_title,
             settings=settings, final_html=final_html,
             keywords_text=keywords_text,
+            # 배경을 여러 장 등록했으면 하위 주제로 고른다
+            subtopic_id=getattr(source_title, "subtopic_id", None),
+            image_cursor=int(getattr(blog, "total_post_count", 0) or 0),
         )
         if img_result and img_result.success and img_result.image_url:
             image_url = img_result.image_url
@@ -697,6 +700,8 @@ class ContentGenerator:
         final_html: str,
         keywords_text: str,
         max_retries: int = 2,
+        subtopic_id: Optional[int] = None,
+        image_cursor: int = 0,
     ) -> Optional[ImageResult]:
         """이미지 생성 (지수 백오프 재시도, 실패 시 None 반환)
 
@@ -707,6 +712,8 @@ class ContentGenerator:
             final_html: 치환 처리된 HTML
             keywords_text: 키워드 텍스트
             max_retries: 최대 재시도 횟수 (기본 2, 백오프 2초/4초)
+            subtopic_id: 이 글의 하위 주제. 템플릿 배경을 하위 주제별로 고른다
+            image_cursor: 순번 모드의 현재 위치
 
         Returns:
             성공 시 ImageResult, 모든 시도 실패 시 None
@@ -718,6 +725,9 @@ class ContentGenerator:
                     blog=blog, title=working_title,
                     module_settings=settings, final_html=final_html,
                     keywords=keywords_text,
+                    # 배경을 여러 장 등록했으면 하위 주제로 고른다.
+                    # 넘기지 않으면 고를 기준이 없어 늘 첫 배경만 쓰인다.
+                    subtopic_id=subtopic_id, cursor=image_cursor,
                 )
                 if result.success:
                     if attempt > 0:

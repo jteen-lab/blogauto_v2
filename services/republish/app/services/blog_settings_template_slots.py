@@ -31,6 +31,8 @@ BASE_SLOT = 0
 IMAGES_KEY = "template_images"
 SINGLE_KEY = "template_image"
 MODE_KEY = "template_image_mode"
+#: 기본 배경(슬롯 0)이 맡을 하위 주제. 비우면 아무 때나 뽑힌다
+BASE_TOPICS_KEY = "template_image_topics"
 
 
 def filename_for(file_type: str, blog_id: int, ext: str, slot: int = 0) -> str:
@@ -118,7 +120,11 @@ def for_picker(config: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
     base = (config or {}).get(SINGLE_KEY)
     out: List[Dict[str, Any]] = []
     if base:
-        out.append({"path": base, "topic_ids": [], "keywords": []})
+        # 기본 배경도 주제를 걸 수 있다. 걸지 않으면 조건 없는 배경이라
+        # 어느 주제에서나 후보가 되어 하위 주제별 고정이 흐려진다.
+        out.append({"path": base,
+                    "topic_ids": (config or {}).get(BASE_TOPICS_KEY) or [],
+                    "keywords": []})
     out.extend({"path": r["path"],
                 "topic_ids": r.get("topic_ids") or [],
                 "keywords": r.get("keywords") or []} for r in rows)
