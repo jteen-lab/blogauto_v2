@@ -113,7 +113,7 @@ function createPromptModuleState() {
         // 프롬프트 로테이션 — 같은 니치라도 글마다 구조를 바꾼다
         builderTarget: 0,   // 빌더 반영 대상 (0=기본, 1..=변형)
         rotation: {
-            base: { purpose: '', topic_ids_text: '', keywords_text: '' },
+            base: { label: '', presetLabel: '',  purpose: '', topic_ids_text: '', keywords_text: '' },
             enabled: false,
             mode: 'random',
             purpose: '',
@@ -260,6 +260,7 @@ const promptModuleMethods = {
             const rot = settings.prompt_rotation;
             const rows = (rot.variants || []).map(v => ({
                 label: v.label || '',
+                presetLabel: v.preset_label || '',
                 template: v.template || '',
                 purpose: v.purpose || '',
                 topic_ids_text: (v.topic_ids || []).join(','),
@@ -274,6 +275,8 @@ const promptModuleMethods = {
                 mode: rot.mode || 'random',
                 purpose: rot.purpose || '',
                 base: {
+                    label: base ? (base.label || '') : '',
+                    presetLabel: base ? (base.presetLabel || '') : '',
                     purpose: base ? base.purpose : '',
                     topic_ids_text: base ? base.topic_ids_text : '',
                     keywords_text: base ? base.keywords_text : ''
@@ -469,6 +472,8 @@ const promptModuleMethods = {
     _variantOut(v, isBase) {
         return {
             label: (v.label || '').trim() || (isBase ? '기본' : ''),
+            // 무엇으로 채웠는지(빌더 프리셋 이름). 화면 표시용이다
+            preset_label: (v.presetLabel || '').trim(),
             template: String(v.template || '').trim(),
             purpose: v.purpose || '',
             topic_ids: String(v.topic_ids_text || '').split(',')

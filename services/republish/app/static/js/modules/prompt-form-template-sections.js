@@ -305,9 +305,19 @@ function getPromptContentGenSection() {
                                         <!-- 템플릿 1 (기본) -->
                                         <div class="rounded-lg"
                                              :class="promptModule.rotation.enabled ? 'border border-indigo-200 p-3 bg-white' : ''">
-                                            <div class="flex items-center justify-between mb-1.5" x-show="promptModule.rotation.enabled">
-                                                <b class="text-xs text-indigo-700">템플릿 1 (기본)</b>
-                                                <span class="text-xs text-gray-400">비우면 로테이션에서 빠집니다</span>
+                                            <div class="flex flex-wrap items-center justify-between gap-2 mb-1.5" x-show="promptModule.rotation.enabled">
+                                                <div class="flex items-center gap-2 min-w-0">
+                                                    <b class="text-xs text-indigo-700 shrink-0">템플릿 1 (기본)</b>
+                                                    <span x-show="promptModule.rotation.base.presetLabel"
+                                                          class="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 truncate"
+                                                          x-text="promptModule.rotation.base.presetLabel"></span>
+                                                </div>
+                                                <div class="flex items-center gap-2">
+                                                    <input type="text" x-model="promptModule.rotation.base.label"
+                                                           placeholder="이름 (선택)"
+                                                           class="w-32 px-2 py-1 border border-gray-300 rounded text-xs">
+                                                    <span class="text-xs text-gray-400">비우면 로테이션에서 빠집니다</span>
+                                                </div>
                                             </div>
                                             <textarea x-model="promptModule.contentGeneration.userPromptTemplate"
                                                       rows="4"
@@ -348,8 +358,13 @@ function getPromptContentGenSection() {
                                             <template x-for="(v, i) in promptModule.rotation.variants" :key="i">
                                                 <div class="p-3 bg-white border border-indigo-200 rounded-lg">
                                                     <div class="flex items-center justify-between gap-2 mb-1.5">
-                                                        <b class="text-xs" x-text="'템플릿 ' + (i + 2)"
-                                                           :class="variantUnreachable(v) ? 'text-amber-700' : 'text-indigo-700'"></b>
+                                                        <div class="flex items-center gap-2 min-w-0">
+                                                            <b class="text-xs shrink-0" x-text="'템플릿 ' + (i + 2)"
+                                                               :class="variantUnreachable(v) ? 'text-amber-700' : 'text-indigo-700'"></b>
+                                                            <span x-show="v.presetLabel"
+                                                                  class="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 truncate"
+                                                                  x-text="v.presetLabel"></span>
+                                                        </div>
                                                         <div class="flex items-center gap-2">
                                                             <input type="text" x-model="v.label"
                                                                    :placeholder="'이름 (선택)'"

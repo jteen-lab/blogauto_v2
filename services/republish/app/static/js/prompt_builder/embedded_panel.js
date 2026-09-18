@@ -17,13 +17,15 @@ window.getPromptBuilderEmbeddedHTML = function () {
                  // 템플릿이 여럿이면 어디에 넣을지 고른 대로 간다.
                  // 0 = 기본(사용자 프롬프트 템플릿), 1.. = 변형
                  const at = parseInt(promptModule.builderTarget, 10) || 0;
+                 const preset = (snapshot || {}).preset || '';
                  if (at > 0) {
                      const v = (promptModule.rotation.variants || [])[at - 1];
-                     if (v) { v.template = text; return; }
+                     if (v) { v.template = text; v.presetLabel = preset; return; }
                  }
                  promptModule.contentGeneration.userPromptTemplate = text;
                  // 어떤 프리셋·항목을 골랐는지 함께 보관한다(복원·강조용).
                  promptModule.contentGeneration.builderSelection = snapshot || null;
+                 promptModule.rotation.base.presetLabel = preset;
              },
              onApplyPreset: (p) => { if (p.full_prompt) promptModule.adsense.infoGainEnabled = false; },
              getAppliedTemplate: () => promptModule.contentGeneration.userPromptTemplate,

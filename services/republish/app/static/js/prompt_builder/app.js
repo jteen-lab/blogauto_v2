@@ -134,6 +134,11 @@ function createPromptBuilderState(opts = {}) {
         // 화면에 그대로 되살린다. 저장되는 것이 텍스트뿐이면 복원할 근거가 없다.
         selectionSnapshot() {
             return {
+                // 어떤 프리셋으로 채웠는지. 템플릿 이름 옆에 적어 둔다 —
+                // 다섯 개를 만들어 놓으면 무엇으로 채웠는지 곧 잊는다.
+                preset: this.fullPromptOverride
+                    ? '전용 프롬프트'
+                    : (this.activePresetLabel || ''),
                 persona: this.persona,
                 reader: this.reader,
                 pattern: this.pattern,
