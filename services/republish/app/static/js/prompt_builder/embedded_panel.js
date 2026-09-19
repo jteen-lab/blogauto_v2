@@ -23,6 +23,10 @@ window.getPromptBuilderEmbeddedHTML = function () {
                  const subs = (typeof promptModule.subtopicIdsByName === 'function')
                      ? promptModule.subtopicIdsByName((snapshot || {}).presetSubtopics)
                      : [];
+                 // 하위 주제로 걸려면 고르는 방식이 '제목 키워드'여야 한다.
+                 if (subs.length && promptModule.rotation.mode !== 'by_keyword') {
+                     promptModule.rotation.mode = 'by_keyword';
+                 }
                  if (at > 0) {
                      const v = (promptModule.rotation.variants || [])[at - 1];
                      if (v) {
