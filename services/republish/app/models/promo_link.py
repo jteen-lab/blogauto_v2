@@ -33,6 +33,11 @@ class PromoLink(Base):
     keywords = Column(String(500), nullable=True,
                       comment="이 링크를 쓸 키워드 조합. 예: 이사+견적, 이사+비용")
 
+    #: 고른 하위 주제. 저장할 때 이 주제의 키워드를 keywords 로 펼친다.
+    #: 원본을 남겨 두어야 카테고리에 키워드가 늘었을 때 다시 펼칠 수 있다.
+    subtopic_ids = Column(String(300), nullable=True,
+                          comment="연동한 하위 주제 id 목록(쉼표)")
+
     blog_id = Column(Integer, ForeignKey("blogs.id", ondelete="CASCADE"),
                      nullable=True, index=True,
                      comment="이 블로그 전용. 비우면 모든 블로그 공용")
@@ -55,6 +60,8 @@ class PromoLink(Base):
             "button_text": self.button_text,
             "notice": self.notice or "",
             "keywords": self.keywords or "",
+            "subtopic_ids": [int(x) for x in (self.subtopic_ids or "").split(",")
+                             if x.strip().isdigit()],
             "blog_id": self.blog_id,
             "cpa_offer_id": self.cpa_offer_id,
             "is_active": self.is_active,

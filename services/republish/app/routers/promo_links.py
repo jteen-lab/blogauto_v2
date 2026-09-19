@@ -31,6 +31,8 @@ class LinkIn(BaseModel):
     keywords: Optional[str] = Field(
         None, max_length=500,
         description="이 링크를 쓸 키워드 조합. 예: 이사+견적, 이사+비용")
+    subtopic_ids: Optional[List[int]] = Field(
+        None, description="연동할 하위 주제. 그 주제의 키워드가 함께 쓰인다")
     blog_id: Optional[int] = None
     cpa_offer_id: Optional[int] = None
 
@@ -43,6 +45,7 @@ class LinkPatch(BaseModel):
     button_text: Optional[str] = Field(None, max_length=200)
     notice: Optional[str] = Field(None, max_length=300)
     keywords: Optional[str] = Field(None, max_length=500)
+    subtopic_ids: Optional[List[int]] = None
     blog_id: Optional[int] = None
     cpa_offer_id: Optional[int] = None
     is_active: Optional[bool] = None
@@ -80,6 +83,24 @@ def _clean(field: str, value: object) -> object:
     return text
 
 
+async def _fold(db: AsyncSession, subtopic_ids, manual: Optional[str]) -> tuple:
+    """고른 하위 주제와, 그 키워드까지 펼친 문자열을 돌려준다.
+
+    손으로 적은 키워드는 그대로 살린다 — 하위 주제로 큰 그물을 치고
+    손으로 빠진 말을 보탠다.
+    순서도: docs/flowcharts/subtopic_link.md
+    """
+    from ..services.generation.subtopic_keywords import expand
+
+    ids = [int(x) for x in (subtopic_ids or []) if str(x).strip().lstrip("-").isdigit()]
+    hand = [w.strip() for w in (manual or "").split(",") if w.strip()]
+    if not ids:
+        return (None, ", ".join(hand) or None)
+    words = await expand(db, ids, hand)
+    logger.info("[PROMO_LINK] 하위 주제 %d개 → 키워드 %d개", len(ids), len(words))
+    return (",".join(str(i) for i in ids), ", ".join(words) or None)
+
+
 @router.get("", summary="링크 목록")
 async def list_links(
     blog_id: Optional[int] = Query(None, description="이 블로그가 쓸 수 있는 것만"),
@@ -102,11 +123,12 @@ async def create_link(
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
     """새 링크 하나. 등록하면 바로 글에 붙일 수 있다."""
+    subs, words = await _fold(db, payload.subtopic_ids, payload.keywords)
     link = PromoLink(
         name=payload.name.strip(), url=payload.url.strip(),
         button_text=payload.button_text.strip(),
         notice=(payload.notice or "").strip() or None,
-        keywords=(payload.keywords or "").strip() or None,
+        keywords=words, subtopic_ids=subs,
         blog_id=payload.blog_id, cpa_offer_id=payload.cpa_offer_id)
     db.add(link)
     await db.commit()
@@ -125,6 +147,14 @@ async def update_link(
     """보낸 값만 바꾼다. 안 보낸 칸은 그대로 둔다."""
     link = await _get(db, link_id)
     changed = payload.model_dump(exclude_unset=True)
+    # 하위 주제를 보냈으면 키워드는 그것으로 다시 펼친다
+    if "subtopic_ids" in changed:
+        subs, words = await _fold(
+            db, changed.pop("subtopic_ids"),
+            changed.get("keywords", link.keywords))
+        link.subtopic_ids = subs
+        link.keywords = words
+        changed.pop("keywords", None)
     for field, value in changed.items():
         setattr(link, field, _clean(field, value))
     await db.commit()

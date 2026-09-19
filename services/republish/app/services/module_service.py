@@ -305,6 +305,10 @@ class ModuleService:
 
                 update_data["settings"] = _merge_settings(
                     module.settings, update_data["settings"])
+                # 하위 주제를 골랐으면 그 키워드를 펼쳐 넣는다. 글을 만들
+                # 때마다 카테고리를 다시 읽지 않기 위해 저장 때 한 번 한다.
+                update_data["settings"] = await _expand_subtopics(
+                    self.db, update_data["settings"])
 
             logger.debug(f"[UPDATE_MODULE] 업데이트 필드: {list(update_data.keys())}")
 
@@ -478,3 +482,43 @@ class ModuleService:
         except Exception as e:
             logger.error(f"[CHECK_MODULE_IN_USE] 오류: {e}")
             return False
+
+
+async def _expand_subtopics(db, settings: dict) -> dict:
+    """프롬프트 변형의 `subtopic_ids` 를 키워드로 펼친다(원본 불변).
+
+    하위 주제를 고르지 않은 변형은 손으로 적은 키워드를 그대로 둔다.
+    둘 다 있으면 합친다 — 하위 주제로 큰 그물을 치고 손으로 보탠다.
+    순서도: docs/flowcharts/subtopic_link.md
+    """
+    from .generation.subtopic_keywords import expand as _expand
+
+    rot = (settings or {}).get("prompt_rotation") or {}
+    rows = rot.get("variants") or []
+    if not isinstance(rows, list) or not rows:
+        return settings
+
+    changed = False
+    out_rows = []
+    for row in rows:
+        if not isinstance(row, dict):
+            out_rows.append(row)
+            continue
+        subs = row.get("subtopic_ids") or []
+        if not subs:
+            out_rows.append(row)
+            continue
+        merged = await _expand(db, subs, row.get("manual_keywords")
+                               or row.get("keywords") or [])
+        item = dict(row)
+        item["keywords"] = merged
+        out_rows.append(item)
+        changed = True
+
+    if not changed:
+        return settings
+    updated = dict(settings)
+    block = dict(rot)
+    block["variants"] = out_rows
+    updated["prompt_rotation"] = block
+    return updated
