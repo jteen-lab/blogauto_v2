@@ -271,17 +271,30 @@ const titleBundleMethods = {
      *  id 를 알 수 없다. 화면이 들고 있는 카테고리 트리로 풀어 준다.
      */
     subtopicIdsByName(names) {
-        const want = (names || []).map(n => String(n).trim()).filter(Boolean);
+        const want = (names || []).map(n => this._nameParts(n)).filter(a => a.length);
         if (!want.length) return [];
         const out = [];
         (this.promptModule.topics || []).forEach(t => {
-            (t.subtopics || []).forEach(st => {
-                if (want.includes(String(st.name).trim()) && !out.includes(st.id)) {
-                    out.push(st.id);
-                }
+            (t.subtopics || t.subcategories || []).forEach(st => {
+                const mine = this._nameParts(st.name);
+                const hit = want.some(w => w.some(x => mine.includes(x)));
+                if (hit && !out.includes(st.id)) out.push(st.id);
             });
         });
         return out;
+    },
+
+    /** 이름을 견줄 수 있게 조각낸다.
+     *
+     *  프리셋은 '육아팁/육아노하우' 처럼 여러 이름을 빗금으로 묶어 두는데
+     *  실제 하위 주제는 '육아팁' 하나만 쓰는 일이 잦다. 글자 그대로
+     *  맞춰 보면 이런 짝을 놓친다.
+     */
+    _nameParts(name) {
+        return String(name || '')
+            .split(/[\/·,|]/)
+            .map(x => x.replace(/\s+/g, ''))
+            .filter(Boolean);
     },
 
     /** 하위 주제 고르개 — 어느 템플릿·링크에 걸지 정한다.
@@ -290,30 +303,68 @@ const titleBundleMethods = {
      *  그 주제의 키워드가 펼쳐져 들어간다.
      *  순서도: docs/flowcharts/subtopic_link.md
      */
-    openSubtopicPicker(target) {
-        if (!Array.isArray(target.subtopic_ids)) target.subtopic_ids = [];
-        this.promptModule.subtopicTarget = target;
+    openSubtopicPicker(kind, index) {
+        const holder = this.subtopicHolder(kind, index);
+        if (!holder) return;
+        if (!Array.isArray(holder.subtopic_ids)) holder.subtopic_ids = [];
+        this.promptModule.subtopicKind = kind;
+        this.promptModule.subtopicIndex = (index === undefined ? -1 : index);
         this.promptModule.subtopicOpen = true;
+    },
+
+    /** 지금 고르개가 손대고 있는 자리. 객체를 들고 있지 않고 자리만
+     *  기억해 두었다가 그때그때 찾아간다. 들고 있으면 화면이 따라오지 않는다.
+     */
+    subtopicHolder(kind, index) {
+        const pm = this.promptModule;
+        const rot = pm.rotation || {};
+        const k = (kind === undefined) ? pm.subtopicKind : kind;
+        const i = (index === undefined) ? pm.subtopicIndex : index;
+        if (k === 'variant') return (rot.variants || [])[i] || null;
+        if (k === 'base') return rot.base || null;
+        return null;
     },
 
     closeSubtopicPicker() {
         this.promptModule.subtopicOpen = false;
-        this.promptModule.subtopicTarget = null;
+        this.promptModule.subtopicKind = '';
+        this.promptModule.subtopicIndex = -1;
     },
 
     /** 고르개에서 하위 주제 하나를 집거나 놓는다. */
     toggleSubtopic(id) {
-        const t = this.promptModule.subtopicTarget;
-        if (!t) return;
-        if (!Array.isArray(t.subtopic_ids)) t.subtopic_ids = [];
-        const at = t.subtopic_ids.indexOf(id);
-        if (at === -1) t.subtopic_ids.push(id);
-        else t.subtopic_ids.splice(at, 1);
+        const holder = this.subtopicHolder();
+        if (!holder) return;
+        const next = Array.isArray(holder.subtopic_ids) ? holder.subtopic_ids.slice() : [];
+        const at = next.indexOf(id);
+        if (at === -1) next.push(id);
+        else next.splice(at, 1);
+        holder.subtopic_ids = next;
     },
 
     subtopicPicked(id) {
-        const t = this.promptModule.subtopicTarget;
-        return !!(t && (t.subtopic_ids || []).includes(id));
+        const holder = this.subtopicHolder();
+        return !!(holder && (holder.subtopic_ids || []).includes(id));
+    },
+
+    /** 고른 것을 모두 비운다. */
+    clearSubtopics() {
+        const holder = this.subtopicHolder();
+        if (holder) holder.subtopic_ids = [];
+    },
+
+    /** 템플릿 머리에 붙는 표. 프리셋으로 하위 주제가 이어졌는지 한눈에 본다. */
+    subtopicBadge(holder) {
+        const ids = (holder && holder.subtopic_ids) || [];
+        if (!ids.length) return '';
+        const names = [];
+        (this.promptModule.topics || []).forEach(t => {
+            (t.subtopics || t.subcategories || []).forEach(st => {
+                if (ids.includes(st.id)) names.push(st.name);
+            });
+        });
+        const head = names.slice(0, 2).join('·') || (ids.length + '개');
+        return '하위 주제 ' + head + (names.length > 2 ? ` 외 ${names.length - 2}` : '');
     },
 
     /** 단추에 적을 말. 고른 것이 없으면 고르라고 적는다. */
@@ -539,10 +590,10 @@ function getSubtopicPickerModal() {
             </div>
             <div class="px-5 py-3 border-t border-gray-200 flex items-center justify-between">
                 <span class="text-xs text-gray-500"
-                      x-text="promptModule.subtopicTarget ? subtopicSummary(promptModule.subtopicTarget) : ''"></span>
+                      x-text="subtopicSummary(subtopicHolder())"></span>
                 <div class="flex gap-2">
-                    <button type="button" x-show="promptModule.subtopicTarget && (promptModule.subtopicTarget.subtopic_ids || []).length"
-                            @click="promptModule.subtopicTarget.subtopic_ids = []"
+                    <button type="button" x-show="((subtopicHolder() || {}).subtopic_ids || []).length"
+                            @click="clearSubtopics()"
                             class="px-3 py-1.5 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">
                         고른 것 지우기
                     </button>

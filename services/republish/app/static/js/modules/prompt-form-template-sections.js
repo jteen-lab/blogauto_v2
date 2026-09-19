@@ -311,6 +311,9 @@ function getPromptContentGenSection() {
                                                     <span x-show="templatePreset(promptModule.rotation.base.presetLabel, promptModule.contentGeneration.userPromptTemplate)"
                                                           class="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 truncate"
                                                           x-text="templatePreset(promptModule.rotation.base.presetLabel, promptModule.contentGeneration.userPromptTemplate)"></span>
+                                                    <span x-show="((promptModule.rotation.base.subtopic_ids) || []).length"
+                                                          class="text-xs px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 shrink-0"
+                                                          x-text="subtopicBadge(promptModule.rotation.base)"></span>
                                                 </div>
                                                 <div class="flex items-center gap-2">
                                                     <input type="text" x-model="promptModule.rotation.base.label"
@@ -352,7 +355,7 @@ function getPromptContentGenSection() {
                                                        class="flex-1 min-w-40 px-2 py-1 border border-amber-300 bg-amber-50 rounded">
                                                 <button type="button"
                                                         x-show="promptModule.rotation.mode === 'by_keyword'"
-                                                        @click="openSubtopicPicker(promptModule.rotation.base)"
+                                                        @click="openSubtopicPicker('base')"
                                                         class="px-2 py-1 border border-amber-400 bg-white rounded text-amber-800 hover:bg-amber-50"
                                                         x-text="subtopicSummary(promptModule.rotation.base)"></button>
                                             </div>
@@ -369,6 +372,9 @@ function getPromptContentGenSection() {
                                                             <span x-show="templatePreset(v.presetLabel, v.template)"
                                                                   class="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 truncate"
                                                                   x-text="templatePreset(v.presetLabel, v.template)"></span>
+                                                            <span x-show="((v.subtopic_ids) || []).length"
+                                                                  class="text-xs px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 shrink-0"
+                                                                  x-text="subtopicBadge(v)"></span>
                                                         </div>
                                                         <div class="flex items-center gap-2">
                                                             <input type="text" x-model="v.label"
@@ -413,7 +419,7 @@ function getPromptContentGenSection() {
                                                                class="flex-1 min-w-40 px-2 py-1 border border-amber-300 bg-amber-50 rounded">
                                                         <button type="button"
                                                                 x-show="promptModule.rotation.mode === 'by_keyword'"
-                                                                @click="openSubtopicPicker(v)"
+                                                                @click="openSubtopicPicker('variant', i)"
                                                                 class="px-2 py-1 border border-amber-400 bg-white rounded text-amber-800 hover:bg-amber-50"
                                                                 x-text="subtopicSummary(v)"></button>
                                                     </div>
