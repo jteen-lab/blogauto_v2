@@ -37,6 +37,10 @@ function createPromptModuleState() {
             variants: []
         },
 
+        // 하위 주제 고르개
+        subtopicOpen: false,
+        subtopicTarget: null,
+
         // 스타일 템플릿(서버에서 받는다)
         styleTemplates: [],
         styleTemplate: '',
@@ -114,7 +118,7 @@ function createPromptModuleState() {
         // 프롬프트 로테이션 — 같은 니치라도 글마다 구조를 바꾼다
         builderTarget: 0,   // 빌더 반영 대상 (0=기본, 1..=변형)
         rotation: {
-            base: { label: '', presetLabel: '',  purpose: '', topic_ids_text: '', keywords_text: '' },
+            base: { label: '', presetLabel: '', subtopic_ids: [],  purpose: '', topic_ids_text: '', keywords_text: '' },
             enabled: false,
             mode: 'random',
             purpose: '',
@@ -267,6 +271,7 @@ const promptModuleMethods = {
                 purpose: v.purpose || '',
                 topic_ids_text: (v.topic_ids || []).join(','),
                 keywords_text: (v.keywords || []).join(','),
+                subtopic_ids: v.subtopic_ids || [],
                 is_base: !!v.is_base
             }));
             // 첫 변형은 기본 템플릿을 복사해 둔 것이다. 화면에서는
@@ -277,6 +282,7 @@ const promptModuleMethods = {
                 mode: rot.mode || 'random',
                 purpose: rot.purpose || '',
                 base: {
+                    subtopic_ids: base ? (base.subtopic_ids || []) : [],
                     label: base ? (base.label || '') : '',
                     presetLabel: base ? (base.presetLabel || '') : '',
                     purpose: base ? base.purpose : '',
@@ -483,6 +489,9 @@ const promptModuleMethods = {
                 .filter(n => Number.isInteger(n)),
             keywords: String(v.keywords_text || '').split(',')
                 .map(x => x.trim()).filter(Boolean),
+            // 고른 하위 주제. 서버가 저장할 때 이 주제의 키워드를 펼친다
+            subtopic_ids: (v.subtopic_ids || [])
+                .map(n => parseInt(n, 10)).filter(n => Number.isInteger(n)),
             ...(isBase ? { is_base: true } : {})
         };
     },

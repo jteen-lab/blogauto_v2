@@ -265,6 +265,52 @@ const titleBundleMethods = {
         else list.push(styleValue);
     },
 
+    /** 하위 주제 고르개 — 어느 템플릿·링크에 걸지 정한다.
+     *
+     *  키워드를 손으로 적는 대신 카테고리의 하위 주제를 고르면, 저장할 때
+     *  그 주제의 키워드가 펼쳐져 들어간다.
+     *  순서도: docs/flowcharts/subtopic_link.md
+     */
+    openSubtopicPicker(target) {
+        if (!Array.isArray(target.subtopic_ids)) target.subtopic_ids = [];
+        this.subtopicTarget = target;
+        this.subtopicOpen = true;
+    },
+
+    closeSubtopicPicker() {
+        this.subtopicOpen = false;
+        this.subtopicTarget = null;
+    },
+
+    /** 고르개에서 하위 주제 하나를 집거나 놓는다. */
+    toggleSubtopic(id) {
+        const t = this.subtopicTarget;
+        if (!t) return;
+        if (!Array.isArray(t.subtopic_ids)) t.subtopic_ids = [];
+        const at = t.subtopic_ids.indexOf(id);
+        if (at === -1) t.subtopic_ids.push(id);
+        else t.subtopic_ids.splice(at, 1);
+    },
+
+    subtopicPicked(id) {
+        const t = this.subtopicTarget;
+        return !!(t && (t.subtopic_ids || []).includes(id));
+    },
+
+    /** 단추에 적을 말. 고른 것이 없으면 고르라고 적는다. */
+    subtopicSummary(target) {
+        const ids = (target && target.subtopic_ids) || [];
+        if (!ids.length) return '하위 주제 고르기';
+        const names = [];
+        (this.promptModule.topics || []).forEach(t => {
+            (t.subtopics || []).forEach(st => {
+                if (ids.includes(st.id)) names.push(st.name);
+            });
+        });
+        const head = names.slice(0, 2).join('·') || (ids.length + '개');
+        return '하위 주제 ' + head + (names.length > 2 ? ` 외 ${names.length - 2}` : '');
+    },
+
     /** 이 템플릿을 무엇으로 채웠는지. 저장된 이름이 먼저고, 없으면
      *  본문에서 되짚는다.
      *
@@ -433,3 +479,60 @@ const titleBundleMethods = {
 };
 
 window.titleBundleMethods = titleBundleMethods;
+
+
+/** 하위 주제 고르개 창. 폼 어디서든 하나만 쓴다. */
+function getSubtopicPickerModal() {
+    return `
+    <div x-show="subtopicOpen" x-cloak class="fixed inset-0 z-[60] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/50" @click="closeSubtopicPicker()"></div>
+        <div class="relative bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+            <div class="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+                <div>
+                    <b class="text-gray-900">하위 주제 고르기</b>
+                    <p class="text-xs text-gray-500 mt-0.5">
+                        고른 주제의 키워드가 제목에 있으면 이 템플릿·링크를 씁니다.
+                        저장할 때 키워드가 펼쳐져 들어갑니다.
+                    </p>
+                </div>
+                <button type="button" @click="closeSubtopicPicker()"
+                        class="text-gray-400 hover:text-gray-700 text-xl leading-none">&times;</button>
+            </div>
+            <div class="flex-1 overflow-y-auto px-5 py-3 space-y-3">
+                <template x-for="t in promptModule.topics" :key="'sp' + t.id">
+                    <div>
+                        <p class="text-xs font-semibold text-gray-700 mb-1" x-text="t.name"></p>
+                        <div class="flex flex-wrap gap-1.5">
+                            <template x-for="st in (t.subtopics || [])" :key="'sps' + st.id">
+                                <button type="button" @click="toggleSubtopic(st.id)"
+                                        class="px-2.5 py-1 rounded-full border text-xs transition-colors"
+                                        :class="subtopicPicked(st.id)
+                                            ? 'border-amber-500 bg-amber-100 text-amber-900 font-medium'
+                                            : 'border-gray-300 text-gray-600 hover:bg-gray-50'"
+                                        x-text="st.name"></button>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+                <p x-show="!(promptModule.topics || []).length" class="text-xs text-gray-400 py-6 text-center">
+                    등록된 카테고리가 없습니다.
+                </p>
+            </div>
+            <div class="px-5 py-3 border-t border-gray-200 flex items-center justify-between">
+                <span class="text-xs text-gray-500"
+                      x-text="subtopicTarget ? subtopicSummary(subtopicTarget) : ''"></span>
+                <div class="flex gap-2">
+                    <button type="button" x-show="subtopicTarget && (subtopicTarget.subtopic_ids || []).length"
+                            @click="subtopicTarget.subtopic_ids = []"
+                            class="px-3 py-1.5 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">
+                        고른 것 지우기
+                    </button>
+                    <button type="button" @click="closeSubtopicPicker()"
+                            class="px-4 py-1.5 text-sm text-white bg-accent rounded hover:opacity-90">
+                        다 골랐습니다
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>`;
+}

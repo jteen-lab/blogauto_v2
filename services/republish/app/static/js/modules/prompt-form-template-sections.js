@@ -347,9 +347,14 @@ function getPromptContentGenSection() {
                                                        placeholder="주제 ID (예: 24,25 · 비우면 전체)"
                                                        class="flex-1 min-w-40 px-2 py-1 border border-gray-300 rounded">
                                                 <input type="text" x-model="promptModule.rotation.base.keywords_text"
-                                                       x-show="promptModule.rotation.mode === 'by_keyword'"
+                                                       x-show="promptModule.rotation.mode === 'by_keyword' && !(promptModule.rotation.base.subtopic_ids || []).length"
                                                        placeholder="예: 이사+견적, 이사+비용 · 비우면 전체"
                                                        class="flex-1 min-w-40 px-2 py-1 border border-amber-300 bg-amber-50 rounded">
+                                                <button type="button"
+                                                        x-show="promptModule.rotation.mode === 'by_keyword'"
+                                                        @click="openSubtopicPicker(promptModule.rotation.base)"
+                                                        class="px-2 py-1 border border-amber-400 bg-white rounded text-amber-800 hover:bg-amber-50"
+                                                        x-text="subtopicSummary(promptModule.rotation.base)"></button>
                                             </div>
                                         </div>
 
@@ -403,9 +408,14 @@ function getPromptContentGenSection() {
                                                                placeholder="주제 ID (예: 24,25 · 비우면 전체)"
                                                                class="flex-1 min-w-40 px-2 py-1 border border-gray-300 rounded">
                                                         <input type="text" x-model="v.keywords_text"
-                                                               x-show="promptModule.rotation.mode === 'by_keyword'"
+                                                               x-show="promptModule.rotation.mode === 'by_keyword' && !(v.subtopic_ids || []).length"
                                                                placeholder="예: 이사+청소, 입주+청소 · 비우면 전체"
                                                                class="flex-1 min-w-40 px-2 py-1 border border-amber-300 bg-amber-50 rounded">
+                                                        <button type="button"
+                                                                x-show="promptModule.rotation.mode === 'by_keyword'"
+                                                                @click="openSubtopicPicker(v)"
+                                                                class="px-2 py-1 border border-amber-400 bg-white rounded text-amber-800 hover:bg-amber-50"
+                                                                x-text="subtopicSummary(v)"></button>
                                                     </div>
                                                 </div>
                                             </template>

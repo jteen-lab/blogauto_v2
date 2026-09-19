@@ -511,6 +511,7 @@ ${getPromptImageSection()}
 ${getTestImageSection()}
 ${getTestSubstitutionSection()}
 ${getForceLinkModal()}
+${getSubtopicPickerModal()}
                         </div>
 `;
 }

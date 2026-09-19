@@ -27,6 +27,9 @@ function emptyLinkForm(notice, blogOnly) {
 /** 모듈 테스터에 섞어 넣는 홍보 링크 부분. */
 function promoLinkPart() {
     return {
+        // 하위 주제 고르개(별도 파일)
+        ...promoSubtopicPart(),
+
         // ── 상태 ─────────────────────────────────────────────
         links: [], pickedLink: null, linkSaving: false, linkMessage: '',
         linkForm: emptyLinkForm(),
@@ -119,6 +122,7 @@ function promoLinkPart() {
         /** 목록의 링크를 등록 칸으로 불러온다. */
         editLink(l) {
             this.linkEditId = l.id;
+            this.restoreLinkSubtopics(l);
             this.linkForm = {
                 name: l.name || '', url: l.url || '',
                 button_text: l.button_text || '', keywords: l.keywords || '',
@@ -129,6 +133,7 @@ function promoLinkPart() {
         /** 고치기를 그만둔다. 칸은 새 등록 상태로 돌아간다. */
         cancelEditLink() {
             this.linkEditId = null;
+            this.linkSubtopics = [];
             this.linkForm = emptyLinkForm();
             this.linkMessage = '';
         },
@@ -146,6 +151,8 @@ function promoLinkPart() {
                 button_text: f.button_text.trim(),
                 notice: (f.notice || '').trim(),
                 keywords: (f.keywords || '').trim(),
+                // 고른 하위 주제. 서버가 그 주제의 키워드를 펼쳐 넣는다
+                subtopic_ids: [...this.linkSubtopics],
                 blog_id: blogId,
             };
         },
@@ -174,6 +181,7 @@ function promoLinkPart() {
                 this.rememberLink();
             }
             this.linkForm = emptyLinkForm(f.notice, f.blogOnly);
+            this.linkSubtopics = [];
             this.linkMessage = (got.link.keywords || '').trim()
                 ? '등록했습니다. 제목이 맞으면 저절로 붙습니다.'
                 : '등록했습니다. 키워드가 없어 이 링크로 고정했습니다.';
