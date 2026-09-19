@@ -39,7 +39,8 @@ function createPromptModuleState() {
 
         // 하위 주제 고르개
         subtopicOpen: false,
-        subtopicTarget: null,
+        subtopicKind: '',
+        subtopicIndex: -1,
 
         // 스타일 템플릿(서버에서 받는다)
         styleTemplates: [],
@@ -192,7 +193,13 @@ const promptModuleMethods = {
             const resp = await fetch('/api/v1/categories', { credentials: 'include' });
             if (resp.ok) {
                 const data = await resp.json();
-                this.promptModule.topics = data.categories || [];
+                // 서버는 subcategories 로 준다. 화면 곳곳이 subtopics 로
+                // 읽으므로 받는 자리에서 두 이름을 모두 갖춰 둔다.
+                this.promptModule.topics = (data.categories || []).map(t => ({
+                    ...t,
+                    subtopics: t.subtopics || t.subcategories || [],
+                    subcategories: t.subcategories || t.subtopics || [],
+                }));
             }
         } catch (e) { console.error('카테고리 로드 실패:', e); }
         finally { this.promptModule.categoriesLoading = false; }

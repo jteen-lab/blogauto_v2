@@ -18,7 +18,11 @@ function promoSubtopicPart() {
             if (this.topics.length) return;
             try {
                 const got = await this._json('/api/v1/categories');
-                this.topics = got.categories || [];
+                // 서버는 subcategories 라는 이름으로 준다. 화면은 subtopics 로
+                // 읽으므로 받는 자리에서 한 번만 맞춰 둔다.
+                this.topics = (got.categories || []).map(t => ({
+                    ...t, subtopics: t.subtopics || t.subcategories || [],
+                }));
             } catch (e) { console.error('카테고리 로드 실패:', e); }
         },
 
