@@ -139,6 +139,9 @@ function createPromptBuilderState(opts = {}) {
                 preset: this.fullPromptOverride
                     ? '전용 프롬프트'
                     : (this.activePresetLabel || ''),
+                // 이 프리셋이 맡는 하위 주제 이름. 템플릿에 반영할 때
+                // 그 주제를 자동으로 이어 준다(키워드를 손으로 안 적게).
+                presetSubtopics: this.activePresetSubtopics,
                 persona: this.persona,
                 reader: this.reader,
                 pattern: this.pattern,
@@ -219,6 +222,12 @@ function createPromptBuilderState(opts = {}) {
         get activePresetLabel() {
             const hit = this.presets.find((p) => this.isActivePreset(p));
             return hit ? hit.label : '';
+        },
+
+        /** 지금 고른 조합과 같은 프리셋이 맡는 하위 주제 이름들. */
+        get activePresetSubtopics() {
+            const hit = this.presets.find((p) => this.isActivePreset(p));
+            return hit ? (hit.match_subtopics || []) : [];
         },
 
         // 지금 화면 선택이 모듈에 반영돼 있는지. 반영을 안 누르면 저장된 것은 옛 텍스트다.

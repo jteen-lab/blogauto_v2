@@ -185,6 +185,8 @@ function createPromptModuleState() {
 // 프롬프트 모듈 메서드 믹스인
 const promptModuleMethods = {
     async loadCategories() {
+        // 빌더 패널(자식 스코프)이 이름으로 하위 주제를 찾을 수 있게 심어 둔다
+        this.promptModule.subtopicIdsByName = (names) => this.subtopicIdsByName(names);
         this.promptModule.categoriesLoading = true;
         try {
             const resp = await fetch('/api/v1/categories', { credentials: 'include' });

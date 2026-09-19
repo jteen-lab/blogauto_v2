@@ -18,11 +18,21 @@ window.getPromptBuilderEmbeddedHTML = function () {
                  // 0 = 기본(사용자 프롬프트 템플릿), 1.. = 변형
                  const at = parseInt(promptModule.builderTarget, 10) || 0;
                  const preset = (snapshot || {}).preset || '';
+                 // 프리셋이 맡는 하위 주제를 그대로 이어 준다 — 키워드를
+                 // 손으로 적지 않아도 이 템플릿이 그 주제에 걸린다.
+                 const subs = (typeof promptModule.subtopicIdsByName === 'function')
+                     ? promptModule.subtopicIdsByName((snapshot || {}).presetSubtopics)
+                     : [];
                  if (at > 0) {
                      const v = (promptModule.rotation.variants || [])[at - 1];
-                     if (v) { v.template = text; v.presetLabel = preset; return; }
+                     if (v) {
+                         v.template = text; v.presetLabel = preset;
+                         if (subs.length) v.subtopic_ids = subs;
+                         return;
+                     }
                  }
                  promptModule.contentGeneration.userPromptTemplate = text;
+                 if (subs.length) promptModule.rotation.base.subtopic_ids = subs;
                  // 어떤 프리셋·항목을 골랐는지 함께 보관한다(복원·강조용).
                  promptModule.contentGeneration.builderSelection = snapshot || null;
                  promptModule.rotation.base.presetLabel = preset;

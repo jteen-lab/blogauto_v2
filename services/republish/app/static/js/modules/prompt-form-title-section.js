@@ -265,6 +265,25 @@ const titleBundleMethods = {
         else list.push(styleValue);
     },
 
+    /** 하위 주제 **이름**으로 id 를 찾는다. 프리셋은 이름만 갖고 있다.
+     *
+     *  빌더 프리셋의 match_subtopics 는 카테고리 이름이라, 모듈마다 다른
+     *  id 를 알 수 없다. 화면이 들고 있는 카테고리 트리로 풀어 준다.
+     */
+    subtopicIdsByName(names) {
+        const want = (names || []).map(n => String(n).trim()).filter(Boolean);
+        if (!want.length) return [];
+        const out = [];
+        (this.promptModule.topics || []).forEach(t => {
+            (t.subtopics || []).forEach(st => {
+                if (want.includes(String(st.name).trim()) && !out.includes(st.id)) {
+                    out.push(st.id);
+                }
+            });
+        });
+        return out;
+    },
+
     /** 하위 주제 고르개 — 어느 템플릿·링크에 걸지 정한다.
      *
      *  키워드를 손으로 적는 대신 카테고리의 하위 주제를 고르면, 저장할 때
@@ -273,18 +292,18 @@ const titleBundleMethods = {
      */
     openSubtopicPicker(target) {
         if (!Array.isArray(target.subtopic_ids)) target.subtopic_ids = [];
-        this.subtopicTarget = target;
-        this.subtopicOpen = true;
+        this.promptModule.subtopicTarget = target;
+        this.promptModule.subtopicOpen = true;
     },
 
     closeSubtopicPicker() {
-        this.subtopicOpen = false;
-        this.subtopicTarget = null;
+        this.promptModule.subtopicOpen = false;
+        this.promptModule.subtopicTarget = null;
     },
 
     /** 고르개에서 하위 주제 하나를 집거나 놓는다. */
     toggleSubtopic(id) {
-        const t = this.subtopicTarget;
+        const t = this.promptModule.subtopicTarget;
         if (!t) return;
         if (!Array.isArray(t.subtopic_ids)) t.subtopic_ids = [];
         const at = t.subtopic_ids.indexOf(id);
@@ -293,7 +312,7 @@ const titleBundleMethods = {
     },
 
     subtopicPicked(id) {
-        const t = this.subtopicTarget;
+        const t = this.promptModule.subtopicTarget;
         return !!(t && (t.subtopic_ids || []).includes(id));
     },
 
@@ -484,7 +503,7 @@ window.titleBundleMethods = titleBundleMethods;
 /** 하위 주제 고르개 창. 폼 어디서든 하나만 쓴다. */
 function getSubtopicPickerModal() {
     return `
-    <div x-show="subtopicOpen" x-cloak class="fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <div x-show="promptModule.subtopicOpen" x-cloak class="fixed inset-0 z-[60] flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-black/50" @click="closeSubtopicPicker()"></div>
         <div class="relative bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
             <div class="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
@@ -504,7 +523,7 @@ function getSubtopicPickerModal() {
                         <p class="text-xs font-semibold text-gray-700 mb-1" x-text="t.name"></p>
                         <div class="flex flex-wrap gap-1.5">
                             <template x-for="st in (t.subtopics || [])" :key="'sps' + st.id">
-                                <button type="button" @click="toggleSubtopic(st.id)"
+                                <button type="button" @click.stop="toggleSubtopic(st.id)"
                                         class="px-2.5 py-1 rounded-full border text-xs transition-colors"
                                         :class="subtopicPicked(st.id)
                                             ? 'border-amber-500 bg-amber-100 text-amber-900 font-medium'
@@ -520,10 +539,10 @@ function getSubtopicPickerModal() {
             </div>
             <div class="px-5 py-3 border-t border-gray-200 flex items-center justify-between">
                 <span class="text-xs text-gray-500"
-                      x-text="subtopicTarget ? subtopicSummary(subtopicTarget) : ''"></span>
+                      x-text="promptModule.subtopicTarget ? subtopicSummary(promptModule.subtopicTarget) : ''"></span>
                 <div class="flex gap-2">
-                    <button type="button" x-show="subtopicTarget && (subtopicTarget.subtopic_ids || []).length"
-                            @click="subtopicTarget.subtopic_ids = []"
+                    <button type="button" x-show="promptModule.subtopicTarget && (promptModule.subtopicTarget.subtopic_ids || []).length"
+                            @click="promptModule.subtopicTarget.subtopic_ids = []"
                             class="px-3 py-1.5 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50">
                         고른 것 지우기
                     </button>
