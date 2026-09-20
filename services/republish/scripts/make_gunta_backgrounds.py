@@ -185,10 +185,12 @@ def savings() -> Image.Image:
 
 
 def main() -> None:
-    jobs = (("template_12_1.png", stocks, "주식·ETF"),
-            ("template_12_2.png", subsidy, "정부 지원금"),
-            ("template_12_3.png", tax, "세금·연말정산"),
-            ("template_12_4.png", savings, "적금·예금"))
+    # 화면은 기본 배경(슬롯 0)을 템플릿 1 자리로 쓴다. 그래서 첫 장은
+    # 슬롯 없는 이름으로, 나머지는 슬롯 1~3 으로 낸다.
+    jobs = (("template_12.png", stocks, "주식·ETF (기본)"),
+            ("template_12_1.png", subsidy, "정부 지원금"),
+            ("template_12_2.png", tax, "세금·연말정산"),
+            ("template_12_3.png", savings, "적금·예금"))
     for name, fn, label in jobs:
         img = fn()
         img.save(name, "PNG", optimize=True)
