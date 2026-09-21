@@ -167,8 +167,14 @@ function unmatchedCleanupPart() {
                 alert(data.message
                     || `${data.promoted ?? data.created ?? data.deleted ?? target.length}개 ${words[1]} 완료`);
 
-                // 처리한 것은 목록에서 걷어낸다
-                const done = new Set(target);
+                // 실패한 것은 목록에 남긴다. 걷어내면 무엇이 안 됐는지
+                // 알 길이 없고, 다시 시도할 수도 없다.
+                const failedIds = new Set(
+                    (data.errors || [])
+                        .map(m => parseInt(String(m).replace(/^post_id=/, ''), 10))
+                        .filter(Number.isInteger));
+                const done = new Set(
+                    target.filter(id => !failedIds.has(id)));
                 this.unmatchedTitlesItems =
                     (this.unmatchedTitlesItems || []).filter(r => !done.has(r.id));
                 this.unmatchedSelectedIds =
@@ -177,7 +183,7 @@ function unmatchedCleanupPart() {
                     (this.selectedUnmatchedCrawled || [])
                         .filter(id => !done.has(parseInt(id, 10)));
                 this.unmatchedTitlesTotal =
-                    Math.max(0, this.unmatchedTitlesTotal - target.length);
+                    Math.max(0, this.unmatchedTitlesTotal - done.size);
 
                 await this.refreshAfterCleanup();
             } catch (e) {
