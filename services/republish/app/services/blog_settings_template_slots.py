@@ -33,6 +33,10 @@ SINGLE_KEY = "template_image"
 MODE_KEY = "template_image_mode"
 #: 기본 배경(슬롯 0)이 맡을 하위 주제. 비우면 아무 때나 뽑힌다
 BASE_TOPICS_KEY = "template_image_topics"
+#: 기본 배경이 맡을 프롬프트 템플릿 자리(0 = 템플릿 1). 비우면 안 고른 것
+BASE_PROMPT_KEY = "template_image_prompt"
+#: 배경마다 맡은 템플릿 자리를 적는 칸 이름
+PROMPT_FIELD = "prompt_index"
 
 
 def filename_for(file_type: str, blog_id: int, ext: str, slot: int = 0) -> str:
@@ -124,11 +128,72 @@ def for_picker(config: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
         # 어느 주제에서나 후보가 되어 하위 주제별 고정이 흐려진다.
         out.append({"path": base,
                     "topic_ids": (config or {}).get(BASE_TOPICS_KEY) or [],
-                    "keywords": []})
+                    "keywords": [],
+                    PROMPT_FIELD: _prompt_at((config or {}).get(
+                        BASE_PROMPT_KEY))})
     out.extend({"path": r["path"],
                 "topic_ids": r.get("topic_ids") or [],
-                "keywords": r.get("keywords") or []} for r in rows)
+                "keywords": r.get("keywords") or [],
+                PROMPT_FIELD: _prompt_at(r.get(PROMPT_FIELD))} for r in rows)
     return out
+
+
+def _prompt_at(value: Any) -> Optional[int]:
+    """맡은 템플릿 자리. 비었거나 이상하면 None(안 고름)."""
+    if value in (None, ""):
+        return None
+    try:
+        at = int(value)
+    except (TypeError, ValueError):
+        return None
+    return at if at >= 0 else None
+
+
+def pick_for_prompt(config: Optional[Dict[str, Any]],
+                    prompt_index: int) -> Optional[Dict[str, Any]]:
+    """이 템플릿을 **집어 든** 배경. 아무도 안 집었으면 None.
+
+    집은 것이 먼저다. 없으면 호출부가 예전처럼 자리 순서로 간다 —
+    이미 자리로 맞춰 둔 블로그를 건드리지 않기 위해서다.
+    """
+    for item in for_picker(config):
+        if item.get(PROMPT_FIELD) == int(prompt_index):
+            return item
+    return None
+
+
+def by_prompt(config: Optional[Dict[str, Any]], items: List[Dict[str, Any]],
+              prompt_index: Optional[int],
+              cursor: int) -> Optional[Dict[str, Any]]:
+    """프롬프트 템플릿에 맞는 배경 하나. 없으면 None(기본으로 물러섬).
+
+    집어 둔 배경이 먼저고, 없으면 자리 순서를 따른다.
+    순서도: docs/flowcharts/template_image_prompt_pick.md
+    """
+    at = int(prompt_index or 0)
+    chosen = pick_for_prompt(config, at)
+    if chosen:
+        logger.info("[TEMPLATE_IMAGE] 배경 선택 | 프롬프트 %d번을 집어 둔 "
+                    "배경 | %s", at + 1, chosen.get("path"))
+        return {"path": chosen.get("path"), "index": items.index(chosen),
+                "next_cursor": cursor + 1}
+    if 0 <= at < len(items):
+        seat = items[at]
+        # 자리로 물러서더라도 **남이 집어 둔 배경은 비켜 준다**. 두
+        # 템플릿이 같은 그림을 쓰면 어느 쪽이 맞는지 알 수 없다.
+        taken = seat.get(PROMPT_FIELD)
+        if taken is not None and int(taken) != at:
+            logger.info("[TEMPLATE_IMAGE] 프롬프트 %d번 자리의 배경은 "
+                        "템플릿 %d번이 집어 두어 기본을 쓴다",
+                        at + 1, int(taken) + 1)
+            return None
+        logger.info("[TEMPLATE_IMAGE] 배경 선택 | 프롬프트 %d번 자리 | %s",
+                    at + 1, seat.get("path"))
+        return {"path": seat.get("path"), "index": at,
+                "next_cursor": cursor + 1}
+    logger.info("[TEMPLATE_IMAGE] 프롬프트 %d번에 맞는 배경이 없어 기본을 "
+                "쓴다 | 배경 %d장", at + 1, len(items))
+    return None
 
 
 # ── 라우터 글루 ────────────────────────────────────────────────────────
