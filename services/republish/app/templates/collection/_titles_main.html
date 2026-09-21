@@ -140,10 +140,13 @@
             </div>
             <div class="px-5 py-2 border-b border-gray-200 flex flex-wrap items-center gap-2">
                 <label class="flex items-center gap-2 text-xs text-gray-700 cursor-pointer select-none">
+                    <!-- 표시는 x-effect 로 상태에 맞춘다. :checked + .prevent 로
+                         두면 막은 기본 동작이 되돌아오며 표시가 굳는다. -->
                     <input type="checkbox" class="w-4 h-4"
-                           :checked="unmatchedAllChecked()"
-                           @click.prevent="toggleAllUnmatched()">
+                           x-effect="$el.checked = unmatchedAllChecked()"
+                           @click="toggleAllUnmatched()">
                     전체 선택
+                    <span x-show="unmatchedLoading" class="text-gray-400">(불러오는 중…)</span>
                 </label>
                 <span class="text-xs text-gray-400"
                       x-text="'불러온 ' + unmatchedTitlesItems.length + ' / 전체 ' + unmatchedTitlesTotal + '개'"></span>
