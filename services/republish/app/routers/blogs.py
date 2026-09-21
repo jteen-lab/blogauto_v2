@@ -906,80 +906,17 @@ async def promote_unmatched_posts_to_main(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    """선택한 미매칭 발행글 각각에 대해:
+    """선택한 미매칭 발행글을 정식제목에 붙인다.
 
-    1) 발행글 제목으로 새 MainTitle 생성 (블로그 첫 활성 카테고리 따름)
-    2) CrawledPost.match_status='matched' + matched_main_title_id 부여
-    3) BlogMainTitleScan(matched=True) 카드 등록 → 다음 사전체크 0초 유지
+    같은 제목이 이미 있으면 새로 만들지 않고 그 제목에 잇는다. 한 건이
+    깨져도 나머지는 살린다 — 자세한 차례는 서비스에 있다.
+    순서도: docs/flowcharts/unmatched_promote.md
     """
-    from sqlalchemy import select
-    from ..models.crawled_post import CrawledPost
-    from ..models.title import MainTitle
-    from ..models.category import BlogCategory
-    from ..models.blog_main_title_scan import BlogMainTitleScan
-    from datetime import datetime as _dt
+    from ..services.unmatched_promote import promote_to_main
 
     blog_service = BlogService(db)
     await blog_service.get_blog_by_id(current_user, blog_id)
-
-    # 블로그 첫 활성 카테고리 (분류 시드)
-    bc_row = (
-        await db.execute(
-            select(BlogCategory).where(
-                BlogCategory.blog_id == blog_id,
-                BlogCategory.is_active.is_(True),
-            ).limit(1)
-        )
-    ).scalar_one_or_none()
-    seed_topic = bc_row.topic_id if bc_row else None
-    seed_subtopic = bc_row.subtopic_id if bc_row else None
-
-    posts = (
-        await db.execute(
-            select(CrawledPost).where(
-                CrawledPost.blog_id == blog_id,
-                CrawledPost.id.in_(body.post_ids),
-                CrawledPost.match_status == "unmatched",
-            )
-        )
-    ).scalars().all()
-
-    promoted = 0
-    errors: list[str] = []
-    now = _dt.utcnow()
-    for post in posts:
-        try:
-            new_title = MainTitle(
-                title=post.title,
-                status="matched",
-                topic_id=seed_topic,
-                subtopic_id=seed_subtopic,
-            )
-            db.add(new_title)
-            await db.flush()
-            post.mark_matched(new_title.id, 100.0)
-            db.add(BlogMainTitleScan(
-                blog_id=blog_id,
-                main_title_id=new_title.id,
-                matched=True,
-                scanned_at=now,
-            ))
-            promoted += 1
-        except Exception as e:
-            errors.append(f"post_id={post.id}: {e}")
-
-    await db.commit()
-    logger.info(
-        f"[PROMOTE-MAIN] blog={blog_id} | promoted={promoted}/{len(posts)} | "
-        f"requested={len(body.post_ids)} | errors={len(errors)}"
-    )
-    return {
-        "success": True,
-        "promoted": promoted,
-        "requested": len(body.post_ids),
-        "errors": errors,
-        "message": f"{promoted}개 발행글이 정식제목으로 등록되어 매칭 완료되었습니다.",
-    }
+    return await promote_to_main(db, blog_id, body.post_ids)
 
 
 @router.post(
