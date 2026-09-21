@@ -89,6 +89,9 @@ class OverlayConfig(BaseModel):
         description="배경 고르는 방식")
     template_image_topics: Optional[List[int]] = Field(
         default=None, description="기본 배경이 맡는 하위 주제")
+    template_image_prompt: Optional[int] = Field(
+        default=None, ge=0,
+        description="기본 배경이 맡는 프롬프트 템플릿 자리(0 = 템플릿 1)")
 
 class ImageSettingsRequest(BaseModel):
     """이미지 설정 요청 스키마."""

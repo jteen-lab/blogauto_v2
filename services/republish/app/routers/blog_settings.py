@@ -288,6 +288,14 @@ async def save_image_settings(
     overlay_data["ai_image_service"] = request.ai_image_service
     overlay_data["cover_source"] = request.cover_source
     overlay_data["section_source"] = request.section_source
+    # 기본 배경이 맡은 프롬프트 템플릿은 **비우는 것도 뜻이 있다**(자리대로).
+    # exclude_none 에 걸려 빠지므로 보냈는지 직접 보고 반영한다.
+    if "template_image_prompt" in request.overlay_config.model_fields_set:
+        chosen = request.overlay_config.template_image_prompt
+        if chosen is None:
+            overlay_data.pop("template_image_prompt", None)
+        else:
+            overlay_data["template_image_prompt"] = int(chosen)
     # file path는 무조건 DB 값으로 덮어씀 (없으면 키 제거).
     # 요청의 template_image/font_file은 무시한다.
     if existing_config.get("template_image"):
