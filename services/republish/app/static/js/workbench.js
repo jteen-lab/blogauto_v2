@@ -28,6 +28,9 @@ function moduleTester() {
             data: '제목 이관', generate: '글 생성', prompt: '글 생성',
         },
         sheet: null,          // blog | module | source | link | preview
+        // 글감을 어디서 찾을까. 'community' = 지식iN·카페 질문,
+        // 'web' = 키워드·제목으로 블로그·웹문서. 고른 뒤 길은 같다.
+        sourceMode: 'community',
         sourceQuery: '', sourceItems: [], sourceError: '', sourceLoading: false,
         sourceNextStart: null, sourceLastQuery: '',
         sourceScrollTop: 0,   // 질문 목록에서 보던 자리
@@ -401,9 +404,11 @@ function moduleTester() {
                 ? (this.sourceNextStart || 1) : 1;
             this.sourceLoading = true; this.sourceError = '';
             try {
+                const path = this.sourceMode === 'web'
+                    ? 'web-sources' : 'sources';
                 const got = await this._json(
-                    '/api/v1/workbench/sources?query=' + encodeURIComponent(q)
-                    + '&start=' + start);
+                    '/api/v1/workbench/' + path + '?query='
+                    + encodeURIComponent(q) + '&start=' + start);
                 const rows = (got.items || []).map(i =>
                     Object.assign({ checked: false }, i));
                 if (start === 1) {
@@ -426,6 +431,32 @@ function moduleTester() {
             finally { this.sourceLoading = false; }
         },
         checkedQuestions() { return this.sourceItems.filter(i => i.checked); },
+
+        /** 이 글감의 본문을 어느 길로 가져올지.
+         *
+         *  질문 페이지와 아무 웹페이지는 본문이 있는 자리가 다르다.
+         *  글감에 적힌 출처를 따르고, 없으면 지금 모드를 따른다.
+         */
+        _bodyPath(item) {
+            const src = String((item && item.source) || '').trim();
+            const isQ = !src || src === 'naver_kin' || src === 'naver_cafe';
+            return '/api/v1/workbench/'
+                + (isQ ? 'question-body' : 'page-body');
+        },
+
+        /** 찾을 곳을 바꾸며 시트를 연다. 곳이 바뀌면 목록을 비운다 —
+         *  섞이면 어디서 온 글인지 알 수 없다. */
+        openSourceSheet(mode) {
+            if (this.sourceMode !== mode) {
+                this.sourceMode = mode;
+                this.sourceItems = [];
+                this.sourceQuery = '';
+                this.sourceError = '';
+                this.sourceNextStart = null;
+                this.sourceLastQuery = '';
+            }
+            this.openSheet('source');
+        },
         /** 체크한 순간 본문을 가져온다. 버튼을 한 번 더 누르게 하면
          *  잊고 그냥 생성해 제목만으로 글이 나간다. */
         async onQuestionCheck(q) {
@@ -434,7 +465,7 @@ function moduleTester() {
             if (!q.link || q.bodyLoading) return;
             q.bodyLoading = true; q.bodyError = '';
             try {
-                const got = await this._json('/api/v1/workbench/question-body', {
+                const got = await this._json(this._bodyPath(q), {
                     method: 'POST', body: JSON.stringify({ links: [q.link] }),
                 });
                 const row = (got.items || [])[0];
@@ -457,7 +488,7 @@ function moduleTester() {
             }
             this.bodyLoading = true; this.sourceError = '';
             try {
-                const got = await this._json('/api/v1/workbench/question-body', {
+                const got = await this._json(this._bodyPath(picked[0]), {
                     method: 'POST',
                     body: JSON.stringify({ links: picked.map(q => q.link) }),
                 });
