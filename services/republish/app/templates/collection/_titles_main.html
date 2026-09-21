@@ -138,8 +138,33 @@
                 <b class="text-blue-700">정식제목 등록</b>을 누르면 이 글의 제목이 새 정식제목으로 등록되고 곧바로 매칭 완료 상태가 됩니다.
                 필요 없으면 임시제목으로 등록하거나 영구 삭제할 수 있습니다.
             </div>
-            <div class="overflow-y-auto flex-1 px-5 py-3">
-                <template x-if="unmatchedTitlesItems.length === 0">
+            <div class="px-5 py-2 border-b border-gray-200 flex flex-wrap items-center gap-2">
+                <label class="flex items-center gap-2 text-xs text-gray-700 cursor-pointer select-none">
+                    <input type="checkbox" class="w-4 h-4"
+                           :checked="unmatchedAllChecked()"
+                           @click.prevent="toggleAllUnmatched()">
+                    전체 선택
+                </label>
+                <span class="text-xs text-gray-400"
+                      x-text="'불러온 ' + unmatchedTitlesItems.length + ' / 전체 ' + unmatchedTitlesTotal + '개'"></span>
+                <div class="flex-1"></div>
+                <input type="text" x-model="unmatchedSearch"
+                       @keyup.enter="reloadUnmatched()"
+                       placeholder="제목 검색 후 엔터"
+                       class="px-2 py-1 border border-gray-300 rounded text-xs w-48">
+                <button type="button" @click="reloadUnmatched()"
+                        class="px-2 py-1 text-xs text-gray-600 border border-gray-300 rounded hover:bg-gray-50">
+                    검색
+                </button>
+                <button type="button" x-show="unmatchedSearch"
+                        @click="unmatchedSearch = ''; reloadUnmatched()"
+                        class="px-2 py-1 text-xs text-gray-500 hover:text-gray-700">
+                    지우기
+                </button>
+            </div>
+            <div class="overflow-y-auto flex-1 px-5 py-3"
+                 @scroll.passive="onUnmatchedScroll($event.target)">
+                <template x-if="unmatchedTitlesItems.length === 0 && !unmatchedLoading">
                     <div class="text-center text-sm text-gray-500 py-8">
                         정리할 미매칭 발행글이 없습니다.
                     </div>
@@ -158,6 +183,22 @@
                         <span class="text-xs text-gray-400" x-text="'#' + item.id"></span>
                     </label>
                 </template>
+
+                <div class="pt-3 text-center" x-show="unmatchedHasNext || unmatchedLoading">
+                    <button type="button" @click="loadMoreUnmatched()"
+                            x-show="!unmatchedLoading"
+                            class="px-3 py-1.5 text-xs text-indigo-700 border border-indigo-300 rounded hover:bg-indigo-50">
+                        더 보기
+                    </button>
+                    <button type="button" @click="loadAllUnmatched()"
+                            x-show="!unmatchedLoading"
+                            class="ml-2 px-3 py-1.5 text-xs text-gray-600 border border-gray-300 rounded hover:bg-gray-50">
+                        남은 것 모두 불러오기
+                    </button>
+                    <span x-show="unmatchedLoading" class="text-xs text-gray-400">
+                        불러오는 중…
+                    </span>
+                </div>
             </div>
             <div class="px-5 py-3 border-t border-gray-200 flex items-center justify-between gap-2">
                 <div class="text-xs text-gray-600">
@@ -268,6 +309,26 @@
                     ✓ <span x-text="selectedMainTitles.length + selectedUnmatchedCrawled.length" class="ml-1"></span>개 선택
                 </span>
                 <div class="flex items-center gap-2">
+                    <!-- 미매칭 발행글을 고른 경우: 바로 정리한다.
+                         검색으로 찾은 한 건도 여기서 처리할 수 있다. -->
+                    <template x-if="selectedUnmatchedCrawled.length > 0">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded px-2 py-1"
+                                  x-text="'미매칭 ' + selectedUnmatchedCrawled.length + '개'"></span>
+                            <button @click="cleanupSelectedUnmatched('promote-to-main')"
+                                class="inline-flex items-center px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
+                                정식제목 등록
+                            </button>
+                            <button @click="cleanupSelectedUnmatched('promote-to-temp')"
+                                class="inline-flex items-center px-3 py-1.5 bg-amber-100 text-amber-800 rounded-lg text-sm font-medium hover:bg-amber-200 transition-colors">
+                                임시제목 등록
+                            </button>
+                            <button @click="cleanupSelectedUnmatched('delete')"
+                                class="inline-flex items-center px-3 py-1.5 bg-rose-600 text-white rounded-lg text-sm font-medium hover:bg-rose-700 transition-colors">
+                                발행글 삭제
+                            </button>
+                        </div>
+                    </template>
                     <!-- 수동 그룹 (2개 이상 선택) -->
                     <button x-show="selectedMainTitles.length >= 2"
                         @click="manualGroupTitles()"
