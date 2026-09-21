@@ -223,6 +223,47 @@ async def fetch_question_body(
     return {"success": True, "items": rows, "fetched": got}
 
 
+@router.get("/web-sources", summary="키워드·제목으로 글감 검색")
+async def search_web_sources(
+    query: str = Query(..., min_length=1),
+    sources: Optional[str] = Query(None, description="쉼표 구분 소스 코드"),
+    limit: int = Query(15, ge=1, le=50),
+    start: int = Query(1, ge=1, le=1000,
+                       description="몇 번째 결과부터 — 더 보기에 쓴다"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """블로그·웹문서에서 찾는다. 돌려주는 모양은 질문 검색과 같다.
+
+    순서도: docs/flowcharts/workbench_web_sources.md
+    """
+    from ..services.workbench import web_sources
+
+    settings = (await db.execute(
+        select(UserSettings).where(UserSettings.user_id == current_user.id)
+    )).scalar_one_or_none()
+    picked = [s.strip() for s in (sources or "").split(",") if s.strip()]
+    return await web_sources.search_pages(
+        settings, query, picked or None, limit, start)
+
+
+@router.post("/page-body", summary="고른 글의 본문 가져오기")
+async def fetch_page_body(
+    body: QuestionBodyRequest,
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """검색으로 고른 글의 본문을 뽑는다.
+
+    질문 본문과 달리 아무 사이트나 올 수 있어 더 넓게 뒤진다. 실패해도
+    오류를 올리지 않는다 — 제목만으로도 글은 나온다.
+    """
+    from ..services.workbench.page_body import fetch_bodies
+
+    rows = await fetch_bodies(body.links)
+    got = len([r for r in rows if r.get("question")])
+    return {"success": True, "items": rows, "fetched": got}
+
+
 @router.post("/apply/keywords", summary="반영 — 키워드를 풀에 채택")
 async def apply_keywords(
     body: ApplyKeywordsRequest,
