@@ -124,24 +124,16 @@ class TemplateImageService:
         """
         from . import variant_picker as vp
 
-        from ..blog_settings_template_slots import for_picker
+        from .. import blog_settings_template_slots as slots
 
-        items = for_picker(config)
+        items = slots.for_picker(config)
         if not items:
             return None
 
-        # 프롬프트 템플릿과 같은 자리의 배경을 쓴다. 글의 주제는 이미
-        # 프롬프트가 가려 놓았으므로 그 번호를 그대로 따르면 어긋나지 않는다.
+        # 프롬프트 템플릿에 맞는 배경을 쓴다. 집어 둔 것이 먼저고, 없으면
+        # 자리 순서를 따른다. 자세한 차례는 슬롯 모듈에 있다.
         if config.get("template_image_mode") == MODE_BY_PROMPT:
-            at = int(prompt_index or 0)
-            if 0 <= at < len(items):
-                logger.info("[TEMPLATE_IMAGE] 배경 선택 | 프롬프트 %d번 | %s",
-                            at + 1, items[at].get("path"))
-                return {"path": items[at].get("path"), "index": at,
-                        "next_cursor": cursor + 1}
-            logger.info("[TEMPLATE_IMAGE] 프롬프트 %d번에 맞는 배경이 없어 "
-                        "기본을 쓴다 | 배경 %d장", at + 1, len(items))
-            return None
+            return slots.by_prompt(config, items, prompt_index, cursor)
 
         got = vp.pick(items, config.get("template_image_mode"),
                       topic_id=topic_id, keyword=keyword, cursor=cursor)
