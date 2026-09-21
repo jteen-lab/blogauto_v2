@@ -75,6 +75,9 @@ from .routers.search_visibility import router as search_visibility_router  # 검
 from .routers.ai_api_keys import router as ai_api_keys_router  # AI API 키 다계정 관리
 from .routers.ai_models import router as ai_models_router  # AI 모델 카탈로그
 from .routers.post_cleanup import router as post_cleanup_router  # 발행글 정리
+from .routers.blog_prompt_templates import (  # 배경↔프롬프트 템플릿 짝짓기
+    router as blog_prompt_templates_router,
+)
 # 키워드 관리(실험실) — 기존 수집을 대체할지 판단하기 위한 별도 화면
 from .routers.keyword_lab import (
     router as keyword_lab_router,
@@ -369,6 +372,7 @@ app.include_router(search_visibility_router, prefix=settings.api_v1_prefix)  # �
 app.include_router(ai_api_keys_router)  # AI API 키 다계정 관리 (prefix 포함)
 app.include_router(ai_models_router)  # AI 모델 카탈로그 (prefix 포함)
 app.include_router(post_cleanup_router)  # 발행글 정리 (prefix 포함)
+app.include_router(blog_prompt_templates_router)  # 배경↔템플릿 (prefix 포함)
 app.include_router(keyword_lab_router)  # 키워드 관리 (prefix 포함)
 app.include_router(promo_links_router)  # 홍보 링크 (버튼 주소 목록)
 app.include_router(workbench_router)  # 작업대 (리허설 실행·반영)
