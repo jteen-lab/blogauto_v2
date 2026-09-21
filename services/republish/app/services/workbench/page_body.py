@@ -149,11 +149,29 @@ def _naver_blog_view(link: str, html: str) -> str:
     return ""
 
 
+async def _get(client: httpx.AsyncClient, url: str) -> Any:
+    """페이지를 받는다.
+
+    인증서 체인이 불완전한 곳(공공기관에 흔하다)은 검증을 끄고 한 번
+    더 간다. 본문을 **읽기만** 하고 그대로 믿지도 않으므로(사용자가
+    보고 고른다) 이 정도는 감수한다.
+    """
+    try:
+        return await client.get(url, headers={"User-Agent": UA})
+    except Exception as e:                             # noqa: BLE001
+        if "CERTIFICATE_VERIFY_FAILED" not in str(e):
+            raise
+        logger.info("[PAGE_BODY] 인증서 검증을 끄고 다시 간다 | %s", url[:60])
+        async with httpx.AsyncClient(timeout=TIMEOUT, verify=False,
+                                     follow_redirects=True) as loose:
+            return await loose.get(url, headers={"User-Agent": UA})
+
+
 async def _fetch_one(client: httpx.AsyncClient, link: str) -> Dict[str, Any]:
     """한 건. 실패해도 예외를 올리지 않는다 — 제목만으로도 글은 쓴다."""
     out = {"link": link, "question": "", "answer": "", "error": ""}
     try:
-        resp = await client.get(link, headers={"User-Agent": UA})
+        resp = await _get(client, link)
         if resp.status_code != 200:
             out["error"] = f"HTTP {resp.status_code}"
             return out
@@ -162,7 +180,7 @@ async def _fetch_one(client: httpx.AsyncClient, link: str) -> Dict[str, Any]:
         inner = _naver_blog_view(link, html)
         if inner:
             try:
-                got = await client.get(inner, headers={"User-Agent": UA})
+                got = await _get(client, inner)
                 if got.status_code == 200:
                     html = got.text
             except Exception:                          # noqa: BLE001
