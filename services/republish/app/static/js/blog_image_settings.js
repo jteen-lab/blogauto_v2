@@ -80,6 +80,9 @@ function imageSettingsApp() {
         loadedFont: null,
         templateImage: null,
         extraCacheBust: 0,
+        // 이 블로그에 걸린 생성 프롬프트 템플릿. 배경마다 어느 템플릿
+        // 것인지 고르게 한다 — 주제 ID 를 외워 적지 않아도 되게.
+        promptTemplates: [],
 
         // 메시지 표시 헬퍼
         showMessage(message, type = 'info') {
@@ -207,6 +210,8 @@ function imageSettingsApp() {
             if (!blogId) { this.loading = false; return; }
 
             try {
+                // 배경마다 고를 템플릿 목록도 함께 받는다
+                this.loadPromptTemplates();
                 const response = await fetch(`/api/v1/blogs/${blogId}/settings/image`);
                 if (response.ok) {
                     this.applySettings(await response.json());
@@ -266,13 +271,23 @@ function imageSettingsApp() {
                         slot: r.slot,
                         path: r.path,
                         topic_ids: r.topic_ids || [],
-                        keywords: r.keywords || []
+                        keywords: r.keywords || [],
+                        prompt_index: (r.prompt_index === undefined
+                            || r.prompt_index === null)
+                            ? null : parseInt(r.prompt_index, 10)
                     }))
                     : [],
                 template_image_mode: config.template_image_mode || 'random',
+                template_image_prompt: (config.template_image_prompt === undefined
+                    || config.template_image_prompt === null)
+                    ? null : parseInt(config.template_image_prompt, 10),
                 font_file: config.font_file || null,
                 padding: config.padding || defaults.padding
             };
+
+            // 파일 이름이 같고 내용만 바뀌면 브라우저가 옛 그림을 계속
+            // 쓴다. 불러올 때마다 주소를 새로 매겨 그것을 막는다.
+            this.extraCacheBust = Date.now();
 
             // 미리보기 상태도 함께 리셋 (이전 블로그의 이미지/폰트 잔존 방지)
             this.templatePreviewUrl = '';
@@ -344,6 +359,31 @@ function imageSettingsApp() {
             return this.previewSlot
                 ? '추가 배경 ' + this.previewSlot + '번'
                 : '기본 배경';
+        },
+
+        /** 이 블로그에 걸린 생성 프롬프트 템플릿을 받아 둔다.
+         *  배경마다 어느 템플릿 것인지 이름으로 고르게 하기 위해서다. */
+        async loadPromptTemplates() {
+            const blogId = this.getBlogId();
+            if (!blogId) { this.promptTemplates = []; return; }
+            try {
+                const r = await fetch(
+                    `/api/v1/blogs/${blogId}/prompt-templates`,
+                    { credentials: 'include' });
+                if (!r.ok) { this.promptTemplates = []; return; }
+                const d = await r.json();
+                this.promptTemplates = d.templates || [];
+            } catch (e) {
+                console.error('[IMAGE_SETTINGS] 프롬프트 템플릿 로드 실패', e);
+                this.promptTemplates = [];
+            }
+        },
+
+        /** 드롭다운에 적을 말. 번호를 앞에 둬야 자리와 견줘 볼 수 있다. */
+        promptOptionText(t) {
+            const head = `템플릿 ${t.no}` + (t.is_base ? ' (기본)' : '');
+            const name = (t.label || '').trim();
+            return name && name !== head ? `${head} · ${name}` : head;
         },
 
         // 추가 배경 미리보기 URL (슬롯별)
@@ -744,6 +784,9 @@ function imageSettingsApp() {
                                 .filter(n => Number.isInteger(n)),
                             keywords: (r.keywords || [])
                                 .map(k => String(k).trim()).filter(Boolean),
+                            // 이 배경이 맡은 프롬프트 템플릿 자리(0 = 템플릿 1)
+                            prompt_index: Number.isInteger(r.prompt_index)
+                                ? r.prompt_index : null,
                         })),
                     template_image_mode: VALID_TPL_MODE.includes(oc.template_image_mode)
                         ? oc.template_image_mode : 'random',
@@ -751,6 +794,9 @@ function imageSettingsApp() {
                     // 저장 한 번에 날아가지 않는다.
                     template_image_topics: (oc.template_image_topics || [])
                         .map(n => parseInt(n, 10)).filter(n => Number.isInteger(n)),
+                    // 기본 배경이 맡은 프롬프트 템플릿 자리
+                    template_image_prompt: Number.isInteger(oc.template_image_prompt)
+                        ? oc.template_image_prompt : null,
                 };
 
                 const payload = {

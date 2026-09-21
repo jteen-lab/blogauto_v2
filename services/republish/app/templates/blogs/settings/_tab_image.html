@@ -188,6 +188,19 @@
                         </select>
                     </div>
 
+                    <div x-show="overlayConfig.template_image_mode === 'by_prompt' && promptTemplates.length"
+                         class="p-2 bg-white border border-indigo-200 rounded flex items-center gap-3 mb-2">
+                        <span class="text-xs text-gray-600 shrink-0">기본 배경이 맡을 템플릿</span>
+                        <select :value="overlayConfig.template_image_prompt ?? ''"
+                                @change="overlayConfig.template_image_prompt = $event.target.value === '' ? null : parseInt($event.target.value, 10)"
+                                class="flex-1 px-2 py-1 border border-indigo-300 bg-indigo-50 rounded text-xs">
+                            <option value="">자리대로 (템플릿 1)</option>
+                            <template x-for="t in promptTemplates" :key="'b' + t.index">
+                                <option :value="t.index" x-text="promptOptionText(t)"></option>
+                            </template>
+                        </select>
+                    </div>
+
                     <div class="space-y-2">
                         <template x-for="row in (overlayConfig.template_images || [])" :key="row.slot">
                             <div class="p-2 bg-white border rounded flex items-start gap-3"
@@ -205,11 +218,22 @@
                                        x-text="'슬롯 ' + row.slot + ' · ' + row.path
                                            + (previewSlot === row.slot ? ' · 미리보기에 쓰는 중' : '')"></p>
                                     <div class="flex flex-wrap gap-2">
-                                        <input type="text" :value="(row.topic_ids || []).join(',')"
+                                        <select x-show="overlayConfig.template_image_mode === 'by_prompt' && promptTemplates.length"
+                                                :value="row.prompt_index ?? ''"
+                                                @change="row.prompt_index = $event.target.value === '' ? null : parseInt($event.target.value, 10)"
+                                                class="flex-1 min-w-48 px-2 py-1 border border-indigo-300 bg-indigo-50 rounded text-xs">
+                                            <option value="">자리대로 (슬롯 번호를 따름)</option>
+                                            <template x-for="t in promptTemplates" :key="'x' + row.slot + '-' + t.index">
+                                                <option :value="t.index" x-text="promptOptionText(t)"></option>
+                                            </template>
+                                        </select>
+                                        <input type="text" x-show="overlayConfig.template_image_mode !== 'by_prompt'"
+                                               :value="(row.topic_ids || []).join(',')"
                                                @input="row.topic_ids = $event.target.value.split(',').map(v => parseInt(v.trim(), 10)).filter(n => Number.isInteger(n))"
                                                placeholder="주제 ID (예: 24 · 비우면 전체)"
                                                class="flex-1 min-w-36 px-2 py-1 border border-gray-300 rounded text-xs">
-                                        <input type="text" :value="(row.keywords || []).join(',')"
+                                        <input type="text" x-show="overlayConfig.template_image_mode !== 'by_prompt'"
+                                               :value="(row.keywords || []).join(',')"
                                                @input="row.keywords = $event.target.value.split(',').map(v => v.trim()).filter(Boolean)"
                                                placeholder="키워드 (예: 이사 · 비우면 전체)"
                                                class="flex-1 min-w-36 px-2 py-1 border border-gray-300 rounded text-xs">
@@ -580,4 +604,4 @@
 </div>
 
 <script src="/static/js/blog_image_preview.js"></script>
-<script src="/static/js/blog_image_settings.js?v=20260913ui"></script>
+<script src="/static/js/blog_image_settings.js?v=20260921prompt"></script>
