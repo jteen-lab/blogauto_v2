@@ -169,6 +169,22 @@ async def catalog(
     }
 
 
+@router.get("/blog-keywords", summary="담은 블로그의 하위 주제·키워드")
+async def blog_keywords(
+    blog_ids: str = Query("", description="쉼표 구분 블로그 id"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """소스 검색창 아래에 펼칠 키워드 칩 — 누르면 검색창에 들어간다.
+
+    순서도: docs/flowcharts/workbench_blog_keywords.md
+    """
+    from ..services.workbench import blog_keywords as kw_svc
+
+    ids = [int(x) for x in blog_ids.split(",") if x.strip().isdigit()]
+    return {"blogs": await kw_svc.keywords_for_blogs(db, current_user.id, ids)}
+
+
 @router.post("/run", summary="리허설 실행 — 반영 전에는 아무것도 남지 않음")
 async def run_module(
     body: RunRequest,
