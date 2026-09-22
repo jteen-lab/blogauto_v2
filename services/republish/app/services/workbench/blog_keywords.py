@@ -37,8 +37,11 @@ async def _owned_blogs(
 
 async def _subtopics_of(db: AsyncSession, blog_id: int) -> List[dict]:
     """블로그에 연결된 활성 하위 주제(주제명 포함), 정렬 순서대로."""
+    # PostgreSQL 은 DISTINCT 와 ORDER BY 를 함께 쓰면 정렬 열이 select 에
+    # 있어야 한다(SQLite 는 봐준다). 정렬 열까지 같이 뽑는다.
     rows = await db.execute(
-        select(SubTopic.id, SubTopic.name, Topic.name)
+        select(SubTopic.id, SubTopic.name, Topic.name,
+               Topic.order, SubTopic.order)
         .join(BlogCategory, BlogCategory.subtopic_id == SubTopic.id)
         .join(Topic, SubTopic.topic_id == Topic.id)
         .where(
@@ -53,7 +56,7 @@ async def _subtopics_of(db: AsyncSession, blog_id: int) -> List[dict]:
     )
     return [
         {"subtopic_id": sid, "subtopic_name": sname, "topic_name": tname}
-        for sid, sname, tname in rows.all()
+        for sid, sname, tname, _to, _so in rows.all()
     ]
 
 
