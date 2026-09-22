@@ -64,13 +64,18 @@
 
      PC 에서는 스크롤바의 작은 화살표를 눌러야 해서 불편했다. 모바일처럼
      카드를 **잡아끌어** 넘긴다. 터치는 브라우저 기본 동작이 이미 자연스러워
-     건드리지 않는다. #}
+     건드리지 않는다.
+
+     **포인터 붙잡기(pointer capture)는 쓰지 않는다.** 붙잡으면 표준에 따라
+     click 이 카드 버튼이 아니라 붙잡은 띠로 가서, 카드를 눌러도 아무 일도
+     일어나지 않았다(2026-09-05 ~ 09-22). 끌기는 창에서 듣고, 클릭은
+     브라우저 기본 경로로 카드까지 가게 둔다. #}
   <div class="niche-strip flex gap-2 overflow-x-auto pb-1 select-none"
        :class="dragging ? 'cursor-grabbing' : 'cursor-grab'"
        @pointerdown="dragStart($event)"
-       @pointermove="dragMove($event)"
-       @pointerup="dragEnd($event)"
-       @pointercancel="dragEnd($event)"
+       @pointermove.window="dragMove($event)"
+       @pointerup.window="dragEnd($event)"
+       @pointercancel.window="dragEnd($event)"
        @dragstart.prevent>
     <template x-for="row in cards()" :key="row.subtopic_id">
       <button type="button" @click="toggle(row)" draggable="false"
@@ -245,32 +250,37 @@ function nicheOverview() {
             this.resultError = false;
         },
 
-        /** 마우스로 잡는다. 터치는 브라우저 기본 스와이프가 더 매끄럽다. */
+        /** 마우스로 잡는다. 터치는 브라우저 기본 스와이프가 더 매끄럽다.
+         *
+         *  포인터를 붙잡지 않는다 — 붙잡으면 click 이 카드에 닿지 않는다.
+         *  대신 창에서 move/up 을 들어 띠 밖으로 나가도 계속 끌린다. */
         dragStart(event) {
             if (event.pointerType === 'touch') return;
             if (event.button !== undefined && event.button !== 0) return;
-            this.drag = { x: event.clientX,
-                          left: event.currentTarget.scrollLeft, moved: 0 };
+            const el = event.currentTarget;
+            if (!el) return;
+            // 직전 끌기의 잔상이 다음 클릭을 먹지 않게 여기서 지운다
+            this.suppressClick = false;
+            this.drag = { x: event.clientX, left: el.scrollLeft,
+                          moved: 0, el };
             this.dragging = true;
-            try { event.currentTarget.setPointerCapture(event.pointerId); }
-            catch (e) { /* 캡처를 못 해도 move/up 은 대개 들어온다 */ }
         },
 
         dragMove(event) {
             if (!this.drag) return;
             const dx = event.clientX - this.drag.x;
             this.drag.moved = Math.max(this.drag.moved, Math.abs(dx));
-            event.currentTarget.scrollLeft = this.drag.left - dx;
+            // 손떨림까지 스크롤하면 카드를 누르기 어려워진다
+            if (this.drag.moved <= 5) return;
+            this.drag.el.scrollLeft = this.drag.left - dx;
         },
 
-        dragEnd(event) {
+        dragEnd() {
             if (!this.drag) return;
             // 5px 은 손떨림. 그 이상 움직였으면 넘긴 것으로 본다.
             this.suppressClick = this.drag.moved > 5;
             this.drag = null;
             this.dragging = false;
-            try { event.currentTarget.releasePointerCapture(event.pointerId); }
-            catch (e) { /* 캡처를 안 잡았으면 풀 것도 없다 */ }
         },
 
         busy() {
