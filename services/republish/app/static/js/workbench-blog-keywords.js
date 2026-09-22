@@ -12,6 +12,7 @@ function blogKeywordPart() {
         blogKeywords: [],        // [{blog_id, blog_name, subtopics:[{subtopic_id, subtopic_name, topic_name, keywords:[]}]}]
         blogKeywordsOpen: true,  // 칩 영역 펼침/접힘 — 시트를 닫아도 유지
         blogKeywordsLoading: false,
+        blogKeywordsError: '',   // 받다 실패하면 '없다' 대신 이걸 보인다
         _blogKeywordsFor: '',    // 어느 블로그 조합으로 받았는지 — 같으면 다시 안 받는다
 
         /** 담은 블로그가 바뀌었을 때 부른다. 조합이 같으면 건너뛴다. */
@@ -20,7 +21,7 @@ function blogKeywordPart() {
             if (key === this._blogKeywordsFor) return;
             this._blogKeywordsFor = key;
             if (!key) { this.blogKeywords = []; return; }
-            this.blogKeywordsLoading = true;
+            this.blogKeywordsLoading = true; this.blogKeywordsError = '';
             try {
                 const got = await this._json(
                     '/api/v1/workbench/blog-keywords?blog_ids=' + key);
@@ -30,6 +31,7 @@ function blogKeywordPart() {
             } catch (e) {
                 console.error('블로그 키워드 로드 실패:', e);
                 this.blogKeywords = [];
+                this.blogKeywordsError = '키워드를 불러오지 못했습니다: ' + e.message;
             } finally { this.blogKeywordsLoading = false; }
         },
 
