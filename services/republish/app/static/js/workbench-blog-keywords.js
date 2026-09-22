@@ -44,10 +44,11 @@ function blogKeywordPart() {
         /** 검색창에 넣는다. 비어 있으면 그대로, 있으면 한 칸 띄워 뒤에.
          *  이미 들어 있는 키워드는 또 붙이지 않는다. */
         pickBlogKeyword(kw) {
+            const text = this._kwText(kw);
             const cur = (this.sourceQuery || '').trim();
-            const has = cur.split(/\s+/).join(' ').includes(kw);
-            if (!cur) this.sourceQuery = kw;
-            else if (!has) this.sourceQuery = cur + ' ' + kw;
+            const has = cur.split(/\s+/).join(' ').includes(text);
+            if (!cur) this.sourceQuery = text;
+            else if (!has) this.sourceQuery = cur + ' ' + text;
             this.$nextTick(() => {
                 const el = this.$refs.sourceInput;
                 if (el) el.focus();
@@ -56,7 +57,12 @@ function blogKeywordPart() {
 
         /** 이 키워드가 지금 검색창에 들어 있는지 — 칩 색을 바꾼다. */
         blogKeywordPicked(kw) {
-            return (this.sourceQuery || '').includes(kw);
+            return (this.sourceQuery || '').includes(this._kwText(kw));
+        },
+
+        /** 키워드 풀은 '포장+이사'처럼 + 로 묶어 둔다. 검색창에는 띄어 넣는다. */
+        _kwText(kw) {
+            return String(kw || '').replace(/\+/g, ' ').replace(/\s+/g, ' ').trim();
         },
     };
 }
