@@ -4,7 +4,9 @@
 보여 줬다. 정작 알고 싶은 것은 무슨 니치인지였다. 카드 하나가 니치
 하나가 되도록 바꾸면서 지켜야 할 것들을 못 박는다.
 """
+import json
 import pathlib
+import subprocess
 
 import pytest
 
@@ -204,3 +206,81 @@ class TestShowAllToggle:
 
     def test_count_label_shows_hidden_ones(self):
         assert "shown < total ? `${total}개 중 ${shown}개`" in TEMPLATE
+
+
+class TestCardClickReachesTheCard:
+    """카드를 눌러도 아무 일도 안 일어나던 회귀를 못 박는다.
+
+    띠에서 setPointerCapture 로 포인터를 붙잡으면, 표준에 따라 뒤이은
+    click 이 카드 버튼이 아니라 **붙잡은 띠**로 간다(Pointer Events L3).
+    그래서 카드의 @click 이 아예 불리지 않았다. 2026-09-05 ~ 09-22.
+    """
+
+    def test_no_pointer_capture(self):
+        assert "setPointerCapture" not in TEMPLATE
+        assert "releasePointerCapture" not in TEMPLATE
+
+    def test_drag_is_heard_on_the_window(self):
+        """붙잡지 않으므로 띠 밖으로 나가도 끌리려면 창에서 들어야 한다."""
+        assert "@pointermove.window" in TEMPLATE
+        assert "@pointerup.window" in TEMPLATE
+
+    def test_click_stays_on_the_card(self):
+        assert '@click="toggle(row)"' in TEMPLATE
+
+
+def _component():
+    """템플릿에서 nicheOverview() 본문만 떼어 낸다."""
+    start = TEMPLATE.index("function nicheOverview()")
+    end = TEMPLATE.index("</script>", start)
+    return TEMPLATE[start:end]
+
+
+def _simulate(script: str) -> dict:
+    """끌기/누르기 흐름을 node 에서 그대로 돌려 본다."""
+    program = _component() + """
+const self = nicheOverview();
+self.items = [{subtopic_id: 7, subtopic_name: '이사', titles: 3, blogs: 1}];
+const strip = { scrollLeft: 0 };
+const down = (x) => self.dragStart(
+    {pointerType: 'mouse', button: 0, clientX: x, currentTarget: strip});
+const move = (x) => self.dragMove({clientX: x});
+const up = () => self.dragEnd();
+const click = () => self.toggle(self.items[0]);
+""" + script + """
+console.log(JSON.stringify(
+    {opened: self.opened, scrollLeft: strip.scrollLeft,
+     dragging: self.dragging, suppressClick: self.suppressClick}));
+"""
+    result = subprocess.run(["node", "-e", program],
+                            capture_output=True, text=True, timeout=60)
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout)
+
+
+class TestDragAndClickBothWork:
+    def test_그냥_누르면_카드가_열린다(self):
+        got = _simulate("down(100); up(); click();")
+        assert got["opened"] == 7
+        assert got["scrollLeft"] == 0      # 안 끌었으니 안 밀린다
+
+    def test_손떨림은_클릭으로_본다(self):
+        got = _simulate("down(100); move(103); up(); click();")
+        assert got["opened"] == 7
+        assert got["scrollLeft"] == 0
+
+    def test_끌어_넘긴_뒤의_클릭은_카드를_열지_않는다(self):
+        got = _simulate("down(100); move(40); up(); click();")
+        assert got["opened"] is None
+        assert got["scrollLeft"] == 60     # 끈 만큼 밀린다
+        assert got["dragging"] is False
+
+    def test_끈_뒤에도_다음_클릭은_열린다(self):
+        """무시는 한 번만 — 계속 무시하면 카드가 영영 안 열린다."""
+        got = _simulate("down(100); move(40); up(); click();"
+                        "down(0); up(); click();")
+        assert got["opened"] == 7
+
+    def test_띠_밖에서_손을_떼도_끌기가_끝난다(self):
+        got = _simulate("down(100); move(40); up();")
+        assert got["dragging"] is False and got["suppressClick"] is True
