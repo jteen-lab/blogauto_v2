@@ -88,11 +88,10 @@
     <!-- 소스 -->
     <div class="bg-white border border-gray-200 rounded-lg px-4 py-3 mb-4">
         <div class="flex flex-wrap items-center gap-2">
-            <button @click="openSourceSheet('community')" class="btn-outline-primary">
-                지식iN·카페에서 질문 가져오기
-            </button>
-            <button @click="openSourceSheet('web')" class="btn-outline-primary">
-                키워드·제목으로 검색하기
+            <!-- 찾을 곳(지식iN·카페 / 키워드·제목)은 시트 안에서 고른다.
+                 마지막에 보던 곳으로 다시 열린다. -->
+            <button @click="openSourceSheet(sourceMode)" class="btn-outline-primary">
+                글 소스 검색하기
             </button>
             <template x-for="(q, qi) in pickedQuestions" :key="'q'+qi">
                 <span class="inline-flex items-center gap-2 rounded-xl px-3 py-1.5 shadow-sm bg-amber-50 text-amber-800 text-xs">
@@ -479,9 +478,9 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="/static/js/workbench-links-subtopic.js?v=20260922kw3"></script>
-<script src="/static/js/workbench-links.js?v=20260922kw3"></script>
-<script src="/static/js/workbench-sources.js?v=20260922kw3"></script>
-<script src="/static/js/workbench-blog-keywords.js?v=20260922kw3"></script>
-<script src="/static/js/workbench.js?v=20260922kw3"></script>
+<script src="/static/js/workbench-links-subtopic.js?v=20260922kw4"></script>
+<script src="/static/js/workbench-links.js?v=20260922kw4"></script>
+<script src="/static/js/workbench-sources.js?v=20260922kw4"></script>
+<script src="/static/js/workbench-blog-keywords.js?v=20260922kw4"></script>
+<script src="/static/js/workbench.js?v=20260922kw4"></script>
 {% endblock %}
