@@ -1,0 +1,140 @@
+{# 모듈 테스터 — 글감(소스) 찾기 시트. 부모 x-data: moduleTester()
+   순서도: docs/flowcharts/workbench_web_sources.md, workbench_blog_keywords.md #}
+            <div x-show="sheet === 'source'" class="h-full flex flex-col min-h-0">
+                <div class="flex gap-1.5 mb-2 shrink-0">
+                    <button type="button" @click="openSourceSheet('community')"
+                            class="px-3 py-1.5 text-xs rounded-md border transition-colors"
+                            :class="sourceMode === 'community'
+                                ? 'border-accent bg-accent-lt text-accent font-medium'
+                                : 'border-gray-300 text-gray-600 hover:bg-gray-50'">
+                        지식iN·카페 질문
+                    </button>
+                    <button type="button" @click="openSourceSheet('web')"
+                            class="px-3 py-1.5 text-xs rounded-md border transition-colors"
+                            :class="sourceMode === 'web'
+                                ? 'border-accent bg-accent-lt text-accent font-medium'
+                                : 'border-gray-300 text-gray-600 hover:bg-gray-50'">
+                        키워드·제목 검색
+                    </button>
+                </div>
+                <div class="flex gap-2 mb-3 shrink-0">
+                    <input type="text" x-model="sourceQuery" @keyup.enter="searchSources()"
+                           x-ref="sourceInput"
+                           :placeholder="sourceMode === 'web'
+                               ? '키워드 또는 제목 (예: 이사 비용 아끼는 법)'
+                               : '니치 키워드 (예: 이사 견적)'"
+                           class="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm focus:border-accent focus:ring-accent">
+                    <button @click="searchSources()" :disabled="sourceLoading" class="btn-primary">
+                        <span x-show="!sourceLoading">검색</span>
+                        <span x-show="sourceLoading">검색 중…</span>
+                    </button>
+                </div>
+                <p class="text-xs text-red-500 mb-2 shrink-0" x-show="sourceError" x-text="sourceError"></p>
+
+                <!-- 담은 블로그의 하위 주제·키워드 — 누르면 검색창에 들어간다 -->
+                <div x-show="blogs.length" class="mb-3 shrink-0 rounded-lg border border-gray-200 bg-gray-50">
+                    <button type="button" @click="blogKeywordsOpen = !blogKeywordsOpen"
+                            class="w-full flex items-center justify-between px-3 py-2 text-xs text-gray-700">
+                        <span>
+                            <b>담은 블로그의 키워드</b>
+                            <span class="text-gray-400 ml-1"
+                                  x-text="blogKeywordsLoading ? '불러오는 중…'
+                                      : (blogKeywordCount() ? blogKeywordCount() + '개 — 누르면 검색창에 들어갑니다'
+                                                            : '이 블로그에 정한 키워드가 없습니다')"></span>
+                        </span>
+                        <span class="text-gray-400" x-text="blogKeywordsOpen ? '접기' : '펼치기'"></span>
+                    </button>
+                    <div x-show="blogKeywordsOpen && blogKeywordCount()"
+                         class="px-3 pb-2.5 max-h-40 overflow-y-auto space-y-2">
+                        <template x-for="bk in blogKeywords" :key="'bk'+bk.blog_id">
+                            <div>
+                                <p x-show="blogKeywords.length > 1"
+                                   class="text-xs font-semibold text-primary mb-1" x-text="bk.blog_name"></p>
+                                <template x-for="st in bk.subtopics" :key="'st'+st.subtopic_id">
+                                    <div x-show="st.keywords.length" class="flex flex-wrap items-center gap-1 mb-1">
+                                        <span class="text-xs text-gray-500 mr-1"
+                                              :title="st.topic_name"
+                                              x-text="st.subtopic_name"></span>
+                                        <template x-for="kw in st.keywords" :key="'kw'+st.subtopic_id+kw">
+                                            <button type="button" @click="pickBlogKeyword(kw)"
+                                                    class="px-2 py-0.5 rounded-full border text-xs transition-colors"
+                                                    :class="blogKeywordPicked(kw)
+                                                        ? 'border-accent bg-accent-lt text-accent font-medium'
+                                                        : 'border-gray-300 bg-white text-gray-700 hover:border-accent hover:text-accent'"
+                                                    x-text="kw"></button>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <div class="space-y-1.5 flex-1 min-h-0 overflow-y-auto pr-1"
+                     x-ref="sourceScroll">
+                    <template x-for="(q, qi) in sourceItems" :key="qi">
+                        <label class="flex items-start gap-2.5 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors"
+                               :class="q.checked ? 'border-amber-400 bg-amber-50' : 'border-gray-200 hover:bg-gray-50'">
+                            <input type="checkbox" x-model="q.checked"
+                                   @change="onQuestionCheck(q)"
+                                   class="mt-0.5 rounded border-gray-300 text-amber-600 focus:ring-amber-500">
+                            <span class="min-w-0 text-xs">
+                                <span class="inline-block px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600"
+                                      x-text="q.source_label"></span>
+                                <span class="inline-block px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700"
+                                      x-show="q.has_situation">상황</span>
+                                <span class="block text-sm text-gray-800 mt-1" x-text="q.title"></span>
+                                <span class="block text-gray-600 mt-1 leading-relaxed"
+                                      x-show="q.description" x-text="q.description"></span>
+                                <span class="block text-gray-400 mt-0.5" x-text="(q.signals||[]).join(' · ')"></span>
+                                <a :href="q.link" target="_blank" rel="noopener"
+                                   @click.stop
+                                   class="inline-block mt-1 text-accent hover:underline"
+                                   x-show="q.link">원문 보기</a>
+                                <span x-show="q.bodyLoading" class="block mt-2 text-emerald-700">
+                                    본문을 가져오는 중…
+                                </span>
+                                <span x-show="q.body && !q.bodyOpen" class="block mt-2">
+                                    <button type="button" @click.prevent.stop="q.bodyOpen = true"
+                                            class="text-emerald-700 underline hover:opacity-70">
+                                        가져온 본문 펼치기
+                                    </button>
+                                </span>
+                                <span x-show="q.body && q.bodyOpen" class="block mt-2 p-2 rounded bg-emerald-50 border border-emerald-200">
+                                    <span class="flex items-center justify-between">
+                                        <span class="text-emerald-800 font-medium"
+                                              x-text="q.source === 'naver_kin' || q.source === 'naver_cafe' || !q.source
+                                                  ? '본문을 가져왔습니다' : '글 내용을 가져왔습니다'"></span>
+                                        <button type="button" @click.prevent.stop="q.bodyOpen = false"
+                                                class="text-emerald-700 hover:opacity-70">접기</button>
+                                    </span>
+                                    <span class="block text-gray-700 mt-1 leading-relaxed"
+                                          x-text="q.body?.question"></span>
+                                    <span class="block text-gray-500 mt-1 leading-relaxed"
+                                          x-show="q.body?.answer"
+                                          x-text="'달린 답: ' + (q.body?.answer || '')"></span>
+                                </span>
+                                <span x-show="q.bodyError" class="block mt-1 text-red-500"
+                                      x-text="q.bodyError"></span>
+                            </span>
+                        </label>
+                    </template>
+                    <p x-show="!sourceItems.length && !sourceLoading"
+                       class="text-xs text-gray-400 text-center py-8"
+                       x-text="sourceMode === 'web'
+                           ? '키워드나 제목을 넣으면 블로그·웹문서에서 글감을 찾습니다. 고르면 내용까지 가져옵니다.'
+                           : '검색어를 넣으면 실제 사람이 올린 질문을 가져옵니다.'"></p>
+                </div>
+
+                <div class="mt-3 text-center" x-show="sourceItems.length">
+                    <button @click="searchSources(true)"
+                            :disabled="sourceLoading || !sourceNextStart"
+                            class="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition-colors">
+                        <span x-show="!sourceLoading && sourceNextStart">더 보기</span>
+                        <span x-show="!sourceLoading && !sourceNextStart">더 볼 질문이 없습니다</span>
+                        <span x-show="sourceLoading">불러오는 중…</span>
+                    </button>
+                    <p class="text-xs text-gray-400 mt-1.5"
+                       x-text="sourceItems.length + '건 표시 중'"></p>
+                </div>
+            </div>
