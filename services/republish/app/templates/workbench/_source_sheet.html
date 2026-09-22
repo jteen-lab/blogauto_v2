@@ -37,8 +37,10 @@
                             class="w-full flex items-center justify-between px-3 py-2 text-xs text-gray-700">
                         <span>
                             <b>담은 블로그의 키워드</b>
-                            <span class="text-gray-400 ml-1"
+                            <span class="ml-1"
+                                  :class="blogKeywordsError ? 'text-red-500' : 'text-gray-400'"
                                   x-text="blogKeywordsLoading ? '불러오는 중…'
+                                      : blogKeywordsError ? blogKeywordsError
                                       : (blogKeywordCount() ? blogKeywordCount() + '개 — 누르면 검색창에 들어갑니다'
                                                             : '이 블로그에 정한 키워드가 없습니다')"></span>
                         </span>
