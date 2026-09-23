@@ -16,7 +16,7 @@ from ...models.category import BlogCategory, Keyword, SubTopic, Topic
 logger = get_logger("workbench_blog_keywords", "app.log")
 
 
-async def _owned_blogs(
+async def owned_blogs(
     db: AsyncSession, user_id: int, blog_ids: List[int],
 ) -> List[Blog]:
     """요청한 id 중 내 블로그만. 남의 id 는 조용히 빠진다."""
@@ -35,7 +35,7 @@ async def _owned_blogs(
     return sorted(blogs, key=lambda b: order.get(b.id, 0))
 
 
-async def _subtopics_of(db: AsyncSession, blog_id: int) -> List[dict]:
+async def subtopics_of(db: AsyncSession, blog_id: int) -> List[dict]:
     """블로그에 연결된 활성 하위 주제(주제명 포함), 정렬 순서대로."""
     # PostgreSQL 은 DISTINCT 와 ORDER BY 를 함께 쓰면 정렬 열이 select 에
     # 있어야 한다(SQLite 는 봐준다). 정렬 열까지 같이 뽑는다.
@@ -91,10 +91,10 @@ async def keywords_for_blogs(
     키워드가 하나도 없는 하위 주제도 남긴다 — 화면이 "이 주제엔 키워드가
     없다"고 알려 줘야 카테고리 화면에서 채우러 갈 수 있다.
     """
-    blogs = await _owned_blogs(db, user_id, blog_ids)
+    blogs = await owned_blogs(db, user_id, blog_ids)
     result: List[dict] = []
     for blog in blogs:
-        subs = await _subtopics_of(db, blog.id)
+        subs = await subtopics_of(db, blog.id)
         kw_map = await _keywords_by_subtopic(
             db, [s["subtopic_id"] for s in subs])
         for s in subs:
