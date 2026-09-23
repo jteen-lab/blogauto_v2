@@ -44,6 +44,10 @@ PER_SEED_LIMIT = 30
 #: 네이버가 받는 시작 위치 상한. 넘기면 400 이 온다.
 MAX_START = 1000
 
+#: 수집기 기본 정렬. 새 질문을 캐는 쪽이라 최신순이 맞다.
+#: 화면 검색(모듈 테스터)은 네이버 화면과 같은 'sim'(정확도순)을 쓴다.
+DEFAULT_SORT = "date"
+
 # 질문으로 볼 신호. 하나라도 있어야 한다.
 QUESTION_MARKS = (
     "?", "？", "어떻게", "어떤", "어디", "얼마", "언제", "왜", "무엇", "뭐",
@@ -169,12 +173,17 @@ def is_configured(user_settings: Any) -> bool:
 async def fetch(user_settings: Any, seed: str, source: str,
                 limit: int = PER_SEED_LIMIT,
                 client: Optional[httpx.AsyncClient] = None,
-                start: int = 1) -> List[CommunityQuestion]:
+                start: int = 1, sort: str = DEFAULT_SORT,
+                keep_all: bool = False) -> List[CommunityQuestion]:
     """시드 하나로 질문을 긁는다. 실패는 빈 목록 — 회차를 죽이지 않는다.
 
     Args:
         start: 몇 번째 결과부터. 같은 검색어로 더 보려면 이 값을 올린다.
             네이버는 1~1000 까지 받는다.
+        sort: 'sim'(정확도순) 또는 'date'(최신순). 네이버 화면과 순서를
+            맞추려면 'sim' 이다.
+        keep_all: 질문이 아니거나 홍보로 보이는 것도 버리지 않고 표시만
+            해 둔다. 순서를 그대로 보여 줘야 하는 화면에서 쓴다.
     """
     url = ENDPOINT.get(source)
     if not url or not is_configured(user_settings):
@@ -182,7 +191,7 @@ async def fetch(user_settings: Any, seed: str, source: str,
 
     params = {"query": seed.strip(), "display": min(limit, 100),
               "start": max(1, min(int(start or 1), MAX_START)),
-              "sort": "date"}
+              "sort": sort if sort in ("sim", "date") else DEFAULT_SORT}
     own = client is None
     client = client or httpx.AsyncClient(timeout=TIMEOUT)
     try:
@@ -200,31 +209,40 @@ async def fetch(user_settings: Any, seed: str, source: str,
         if own:
             await client.aclose()
 
-    return _to_questions(items, seed, source)
+    return _to_questions(items, seed, source, keep_all=keep_all)
 
 
-def _to_questions(items: List[dict], seed: str,
-                  source: str) -> List[CommunityQuestion]:
-    """응답 항목을 질문으로. 홍보글과 비질문을 여기서 버린다."""
+def _to_questions(items: List[dict], seed: str, source: str,
+                  keep_all: bool = False) -> List[CommunityQuestion]:
+    """응답 항목을 질문으로. 홍보글과 비질문을 여기서 버린다.
+
+    `keep_all` 이면 버리지 않고 `extra` 에 판정만 적는다 — 네이버가 준
+    순서를 그대로 보여 줘야 하는 화면용이다.
+    """
     strict = source == SRC_NAVER_CAFE
     out: List[CommunityQuestion] = []
     for item in items or []:
         title = _clean(item.get("title", ""))
         desc = _clean(item.get("description", ""))
         blob = f"{title} {desc}".strip()
-        if is_promo(blob) or not is_question(blob, strict=strict):
+        promo = is_promo(blob)
+        question = is_question(blob, strict=strict)
+        if not keep_all and (promo or not question):
             continue
         out.append(CommunityQuestion(
             title=title, link=item.get("link", ""), description=desc,
             source=source, seed=seed,
             extra={"cafename": item.get("cafename"),
-                   "cafeurl": item.get("cafeurl")}))
+                   "cafeurl": item.get("cafeurl"),
+                   "is_promo": promo, "is_question": question}))
     return out
 
 
 async def collect_questions(user_settings: Any, seeds: List[str], source: str,
                             limit_per_seed: int = PER_SEED_LIMIT,
-                            start: int = 1) -> List[CommunityQuestion]:
+                            start: int = 1, sort: str = DEFAULT_SORT,
+                            keep_all: bool = False
+                            ) -> List[CommunityQuestion]:
     """시드 목록에서 질문을 모은다(2단계 상황 추출의 입력).
 
     `start` 를 올리면 같은 검색어로 다음 묶음을 가져온다.
@@ -233,7 +251,8 @@ async def collect_questions(user_settings: Any, seeds: List[str], source: str,
     async with httpx.AsyncClient(timeout=TIMEOUT) as client:
         for seed in seeds:
             out.extend(await fetch(user_settings, seed, source,
-                                   limit_per_seed, client, start))
+                                   limit_per_seed, client, start,
+                                   sort=sort, keep_all=keep_all))
             await asyncio.sleep(CALL_DELAY)
     logger.info("[COMMUNITY] %s | 시드 %d개 → 질문 %d개",
                 source, len(seeds), len(out))
