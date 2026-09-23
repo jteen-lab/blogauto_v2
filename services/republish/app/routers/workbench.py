@@ -210,15 +210,20 @@ async def search_sources(
     limit: int = Query(30, ge=1, le=100),
     start: int = Query(1, ge=1, le=1000,
                        description="몇 번째 결과부터 — 더 보기에 쓴다"),
+    sort: str = Query("sim", description="sim=정확도순(네이버 기본)|date=최신순"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
+    """네이버가 준 순서 그대로 돌려준다.
+
+    순서도: docs/flowcharts/workbench_source_modes.md
+    """
     settings = (await db.execute(
         select(UserSettings).where(UserSettings.user_id == current_user.id)
     )).scalar_one_or_none()
     picked = [s.strip() for s in (sources or "").split(",") if s.strip()]
     return await source_svc.search_questions(
-        settings, query, picked or None, limit, start)
+        settings, query, picked or None, limit, start, sort=sort)
 
 
 @router.post("/question-body", summary="고른 질문의 본문 가져오기")
@@ -246,6 +251,7 @@ async def search_web_sources(
     limit: int = Query(15, ge=1, le=50),
     start: int = Query(1, ge=1, le=1000,
                        description="몇 번째 결과부터 — 더 보기에 쓴다"),
+    sort: str = Query("sim", description="sim=정확도순(네이버 기본)|date=최신순"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
@@ -260,7 +266,28 @@ async def search_web_sources(
     )).scalar_one_or_none()
     picked = [s.strip() for s in (sources or "").split(",") if s.strip()]
     return await web_sources.search_pages(
-        settings, query, picked or None, limit, start)
+        settings, query, picked or None, limit, start, sort=sort)
+
+
+@router.get("/temp-titles", summary="담은 블로그의 임시제목에서 찾기")
+async def search_temp_titles(
+    query: str = Query(..., min_length=1),
+    blog_ids: str = Query("", description="쉼표 구분 블로그 id"),
+    limit: int = Query(20, ge=1, le=50),
+    start: int = Query(1, ge=1, le=5000,
+                       description="몇 번째 결과부터 — 더 보기에 쓴다"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """담은 블로그의 하위 주제 안에 쌓인 임시제목 중 검색어와 맞는 것.
+
+    순서도: docs/flowcharts/workbench_source_modes.md
+    """
+    from ..services.workbench import temp_titles as temp_svc
+
+    ids = [int(x) for x in blog_ids.split(",") if x.strip().isdigit()]
+    return await temp_svc.search_temp_titles(
+        db, current_user.id, ids, query, limit, start)
 
 
 @router.post("/page-body", summary="고른 글의 본문 가져오기")
