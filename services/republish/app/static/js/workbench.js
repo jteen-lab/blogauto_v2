@@ -92,10 +92,7 @@ function moduleTester() {
         sheetTitle() {
             // 소스 시트는 지금 찾는 곳의 이름을 쓴다 — 시트 안에서 곳을
             // 바꾸면 제목도 같이 바뀐다
-            if (this.sheet === 'source') {
-                return this.sourceMode === 'web'
-                    ? '키워드·제목 검색' : '지식iN·카페 질문';
-            }
+            if (this.sheet === 'source') return this.sourceModeLabel();
             return { blog: '블로그 선택', module: '모듈 담기',
                      link: '홍보 링크', preview: '미리보기' }[this.sheet] || '';
         },

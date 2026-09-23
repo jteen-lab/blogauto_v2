@@ -1,36 +1,78 @@
 /**
  * 모듈 테스터 — 글감(소스) 찾기.
  *
- * 지식iN·카페 질문과 키워드·제목 검색 두 갈래로 찾고, 고른 순간 본문을
- * 가져온다. 고르고 난 뒤는 두 갈래가 같은 길이다.
+ * 네 갈래로 찾는다. 지식iN 질문 · 카페 질문 · 키워드·제목(블로그·웹문서) ·
+ * 임시제목(우리 DB). 고른 순간 본문을 가져오고, 고른 뒤 길은 모두 같다.
  *
- * 순서도: docs/flowcharts/workbench_web_sources.md
+ * **순서는 네이버가 준 대로 둔다** — 우리가 다시 정렬하지 않는다.
+ *
+ * 순서도: docs/flowcharts/workbench_source_modes.md
  */
 function sourcePart() {
     return {
-        // 글감을 어디서 찾을까. 'community' = 지식iN·카페 질문,
-        // 'web' = 키워드·제목으로 블로그·웹문서. 고른 뒤 길은 같다.
-        sourceMode: 'community',
+        // 글감을 어디서 찾을까. 고른 뒤 길은 모두 같다.
+        //   kin  = 지식iN 질문      cafe = 카페 질문
+        //   web  = 키워드·제목      temp = 담은 블로그의 임시제목
+        sourceMode: 'kin',
         sourceQuery: '', sourceItems: [], sourceError: '', sourceLoading: false,
         sourceNextStart: null, sourceLastQuery: '',
         sourceScrollTop: 0,   // 질문 목록에서 보던 자리
+        // 네이버 화면 기본이 정확도순이다. 최신순으로 바꿔 볼 수 있다.
+        sourceSort: 'sim',
         bodyLoading: false,
         pickedQuestions: [],
+
+        // 찾는 곳의 이름. 시트 제목과 버튼에 같이 쓴다.
+        SOURCE_MODES: [
+            { code: 'kin', label: '지식iN 질문' },
+            { code: 'cafe', label: '카페 질문' },
+            { code: 'web', label: '키워드·제목 검색' },
+            { code: 'temp', label: '임시제목' },
+        ],
+
+        sourceModeLabel(mode) {
+            const m = this.SOURCE_MODES.find(x => x.code === (mode || this.sourceMode));
+            return m ? m.label : '글 소스';
+        },
+
+        /** 지금 모드가 부를 주소. 모드마다 길이 다르다. */
+        _sourceUrl(q, start) {
+            const base = '/api/v1/workbench/';
+            const query = 'query=' + encodeURIComponent(q) + '&start=' + start;
+            if (this.sourceMode === 'temp') {
+                return base + 'temp-titles?' + query
+                    + '&blog_ids=' + this.blogs.map(b => b.id).join(',');
+            }
+            if (this.sourceMode === 'web') {
+                return base + 'web-sources?' + query + '&sort=' + this.sourceSort;
+            }
+            const src = this.sourceMode === 'cafe' ? 'naver_cafe' : 'naver_kin';
+            return base + 'sources?' + query + '&sources=' + src
+                + '&sort=' + this.sourceSort;
+        },
+
+        /** 정렬을 바꾸면 바로 다시 찾는다 — 순서를 보려고 누르는 것이다. */
+        setSourceSort(sort) {
+            if (this.sourceSort === sort) return;
+            this.sourceSort = sort;
+            if (this.sourceLastQuery) this.searchSources();
+        },
 
         // ── 소스 ─────────────────────────────────────────────
         async searchSources(more = false) {
             const q = (this.sourceQuery || '').trim();
             if (q.length < 2) { this.sourceError = '검색어가 너무 짧습니다'; return; }
+            if (this.sourceMode === 'temp' && !this.blogs.length) {
+                this.sourceError = '블로그를 먼저 담으세요 — 그 블로그의 '
+                    + '하위 주제 안에서만 찾습니다';
+                return;
+            }
             // 검색어가 바뀌면 처음부터. 더 보기면 이어서.
             const start = (more && q === this.sourceLastQuery)
                 ? (this.sourceNextStart || 1) : 1;
             this.sourceLoading = true; this.sourceError = '';
             try {
-                const path = this.sourceMode === 'web'
-                    ? 'web-sources' : 'sources';
-                const got = await this._json(
-                    '/api/v1/workbench/' + path + '?query='
-                    + encodeURIComponent(q) + '&start=' + start);
+                const got = await this._json(this._sourceUrl(q, start));
                 const rows = (got.items || []).map(i =>
                     Object.assign({ checked: false }, i));
                 if (start === 1) {
@@ -66,10 +108,14 @@ function sourcePart() {
                 + (isQ ? 'question-body' : 'page-body');
         },
 
+        /** 이 글감을 열어 볼 수 있나. 임시제목은 원문 주소가 비어 있을 수
+         *  있다 — 그때는 제목만으로 글을 만든다. */
+        hasSourceLink(item) { return !!(item && item.link); },
+
         /** 찾을 곳을 바꾸며 시트를 연다. 곳이 바뀌면 목록을 비운다 —
          *  섞이면 어디서 온 글인지 알 수 없다. */
         openSourceSheet(mode) {
-            if (this.sourceMode !== mode) {
+            if (mode && this.sourceMode !== mode) {
                 this.sourceMode = mode;
                 this.sourceItems = [];
                 this.sourceQuery = '';
