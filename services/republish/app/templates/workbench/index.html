@@ -88,8 +88,8 @@
     <!-- 소스 -->
     <div class="bg-white border border-gray-200 rounded-lg px-4 py-3 mb-4">
         <div class="flex flex-wrap items-center gap-2">
-            <!-- 찾을 곳(지식iN·카페 / 키워드·제목)은 시트 안에서 고른다.
-                 마지막에 보던 곳으로 다시 열린다. -->
+            <!-- 찾을 곳(지식iN·카페·키워드/제목·임시제목)은 시트 안에서
+                 고른다. 마지막에 보던 곳으로 다시 열린다. -->
             <button @click="openSourceSheet(sourceMode)" class="btn-outline-primary">
                 글 소스 검색하기
             </button>
@@ -101,7 +101,7 @@
                 </span>
             </template>
             <span x-show="!pickedQuestions.length" class="text-sm text-gray-400">
-                고른 질문이 글 생성의 제목이 됩니다 (회차당 최대 3편).
+                고른 글감이 글 생성의 제목이 됩니다 (회차당 최대 3편).
             </span>
         </div>
     </div>
@@ -478,9 +478,9 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="/static/js/workbench-links-subtopic.js?v=20260922kw4"></script>
-<script src="/static/js/workbench-links.js?v=20260922kw4"></script>
-<script src="/static/js/workbench-sources.js?v=20260922kw4"></script>
-<script src="/static/js/workbench-blog-keywords.js?v=20260922kw4"></script>
-<script src="/static/js/workbench.js?v=20260922kw4"></script>
+<script src="/static/js/workbench-links-subtopic.js?v=20260923src"></script>
+<script src="/static/js/workbench-links.js?v=20260923src"></script>
+<script src="/static/js/workbench-sources.js?v=20260923src"></script>
+<script src="/static/js/workbench-blog-keywords.js?v=20260923src"></script>
+<script src="/static/js/workbench.js?v=20260923src"></script>
 {% endblock %}
