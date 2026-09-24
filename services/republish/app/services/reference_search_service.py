@@ -18,8 +18,9 @@
 계획서: docs/plans/topic_discovery_and_structure_plan.md §12
 """
 import asyncio
-import re
 import logging
+import re
+from email.utils import parsedate_to_datetime
 from typing import List, Optional
 
 import httpx
@@ -240,6 +241,27 @@ class ReferenceSearchService:
 
         return None
 
+    @staticmethod
+    def _read_postdate(item: dict) -> Optional[str]:
+        """발행일을 YYYYMMDD 로. 못 읽으면 None.
+
+        소스마다 칸 이름이 다르다. 뉴스는 `pubDate`(RFC 822)를 주고,
+        블로그는 `postdate`(YYYYMMDD)를 준다. 웹문서·지식iN·백과는 날짜를
+        아예 주지 않는다. `postdate` 만 읽던 탓에 **뉴스 날짜까지 버려져**
+        모든 자료가 "발행일 없음" 이 됐고, 근거 판정이 최신 자료를 한 건도
+        못 세어 YMYL 글이 전부 보류됐다(2026-09-24 확인).
+        """
+        raw = (item.get("postdate") or "").strip()
+        if len(raw) == 8 and raw.isdigit():
+            return raw
+        pub = (item.get("pubDate") or "").strip()
+        if pub:
+            try:
+                return parsedate_to_datetime(pub).strftime("%Y%m%d")
+            except (TypeError, ValueError):
+                logger.debug(f"[REF_SEARCH] 날짜를 못 읽음: {pub!r}")
+        return None
+
     def _parse_response(self, response: dict) -> List[SearchResult]:
         """응답 파싱하여 SearchResult 리스트 반환"""
         items = response.get("items", [])
@@ -253,7 +275,7 @@ class ReferenceSearchService:
                     description=self._clean_html(item.get("description", "")),
                     bloggername=item.get("bloggername"),
                     bloggerlink=item.get("bloggerlink"),
-                    postdate=item.get("postdate")
+                    postdate=self._read_postdate(item)
                 ))
             except Exception as e:
                 logger.warning(f"[REF_SEARCH] 결과 파싱 실패: {e}")
