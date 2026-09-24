@@ -81,9 +81,31 @@ class PublisherPipeline:
         )
 
         # Step 1: 대표이미지 업로드
-        image_result = await self._upload_image(
-            blog, crawled_post
+        #
+        # 본문에 이미 그 표지가 들어 있으면(모듈 테스터에서 조립해 반영한
+        # 글) 올리지 않는다. 올려서 또 얹으면 같은 이미지가 둘 연속으로
+        # 나갔다(2026-09-24 실측). 본문 쪽 로컬 이미지는 Step 2.5 에서
+        # 올라가므로 표지가 빠지는 일은 없다.
+        # 파일이 실제로 있는지도 본다. 없으면 건너뛰지 않는다 — 본문 쪽
+        # 이미지는 Step 2.5 에서 조용히 지워지므로, 업로드를 태워
+        # **이미지 없는 발행 금지** 관문(Step 1.5)에 걸리게 해야 한다.
+        cover_in_body = bool(
+            self.html_injector.has_image(
+                crawled_post.content_html, crawled_post.image_url)
+            and (not (crawled_post.image_url or "").startswith("/static/")
+                 or resolve_image_path(crawled_post.image_url))
         )
+        if cover_in_body:
+            logger.info(
+                "[PIPELINE] 표지가 본문에 이미 있어 대표이미지 업로드 생략"
+                " | blog=%s | post_id=%s",
+                blog.name, crawled_post.id,
+            )
+            image_result = None
+        else:
+            image_result = await self._upload_image(
+                blog, crawled_post
+            )
 
         # Step 1.5: 대표이미지 업로드 실패 시 발행 중단
         # (이미지 없는 발행 금지 — imgbb 키 미설정 등)
@@ -223,7 +245,8 @@ class PublisherPipeline:
             "url=%s | image=%s",
             blog.name, crawled_post.id,
             result.published_url,
-            "업로드됨" if result.image_uploaded else "없음",
+            "업로드됨" if result.image_uploaded
+            else ("본문에 포함" if cover_in_body else "없음"),
         )
         return result
 
@@ -395,6 +418,9 @@ class PublisherPipeline:
 
             # 모든 플랫폼에서 HTML에 이미지 주입
             # (WordPress도 featured_media 대신 HTML 삽입 방식 사용)
+            # 조립 단계에서 표지를 이미 붙인 글(모듈 테스터 반영분)에는
+            # 넣지 않는다. 본문에는 아직 로컬 경로로 있으니 그 형태까지
+            # 함께 본다 — 인라인 치환은 이 뒤에 일어난다.
             final_html = self.html_injector.inject_featured_image(
                 html=final_html,
                 image_url=image_result.platform_url,
@@ -404,6 +430,7 @@ class PublisherPipeline:
                 ),
                 media_id=image_result.media_id,
                 platform=platform,
+                source_url=post.image_url,
             )
 
         # X1: 외부 링크에 rel="sponsored nofollow" 와 전면광고 억제를 적용한다.
