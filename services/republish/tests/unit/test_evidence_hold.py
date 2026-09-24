@@ -422,3 +422,85 @@ class TestWeakCompanyTails:
 
         monkeypatch.setattr(company, "_load_names", fake)
         assert (await company.verify("key", "없는저축은행")).known is False
+
+
+class TestUnknownDateIsNotStale:
+    """'모름' 과 '오래됨' 은 다르다.
+
+    2026-09-24 실측: 참조 검색이 쓰는 웹문서·지식iN·백과는 발행일을 아예
+    주지 않고, 뉴스가 주는 `pubDate` 는 읽지 않고 버렸다. 그래서 YMYL 니치
+    (수작남 = 건강/의학)는 자료를 몇 건 모아도 "최근 1년 자료가 없음" 으로
+    전부 보류됐다. 반면 이사/청소는 YMYL 이 아니라 게이트를 지나 정상이었다.
+    """
+
+    def test_날짜를_못_읽으면_보류하지_않는다(self):
+        docs = [SimpleNamespace(url="https://namu.wiki/w/a", summary=""),
+                SimpleNamespace(url="https://terms.naver.com/b", summary="")]
+        found = evaluate(["건강/의학"], "위고비 식단은 어떻게", False, docs)
+        assert found.dated_docs == 0
+        assert found.grade == GRADE_B
+        assert found.hold is False
+        assert "발행일을 읽을 수 없음" in found.summary()
+        # 그래도 확인 안 된 숫자는 쓰지 못한다
+        assert found.allow_numbers is False
+
+    def test_날짜가_있고_전부_오래되면_보류한다(self):
+        found = evaluate(["건강/의학"], "위고비 식단은 어떻게", False,
+                         _docs("https://a.com/1", "https://b.com/2",
+                               postdate="20200101"))
+        assert found.dated_docs == 2 and found.fresh_docs == 0
+        assert found.grade == GRADE_C
+        assert "최근 1년 자료가 없음" in found.summary()
+
+    def test_한_건만_최신이어도_통과(self):
+        docs = [SimpleNamespace(url="https://a.com/1", postdate="20260901"),
+                SimpleNamespace(url="https://b.com/2", summary="")]
+        found = evaluate(["건강/의학"], "위고비 식단은 어떻게", False, docs)
+        assert found.fresh_docs == 1 and found.grade == GRADE_B
+
+    def test_자료가_한_건뿐이면_여전히_보류(self):
+        """날짜를 못 읽는다고 건수 기준까지 풀리지는 않는다."""
+        docs = [SimpleNamespace(url="https://namu.wiki/w/a", summary="")]
+        found = evaluate(["건강/의학"], "위고비 식단은 어떻게", False, docs)
+        assert found.grade == GRADE_C
+        assert "자료가 1건뿐" in found.summary()
+        assert "최근 1년" not in found.summary(), "날짜를 모르면 그 말은 안 한다"
+
+
+class TestDateReading:
+    @pytest.mark.parametrize("raw,expected", [
+        ("20260901", True),
+        ("2026-09-01", True),
+        ("20200101", False),
+        ("", None),
+        ("날짜없음", None),
+    ])
+    def test_형식별_날짜_읽기(self, raw, expected):
+        from app.services.reference.evidence import read_date
+        when = read_date(raw)
+        if expected is None:
+            assert when is None
+        else:
+            import datetime as _d
+            fresh = when >= _d.date.today() - _d.timedelta(days=365)
+            assert fresh is expected
+
+    @pytest.mark.parametrize("url,found", [
+        ("https://news.co.kr/2026/09/23/article.html", True),
+        ("https://blog.x.com/posts?date=20260923", True),
+        ("https://namu.wiki/w/위고비", False),
+        ("https://x.com/2026/13/45/bad", False),      # 있을 수 없는 날짜
+    ])
+    def test_주소에_박힌_날짜(self, url, found):
+        from app.services.reference.evidence import date_from_url
+        assert (date_from_url(url) is not None) is found
+
+    def test_뉴스_pubDate_를_읽는다(self):
+        """뉴스는 postdate 가 아니라 pubDate 로 날짜를 준다."""
+        from app.services.reference_search_service import (
+            ReferenceSearchService as Svc,
+        )
+        assert Svc._read_postdate(
+            {"pubDate": "Tue, 23 Sep 2026 10:00:00 +0900"}) == "20260923"
+        assert Svc._read_postdate({"postdate": "20260901"}) == "20260901"
+        assert Svc._read_postdate({"pubDate": "이상한 값"}) is None
