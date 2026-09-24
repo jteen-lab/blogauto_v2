@@ -75,6 +75,7 @@ class Evidence:
     official_docs: int = 0           # 공식 도메인 자료 수
     total_docs: int = 0              # 관련 자료 수
     fresh_docs: int = 0              # 12개월 이내 자료 수
+    dated_docs: int = 0              # 발행일을 읽을 수 있었던 자료 수
     company_known: Optional[bool] = None  # 회사가 공시 목록에 있나
     figures: List[str] = field(default_factory=list)  # 2곳 이상에서 겹친 수치
     reasons: List[str] = field(default_factory=list)
@@ -93,6 +94,7 @@ class Evidence:
         return {"grade": self.grade, "official_hit": self.official_hit,
                 "official_docs": self.official_docs,
                 "total_docs": self.total_docs, "fresh_docs": self.fresh_docs,
+                "dated_docs": self.dated_docs,
                 "company_known": self.company_known, "figures": self.figures,
                 "reasons": self.reasons}
 
@@ -131,22 +133,63 @@ def is_official(url: str) -> bool:
     return any(hint in host for hint in OFFICIAL_HINTS)
 
 
-def _is_fresh(raw: Any) -> bool:
-    """12개월 이내인가. 날짜를 못 읽으면 판단하지 않는다(False)."""
+#: 주소에 박힌 날짜. 뉴스·블로그는 경로에 날짜를 넣는 곳이 많다.
+_URL_DATE = re.compile(r"(?:^|[/_?=&-])(20\d{2})[./_-]?(0[1-9]|1[0-2])"
+                       r"[./_-]?(0[1-9]|[12]\d|3[01])(?:$|[/_?=&-])")
+
+
+def read_date(raw: Any) -> Optional[date]:
+    """적힌 날짜를 날짜로. 못 읽으면 None.
+
+    **'모름' 과 '오래됨' 은 다르다.** 예전에는 둘을 함께 False 로 다뤄,
+    날짜를 주지 않는 소스(웹문서·지식iN·백과)만 모이면 "최근 1년 자료가
+    없음" 이 되어 글이 보류됐다.
+    """
     text = str(raw or "").strip()
     if not text:
-        return False
+        return None
     for pattern in ("%Y%m%d", "%Y-%m-%d", "%m/%d/%Y %H:%M:%S", "%Y.%m.%d"):
         try:
-            when = datetime.strptime(text[:len(text)], pattern).date()
+            return datetime.strptime(text, pattern).date()
         except ValueError:
             continue
-        return when >= date.today() - timedelta(days=FRESH_DAYS)
-    # 본문에서 연도만 찾는다
+    # 본문에 적힌 연도. 월·일은 모르니 그 해 중간으로 둔다.
     years = re.findall(r"20\d{2}", text)
     if years:
-        return int(years[-1]) >= date.today().year - 1
-    return False
+        year = int(years[-1])
+        if 2000 <= year <= date.today().year:
+            return date(year, 7, 1)
+    return None
+
+
+def date_from_url(url: str) -> Optional[date]:
+    """주소에 박힌 발행일(/2026/09/23/ 같은 것)."""
+    m = _URL_DATE.search(url or "")
+    if not m:
+        return None
+    try:
+        return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    except ValueError:
+        return None
+
+
+def doc_date(doc: Any, dates: Optional[Dict[str, str]] = None
+             ) -> Optional[date]:
+    """이 자료의 발행일. 여러 자리를 차례로 본다."""
+    url = getattr(doc, "url", "") or ""
+    for raw in (getattr(doc, "postdate", None),
+                getattr(doc, "published", None),
+                (dates or {}).get(url)):
+        when = read_date(raw)
+        if when:
+            return when
+    return date_from_url(url) or read_date(getattr(doc, "summary", ""))
+
+
+def _is_fresh(raw: Any) -> bool:
+    """12개월 이내인가. 날짜를 못 읽으면 판단하지 않는다(False)."""
+    when = read_date(raw)
+    return bool(when and when >= date.today() - timedelta(days=FRESH_DAYS))
 
 
 # 수치로 볼 낱말. 단위가 붙은 것만 센다 — "3" 은 무엇이든 될 수 있다.
@@ -200,14 +243,14 @@ def evaluate(
     official_docs = sum(
         1 for d in docs if is_official(getattr(d, "url", "") or ""))
     dates = postdates or {}
-    fresh_docs = sum(1 for d in docs if _is_fresh(
-        getattr(d, "postdate", None) or getattr(d, "published", None)
-        or dates.get(getattr(d, "url", "") or "")
-        or getattr(d, "summary", "")))
+    when = [doc_date(d, dates) for d in docs]
+    dated_docs = sum(1 for w in when if w)
+    limit = date.today() - timedelta(days=FRESH_DAYS)
+    fresh_docs = sum(1 for w in when if w and w >= limit)
 
     found = Evidence(official_hit=official_hit, official_docs=official_docs,
                      total_docs=len(docs), fresh_docs=fresh_docs,
-                     company_known=company_known,
+                     dated_docs=dated_docs, company_known=company_known,
                      figures=corroborated_figures(docs))
 
     if official_hit:
@@ -234,12 +277,22 @@ def evaluate(
         found.reasons.append(f"공식 도메인 자료 {official_docs}건")
         return found
 
+    figure_note = (f", 교차 확인된 수치 {len(found.figures)}개"
+                   if found.figures else ", 교차 확인된 수치 없음")
+
     if len(docs) >= MIN_SOURCES and fresh_docs >= 1:
         found.grade = GRADE_B
         found.reasons.append(
-            f"자료 {len(docs)}건(최근 {fresh_docs}건)"
-            + (f", 교차 확인된 수치 {len(found.figures)}개"
-               if found.figures else ", 교차 확인된 수치 없음"))
+            f"자료 {len(docs)}건(최근 {fresh_docs}건)" + figure_note)
+        return found
+
+    # 날짜를 **한 건도 못 읽은** 경우. 웹문서·지식iN·백과는 발행일을 주지
+    # 않는다. 오래됐다는 근거가 없으므로 이것만으로 보류하지 않는다.
+    # 수치는 A 등급에서만 쓸 수 있어, B 로 둬도 확인 안 된 숫자는 못 쓴다.
+    if len(docs) >= MIN_SOURCES and dated_docs == 0:
+        found.grade = GRADE_B
+        found.reasons.append(
+            f"자료 {len(docs)}건(발행일을 읽을 수 없음)" + figure_note)
         return found
 
     found.grade = GRADE_C
@@ -248,7 +301,7 @@ def evaluate(
     else:
         if len(docs) < MIN_SOURCES:
             found.reasons.append(f"자료가 {len(docs)}건뿐")
-        if not fresh_docs:
+        if dated_docs and not fresh_docs:
             found.reasons.append("최근 1년 자료가 없음")
         found.reasons.append("공식 출처 없음")
     logger.info("[EVIDENCE] C 등급 | '%s' | %s", title[:40], found.summary())
