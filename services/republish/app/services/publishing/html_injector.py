@@ -23,6 +23,23 @@ class HtmlInjector:
     - blogger: Blogger 스타일 이미지 래퍼
     """
 
+    def has_image(self, html: str, *candidates: Optional[str]) -> bool:
+        """본문에 이 이미지가 이미 들어 있나.
+
+        모듈 테스터에서 반영한 글은 조립 단계에서 표지 이미지가 본문에
+        **로컬 경로**(/static/generated/images/…)로 들어간다. 발행 때는
+        그 파일을 올린 **플랫폼 URL**로 바뀐다. 두 형태를 모두 봐야
+        중복을 잡을 수 있다(2026-09-24 실측: 같은 이미지 2연속 발행).
+        """
+        body = html or ""
+        if "<img" not in body:
+            return False
+        for raw in candidates:
+            url = (raw or "").strip()
+            if url and url in body:
+                return True
+        return False
+
     def inject_featured_image(
         self,
         html: str,
@@ -31,9 +48,13 @@ class HtmlInjector:
         editor_type: str = "classic",
         media_id: Optional[int] = None,
         platform: str = "wordpress",
+        source_url: Optional[str] = None,
     ) -> str:
         """
         대표 이미지를 HTML 상단에 삽입합니다.
+
+        같은 이미지가 이미 본문에 있으면 넣지 않습니다 — 조립 단계에서
+        표지를 붙인 글에 또 붙어 이미지가 둘 연속으로 나갔습니다.
 
         Args:
             html: 원본 HTML 콘텐츠
@@ -42,11 +63,20 @@ class HtmlInjector:
             editor_type: 에디터 타입 (classic/block/gutenberg)
             media_id: WordPress 미디어 ID (Gutenberg용)
             platform: 플랫폼 (wordpress/blogger)
+            source_url: 올리기 전 주소(로컬 경로). 본문에 이 형태로
+                들어 있는지도 함께 본다
 
         Returns:
             이미지가 삽입된 HTML
         """
         if not image_url:
+            return html
+
+        if self.has_image(html, image_url, source_url):
+            logger.info(
+                "[HTML_INJECT] 표지가 이미 본문에 있어 건너뜀 | url=%s",
+                image_url[:60],
+            )
             return html
 
         safe_title = self._escape_html(title)
