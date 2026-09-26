@@ -170,3 +170,25 @@ class TestOffCategoryState:
         idx = (ROOT / "app/templates/collection/index.html"
                ).read_text(encoding="utf-8")
         assert "loadBlogCategories()" in idx
+
+
+class TestEmptyCategoryGoesLast:
+    """오름차순 첫 화면이 '(없음)' 수천 건으로 차면 정렬이 안 된 것처럼 보인다.
+
+    실측(2026-09-26 서버): 분류 없는 정식제목이 수천 건 있어, 이름 정렬만
+    하면 오름차순에서 그것들이 전부 앞을 차지했다.
+    """
+
+    def test_정식제목은_방향과_무관하게_뒤로_보낸다(self):
+        src = (ROOT / "app/routers/titles.py").read_text(encoding="utf-8")
+        assert "empty_last" in src
+        assert "empty_last.asc()" in src, "방향을 따라가면 안 된다"
+
+    def test_통합_목록도_분류_없는_행을_뒤로(self):
+        src = (ROOT / "app/routers/titles.py").read_text(encoding="utf-8")
+        block = src[src.index("# 9) 통합 정렬"):src.index("# 10)")]
+        assert "named + bare" in block
+
+    def test_임시제목도_같게(self):
+        src = (ROOT / "app/routers/data_titles.py").read_text(encoding="utf-8")
+        assert "empty_last" in src
