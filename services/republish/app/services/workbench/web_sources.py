@@ -199,7 +199,9 @@ async def search_pages(user_settings: Any, query: str,
             groups.append(rows)
             await asyncio.sleep(CALL_DELAY)
 
-    items = _weave(groups)
+    from . import dedup
+
+    items = dedup.unique(_weave(groups), label=f"웹 '{text}'")
     got = max((len(g) for g in groups), default=0)
     nxt = start + limit if got >= limit and start + limit <= MAX_START else None
     logger.info("[WEB_SOURCE] '%s' start=%s → %d건 %s",

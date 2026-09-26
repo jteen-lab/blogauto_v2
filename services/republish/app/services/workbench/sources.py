@@ -80,6 +80,11 @@ async def search_questions(user_settings: Any, query: str,
             })
 
     # 여기서 다시 정렬하지 않는다 — 네이버가 준 순서가 곧 화면 순서다.
+    # 다만 **같은 글이 겹쳐 오는 것**은 걸러 낸다. 지식iN 은 한 페이지 안에서
+    # 제목이 같은 것을 여러 건 준다(링크는 달라 링크만으로는 못 걸러진다).
+    from . import dedup
+
+    items = dedup.unique(items, label=f"질문 '{text}'")
 
     # 더 볼 것이 남았나. 어느 소스든 요청한 만큼 왔으면 다음 묶음이 있다.
     # (질문이 아닌 글을 걸러내 건수가 줄므로 받은 원본 기준으로 본다)
