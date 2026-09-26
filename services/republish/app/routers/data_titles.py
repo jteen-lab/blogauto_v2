@@ -231,13 +231,31 @@ async def list_temp_titles(
         "status": TempTitle.status,
         "collection_stage": TempTitle.collection_stage,
         "created_at": TempTitle.created_at,
-        "category_path": TempTitle.topic_id,  # 카테고리 정렬 (topic_id 기준)
+        # 카테고리는 이름으로 세운다. 번호(topic_id)로 세우면 가나다 순이
+        # 되지 않는다 — 아래에서 Topic/SubTopic 을 붙여 정렬한다.
     }
-    sort_column = sort_columns.get(sort_field, TempTitle.created_at)
-    if sort_dir == "asc":
-        query = query.order_by(sort_column.asc())
+    category_sort = sort_field in ("category", "category_path",
+                                  "category_name")
+    second_column = None
+    if category_sort:
+        from ..models.category import SubTopic as _ST, Topic as _T
+
+        query = (query
+                 .outerjoin(_T, TempTitle.topic_id == _T.id)
+                 .outerjoin(_ST, TempTitle.subtopic_id == _ST.id))
+        sort_column = func.coalesce(_T.name, "")
+        second_column = func.coalesce(_ST.name, "")
     else:
-        query = query.order_by(sort_column.desc())
+        sort_column = sort_columns.get(sort_field, TempTitle.created_at)
+    if sort_dir == "asc":
+        order = [sort_column.asc()]
+        if second_column is not None:
+            order.append(second_column.asc())
+    else:
+        order = [sort_column.desc()]
+        if second_column is not None:
+            order.append(second_column.desc())
+    query = query.order_by(*order)
 
     # 페이지네이션
     query = query.offset((page - 1) * size).limit(size)
