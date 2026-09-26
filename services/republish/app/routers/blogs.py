@@ -544,33 +544,11 @@ async def get_blog_matching_summary(
     blog_service = BlogService(db)
     await blog_service.get_blog_by_id(current_user, blog_id)
 
-    # 1) BlogCategory 기반 MainTitle 필터 빌드 (titles.py와 동일 패턴)
-    bc_result = await db.execute(
-        select(BlogCategory).where(
-            BlogCategory.blog_id == blog_id,
-            BlogCategory.is_active.is_(True),
-        )
-    )
-    blog_categories = bc_result.scalars().all()
+    # 1) 카테고리 안/밖 조건 — 목록(titles.py)과 같은 판정을 쓴다.
+    #    따로 구현하면 목록과 숫자가 어긋난다.
+    from ..services.titles import blog_scope
 
-    subtopic_ids: set[int] = set()
-    topic_only_ids: set[int] = set()
-    for bc in blog_categories:
-        if bc.subtopic_id:
-            subtopic_ids.add(bc.subtopic_id)
-        elif bc.topic_id:
-            topic_only_ids.add(bc.topic_id)
-
-    cat_conditions = []
-    if subtopic_ids:
-        cat_conditions.append(
-            MainTitle.subtopic_id.in_(list(subtopic_ids))
-        )
-    if topic_only_ids:
-        cat_conditions.append(
-            MainTitle.topic_id.in_(list(topic_only_ids))
-        )
-    cat_filter = or_(*cat_conditions) if cat_conditions else None
+    cat_filter, off_filter = await blog_scope.filters(db, blog_id)
 
     # 2) 카테고리 필터 + hide_group_members(대표 또는 미그룹 또는 비활성 그룹) 통과
     #    정식제목 탭의 실제 표시 row와 일치시키기 위해 동일 필터 적용.
@@ -634,6 +612,17 @@ async def get_blog_matching_summary(
         valid_matched_main = 0
     unmatched_count = max(total_titles - valid_matched_main, 0)
 
+    # 5-1) 카테고리 밖 독립포스트 — 이 블로그가 아직 쓰지 않았고, 걸어 둔
+    #      카테고리에도 속하지 않는 제목. 잘못 분류된 제목을 찾는 자리다.
+    off_category_count = 0
+    if off_filter is not None:
+        off_q = select(func.count(MainTitle.id)).where(
+            off_filter, hide_group_filter,
+        )
+        if matched_main_ids:
+            off_q = off_q.where(~MainTitle.id.in_(matched_main_ids))
+        off_category_count = (await db.execute(off_q)).scalar() or 0
+
     # 6) 블로그에 발행됐으나 정식제목에 매칭 안 된 글 수
     unmatched_published_query = select(func.count(CrawledPost.id)).where(
         CrawledPost.blog_id == blog_id,
@@ -672,6 +661,9 @@ async def get_blog_matching_summary(
         "published": published_count,
         "pending": pending_count,
         "unmatched": unmatched_count,
+        # 카테고리 밖 독립포스트(전체 합계에는 넣지 않는다 — 카테고리 안
+        # 목록과 겹치지 않는 별도 묶음이다)
+        "off_category": off_category_count,
         "unmatched_published": unmatched_published,
         # 정식제목 탭에 실제 표시되는 모든 row의 합 (메인 + 미매칭 크롤포스트).
         # 발행완료 + 발행대기 + 독립 + 미매칭과 동일하므로 사용자 직관과 일치한다.
