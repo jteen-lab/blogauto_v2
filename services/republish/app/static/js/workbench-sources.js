@@ -16,6 +16,8 @@ function sourcePart() {
         sourceMode: 'kin',
         sourceQuery: '', sourceItems: [], sourceError: '', sourceLoading: false,
         sourceNextStart: null, sourceLastQuery: '',
+        // 이미 보여 준 글감의 열쇠. 같은 글이 또 오면 쌓지 않는다.
+        _seenLinks: new Set(), _seenTitles: new Set(),
         sourceScrollTop: 0,   // 질문 목록에서 보던 자리
         // 네이버 화면 기본이 정확도순이다. 최신순으로 바꿔 볼 수 있다.
         sourceSort: 'sim',
@@ -55,10 +57,44 @@ function sourcePart() {
         setSourceSort(sort) {
             if (this.sourceSort === sort) return;
             this.sourceSort = sort;
+            // 순서가 바뀌면 앞장부터 다시 본다
+            this.sourceNextStart = null;
             if (this.sourceLastQuery) this.searchSources();
         },
 
         // ── 소스 ─────────────────────────────────────────────
+
+        /** 같은 글인지 가릴 열쇠 둘. 서버(dedup.py)와 같은 규칙이다.
+         *
+         *  네이버는 같은 글을 두 모양으로 겹쳐 준다 — 링크가 같은 것,
+         *  그리고 **링크는 달라도 제목이 같은 것**(지식iN 에서 특히 많다).
+         *  그래서 링크만 보면 같은 제목이 계속 쌓인다.
+         */
+        _itemKeys(item) {
+            const link = String((item && item.link) || '').trim().toLowerCase()
+                .replace(/^https?:\/\//, '').replace(/^(www|m)\./, '')
+                .replace(/\/+$/, '');
+            const title = String((item && item.title) || '')
+                .replace(/\s+/g, ' ').trim().toLowerCase();
+            const src = String((item && item.source) || '').trim();
+            return [link, title ? src + '|' + title : ''];
+        },
+
+        /** 이미 목록에 있는 글인가. 있으면 열쇠를 적어 두지 않는다. */
+        _isNewItem(item) {
+            const [link, title] = this._itemKeys(item);
+            if ((link && this._seenLinks.has(link))
+                || (title && this._seenTitles.has(title))) return false;
+            if (link) this._seenLinks.add(link);
+            if (title) this._seenTitles.add(title);
+            return true;
+        },
+
+        _resetSeen() {
+            this._seenLinks = new Set();
+            this._seenTitles = new Set();
+        },
+
         async searchSources(more = false) {
             const q = (this.sourceQuery || '').trim();
             if (q.length < 2) { this.sourceError = '검색어가 너무 짧습니다'; return; }
@@ -68,29 +104,47 @@ function sourcePart() {
                 return;
             }
             // 검색어가 바뀌면 처음부터. 더 보기면 이어서.
-            const start = (more && q === this.sourceLastQuery)
-                ? (this.sourceNextStart || 1) : 1;
+            const goOn = more && q === this.sourceLastQuery;
+            if (goOn && !this.sourceNextStart) {
+                // 더 볼 것이 없는데 또 누르면 1쪽으로 되돌아가 목록이 줄었다
+                this.sourceError = '더 볼 새 글감이 없습니다';
+                return;
+            }
+            let start = goOn ? this.sourceNextStart : 1;
+            if (start === 1) this._resetSeen();
+
             this.sourceLoading = true; this.sourceError = '';
+            let added = 0, tries = 0, err = '';
             try {
-                const got = await this._json(this._sourceUrl(q, start));
-                const rows = (got.items || []).map(i =>
-                    Object.assign({ checked: false }, i));
-                if (start === 1) {
-                    this.sourceItems = rows;
-                    // 새 검색은 처음부터 본다
-                    this.sourceScrollTop = 0;
-                    this.$nextTick(() => {
-                        const box = this.$refs.sourceScroll;
-                        if (box) box.scrollTop = 0;
-                    });
-                } else {
-                    // 같은 글이 겹쳐 오면 한 번만 남긴다
-                    const seen = new Set(this.sourceItems.map(i => i.link));
-                    this.sourceItems.push(...rows.filter(i => !seen.has(i.link)));
+                // 깊은 페이지에서는 네이버가 앞 페이지와 같은 것을 되돌려
+                // 준다(카페 start=61 에서 20건 겹침 — 2026-09-26 실측).
+                // 다 걸러 내면 '더 보기'가 먹지 않는 것처럼 보이므로,
+                // 새 글이 한 건도 없으면 다음 묶음까지 몇 번 더 본다.
+                while (tries < 3) {
+                    tries += 1;
+                    const got = await this._json(this._sourceUrl(q, start));
+                    const fresh = (got.items || [])
+                        .filter(i => this._isNewItem(i))
+                        .map(i => Object.assign({ checked: false }, i));
+                    if (start === 1) {
+                        this.sourceItems = fresh;
+                        this.sourceScrollTop = 0;   // 새 검색은 처음부터 본다
+                        this.$nextTick(() => {
+                            const box = this.$refs.sourceScroll;
+                            if (box) box.scrollTop = 0;
+                        });
+                    } else {
+                        this.sourceItems.push(...fresh);
+                    }
+                    added += fresh.length;
+                    this.sourceNextStart = got.next_start || null;
+                    err = got.error || '';
+                    if (added || !this.sourceNextStart) break;
+                    start = this.sourceNextStart;   // 겹치기만 했다 — 더 간다
                 }
-                this.sourceNextStart = got.next_start || null;
                 this.sourceLastQuery = q;
-                this.sourceError = got.error || '';
+                this.sourceError = err
+                    || (more && !added ? '더 볼 새 글감이 없습니다' : '');
             } catch (e) { this.sourceError = e.message; }
             finally { this.sourceLoading = false; }
         },
@@ -122,6 +176,7 @@ function sourcePart() {
                 this.sourceError = '';
                 this.sourceNextStart = null;
                 this.sourceLastQuery = '';
+                this._resetSeen();
             }
             this.openSheet('source');
         },
