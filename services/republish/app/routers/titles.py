@@ -78,8 +78,7 @@ async def _build_blog_category_filter(
     """
     from ..services.titles import blog_scope
 
-    inside, _ = await blog_scope.filters(db, blog_id)
-    return inside
+    return await blog_scope.inside_filter(db, blog_id)
 
 
 @router.get("", response_model=MainTitleListResponse)
@@ -354,10 +353,7 @@ async def list_titles_unified(
     sort_field: Optional[str] = Query("created_at"),
     sort_dir: Optional[str] = Query("desc"),
     matching_filter: Optional[str] = Query("all", description="레거시: all|matched|unmatched"),
-    state: Optional[str] = Query(
-        None,
-        description=("상태 필터: all|published|pending|independent|"
-                     "off_category(카테고리 밖 독립포스트)|unmatched")),
+    state: Optional[str] = Query(None, description="상태 필터: all|published|pending|independent|unmatched"),
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_user),
 ):
@@ -385,8 +381,7 @@ async def list_titles_unified(
 
     # state 정규화 (레거시 matching_filter 폴백)
     #   all | published(발행완료) | pending(발행대기) | independent(독립) | unmatched(미매칭)
-    valid_states = {"all", "published", "pending", "independent",
-                    "off_category", "unmatched"}
+    valid_states = {"all", "published", "pending", "independent", "unmatched"}
     if state:
         st = state.lower()
         if st not in valid_states:
@@ -418,12 +413,8 @@ async def list_titles_unified(
     # 카테고리로 걸러내면 목록<카운트 불일치가 발생하기 때문.
     from ..services.titles import blog_scope
 
-    cat_filter, off_filter = await blog_scope.filters(db, blog_id)
-    if st == "off_category":
-        # 카테고리 **밖**을 보는 화면이다. 안쪽 제한을 걸면 아무것도 안 나온다.
-        if off_filter is not None:
-            main_query = main_query.where(off_filter)
-    elif cat_filter is not None:
+    cat_filter = await blog_scope.inside_filter(db, blog_id)
+    if cat_filter is not None:
         main_query = main_query.where(
             or_(cat_filter, MainTitle.id.in_(matched_subq))
         )
@@ -444,12 +435,8 @@ async def list_titles_unified(
     # state별 메인 쿼리 사전 제한(효율 + 정확성)
     if st in ("published", "pending"):
         main_query = main_query.where(MainTitle.id.in_(matched_subq))
-    elif st in ("independent", "off_category"):
-        # 카테고리 밖도 '아직 이 블로그가 쓰지 않은 제목' 안에서 고른다
+    elif st == "independent":
         main_query = main_query.where(~MainTitle.id.in_(matched_subq))
-
-    # 그룹 비대표 예외는 매칭된 제목에만 걸리므로, 카테고리 밖 화면에서는
-    # 그대로 둔다(매칭 제목은 이미 위에서 빠졌다).
 
     # unmatched(미매칭 크롤글)만 볼 때는 메인 타이틀 불필요
     need_main = st != "unmatched"
@@ -659,10 +646,7 @@ async def list_titles_unified(
         "pending": "발행대기",
         "independent": "독립포스트",
     }
-    if st == "off_category":
-        combined = [r for r in combined
-                    if compute_display_status(r) == "독립포스트"]
-    elif st in _state_label:
+    if st in _state_label:
         target = _state_label[st]
         combined = [r for r in combined if compute_display_status(r) == target]
     elif st == "unmatched":
