@@ -203,12 +203,18 @@ class TestTempTitleSearch:
                 != first["items"][0]["title"])
 
 
-def _js(script: str) -> dict:
-    program = JS + """
-const self = sourcePart();
+def _js(script: str, extra: str = "") -> dict:
+    """화면 조각을 node 에서 그대로 돌려 본다. script 안에서 await 를 쓸 수 있다."""
+    program = JS + extra + """
+const self = Object.assign(sourcePart(),
+    typeof blogKeywordPart === 'function' ? blogKeywordPart() : {});
 self.blogs = [{id: 3}, {id: 7}];
+self.$nextTick = (f) => { if (typeof f === 'function') f(); };
+self.$refs = {};
+(async () => {
 """ + script + """
 console.log(JSON.stringify(out));
+})().catch(e => { console.error(e); process.exit(1); });
 """
     r = subprocess.run(["node", "-e", program], capture_output=True,
                        text=True, timeout=60)
@@ -241,3 +247,161 @@ self.sourceMode = 'temp';
 const out = {temp: self.sourceModeLabel(), kin: self.sourceModeLabel('kin')};
 """)
         assert out == {"temp": "임시제목", "kin": "지식iN 질문"}
+
+
+class TestDedup:
+    """네이버는 같은 글을 두 모양으로 겹쳐 준다(2026-09-26 실측).
+
+        지식iN '이사 견적'  한 페이지 30건 안에서 제목이 같은 것 8건
+                           (링크는 서로 달라 링크만으로는 못 걸러진다)
+        카페  start=61     앞 페이지와 링크까지 같은 것 20건
+    """
+
+    def test_링크가_같으면_한_번만(self):
+        from app.services.workbench import dedup
+
+        rows = [{"title": "가", "link": "https://kin.naver.com/a",
+                 "source": "naver_kin"},
+                {"title": "나", "link": "http://www.kin.naver.com/a/",
+                 "source": "naver_kin"}]
+        assert [r["title"] for r in dedup.unique(rows)] == ["가"]
+
+    def test_제목이_같으면_링크가_달라도_한_번만(self):
+        from app.services.workbench import dedup
+
+        rows = [{"title": "이사 견적 얼마", "link": "https://kin.naver.com/1",
+                 "source": "naver_kin"},
+                {"title": "이사  견적   얼마", "link": "https://kin.naver.com/2",
+                 "source": "naver_kin"}]
+        assert len(dedup.unique(rows)) == 1
+
+    def test_출처가_다르면_남긴다(self):
+        """제목만 같고 실제로는 다른 글이다."""
+        from app.services.workbench import dedup
+
+        rows = [{"title": "이사 견적", "link": "https://kin.naver.com/1",
+                 "source": "naver_kin"},
+                {"title": "이사 견적", "link": "https://blog.naver.com/1",
+                 "source": "naver_blog"}]
+        assert len(dedup.unique(rows)) == 2
+
+    def test_앞_페이지에서_본_것도_걸러진다(self):
+        from app.services.workbench import dedup
+
+        links, titles = set(), set()
+        first = [{"title": "가", "link": "https://a/1", "source": "s"}]
+        dedup.unique(first, links, titles)
+        again = [{"title": "가", "link": "https://a/9", "source": "s"},
+                 {"title": "나", "link": "https://a/2", "source": "s"}]
+        assert [r["title"] for r in dedup.unique(again, links, titles)] == ["나"]
+
+    def test_순서는_건드리지_않는다(self):
+        from app.services.workbench import dedup
+
+        rows = [{"title": str(i), "link": f"https://a/{i}", "source": "s"}
+                for i in range(5)]
+        assert [r["title"] for r in dedup.unique(rows)] == list("01234")
+
+    @pytest.mark.asyncio
+    async def test_질문_검색이_겹친_것을_걸러_낸다(self, monkeypatch):
+        dupes = community._to_questions([
+            {"title": "이사 견적 얼마", "description": "3층인데요"},
+            {"title": "이사 견적 얼마", "description": "다른 사람 글"},
+            {"title": "보관이사 비용", "description": "얼마인가요"},
+        ], "이사", SRC_NAVER_KIN, keep_all=True)
+
+        async def fake_collect(settings, seeds, source, **kw):
+            return dupes
+
+        monkeypatch.setattr(community, "collect_questions", fake_collect)
+        monkeypatch.setattr(community, "is_configured", lambda s: True)
+        got = await source_svc.search_questions(
+            object(), "이사 견적", [SRC_NAVER_KIN])
+        assert [i["title"] for i in got["items"]] == ["이사 견적 얼마",
+                                                     "보관이사 비용"]
+
+
+class TestKeywordChipReplaces:
+    """칩을 두 개 누르면 '포장 이사 보관 이사' 가 되어 결과가 사라졌다."""
+
+    def test_마지막에_누른_키워드만_남는다(self):
+        out = _js("""
+self.pickBlogKeyword('포장+이사');
+const first = self.sourceQuery;
+self.pickBlogKeyword('보관+이사');
+const out = {first, second: self.sourceQuery,
+             pickedNew: self.blogKeywordPicked('보관+이사'),
+             pickedOld: self.blogKeywordPicked('포장+이사')};
+""", extra=(ROOT / "app/static/js/workbench-blog-keywords.js")
+            .read_text(encoding="utf-8"))
+        assert out == {"first": "포장 이사", "second": "보관 이사",
+                       "pickedNew": True, "pickedOld": False}
+
+    def test_손으로_적은_말도_치운다(self):
+        out = _js("""
+self.sourceQuery = '아무렇게나 적은 말';
+self.pickBlogKeyword('포장+이사');
+const out = {q: self.sourceQuery};
+""", extra=(ROOT / "app/static/js/workbench-blog-keywords.js")
+            .read_text(encoding="utf-8"))
+        assert out == {"q": "포장 이사"}
+
+
+class TestMoreButtonSkipsRepeats:
+    """더 보기가 앞 결과를 또 쌓거나, 겹치기만 하고 멈추던 문제."""
+
+    PAGES = """
+self._pages = {
+    1: {items: [
+          {title: '가', link: 'https://a/1', source: 'naver_kin'},
+          {title: '가', link: 'https://a/2', source: 'naver_kin'},
+          {title: '나', link: 'https://a/3', source: 'naver_kin'}],
+        next_start: 31},
+    31: {items: [
+          {title: '가', link: 'https://a/1', source: 'naver_kin'},
+          {title: '나', link: 'https://a/9', source: 'naver_kin'}],
+         next_start: 61},
+    61: {items: [
+          {title: '다', link: 'https://a/4', source: 'naver_kin'}],
+         next_start: null},
+};
+self._calls = [];
+self._json = async (url) => {
+    const m = url.match(/start=(\\d+)/);
+    const start = m ? Number(m[1]) : 1;
+    self._calls.push(start);
+    return self._pages[start] || {items: [], next_start: null};
+};
+self.$nextTick = () => {};
+self.$refs = {};
+self.sourceMode = 'kin';
+self.sourceQuery = '이사 견적';
+"""
+
+    def test_한_페이지_안의_같은_제목은_한_번만(self):
+        out = _js(self.PAGES + """
+await self.searchSources();
+const out = {titles: self.sourceItems.map(i => i.title)};
+""")
+        assert out["titles"] == ["가", "나"]
+
+    def test_더_보기가_앞_결과를_또_쌓지_않는다(self):
+        out = _js(self.PAGES + """
+await self.searchSources();
+await self.searchSources(true);
+const out = {titles: self.sourceItems.map(i => i.title), calls: self._calls};
+""")
+        # 31 쪽은 전부 겹쳐서 새 글이 없다 → 61 까지 이어서 본다
+        assert out["titles"] == ["가", "나", "다"]
+        assert out["calls"] == [1, 31, 61]
+
+    def test_더_볼_것이_없으면_그렇게_말한다(self):
+        out = _js(self.PAGES + """
+await self.searchSources();
+await self.searchSources(true);
+await self.searchSources(true);
+const out = {error: self.sourceError,
+             titles: self.sourceItems.map(i => i.title)};
+""")
+        assert out["titles"] == ["가", "나", "다"]
+        assert "더 볼 새 글감이 없습니다" in out["error"]
