@@ -34,6 +34,10 @@ from ..schemas.title import (
 )
 
 router = APIRouter(prefix="/titles", tags=["titles"])
+#: 카테고리 열 정렬에 쓰이는 이름들. 화면은 'category' 를 보내고, 응답
+#: 필드 이름은 'category_path' 다 — 둘 다 같은 정렬로 받는다.
+CATEGORY_SORT_FIELDS = ("category", "category_path", "category_name")
+
 logger = get_logger("titles", "app.log")
 
 
@@ -72,43 +76,10 @@ async def _build_blog_category_filter(
     Returns:
         SQLAlchemy WHERE 조건 또는 None (카테고리가 없는 경우)
     """
-    # 해당 블로그의 활성 카테고리 조회
-    bc_query = select(BlogCategory).where(
-        BlogCategory.blog_id == blog_id,
-        BlogCategory.is_active == True,
-    )
-    bc_result = await db.execute(bc_query)
-    blog_categories = bc_result.scalars().all()
+    from ..services.titles import blog_scope
 
-    if not blog_categories:
-        logger.debug(f"[TITLE_FILTER] blog_id={blog_id}: 활성 카테고리 없음, 필터 미적용")
-        return None
-
-    # subtopic_id / topic_id 분리 수집
-    subtopic_ids: set[int] = set()
-    topic_only_ids: set[int] = set()
-
-    for bc in blog_categories:
-        if bc.subtopic_id:
-            subtopic_ids.add(bc.subtopic_id)
-        elif bc.topic_id:
-            topic_only_ids.add(bc.topic_id)
-
-    # OR 조건 구성
-    conditions: list = []
-    if subtopic_ids:
-        conditions.append(MainTitle.subtopic_id.in_(list(subtopic_ids)))
-    if topic_only_ids:
-        conditions.append(MainTitle.topic_id.in_(list(topic_only_ids)))
-
-    if not conditions:
-        return None
-
-    logger.debug(
-        f"[TITLE_FILTER] blog_id={blog_id}: "
-        f"subtopic_ids={subtopic_ids}, topic_only_ids={topic_only_ids}"
-    )
-    return or_(*conditions)
+    inside, _ = await blog_scope.filters(db, blog_id)
+    return inside
 
 
 @router.get("", response_model=MainTitleListResponse)
@@ -229,7 +200,19 @@ async def list_main_titles(
         "updated_at": MainTitle.updated_at,
         "use_count": MainTitle.use_count,
     }
-    sort_column = sort_columns.get(sort_field, MainTitle.created_at)
+    # 카테고리는 **이름**으로 세운다. 화면은 'category' 를 보내는데 서버가
+    # 그 이름을 몰라 생성일 정렬로 되돌아갔다(가나다 정렬이 안 되던 원인).
+    category_sort = sort_field in CATEGORY_SORT_FIELDS
+    if category_sort:
+        query = (query
+                 .outerjoin(Topic, MainTitle.topic_id == Topic.id)
+                 .outerjoin(SubTopic, MainTitle.subtopic_id == SubTopic.id))
+        sort_column = func.coalesce(Topic.name, "")
+        second_column = func.coalesce(SubTopic.name, "")
+    else:
+        second_column = None
+    sort_column = sort_columns.get(sort_field, sort_column
+                                   if category_sort else MainTitle.created_at)
 
     # 블로그 선택 시: 발행대기 우선 → 매칭됨 → 미매칭 순으로 정렬.
     # 사용자가 매칭한 글(특히 발행대기)이 1페이지 상단에 보이도록 한다.
@@ -256,9 +239,14 @@ async def list_main_titles(
             query = query.order_by(match_priority, sort_column.desc())
     else:
         if sort_dir == "asc":
-            query = query.order_by(sort_column.asc())
+            order = [sort_column.asc()]
+            if second_column is not None:
+                order.append(second_column.asc())
         else:
-            query = query.order_by(sort_column.desc())
+            order = [sort_column.desc()]
+            if second_column is not None:
+                order.append(second_column.desc())
+        query = query.order_by(*order)
 
     # 페이지네이션
     query = query.offset((page - 1) * size).limit(size)
@@ -361,7 +349,10 @@ async def list_titles_unified(
     sort_field: Optional[str] = Query("created_at"),
     sort_dir: Optional[str] = Query("desc"),
     matching_filter: Optional[str] = Query("all", description="레거시: all|matched|unmatched"),
-    state: Optional[str] = Query(None, description="상태 필터: all|published|pending|independent|unmatched"),
+    state: Optional[str] = Query(
+        None,
+        description=("상태 필터: all|published|pending|independent|"
+                     "off_category(카테고리 밖 독립포스트)|unmatched")),
     db: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_user),
 ):
@@ -389,7 +380,8 @@ async def list_titles_unified(
 
     # state 정규화 (레거시 matching_filter 폴백)
     #   all | published(발행완료) | pending(발행대기) | independent(독립) | unmatched(미매칭)
-    valid_states = {"all", "published", "pending", "independent", "unmatched"}
+    valid_states = {"all", "published", "pending", "independent",
+                    "off_category", "unmatched"}
     if state:
         st = state.lower()
         if st not in valid_states:
@@ -419,8 +411,14 @@ async def list_titles_unified(
     # 카테고리 필터: 단, 매칭된 제목(발행완료/발행대기)은 카테고리 밖이어도 노출한다.
     # 카운트(matching-summary)가 CrawledPost 기준(필터 없음)이라, 매칭 제목을
     # 카테고리로 걸러내면 목록<카운트 불일치가 발생하기 때문.
-    cat_filter = await _build_blog_category_filter(blog_id, db)
-    if cat_filter is not None:
+    from ..services.titles import blog_scope
+
+    cat_filter, off_filter = await blog_scope.filters(db, blog_id)
+    if st == "off_category":
+        # 카테고리 **밖**을 보는 화면이다. 안쪽 제한을 걸면 아무것도 안 나온다.
+        if off_filter is not None:
+            main_query = main_query.where(off_filter)
+    elif cat_filter is not None:
         main_query = main_query.where(
             or_(cat_filter, MainTitle.id.in_(matched_subq))
         )
@@ -441,8 +439,12 @@ async def list_titles_unified(
     # state별 메인 쿼리 사전 제한(효율 + 정확성)
     if st in ("published", "pending"):
         main_query = main_query.where(MainTitle.id.in_(matched_subq))
-    elif st == "independent":
+    elif st in ("independent", "off_category"):
+        # 카테고리 밖도 '아직 이 블로그가 쓰지 않은 제목' 안에서 고른다
         main_query = main_query.where(~MainTitle.id.in_(matched_subq))
+
+    # 그룹 비대표 예외는 매칭된 제목에만 걸리므로, 카테고리 밖 화면에서는
+    # 그대로 둔다(매칭 제목은 이미 위에서 빠졌다).
 
     # unmatched(미매칭 크롤글)만 볼 때는 메인 타이틀 불필요
     need_main = st != "unmatched"
@@ -626,6 +628,9 @@ async def list_titles_unified(
     def sort_key(row: dict):
         if sort_field == "title":
             return title_key(row)
+        if sort_field in CATEGORY_SORT_FIELDS:
+            # 분류가 없는 제목·미매칭 크롤글은 빈 문자열로 한쪽에 모인다
+            return ((row.get("category_path") or ""), title_key(row))
         if sort_field in ("created_at", "updated_at"):
             return (
                 row.get(sort_field)
@@ -649,7 +654,10 @@ async def list_titles_unified(
         "pending": "발행대기",
         "independent": "독립포스트",
     }
-    if st in _state_label:
+    if st == "off_category":
+        combined = [r for r in combined
+                    if compute_display_status(r) == "독립포스트"]
+    elif st in _state_label:
         target = _state_label[st]
         combined = [r for r in combined if compute_display_status(r) == target]
     elif st == "unmatched":
