@@ -1,13 +1,15 @@
-"""블로그의 카테고리 안과 밖 + 카테고리 열 정렬.
+"""블로그가 쓰는 카테고리 + 카테고리 열 정렬.
 
 고친 것(2026-09-26):
   * 정식제목 탭에 블로그의 카테고리가 적혀 있지 않아, 왜 어떤 제목이
     보이고 어떤 제목이 빠지는지 알 수 없었다.
-  * 독립포스트 중 **카테고리 밖** 제목을 볼 길이 없었다(안쪽 필터에
-    막혀 아예 조회되지 않았다).
   * 카테고리 열을 눌러도 가나다 순으로 서지 않았다 — 화면은
     sort_field=category 를 보내는데 서버가 그 이름을 몰라 생성일
     정렬로 되돌아갔다.
+
+'카테고리 밖' 목록은 만들었다가 되돌렸다(2026-09-26). 독립포스트는
+카테고리가 바뀌면 다시 불러오므로 분류가 틀린 제목이 남지 않는다.
+정리가 필요한 자리는 **발행대기 글**이고, 그건 따로 검토한다.
 """
 import pathlib
 
@@ -82,23 +84,8 @@ async def _titles(db, condition):
 class TestScope:
     async def test_안쪽은_블로그가_쓰는_카테고리뿐(self, db):
         blog, _ = await _seed(db)
-        inside, _out = await blog_scope.filters(db, blog.id)
+        inside = await blog_scope.inside_filter(db, blog.id)
         assert await _titles(db, inside) == ["안-이사 견적"]
-
-    async def test_밖에는_분류_없는_제목도_들어간다(self, db):
-        """NOT IN 만 쓰면 분류가 빈 제목이 조용히 사라진다."""
-        blog, _ = await _seed(db)
-        _in, outside = await blog_scope.filters(db, blog.id)
-        assert await _titles(db, outside) == [
-            "밖-청소 요령", "밖-다이어트 식단", "밖-분류 없는 제목"]
-
-    async def test_안과_밖은_겹치지_않고_전부를_덮는다(self, db):
-        blog, _ = await _seed(db)
-        inside, outside = await blog_scope.filters(db, blog.id)
-        total = (await db.execute(
-            select(func.count(MainTitle.id)))).scalar()
-        assert len(await _titles(db, inside)) \
-            + len(await _titles(db, outside)) == total
 
     async def test_카테고리를_안_걸면_제한도_없다(self, db):
         """카테고리 미설정 블로그는 예전처럼 전체가 보인다."""
@@ -107,7 +94,7 @@ class TestScope:
         bare = Blog(user_id=me.id, name="맨블로그", url="https://b",
                     platform=BlogPlatform.BLOGGER)
         db.add(bare); await db.commit()
-        assert await blog_scope.filters(db, bare.id) == (None, None)
+        assert await blog_scope.inside_filter(db, bare.id) is None
 
     async def test_주제만_걸어도_동작한다(self, db):
         """하위주제 없이 주제만 지정한 카테고리."""
@@ -115,12 +102,12 @@ class TestScope:
         db.add(BlogCategory(blog_id=blog.id, topic_id=cats["health"].id,
                             subtopic_id=None))
         await db.commit()
-        inside, outside = await blog_scope.filters(db, blog.id)
+        inside = await blog_scope.inside_filter(db, blog.id)
         got = await _titles(db, inside)
         # 주제만 걸어 두면 그 주제의 제목은 하위주제와 상관없이 안쪽이다
         assert "밖-다이어트 식단" in got and "안-이사 견적" in got
-        # 같은 주제(이사/청소)라도 걸지 않은 하위주제는 여전히 밖이다
-        assert await _titles(db, outside) == ["밖-청소 요령", "밖-분류 없는 제목"]
+        # 같은 주제라도 걸지 않은 하위주제는 안쪽이 아니다
+        assert "밖-청소 요령" not in got and "밖-분류 없는 제목" not in got
 
 
 class TestCategorySortContract:
@@ -150,26 +137,23 @@ class TestCategorySortContract:
         assert "category_path" in merged
 
 
-class TestOffCategoryState:
-    def test_상태값이_등록돼_있다(self):
-        src = (ROOT / "app/routers/titles.py").read_text(encoding="utf-8")
-        assert '"off_category"' in src
-        # 밖을 보는 화면에서 안쪽 제한을 걸면 아무것도 안 나온다
-        block = src[src.index('if st == "off_category":'):]
-        assert "off_filter" in block[:400]
-
-    def test_카운트가_요약에_실린다(self):
-        src = (ROOT / "app/routers/blogs.py").read_text(encoding="utf-8")
-        assert '"off_category": off_category_count' in src
-
-    def test_화면에_칩과_카테고리_목록이_있다(self):
+class TestBlogCategoryDisplay:
+    def test_화면에_카테고리_목록이_있다(self):
         tmpl = (ROOT / "app/templates/collection/_titles_main.html"
                 ).read_text(encoding="utf-8")
-        assert "selectState('off_category')" in tmpl
         assert "이 블로그의 카테고리" in tmpl
         idx = (ROOT / "app/templates/collection/index.html"
                ).read_text(encoding="utf-8")
         assert "loadBlogCategories()" in idx
+
+    def test_카테고리_밖_목록은_되돌렸다(self):
+        """되돌린 기능이 슬그머니 되살아나지 않게 못 박는다."""
+        for rel in ("app/routers/titles.py", "app/routers/blogs.py",
+                    "app/templates/collection/_titles_main.html",
+                    "app/templates/collection/index.html",
+                    "app/services/titles/blog_scope.py"):
+            assert "off_category" not in (ROOT / rel).read_text(
+                encoding="utf-8"), rel
 
 
 class TestEmptyCategoryGoesLast:
