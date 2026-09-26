@@ -686,7 +686,9 @@ function dataManagementApp() {
         availableBlogs: [],
         selectedBlogId: '',
         matchingSummary: null,
-        stateFilter: 'all',  // 'all' | 'published' | 'pending' | 'independent' | 'unmatched'
+        stateFilter: 'all',  // 'all' | 'published' | 'pending' | 'independent' | 'off_category' | 'unmatched'
+        // 이 블로그에 걸린 카테고리 — 무엇이 보이고 무엇이 빠지는지 알려 준다
+        blogCategories: [], blogCategoriesLoading: false, blogCategoriesError: '',
         // 정리 권장 표시 {정식제목id: 사유}. 저품질 재고를 한 번 걷어내기 위한
         // 것이라 정리가 끝나면 쓰지 않게 된다.
         cleanupFlags: {},
@@ -927,6 +929,8 @@ function dataManagementApp() {
             if (!this.selectedBlogId) {
                 this.matchingSummary = null;
                 this.stateFilter = 'all';
+                this.blogCategories = [];
+                this.blogCategoriesError = '';
                 this.blogMatchingConfig = null;
                 this.unmatchedCrawledPosts = [];
                 this.selectedUnmatchedCrawled = [];
@@ -988,11 +992,40 @@ function dataManagementApp() {
                 this.matchProgressText = '';
             }
 
+            // 이 블로그에 걸린 카테고리 표시
+            this.loadBlogCategories();
+
             // 제목 목록 다시 로드 (기본: 전체 상태)
             this.mainTitlePage = 1;
             this.stateFilter = 'all';
             this.loadCleanupFlags();
             this.loadMainTitlesWithCrawled();
+        },
+
+        /** 선택한 블로그에 설정된 카테고리(주제 › 하위주제)를 받아 온다. */
+        async loadBlogCategories() {
+            if (!this.selectedBlogId) { this.blogCategories = []; return; }
+            this.blogCategoriesLoading = true;
+            this.blogCategoriesError = '';
+            const asked = String(this.selectedBlogId);
+            try {
+                const res = await fetch(
+                    `${API_BASE}/blogs/${asked}/categories`,
+                    { credentials: 'include' },
+                );
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                // 받는 사이 블로그가 바뀌었으면 이 응답은 버린다
+                if (asked !== String(this.selectedBlogId)) return;
+                this.blogCategories = (data.categories || []).filter(
+                    c => c.topic_name || c.subtopic_name);
+            } catch (e) {
+                console.error('블로그 카테고리 로드 실패:', e);
+                this.blogCategories = [];
+                this.blogCategoriesError = '카테고리를 불러오지 못했습니다';
+            } finally {
+                this.blogCategoriesLoading = false;
+            }
         },
 
         // 상태 카운트 칩 클릭 → 해당 상태 목록만 로드

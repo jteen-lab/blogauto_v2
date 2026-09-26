@@ -95,6 +95,15 @@
                     <span class="text-xs" :class="stateFilter === 'independent' ? 'text-white/80' : 'text-gray-500'">독립:</span>
                     <span class="font-bold" :class="stateFilter === 'independent' ? '' : 'text-accent'" x-text="matchingSummary?.unmatched || 0"></span>
                 </button>
+                <button @click="selectState('off_category')"
+                        x-show="(matchingSummary?.off_category || 0) > 0 || stateFilter === 'off_category'"
+                        class="flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors"
+                        :class="stateFilter === 'off_category' ? 'bg-orange-600 text-white' : 'hover:bg-gray-100'"
+                        :title="'독립포스트 중 이 블로그에 걸린 카테고리에 속하지 않는 제목'">
+                    <span class="w-2 h-2 rounded-full bg-orange-500"></span>
+                    <span class="text-xs" :class="stateFilter === 'off_category' ? 'text-orange-100' : 'text-gray-500'">카테고리 밖:</span>
+                    <span class="font-bold" :class="stateFilter === 'off_category' ? '' : 'text-orange-600'" x-text="matchingSummary?.off_category || 0"></span>
+                </button>
                 <button @click="selectState('unmatched')"
                         class="flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors"
                         :class="stateFilter === 'unmatched' ? 'bg-rose-600 text-white' : 'hover:bg-gray-100'"
@@ -103,6 +112,25 @@
                     <span class="text-xs" :class="stateFilter === 'unmatched' ? 'text-rose-100' : 'text-gray-500'">미매칭:</span>
                     <span class="font-bold" :class="stateFilter === 'unmatched' ? '' : 'text-rose-600'" x-text="matchingSummary?.unmatched_published || 0"></span>
                 </button>
+            </div>
+        </div>
+
+        {# 이 블로그에 걸린 카테고리 — 무엇이 보이고 무엇이 빠지는지 알려 준다 #}
+        <div x-show="selectedBlogId" x-cloak class="mt-3">
+            <div class="flex flex-wrap items-center gap-1.5">
+                <span class="text-xs text-gray-600 font-medium">이 블로그의 카테고리</span>
+                <span class="text-xs text-gray-400"
+                      x-text="blogCategoriesLoading ? '불러오는 중…'
+                          : (blogCategories.length ? blogCategories.length + '개'
+                                                   : '설정된 카테고리가 없습니다 — 모든 제목이 보입니다')"></span>
+                <template x-for="cat in blogCategories" :key="'bc' + (cat.subtopic_id || 0) + '-' + (cat.topic_id || 0)">
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border border-emerald-200 text-xs text-emerald-700">
+                        <span class="text-gray-400" x-text="cat.topic_name"></span>
+                        <span x-show="cat.subtopic_name" class="text-gray-300">›</span>
+                        <span class="font-medium" x-text="cat.subtopic_name || ''"></span>
+                    </span>
+                </template>
+                <span x-show="blogCategoriesError" class="text-xs text-red-500" x-text="blogCategoriesError"></span>
             </div>
         </div>
 
