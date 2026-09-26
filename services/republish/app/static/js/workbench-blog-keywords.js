@@ -41,23 +41,23 @@ function blogKeywordPart() {
                 n + b.subtopics.reduce((m, s) => m + s.keywords.length, 0), 0);
         },
 
-        /** 검색창에 넣는다. 비어 있으면 그대로, 있으면 한 칸 띄워 뒤에.
-         *  이미 들어 있는 키워드는 또 붙이지 않는다. */
+        /** 검색창을 **이 키워드로 바꾼다.**
+         *
+         *  예전에는 뒤에 붙였다. 칩을 두 개 누르면 '포장 이사 보관 이사'가
+         *  되어 검색 결과가 사라졌다. 키워드는 하나씩 보는 것이라, 마지막에
+         *  누른 것만 남긴다(손으로 적은 말도 같이 지워진다).
+         */
         pickBlogKeyword(kw) {
-            const text = this._kwText(kw);
-            const cur = (this.sourceQuery || '').trim();
-            const has = cur.split(/\s+/).join(' ').includes(text);
-            if (!cur) this.sourceQuery = text;
-            else if (!has) this.sourceQuery = cur + ' ' + text;
+            this.sourceQuery = this._kwText(kw);
             this.$nextTick(() => {
                 const el = this.$refs.sourceInput;
                 if (el) el.focus();
             });
         },
 
-        /** 이 키워드가 지금 검색창에 들어 있는지 — 칩 색을 바꾼다. */
+        /** 지금 검색창에 든 것이 이 키워드인지 — 하나만 진하게 보인다. */
         blogKeywordPicked(kw) {
-            return (this.sourceQuery || '').includes(this._kwText(kw));
+            return (this.sourceQuery || '').trim() === this._kwText(kw);
         },
 
         /** 키워드 풀은 '포장+이사'처럼 + 로 묶어 둔다. 검색창에는 띄어 넣는다. */
