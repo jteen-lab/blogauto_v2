@@ -95,15 +95,6 @@
                     <span class="text-xs" :class="stateFilter === 'independent' ? 'text-white/80' : 'text-gray-500'">독립:</span>
                     <span class="font-bold" :class="stateFilter === 'independent' ? '' : 'text-accent'" x-text="matchingSummary?.unmatched || 0"></span>
                 </button>
-                <button @click="selectState('off_category')"
-                        x-show="(matchingSummary?.off_category || 0) > 0 || stateFilter === 'off_category'"
-                        class="flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors"
-                        :class="stateFilter === 'off_category' ? 'bg-orange-600 text-white' : 'hover:bg-gray-100'"
-                        :title="'독립포스트 중 이 블로그에 걸린 카테고리에 속하지 않는 제목'">
-                    <span class="w-2 h-2 rounded-full bg-orange-500"></span>
-                    <span class="text-xs" :class="stateFilter === 'off_category' ? 'text-orange-100' : 'text-gray-500'">카테고리 밖:</span>
-                    <span class="font-bold" :class="stateFilter === 'off_category' ? '' : 'text-orange-600'" x-text="matchingSummary?.off_category || 0"></span>
-                </button>
                 <button @click="selectState('unmatched')"
                         class="flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors"
                         :class="stateFilter === 'unmatched' ? 'bg-rose-600 text-white' : 'hover:bg-gray-100'"
