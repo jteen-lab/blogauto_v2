@@ -12,7 +12,7 @@ Features:
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, update
+from sqlalchemy import case, func, select, update
 from sqlalchemy.orm import load_only
 from pydantic import BaseModel, Field
 from datetime import datetime
@@ -245,14 +245,18 @@ async def list_temp_titles(
                  .outerjoin(_ST, TempTitle.subtopic_id == _ST.id))
         sort_column = func.coalesce(_T.name, "")
         second_column = func.coalesce(_ST.name, "")
+        # 분류 없는 제목은 방향과 무관하게 맨 뒤로
+        empty_last = case((sort_column == "", 1), else_=0)
     else:
+        empty_last = None
         sort_column = sort_columns.get(sort_field, TempTitle.created_at)
+    order = [empty_last.asc()] if empty_last is not None else []
     if sort_dir == "asc":
-        order = [sort_column.asc()]
+        order.append(sort_column.asc())
         if second_column is not None:
             order.append(second_column.asc())
     else:
-        order = [sort_column.desc()]
+        order.append(sort_column.desc())
         if second_column is not None:
             order.append(second_column.desc())
     query = query.order_by(*order)

@@ -203,12 +203,16 @@ async def list_main_titles(
     # 카테고리는 **이름**으로 세운다. 화면은 'category' 를 보내는데 서버가
     # 그 이름을 몰라 생성일 정렬로 되돌아갔다(가나다 정렬이 안 되던 원인).
     category_sort = sort_field in CATEGORY_SORT_FIELDS
+    empty_last = None
     if category_sort:
         query = (query
                  .outerjoin(Topic, MainTitle.topic_id == Topic.id)
                  .outerjoin(SubTopic, MainTitle.subtopic_id == SubTopic.id))
         sort_column = func.coalesce(Topic.name, "")
         second_column = func.coalesce(SubTopic.name, "")
+        # 분류가 없는 제목은 **방향과 무관하게 맨 뒤**로. 오름차순 첫 화면이
+        # "(없음)" 수천 건으로 차 버리면 정렬이 안 된 것처럼 보인다.
+        empty_last = case((sort_column == "", 1), else_=0)
     else:
         second_column = None
     sort_column = sort_columns.get(sort_field, sort_column
@@ -238,12 +242,13 @@ async def list_main_titles(
         else:
             query = query.order_by(match_priority, sort_column.desc())
     else:
+        order = [empty_last.asc()] if empty_last is not None else []
         if sort_dir == "asc":
-            order = [sort_column.asc()]
+            order.append(sort_column.asc())
             if second_column is not None:
                 order.append(second_column.asc())
         else:
-            order = [sort_column.desc()]
+            order.append(sort_column.desc())
             if second_column is not None:
                 order.append(second_column.desc())
         query = query.order_by(*order)
@@ -664,7 +669,15 @@ async def list_titles_unified(
         combined = [r for r in combined if r.get("_kind") == "unmatched"]
 
     # 9) 통합 정렬 (가나다: sort_dir 로 오름/내림 토글)
-    combined.sort(key=sort_key, reverse=(sort_dir != "asc"))
+    if sort_field in CATEGORY_SORT_FIELDS:
+        # 분류가 없는 행(미매칭 크롤글 포함)은 방향과 무관하게 맨 뒤로
+        named = [r for r in combined if (r.get("category_path") or "")]
+        bare = [r for r in combined if not (r.get("category_path") or "")]
+        named.sort(key=sort_key, reverse=(sort_dir != "asc"))
+        bare.sort(key=title_key)
+        combined = named + bare
+    else:
+        combined.sort(key=sort_key, reverse=(sort_dir != "asc"))
 
     # 10) 상태필터 후 실제 총계로 페이지 슬라이싱
     total = len(combined)
