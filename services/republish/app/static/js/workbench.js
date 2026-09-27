@@ -390,11 +390,57 @@ function moduleTester() {
             }
             step.applyMessage = message + ' · 남은 글 ' + left + '건';
         },
-        async copyHtml() {
+        /** 글자를 클립보드에 넣는다. 세 갈래로 시도한다.
+         *
+         *  `navigator.clipboard` 는 **보안 컨텍스트(https 또는 localhost)에서만**
+         *  동작한다. 우리 서버는 http 로 접속하니 이 API 가 아예 없거나 막혀
+         *  "복사 권한이 없습니다"만 떴다(2026-09-27 확인).
+         *
+         *  Returns: 'clipboard' | 'exec' | '' (실패)
+         */
+        async _copyText(text) {
+            const value = String(text || '');
+            if (!value) return '';
             try {
-                await navigator.clipboard.writeText(this.preview.html || '');
+                if (navigator.clipboard && window.isSecureContext !== false) {
+                    await navigator.clipboard.writeText(value);
+                    return 'clipboard';
+                }
+            } catch (e) { /* 아래 옛 방식으로 내려간다 */ }
+            try {
+                // http 에서도 되는 옛 방식. 화면 밖에 두고 고른 뒤 복사한다.
+                const box = document.createElement('textarea');
+                box.value = value;
+                box.setAttribute('readonly', '');
+                box.style.position = 'fixed';
+                box.style.top = '-1000px';
+                box.style.opacity = '0';
+                document.body.appendChild(box);
+                box.select();
+                box.setSelectionRange(0, value.length);
+                const ok = document.execCommand && document.execCommand('copy');
+                document.body.removeChild(box);
+                if (ok) return 'exec';
+            } catch (e) { /* 마지막 갈래로 */ }
+            return '';
+        },
+
+        async copyHtml() {
+            const html = this.preview.html || '';
+            if (!html) { this.postMessage = '복사할 본문이 없습니다.'; return; }
+            const how = await this._copyText(html);
+            if (how) {
                 this.postMessage = 'HTML을 복사했습니다.';
-            } catch (e) { this.postMessage = '실패: 복사 권한이 없습니다'; }
+                return;
+            }
+            // 둘 다 막혔으면 직접 고를 수 있게 열어 준다
+            this.editMode = true;
+            this.$nextTick(() => {
+                const el = this.$refs.htmlBox;
+                if (el) { el.focus(); el.select(); }
+            });
+            this.postMessage = '브라우저가 자동 복사를 막았습니다 — '
+                + 'HTML 칸을 모두 골라 뒀으니 Ctrl+C 로 복사하세요.';
         },
 
         // ── 프리셋 ───────────────────────────────────────────
