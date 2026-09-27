@@ -51,10 +51,23 @@
 
 > 현재 옛 오라클 서버(144.24.82.130, E2.1.Micro)에서 **실 운영 중**. 사용자는 실제 블로그에 글/이미지 생성·발행하면서 운영 중 문제를 발견·보고한다. A1.Flex 마이그레이션은 capacity 확보 대기 중.
 
+### ⚠️ 작업 시작 전 반드시 `git pull` (2026-09-27 추가)
+
+이 저장소의 작업 사본이 **두 곳**이 되었다: 로컬 PC(`~/blogauto_v2`)와 오라클 서버(`~/blogauto_v2`, 체셔캣이 폰 지시로 작업하는 곳).
+둘 다 같은 `origin/main`에 push 한다. **어느 쪽에서든 코드를 건드리기 전에 먼저:**
+
+```bash
+git pull --ff-only origin main
+```
+
+`--ff-only`가 거부하면 양쪽이 갈라진 것이다. 임의로 merge·rebase 하지 말고 사용자에게 상황을 보고할 것.
+(서버에서 운영 중인 이미지 SHA도 함께 확인: `sudo docker inspect blogauto-app-1 --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'`)
+
 ### 수정 요청 처리 표준 절차 (사용자 개입 없음, 직접 마무리)
 
 사용자가 "서버에서 X가 안 된다", "이 오류 고쳐줘" 등 운영 중 문제를 보고하면:
 
+0. **`git pull --ff-only origin main`** — 다른 쪽(PC 또는 서버)에서 먼저 한 작업을 덮지 않게.
 1. **로컬에서 수정** — 서버 코드 직접 수정 금지(회귀 위험·SHA 불일치 발생). 모든 수정은 `~/blogauto_v2`(로컬)에서만.
 2. **로컬 자체 테스트** — 데이터 영향이 큰 변경(마이그레이션, 모델 변경, 데이터 마이그레이션 스크립트 등)은 로컬에서 먼저 검증. UI/회귀 fix는 서버 배포 후 사용자 검증으로 갈음 가능.
 3. **파일별 개별 `git commit`** + **`git push origin main`** — push가 GitHub Actions를 트리거해 `ghcr.io/jteen-lab/blogauto:stable` 이미지를 자동 빌드한다.
