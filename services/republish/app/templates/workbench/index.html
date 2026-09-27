@@ -376,6 +376,7 @@
                 <iframe x-show="!editMode" class="mt-preview-frame border border-gray-200 rounded-md"
                         :srcdoc="previewDoc()"></iframe>
                 <textarea x-show="editMode" x-model="preview.html" rows="20"
+                          x-ref="htmlBox"
                           class="w-full px-3 py-2 border border-gray-300 rounded-md text-xs font-mono focus:border-accent focus:ring-accent"></textarea>
                 <p class="text-xs mt-2" x-show="postMessage"
                    :class="postMessage.startsWith('실패') ? 'text-red-600' : 'text-primary'"
@@ -478,9 +479,9 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="/static/js/workbench-links-subtopic.js?v=20260926dedup"></script>
-<script src="/static/js/workbench-links.js?v=20260926dedup"></script>
-<script src="/static/js/workbench-sources.js?v=20260926dedup"></script>
-<script src="/static/js/workbench-blog-keywords.js?v=20260926dedup"></script>
-<script src="/static/js/workbench.js?v=20260926dedup"></script>
+<script src="/static/js/workbench-links-subtopic.js?v=20260927copy"></script>
+<script src="/static/js/workbench-links.js?v=20260927copy"></script>
+<script src="/static/js/workbench-sources.js?v=20260927copy"></script>
+<script src="/static/js/workbench-blog-keywords.js?v=20260927copy"></script>
+<script src="/static/js/workbench.js?v=20260927copy"></script>
 {% endblock %}
