@@ -49,7 +49,23 @@
 
 ## 운영 모드 워크플로우 (2026-05-26 추가)
 
-> 현재 옛 오라클 서버(144.24.82.130, E2.1.Micro)에서 **실 운영 중**. 사용자는 실제 블로그에 글/이미지 생성·발행하면서 운영 중 문제를 발견·보고한다. A1.Flex 마이그레이션은 capacity 확보 대기 중.
+> **실 운영 서버: `168.110.98.47` (A1.Flex, 2 OCPU/12GB, aarch64).** 배포 디렉토리는 **`/opt/blogauto`** (compose·Caddyfile·.env·data만 있고 소스는 없다 — 운영은 GitHub Actions가 만든 이미지를 pull 하는 방식).
+> 사용자는 실제 블로그에 글/이미지 생성·발행하면서 운영 중 문제를 발견·보고한다.
+> ~~144.24.82.130 / E2.1.Micro / `~/blogauto_v2/services/republish`~~ 는 **옛 정보다. 쓰지 마라.** (2026-09-27 정정)
+
+### 지금 나는 어디서 돌고 있나 — 먼저 확인하라
+
+이 저장소의 작업 사본은 **두 곳**이고, 배포 절차의 5번이 달라진다.
+
+```bash
+hostname   # 또는:  [ -d /opt/blogauto ] && echo 서버 || echo 로컬PC
+```
+
+| | 로컬 PC (`jteen`) | 운영 서버 (`ubuntu@168.110.98.47`) |
+|---|---|---|
+| 작업 폴더 | `~/blogauto_v2` | `~/blogauto_v2` |
+| 부르는 경로 | 사용자가 터미널에서 직접 | 텔레그램(체셔캣) 또는 SSH 접속 |
+| 배포 5번 | **SSH로 서버 접속 후** 실행 | **SSH 하지 말고** 그 자리에서 바로 실행 |
 
 ### ⚠️ 작업 시작 전 반드시 `git pull` (2026-09-27 추가)
 
@@ -72,14 +88,25 @@ git pull --ff-only origin main
 2. **로컬 자체 테스트** — 데이터 영향이 큰 변경(마이그레이션, 모델 변경, 데이터 마이그레이션 스크립트 등)은 로컬에서 먼저 검증. UI/회귀 fix는 서버 배포 후 사용자 검증으로 갈음 가능.
 3. **파일별 개별 `git commit`** + **`git push origin main`** — push가 GitHub Actions를 트리거해 `ghcr.io/jteen-lab/blogauto:stable` 이미지를 자동 빌드한다.
 4. **GitHub Actions 빌드 완료 대기** — 약 3~7분. 빌드 완료 전에는 서버 pull 무의미.
-5. **서버에 데이터 보존 업데이트 배포** — SSH 접속 후 다음 패턴:
+5. **서버에 데이터 보존 업데이트 배포** — 지금 도는 위치에 따라 둘 중 하나.
+
+   **(A) 로컬 PC에서 작업 중이면** — SSH로 서버에 들어가서:
    ```bash
-   ssh -i ~/.ssh/blogauto-oracle.key ubuntu@144.24.82.130
-   cd ~/blogauto_v2/services/republish     # 또는 실제 배포 디렉토리
+   ssh -i ~/.ssh/blogauto-oracle.key ubuntu@168.110.98.47
+   cd /opt/blogauto
    sudo docker compose pull                 # 새 이미지만 받아옴
    sudo docker compose up -d                # 컨테이너만 교체 (volume 보존)
    sudo docker image prune -f               # 교체로 dangling된 옛 이미지 정리(안전: 태그없는 미사용만)
    ```
+
+   **(B) 이미 서버에서 돌고 있으면 (체셔캣·SSH 세션)** — SSH 하지 말고 그대로:
+   ```bash
+   cd /opt/blogauto
+   sudo docker compose pull
+   sudo docker compose up -d
+   sudo docker image prune -f
+   ```
+   > 서버에서 자기 자신에게 다시 SSH 하려 들지 마라. `/opt/blogauto` 가 있으면 여기가 서버다.
    > 옛 `:stable` 이미지는 교체 시 dangling(태그없음)으로 남아 누적됨(배포당 ~1.7GB).
    > `docker image prune -f`는 dangling 이미지만 삭제하며 volume/실행이미지/DB는 건드리지 않음.
    > 서버에 주간 cron(`0 4 * * 0 docker image prune -f`)도 설치돼 있으나, 배포마다 함께 정리 권장.
@@ -94,7 +121,8 @@ git pull --ff-only origin main
 
 - ❌ `docker compose down -v` — `-v`는 named volume 삭제. PostgreSQL DB / 생성 이미지 / 사용자 업로드 데이터가 날아간다.
 - ❌ `docker volume rm`, `docker system prune --volumes` — 같은 이유로 금지.
-- ❌ 서버에서 직접 코드 편집 (`vim`, `nano` 등) — 로컬과 SHA 불일치 발생, 다음 배포 시 덮어써짐.
+- ❌ **`/opt/blogauto` 안의 코드·설정을 직접 편집** — 여기는 배포 산출물 자리다. 수정은 반드시 git 작업 사본(`~/blogauto_v2`)에서 하고 커밋·푸시·이미지 빌드를 거친다. (`.env`·Caddyfile 같은 운영 설정 변경은 예외지만, 먼저 사용자에게 알린다)
+- ❌ 서버 컨테이너 안에서 코드 편집 — 재배포 시 덮어써짐.
 - ❌ 서버에서 `alembic downgrade` — 데이터 손실 가능. 마이그레이션은 항상 upgrade 방향.
 
 ### 마이그레이션 동반 배포
