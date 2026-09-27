@@ -326,6 +326,33 @@ async def apply_titles(
     return await apply_svc.apply_titles(db, current_user.id, body.titles)
 
 
+class CopyHtmlRequest(BaseModel):
+    """복사용 HTML 요청."""
+
+    html: str = Field(..., description="미리보기 HTML")
+    blog_id: Optional[int] = Field(None, description="이미지를 올릴 블로그")
+    title: str = Field("", description="이미지 alt·파일명")
+
+
+@router.post("/copy-html", summary="복사용 — 이미지를 올려 절대주소로")
+async def copy_html(
+    body: CopyHtmlRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """본문의 로컬 이미지를 블로그 저장소에 올려 절대주소로 바꿔 돌려준다.
+
+    붙여넣기용이다 — 저장된 본문은 건드리지 않는다.
+
+    순서도: docs/flowcharts/workbench_copy_html.md
+    """
+    from ..services.workbench import copy_html as copy_svc
+
+    got = await copy_svc.absolutize(
+        db, current_user.id, body.blog_id, body.html, title=body.title)
+    return {"success": got["error"] is None, **got}
+
+
 @router.post("/assemble", summary="고지문·표지·버튼을 붙인 완성본")
 async def assemble_post(
     body: AssembleRequest,
