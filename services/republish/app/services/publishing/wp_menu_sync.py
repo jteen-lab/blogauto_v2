@@ -18,8 +18,12 @@ PAGE_ORDER = ("about", "contact", "privacy", "terms")
 UNSUPPORTED = (401, 403, 404)
 
 
-def desired_items(blog, category_names: dict | None = None) -> list:
+def desired_items(blog, category_names: dict | None = None,
+                  include_subtopics: bool = False) -> list:
     """메뉴에 들어갈 항목 계획. category_names: {"t:1": "이름", "s:2": "이름"}
+
+    기본은 '상위 주제 + 필수 페이지'만 — 하위주제까지 넣으면 항목이 20개를 넘어
+    모바일에서 지저분해진다(2026-09-29 오너 결정). 하위주제 글은 주제 페이지에 모인다.
 
     반환: [{key, type, object, object_id, title, parent_key}]
     """
@@ -34,7 +38,7 @@ def desired_items(blog, category_names: dict | None = None) -> list:
                       "object_id": int(wp_id), "title": names.get(key, ""),
                       "parent_key": None})
     for key, wp_id in cat_map.items():
-        if not key.startswith("s:"):
+        if not include_subtopics or not key.startswith("s:"):
             continue
         items.append({"key": key, "type": "taxonomy", "object": "category",
                       "object_id": int(wp_id), "title": names.get(key, ""),
@@ -48,13 +52,31 @@ def desired_items(blog, category_names: dict | None = None) -> list:
     return items
 
 
+_PRIMARY_HINTS = ("primary", "main", "header", "menu-1", "top")
+
+
+def _ordered_slugs(locations: dict) -> list:
+    """주 메뉴처럼 보이는 위치를 앞으로."""
+    slugs = list((locations or {}).keys())
+    return sorted(slugs, key=lambda s: (not any(h in s.lower() for h in _PRIMARY_HINTS), slugs.index(s)))
+
+
+def existing_primary_menu(locations: dict) -> int | None:
+    """이미 주 메뉴 자리에 걸린 메뉴가 있으면 그 id — 새 메뉴를 만들지 않고 거기에 보탠다."""
+    for slug in _ordered_slugs(locations):
+        mid = int(((locations or {}).get(slug) or {}).get("menu") or 0)
+        if mid:
+            return mid
+    return None
+
+
 def pick_location(locations: dict, menu_id: int) -> str | None:
     """이미 우리 메뉴가 걸린 위치 → 빈 위치(첫 번째) 순. 남의 메뉴는 건드리지 않는다."""
     for slug, loc in (locations or {}).items():
         if int((loc or {}).get("menu") or 0) == int(menu_id):
             return slug
-    for slug, loc in (locations or {}).items():
-        if not int((loc or {}).get("menu") or 0):
+    for slug in _ordered_slugs(locations):
+        if not int(((locations or {}).get(slug) or {}).get("menu") or 0):
             return slug
     return None
 
@@ -80,20 +102,25 @@ async def _ensure_menu(blog, category_names, client) -> dict:
         return {"supported": False, "reason": f"menu-locations HTTP {resp.status_code}"}
     locations = resp.json() if resp.status_code == 200 else {}
 
-    menu_id = await _find_or_create_menu(client, base, headers)
+    locs = locations if isinstance(locations, dict) else {}
+    # 이미 주 메뉴가 걸려 있으면(예: 필수 페이지 4개 메뉴) 그 메뉴에 빠진 항목만 보탠다.
+    menu_id = existing_primary_menu(locs)
+    reused = menu_id is not None
+    if menu_id is None:
+        menu_id = await _find_or_create_menu(client, base, headers)
     if menu_id is None:
         return {"supported": False, "reason": "menus 엔드포인트 사용 불가"}
 
     added = await _add_missing_items(client, base, headers, menu_id,
                                      desired_items(blog, category_names))
-    location = pick_location(locations if isinstance(locations, dict) else {}, menu_id)
-    assigned = False
+    location = None if reused else pick_location(locs, menu_id)
+    assigned = reused
     if location:
         r = await client.post(f"{base}/menus/{menu_id}",
                               json={"locations": [location]}, headers=headers)
         assigned = r.status_code in (200, 201)
     return {"supported": True, "menu_id": menu_id, "added": added,
-            "location": location, "assigned": assigned}
+            "location": location, "assigned": assigned, "reused_existing": reused}
 
 
 async def _find_or_create_menu(client, base, headers) -> int | None:
@@ -116,7 +143,8 @@ async def _add_missing_items(client, base, headers, menu_id, items) -> list:
     have = {(e.get("object"), int(e.get("object_id") or 0)): int(e["id"])
             for e in existing or []}
     key_to_item_id, added = {}, []
-    for order, it in enumerate(items, start=1):
+    base_order = len(existing or [])
+    for order, it in enumerate(items, start=base_order + 1):
         ident = (it["object"], it["object_id"])
         if ident in have:
             key_to_item_id[it["key"]] = have[ident]
