@@ -133,6 +133,7 @@ class WordPressPublisher:
         payload = self._build_payload(
             post, final_html, blog, seo_meta, seo_plugin,
         )
+        await self._merge_mapped_categories(blog, post, payload)
 
         for attempt in range(MAX_RETRIES):
             try:
@@ -568,6 +569,16 @@ class WordPressPublisher:
                     "Authorization": f"Basic {auth_str}",
                     "Content-Type": "application/json"},
             )
+
+    @staticmethod
+    async def _merge_mapped_categories(blog: Blog, post, payload: dict) -> None:
+        """정적 wp_categories ∪ 글 topic/subtopic 매핑 ID. 실패해도 발행은 계속."""
+        from .wp_category_sync import resolve_post_category_ids
+
+        mapped = await resolve_post_category_ids(blog, post)
+        if mapped:
+            cats = list(payload.get("categories") or [])
+            payload["categories"] = cats + [c for c in mapped if c not in cats]
 
     @staticmethod
     def _get_categories(blog: Blog) -> list:
