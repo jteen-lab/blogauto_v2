@@ -159,7 +159,32 @@ async def test_menu_created_and_assigned_to_empty_location():
         res = await wms.ensure_menu(blog, names, client=c)
     assert res["supported"] and res["location"] == "primary" and res["assigned"]
     items = [b for p, b in posts if p.endswith("/menu-items")]
-    assert len(items) == 6
-    sub = next(b for b in items if b["object_id"] == 100)
+    # 기본은 상위 주제 + 필수 페이지만(하위주제 제외)
+    assert len(items) == 5
+    assert not any(b["object_id"] == 100 for b in items)
     top = next(b for b in items if b["object_id"] == 5)
-    assert "parent" in sub and top.get("title") == "여행"
+    assert top.get("title") == "여행"
+
+
+# ── 메뉴: 상위 주제 + 필수 페이지만, 기존 주 메뉴 재사용 (2026-09-29) ──
+from app.services.publishing import wp_menu_sync as _wm
+
+
+def test_desired_items_기본은_상위주제와_필수페이지만():
+    blog = _blog(placeholders={"wp_category_map": {"t:6": 5, "s:25": 100}})
+    blog.required_page_ids = {"about": "11", "contact": "12", "privacy": "13", "terms": "14"}
+    keys = [i["key"] for i in _wm.desired_items(blog, {"t:6": "여행"})]
+    assert keys == ["t:6", "p:about", "p:contact", "p:privacy", "p:terms"]
+    keys_all = [i["key"] for i in _wm.desired_items(blog, {}, include_subtopics=True)]
+    assert "s:25" in keys_all
+
+
+def test_기존_주메뉴가_있으면_그_메뉴를_쓴다():
+    locs = {"footer": {"menu": 0}, "primary": {"menu": 7}}
+    assert _wm.existing_primary_menu(locs) == 7
+    assert _wm.existing_primary_menu({"primary": {"menu": 0}}) is None
+
+
+def test_빈_자리는_주메뉴_자리부터():
+    locs = {"footer": {"menu": 0}, "primary": {"menu": 0}}
+    assert _wm.pick_location(locs, 99) == "primary"
