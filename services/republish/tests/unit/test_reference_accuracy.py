@@ -286,7 +286,7 @@ class TestDigest:
         text = to_prompt_injection("한도 5억 [1]", ["http://a"])
         assert "그대로 옮기지 마세요" in text
         assert "지어내지" in text
-        assert "출처 URL 은 본문에 쓰지 마세요" in text
+        assert "일반 문서의 URL 은 본문에 쓰지 마세요" in text
 
 
 class TestPlaceholderSafetyNet:
