@@ -20,6 +20,7 @@ from ..routers.auth import get_current_user
 from ..services.blog_settings_service import get_blog_or_404
 from ..services.publishing.adsense_readiness_service import AdsenseReadinessService
 from ..services.publishing.required_pages_service import RequiredPagesService
+from ..services.publishing.required_pages_templates import ABOUT_BODY_MAX_LEN
 
 logger = get_logger("blog_settings_adsense", "app.log")
 
@@ -34,6 +35,8 @@ class AuthorProfileRequest(BaseModel):
     expertise: Optional[str] = None
     contact_email: Optional[str] = None
     contact_form_url: Optional[str] = None
+    # 블로그별 소개 페이지 본문(평문/간단 HTML). None이면 기존 값 유지.
+    about_body: Optional[str] = None
 
 
 ADSENSE_STATUS_VALUES = {"none", "preparing", "applied", "approved"}
@@ -119,7 +122,7 @@ async def save_author_profile(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    """저자 프로필 저장 (name/bio/expertise).
+    """저자 프로필 저장 (name/bio/expertise/about_body).
 
     기존 author_profile을 **병합**해 프로비저닝 키(contact_form_id 등)를 보존한다.
     옛 Google Forms URL은 저장하지 않고 폐기(Tally 자동 생성으로 대체) —
@@ -131,6 +134,9 @@ async def save_author_profile(
     profile["bio"] = request.bio or ""
     profile["expertise"] = request.expertise or ""
     profile["contact_email"] = request.contact_email or ""
+    if request.about_body is not None:
+        # 필드를 모르는 옛 클라이언트가 값을 지우지 않도록 None이면 유지
+        profile["about_body"] = request.about_body.strip()[:ABOUT_BODY_MAX_LEN]
 
     form_url = (request.contact_form_url or "").strip()
     if "docs.google.com/forms" in form_url:
