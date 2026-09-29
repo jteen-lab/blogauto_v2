@@ -120,6 +120,9 @@ class BloggerPublisher:
         }
 
         # 라벨 설정 (정적 라벨 + 카테고리 동적 라벨)
+        # 관계를 먼저 불러와야 한다 — 안 그러면 비동기 세션에서 지연 로딩 예외가 나
+        # 라벨이 늘 빈 채로 발행됐다(docs/flowcharts/blogger_category_labels.md).
+        await self._load_category_relations(post)
         labels = self._get_labels(blog, post=post)
         if labels:
             payload["labels"] = labels
@@ -394,6 +397,37 @@ class BloggerPublisher:
         except Exception:
             return None
 
+    @staticmethod
+    async def _load_category_relations(post: Optional[CrawledPost]) -> None:
+        """post.matched_main_title 과 그 topic/subtopic 을 비동기로 미리 불러온다.
+
+        세션에 붙어 있지 않거나 실패하면 라벨 없이 발행하되, 조용히 넘기지 않고
+        warning 을 남긴다.
+        """
+        if post is None or not getattr(post, "matched_main_title_id", None):
+            return
+        try:
+            from sqlalchemy.ext.asyncio import async_object_session
+
+            session = async_object_session(post)
+            if session is None:
+                logger.warning(
+                    "[BLOGGER_LABELS] 세션 없는 글 — 카테고리 라벨 생략 | post_id=%s",
+                    getattr(post, "id", None),
+                )
+                return
+            await session.refresh(post, attribute_names=["matched_main_title"])
+            main_title = post.matched_main_title
+            if main_title is not None:
+                await session.refresh(
+                    main_title, attribute_names=["topic", "subtopic"],
+                )
+        except Exception as e:  # noqa: BLE001
+            logger.warning(
+                "[BLOGGER_LABELS] 카테고리 관계 로드 실패 — 라벨 생략 | post_id=%s | %s: %s",
+                getattr(post, "id", None), type(e).__name__, str(e)[:120],
+            )
+
     def _get_labels(
         self,
         blog: Blog,
@@ -428,9 +462,9 @@ class BloggerPublisher:
                     if label and label not in labels:
                         labels.append(label)
             except Exception as e:
-                logger.debug(
-                    "[BLOGGER_LABELS] 카테고리 라벨 추출 스킵 | %s",
-                    type(e).__name__,
+                logger.warning(
+                    "[BLOGGER_LABELS] 카테고리 라벨 추출 실패 | %s: %s",
+                    type(e).__name__, str(e)[:120],
                 )
 
         if labels:
