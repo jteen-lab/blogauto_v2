@@ -6,22 +6,24 @@
 위치별 규칙:
 - 서론 뒤: 유사 제목 글 (버튼/일반 선택, 최대 5개)
 - 본문 섹션 뒤: 섹션 제목과 유사한 글 (일반 링크, 섹션당 0~1개)
-- 결론 뒤: 랜덤 글 (리스트 스타일 선택)
+- 결론 뒤: 관련 글 (리스트 스타일 선택, 점수순 + 미색인 우선)
 
-유사도 매칭: shared SimilarityService 사용 (token_sort_ratio + 키워드 보너스)
+관련성 판정: link_relevance (조사·불용어 제거 토큰, 공통 2개 이상, 같은 topic 우선)
+본문 섹션 유사도: shared SimilarityService (토큰화된 제목끼리 비교)
+순서도: docs/flowcharts/internal_link_relevance.md
 """
 import logging
 import os
-import random
 import re
 import sys
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...models.blog import Blog
 from ...models.crawled_post import CrawledPost
+from ...models.title import MainTitle
 
 # shared SimilarityService 임포트 (Docker/로컬 환경 모두 지원)
 _shared_paths = ['/app/shared', '/home/jteen/blogauto_v2/shared']
@@ -30,9 +32,10 @@ for _path in _shared_paths:
         sys.path.insert(0, _path)
         break
 
-from services.similarity_service import SimilarityService, KOREAN_STOPWORDS
+from services.similarity_service import SimilarityService
 
 from .index_priority import prioritize as prioritize_by_index
+from .link_relevance import rank_related, tokenize
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +58,10 @@ class InternalLinker:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+        # 글 id → (topic_id, subtopic_id). _load_blog_posts 가 채운다.
+        self._post_cats: Dict[int, Tuple[Optional[int], Optional[int]]] = {}
+        # 현재 글의 (topic_id, subtopic_id). 모르면 (None, None) → 전체 후보
+        self._current_cat: Tuple[Optional[int], Optional[int]] = (None, None)
 
     async def insert_links(
         self,
@@ -129,6 +136,7 @@ class InternalLinker:
         if not all_posts:
             logger.info("[INTERNAL_LINK] 삽입 가능한 포스트 없음")
             return content
+        self._current_cat = await self._load_current_category(current_title)
 
         used_urls: set = set()
 
@@ -151,15 +159,12 @@ class InternalLinker:
         )
 
         # 3. 결론 뒤 링크 삽입
-        # 무작위성을 유지한 채 **미색인 글을 앞으로 당긴다**(S7). 구글이
-        # "발견됨-미색인" 으로 둔 글에 대한 표준 처방이 내부링크다.
-        #
-        # 다만 **아무 글이나 붙이지는 않는다.** 홈트 글 끝에 '일본여행 환전'
-        # 이 붙으면 독자에게도 검색엔진에도 손해다. 같은 니치 안에서 고르고,
-        # 니치가 겹치는 글이 부족하면 그만큼만 넣는다.
+        # 관련 글만 점수순으로 고른 뒤 **미색인 글을 앞으로 당긴다**(S7,
+        # 안정 정렬이라 같은 색인상태 안에서는 점수순 유지).
+        # 2026-09-29: 무작위 셔플 제거 — 여드름 글 끝에 '하나카드 분실신고'
+        # 가 붙던 원인 중 하나. 관련 글이 부족하면 그만큼만 넣는다.
         remaining = [p for p in all_posts if p.url not in used_urls]
         related = self._filter_related(current_title, remaining, sim_service)
-        random.shuffle(related)
         related = await prioritize_by_index(self.db, blog_id, related)
         conclusion_posts = related[:conclusion_count]
         if len(conclusion_posts) < conclusion_count:
@@ -177,12 +182,40 @@ class InternalLinker:
 
     # ── 포스트 검색 ──────────────────────────────────
 
+    async def _load_current_category(
+        self, current_title: str
+    ) -> Tuple[Optional[int], Optional[int]]:
+        """현재 글 제목과 같은 MainTitle 의 (topic_id, subtopic_id).
+
+        못 찾거나 조회에 실패하면 (None, None) — 카테고리 제한 없이 전체
+        후보로 폴백한다(관련성 토큰 기준은 그대로 적용).
+        """
+        try:
+            row = (await self.db.execute(
+                select(MainTitle.topic_id, MainTitle.subtopic_id)
+                .where(MainTitle.title == current_title)
+                .limit(1)
+            )).first()
+        except Exception as e:  # noqa: BLE001 — 링크 삽입을 막지 않는다
+            logger.warning(f"[INTERNAL_LINK] 현재 글 카테고리 조회 실패: {e}")
+            return (None, None)
+        return (row[0], row[1]) if row else (None, None)
+
     async def _load_blog_posts(
         self, blog_id: int, current_title: str
     ) -> List[CrawledPost]:
-        """블로그 내 URL이 있는 포스트 전체 로드"""
+        """블로그 내 URL이 있는 포스트 전체 로드 (+ 카테고리 맵 갱신).
+
+        MainTitle 을 outer join 해 topic/subtopic 을 컬럼으로 함께 가져온다.
+        relationship lazy load 를 쓰지 않아 async 에서 MissingGreenlet 이
+        나지 않는다.
+        """
         query = (
-            select(CrawledPost)
+            select(CrawledPost, MainTitle.topic_id, MainTitle.subtopic_id)
+            .outerjoin(
+                MainTitle,
+                CrawledPost.matched_main_title_id == MainTitle.id,
+            )
             .where(
                 CrawledPost.blog_id == blog_id,
                 CrawledPost.url.isnot(None),
@@ -192,7 +225,11 @@ class InternalLinker:
             )
         )
         result = await self.db.execute(query)
-        posts = list(result.scalars().all())
+        posts: List[CrawledPost] = []
+        self._post_cats = {}
+        for post, topic_id, subtopic_id in result.all():
+            posts.append(post)
+            self._post_cats[post.id] = (topic_id, subtopic_id)
         logger.debug(
             f"[INTERNAL_LINK] 포스트 로드 | blog_id={blog_id} "
             f"| count={len(posts)}"
@@ -206,11 +243,22 @@ class InternalLinker:
         sim_service: SimilarityService,
         limit: int = 10,
     ) -> List[CrawledPost]:
-        """유사도 점수 기반 포스트 매칭 (threshold 이상만, 점수 내림차순)"""
+        """본문 섹션용 유사도 매칭 (threshold 이상만, 점수 내림차순).
+
+        서론·결론과 **같은 토큰화**(조사·불용어 제거)를 거친 문자열끼리
+        비교하고, 공통 의미토큰이 1개도 없으면 점수와 무관하게 제외한다.
+        """
+        target_kw = tokenize(target_title)
+        if not target_kw:
+            return []
+        target_norm = " ".join(sorted(target_kw))
         scored = []
         for post in posts:
+            post_kw = tokenize(post.title)
+            if not (target_kw & post_kw):
+                continue
             score = sim_service.calculate_text_similarity(
-                target_title, post.title
+                target_norm, " ".join(sorted(post_kw))
             )
             if score >= sim_service.threshold:
                 scored.append((post, score))
@@ -219,26 +267,18 @@ class InternalLinker:
         return [post for post, _ in scored[:limit]]
 
     def _extract_keywords(
-        self, text: str, sim_service: SimilarityService
+        self, text: str, sim_service: Optional[SimilarityService] = None
     ) -> set:
-        """제목에서 핵심 키워드 집합 추출.
-
-        SimilarityService.normalize_text 로 정규화한 뒤 토큰화하고,
-        불용어와 1글자 토큰을 제거한다. KoNLPy 는 1GB RAM 환경 부담으로
-        사용하지 않는다(generator 의 자동 키워드 추출 정책과 동일).
+        """제목에서 의미토큰 집합 추출 (link_relevance.tokenize 위임).
 
         Args:
             text: 원본 제목
-            sim_service: 정규화에 사용할 유사도 서비스
+            sim_service: 하위호환용(미사용)
 
         Returns:
-            핵심 키워드 집합 (정규화·소문자 상태)
+            조사·어미·불용어·1글자·숫자를 뺀 토큰 집합
         """
-        norm = sim_service.normalize_text(text)
-        return {
-            t for t in norm.split()
-            if len(t) > 1 and t not in KOREAN_STOPWORDS
-        }
+        return tokenize(text)
 
     def _find_intro_posts(
         self,
@@ -248,86 +288,51 @@ class InternalLinker:
         count: int,
         sim_service: SimilarityService,
     ) -> List[CrawledPost]:
-        """서론 링크 후보 선정: 키워드 매칭 우선 + 최신순/랜덤 fallback.
+        """서론 링크 후보 선정: 관련 글만 점수순 상위 count 개.
 
-        1) 현재 글 제목과 공통 핵심 키워드가 1개 이상인 포스트를 겹침 수
-           내림차순으로 정렬해 상위 count 개 선택.
-        2) count 에 못 미치면 남은 포스트를 발행일 내림차순(없으면 뒤)으로
-           보충한다. 본론 75% 임계값과 독립적으로 동작한다.
+        관련 = 같은 topic 우선 + 공통 의미토큰 2개 이상
+        (link_relevance.rank_related). 부족분을 최신/랜덤 글로 채우지
+        않는다 — 0개여도 정상이다.
 
         Args:
             current_title: 현재 글 제목
             posts: 블로그 내 발행 포스트 목록
             used_urls: 이미 사용된 URL 집합(중복 방지)
             count: 채울 링크 개수
-            sim_service: 키워드 정규화용 유사도 서비스
+            sim_service: 하위호환용(미사용)
 
         Returns:
             서론에 삽입할 포스트 목록 (최대 count 개)
         """
         if count <= 0:
             return []
-
-        target_kw = self._extract_keywords(current_title, sim_service)
-
-        # 1. 키워드 겹침 매칭 (공통 키워드 1개 이상)
-        scored: list = []
-        if target_kw:
-            for post in posts:
-                if not post.url or post.url in used_urls:
-                    continue
-                post_kw = self._extract_keywords(post.title, sim_service)
-                overlap = len(target_kw & post_kw)
-                if overlap > 0:
-                    scored.append((post, overlap))
-            scored.sort(key=lambda x: x[1], reverse=True)
-
-        matched = [post for post, _ in scored[:count]]
-
-        # 2026-08-30: 부족분을 최신순으로 채우던 fallback 을 없앴다.
-        # 홈트 글 도입부에 '레몬디톡스·일본여행 환전' 링크가 붙는 원인이었다.
-        # 개수를 채우려고 관련 없는 글을 끌어오면 독자에게도 검색엔진에도
-        # 손해다. 매칭된 만큼만 넣고, 없으면 넣지 않는다.
+        available = [p for p in posts if p.url and p.url not in used_urls]
+        matched = rank_related(
+            current_title, available, self._post_cats, self._current_cat
+        )[:count]
         if len(matched) < count:
             logger.info(
                 "[INTERNAL_LINK] 서론 링크 %d/%d — 관련 글이 부족해 "
                 "채우지 않음(무관한 링크 방지)",
                 len(matched), count,
             )
-        else:
-            logger.debug(
-                f"[INTERNAL_LINK] 서론 키워드매칭={len(scored)} (fallback 불필요)"
-            )
-
         return matched
 
     def _filter_related(
         self,
         current_title: str,
         posts: List[CrawledPost],
-        sim_service: SimilarityService,
+        sim_service: Optional[SimilarityService] = None,
     ) -> List[CrawledPost]:
-        """현재 글과 **주제가 닿는** 글만 남긴다.
+        """현재 글과 **주제가 닿는** 글만 점수순으로 남긴다(결론 링크용).
 
-        결론 링크는 유사도 순으로 줄세우지 않는다(미색인 글을 밀어 주는
-        것이 목적이라 무작위성이 필요하다). 대신 공통 키워드가 하나도 없는
-        글은 뺀다 — 개수를 채우려고 무관한 글을 끌어오면 독자에게도
-        검색엔진에도 손해다.
-
-        현재 글에서 키워드를 못 뽑으면 거르지 않는다. 판단 근거가 없는데
-        막으면 결론 링크가 통째로 사라진다.
+        서론과 같은 기준(같은 topic 우선 + 공통 의미토큰 2개 이상).
+        현재 글에서 토큰을 충분히 못 뽑으면 **빈 목록** — 판단 근거 없이
+        아무 글이나 붙이지 않는다(2026-09-29 변경).
         """
-        target_kw = self._extract_keywords(current_title, sim_service)
-        if not target_kw:
-            return list(posts)
-
-        out = []
-        for post in posts:
-            if not post.title:
-                continue
-            if target_kw & self._extract_keywords(post.title, sim_service):
-                out.append(post)
-        return out
+        return rank_related(
+            current_title, posts, self._post_cats, self._current_cat
+        )
 
     def _find_best_match_for_section(
         self,
@@ -336,23 +341,10 @@ class InternalLinker:
         sim_service: SimilarityService,
     ) -> Optional[CrawledPost]:
         """섹션 제목과 가장 유사한 포스트 1개 반환 (threshold 이상만)"""
-        best_post = None
-        best_score = 0.0
-
-        for post in posts:
-            score = sim_service.calculate_text_similarity(
-                section_title, post.title
-            )
-            if score >= sim_service.threshold and score > best_score:
-                best_score = score
-                best_post = post
-
-        if best_post:
-            logger.debug(
-                f"[INTERNAL_LINK] 섹션 매칭: '{section_title[:20]}' "
-                f"→ '{best_post.title[:20]}' (score={best_score:.1f})"
-            )
-        return best_post
+        matched = self._find_similar_by_score(
+            section_title, posts, sim_service, limit=1
+        )
+        return matched[0] if matched else None
 
     # ── 헤딩 추출 ──────────────────────────────────
 
