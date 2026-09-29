@@ -68,3 +68,29 @@ async def inside_filter(db: AsyncSession,
         logger.debug("[BLOG_SCOPE] blog_id=%s 활성 카테고리 없음", blog_id)
         return None
     return inside(subs, topics)
+
+
+def title_inside(subtopic_ids: Set[int], topic_only_ids: Set[int],
+                 topic_id: Optional[int],
+                 subtopic_id: Optional[int]) -> bool:
+    """제목 하나가 카테고리 안인지. `inside()` 와 같은 규칙의 파이썬 판정.
+
+    카테고리가 없는 블로그는 제한 없음(True). 카테고리가 있으면 미분류
+    제목(topic·subtopic 모두 없음)은 밖이다 — 목록 필터와 같다.
+    """
+    if not subtopic_ids and not topic_only_ids:
+        return True
+    if subtopic_id is not None and subtopic_id in subtopic_ids:
+        return True
+    return topic_id is not None and topic_id in topic_only_ids
+
+
+async def title_in_scope(db: AsyncSession, blog_id: int,
+                         title: MainTitle) -> bool:
+    """자동 생성 관문 — 이 제목을 이 블로그에 써도 되는가.
+
+    순서도: docs/flowcharts/blog_category_scope.md (자동 생성 관문)
+    """
+    subs, topics = await category_sets(db, blog_id)
+    return title_inside(subs, topics, getattr(title, "topic_id", None),
+                        getattr(title, "subtopic_id", None))
