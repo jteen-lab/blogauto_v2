@@ -14,6 +14,7 @@
 설계: docs/plans/adsense_required_pages_module_plan.md,
 docs/flowcharts/adsense_required_pages_module.md
 """
+import html as html_lib
 import re
 from datetime import date
 from typing import Any, Dict, List, Optional, Tuple
@@ -259,6 +260,71 @@ def _author_block(profile: Dict[str, Any]) -> str:
     return block
 
 
+ABOUT_BODY_MAX_LEN = 5000
+
+# 문단 전체가 블록 토큰이면 <p>로 감싸지 않는다(블록 HTML 중첩 방지).
+_BLOCK_TOKEN_RE = re.compile(r"^\{\{\s*(contact|author_block)\s*\}\}$")
+
+
+def about_body_to_html(text: str) -> str:
+    """블로그별 소개 본문(author_profile.about_body)을 HTML로 변환.
+
+    ``<``로 시작하면 운영자가 쓴 HTML로 보고 그대로 둔다. 평문이면 HTML
+    이스케이프 후 빈 줄=문단, ``- ``=목록, ``## ``=소제목(h3)으로 바꾼다.
+    {{토큰}}은 이스케이프 영향이 없어 이후 render_tokens에서 치환된다.
+    """
+    text = (text or "").strip()
+    if not text:
+        return ""
+    if text.startswith("<"):
+        return text
+    parts: List[str] = []
+    for block in re.split(r"\n\s*\n", text.replace("\r\n", "\n")):
+        lines = [ln.strip() for ln in block.split("\n") if ln.strip()]
+        para: List[str] = []
+        items: List[str] = []
+
+        def flush_para() -> None:
+            if para:
+                joined = "<br>".join(para)
+                parts.append(joined if _BLOCK_TOKEN_RE.match(joined) else f"<p>{joined}</p>")
+                para.clear()
+
+        def flush_items() -> None:
+            if items:
+                parts.append("<ul>" + "".join(f"<li>{i}</li>" for i in items) + "</ul>")
+                items.clear()
+
+        for line in lines:
+            if line.startswith("## "):
+                flush_para()
+                flush_items()
+                parts.append(f"<h3>{html_lib.escape(line[3:].strip())}</h3>")
+            elif line.startswith("- "):
+                flush_para()
+                items.append(html_lib.escape(line[2:].strip()))
+            else:
+                flush_items()
+                para.append(html_lib.escape(line))
+        flush_para()
+        flush_items()
+    return "\n".join(parts)
+
+
+def _about_body_from_profile(profile: Dict[str, Any]) -> str:
+    """author_profile.about_body → 소개 페이지 body(비었으면 빈 문자열).
+
+    문의 링크가 사라지지 않도록 ``{{contact}}``가 없으면 문의 섹션을 덧붙인다.
+    """
+    raw = profile.get("about_body")
+    if not isinstance(raw, str) or not raw.strip():
+        return ""
+    body = about_body_to_html(raw[:ABOUT_BODY_MAX_LEN])
+    if "{{contact}}" not in body:
+        body += "\n<h3>문의</h3>\n{{contact}}"
+    return body
+
+
 # "블로그이름은(는)" 처럼 남는 기계적 조사 표기 → 앞말 받침에 맞춰 하나만 남긴다.
 _JOSA_PAIRS = {
     "은": "는", "는": "은", "이": "가", "가": "이", "을": "를", "를": "을",
@@ -328,6 +394,8 @@ def build_required_pages(
         owner_email: contact_form_url 미설정 시 문의 채널에 노출할 이메일
         preset_code: 문체 프리셋 코드(없으면 표준)
         overrides: {page_type: 편집된 body} — 있으면 프리셋 본문 대신 사용
+            (모듈 설정이라 여러 블로그 공유). 소개 페이지는 블로그별
+            author_profile.about_body가 있으면 그것이 최우선.
 
     Returns:
         {page_type: (title, html)} — page_type은 REQUIRED_PAGE_TYPES 값
@@ -346,12 +414,18 @@ def build_required_pages(
     ctx["author_block"] = _author_block(profile)
 
     preset = get_preset(preset_code)
+    about_body = _about_body_from_profile(profile)
     pages: Dict[str, Tuple[str, str]] = {}
     for page_type in REQUIRED_PAGE_TYPES:
         # 문의 페이지에서만 폼을 바로 노출하고, 나머지는 바로가기 링크만 둔다.
         ctx["contact"] = _contact_section(ctx, embed=(page_type == "contact"))
         spec = preset["pages"][page_type]
-        body_src = overrides.get(page_type) or spec["body"]
+        # 우선순위: (소개) 블로그별 about_body > 모듈 overrides > 프리셋
+        body_src = (
+            (about_body if page_type == "about" else "")
+            or overrides.get(page_type)
+            or spec["body"]
+        )
         title = render_tokens(spec["title"], ctx)
         html = render_tokens(body_src, ctx).strip()
         pages[page_type] = (title, html)
