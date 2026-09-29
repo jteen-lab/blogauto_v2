@@ -243,7 +243,8 @@ class WorkbenchRunner:
                            user_id=module.user_id,
                            settings=_attach_q(settings, asked))
             summary = await executor.execute_for_blog(
-                probe, blog, force=True, force_title_id=fid)
+                probe, blog, force=True, force_title_id=fid,
+                scope_gate=False)
             summaries.append(summary)
             items.append(await self._post_item(rs, summary))
 
