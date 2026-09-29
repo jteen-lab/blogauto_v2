@@ -64,9 +64,8 @@ class TestBothLinksAgree:
 class TestConclusionRelatedness:
     """결론 링크가 관련 없는 글을 끌어오던 자리.
 
-    결론 링크는 유사도 순으로 줄세우지 않는다 — 미색인 글을 밀어 주는
-    것이 목적이라 무작위성이 필요하다. 하지만 **아무 글이나 붙이면**
-    홈트 글 끝에 '일본여행 환전' 이 온다. 개수를 채우려고 무관한 글을
+    2026-09-29: 무작위 셔플을 없애고 점수순(공통 의미토큰 2개 이상)으로
+    바꿨다. **아무 글이나 붙이면** 홈트 글 끝에 '일본여행 환전' 이 온다. 개수를 채우려고 무관한 글을
     끌어오면 독자에게도 검색엔진에도 손해다.
     """
 
@@ -91,18 +90,18 @@ class TestConclusionRelatedness:
                 for i, t in enumerate(titles)]
 
     def test_unrelated_posts_dropped(self):
-        posts = self._posts("홈트레이닝 초보 루틴 정리",
+        posts = self._posts("홈트레이닝 어깨 루틴 정리",
                             "일본여행 환전 수수료 비교")
         kept = self._linker()._filter_related(
             "홈트레이닝 어깨 운동 방법", posts, self._sim())
         titles = [p.title for p in kept]
-        assert "홈트레이닝 초보 루틴 정리" in titles
+        assert "홈트레이닝 어깨 루틴 정리" in titles
         assert "일본여행 환전 수수료 비교" not in titles
 
-    def test_no_keywords_keeps_everything(self):
-        """판단 근거가 없는데 막으면 결론 링크가 통째로 사라진다."""
+    def test_no_keywords_links_nothing(self):
+        """판단 근거가 없으면 아무 글이나 붙이지 않는다(2026-09-29)."""
         posts = self._posts("아무 글", "다른 글")
-        assert len(self._linker()._filter_related("", posts, self._sim())) == 2
+        assert self._linker()._filter_related("", posts, self._sim()) == []
 
     def test_shortage_is_not_padded(self):
         """관련 글이 2개뿐이면 2개만 넣는다."""
@@ -112,15 +111,15 @@ class TestConclusionRelatedness:
         assert "_filter_related(current_title, remaining, sim_service)" in src
         assert "결론 링크 %d/%d — 관련 글이 부족해" in src
 
-    def test_index_priority_kept(self):
-        """미색인 글 밀어주기(S7)는 유지한다."""
+    def test_index_priority_kept_without_shuffle(self):
+        """미색인 글 밀어주기(S7)는 유지, 무작위 셔플은 제거."""
         src = (__import__("pathlib").Path(__file__).resolve().parents[2]
                / "app/services/generation/internal_linker.py").read_text(
             encoding="utf-8")
         block = src[src.index("# 3. 결론 뒤 링크 삽입"):
                     src.index("link_count = len(used_urls)")]
         assert "prioritize_by_index" in block
-        assert "random.shuffle(related)" in block
+        assert "random.shuffle" not in block
 
     def test_intro_shortage_already_handled(self):
         """서론은 2026-08-30 에 이미 fallback 을 없앴다."""
