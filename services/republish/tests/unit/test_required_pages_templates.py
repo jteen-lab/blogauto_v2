@@ -75,3 +75,70 @@ def test_required_pages_use_stable_phrase_variant_per_blog():
     _, html_first = build_required_pages(blog, "owner@example.com")["privacy"]
     _, html_second = build_required_pages(blog, "owner@example.com")["privacy"]
     assert html_first == html_second
+
+
+# ---------------------------------------------------------------------------
+# 블로그별 소개 본문 (author_profile.about_body)
+# ---------------------------------------------------------------------------
+from app.services.publishing.required_pages_templates import about_body_to_html  # noqa: E402
+
+
+def test_about_body_takes_priority_over_overrides_and_preset():
+    blog = _make_blog(author_profile={"about_body": "블로그별 소개입니다."})
+    _, html = build_required_pages(
+        blog, "owner@example.com", overrides={"about": "<p>공통 소개</p>"},
+    )["about"]
+    assert "블로그별 소개입니다." in html
+    assert "공통 소개" not in html
+
+
+def test_empty_about_body_falls_back_to_overrides_then_preset():
+    blog = _make_blog(author_profile={"about_body": "   "})
+    _, html = build_required_pages(
+        blog, "owner@example.com", overrides={"about": "<p>공통 소개</p>"},
+    )["about"]
+    assert "공통 소개" in html
+    _, html2 = build_required_pages(blog, "owner@example.com")["about"]
+    assert "방문자에게 유용한 정보" in html2
+
+
+def test_about_body_does_not_affect_other_pages_and_title_kept():
+    blog = _make_blog(author_profile={"about_body": "소개 본문"})
+    pages = build_required_pages(blog, "owner@example.com")
+    assert pages["about"][0] == "테스트블로그 소개"
+    assert "소개 본문" not in pages["contact"][1]
+
+
+def test_about_body_plain_text_conversion():
+    out = about_body_to_html(
+        "## 운영 목적\n첫 줄 <b>강조</b>\n둘째 줄\n\n- 항목1\n- 항목2\n\n마지막 문단"
+    )
+    assert "<h3>운영 목적</h3>" in out
+    assert "<p>첫 줄 &lt;b&gt;강조&lt;/b&gt;<br>둘째 줄</p>" in out
+    assert "<ul><li>항목1</li><li>항목2</li></ul>" in out
+    assert "<p>마지막 문단</p>" in out
+    assert "<b>" not in out
+
+
+def test_about_body_html_kept_as_is():
+    assert about_body_to_html("<p>직접 <b>HTML</b></p>") == "<p>직접 <b>HTML</b></p>"
+
+
+def test_about_body_contact_section_appended_and_tokens_rendered():
+    blog = _make_blog(author_profile={
+        "about_body": "{{blog_name}}에 오신 것을 환영합니다.",
+        "contact_form_url": "https://tally.so/r/abc",
+    })
+    _, html = build_required_pages(blog, "owner@example.com")["about"]
+    assert "테스트블로그에 오신 것을 환영합니다." in html
+    assert "<h3>문의</h3>" in html
+    assert "https://tally.so/r/abc" in html
+    assert "<iframe" not in html  # 소개 페이지는 링크만
+
+
+def test_about_body_with_contact_token_not_duplicated():
+    blog = _make_blog(author_profile={"about_body": "소개\n\n{{contact}}"})
+    _, html = build_required_pages(blog, "owner@example.com")["about"]
+    assert html.count("owner@example.com") == 2  # mailto href + 텍스트 1세트
+    assert "<h3>문의</h3>" not in html
+    assert "<p><p>" not in html
