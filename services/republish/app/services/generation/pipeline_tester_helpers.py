@@ -79,6 +79,10 @@ async def call_ai_generate(
     ).replace(
         "{keywords}", keywords_text or ""
     )
+    # 경험 서술 규칙 — 실제 생성(content_generator_helper)과 같이 맨 끝에 붙인다
+    from ..prompt_builder.experience_rules import append_block as _exp_rules
+
+    full_prompt = _exp_rules(full_prompt, title, [category_name])
     provider = writing_ai.get("provider")
     model = writing_ai.get("model")
     temperature = cg.get("temperature", 0.7)
