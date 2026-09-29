@@ -42,6 +42,7 @@ class FlowGenerateExecutor:
         stage_params: Optional[StageParams] = None,
         force: bool = False,
         force_title_id: int = 0,
+        scope_gate: bool = True,
     ) -> Dict[str, Any]:
         """
         단일 블로그에 대해 생성 모듈 실행
@@ -54,6 +55,7 @@ class FlowGenerateExecutor:
             force_title_id: 디스패치 시 결정된 MainTitle.id. 0이 아니면
                             random 선택을 우회하고 이 ID를 강제 사용한다.
                             큐 등록 → 워커 흐름의 결정성을 보장한다.
+            scope_gate: False면 블로그 카테고리 관문을 건너뛴다(작업대 전용).
 
         Returns:
             dict: 실행 결과
@@ -233,12 +235,18 @@ class FlowGenerateExecutor:
                         "threshold": check_result.threshold,
                     }
 
+            # 2.4 블로그 카테고리 관문 — 순서도: blog_category_scope.md
+            title = await self._load_title(locals().get("title"), title_id)
+            if scope_gate and not await self._in_blog_scope(blog, title):
+                msg = f"카테고리 밖 제목(id={title_id}) - 생성 건너뜀"
+                return {"success": True, "message": msg, "skipped": True}
+
             # 2.5 프롬프트 로테이션 — 같은 블로그·같은 니치라도 글마다
             # 구조를 바꾼다. 한 구조로 계속 나가면 패턴이 보인다.
             # 제목이 정해진 뒤라야 주제·키워드별 고정 모드를 쓸 수 있다.
             # 승인용 프롬프트가 걸린 상태면 그쪽이 이긴다 — 승인이 더 급하다.
             module_settings = self._apply_rotation(
-                module_settings, blog, locals().get("title"), title_id,
+                module_settings, blog, title, title_id,
             )
 
             # 3. ContentGenerator로 글 생성
@@ -299,6 +307,24 @@ class FlowGenerateExecutor:
                 "message": msg,
                 "error": str(e),
             }
+
+    async def _load_title(self, title, title_id: int):
+        """확정된 제목 객체. 자동 경로는 id 만 있어 여기서 읽는다."""
+        if title is not None or not title_id:
+            return title
+        from app.models.title import MainTitle
+        return await self.db.get(MainTitle, title_id)
+
+    async def _in_blog_scope(self, blog, title) -> bool:
+        """카테고리 있는 블로그는 그 안의 제목만 쓴다(미분류는 밖)."""
+        from ..titles.blog_scope import title_in_scope
+        if title is None or await title_in_scope(self.db, blog.id, title):
+            return True
+        logger.info(
+            "[FLOW_GEN] 카테고리 밖 제목 건너뜀 | blog=%s | title_id=%s | "
+            "topic=%s sub=%s | '%s'", blog.id, title.id, title.topic_id,
+            title.subtopic_id, (title.title or "")[:30])
+        return False
 
     def _apply_rotation(self, module_settings: dict, blog,
                         title, title_id: int = 0) -> dict:
