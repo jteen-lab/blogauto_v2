@@ -55,6 +55,8 @@ class ReferenceCollectionResult:
     # 제목의 회사가 금감원 공시 목록에 있나 (True/False/None 모름)
     company_known: Optional[bool] = None
     company_note: str = ""
+    # 글 끝 '참고 자료'·건강 규칙 지시문(공식 출처만). health_sources 참조
+    citation: str = ""
 
     def evidence_documents(self) -> List[Any]:
         """근거 판정에 쓸 자료 목록.
@@ -97,9 +99,9 @@ class ReferenceCollectionResult:
                 "[참고 자료]\n"
                 "아래는 이 제목으로 검색해 모은 자료입니다. 사실·수치·최신 "
                 "정보는 여기서 가져오되 문장을 그대로 옮기지 마세요.\n"
-                "여기에 없는 수치를 지어내지 말고, 출처 URL 은 본문에 쓰지 "
-                "마세요.\n\n" + "\n\n".join(parts))
-
+                "여기에 없는 수치를 지어내지 말고, 블로그·카페 등 일반 "
+                "문서의 URL 은 본문에 쓰지 마세요.\n\n" + "\n\n".join(parts))
+        blocks.append(self.citation)
         return "\n\n".join(b for b in blocks if b)
 
 
@@ -243,13 +245,20 @@ class ReferenceCollector:
         ref.total_searched = len(search_results)
         if sheet is not None:
             trace["checklist"] = sheet.to_dict()
+        from ..reference import health_sources as hs  # 건강형 = 공식 출처 우선
+
+        health = hs.is_health_topic(await self._topics_of(title or query),
+                                    title or query)
+        search_results = await hs.augment(search_service, query,
+                                          search_results, health)
 
         # ② 관문 1 — 제목·설명에 개체가 없는 결과를 뺀다(크롤링 전이라 공짜)
         before = len(search_results)
         search_results = relevance.filter_search_results(
             search_results, entities)
         # ⑤ 최신성 — 새 문서를 앞으로. 금리·제도는 오래된 값이 틀린 값이다
-        search_results = relevance.sort_by_freshness(search_results)
+        search_results = hs.boost_official(
+            relevance.sort_by_freshness(search_results))
         trace["gate1"] = relevance.report(before, len(search_results), "관문1")
         postdates = {r.link: (getattr(r, "postdate", "") or "")
                      for r in search_results if getattr(r, "link", "")}
@@ -285,7 +294,7 @@ class ReferenceCollector:
         # ④ 통합 요약 — 제목과 함께 한 번에 읽는다. 문서별로 따로 물으면
         #    문서의 주된 내용이 요약되고 우리가 필요한 부분은 빠진다.
         #    (AI 호출도 3회 → 1회로 준다)
-        picked = documents[:max(1, summary_count)]
+        picked = hs.boost_official(documents)[:max(1, summary_count)]
         digest_text, digest_sources = "", []
         if summary_method == "ai":
             from ..reference.digest import summarize as digest_summarize
@@ -360,6 +369,7 @@ class ReferenceCollector:
             reference_id=ref.id,
             digest=digest_text,
             official=official,
+            citation=hs.citation_block(hs.official_refs(picked), health),
             trace=trace,
         )
 
