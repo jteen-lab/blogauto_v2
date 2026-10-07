@@ -40,7 +40,8 @@ def test_loan_products_blocked():
 def test_loan_words_that_are_not_products():
     for t in ("햇살론 신청 조건과 한도 정리", "보금자리론 금리 2026",
               "토론 잘하는 법 정리", "결론부터 말하는 글쓰기", "대부분의 사람이 모르는 절약 팁",
-              "청년 전세대출 조건 정리"):
+              "청년 전세대출 조건 정리", "토큰 증권(STO) vs 회사채 투자 수익률",
+              "하나 저축은행 정기예금 금리 정리"):
         assert _code(t) is None, t
 
 
@@ -52,6 +53,10 @@ def test_out_of_season_skipped_not_archived():
     assert _code("김장 김치 황금 레시피") is None                     # 10월은 김장철
     assert _code("수박 고르는 법", OCT) == "제철아님"
     assert _code("방어운전 요령 정리") is None
+    for t in ("실손보험 중복가입 확인방법", "엑셀 중복값 제외 개수 세는 법", "고추냉이 와사비 차이",
+              "제천 여행 심신을 달래줄 맛집", "복숭아뼈 부음의 원인", "개복숭아 효소 효능",
+              "옥수수 삶는 방법", "양양 하조대 해수욕장 펜션"):
+        assert _code(t) is None, t
 
 
 def test_normal_titles_pass():
