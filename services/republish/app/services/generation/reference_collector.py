@@ -57,6 +57,8 @@ class ReferenceCollectionResult:
     company_note: str = ""
     # 글 끝 '참고 자료'·건강 규칙 지시문(공식 출처만). health_sources 참조
     citation: str = ""
+    health: bool = False      # 건강형 판정(health_sources.is_health_topic)
+    official_refs: int = 0    # 인용 가능한 공식 출처 수 — 건강형인데 0이면 보류
 
     def evidence_documents(self) -> List[Any]:
         """근거 판정에 쓸 자료 목록.
@@ -336,13 +338,9 @@ class ReferenceCollector:
 
         # 결과 저장
         ref.selected_references = [
-            {
-                "url": s.url,
-                "title": s.title,
-                "summary": s.summary,
-                "original_length": s.original_length,
-                "is_ai_summary": s.is_ai_summary,
-            }
+            {"url": s.url, "title": s.title, "summary": s.summary,
+             "original_length": s.original_length,
+             "is_ai_summary": s.is_ai_summary}
             for s in summaries
         ]
         ref.status = "completed"
@@ -369,7 +367,8 @@ class ReferenceCollector:
             reference_id=ref.id,
             digest=digest_text,
             official=official,
-            citation=hs.citation_block(hs.official_refs(picked), health),
+            citation=hs.citation_block((refs := hs.official_refs(picked)), health),
+            health=health, official_refs=len(refs),
             trace=trace,
         )
 
