@@ -300,6 +300,14 @@ class ContentGenerator:
                 error=f"근거 부족으로 보류: {evidence.summary()}",
                 warnings=[f"보류 {source_title.hold_count}회차"],
             )
+        from .health_hold import hold_if_unsourced
+        unsourced = await hold_if_unsourced(
+            self.db, source_title, ref_result, working_title)
+        if unsourced:
+            return GenerationResult(
+                success=False, generation_time_seconds=int(time.time() - start_time),
+                error=f"근거 부족으로 보류: {unsourced}",
+                warnings=[f"보류 {source_title.hold_count}회차"])
         if source_title.keywords:
             # 수동 입력된 키워드 우선 (POST /titles 로 만든 케이스)
             try:
