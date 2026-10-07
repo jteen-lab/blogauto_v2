@@ -10,21 +10,27 @@
 """
 from __future__ import annotations
 
-import logging
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 from urllib.parse import urlparse
 
-logger = logging.getLogger(__name__)
+from ...core.logger import get_logger
+
+# app.log 에 남긴다. 표준 로거로 두었더니 [HEALTH_SRC] 가 어느 로그 파일에도
+# 안 남아 '카무트'(10/5) 글에 참고 자료가 왜 없는지 확인할 수 없었다.
+logger = get_logger("health_sources", "app.log")
 
 # 건강형 주제 판정 — 주제/하위주제 이름에 이 낱말이 있으면 건강형이다.
 # (수작남: 건강/의학=topic1, 비만/다이어트=sub18, 음식 효능=sub53,
 #  출산 준비=sub32, 육아팁=sub51). 목록을 바꾸려면 여기만 고친다.
+#  '부작용·주의'(레시피노트 카무트, 10/5)도 건강형이다.
 HEALTH_TOPIC_KEYWORDS: tuple = (
     "건강", "의학", "다이어트", "비만", "효능", "출산", "임신", "육아", "영양",
+    "부작용",
 )
 
 # 공식 출처를 겨냥한 추가 질의 꼬리말
-OFFICIAL_QUERY_SUFFIXES: tuple = ("질병관리청", "국가건강정보포털", "식약처")
+OFFICIAL_QUERY_SUFFIXES: tuple = ("질병관리청", "국가건강정보포털", "식약처",
+                                  "농촌진흥청")
 
 # 공식 출처 도메인 → 기관명. 하위 도메인까지 인정한다(예: health.kdca.go.kr).
 TRUSTED_HEALTH_DOMAINS: Dict[str, str] = {
@@ -43,6 +49,9 @@ TRUSTED_HEALTH_DOMAINS: Dict[str, str] = {
     "sev.iseverance.com": "세브란스병원",
     "samsunghospital.com": "삼성서울병원",
     "kams.or.kr": "대한의학회",
+    "nics.go.kr": "농촌진흥청 국립농업과학원(농식품올바로)",
+    "rda.go.kr": "농촌진흥청",
+    "cancer.go.kr": "국가암정보센터",
     "diabetes.or.kr": "대한당뇨병학회",
     "kosso.or.kr": "대한비만학회",
     "pediatrics.or.kr": "대한소아청소년과학회",
@@ -54,9 +63,13 @@ EXTRA_CAP = 10
 
 
 def is_health_topic(topic_names: Iterable[str], title: str = "") -> bool:
-    """주제·하위주제 이름(없으면 제목)에 건강형 낱말이 있나."""
+    """주제·하위주제 이름 **또는** 제목에 건강형 낱말이 있나.
+
+    예전에는 주제 이름이 있으면 제목을 보지 않았다 — '음식/레시피 >
+    부작용·주의' 에 속한 '카무트 효능과 부작용' 이 건강형에서 빠질 수 있었다.
+    """
     names = [n for n in (topic_names or []) if n]
-    text = " ".join(names) if names else (title or "")
+    text = " ".join(names + [title or ""])
     return any(k in text for k in HEALTH_TOPIC_KEYWORDS)
 
 
@@ -80,6 +93,17 @@ def is_official(url: str) -> bool:
     return official_org(url) is not None
 
 
+def is_homepage(url: str) -> bool:
+    """기관 첫 화면인가. 첫 화면은 근거가 아니다(카무트 검색이 돌려준 것은
+    health.kdca.go.kr/·foodsafetykorea.go.kr/ 같은 첫 화면뿐이었다)."""
+    try:
+        parsed = urlparse(url or "")
+    except ValueError:
+        return True
+    return parsed.path.strip("/") in ("", "index.do", "main.do", "index.jsp") \
+        and not parsed.query
+
+
 def _url_of(item: Any) -> str:
     return getattr(item, "link", "") or getattr(item, "url", "") or ""
 
@@ -99,7 +123,8 @@ async def official_search(search_service: Any, query: str) -> List[Any]:
         except Exception as e:  # noqa: BLE001 — 추가 검색 실패로 막지 않는다
             logger.warning("[HEALTH_SRC] 추가 검색 실패 | %s | %s", suffix, e)
             continue
-        found.extend(r for r in (rows or []) if is_official(_url_of(r)))
+        found.extend(r for r in (rows or []) if is_official(_url_of(r))
+                     and not is_homepage(_url_of(r)))
     return found[:EXTRA_CAP]
 
 
@@ -126,7 +151,7 @@ def official_refs(documents: Sequence[Any]) -> List[Dict[str, Any]]:
     for doc in documents:
         url = _url_of(doc)
         org = official_org(url)
-        if org:
+        if org and not is_homepage(url):
             refs.append({"org": org, "title": getattr(doc, "title", "") or "",
                          "url": url, "is_official": True})
     return refs
@@ -135,6 +160,8 @@ def official_refs(documents: Sequence[Any]) -> List[Dict[str, Any]]:
 def citation_block(refs: Sequence[Dict[str, Any]], health: bool) -> str:
     """글 끝 '참고 자료'·수치·면책 지시문. 비건강형은 공식 출처가 있을 때만."""
     lines: List[str] = []
+    if health:
+        logger.info("[HEALTH_SRC] 건강형 | 인용 가능한 공식 출처 %d건", len(refs))
     if refs:
         lines += ["[인용 가능한 공식 출처]"]
         lines += [f"- {r['org']} | {r['title'] or '(제목 없음)'} | {r['url']}"
