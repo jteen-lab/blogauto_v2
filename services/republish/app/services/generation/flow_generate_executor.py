@@ -240,6 +240,11 @@ class FlowGenerateExecutor:
             if scope_gate and not await self._in_blog_scope(blog, title):
                 msg = f"카테고리 밖 제목(id={title_id}) - 생성 건너뜀"
                 return {"success": True, "message": msg, "skipped": True}
+            # 2.45 제목 관문(위험·지난연도·대출·제철·타블로그 중복) — title_topic_gate.md
+            from . import topic_gate
+            blocked = scope_gate and await topic_gate.apply(self.db, blog, title)
+            if blocked:
+                return {"success": True, "skipped": True, "message": f"{blocked} - 생성 건너뜀"}
 
             # 2.5 프롬프트 로테이션 — 같은 블로그·같은 니치라도 글마다
             # 구조를 바꾼다. 한 구조로 계속 나가면 패턴이 보인다.
@@ -438,21 +443,14 @@ class FlowGenerateExecutor:
         if not categories:
             return "카테고리 미설정"
 
-        topic_ids = set()
-        subtopic_ids = set()
-        for cat in categories:
-            if cat.get("subtopic_id"):
-                subtopic_ids.add(cat["subtopic_id"])
-            if cat.get("topic_id"):
-                topic_ids.add(cat["topic_id"])
-
+        topic_ids = {c["topic_id"] for c in categories if c.get("topic_id")}
+        subtopic_ids = {c["subtopic_id"] for c in categories
+                        if c.get("subtopic_id")}
         parts = []
         if topic_ids:
             parts.append(f"topic:{','.join(map(str, sorted(topic_ids)))}")
         if subtopic_ids:
-            parts.append(
-                f"subtopic:{','.join(map(str, sorted(subtopic_ids)))}"
-            )
+            parts.append(f"subtopic:{','.join(map(str, sorted(subtopic_ids)))}")
         return "/".join(parts) if parts else "카테고리 미설정"
 
     async def execute_for_blogs(
