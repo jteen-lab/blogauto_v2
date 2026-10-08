@@ -458,6 +458,7 @@ class ContentGenerator:
             blog_id=blog_id,
             current_title=working_title,
             module_settings=settings,
+            source_title_id=source_title.id,
         )
 
         # 6. 치환 처리 (마크다운 → HTML → 치환)
