@@ -240,9 +240,10 @@ class FlowGenerateExecutor:
             if scope_gate and not await self._in_blog_scope(blog, title):
                 msg = f"카테고리 밖 제목(id={title_id}) - 생성 건너뜀"
                 return {"success": True, "message": msg, "skipped": True}
-            # 2.45 제목 관문(위험·지난연도·대출·제철·타블로그 중복) — title_topic_gate.md
-            from . import topic_gate
-            blocked = scope_gate and await topic_gate.apply(self.db, blog, title)
+            # 2.45 제목 관문(위험·지난연도·대출·제철·타블로그 중복·같은 블로그 비슷한 제목) — title_topic_gate.md
+            from . import same_blog_dedupe, topic_gate
+            blocked = scope_gate and (await topic_gate.apply(self.db, blog, title) or await same_blog_dedupe.apply(
+                self.db, blog, title, module_settings))
             if blocked:
                 return {"success": True, "skipped": True, "message": f"{blocked} - 생성 건너뜀"}
 
