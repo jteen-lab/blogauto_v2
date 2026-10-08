@@ -308,6 +308,15 @@ class ContentGenerator:
                 success=False, generation_time_seconds=int(time.time() - start_time),
                 error=f"근거 부족으로 보류: {unsourced}",
                 warnings=[f"보류 {source_title.hold_count}회차"])
+        # 모듈 스위치(reference.require_official)가 켜진 모듈만. 키 없으면 그대로.
+        from .official_hold import hold_if_no_official
+        no_official = await hold_if_no_official(
+            self.db, settings, source_title, ref_result, working_title, blog_id)
+        if no_official:
+            return GenerationResult(
+                success=False, generation_time_seconds=int(time.time() - start_time),
+                error=f"근거 부족으로 보류: {no_official}",
+                warnings=[f"보류 {source_title.hold_count}회차"])
         if source_title.keywords:
             # 수동 입력된 키워드 우선 (POST /titles 로 만든 케이스)
             try:
