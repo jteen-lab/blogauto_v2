@@ -52,6 +52,8 @@ STOPWORDS: frozenset = frozenset({
     "정보", "내용", "주의", "주의사항", "주의점", "필수", "핵심",
     "준비", "선택", "해결", "필요", "실제", "현실", "정확", "제대로",
     "올바른", "쉬운", "쉽게", "간단", "좋은", "나쁜", "the", "and",
+    # 채용·모집류(2026-10-08, 취업인포마스터: 무관 기관 글끼리 '채용·공고'로 이어짐)
+    "채용", "공고", "채용공고", "모집", "모집공고", "절차", "일정",
     "for", "how", "to", "of", "in",
 })
 
@@ -126,15 +128,15 @@ def restrict_by_category(
         current_cat: 현재 글의 (topic_id, subtopic_id)
 
     Returns:
-        같은 topic 글 목록. 현재 글 topic 이 없거나 같은 topic 글이
-        하나도 없으면 원래 목록 전체.
+        같은 topic 글 목록. 현재 글 topic 을 모르면 원래 목록 전체.
+        topic 을 아는데 같은 topic 글이 없으면 **빈 목록**(2026-10-08) —
+        예전에는 블로그 전체로 넓혀 무관한 글이 붙었다.
     """
     topic = current_cat[0] if current_cat else None
     if topic is None:
         return list(posts)
-    same = [p for p in posts
+    return [p for p in posts
             if post_cats.get(getattr(p, "id", None), (None, None))[0] == topic]
-    return same if same else list(posts)
 
 
 def rank_related(
