@@ -52,3 +52,18 @@ def test_failure_returns_content_unchanged():
     """링크 만들기가 실패해도 글은 그대로 나간다(링크 0개)."""
     out = asyncio.run(InternalLinker(_DB(boom=True)).insert_links("# 글\n본문", 17, "글", {}))
     assert out == "# 글\n본문"
+
+
+class _AllDB(_DB):
+    """execute 결과에 .all() 을 주는 가짜 세션(후보 로드용)."""
+
+    async def execute(self, q):
+        self.queries.append(str(q))
+        return type("R", (), {"all": lambda self: []})()
+
+
+def test_candidate_query_excludes_unpublished_without_model_attr():
+    """status 는 모델에 없는 DB 컬럼 — 속성으로 쓰면 예외로 모든 링크가 0개가 된다."""
+    db = _AllDB()
+    asyncio.run(InternalLinker(db)._load_blog_posts(17, "글"))
+    assert "unpublished" in db.queries[0]
