@@ -46,3 +46,21 @@ flowchart TD
   첫 화면만 돌려줬고, 본문에 '카무트'가 없어 관련성 관문에서 빠져 인용 후보 0건 → 규칙대로 '참고 자료'는
   안 붙었는데 글은 그대로 나가 출처 없는 수치가 실렸다. `[HEALTH_SRC]` 로그는 표준 로거라 app.log에 안 남았다(수정).
 - 예전 판정은 주제 이름이 있으면 제목을 보지 않아 '음식/레시피 > 부작용·주의' 제목이 빠질 수 있었다(수정).
+
+## 공식 출처 보류 — 모듈 스위치 (2026-10-08, 건강 글 보류 다음)
+
+취업인포마스터(블로그 17) 애드센스 '가치 없는 콘텐츠' 거절 재정비. 자격증·시험 글은 시행 기관 공고가 근거다.
+코드: `app/services/generation/official_hold.py`
+
+```mermaid
+flowchart TD
+    R[참조자료 수집 → 근거 등급 → 건강 글 보류 통과] --> S{모듈 settings.reference.require_official == true?}
+    S -- 아니오(키 없음 포함) --> W[글 생성 — 지금과 같은 경로]
+    S -- 예 --> K{참고 자료 문서 주소 중 공식 도메인<br/>official_domains, 기본 .go.kr·.or.kr·q-net·korcham·kuksiwon·dataq·kotsa·work24}
+    K -- 1건 이상 --> W2[글 생성 + app.log OFFICIAL_HOLD 통과]
+    K -- 0건 --> HOLD[보류: hold_count+1, hold_reason 기록<br/>'근거 부족으로 보류' 실패 → 워커가 다른 제목으로 재시도<br/>app.log OFFICIAL_HOLD 보류 blog=번호]
+```
+
+- 켠 모듈: 189(취업인포마스터)만. 다른 모듈은 키가 없어 판정 자체를 하지 않는다.
+- 도메인 일치: '.go.kr' 처럼 점으로 시작하면 접미사, 아니면 같은 호스트 또는 그 하위 도메인만.
+- 사흘 연속 보류면 마케팅에 알린다(제목 교체 또는 검색 보강 판단).
