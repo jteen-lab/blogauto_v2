@@ -103,8 +103,12 @@ class TestCategory:
     def test_no_category_falls_back_to_all(self):
         posts = [_post(1, "a"), _post(2, "b")]
         assert restrict_by_category(posts, {}, (None, None)) == posts
-        # 현재 topic 은 있지만 같은 topic 글이 없으면 전체
-        assert restrict_by_category(posts, {1: (5, None)}, (9, None)) == posts
+        # 현재 topic 은 있지만 같은 topic 글이 없으면 빈 목록(10/8 — 블로그 전체로 넓히지 않음)
+        assert restrict_by_category(posts, {1: (5, None)}, (9, None)) == []
+
+    def test_recruit_words_are_not_shared_meaning(self):
+        """'채용·공고'만 겹치는 무관 기관 글은 관련 글이 아니다(취업인포마스터 10/8)."""
+        assert shared_count("한국수출입은행 채용 공고 일정", "삼척시청 채용 공고 절차") == 0
 
 
 class TestZeroLink:
