@@ -54,3 +54,23 @@ flowchart TD
 - 신규: `link_relevance.py` (순수 함수: 토큰화·점수·카테고리 필터)
 - 수정: `internal_linker.py` (후보 로드·서론·결론·본문 매칭이 위 모듈 사용)
 - 무변경: `insert_links` 시그니처, 호출부(generator·renewal·pipeline_tester), 삽입 위치·마크업, DB 스키마
+
+## 주제 찾기 고침 (2026-10-08, 취업인포마스터 재정비 3단계 10)
+
+```mermaid
+flowchart TD
+    A[insert_links 호출] --> T{현재 글 주제}
+    T -- 리뉴얼: category 넘겨받음 --> C[(topic, subtopic)]
+    T -- 생성: source_title_id --> C2[원래 정식제목 번호의 topic/subtopic]
+    T -- 둘 다 없음 --> C3[같은 제목 MainTitle — 예전 방식]
+    C & C2 & C3 --> P[후보 = 같은 블로그 URL 있는 글<br/>정리로 초안·비공개된 글 status=unpublished 제외]
+    P --> R{현재 topic 을 아나?}
+    R -- 예 --> S[같은 topic 글만 — 없으면 0개<br/>서론·본문·결론 모두]
+    R -- 아니오 --> S2[전체 후보 — 관련성 토큰 기준만]
+    S & S2 --> L[공통 의미토큰 2개↑ 서론·결론 / 본문은 섹션 제목 유사도]
+    L --> E[삽입. 어느 단계든 예외면 링크 0개로 글은 그대로 진행]
+```
+
+- 예전: 재조합된 제목으로 MainTitle 을 찾다 못 찾아 (None, None) → 블로그 전체가 후보. 같은 topic 글이 없을 때도 전체로 넓혔다.
+- 불용어 추가: 채용·공고·채용공고·모집·모집공고·절차·일정(무관 기관 글끼리 이어지던 원인).
+- 배포 전 모의(블로그별 최근 50편): 링크 0개 글 증가 최대 +20%p(머니조아) — 멈춤 기준 50%p 미만.
