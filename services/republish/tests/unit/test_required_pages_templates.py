@@ -142,3 +142,11 @@ def test_about_body_with_contact_token_not_duplicated():
     assert html.count("owner@example.com") == 2  # mailto href + 텍스트 1세트
     assert "<h3>문의</h3>" not in html
     assert "<p><p>" not in html
+
+
+def test_about_does_not_claim_operator_review():
+    """소개 틀은 사실대로 — '운영자 검수를 거쳐 발행' 같은 확인 안 된 주장 금지(10/8)."""
+    from app.services.publishing.required_pages_templates import PRESETS
+    for preset in PRESETS:
+        about = preset["pages"]["about"]["body"]
+        assert "검수" not in about
