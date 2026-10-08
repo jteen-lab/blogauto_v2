@@ -123,6 +123,7 @@ class RenewalGenerator:
             blog_id=blog.id,
             current_title=working_title,
             module_settings=settings,
+            category=(topic_id, subtopic_id),
         )
         final_html = await self.gen.substitution_processor.process(
             content=content_with_links,
