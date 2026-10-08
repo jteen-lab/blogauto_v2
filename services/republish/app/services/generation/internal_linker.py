@@ -18,7 +18,7 @@ import re
 import sys
 from typing import Dict, List, Optional, Tuple
 
-from sqlalchemy import or_, select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...models.blog import Blog
@@ -46,6 +46,8 @@ DEFAULT_INTRO_LINK_COUNT = 2
 DEFAULT_CONCLUSION_LINK_COUNT = 3
 DEFAULT_SIMILARITY_THRESHOLD = 75
 MAX_INTRO_LINKS = 5
+# 정리로 초안·비공개로 돌린 글(10/7·10/8). status 는 DB 에만 있고 모델에 없다.
+NOT_UNPUBLISHED = text("coalesce(crawled_posts.status, '') <> 'unpublished'")
 
 
 class InternalLinker:
@@ -255,8 +257,7 @@ class InternalLinker:
                 ~CrawledPost.url.startswith("https://pending-content"),
                 CrawledPost.title != current_title,
                 # 정리로 비공개·초안으로 돌린 글(10/7·10/8)은 링크하지 않는다
-                or_(CrawledPost.status.is_(None),
-                    CrawledPost.status != "unpublished"),
+                NOT_UNPUBLISHED,
             )
         )
         result = await self.db.execute(query)
