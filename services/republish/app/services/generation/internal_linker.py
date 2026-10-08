@@ -18,7 +18,7 @@ import re
 import sys
 from typing import Dict, List, Optional, Tuple
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...models.blog import Blog
@@ -35,7 +35,7 @@ for _path in _shared_paths:
 from services.similarity_service import SimilarityService
 
 from .index_priority import prioritize as prioritize_by_index
-from .link_relevance import rank_related, tokenize
+from .link_relevance import rank_related, restrict_by_category, tokenize
 
 logger = logging.getLogger(__name__)
 
@@ -69,19 +69,42 @@ class InternalLinker:
         blog_id: int,
         current_title: str,
         module_settings: Optional[dict] = None,
+        source_title_id: Optional[int] = None,
+        category: Optional[Tuple[Optional[int], Optional[int]]] = None,
     ) -> str:
         """
-        마크다운 글에 내부링크 삽입
+        마크다운 글에 내부링크 삽입. 실패해도 글 생성은 막지 않는다(링크 0개).
 
         Args:
             content: 마크다운 글 본문
             blog_id: 블로그 ID
             current_title: 현재 글 제목 (중복 방지)
             module_settings: 모듈 설정 (Module.settings)
+            source_title_id: 원래 정식제목 번호 — 이 제목의 topic/subtopic 으로
+                주제를 찾는다(재조합 제목으로는 못 찾아 블로그 전체가 후보가 됐다)
+            category: (topic_id, subtopic_id) 를 이미 알면 그대로 쓴다(리뉴얼)
 
         Returns:
             내부링크가 삽입된 마크다운 글
         """
+        try:
+            return await self._insert_links(
+                content, blog_id, current_title, module_settings,
+                source_title_id, category)
+        except Exception as e:  # noqa: BLE001 — 링크 실패가 생성 실패로 번지지 않게
+            logger.warning(f"[INTERNAL_LINK] 삽입 실패 → 링크 0개로 진행: {e}")
+            return content
+
+    async def _insert_links(
+        self,
+        content: str,
+        blog_id: int,
+        current_title: str,
+        module_settings: Optional[dict],
+        source_title_id: Optional[int],
+        category: Optional[Tuple[Optional[int], Optional[int]]],
+    ) -> str:
+        """insert_links 본체(설정 읽기 → 후보 로드 → 서론·본문·결론 삽입)."""
         blog = await self.db.get(Blog, blog_id)
         if not blog:
             logger.warning(f"[INTERNAL_LINK] 블로그 없음: id={blog_id}")
@@ -136,7 +159,8 @@ class InternalLinker:
         if not all_posts:
             logger.info("[INTERNAL_LINK] 삽입 가능한 포스트 없음")
             return content
-        self._current_cat = await self._load_current_category(current_title)
+        self._current_cat = await self._load_current_category(
+            current_title, source_title_id, category)
 
         used_urls: set = set()
 
@@ -183,17 +207,25 @@ class InternalLinker:
     # ── 포스트 검색 ──────────────────────────────────
 
     async def _load_current_category(
-        self, current_title: str
+        self,
+        current_title: str,
+        source_title_id: Optional[int] = None,
+        category: Optional[Tuple[Optional[int], Optional[int]]] = None,
     ) -> Tuple[Optional[int], Optional[int]]:
-        """현재 글 제목과 같은 MainTitle 의 (topic_id, subtopic_id).
+        """현재 글의 (topic_id, subtopic_id).
 
-        못 찾거나 조회에 실패하면 (None, None) — 카테고리 제한 없이 전체
-        후보로 폴백한다(관련성 토큰 기준은 그대로 적용).
+        순서: 넘겨받은 category → 원래 정식제목 번호(source_title_id) →
+        제목이 같은 MainTitle. 못 찾거나 조회에 실패하면 (None, None) —
+        카테고리 제한 없이 전체 후보(관련성 토큰 기준은 그대로 적용).
         """
+        if category and category[0] is not None:
+            return (category[0], category[1])
+        cond = (MainTitle.id == source_title_id if source_title_id
+                else MainTitle.title == current_title)
         try:
             row = (await self.db.execute(
                 select(MainTitle.topic_id, MainTitle.subtopic_id)
-                .where(MainTitle.title == current_title)
+                .where(cond)
                 .limit(1)
             )).first()
         except Exception as e:  # noqa: BLE001 — 링크 삽입을 막지 않는다
@@ -222,6 +254,9 @@ class InternalLinker:
                 CrawledPost.url != "",
                 ~CrawledPost.url.startswith("https://pending-content"),
                 CrawledPost.title != current_title,
+                # 정리로 비공개·초안으로 돌린 글(10/7·10/8)은 링크하지 않는다
+                or_(CrawledPost.status.is_(None),
+                    CrawledPost.status != "unpublished"),
             )
         )
         result = await self.db.execute(query)
@@ -480,10 +515,9 @@ class InternalLinker:
         for i, head in enumerate(body_heads):
             section_title = head.group(2).strip()
             next_start = section_heads[i + 1].start()
-            available = [
-                p for p in all_posts
-                if p.url and p.url not in used_urls
-            ]
+            available = restrict_by_category(
+                [p for p in all_posts if p.url and p.url not in used_urls],
+                self._post_cats, self._current_cat)
             matched_posts = self._find_similar_by_score(
                 section_title, available, sim_service, limit=body_count
             )
