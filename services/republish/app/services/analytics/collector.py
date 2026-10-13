@@ -21,6 +21,7 @@ from ...models.blog import Blog
 from ...models.post_metric import PostMetricDaily
 from ...models.search_visibility import SearchVisibilityUrl
 from . import ga4_client, gsc_pages
+from .page_metrics import aggregate_pages, save_pages
 from .url_match import MatchReport, index_by_path, path_of
 
 logger = get_logger("analytics_collector", "app.log")
@@ -37,6 +38,8 @@ class AnalyticsCollector:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+        # 마지막 블로그의 페이지 유입 칸 수(옛 글·첫 화면 포함)
+        self.pages_saved = 0
 
     async def collect_blog(self, blog: Blog, days: int = DEFAULT_DAYS,
                            ga_token: Optional[str] = None,
@@ -53,12 +56,12 @@ class AnalyticsCollector:
         Returns:
             {"rows": 적재 행 수, "ga4": bool, "gsc": bool, "match": {...}}
         """
+        # 발행 글이 없어도 진행한다 — 옛 글·첫 화면 유입은 GA4 로 잡힌다
         urls = await self._urls(blog.id)
-        if not urls:
-            return {"skipped": "발행 URL 없음", "rows": 0}
 
         by_path = index_by_path(urls)
         report = MatchReport()
+        self.pages_saved = 0
         # (url_id, date) → 지표. 두 소스를 같은 칸에 합친다.
         bucket: Dict[tuple, Dict[str, Any]] = {}
 
@@ -81,37 +84,50 @@ class AnalyticsCollector:
         logger.info("[ANALYTICS] %s | 행 %d | GA4=%s GSC=%s | 매칭 %s%%",
                     blog.name, rows, ga_used, gsc_used,
                     int(report.rate * 100))
-        return {"rows": rows, "ga4": ga_used, "gsc": gsc_used,
-                "match": report.to_dict()}
+        return {"rows": rows, "pages": self.pages_saved, "ga4": ga_used,
+                "gsc": gsc_used, "match": report.to_dict()}
 
     async def _pull_ga4(self, blog: Blog, days: int, token: Optional[str],
                         by_path: dict, bucket: dict,
                         report: MatchReport) -> bool:
-        """GA4 세션. 속성이 없으면 조용히 건너뛴다."""
+        """GA4 세션. 속성이 없으면 조용히 건너뛴다.
+
+        유입 경로까지 받아 두 곳에 쓴다 — 발행 글 칸(bucket)과 모든 페이지
+        칸(page_metrics_daily, 옛 글·첫 화면 포함).
+        """
         cfg = blog.analytics_config or {}
         property_id = str(cfg.get("property_id") or "").strip()
         if not property_id or not token:
             return False
         try:
-            rows = await ga4_client.fetch_landing_pages(token, property_id,
-                                                        days)
+            rows = await ga4_client.fetch_landing_sources(token, property_id,
+                                                          days)
         except ga4_client.Ga4Error as e:
             logger.warning("[ANALYTICS] GA4 실패 | %s | %s", blog.name,
                            e.message)
             return False
 
-        for row in rows:
-            target = self._resolve(row.get("path"), by_path, report)
+        pages = aggregate_pages(rows)
+        for (path, day), values in pages.items():
+            target = self._resolve(path, by_path, report)
             if target is None:
                 continue
-            slot = self._slot(bucket, target.id, row.get("date"))
+            slot = self._slot(bucket, target.id, day.isoformat())
             if slot is None:
                 continue
-            slot["sessions"] += row.get("sessions") or 0
-            slot["engaged_sessions"] += row.get("engaged_sessions") or 0
-            # 평균 시간은 합산하면 안 된다 — 큰 쪽을 남긴다
-            slot["avg_duration"] = max(slot["avg_duration"],
-                                       row.get("avg_duration") or 0.0)
+            # 평균 시간은 세션 가중으로 합친다(같은 글이 경로 둘로 갈라질 때)
+            total = slot["sessions"] + values["sessions"]
+            if total:
+                slot["avg_duration"] = round(
+                    (slot["avg_duration"] * slot["sessions"]
+                     + values["avg_duration"] * values["sessions"]) / total, 2)
+            slot["sessions"] = total
+            slot["engaged_sessions"] += values["engaged_sessions"]
+
+        saved = await save_pages(self.db, blog.id, pages, set(by_path))
+        self.pages_saved = saved
+        logger.info("[ANALYTICS] 페이지 유입 | %s | 경로·날짜 %d칸", blog.name,
+                    saved)
         return True
 
     async def _pull_gsc(self, blog: Blog, days: int, token: Optional[str],
@@ -229,7 +245,7 @@ async def collect_all(db: AsyncSession, days: int = DEFAULT_DAYS
             logger.warning("[ANALYTICS] 서치콘솔 속성 목록 실패 | %s", e.message)
 
     collector = AnalyticsCollector(db)
-    total, details = 0, []
+    total, pages, details = 0, 0, []
     for blog in blogs:
         site = ics.resolve_property(sites, blog) if sites else None
         try:
@@ -240,8 +256,10 @@ async def collect_all(db: AsyncSession, days: int = DEFAULT_DAYS
             logger.error("[ANALYTICS] 수집 오류 | %s | %s", blog.name, e)
             out = {"error": str(e)[:200], "rows": 0}
         total += out.get("rows") or 0
+        pages += out.get("pages") or 0
         details.append({"blog": blog.name, **out})
 
     logger.info("[ANALYTICS] 회차 완료 | 블로그 %d | 행 %d", len(blogs), total)
-    return {"blogs": len(blogs), "rows": total, "details": details,
+    return {"blogs": len(blogs), "rows": total, "pages": pages,
+            "details": details,
             "collected_at": date.today().isoformat()}
