@@ -1,0 +1,74 @@
+{# 유입 경로 — 네이버/구글/직접/기타. 옛 글·첫 화면까지 포함(page_metrics_daily).
+   순서도: docs/flowcharts/analytics_sources.md #}
+<div x-show="gaSources && gaSources.totals && gaSources.totals.sessions" class="space-y-2">
+    <div class="text-xs text-gray-500">
+        유입 경로 <span class="text-gray-400">(블로그오토 이전 옛 글·첫 화면 포함)</span>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
+        <template x-for="key in ['sessions','naver','google','direct','other']" :key="key">
+            <div class="px-3 py-2 border border-gray-200 rounded-lg">
+                <div class="text-xs text-gray-500" x-text="gaChannelLabel(key)"></div>
+                <div class="text-lg font-semibold"
+                     x-text="((gaSources.totals || {})[key] || 0).toLocaleString()"></div>
+            </div>
+        </template>
+    </div>
+
+    <!-- 블로그별 경로 -->
+    <div x-show="!gaBlogId && (gaSources.blogs || []).length > 1" class="overflow-x-auto">
+        <table class="w-full text-xs">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-2 py-1.5 text-left font-medium text-gray-600">블로그</th>
+                    <template x-for="key in ['sessions','naver','google','direct','other']" :key="key">
+                        <th class="px-2 py-1.5 text-right font-medium text-gray-600"
+                            x-text="gaChannelLabel(key)"></th>
+                    </template>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                <template x-for="b in (gaSources.blogs || [])" :key="b.blog_id">
+                    <tr>
+                        <td class="px-2 py-1 text-gray-700" x-text="b.blog"></td>
+                        <template x-for="key in ['sessions','naver','google','direct','other']" :key="key">
+                            <td class="px-2 py-1 text-right" x-text="b[key]"></td>
+                        </template>
+                    </tr>
+                </template>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 방문 많은 페이지 -->
+    <div x-show="(gaSources.pages || []).length" class="overflow-x-auto">
+        <table class="w-full text-xs">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-2 py-1.5 text-left font-medium text-gray-600">블로그</th>
+                    <th class="px-2 py-1.5 text-left font-medium text-gray-600">페이지</th>
+                    <th class="px-2 py-1.5 text-right font-medium text-gray-600">방문</th>
+                    <th class="px-2 py-1.5 text-right font-medium text-gray-600">네이버</th>
+                    <th class="px-2 py-1.5 text-right font-medium text-gray-600">구글</th>
+                    <th class="px-2 py-1.5 text-right font-medium text-gray-600">머문 초</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                <template x-for="p in (gaSources.pages || [])" :key="p.blog + p.path">
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-2 py-1 whitespace-nowrap text-gray-500" x-text="p.blog"></td>
+                        <td class="px-2 py-1 max-w-[320px] truncate">
+                            <span x-show="p.kind === 'legacy'"
+                                  class="px-1 mr-1 rounded bg-amber-100 text-amber-700">옛 글</span>
+                            <a :href="p.url" target="_blank" class="text-gray-800 hover:underline"
+                               x-text="p.title || p.path"></a>
+                        </td>
+                        <td class="px-2 py-1 text-right" x-text="p.sessions"></td>
+                        <td class="px-2 py-1 text-right" x-text="p.naver"></td>
+                        <td class="px-2 py-1 text-right" x-text="p.google"></td>
+                        <td class="px-2 py-1 text-right" x-text="Math.round(p.avg_duration)"></td>
+                    </tr>
+                </template>
+            </tbody>
+        </table>
+    </div>
+</div>
