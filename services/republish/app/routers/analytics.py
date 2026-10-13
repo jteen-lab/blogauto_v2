@@ -205,6 +205,23 @@ async def summary(
     }
 
 
+@router.get("/sources")
+async def sources(
+    blog_id: Optional[int] = Query(default=None),
+    days: int = Query(default=28, ge=1, le=180),
+    limit: int = Query(default=30, ge=1, le=200),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """유입 경로(네이버/구글/직접/기타)별 방문과 방문 많은 페이지.
+
+    블로그오토가 쓰지 않은 옛 글·첫 화면까지 포함한다(page_metrics_daily).
+    """
+    from ..services.analytics.page_metrics import summarize_sources
+
+    return await summarize_sources(db, days=days, blog_id=blog_id, limit=limit)
+
+
 @router.get("/posts")
 async def posts(
     blog_id: Optional[int] = Query(default=None),
