@@ -315,6 +315,8 @@
                             </div>
                         </div>
 
+                        {% include "dashboard/_analytics_sources.html" %}
+
                         <!-- 판정 분포 — 재발행이 무엇을 할지 미리 보여 준다 -->
                         <div x-show="gaPosts.length" class="flex flex-wrap gap-2 text-xs">
                             <template x-for="key in ['keep','augment','title','rewrite','legacy']" :key="key">
@@ -549,4 +551,5 @@
 <script src="/static/js/dashboard/perf_panel.js?v=1"></script>
 <script src="/static/js/dashboard/content_table.js?v=1"></script>
 <script src="/static/js/dashboard/analytics_panel.js?v=20260906b"></script>
+<script src="/static/js/dashboard/analytics_sources.js?v=20261014a"></script>
 {% endblock %}
