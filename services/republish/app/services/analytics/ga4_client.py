@@ -135,7 +135,68 @@ async def fetch_landing_pages(
     return _parse_rows((response.json() or {}).get("rows") or [])
 
 
-def _parse_rows(rows: List[dict]) -> List[Dict[str, Any]]:
+# 유입 경로까지 나누면 행이 몇 배로 는다. 한 번에 이만큼씩, 이 횟수까지 받는다.
+SOURCE_PAGE_SIZE = 10000
+SOURCE_MAX_PAGES = 10
+
+
+async def fetch_landing_sources(
+    access_token: str, property_id: str, days: int = 28,
+) -> List[Dict[str, Any]]:
+    """날짜·방문 페이지·유입 경로(source/medium)별 세션 지표.
+
+    `fetch_landing_pages` 에 sessionSource·sessionMedium 을 더한 것이다.
+    행이 많아 1만 행씩 끝까지 이어 받는다(최대 10만 행).
+
+    Returns:
+        [{"date", "path", "source", "medium", "sessions",
+          "engaged_sessions", "avg_duration"}]
+    """
+    end = date.today() - timedelta(days=LAG_DAYS)
+    body: Dict[str, Any] = {
+        "dateRanges": [{
+            "startDate": (end - timedelta(days=days)).isoformat(),
+            "endDate": end.isoformat(),
+        }],
+        "dimensions": [{"name": "date"}, {"name": "landingPage"},
+                       {"name": "sessionSource"}, {"name": "sessionMedium"}],
+        "metrics": [{"name": "sessions"}, {"name": "engagedSessions"},
+                    {"name": "averageSessionDuration"}],
+        "limit": SOURCE_PAGE_SIZE,
+    }
+    out: List[Dict[str, Any]] = []
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+        for page in range(SOURCE_MAX_PAGES):
+            body["offset"] = page * SOURCE_PAGE_SIZE
+            response = await client.post(
+                DATA_URL.format(property_id=property_id),
+                headers={"Authorization": f"Bearer {access_token}"},
+                json=body,
+            )
+            if response.status_code >= 400:
+                raise Ga4Error(
+                    f"GA4 조회 실패 {response.status_code}: "
+                    f"{response.text[:200]}", response.status_code)
+            data = response.json() or {}
+            out.extend(_parse_source_rows(data.get("rows") or []))
+            if body["offset"] + SOURCE_PAGE_SIZE >= int(data.get("rowCount") or 0):
+                break
+    return out
+
+
+def _parse_source_rows(rows: List[dict]) -> List[Dict[str, Any]]:
+    """경로 차원이 붙은 runReport 응답을 평평한 dict 로."""
+    out: List[Dict[str, Any]] = []
+    for item in _parse_rows(rows, keep_dims=True):
+        dims = item.pop("_dims", [])
+        item["source"] = dims[2] if len(dims) > 2 else ""
+        item["medium"] = dims[3] if len(dims) > 3 else ""
+        out.append(item)
+    return out
+
+
+def _parse_rows(rows: List[dict], keep_dims: bool = False
+                ) -> List[Dict[str, Any]]:
     """runReport 응답을 평평한 dict 로.
 
     지표가 비면 0 으로 둔다. GA4 는 값이 없는 칸을 빈 문자열로 준다.
@@ -157,6 +218,8 @@ def _parse_rows(rows: List[dict]) -> List[Dict[str, Any]]:
             "engaged_sessions": _int(vals[1]),
             "avg_duration": _float(vals[2]),
         })
+        if keep_dims:
+            out[-1]["_dims"] = dims
     return out
 
 
