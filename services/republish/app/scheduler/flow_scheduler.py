@@ -3926,31 +3926,21 @@ async def _model_catalog_sync_callback() -> None:
         logger.error("[MODEL_SYNC] 동기화 실패: %s", exc)
 
 
-def _rate_limit_recovery_callback() -> None:
-    """AI API 키 rate_limited 자동 복구 콜백 (동기 래퍼)"""
-    import asyncio
+async def _rate_limit_recovery_callback() -> None:
+    """AI API 키 rate_limited 자동 복구 콜백.
 
-    async def _do_recovery():
-        from ..services.ai_key_manager import AIKeyManager
-        # ensure_future로 던져진 코루틴 내부 예외는 바깥 try/except가 못 잡아
-        # 조용히 삼켜지므로(과거 db_manager.session 오타가 이렇게 은폐됨),
-        # 코루틴 내부에서 직접 로깅한다.
-        try:
-            async with db_manager.get_session() as db:
-                key_manager = AIKeyManager(db, user_id=1)
-                count = await key_manager.reset_rate_limited_keys()
-                if count > 0:
-                    logger.info(
-                        f"[RATE_LIMIT_RECOVERY] {count}개 키 자동 복구 완료"
-                    )
-        except Exception as e:
-            logger.error(f"[RATE_LIMIT_RECOVERY] 복구 코루틴 실패: {e}")
+    동기 함수로 두면 APScheduler 가 스레드 풀에서 돌려 이벤트 루프가 없다
+    ("There is no current event loop in thread 'uvloop_N'") — 그래서 복구가
+    한 번도 실행되지 않았다(2026-10-17 확인). 다른 콜백처럼 async 로 두면
+    스케줄러가 메인 루프에서 직접 await 한다.
+    """
+    from ..services.ai_key_manager import AIKeyManager
 
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            asyncio.ensure_future(_do_recovery())
-        else:
-            loop.run_until_complete(_do_recovery())
+        async with db_manager.get_session() as db:
+            key_manager = AIKeyManager(db, user_id=1)
+            count = await key_manager.reset_rate_limited_keys()
+            if count > 0:
+                logger.info(f"[RATE_LIMIT_RECOVERY] {count}개 키 자동 복구 완료")
     except Exception as e:
         logger.error(f"[RATE_LIMIT_RECOVERY] 복구 실패: {e}")

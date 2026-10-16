@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..ai_key_manager import AIKeyManager
 from ...schemas.ai_api_key import AIProvider
+from .error_kind import is_key_fault
 
 logger = logging.getLogger(__name__)
 
@@ -262,8 +263,15 @@ class AIService:
                         system_prompt, top_p, top_k,
                         frequency_penalty, presence_penalty,
                     )
-            else:
+            elif is_key_fault(e):
                 await self.key_manager.mark_key_error(key.id, error_msg[:200])
+            else:
+                # 일시 장애(시간 초과·빈 응답·5xx 등)는 키를 그대로 둔다.
+                # ERROR 는 자동 복구가 없어 한 번의 장애가 영구 정지가 된다.
+                logger.warning(
+                    "[AI_SERVICE] %s 일시 장애로 판단 — 키 상태 유지 (id=%s)",
+                    provider.value, key.id,
+                )
             logger.warning(f"[AI_SERVICE] {provider.value} 실패: {error_msg[:100]}")
             return None
 
@@ -316,6 +324,10 @@ class AIService:
             client_kwargs["base_url"] = base_url
         client = openai.AsyncOpenAI(**client_kwargs)
         resp = await client.chat.completions.create(**kwargs)
+        if not getattr(resp, "choices", None):
+            # 제공자가 오래 붙잡다 본문 없이 끊으면 choices 가 비어 온다.
+            # 그대로 [0] 을 집으면 원인 모를 TypeError 가 돼 키 오류로 오인된다.
+            raise RuntimeError(f"빈 응답(choices 없음) | model={model}")
         choice = resp.choices[0]
         content = (choice.message.content or "").strip()
         if not content:
