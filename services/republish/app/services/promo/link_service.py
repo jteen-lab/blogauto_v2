@@ -164,6 +164,8 @@ async def build_html(db: AsyncSession, html: str,
     else:
         link = await load(db, link_id)
     url = await tracked_url(db, link, post_id=post_id, blog_id=blog_id)
+    # 오토런이 먼저 붙인 고지문·버튼은 떼고 다시 조립한다(겹침 방지)
+    html = assembler.strip_promo(html)
     out = assembler.assemble(html, link, image_url=image_url,
                              title=title, tracked_url=url)
     return out, link

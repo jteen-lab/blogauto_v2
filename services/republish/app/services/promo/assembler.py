@@ -114,3 +114,20 @@ def strip_assembly(html: str) -> str:
         r'\s*<div class="button-link">.*?</div>\s*$', "", out,
         count=1, flags=re.S)
     return out.strip()
+
+
+def strip_promo(html: str) -> str:
+    """앞서 붙은 고지문·홍보 버튼만 뗀다. 링크를 다시 고를 때 겹치지 않게.
+
+    오토런이 이미 붙인 글을 작업대에서 다른 링크로 조립하면 버튼이 둘이
+    된다. 홍보 버튼(``rel="nofollow sponsored"``)만 지우고 내부 링크 버튼은
+    건드리지 않는다.
+    """
+    out = (html or "").strip()
+    out = re.sub(
+        r'^\s*<p style="' + re.escape(NOTICE_STYLE) + r'">.*?</p>\s*', "",
+        out, count=1, flags=re.S)
+    out = re.sub(
+        r'\s*<div class="button-link"><a [^>]*rel="nofollow sponsored"[^>]*>'
+        r'[^<]*</a></div>\s*$', "", out, count=1, flags=re.S)
+    return out.strip()

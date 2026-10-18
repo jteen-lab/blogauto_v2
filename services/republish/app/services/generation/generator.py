@@ -31,6 +31,8 @@ from .content_generator_helper import (
     DEFAULT_CONTENT_PROMPT,
 )
 from .author_signal_injector import inject_author_signal
+from .title_trim import trim as trim_title
+from ..promo.auto_attach import attach as attach_promo_link
 from .title_lifecycle import (
     consume_group, distinct_or_original, is_recombined, pick_style,
     resolve_provider, title_keywords,
@@ -195,6 +197,9 @@ class ContentGenerator:
                 # 프롬프트 템플릿이 갈렸으면 제목 묶음도 그 번호를 쓴다
                 settings_override=settings,
             )
+        # 기계적으로 붙는 접두·꼬리 지우기(모듈 설정 있을 때만)
+        recombine_result.recombined_title = trim_title(
+            recombine_result.recombined_title, settings)
         # 기존 제목과 겹치면 원본을 쓴다(계획서 §4-5 C). 재조합은 관문
         # 밖이라 여기서 안 걸면 같은 글이 두 번 나간다.
         working_title = await distinct_or_original(
@@ -537,6 +542,10 @@ class ContentGenerator:
             logger.warning(
                 "[GENERATOR] 저자 바이라인 주입 실패 (무시): %s", e
             )
+
+        # 6.9 홍보 링크(고지문·버튼) — 모듈 스위치 켜진 업체 글만
+        final_html = await attach_promo_link(
+            self.db, final_html, working_title, blog_id, settings)
 
         # 7. GenerationHistory 저장
         elapsed = int(time.time() - start_time)
