@@ -28,6 +28,9 @@ logger = get_logger("naver_index", "app.log")
 # 제목으로 검색했을 때 몇 위까지 보고 판정할지
 SEARCH_DISPLAY = 30
 TAG_RE = re.compile(r"<[^>]+>")
+# 짧은 검색어 = 제목 앞 낱말 몇 개. 사람은 제목 전체를 치지 않는다(마케팅 10/19).
+SHORT_WORDS = 3
+SHORT_MIN_CHARS = 4
 
 
 def normalize(url: str) -> str:
@@ -117,3 +120,37 @@ async def check_url(
     return NaverIndexResult(
         found=rank is not None, rank=rank, query=query, result_count=len(items),
     )
+
+
+def short_query(title: str, words: int = SHORT_WORDS) -> str:
+    """제목 앞 낱말 2~3개로 만든 짧은 검색어.
+
+    '제목 전체 검색 = 색인 확인'일 뿐이라 실제 노출에 가까운 숫자를 따로 본다.
+    앞 낱말이 너무 짧으면(예: '왜 지금') 낱말을 하나 더 붙인다.
+    """
+    tokens = clean_title(title).split()
+    if not tokens:
+        return ""
+    picked = tokens[:max(1, words - 1)]
+    if len("".join(picked)) < SHORT_MIN_CHARS * 2 and len(tokens) >= words:
+        picked = tokens[:words]
+    query = " ".join(picked)
+    return "" if query == clean_title(title) else query
+
+
+async def check_short(service: Any, url: str, title: str) -> Dict[str, Any]:
+    """짧은 검색어로 순위를 따로 본다. 실패해도 예외를 내지 않는다.
+
+    Returns:
+        {"short_query", "short_rank"} — 순위가 없으면 None
+    """
+    query = short_query(title)
+    if not query:
+        return {"short_query": None, "short_rank": None}
+    try:
+        response = await service.search_webdoc(query, display=SEARCH_DISPLAY)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[NAVER_INDEX] 짧은 검색어 실패 | %s | %s", query, exc)
+        return {"short_query": query, "short_rank": None, "short_error": str(exc)}
+    rank = find_rank(response.get("items") or [], url)
+    return {"short_query": query, "short_rank": rank}
