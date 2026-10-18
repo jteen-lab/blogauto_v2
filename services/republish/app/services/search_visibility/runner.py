@@ -8,7 +8,7 @@ import time
 from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.logger import get_logger
@@ -216,7 +216,7 @@ async def _pending_naver_rows(
 
     - 미확인·미노출·오류는 늘 대상
     - found 도 NV_RECHECK_DAYS 가 지나면 다시 본다
-    - 우리 기록이 지워진 글(crawled_post_id 없음)은 먼저 본다 — 지운 글 정리
+    - 우리 기록이 지워진 found 는 맨 먼저 본다 — 지운 글 정리
     - gone 은 대상이 아니다
     """
     now = utcnow()
@@ -238,7 +238,9 @@ async def _pending_naver_rows(
             ),
         )
         .order_by(
-            row.crawled_post_id.isnot(None),
+            # 기록 지워진 found(지운 글이 노출로 세어지던 것)만 맨 앞 — 나머지는 오래된 순
+            case((and_(row.crawled_post_id.is_(None),
+                       row.naver_index_state == NV_FOUND), 0), else_=1),
             row.naver_checked_at.asc().nullsfirst(),
             row.published_at.desc(),
         )
