@@ -129,3 +129,25 @@ def test_detail_payload_shape():
     assert result.to_detail() == {
         "query": "q", "rank": 3, "result_count": 30, "error": None,
     }
+
+
+# ---------- 짧은 검색어 (10/19 마케팅: 제목 전체 검색 = 색인 확인일 뿐) ----------
+
+def test_short_query_takes_front_words():
+    assert nis.short_query("관악우체국 근무시간 전화번호 정리") == "관악우체국 근무시간"
+
+
+def test_short_query_adds_word_when_front_is_short():
+    assert nis.short_query("옷 땀 냄새 쉽게 제거하는 방법") == "옷 땀 냄새"
+
+
+def test_short_query_empty_when_same_as_title():
+    """제목이 이미 짧으면 따로 볼 필요가 없다(같은 질의로 두 번 부르지 않는다)."""
+    assert nis.short_query("마운자로 부작용") == ""
+
+
+@pytest.mark.asyncio
+async def test_check_short_records_rank():
+    svc = _FakeService({"items": [{"link": "https://o.com/1"}, {"link": "https://x.com/1"}]})
+    out = await nis.check_short(svc, "https://x.com/1", "마운자로 손바닥 간지러움 원인 정리")
+    assert out == {"short_query": "마운자로 손바닥 간지러움", "short_rank": 2}
