@@ -146,6 +146,30 @@ flowchart TD
 
 ---
 
+## S6-N — 네이버 노출 점검 (2026-10-19 고침: 지운 글·재점검·짧은 검색어)
+
+코드: `app/services/search_visibility/runner.py`(`_pending_naver_rows`·`_check_naver_row`),
+`naver_index_service.py`(`check_url`·`short_query`·`check_short`), `url_liveness.py`
+
+근거: 마케팅 진단 2026-10-19 — 수작남 '네이버 노출확인 86' 중 79개가 지운 글(404).
+한 번 found 면 다시 안 봐서 지운 글이 계속 노출로 세어졌고, '제목 전체 검색'은 색인 확인일 뿐이다.
+
+```mermaid
+flowchart TD
+    A[하루 1회 또는 화면 버튼] --> P[대상 고르기]
+    P --> P1[unknown·not_found·error]
+    P --> P2[found 인데 30일 지남]
+    P --> P3[found 인데 우리 기록(crawled_post) 지워짐 — 맨 먼저]
+    P1 & P2 & P3 --> L{주소 열어 보기<br/>404·410?}
+    L -- 예 --> G[gone — 행은 남기고 대상·노출 수에서 뺌]
+    L -- 아니오/확인 실패 --> F[제목 전체로 웹문서 30위 검색 = 색인 확인]
+    F --> S[제목 앞 2~3낱말 짧은 검색어로 한 번 더 → short_rank]
+    S --> R[found/not_found/error 저장 + naver_detail 에 short_query·short_rank]
+```
+
+- gone 은 다시 점검하지 않는다. 네트워크 오류·5xx 는 지운 글로 보지 않는다(일시 장애).
+- 화면: '네이버 색인 확인률'(제목 전체) · '짧은 검색어 30위 안 N' · '지운 글 N개는 뺌'.
+
 ## 데이터
 
 ### `search_visibility_urls` (신규 테이블)
