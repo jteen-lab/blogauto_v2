@@ -15,12 +15,12 @@ LINK = SimpleNamespace(
 
 ON = {"promo_link": {"auto": True, "exclude": ["지원사업", "전입신고"]}}
 
-PATTERNS = {"title_recombine": {"strip_patterns": [
+PATTERNS = {"title_strip_patterns": [
     r"^이사\s*견적(을)?\s*(받았다면|받은\s*(날|뒤|후)|받고(\s*나서)?|받아\s*든)\s+",
     r"\s*이대로\s*괜찮(은\s*걸까요?|을까요?)\s*$",
     r"\s*다\s*됐나요?\s*$",
     r"\s*이\s*정도면\s*적정한\s*걸까요?\s*$",
-]}}
+]}
 
 
 def _run(html: str, title: str, settings: dict, monkeypatch, link=LINK) -> str:
@@ -93,5 +93,5 @@ def test_제목_정리_안전장치() -> None:
     """설정 없음·너무 짧아짐·틀 오류면 원래 제목."""
     assert trim("이사 견적 받았다면 비용", {}) == "이사 견적 받았다면 비용"
     assert trim("이사 견적 받고 짐", PATTERNS) == "이사 견적 받고 짐"
-    bad = {"title_recombine": {"strip_patterns": ["("]}}
+    bad = {"title_strip_patterns": ["("]}
     assert trim("부산 이사업체 비교 정리", bad) == "부산 이사업체 비교 정리"
