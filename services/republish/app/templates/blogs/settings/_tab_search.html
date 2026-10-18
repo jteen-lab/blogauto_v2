@@ -70,13 +70,20 @@
                x-text="summary.sitemap_missing || 0"></p>
         </div>
         <div class="border border-gray-200 rounded-lg p-3">
-            <p class="text-xs text-gray-500">네이버 노출률</p>
+            <p class="text-xs text-gray-500"
+               title="글 제목 전체를 네이버 웹문서 검색에 넣어 30위 안에 있는지 봅니다. 네이버가 글을 알고 있다(색인)는 뜻이지, 사람들이 치는 검색어에 뜬다는 뜻은 아닙니다.">
+                네이버 색인 확인률</p>
             <p class="text-xl font-semibold text-gray-800 mt-1">
                 <span x-text="summary.naver_rate !== null && summary.naver_rate !== undefined
                     ? summary.naver_rate + '%' : '—'"></span>
             </p>
             <p class="text-[11px] text-gray-400 mt-0.5"
-               x-text="`확인 ${summary.naver_checked || 0} · 노출 ${summary.naver_found || 0}`"></p>
+               x-text="`확인 ${summary.naver_checked || 0} · 잡힘 ${summary.naver_found || 0}`"></p>
+            <p class="text-[11px] text-gray-400"
+               x-text="`짧은 검색어 30위 안 ${summary.naver_short_found || 0}`"></p>
+            <p class="text-[11px] text-gray-400" x-show="(summary.naver_gone || 0) > 0"
+               x-text="`지운 글 ${summary.naver_gone}개는 뺌`"></p>
+            <p class="text-[10px] text-gray-400 mt-1 leading-tight">제목 전체 검색 = 색인 확인 · 짧은 검색어(제목 앞 2~3낱말) = 실제 노출에 가까운 숫자</p>
         </div>
         <div class="border border-gray-200 rounded-lg p-3">
             <p class="text-xs text-gray-500">IndexNow 성공</p>
