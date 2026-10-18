@@ -8,16 +8,16 @@ import time
 from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.logger import get_logger
 from ...models.search_visibility import (
     IX_ERROR, IX_INDEXED, IX_NOT_INDEXED, IX_UNKNOWN,
-    NV_ERROR, NV_FOUND, NV_NOT_FOUND, NV_UNKNOWN,
+    NV_ERROR, NV_FOUND, NV_GONE, NV_NOT_FOUND, NV_RECHECK_DAYS, NV_UNKNOWN,
     SM_MISSING, SM_PRESENT, SM_UNKNOWN, SearchVisibilityUrl, utcnow,
 )
-from . import index_check_service, naver_index_service, sitemap_service
+from . import index_check_service, naver_index_service, sitemap_service, url_liveness
 from .config import load_config
 
 logger = get_logger("search_visibility", "app.log")
@@ -212,31 +212,74 @@ async def run_index_check(
 async def _pending_naver_rows(
     db: AsyncSession, blog_id: int, limit: int,
 ) -> List[SearchVisibilityUrl]:
-    """네이버 확인이 필요한 행(미확인 우선, 오래된 확인 순)."""
-    cutoff = utcnow() - timedelta(days=INDEX_GRACE_DAYS)
+    """네이버 확인이 필요한 행.
+
+    - 미확인·미노출·오류는 늘 대상
+    - found 도 NV_RECHECK_DAYS 가 지나면 다시 본다
+    - 우리 기록이 지워진 글(crawled_post_id 없음)은 먼저 본다 — 지운 글 정리
+    - gone 은 대상이 아니다
+    """
+    now = utcnow()
+    cutoff = now - timedelta(days=INDEX_GRACE_DAYS)
+    stale = now - timedelta(days=NV_RECHECK_DAYS)
+    row = SearchVisibilityUrl
     stmt = (
-        select(SearchVisibilityUrl)
+        select(row)
         .where(
-            SearchVisibilityUrl.blog_id == blog_id,
-            SearchVisibilityUrl.naver_index_state.in_(
-                [NV_UNKNOWN, NV_NOT_FOUND, NV_ERROR],
+            row.blog_id == blog_id,
+            row.published_at <= cutoff,
+            row.title.isnot(None),
+            or_(
+                row.naver_index_state.in_([NV_UNKNOWN, NV_NOT_FOUND, NV_ERROR]),
+                and_(row.naver_index_state == NV_FOUND,
+                     or_(row.naver_checked_at.is_(None),
+                         row.naver_checked_at <= stale,
+                         row.crawled_post_id.is_(None))),
             ),
-            SearchVisibilityUrl.published_at <= cutoff,
-            SearchVisibilityUrl.title.isnot(None),
         )
         .order_by(
-            SearchVisibilityUrl.naver_checked_at.asc().nullsfirst(),
-            SearchVisibilityUrl.published_at.desc(),
+            row.crawled_post_id.isnot(None),
+            row.naver_checked_at.asc().nullsfirst(),
+            row.published_at.desc(),
         )
         .limit(limit)
     )
     return list((await db.execute(stmt)).scalars().all())
 
 
+async def _check_naver_row(svc: Any, row: SearchVisibilityUrl) -> str:
+    """행 1건 점검 — 살아 있는지 먼저 보고, 살아 있으면 제목 전체·짧은 검색어.
+
+    Returns:
+        새 상태(NV_*)
+    """
+    status = await url_liveness.status_of(row.url)
+    if url_liveness.is_gone(status):
+        row.naver_index_state = NV_GONE
+        row.naver_detail = {"gone_status": status}
+        return NV_GONE
+    result = await naver_index_service.check_url(svc, row.url, row.title or "")
+    detail = result.to_detail()
+    if not result.error:
+        detail.update(await naver_index_service.check_short(
+            svc, row.url, row.title or ""))
+    row.naver_detail = detail
+    if result.error:
+        row.naver_index_state = NV_ERROR
+    elif result.found:
+        row.naver_index_state = NV_FOUND
+    else:
+        row.naver_index_state = NV_NOT_FOUND
+    return row.naver_index_state
+
+
 async def run_naver_index_check(
     db: AsyncSession, blog: Any, service: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """네이버 웹문서 검색으로 노출 여부를 갱신한다(S6-N).
+
+    '제목 전체 검색'은 색인 확인일 뿐이다. 짧은 검색어 순위(short_rank)를
+    함께 적어 실제 노출에 가까운 숫자를 따로 본다.
 
     Args:
         db: 세션
@@ -258,28 +301,20 @@ async def run_naver_index_check(
 
     now = utcnow()
     deadline = time.monotonic() + INDEX_TIME_BUDGET_SECONDS
-    found = missing = errors = 0
+    counts = {NV_FOUND: 0, NV_NOT_FOUND: 0, NV_ERROR: 0, NV_GONE: 0}
     for row in rows:
         if time.monotonic() > deadline:
             break
-        result = await naver_index_service.check_url(svc, row.url, row.title or "")
+        state = await _check_naver_row(svc, row)
         row.naver_checked_at = now
-        row.naver_detail = result.to_detail()
-        if result.error:
-            row.naver_index_state = NV_ERROR
-            errors += 1
-        elif result.found:
-            row.naver_index_state = NV_FOUND
-            found += 1
-        else:
-            row.naver_index_state = NV_NOT_FOUND
-            missing += 1
+        counts[state] += 1
 
     await db.flush()
-    processed = found + missing + errors
+    processed = sum(counts.values())
     return {
-        "checked": processed, "found": found,
-        "not_found": missing, "errors": errors,
+        "checked": processed, "found": counts[NV_FOUND],
+        "not_found": counts[NV_NOT_FOUND], "errors": counts[NV_ERROR],
+        "gone": counts[NV_GONE],
         "remaining": max(0, len(rows) - processed),
     }
 
@@ -317,7 +352,8 @@ async def blog_summary(db: AsyncSession, blog_id: int) -> Dict[str, Any]:
     checked = total - await _count(SearchVisibilityUrl.index_state, IX_UNKNOWN)
     missing = await _count(SearchVisibilityUrl.sitemap_state, SM_MISSING)
     naver_found = await _count(SearchVisibilityUrl.naver_index_state, NV_FOUND)
-    naver_checked = total - await _count(
+    naver_gone = await _count(SearchVisibilityUrl.naver_index_state, NV_GONE)
+    naver_checked = total - naver_gone - await _count(
         SearchVisibilityUrl.naver_index_state, NV_UNKNOWN,
     )
 
@@ -331,7 +367,19 @@ async def blog_summary(db: AsyncSession, blog_id: int) -> Dict[str, Any]:
         "indexnow_failed": await _count(SearchVisibilityUrl.indexnow_status, "failed"),
         "naver_found": naver_found,
         "naver_checked": naver_checked,
+        "naver_gone": naver_gone,
+        "naver_short_found": await _short_found(db, blog_id),
         "naver_rate": (
             round(naver_found / naver_checked * 100, 1) if naver_checked else None
         ),
     }
+
+
+async def _short_found(db: AsyncSession, blog_id: int) -> int:
+    """짧은 검색어로도 30위 안에 든 살아 있는 글 수(JSON 은 파이썬에서 센다)."""
+    stmt = select(SearchVisibilityUrl.naver_detail).where(
+        SearchVisibilityUrl.blog_id == blog_id,
+        SearchVisibilityUrl.naver_index_state != NV_GONE,
+    )
+    details = (await db.execute(stmt)).scalars().all()
+    return sum(1 for d in details if isinstance(d, dict) and d.get("short_rank"))
