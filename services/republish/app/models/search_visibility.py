@@ -35,6 +35,10 @@ NV_UNKNOWN = "unknown"
 NV_FOUND = "found"
 NV_NOT_FOUND = "not_found"
 NV_ERROR = "error"
+# 지운 글(우리 기록 삭제 또는 실제 404). 점검 대상·노출 수에서 뺀다 — 행은 남긴다.
+NV_GONE = "gone"
+# found 도 이 날수가 지나면 다시 본다(지운 글이 found 로 남던 문제, 10/19).
+NV_RECHECK_DAYS = 30
 
 # --- index_state ---
 IX_UNKNOWN = "unknown"
@@ -110,7 +114,7 @@ class SearchVisibilityUrl(Base):
     # --- S6-N 네이버 ---
     naver_index_state = Column(
         String(20), default=NV_UNKNOWN, nullable=False, index=True,
-        comment="unknown/found/not_found/error",
+        comment="unknown/found/not_found/error/gone",
     )
     naver_checked_at = Column(DateTime(timezone=True), nullable=True)
     naver_detail = Column(
