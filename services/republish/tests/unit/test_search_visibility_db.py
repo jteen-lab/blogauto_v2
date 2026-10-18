@@ -291,3 +291,61 @@ async def test_index_check_skips_when_disabled(db, blog):
     blog.search_index_config = {"index_check_enabled": False}
     result = await runner.run_index_check(db, blog)
     assert result["skipped"] == "disabled"
+
+
+# ---------- S6-N 지운 글·재점검 (10/19 마케팅 수작남) ----------
+
+class _NaverSvc:
+    def is_configured(self):
+        return True
+
+    async def search_webdoc(self, query, display=30, start=1):
+        return {"items": [{"link": "https://example.com/live/"}]}
+
+
+async def _naver_row(db, blog, url, state, checked_days_ago, has_post=True):
+    from datetime import timedelta
+
+    from app.models.search_visibility import utcnow
+    row = await tracker.get_or_create_row(db, blog.id, url, title="관악우체국 근무시간 정리")
+    row.published_at = utcnow() - timedelta(days=60)
+    row.naver_index_state = state
+    row.naver_checked_at = (utcnow() - timedelta(days=checked_days_ago)
+                            if checked_days_ago is not None else None)
+    row.crawled_post_id = None
+    await db.flush()
+    return row
+
+
+@pytest.mark.asyncio
+async def test_naver_pending_rechecks_old_found_and_skips_gone(db, blog):
+    blog.search_index_config = {"naver_check_enabled": True}
+    old = await _naver_row(db, blog, "https://example.com/old/", "found", 40)
+    gone = await _naver_row(db, blog, "https://example.com/gone/", "gone", 40)
+    rows = await runner._pending_naver_rows(db, blog.id, 50)
+    ids = {r.id for r in rows}
+    assert old.id in ids          # 기록 없는 found 는 바로, 오래된 found 도 다시 본다
+    assert gone.id not in ids     # gone 은 다시 안 본다
+
+
+@pytest.mark.asyncio
+async def test_naver_check_marks_404_as_gone(db, blog, monkeypatch):
+    from app.models.search_visibility import NV_FOUND, NV_GONE
+    from app.services.search_visibility import url_liveness
+
+    async def fake_status(url, client=None):
+        return 404 if "gone" in url else 200
+
+    monkeypatch.setattr(url_liveness, "status_of", fake_status)
+    blog.search_index_config = {"naver_check_enabled": True}
+    dead = await _naver_row(db, blog, "https://example.com/gone/", "found", 1)
+    live = await _naver_row(db, blog, "https://example.com/live/", "not_found", 5)
+    result = await runner.run_naver_index_check(db, blog, service=_NaverSvc())
+    assert result["gone"] == 1 and result["found"] == 1
+    assert dead.naver_index_state == NV_GONE
+    assert live.naver_index_state == NV_FOUND
+    assert live.naver_detail["short_query"] == "관악우체국 근무시간"
+    summary = await runner.blog_summary(db, blog.id)
+    assert summary["naver_gone"] == 1
+    assert summary["naver_found"] == 1 and summary["naver_checked"] == 1
+    assert summary["naver_short_found"] == 1
