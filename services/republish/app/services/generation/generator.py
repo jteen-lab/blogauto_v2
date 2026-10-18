@@ -32,6 +32,7 @@ from .content_generator_helper import (
 )
 from .author_signal_injector import inject_author_signal
 from .title_trim import trim as trim_title
+from . import lead_keyword
 from ..promo.auto_attach import attach as attach_promo_link
 from .title_lifecycle import (
     consume_group, distinct_or_original, is_recombined, pick_style,
@@ -186,6 +187,9 @@ class ContentGenerator:
             # 조용히 무효가 된다. 수동 재조합과 같은 폴백을 쓴다.
             provider = await resolve_provider(
                 self.db, self.user_id, title_provider)
+            # 맨 앞 검색어(모듈 title_lead_keyword) — 검색량으로 골라 지시에 붙임
+            title_settings, lead_kw = await lead_keyword.apply(
+                self.db, self.user_id, settings, source_title.title, title_keywords(source_title))
             recombine_result = await self.title_recombiner.recombine(
                 original_title=source_title.title,
                 module_id=prompt_module_id,
@@ -195,8 +199,11 @@ class ContentGenerator:
                 # 핵심어가 빠지면 검색에 안 잡힌다(계획서 §4-5 B)
                 keywords=title_keywords(source_title),
                 # 프롬프트 템플릿이 갈렸으면 제목 묶음도 그 번호를 쓴다
-                settings_override=settings,
+                settings_override=title_settings,
             )
+            if not lead_keyword.starts_with(recombine_result.recombined_title, lead_kw):
+                logger.warning(f"[LEAD_KW] 맨 앞 검색어 미반영 | 「{lead_kw}」 | "
+                               f"'{recombine_result.recombined_title[:40]}'")
         # 기계적으로 붙는 접두·꼬리 지우기(모듈 설정 있을 때만)
         recombine_result.recombined_title = trim_title(
             recombine_result.recombined_title, settings)
