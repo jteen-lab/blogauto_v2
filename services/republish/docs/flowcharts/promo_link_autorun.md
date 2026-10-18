@@ -44,7 +44,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A[제목 재조합 결과] --> B{모듈 설정<br/>title_recombine.strip_patterns}
+    A[제목 재조합 결과] --> B{모듈 설정<br/>title_strip_patterns<br/>최상위 — 화면 저장에 안 지워짐}
     B -->|없음·기본| D[그대로]
     B -->|있음| C[맞는 접두·꼬리 지움]
     C --> E{남은 제목이<br/>너무 짧음 10자 미만?}
