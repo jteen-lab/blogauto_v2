@@ -273,3 +273,10 @@ def test_digest_prompt_min_length_and_caps():
                                per_doc=3000, max_input=14000)
     assert "최소 1600자 이상" in rich and "가" * 3000 in rich and "나" * 3000 in rich
     assert rich.index("최소 1600자") < rich.index("[문서]")
+
+
+def test_f2_prompt_marks_fact_conflict_high():
+    """확정 사실과 어긋남·근거 없는 시행 연도 단정은 '높음' 으로 고르게 한다."""
+    assert "[확정 사실]과 어긋나는 문장은 \"높음\"" in f2.CHECK_PROMPT
+    assert "시행 연도·제도 변경" in f2.CHECK_PROMPT
+    f2.CHECK_PROMPT.format(refs="r", body="b", facts="")  # 중괄호 깨짐 없음
