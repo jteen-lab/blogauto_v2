@@ -311,11 +311,13 @@ class ReferenceCollector:
         picked = seeds.pick(seed_docs, hs.boost_official(documents), summary_count)
         digest_text, digest_sources = "", []
         if summary_method == "ai":
+            from ..reference.digest import options_from
             from ..reference.digest import summarize as digest_summarize
 
             digest = await digest_summarize(
                 self.ai_service, title or query, picked,
-                ai_provider, ai_model, max_length=max(600, max_length))
+                ai_provider, ai_model, max_length=max(600, max_length),
+                options=options_from(settings))
             digest_text = digest.get("text") or ""
             digest_sources = digest.get("sources") or []
             trace["digest"] = {"used": digest.get("used"),
