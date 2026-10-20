@@ -6,12 +6,32 @@
 
 설계 문서: docs/flowcharts/adsense_sprint1_p1.md - F2
 """
+import html as _html
+
 from ...models.blog import Blog
 
 EDITORIAL_NOTICE = (
     '<p style="font-size:0.85em;color:#777;">'
     "본 콘텐츠는 사람이 검수·편집합니다.</p>"
 )
+
+
+def editorial_notice_html(profile: dict) -> str:
+    """꼬리말 문구 — author_profile.editorial_notice 가 있으면 그 글, 없으면 공통 문구.
+
+    Args:
+        profile: blog.author_profile (없으면 빈 dict)
+
+    Returns:
+        꼬리말 <p> HTML. 키가 없거나 비어 있으면 EDITORIAL_NOTICE 와 완전히 같다.
+    """
+    custom = ((profile or {}).get("editorial_notice") or "").strip()
+    if not custom:
+        return EDITORIAL_NOTICE
+    return (
+        '<p style="font-size:0.85em;color:#777;">'
+        f"{_html.escape(custom, quote=False)}</p>"
+    )
 
 
 def inject_author_signal(html: str, blog: Blog) -> str:
@@ -41,6 +61,6 @@ def inject_author_signal(html: str, blog: Blog) -> str:
     block = f"<hr>{byline}"
     if bio:
         block += f"<p>{bio}</p>"
-    block += EDITORIAL_NOTICE
+    block += editorial_notice_html(profile)
 
     return f"{html}\n{block}"
