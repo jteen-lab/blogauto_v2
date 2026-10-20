@@ -8,7 +8,7 @@
       "url_allowlist": {"enabled": true, "domains": [...], "check_alive": true},
       "polite_tone":   {"enabled": true, "max_ratio": 0.2},
       "fact_check":    {"enabled": true, "provider": "anthropic",
-                        "model": "claude-haiku-4-5"},
+                        "model": "claude-haiku-4-5", "facts": ["확정 사실", ...]},
       "official_api_counts": true,          # O1 (official_hold)
       "official_seeds": [{"keywords": [...], "urls": [...]}],   # O2
       "next_title_on_hold": {"enabled": true, "max_attempts": 3}  # O3
@@ -91,7 +91,8 @@ async def _run_f2(ai: Any, md: str, refs: str, cfg: dict, writer: tuple,
     """사실 검사 → '높음' 문장 고치기 → 재검사. (본문, 보류 사유)."""
     prov = cfg.get("provider") or DEFAULT_CHECK[0]
     model = cfg.get("model") or DEFAULT_CHECK[1]
-    items = await f2.check(ai, md, refs, prov, model)
+    facts = cfg.get("facts") or []  # 확정 사실 — 검사 모델의 옛 기억을 누른다
+    items = await f2.check(ai, md, refs, prov, model, facts)
     rec["f2_items"] = items
     if items is None:
         rec["f2_error"] = "검사 호출 실패 — 검사 없이 계속"
@@ -99,14 +100,14 @@ async def _run_f2(ai: Any, md: str, refs: str, cfg: dict, writer: tuple,
     bad = f2.high(items)
     if not bad:
         return md, None
-    fixes = await f2.fix(ai, bad, refs, writer[0], writer[1])
+    fixes = await f2.fix(ai, bad, refs, writer[0], writer[1], facts)
     given = {str(f.get("sentence") or "").strip() for f in fixes}
     # 답에 빠진 문장은 고칠 수 없는 것으로 보고 지운다
     fixes += [{"sentence": b["sentence"], "replacement": ""}
               for b in bad if str(b["sentence"]).strip() not in given]
     md, applied = f2.apply_fixes(md, fixes)
     rec["f2_fixes"] = applied
-    again = await f2.check(ai, md, refs, prov, model)
+    again = await f2.check(ai, md, refs, prov, model, facts)
     rec["f2_recheck"] = again
     left = f2.high(again)
     if left:
