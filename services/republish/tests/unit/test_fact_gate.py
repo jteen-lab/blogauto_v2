@@ -195,3 +195,15 @@ def test_o3_switch_and_retry_picks_next():
     assert calls == [2] and res["held_titles"] == [1]
     assert asyncio.run(hold_retry.retry(Ex(), None, SimpleNamespace(id=15), None, True,
                                         st, "다른 실패", (1,))) is None
+
+
+def test_f2_parse_json_newline_in_string():
+    assert f2.parse_json('{"items":[{"sentence":"가\n나"}]}')["items"][0]["sentence"] == "가\n나"
+
+
+def test_f2_facts_reach_check_and_fix_prompts():
+    st = {"fact_gate": {"fact_check": {"enabled": True, "facts": ["예금자보호 한도는 1억 원"]}}}
+    ai = AI(ITEM, '{"fixes":[]}', '{"items":[]}')
+    asyncio.run(fg.run(ai, "신협은 예금보험공사가 보호합니다.", _ref(), st, _blog(), "t"))
+    assert all("예금자보호 한도는 1억 원" in c["prompt"] for c in ai.calls)
+    assert "확정 사실" not in f2.facts_block([])
