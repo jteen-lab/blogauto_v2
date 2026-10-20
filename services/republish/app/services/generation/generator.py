@@ -82,6 +82,7 @@ class ContentGenerator:
         self.internal_linker = InternalLinker(db)
         self.substitution_processor = SubstitutionProcessor(db)
         self.image_generator = ImageGenerator(db, user_id)
+        self.last_fact_gate: dict = {}  # 마지막 사실 관문 기록(시험·로그용)
 
     async def generate(
         self,
@@ -217,6 +218,9 @@ class ContentGenerator:
         )
 
         # 3. 참조자료 수집 (blog.reference_ai 우선, 없으면 모듈 설정)
+        from . import fact_gate
+        from ..reference.official_seeds import urls_for as _seed_urls
+        seed_urls = _seed_urls(settings, working_title)  # O2 — fact_gate 표 있을 때만
         ref_ai = ai_config.get("reference_ai", {})
         if ref_ai.get("provider"):
             # 블로그 AI 설정으로 모듈 참조자료 설정 오버라이드
@@ -231,12 +235,12 @@ class ContentGenerator:
             )
             ref_result = await self.reference_collector.collect_and_summarize(
                 search_query=working_title,
-                ref_settings=ref_settings,
+                ref_settings=ref_settings, seed_urls=seed_urls,
             )
         else:
             ref_result = await self.reference_collector.collect_and_summarize(
                 search_query=working_title,
-                module_id=prompt_module_id,
+                module_id=prompt_module_id, seed_urls=seed_urls,
             )
         logger.info(
             f"[GENERATOR] 참조자료 수집 | count={ref_result.count}"
@@ -368,7 +372,7 @@ class ContentGenerator:
                 _with_directive(ref_result.to_prompt_injection(),
                                 evidence_directive),
                 cpa_directive),
-            settings=settings,
+            settings=fact_gate.with_prompt(settings),  # F3 말투 한 줄(스위치 있을 때만)
             blog=blog,
             category_name=category_name,
             keywords_text=keywords_text,
@@ -453,6 +457,18 @@ class ContentGenerator:
                     blog.name, working_title[:30], gate.message,
                 )
                 raise RuntimeError(f"품질 기준 미달: {gate.message}")
+
+        # 4-3. 사실 관문(F1 주소·F3 말투·F2 사실 검사) — 모듈 fact_gate 있을 때만
+        fg = await fact_gate.run(self.ai_service, content_markdown, ref_result,
+                                 settings, blog, working_title)
+        content_markdown, self.last_fact_gate = fg.markdown, fg.record
+        pipeline_warnings += fg.notes
+        if fg.hold_reason:
+            await fact_gate.record_hold(self.db, source_title, fg.hold_reason, working_title)
+            return GenerationResult(
+                success=False, generation_time_seconds=int(time.time() - start_time),
+                error=f"근거 부족으로 보류: {fg.hold_reason}",
+                warnings=[f"보류 {source_title.hold_count}회차", *fg.notes])
 
         # 측정값은 통과했을 때도 남긴다. 실패 때만 남기면 임계값을
         # 데이터가 아니라 짐작으로 조정하게 된다.
