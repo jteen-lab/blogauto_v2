@@ -51,27 +51,64 @@ PROMPT = """다음 제목으로 블로그 글을 쓰려고 합니다.
 
 [정리]"""
 
+# 최소 길이를 정한 모듈만 붙는다(슈마즈 B3, 2026-10-20). "이내" 만 주면
+# gpt-4o-mini 는 2,000자를 줘도 600자 안팎으로 줄여 글의 대부분을 모델
+# 기억으로 쓰게 된다.
+RICH = """
+- 최소 {min_length}자 이상 씁니다. 문서에 있는 수치·조건·예외·대상·한도·시행 시기·
+  계산 예시·확인처(기관·메뉴 이름)를 빠짐없이 옮기고, 항목별로 나눠 적습니다.
+"""
+
 
 def build_prompt(title: str, documents: Sequence[Any],
-                 max_length: int = 900) -> str:
-    """묶음 요약 프롬프트. 문서가 없으면 빈 문자열."""
+                 max_length: int = 900, min_length: int = 0,
+                 per_doc: int = PER_DOC_CHARS,
+                 max_input: int = MAX_INPUT_CHARS) -> str:
+    """묶음 요약 프롬프트. 문서가 없으면 빈 문자열.
+
+    min_length 가 있으면 최소 길이·빠짐없이 옮기기 지시를 붙인다.
+    """
     blocks: List[str] = []
     used = 0
     for index, doc in enumerate(documents, 1):
-        body = _clean(getattr(doc, "content", "") or "")[:PER_DOC_CHARS]
+        body = _clean(getattr(doc, "content", "") or "")[:per_doc]
         if not body:
             continue
         head = (getattr(doc, "title", "") or "").strip()
         block = f"[{index}] {head}\n{body}"
-        if used + len(block) > MAX_INPUT_CHARS:
+        if used + len(block) > max_input:
             break
         blocks.append(block)
         used += len(block)
 
     if not blocks:
         return ""
-    return PROMPT.format(title=title, max_length=max_length,
-                         no_match=NO_MATCH, documents="\n\n".join(blocks))
+    prompt = PROMPT.format(title=title, max_length=max_length,
+                           no_match=NO_MATCH, documents="\n\n".join(blocks))
+    if min_length > 0:
+        rich = RICH.format(min_length=min_length)
+        prompt = prompt.replace("\n\n[문서]", rich + "\n[문서]", 1)
+    return prompt
+
+
+def options_from(settings: dict) -> Dict[str, int]:
+    """모듈 reference 설정의 digest_* 키 → 요약 옵션(없으면 빈 dict).
+
+    digest_min_length·digest_per_doc_chars·digest_max_input_chars 를 넣은
+    모듈만 요약이 길어진다(슈마즈 B3, 2026-10-20). 다른 모듈은 지금과 같다.
+    """
+    keys = {"digest_min_length": "min_length",
+            "digest_per_doc_chars": "per_doc",
+            "digest_max_input_chars": "max_input"}
+    out: Dict[str, int] = {}
+    for src, dst in keys.items():
+        try:
+            value = int((settings or {}).get(src) or 0)
+        except (TypeError, ValueError):
+            value = 0
+        if value > 0:
+            out[dst] = value
+    return out
 
 
 def _clean(text: str) -> str:
@@ -87,7 +124,8 @@ def sources_of(documents: Sequence[Any]) -> List[str]:
 
 async def summarize(ai_service: Any, title: str, documents: Sequence[Any],
                     provider: Optional[str], model: Optional[str],
-                    max_length: int = 900) -> Dict[str, Any]:
+                    max_length: int = 900,
+                    options: Optional[Dict[str, int]] = None) -> Dict[str, Any]:
     """한 번의 호출로 전체를 정리한다.
 
     Args:
@@ -96,12 +134,13 @@ async def summarize(ai_service: Any, title: str, documents: Sequence[Any],
         documents: CrawledDocument 목록
         provider/model: 요약에 쓸 AI
         max_length: 정리문 최대 길이
+        options: min_length·per_doc·max_input (모듈 reference 설정 digest_*)
 
     Returns:
         {"text": 정리문, "sources": [url], "no_match": bool, "used": 문서수}
         실패하면 text 가 빈 문자열이다 — 호출자가 문서별 요약으로 되돌린다.
     """
-    prompt = build_prompt(title, documents, max_length)
+    prompt = build_prompt(title, documents, max_length, **(options or {}))
     if not prompt:
         return {"text": "", "sources": [], "no_match": False, "used": 0}
 
