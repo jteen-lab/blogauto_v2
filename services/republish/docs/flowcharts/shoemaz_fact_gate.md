@@ -23,7 +23,10 @@ flowchart TD
     F3C -- 예 --> HOLD
     F3C -- 아니오 --> F2
     F3 -- 아니오 --> F2[F2 haiku 사실 검사<br/>문장·이유·확실도 JSON]
-    F2 --> F2H{확실도 높음 있음?}
+    F2 --> F2E{검사·재검사 호출이나<br/>답 해석 실패?}
+    F2E -- 예, hold_on_error --> HOLD
+    F2E -- 예, 꺼짐 --> SAVE
+    F2E -- 아니오 --> F2H{확실도 높음 있음?}
     F2H -- 아니오 --> SAVE[내부링크·치환·이미지·저장]
     F2H -- 예 --> F2F[그 문장만 글쓰기 모델로 고침<br/>답 없으면 문장 삭제]
     F2F --> F2C{재검사에 높음 남음?}
@@ -40,10 +43,14 @@ flowchart TD
 |---|---|
 | `url_allowlist.enabled/domains/check_alive` | F1. 도메인은 하위 도메인 포함 |
 | `polite_tone.enabled/max_ratio` | F3. 기본 0.2 |
-| `fact_check.enabled/provider/model` | F2. 기본 anthropic / claude-haiku-4-5. 검사 호출 실패면 검사 없이 계속(기록) |
+| `fact_check.enabled/provider/model` | F2. 기본 anthropic / claude-haiku-4-5 |
+| `fact_check.facts` | 확정 사실 목록 — 검사·고치기 지시에 "모델 기억보다 우선"으로 넣음 |
+| `fact_check.hold_on_error` | B2. true 면 검사·재검사 호출이나 답 해석이 실패할 때 보류(승인 심사 기간). 없으면 검사 없이 계속(기록) |
+| `journal` | B4. true 면 글마다 `logs/fact_gate.jsonl` 한 줄(잡은·고친 문장·재검사·F1·F3·보류) |
+| `reference.digest_min_length/digest_per_doc_chars/digest_max_input_chars` | B3. 통합 요약 최소 길이·문서당·전체 입력 상한(없으면 지금과 같음 — 900자 이내·2,500·9,000) |
 | `official_api_counts` | O1 |
 | `official_seeds` `[{keywords, urls}]`, `max_seeds` | O2. 기본 최대 3개 |
 | `next_title_on_hold.enabled/max_attempts` | O3. 기본 3 |
 
 - 파일: `app/services/generation/fact_gate/`(F1·F2·F3), `official_hold.py`(O1), `app/services/reference/official_seeds.py`(O2), `generation/hold_retry.py`(O3).
-- 기록: 로그 `[FACT_GATE]`(지운 주소·뽑힌 문장·고친 결과 JSON), `[OFFICIAL_SEED]`, `[HOLD_RETRY]`. 생성 결과 warnings 에 "F1 주소 n개 삭제·F2 틀린 문장 n개 고침".
+- 기록: `logs/fact_gate.jsonl`(journal), 로그 `[FACT_GATE]`(지운 주소·뽑힌 문장·고친 결과 JSON), `[OFFICIAL_SEED]`, `[HOLD_RETRY]`. 생성 결과 warnings 에 "F1 주소 n개 삭제·F2 틀린 문장 n개 고침".
