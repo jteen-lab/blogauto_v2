@@ -69,10 +69,22 @@ def reference_urls(ref_result: Any) -> List[str]:
     return [u for u in dict.fromkeys(urls) if u]
 
 
-def count_official(ref_result: Any, domains: Iterable[str]) -> int:
-    """참고 자료 중 공식 도메인 주소 수."""
+def api_counts(settings: Optional[dict]) -> bool:
+    """O1 스위치 — 금감원 상품 API 적중도 공식 출처로 세나(fact_gate)."""
+    cfg = (settings or {}).get("fact_gate") or {}
+    return isinstance(cfg, dict) and cfg.get("official_api_counts") is True
+
+
+def count_official(ref_result: Any, domains: Iterable[str],
+                   with_api: bool = False) -> int:
+    """참고 자료 중 공식 도메인 주소 수.
+
+    with_api 면 공식 API(금감원 상품 API 등) 적중을 1건으로 더한다 —
+    API 자체가 기관 1차 자료다(슈마즈 2026-10-20 O1).
+    """
     domains = list(domains)
-    return sum(1 for u in reference_urls(ref_result) if is_official(u, domains))
+    found = sum(1 for u in reference_urls(ref_result) if is_official(u, domains))
+    return found + (1 if with_api and getattr(ref_result, "official", "") else 0)
 
 
 async def hold_if_no_official(db, settings: Optional[dict], source_title,
@@ -82,7 +94,7 @@ async def hold_if_no_official(db, settings: Optional[dict], source_title,
     domains = switch(settings)
     if domains is None:
         return None
-    found = count_official(ref_result, domains)
+    found = count_official(ref_result, domains, api_counts(settings))
     if found:
         logger.info("[OFFICIAL_HOLD] 통과 blog=%s | 공식 %d건 | '%s'",
                     blog_id, found, (working_title or "")[:40])
