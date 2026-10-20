@@ -8,7 +8,9 @@
       "url_allowlist": {"enabled": true, "domains": [...], "check_alive": true},
       "polite_tone":   {"enabled": true, "max_ratio": 0.2},
       "fact_check":    {"enabled": true, "provider": "anthropic",
-                        "model": "claude-haiku-4-5", "facts": ["확정 사실", ...]},
+                        "model": "claude-haiku-4-5", "facts": ["확정 사실", ...],
+                        "hold_on_error": true},  # B2 검사 실패면 보류
+      "journal": true,                       # B4 logs/fact_gate.jsonl
       "official_api_counts": true,          # O1 (official_hold)
       "official_seeds": [{"keywords": [...], "urls": [...]}],   # O2
       "next_title_on_hold": {"enabled": true, "max_attempts": 3}  # O3
@@ -26,12 +28,14 @@ from typing import Any, List, Optional
 
 from ....core.logger import get_logger
 from . import fact_check as f2
+from . import journal
 from . import polite_tone as f3
 from . import url_allowlist as f1
 
 logger = get_logger("fact_gate", "app.log")
 
 DEFAULT_CHECK = ("anthropic", "claude-haiku-4-5")
+CHECK_FAILED = "사실 검사 — 검사 호출·해석 실패(검사 없이 내보내지 않음)"
 
 
 @dataclass
@@ -92,11 +96,13 @@ async def _run_f2(ai: Any, md: str, refs: str, cfg: dict, writer: tuple,
     prov = cfg.get("provider") or DEFAULT_CHECK[0]
     model = cfg.get("model") or DEFAULT_CHECK[1]
     facts = cfg.get("facts") or []  # 확정 사실 — 검사 모델의 옛 기억을 누른다
+    strict = cfg.get("hold_on_error") is True  # B2 승인 심사 기간엔 보류
     items = await f2.check(ai, md, refs, prov, model, facts)
     rec["f2_items"] = items
     if items is None:
-        rec["f2_error"] = "검사 호출 실패 — 검사 없이 계속"
-        return md, None
+        rec["f2_error"] = ("검사 호출 실패 — 보류" if strict
+                           else "검사 호출 실패 — 검사 없이 계속")
+        return md, (CHECK_FAILED if strict else None)
     bad = f2.high(items)
     if not bad:
         return md, None
@@ -109,6 +115,9 @@ async def _run_f2(ai: Any, md: str, refs: str, cfg: dict, writer: tuple,
     rec["f2_fixes"] = applied
     again = await f2.check(ai, md, refs, prov, model, facts)
     rec["f2_recheck"] = again
+    if again is None and strict:
+        rec["f2_error"] = "재검사 호출 실패 — 보류"
+        return md, CHECK_FAILED
     left = f2.high(again)
     if left:
         return md, (f"사실 검사 — 고친 뒤에도 틀린 문장 {len(left)}개: "
@@ -149,6 +158,8 @@ async def run(ai_service: Any, markdown: str, ref_result: Any,
     logger.info("[FACT_GATE] '%s' | 보류=%s | %s", (title or "")[:40],
                 out.hold_reason or "-",
                 json.dumps(rec, ensure_ascii=False, default=str)[:3000])
+    if cfg.get("journal") is True:
+        journal.write(blog, title, out.hold_reason, rec)
     return out
 
 
