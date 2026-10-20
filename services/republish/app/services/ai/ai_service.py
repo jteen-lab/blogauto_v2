@@ -371,8 +371,12 @@ class AIService:
             "model": model,
             "max_tokens": max_tokens,
             "messages": [{"role": "user", "content": prompt}],
-            **sampling_kwargs(model, temperature, top_p, top_k),
         }
+        # SDK 1.x 는 temperature·top_p·top_k 인자를 없앴다(TypeError).
+        # API 는 아직 받으므로 요청 본문에 그대로 싣는다.
+        sampling = sampling_kwargs(model, temperature, top_p, top_k)
+        if sampling:
+            kwargs["extra_body"] = sampling
         if system_prompt:
             kwargs["system"] = system_prompt
 
