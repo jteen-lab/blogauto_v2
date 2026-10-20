@@ -1,5 +1,6 @@
 """사실 관문(F1 주소·F3 말투·F2 사실)·O1~O3 — 슈마즈 2026-10-20."""
 import asyncio
+import json
 from types import SimpleNamespace
 
 from app.services.generation import fact_gate as fg
@@ -207,3 +208,68 @@ def test_f2_facts_reach_check_and_fix_prompts():
     asyncio.run(fg.run(ai, "신협은 예금보험공사가 보호합니다.", _ref(), st, _blog(), "t"))
     assert all("예금자보호 한도는 1억 원" in c["prompt"] for c in ai.calls)
     assert "확정 사실" not in f2.facts_block([])
+
+
+STRICT = {"fact_gate": {"fact_check": {"enabled": True, "hold_on_error": True}}}
+
+
+def test_f2_call_failure_holds_when_strict():
+    """B2 — 승인 심사 기간엔 검사 없이 나가지 않는다."""
+    out = asyncio.run(fg.run(AI(), "본문입니다.", _ref(), STRICT, _blog(), "t"))
+    assert out.hold_reason == fg.CHECK_FAILED and "보류" in out.record["f2_error"]
+
+
+def test_f2_unparsable_answer_holds_when_strict():
+    out = asyncio.run(fg.run(AI("검사 결과입니다"), "본문입니다.", _ref(), STRICT, _blog(), "t"))
+    assert out.hold_reason == fg.CHECK_FAILED
+
+
+def test_f2_recheck_failure_holds_when_strict():
+    ai = AI(ITEM, '{"fixes":[{"sentence":"신협은 예금보험공사가 보호합니다.",'
+                  '"replacement":"신협은 신협중앙회가 보호합니다."}]}')
+    out = asyncio.run(fg.run(ai, "신협은 예금보험공사가 보호합니다.", _ref(), STRICT, _blog(), "t"))
+    assert out.hold_reason == fg.CHECK_FAILED and "재검사" in out.record["f2_error"]
+
+
+def test_journal_written_only_when_on(tmp_path, monkeypatch):
+    """B4 — journal 스위치가 있을 때만 글마다 한 줄."""
+    from app.services.generation.fact_gate import journal
+    monkeypatch.setattr(journal.LoggerConfig, "LOG_DIR", str(tmp_path))
+    ai = AI(ITEM, '{"fixes":[{"sentence":"신협은 예금보험공사가 보호합니다.",'
+                  '"replacement":"신협은 신협중앙회가 보호합니다."}]}', '{"items":[]}')
+    asyncio.run(fg.run(ai, "신협은 예금보험공사가 보호합니다.", _ref(), SET, _blog(), "t"))
+    assert not journal.path().exists()
+    on = {"fact_gate": {**SET["fact_gate"], "journal": True}}
+    ai = AI(ITEM, '{"fixes":[{"sentence":"신협은 예금보험공사가 보호합니다.",'
+                  '"replacement":"신협은 신협중앙회가 보호합니다."}]}', '{"items":[]}')
+    asyncio.run(fg.run(ai, "신협은 예금보험공사가 보호합니다.", _ref(), on, _blog(), "제목"))
+    row = json.loads(journal.path().read_text(encoding="utf-8").strip())
+    assert row["title"] == "제목" and row["hold"] is None
+    assert row["f2_items"][0]["confidence"] == "높음"
+    assert row["f2_fixes"][0]["replacement"] == "신협은 신협중앙회가 보호합니다."
+
+
+def _doc(text, title="문서"):
+    return SimpleNamespace(content=text, title=title, url="https://www.nts.go.kr/a")
+
+
+def test_digest_options_only_when_set():
+    """B3 — digest_* 키가 있는 모듈만 요약이 길어진다."""
+    from app.services.reference import digest
+    assert digest.options_from({"max_length": 500}) == {}
+    got = digest.options_from({"digest_min_length": 1600, "digest_per_doc_chars": "3000",
+                               "digest_max_input_chars": 14000, "x": 1})
+    assert got == {"min_length": 1600, "per_doc": 3000, "max_input": 14000}
+    assert digest.options_from({"digest_min_length": "많이"}) == {}
+
+
+def test_digest_prompt_min_length_and_caps():
+    from app.services.reference import digest
+    docs = [_doc(c * 5000) for c in "가다라나"]
+    plain = digest.build_prompt("제목", docs, 2000)
+    # 문서마다 2,500자, 9,000자 상한이라 넷째 문서는 빠진다
+    assert "최소" not in plain and "가" * 2501 not in plain and "나" * 10 not in plain
+    rich = digest.build_prompt("제목", docs, 2000, min_length=1600,
+                               per_doc=3000, max_input=14000)
+    assert "최소 1600자 이상" in rich and "가" * 3000 in rich and "나" * 3000 in rich
+    assert rich.index("최소 1600자") < rich.index("[문서]")
