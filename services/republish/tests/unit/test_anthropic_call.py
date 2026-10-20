@@ -91,8 +91,10 @@ async def test_call_anthropic_kwargs_for_haiku_and_article_tokens():
         await svc._call_anthropic("k", "p", "claude-haiku-4-5", 4096, 0.7,
                                   "sys", top_p=0.9, top_k=40)
     kw = fake.messages.create.call_args.kwargs
-    assert kw["temperature"] == 0.7
-    assert "top_p" not in kw and "top_k" not in kw
+    # SDK 1.x 는 temperature 인자를 없앴다 — 요청 본문(extra_body)으로만 보낸다
+    assert kw["extra_body"] == {"temperature": 0.7}
+    assert not {"temperature", "top_p", "top_k"} & set(kw)
+    _assert_sdk_accepts(kw)
     assert kw["max_tokens"] == 8000
     assert kw["system"] == "sys"
 
@@ -108,8 +110,21 @@ async def test_call_anthropic_sonnet5_no_sampling_small_tokens_kept():
         await svc._call_anthropic("k", "p", "claude-sonnet-5", 300, 0.7,
                                   top_p=0.9, top_k=40)
     kw = fake.messages.create.call_args.kwargs
-    assert not {"temperature", "top_p", "top_k"} & set(kw)
+    assert not {"temperature", "top_p", "top_k", "extra_body"} & set(kw)
     assert kw["max_tokens"] == 300
+    _assert_sdk_accepts(kw)
+
+
+def _assert_sdk_accepts(kw: dict) -> None:
+    """설치된 anthropic SDK 의 messages.create 가 실제로 받는 인자만 보냈는지 본다.
+
+    가짜 클라이언트는 아무 인자나 받아서 SDK 1.x 의 TypeError 를 못 잡았다(10/20).
+    """
+    import inspect
+    from anthropic.resources.messages import AsyncMessages
+
+    params = inspect.signature(AsyncMessages.create).parameters
+    assert set(kw) <= set(params), set(kw) - set(params)
 
 
 @pytest.mark.asyncio
