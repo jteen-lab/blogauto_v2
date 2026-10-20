@@ -35,6 +35,13 @@ def _outline_block(outline: list) -> str:
             "자료에 없는 항목은 지어내지 말고 건너뜁니다.\n\n")
 
 
+_DEFAULT_REF = {
+    "enabled": True, "max_search": 30, "crawl_target": 10, "summary_count": 3,
+    "summary_method": "ai", "ai_provider": "openai", "ai_model": "gpt-4o-mini",
+    "summary_style": "concise", "algorithm_type": "textrank", "max_length": 500,
+}
+
+
 @dataclass
 class ReferenceCollectionResult:
     """참조자료 수집 결과"""
@@ -138,6 +145,7 @@ class ReferenceCollector:
         search_query: str,
         module_id: Optional[int] = None,
         ref_settings: Optional[dict] = None,
+        seed_urls: Optional[List[str]] = None,
     ) -> ReferenceCollectionResult:
         """
         참조자료 수집 및 요약 실행
@@ -146,6 +154,7 @@ class ReferenceCollector:
             search_query: 검색어 (재조합된 제목)
             module_id: 모듈 ID (설정 로드용, ref_settings와 택일)
             ref_settings: 직접 전달하는 참조자료 설정
+            seed_urls: 먼저 읽을 공식 시작 주소(official_seeds, O2)
 
         Returns:
             ReferenceCollectionResult: 수집 결과
@@ -186,6 +195,7 @@ class ReferenceCollector:
                 result = await self._execute_collection(
                     query, settings, user_settings, ref,
                     entities=plan.entities, title=search_query,
+                    seed_urls=seed_urls,
                 )
             except Exception as e:  # noqa: BLE001
                 last_error = str(e)
@@ -213,6 +223,7 @@ class ReferenceCollector:
         ref: CollectedReference,
         entities: Optional[List[str]] = None,
         title: str = "",
+        seed_urls: Optional[List[str]] = None,
     ) -> ReferenceCollectionResult:
         """수집 파이프라인 실행.
 
@@ -221,7 +232,8 @@ class ReferenceCollector:
             entities: 제목 개체 — 관련성 관문이 쓴다
             title: 원본 제목 — 통합 요약이 쓴다(질의가 아니라 제목을 묻는다)
         """
-        from ..reference import relevance
+        from ..reference import official_seeds as seeds, relevance
+        seed_docs = await seeds.fetch(seed_urls or [])  # O2 공식 시작 주소
         max_search = settings.get("max_search", 30)
         crawl_target = settings.get("crawl_target", 10)
         summary_count = settings.get("summary_count", 3)
@@ -265,7 +277,7 @@ class ReferenceCollector:
         postdates = {r.link: (getattr(r, "postdate", "") or "")
                      for r in search_results if getattr(r, "link", "")}
 
-        if not search_results:
+        if not search_results and not seed_docs:
             ref.status = "failed"
             ref.completed_at = datetime.now()
             await self.db.commit()
@@ -283,8 +295,8 @@ class ReferenceCollector:
 
         # ② 관문 2 — 본문에 개체가 없는 문서를 뺀다
         docs_before = len(crawl_result.documents)
-        documents = relevance.filter_documents(
-            crawl_result.documents, entities)
+        documents = seeds.merge(seed_docs, relevance.filter_documents(
+            crawl_result.documents, entities))
         trace["gate2"] = relevance.report(docs_before, len(documents), "관문2")
 
         if not documents:
@@ -296,7 +308,7 @@ class ReferenceCollector:
         # ④ 통합 요약 — 제목과 함께 한 번에 읽는다. 문서별로 따로 물으면
         #    문서의 주된 내용이 요약되고 우리가 필요한 부분은 빠진다.
         #    (AI 호출도 3회 → 1회로 준다)
-        picked = hs.boost_official(documents)[:max(1, summary_count)]
+        picked = seeds.pick(seed_docs, hs.boost_official(documents), summary_count)
         digest_text, digest_sources = "", []
         if summary_method == "ai":
             from ..reference.digest import summarize as digest_summarize
@@ -460,32 +472,10 @@ class ReferenceCollector:
                 if not settings.get("enable_reference_collection", False):
                     return {"enabled": False}
 
-                return {
-                    "enabled": True,
-                    "max_search": 30,
-                    "crawl_target": 10,
-                    "summary_count": settings.get("reference_count", 3),
-                    "summary_method": "ai",
-                    "ai_provider": "openai",
-                    "ai_model": "gpt-4o-mini",
-                    "summary_style": "concise",
-                    "algorithm_type": "textrank",
-                    "max_length": 500,
-                }
+                return {**_DEFAULT_REF,
+                        "summary_count": settings.get("reference_count", 3)}
 
-        # 기본 설정
-        return {
-            "enabled": True,
-            "max_search": 30,
-            "crawl_target": 10,
-            "summary_count": 3,
-            "summary_method": "ai",
-            "ai_provider": "openai",
-            "ai_model": "gpt-4o-mini",
-            "summary_style": "concise",
-            "algorithm_type": "textrank",
-            "max_length": 500,
-        }
+        return dict(_DEFAULT_REF)  # 기본 설정
 
     async def _get_user_settings(self) -> Optional[UserSettings]:
         """사용자 설정 조회"""
