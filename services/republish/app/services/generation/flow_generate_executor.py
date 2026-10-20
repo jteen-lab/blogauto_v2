@@ -43,6 +43,7 @@ class FlowGenerateExecutor:
         force: bool = False,
         force_title_id: int = 0,
         scope_gate: bool = True,
+        _tried: tuple = (),
     ) -> Dict[str, Any]:
         """
         단일 블로그에 대해 생성 모듈 실행
@@ -56,6 +57,7 @@ class FlowGenerateExecutor:
                             random 선택을 우회하고 이 ID를 강제 사용한다.
                             큐 등록 → 워커 흐름의 결정성을 보장한다.
             scope_gate: False면 블로그 카테고리 관문을 건너뛴다(작업대 전용).
+            _tried: 이번 실행에서 보류된 제목들(hold_retry, O3 — 내부용)
 
         Returns:
             dict: 실행 결과
@@ -295,15 +297,15 @@ class FlowGenerateExecutor:
                     "generation_time_seconds": gen_result.generation_time_seconds,
                     "ai_model": gen_result.ai_model_content,
                 }
-            else:
-                msg = f"글 생성 실패: {gen_result.error}"
-                logger.warning(f"[FLOW_GEN] {msg}")
-                return {
-                    "success": False,
-                    "message": msg,
-                    "skipped": False,
-                    "error": gen_result.error,
-                }
+            from . import hold_retry  # O3 — 보류면 다음 제목(fact_gate 스위치만)
+            again = await hold_retry.retry(self, module, blog, stage_params, scope_gate,
+                                           module_settings, gen_result.error, (*_tried, title_id))
+            if again:
+                return again
+            msg = f"글 생성 실패: {gen_result.error}"
+            logger.warning(f"[FLOW_GEN] {msg}")
+            return {"success": False, "message": msg, "skipped": False,
+                    "error": gen_result.error}
 
         except Exception as e:
             msg = f"생성 모듈 실행 오류: {str(e)}"
