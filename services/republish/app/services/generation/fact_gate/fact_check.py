@@ -37,10 +37,14 @@ CHECK_PROMPT = """당신은 한국 금융·세금 글의 사실 검토자입니�
 - 예: 신협·새마을금고·우체국의 보호 주체를 예금보험공사로 쓴 문장,
   예금자보호 한도 1억 원의 시행 시기(2025년 9월 1일)를 틀리게 쓴 문장,
   가산세율·원천징수세율을 틀리게 쓴 문장, 과세 대상을 비과세로 쓴 문장.
+- [확정 사실]·[참고 자료]가 당신의 기억과 다르면 그쪽이 맞습니다(제도는 자주 바뀝니다).
+  [확정 사실]과 맞는 문장은 고르지 않습니다.
+- 같은 잘못이 여러 문장에 있으면 문장마다 따로 적습니다.
+- 문장 속 큰따옴표(")는 작은따옴표(')로 바꿔 적습니다.
 - 문제가 없으면 items 를 빈 목록으로 둡니다.
 - JSON 만 출력합니다:
 {{"items":[{{"sentence":"...","reason":"...","confidence":"높음|중간|낮음","fix_hint":"..."}}]}}
-
+{facts}
 [참고 자료]
 {refs}
 
@@ -53,7 +57,7 @@ FIX_PROMPT = """아래 [고칠 문장]은 금융·세금 블로그 글에서 사
 - 확실히 고칠 수 없으면 "replacement" 를 빈 문자열로 둡니다(문장 삭제).
 - JSON 만 출력합니다:
 {{"fixes":[{{"sentence":"원래 문장 그대로","replacement":"고친 문장"}}]}}
-
+{facts}
 [참고 자료]
 {refs}
 
@@ -69,9 +73,17 @@ def parse_json(text: str) -> dict:
     if start < 0 or end <= start:
         return {}
     try:
-        return json.loads(t[start:end + 1])
+        # strict=False — 문자열 속 줄바꿈을 받아 준다(haiku 가 자주 넣는다)
+        return json.loads(t[start:end + 1], strict=False)
     except json.JSONDecodeError:
         return {}
+
+
+def facts_block(facts) -> str:
+    """모듈 설정의 확정 사실 목록 → 지시문 덩어리(없으면 빈 줄)."""
+    rows = [str(f).strip() for f in facts or [] if str(f).strip()]
+    return ("\n[확정 사실 — 모델 기억보다 우선]\n" + "\n".join(f"- {r}" for r in rows)
+            + "\n") if rows else ""
 
 
 def _norm(s: str) -> str:
@@ -112,10 +124,10 @@ def apply_fixes(markdown: str, fixes: List[dict]) -> Tuple[str, List[dict]]:
 
 
 async def check(ai_service: Any, body: str, refs: str, provider: str,
-                model: str) -> Optional[List[dict]]:
+                model: str, facts=None) -> Optional[List[dict]]:
     """검사 모델 호출. 호출 실패면 None(검사 못 함), 문제 없으면 []."""
     prompt = CHECK_PROMPT.format(refs=(refs or "(없음)")[:REF_LIMIT],
-                                 body=body)
+                                 body=body, facts=facts_block(facts))
     try:
         res = await ai_service.generate(prompt=prompt, provider=provider,
                                         model=model, max_tokens=2000,
@@ -135,7 +147,7 @@ async def check(ai_service: Any, body: str, refs: str, provider: str,
 
 
 async def fix(ai_service: Any, items: List[dict], refs: str, provider: str,
-              model: Optional[str]) -> List[dict]:
+              model: Optional[str], facts=None) -> List[dict]:
     """'높음' 문장들을 글쓰기 모델로 고친다. 실패하면 빈 목록."""
     listing = "\n".join(
         f"- 문장: {i.get('sentence')}\n  이유: {i.get('reason')}\n"
@@ -143,7 +155,7 @@ async def fix(ai_service: Any, items: List[dict], refs: str, provider: str,
     try:
         res = await ai_service.generate(
             prompt=FIX_PROMPT.format(refs=(refs or "(없음)")[:REF_LIMIT],
-                                     items=listing),
+                                     items=listing, facts=facts_block(facts)),
             provider=provider, model=model, max_tokens=2000, temperature=0.2)
     except Exception as e:  # noqa: BLE001
         logger.warning("[FACT_GATE:F2] 고쳐 쓰기 호출 실패 | %s", e)
