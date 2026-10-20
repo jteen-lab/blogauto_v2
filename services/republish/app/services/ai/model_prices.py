@@ -66,6 +66,17 @@ SEED: List[Dict[str, Any]] = [
      "input_per_1m": 3.0, "output_per_1m": 15.0},
     {"provider": "anthropic", "model_id": "claude-haiku-4-5-20251001",
      "input_per_1m": 1.0, "output_per_1m": 5.0, "tier": "value"},
+    # 날짜 없는 현행 ID (2026-10 기준)
+    {"provider": "anthropic", "model_id": "claude-haiku-4-5",
+     "input_per_1m": 1.0, "output_per_1m": 5.0, "tier": "value"},
+    {"provider": "anthropic", "model_id": "claude-sonnet-5",
+     "input_per_1m": 2.0, "output_per_1m": 10.0, "tier": "value"},
+    {"provider": "anthropic", "model_id": "claude-sonnet-4-6",
+     "input_per_1m": 3.0, "output_per_1m": 15.0},
+    {"provider": "anthropic", "model_id": "claude-opus-5",
+     "input_per_1m": 5.0, "output_per_1m": 25.0, "tier": "flagship"},
+    {"provider": "anthropic", "model_id": "claude-opus-5-5",
+     "input_per_1m": 4.0, "output_per_1m": 20.0, "tier": "flagship"},
 ]
 
 # 글 한 편 기준 예상 비용을 계산할 때 쓰는 가정.

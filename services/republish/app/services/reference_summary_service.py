@@ -18,6 +18,7 @@ from ..schemas.ai_api_key import AIProvider
 from ..schemas.reference_collection import CrawledDocument, DocumentSummary
 from .ai_key_manager import AIKeyManager
 from .text_summarizer import TextSummarizer
+from .ai.anthropic_call import response_text
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +95,7 @@ class ReferenceSummaryService:
             select_count: 요약할 문서 선택 수
             summary_method: 요약 방법 (ai / algorithm)
             ai_provider: AI 제공자 (openai / anthropic / google)
-            ai_model: AI 모델명 (gpt-4o-mini, claude-3-haiku 등)
+            ai_model: AI 모델명 (gpt-4o-mini, claude-haiku-4-5 등)
             summary_style: 요약 스타일 (concise / narrative / report / bullet)
             algorithm_type: 알고리즘 유형 (textrank / frequency / position)
             max_length: 요약 최대 글자수
@@ -224,7 +225,7 @@ class ReferenceSummaryService:
         """provider별 사용할 모델명 반환"""
         defaults = {
             "openai": "gpt-4.1-mini",
-            "anthropic": "claude-haiku-4-5-20251001",
+            "anthropic": "claude-haiku-4-5",
             "google": "gemini-2.5-flash",
             "deepseek": "deepseek-v4-flash",
         }
@@ -235,7 +236,8 @@ class ReferenceSummaryService:
                 "gpt-5-nano", "gpt-5-mini", "gpt-5", "gpt-5.2",
             },
             "anthropic": {
-                "claude-3-haiku-20240307",
+                "claude-haiku-4-5",
+                "claude-sonnet-5",
                 "claude-haiku-4-5-20251001",
                 "claude-sonnet-4-20250514",
                 "claude-sonnet-4-5-20250929",
@@ -302,7 +304,7 @@ class ReferenceSummaryService:
                 max_tokens=800,
                 messages=[{"role": "user", "content": prompt}]
             )
-            return response.content[0].text.strip()
+            return response_text(response, model_name)
         except Exception as e:
             logger.warning(f"[SUMMARY] Anthropic 실패: {e}")
             return None

@@ -159,7 +159,7 @@ function settingsApp() {
         similarityModels: {
             openai: ['gpt-4o-mini', 'gpt-3.5-turbo', 'gpt-4o', 'gpt-4-turbo', 'gpt-4'],
             google: ['gemini-2.5-flash-lite-preview-06-17', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-flash-preview-04-17', 'gemini-1.5-pro', 'gemini-2.5-pro-preview-05-06'],
-            anthropic: ['claude-3-5-haiku-latest', 'claude-3-haiku-20240307', 'claude-3-5-sonnet-latest', 'claude-sonnet-4-20250514', 'claude-3-opus-latest'],
+            anthropic: ['claude-haiku-4-5', 'claude-sonnet-5', 'claude-opus-5'],
             deepseek: ['deepseek-v4-flash', 'deepseek-v4-pro'],
         },
 

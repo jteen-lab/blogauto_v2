@@ -198,12 +198,14 @@ class AIService:
                 used_model = model or "gpt-4o-mini"
             elif provider == AIProvider.ANTHROPIC:
                 # Anthropic: top_p, top_k 지원 (frequency/presence_penalty 미지원)
+                from .anthropic_call import DEFAULT_MODEL as _CLAUDE_DEFAULT
+
+                used_model = model or _CLAUDE_DEFAULT
                 content = await self._call_anthropic(
-                    key.api_key, prompt, model or "claude-3-haiku-20240307",
+                    key.api_key, prompt, used_model,
                     max_tokens, temperature, system_prompt,
                     top_p=top_p, top_k=top_k,
                 )
-                used_model = model or "claude-3-haiku-20240307"
             elif provider == AIProvider.DEEPSEEK:
                 # OpenAI 호환 엔드포인트라 호출부를 그대로 쓴다.
                 # base_url 만 바꾸면 파라미터 처리가 두 갈래로 갈라지지 않는다.
@@ -352,26 +354,31 @@ class AIService:
         top_p: Optional[float] = None,
         top_k: Optional[int] = None,
     ) -> Optional[str]:
-        """Anthropic API 호출 (frequency_penalty, presence_penalty는 미지원)"""
+        """Anthropic API 호출 (frequency_penalty, presence_penalty는 미지원).
+
+        모델마다 받는 샘플링 값이 달라 anthropic_call.sampling_kwargs 로 거른다.
+        글 한 편 크기(4096 이상) 요청은 잘리지 않게 8000 까지 올린다.
+        """
         import anthropic
 
+        from .anthropic_call import (
+            MIN_ARTICLE_MAX_TOKENS, response_text, sampling_kwargs,
+        )
+
+        if max_tokens >= 4096:
+            max_tokens = max(max_tokens, MIN_ARTICLE_MAX_TOKENS)
         kwargs = {
             "model": model,
             "max_tokens": max_tokens,
-            "temperature": temperature,
             "messages": [{"role": "user", "content": prompt}],
+            **sampling_kwargs(model, temperature, top_p, top_k),
         }
         if system_prompt:
             kwargs["system"] = system_prompt
-        # None이 아닌 경우에만 추가 (기존 동작 유지)
-        if top_p is not None:
-            kwargs["top_p"] = top_p
-        if top_k is not None:
-            kwargs["top_k"] = top_k
 
         client = anthropic.AsyncAnthropic(api_key=api_key, timeout=AI_CALL_TIMEOUT)
         resp = await client.messages.create(**kwargs)
-        return resp.content[0].text.strip()
+        return response_text(resp, model)
 
     async def _call_google(
         self,

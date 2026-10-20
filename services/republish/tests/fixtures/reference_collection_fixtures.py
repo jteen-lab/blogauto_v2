@@ -280,7 +280,9 @@ def create_mock_anthropic_response(content: str = "요약된 내용입니다."):
     """Mock Anthropic API 응답"""
     response = MagicMock()
     response.content = [MagicMock()]
+    response.content[0].type = "text"
     response.content[0].text = content
+    response.stop_reason = "end_turn"
     return response
 
 
