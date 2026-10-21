@@ -20,6 +20,7 @@ from .image_uploader import ImageUploader
 from .html_injector import HtmlInjector
 from .wordpress_publisher import WordPressPublisher
 from .blogger_publisher import BloggerPublisher
+from . import blogger_slug
 from .publish_result import PublishResult, ImageUploadResult
 from .thin_content_gate import check_thin_content
 from .topic_dedup_gate import check_topic_duplicate
@@ -471,6 +472,7 @@ class PublisherPipeline:
             return await self.blogger_publisher.publish(
                 blog, post, final_html,
                 credential=credential,
+                slug=await blogger_slug.make(self.db, blog, post.title),
             )
 
         else:
