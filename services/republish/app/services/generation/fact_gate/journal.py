@@ -26,7 +26,7 @@ def path() -> Path:
 
 
 def entry(blog: Any, title: str, hold: Optional[str], rec: dict) -> dict:
-    """기록장 한 줄. 잡은 문장(F2 전부)·고친 문장·재검사·F1·F3 를 담는다."""
+    """기록장 한 줄. 잡은 문장(F2 전부)·고친 문장·재검사·F1·F3·L1·L2 를 담는다."""
     return {
         "at": datetime.now().isoformat(timespec="seconds"),
         "blog_id": getattr(blog, "id", None),
@@ -38,6 +38,8 @@ def entry(blog: Any, title: str, hold: Optional[str], rec: dict) -> dict:
         "f2_fixes": rec.get("f2_fixes"),
         "f2_recheck": rec.get("f2_recheck"),
         "f2_error": rec.get("f2_error"),
+        "l2_removed": rec.get("l2_removed"),
+        "l1_links": rec.get("l1_links"),
     }
 
 
