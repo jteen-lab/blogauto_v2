@@ -13,10 +13,13 @@
       "journal": true,                       # B4 logs/fact_gate.jsonl
       "official_api_counts": true,          # O1 (official_hold)
       "official_seeds": [{"keywords": [...], "urls": [...]}],   # O2
-      "next_title_on_hold": {"enabled": true, "max_attempts": 3}  # O3
+      "next_title_on_hold": {"enabled": true, "max_attempts": 3}, # O3
+      "template_leak": {"enabled": true},    # L2 지시 문구 새어 나옴 지움
+      "source_links":  {"enabled": true, "links": [{"name","url"}]}  # L1
     }
 
 2026-10-20 마케팅 지시(형 승인) — 슈마즈(블로그 15·모듈 177).
+L1·L2 는 2026-10-22 마케팅 지시(형 승인) — 첫 발행 글 5230 에서 발견.
 순서도: docs/flowcharts/shoemaz_fact_gate.md
 """
 from __future__ import annotations
@@ -30,6 +33,8 @@ from ....core.logger import get_logger
 from . import fact_check as f2
 from . import journal
 from . import polite_tone as f3
+from . import source_links as l1
+from . import template_leak as l2
 from . import url_allowlist as f1
 
 logger = get_logger("fact_gate", "app.log")
@@ -61,11 +66,15 @@ def _on(cfg: dict, key: str) -> dict:
 
 
 def with_prompt(settings: dict) -> dict:
-    """F3 가 켜졌으면 system_prompt 에 말투 한 줄을 붙인 사본."""
-    if not _on(config(settings), "polite_tone"):
+    """F3·L2 가 켜졌으면 system_prompt 에 지시 한 줄씩 붙인 사본."""
+    cfg = config(settings)
+    adds = [m.with_directive for k, m in (("polite_tone", f3),
+                                         ("template_leak", l2)) if _on(cfg, k)]
+    if not adds:
         return settings
     cg = dict(settings.get("content_generation") or {})
-    cg["system_prompt"] = f3.with_directive(cg.get("system_prompt"))
+    for add in adds:
+        cg["system_prompt"] = add(cg.get("system_prompt"))
     return {**settings, "content_generation": cg}
 
 
@@ -142,6 +151,8 @@ async def run(ai_service: Any, markdown: str, ref_result: Any,
         rec["f1_removed"] = removed
         if removed:
             out.notes.append(f"F1 주소 {len(removed)}개 삭제")
+    if _on(cfg, "template_leak"):
+        out.markdown, rec["l2_removed"] = l2.scrub(out.markdown)
     c3 = _on(cfg, "polite_tone")
     if c3:
         out.markdown, reason, rec["f3"] = await f3.enforce(
@@ -155,6 +166,10 @@ async def run(ai_service: Any, markdown: str, ref_result: Any,
         n = len(f2.high(rec.get("f2_items")))
         if n:
             out.notes.append(f"F2 틀린 문장 {n}개 고침")
+    cl = _on(cfg, "source_links")
+    if cl and not out.hold_reason:
+        out.markdown, rec["l1_links"] = l1.apply(
+            out.markdown, cl, (c1 or {}).get("domains"))
     logger.info("[FACT_GATE] '%s' | 보류=%s | %s", (title or "")[:40],
                 out.hold_reason or "-",
                 json.dumps(rec, ensure_ascii=False, default=str)[:3000])
