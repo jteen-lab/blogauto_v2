@@ -54,3 +54,33 @@ flowchart TD
 
 - 파일: `app/services/generation/fact_gate/`(F1·F2·F3), `official_hold.py`(O1), `app/services/reference/official_seeds.py`(O2), `generation/hold_retry.py`(O3).
 - 기록: `logs/fact_gate.jsonl`(journal), 로그 `[FACT_GATE]`(지운 주소·뽑힌 문장·고친 결과 JSON), `[OFFICIAL_SEED]`, `[HOLD_RETRY]`. 생성 결과 warnings 에 "F1 주소 n개 삭제·F2 틀린 문장 n개 고침".
+
+## L1·L2·L3 — 첫 발행 글(5230) 뒤 덧붙임 (2026-10-22 마케팅 지시·형 승인)
+
+```mermaid
+flowchart TD
+    A[글쓰기 지시문] -->|L2 켜짐| A2[+ '형식 이름을 본문에 쓰지 말 것' 한 줄]
+    B[다 쓴 본문] --> F1[F1 주소 허용 목록]
+    F1 --> L2{L2 '항목: 값' 같은 지시 문구 문장?}
+    L2 -->|있음| L2a[그 문장만 지움]
+    L2 -->|없음| F3
+    L2a --> F3[F3 말투] --> F2[F2 사실 검사]
+    F2 -->|보류 아님| L1{L1 '어디서 확인' 소제목 아래 목록 줄}
+    L1 -->|기관 이름 + 링크 없음| L1a[정해진 목록 주소로 링크<br/>F1 허용 도메인 밖이면 안 붙임]
+    L1 --> S[저장]
+    L1a --> S
+    S --> P{발행: 블로그 seo_config.english_slug.enabled?}
+    P -->|아니오| P0[한글 제목 그대로 발행]
+    P -->|예| K[gpt-4o-mini 로 영어 키워드 3~6개] -->|못 만듦| P0
+    K --> P1[영어 제목으로 발행 → 주소 /YYYY/MM/영어-키워드.html]
+    P1 --> P2[PATCH 로 한글 제목 되돌림 3회까지<br/>주소는 그대로]
+```
+
+| 키 | 뜻 |
+|---|---|
+| 모듈 `fact_gate.template_leak.enabled` | L2 |
+| 모듈 `fact_gate.source_links.enabled/headings/links[{name,url}]` | L1. 기본 소제목 '어디서 확인', 기본 기관 주소 20개(새마을금고중앙회는 서버에서 400이라 뺌)(`source_links.DEFAULT_LINKS`) |
+| 블로그 `seo_config.english_slug.enabled` | L3 (`publishing/blogger_slug.py`) |
+
+- 재시도 중복 방지: 한글 제목으로 못 찾으면 영어 제목으로도 찾아, 있으면 한글 제목으로 되돌리고 그 글을 채택.
+- 기록: `fact_gate.jsonl` 에 `l2_removed`(지운 문장)·`l1_links`(붙인 수), 로그 `[BLOGGER_SLUG]`.
