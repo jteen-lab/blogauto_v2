@@ -17,6 +17,7 @@ from ...models.crawled_post import CrawledPost
 from ...models.google_credential import GoogleCredential
 from ...core.encryption import decrypt_api_key
 from ...core.logger import get_logger
+from . import blogger_slug
 from .publish_result import PublishResult
 from .google_oauth_helper import refresh_access_token
 
@@ -43,15 +44,20 @@ class BloggerPublisher:
         post: CrawledPost,
         final_html: str,
         credential: Optional[GoogleCredential] = None,
+        slug: Optional[str] = None,
     ) -> PublishResult:
         """
         Blogger에 글을 발행합니다.
+
+        slug 가 있으면 영어 제목으로 발행해 주소를 만든 뒤 한글 제목으로
+        되돌린다(blogger_slug, L3).
 
         Args:
             blog: 대상 블로그
             post: 발행할 CrawledPost
             final_html: 이미지가 삽입된 최종 HTML
             credential: Google OAuth 인증 정보
+            slug: 영어 키워드 제목(없으면 한글 제목 그대로)
 
         Returns:
             PublishResult
@@ -101,6 +107,14 @@ class BloggerPublisher:
         existing = await self._find_recent_post_by_title(
             blog_id, post.title, access_token,
         )
+        if not existing and slug:
+            existing = await self._find_recent_post_by_title(
+                blog_id, slug, access_token,
+            )
+            if existing:
+                await blogger_slug.restore_title(
+                    BLOGGER_API_BASE, blog_id, str(existing.get("id")),
+                    post.title, access_token)
         if existing:
             result.success = True
             result.published_url = existing.get("url", "")
@@ -115,7 +129,7 @@ class BloggerPublisher:
 
         payload = {
             "kind": "blogger#post",
-            "title": post.title,
+            "title": slug or post.title,
             "content": final_html,
         }
 
@@ -147,6 +161,11 @@ class BloggerPublisher:
                     result.platform_post_id = str(
                         data.get("id", "")
                     )
+                    if slug:
+                        await blogger_slug.restore_title(
+                            BLOGGER_API_BASE, blog_id,
+                            result.platform_post_id, post.title,
+                            access_token)
 
                     logger.info(
                         "[BLOGGER_PUBLISH] 발행 성공 | "
