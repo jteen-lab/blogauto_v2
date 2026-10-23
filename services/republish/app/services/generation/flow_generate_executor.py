@@ -134,18 +134,14 @@ class FlowGenerateExecutor:
                         f"존재하지 않음"
                     )
                     logger.warning(f"[FLOW_GEN] {msg}")
-                    return {
-                        "success": True, "message": msg, "skipped": True,
-                    }
+                    return {"success": True, "message": msg, "skipped": True}
                 if title.status == "archived":
                     msg = (
                         f"디스패치 지정 제목(id={force_title_id})이 "
                         f"archived 상태로 사용 불가"
                     )
                     logger.warning(f"[FLOW_GEN] {msg}")
-                    return {
-                        "success": True, "message": msg, "skipped": True,
-                    }
+                    return {"success": True, "message": msg, "skipped": True}
                 # 이 블로그가 이미 만든 제목이면 중복 생성 방지
                 dup_check = await self.db.execute(
                     _select(CrawledPost.id).where(
@@ -160,9 +156,7 @@ class FlowGenerateExecutor:
                         f"이 블로그가 이미 사용함 - 중복 생성 방지"
                     )
                     logger.warning(f"[FLOW_GEN] {msg}")
-                    return {
-                        "success": True, "message": msg, "skipped": True,
-                    }
+                    return {"success": True, "message": msg, "skipped": True}
                 title_id = title.id
                 logger.info(
                     f"[FLOW_GEN] 디스패치 지정 제목 사용 | title_id={title_id} | "
@@ -248,6 +242,11 @@ class FlowGenerateExecutor:
                 self.db, blog, title, module_settings) or await blog_topic_filter.apply(self.db, blog, title, module_settings))
             if blocked:
                 return {"success": True, "skipped": True, "message": f"{blocked} - 생성 건너뜀"}
+            from . import volume_floor  # N2 검색량 바닥선 — 낮으면 같은 회차에서 다음 제목(title_lead_keyword.md)
+            low = scope_gate and await volume_floor.check(self.db, self.user_id, blog, title, module_settings)
+            if low:
+                return await volume_floor.next_title(self, module, blog, stage_params, scope_gate, module_settings,
+                                                     (*_tried, title_id)) or {"success": True, "skipped": True, "message": f"{low} - 생성 건너뜀"}
 
             # 2.5 프롬프트 로테이션 — 같은 블로그·같은 니치라도 글마다
             # 구조를 바꾼다. 한 구조로 계속 나가면 패턴이 보인다.
