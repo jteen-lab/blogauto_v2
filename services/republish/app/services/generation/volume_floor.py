@@ -54,7 +54,7 @@ async def check(db: Any, user_id: int, blog: Any, title: Any,
             title.search_volume = lead.best
             title.search_volume_at = datetime.now(timezone.utc)
             await db.commit()
-            known = lead.status == "ok"
+            known = lead.status != "low"
     except Exception as e:  # noqa: BLE001
         logger.warning("[VOLUME_FLOOR] 판정 실패(통과) | blog=%s | %s", blog.id, e)
         return None
