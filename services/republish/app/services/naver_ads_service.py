@@ -279,11 +279,14 @@ class NaverAdsService:
         for item in keyword_list:
             keyword_data = KeywordData(
                 keyword=item.get("relKeyword", ""),
-                monthly_pc_qc_cnt=self._parse_count(
-                    item.get("monthlyPcQcCnt", "< 10")
+                monthly_pc_qc_cnt=self._count_or_estimate(
+                    item.get("monthlyPcQcCnt", "< 10"),
+                    item.get("monthlyAvePcClkCnt"), item.get("monthlyAvePcCtr")
                 ),
-                monthly_mobile_qc_cnt=self._parse_count(
-                    item.get("monthlyMobileQcCnt", "< 10")
+                monthly_mobile_qc_cnt=self._count_or_estimate(
+                    item.get("monthlyMobileQcCnt", "< 10"),
+                    item.get("monthlyAveMobileClkCnt"),
+                    item.get("monthlyAveMobileCtr")
                 ),
                 total_qc_cnt=0,
                 competition_level=self._parse_competition(
@@ -319,6 +322,24 @@ class NaverAdsService:
             result["keywords"] = result["keywords"][:1]
 
         return result
+
+    def _count_or_estimate(self, value: Any, clicks: Any, ctr: Any) -> int:
+        """검색량. '< 10' 으로 가려져 오면 클릭 수 ÷ 클릭률로 어림한다.
+
+        2026-10-23 실측: 검색광고가 '석류'(클릭 244·클릭률 1.52%)까지 모든 말의
+        검색량을 '< 10' 으로 돌려줬다. 클릭·클릭률은 그대로 와서 둘로 되살린다
+        (석류효능 어림 7,791 ↔ 마케팅이 전날 잰 9,050). 클릭이 없으면 그대로 9.
+        """
+        count = self._parse_count(value)
+        if not (isinstance(value, str) and value.startswith("<")):
+            return count
+        try:
+            clk, rate = float(clicks or 0), float(ctr or 0)
+        except (TypeError, ValueError):
+            return count
+        if clk <= 0 or rate <= 0:
+            return count
+        return max(count, int(round(clk / (rate / 100))))
 
     def _parse_count(self, value: Any) -> int:
         """
@@ -356,6 +377,9 @@ class NaverAdsService:
             "MEDIUM": "중간",
             "LOW": "낮음"
         }
+        # 2026-10-23 실측: 영어 대신 '높음·중간·낮음'으로 오기 시작했다
+        if value in competition_map.values():
+            return value
         return competition_map.get(value, "알 수 없음")
 
     async def collect_keywords(
