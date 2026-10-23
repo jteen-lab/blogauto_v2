@@ -131,6 +131,13 @@ async def generate_content_with_meta(
 
     full_prompt = _lead_summary(full_prompt, blog)
 
+    # 맨 앞 검색어를 첫 문단·소제목에 / 지난 연도 숫자는 과거형(title_lead_keyword.md)
+    from .lead_keyword_flow import body_notes as _body_notes
+
+    for note in _body_notes(settings):
+        if note[:12] not in full_prompt:
+            full_prompt = f"{full_prompt}\n\n{note}"
+
     # 분량 지시문 — 게이트 임계값에서 유도해 주입한다.
     # 이 지시가 없으면 모델은 모듈 프롬프트의 목표치를 소프트하게 받아
     # 중앙 1,883자·하위10% 1,484자로 흩어진다(400편 실측). 게이트가 보는
