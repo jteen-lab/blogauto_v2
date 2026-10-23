@@ -18,3 +18,13 @@ def test_parse_response_uses_estimate():
                              "monthlyAveMobileClkCnt": 175.0, "monthlyAveMobileCtr": 2.37}]}
     kw = svc._parse_keyword_response(data, False)["keywords"][0]
     assert kw["total_search_volume"] == 7384 + 407 and kw["competition"] == "높음"
+
+
+def test_masked_flag_when_almost_all_hidden():
+    svc = NaverAdsService(None)
+    rows = [{"relKeyword": f"k{i}", "monthlyPcQcCnt": "< 10", "monthlyMobileQcCnt": "< 10"}
+            for i in range(10)]
+    assert svc._parse_keyword_response({"keywordList": rows}, False)["masked"] is True
+    rows[0]["monthlyMobileQcCnt"] = 5000
+    rows[1]["monthlyMobileQcCnt"] = 300
+    assert svc._parse_keyword_response({"keywordList": rows}, False)["masked"] is False
