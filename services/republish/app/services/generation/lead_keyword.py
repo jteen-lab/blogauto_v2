@@ -35,6 +35,7 @@ logger = get_logger("lead_keyword", "app.log")
 SETTINGS_KEY = "title_lead_keyword"
 FLOOR_KEY = "title_lead_floor"
 JOURNAL = "lead_keyword.jsonl"
+MASKED = "__masked__"   # 검색량이 가려진 응답 표시(stats 안 특수 키)
 CACHE_SEC = 3600
 REST_CHARS = 30
 _CACHE: Dict[Tuple[str, int], Tuple[float, "Lead"]] = {}
@@ -87,14 +88,17 @@ async def _stats(db: Any, user_id: int, hints: List[str]) -> Optional[Dict[str, 
     if not result.get("success"):
         logger.warning("[LEAD_KW] 검색량 조회 실패 | %s", result.get("error"))
         return None
-    return {(r.get("keyword") or "").replace(" ", "").lower():
-            (int(r.get("total_search_volume") or 0), r.get("competition") or "")
-            for r in result.get("keywords") or []}
+    stats = {(r.get("keyword") or "").replace(" ", "").lower():
+             (int(r.get("total_search_volume") or 0), r.get("competition") or "")
+             for r in result.get("keywords") or []}
+    stats[MASKED] = (int(bool(result.get("masked"))), "")
+    return stats
 
 
 def judge(stats: Dict[str, Tuple[int, str]], title: str,
           keywords: Optional[List[str]], low: int) -> Lead:
     """조회 결과로 고르기(DB 없음 — 시험·모의용)."""
+    masked = bool(stats.pop(MASKED, (0, ""))[0])
     regions = _regions()
     cands = pick.title_candidates(title, keywords, regions)
     for c in cands:
@@ -104,6 +108,10 @@ def judge(stats: Dict[str, Tuple[int, str]], title: str,
     best = max((c.volume for c in allc if len(c.key) >= 2), default=0)
     chosen = pick.choose(allc, low, pick.region_lead(pick.words(title), regions))
     status = "ok" if chosen else ("none" if best >= low else "low")
+    if status == "low" and masked:
+        # 가려진 응답에선 '낮음'을 믿지 않는다 — 건너뛰지도, 기억하지도 않음
+        logger.info("[LEAD_KW] 검색량 가려짐 — 낮음 판정 보류 | '%s'", title[:30])
+        status = "fail"
     return Lead(status, chosen, best)
 
 
@@ -165,7 +173,7 @@ async def apply(db: Any, user_id: int, settings: Optional[dict], title: str,
         return settings, None
     c = lead.pick
     if cpa:
-        logger.info("[LEAD_KW] CPA 제목 — 검색어만 기록 「%s」(%d) | '%s'",
+        logger.info("[LEAD_KW] 기록만(CPA·재조합 꺼짐) 「%s」(%d) | '%s'",
                     c.text, c.volume, title[:30])
         return settings, c
     out = copy.deepcopy(settings)
