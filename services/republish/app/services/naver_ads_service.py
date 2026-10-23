@@ -311,6 +311,13 @@ class NaverAdsService:
                 "avg_cpc": keyword_data.avg_cpc
             })
 
+        # 검색량이 통째로 '< 10' 으로 가려 왔나(2026-10-23 실측). 가려지면 광고 클릭이
+        # 없는 말('위택스' 같은 찾아가기 말)은 어림도 안 돼 낮게 보인다 — 쓰는 쪽이
+        # '낮다'는 판정을 믿지 않게 알린다.
+        masked = sum(1 for it in keyword_list
+                     if str(it.get("monthlyMobileQcCnt", "")).startswith("<"))
+        result["masked"] = len(keyword_list) >= 5 and masked >= 0.9 * len(keyword_list)
+
         # 연관 키워드 분리 (검색량 기준 정렬)
         if include_related and len(result["keywords"]) > 1:
             # 첫 번째 키워드는 원본, 나머지는 연관 키워드
