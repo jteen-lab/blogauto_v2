@@ -27,7 +27,9 @@ async def lead_recombine(gen: Any, source_title: Any, settings: dict, provider: 
                          module_id: int) -> Tuple[Any, Optional[Candidate], str]:
     """재조합 결과, 고른 검색어, 반영 방식(instruction|retry|rule|cpa|none)."""
     kws = title_keywords(source_title)
-    cpa = bool(getattr(source_title, "cpa_offer_id", None))
+    # CPA 오퍼 제목·재조합을 꺼 둔 모듈(슈마즈)은 제목을 건드리지 않고 검색어만 기록
+    cpa = bool(getattr(source_title, "cpa_offer_id", None)) or (
+        (settings.get("title_recombine") or {}).get("enabled") is False)
     title_settings, lead = await lead_keyword.apply(
         gen.db, gen.user_id, settings, source_title.title, kws, cpa=cpa)
 
