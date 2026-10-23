@@ -19,7 +19,7 @@ class DB:
 
 
 def _title(**kw):
-    base = dict(id=1, title="고흥석류 효능", cpa_offer_id=None, keywords=None,
+    base = dict(id=1, title="고흥석류 효능", cpa_offer_id=None, keywords=None, source="transfer",
                 search_volume=None, search_volume_at=None)
     base.update(kw)
     return SimpleNamespace(**base)
@@ -52,6 +52,7 @@ def test_check_skips_low_records_volume_and_passes_on_failure(monkeypatch):
     assert asyncio.run(vf.check(DB(), 1, blog, _title(), on)) is None       # 조회 실패 → 통과
     assert asyncio.run(vf.check(DB(), 1, blog, _title(), {})) is None       # 스위치 꺼짐
     assert asyncio.run(vf.check(DB(), 1, blog, _title(cpa_offer_id=3), on)) is None
+    assert asyncio.run(vf.check(DB(), 1, blog, _title(source="manual"), on)) is None
 
 
 def test_long_duplicate_uses_meaning_words():
