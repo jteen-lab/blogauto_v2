@@ -117,6 +117,11 @@ class MainTitle(Base):
         DateTime(timezone=True), nullable=True, comment="마지막 보류 시각")
     hold_reason: Mapped[Optional[str]] = mapped_column(
         Text, nullable=True, comment="마지막 보류 사유")
+    # N2 검색량 바닥선(2026-10-23) — 맨 앞 검색어 후보 중 가장 큰 한 달 검색량과 잰 날
+    search_volume: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True, comment="맨 앞 검색어 후보 최대 검색량(네이버 한 달)")
+    search_volume_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="검색량 잰 시각")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
