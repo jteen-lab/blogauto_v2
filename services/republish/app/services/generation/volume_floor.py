@@ -7,7 +7,7 @@
 - 제목은 보관하지 않는다. 가장 큰 검색량과 잰 날만 main_titles 에 남긴다 —
   나중에 바닥선을 바꾸면 남긴 값으로 다시 판정한다. 30일 안이면 다시 재지 않는다.
 - 조회 실패면 건너뛰지 않는다(조회 실패로 발행이 멈추면 안 된다).
-- CPA 오퍼 제목은 보지 않는다. 바닥선은 모듈 `title_lead_floor`(인포노트 10 — 구글 유입).
+- CPA 오퍼 제목·손으로 넣은 제목(source=manual)은 보지 않는다. 바닥선은 모듈 `title_lead_floor`(인포노트 10 — 구글 유입).
 - 스위치는 맨 앞 검색어와 같은 `title_lead_keyword`.
 
 순서도: docs/flowcharts/title_lead_keyword.md (1. 생성 회차)
@@ -42,6 +42,8 @@ async def check(db: Any, user_id: int, blog: Any, title: Any,
                 settings: Optional[dict]) -> Optional[str]:
     """바닥선 아래면 건너뛸 사유, 아니면 None. 판정 오류는 통과."""
     if not lead_keyword.enabled(settings) or getattr(title, "cpa_offer_id", None):
+        return None
+    if getattr(title, "source", None) == "manual":   # 사람이 골라 넣은 제목(마케팅 묶음)은 그대로
         return None
     low = lead_keyword.floor(settings)
     text = getattr(title, "title", "") or ""
