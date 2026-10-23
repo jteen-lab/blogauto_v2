@@ -9,6 +9,9 @@
   4. 저축은행·캐피탈·소액대출 등 개별 대출 상품 — 3번과 같은 기준
   5. 제철이 아닌 주제(10월 '봄동 효능')        — 철 지난 글
   6. 7일 안에 다른 블로그가 같은 주제를 냈음  — 블로그 간 중복
+     (N3, 2026-10-23: 8~90일 전 글도 본다 — 기준은 같은 블로그 쪽 의미 낱말 셈법.
+      7일 기준(바이그램)을 90일에 그대로 쓰면 '직장인을 위한 … 7가지' 틀만 겹쳐도
+      걸려 인생꿀팁 60%·꿀팁대백과 55% 제목이 막혔다 — 시험 10/23)
 
 1~4는 시간이 지나도 풀리지 않으므로 제목을 보관(archived)해 다시 뽑히지
 않게 한다(지우지 않는다 — 되돌릴 수 있다). 5·6은 때가 지나면 풀리므로
@@ -29,6 +32,8 @@ from .quality_gate import RISKY_PATTERNS
 logger = get_logger("topic_gate", "app.log")
 
 DUP_DAYS = 7
+LONG_DUP_DAYS = 90   # N3 — 8~90일은 의미 낱말 기준
+LONG_STRONG = 3      # 의미 낱말이 이만큼 겹치면 자카드와 상관없이 같은 주제
 
 # ── 대출 ──────────────────────────────────────────────────────────────
 LENDER = re.compile(r"대부(?!분)|대부업")
@@ -92,10 +97,33 @@ def _risky(title: str) -> Optional[str]:
     return None
 
 
+# '25년 상반기'·'24년 기준' 같은 두 자리 연도(뒤에 시기 말이 올 때만 — '25년 근속' 제외)
+_SHORT_YEAR = re.compile(r"(?<!\d)'?(\d\d)년\s*(?:도\s*)?(?=상반기|하반기|기준|최신|개정|변경|"
+                         r"업데이트|버전|달라진|새해|부터|까지)")
+
+
 def _past_year(title: str, today: date) -> Optional[int]:
     years = [int(y) for y in re.findall(r"(?<!\d)(20\d\d)(?!\d)", title)]
+    years += [2000 + int(y) for y in _SHORT_YEAR.findall(title)]
     past = [y for y in years if y < today.year]
     return max(past) if past else None
+
+
+def strip_past_year(title: str, today: Optional[date] = None) -> Optional[str]:
+    """N4 — 재조합 뒤 최종 제목에 지난 연도가 있으면 연도를 뺀 제목, 없으면 None.
+
+    올해 연도로 바꾸지 않는다 — 본문 숫자가 옛 기준일 수 있다.
+    """
+    today = today or date.today()
+    if not _past_year(title or "", today):
+        return None
+    out = re.sub(r"\(?\s*(?<!\d)(20\d\d)(?!\d)\s*년?\s*(?:도)?\s*(?:업데이트|기준|최신)?\s*\)?",
+                 lambda m: m.group(0) if int(m.group(1)) >= today.year else " ", title)
+    out = _SHORT_YEAR.sub(lambda m: m.group(0) if 2000 + int(m.group(1)) >= today.year
+                          else " ", out)
+    out = re.sub(r"\(\s*\)", " ", out)
+    out = re.sub(r"\s+([,·:])", r"\1", re.sub(r"\s{2,}", " ", out)).strip(" ,·:-")
+    return out or None
 
 
 def loan_product(title: str) -> Optional[str]:
@@ -174,12 +202,35 @@ def same_topic(a: str, b: str) -> bool:
     return jac >= 0.45 or (len(ta & tb) >= 2 and tj >= 0.3)
 
 
+def same_topic_long(a: str, b: str) -> bool:
+    """8~90일 전 글과 같은 주제인가 — 의미 낱말 기준(지역은 지우지 않음).
+
+    지역이 다른 글('청주 콜택시'·'대구 콜택시')은 검색어가 달라 서로 밀어내지 않는다.
+    """
+    from .same_blog_dedupe import _regions, is_same
+
+    regions = _regions()
+    ra = {w for w in _tokens(a) if w in regions}
+    rb = {w for w in _tokens(b) if w in regions}
+    if ra and rb and not ra & rb:
+        return False
+    return is_same(a, b, set(), strong=LONG_STRONG)
+
+
 def find_duplicate(title: str, title_id: int,
-                   recent: Sequence[Tuple[str, Optional[int], str]]) -> Optional[str]:
-    """recent = (다른 블로그 이름, 정식제목 id, 글 제목). 겹치면 설명."""
-    for blog_name, tid, other in recent:
-        if (title_id and tid == title_id) or same_topic(title, other):
-            return f"{DUP_DAYS}일 안에 {blog_name}가 같은 주제 「{other[:30]}」"
+                   recent: Sequence[tuple]) -> Optional[str]:
+    """recent = (다른 블로그 이름, 정식제목 id, 글 제목[, 지난 날수]). 겹치면 설명.
+
+    지난 날수가 없거나 DUP_DAYS 안이면 넓은 기준(same_topic), 그 밖은 의미 낱말 기준.
+    """
+    for row in recent:
+        blog_name, tid, other = row[:3]
+        age = row[3] if len(row) > 3 else 0
+        short = age <= DUP_DAYS
+        if (title_id and tid == title_id) or (
+                same_topic(title, other) if short else same_topic_long(title, other)):
+            days = DUP_DAYS if short else LONG_DUP_DAYS
+            return f"{days}일 안에 {blog_name}가 같은 주제 「{other[:30]}」"
     return None
 
 
@@ -189,14 +240,16 @@ async def _recent_other_posts(db, blog_id: int):
     from ...models.blog import Blog
     from ...models.crawled_post import CrawledPost
 
-    since = datetime.now(timezone.utc) - timedelta(days=DUP_DAYS)
+    now = datetime.now(timezone.utc)
     rows = await db.execute(
-        select(Blog.name, CrawledPost.matched_main_title_id, CrawledPost.title)
+        select(Blog.name, CrawledPost.matched_main_title_id, CrawledPost.title,
+               CrawledPost.created_at)
         .join(Blog, Blog.id == CrawledPost.blog_id)
         .where(CrawledPost.blog_id != blog_id,
                CrawledPost.source == "generated",
-               CrawledPost.created_at >= since))
-    return [(n, t, s or "") for n, t, s in rows.all()]
+               CrawledPost.created_at >= now - timedelta(days=LONG_DUP_DAYS))
+        .order_by(CrawledPost.created_at.desc()))
+    return [(n, t, s or "", (now - c).days if c else 0) for n, t, s, c in rows.all()]
 
 
 async def apply(db, blog, title) -> Optional[str]:
