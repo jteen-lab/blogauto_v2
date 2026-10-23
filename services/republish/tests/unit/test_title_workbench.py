@@ -495,9 +495,10 @@ class TestRecombine:
         assert "title_style=selected_style" in src
 
     def test_keywords_passed_to_recombiner(self):
-        src = (BASE / "app/services/generation/generator.py").read_text(
+        # 재조합 호출은 맨 앞 검색어 흐름으로 옮겨졌다(2026-10-23 N1)
+        src = (BASE / "app/services/generation/lead_keyword_flow.py").read_text(
             encoding="utf-8")
-        assert "keywords=title_keywords(source_title)" in src
+        assert "kws = title_keywords(source_title)" in src and "keywords=kws" in src
         recomb = (BASE / "app/services/generation/title_recombiner.py"
                   ).read_text(encoding="utf-8")
         assert "반드시 유지할 핵심어" in recomb
@@ -804,7 +805,7 @@ class TestRecombineSimilarity:
             encoding="utf-8")
         assert "distinct_or_original(" in src
         assert src.index("distinct_or_original(") > src.index(
-            "recombine_result = await self.title_recombiner.recombine(")
+            "await lead_keyword_flow.lead_recombine(")
 
     def test_generation_has_provider_fallback(self):
         """제공자가 없으면 재조합기가 원본을 돌려줘 조용히 무효가 된다."""
