@@ -32,11 +32,11 @@ from .content_generator_helper import (
 )
 from .author_signal_injector import inject_author_signal
 from .title_trim import trim as trim_title
-from . import lead_keyword
+from . import lead_keyword_flow
 from ..promo.auto_attach import attach as attach_promo_link
 from .title_lifecycle import (
     consume_group, distinct_or_original, is_recombined, pick_style,
-    resolve_provider, title_keywords,
+    resolve_provider,
 )
 
 logger = logging.getLogger(__name__)
@@ -172,6 +172,7 @@ class ContentGenerator:
         tr_styles = tr.get("styles", [])
         selected_style = await pick_style(self.db, tr_styles, blog_id)
 
+        lead_kw, lead_applied = None, "none"
         if is_recombined(source_title):
             # 이미 재조합된 제목이다. 또 돌리면 원문에서 두 단계 멀어져
             # 키워드가 유실된다(계획서 §4-3).
@@ -188,23 +189,11 @@ class ContentGenerator:
             # 조용히 무효가 된다. 수동 재조합과 같은 폴백을 쓴다.
             provider = await resolve_provider(
                 self.db, self.user_id, title_provider)
-            # 맨 앞 검색어(모듈 title_lead_keyword) — 검색량으로 골라 지시에 붙임
-            title_settings, lead_kw = await lead_keyword.apply(
-                self.db, self.user_id, settings, source_title.title, title_keywords(source_title))
-            recombine_result = await self.title_recombiner.recombine(
-                original_title=source_title.title,
-                module_id=prompt_module_id,
-                provider=provider,
-                model=title_ai.get("model"),
-                style=selected_style,
-                # 핵심어가 빠지면 검색에 안 잡힌다(계획서 §4-5 B)
-                keywords=title_keywords(source_title),
-                # 프롬프트 템플릿이 갈렸으면 제목 묶음도 그 번호를 쓴다
-                settings_override=title_settings,
-            )
-            if not lead_keyword.starts_with(recombine_result.recombined_title, lead_kw):
-                logger.warning(f"[LEAD_KW] 맨 앞 검색어 미반영 | 「{lead_kw}」 | "
-                               f"'{recombine_result.recombined_title[:40]}'")
+            # 맨 앞 검색어(모듈 title_lead_keyword) — 검색량으로 골라 지시에 붙이고,
+            # 안 지켜지면 한 번 다시·그래도 아니면 규칙으로(title_lead_keyword.md)
+            recombine_result, lead_kw, lead_applied = await lead_keyword_flow.lead_recombine(
+                self, source_title, settings, provider, title_ai.get("model"),
+                selected_style, prompt_module_id)
         # 기계적으로 붙는 접두·꼬리 지우기(모듈 설정 있을 때만)
         recombine_result.recombined_title = trim_title(
             recombine_result.recombined_title, settings)
@@ -212,6 +201,9 @@ class ContentGenerator:
         # 밖이라 여기서 안 걸면 같은 글이 두 번 나간다.
         working_title = await distinct_or_original(
             self.db, recombine_result, source_title)
+        # N4 최종 제목 지난 연도 빼기 + 본문 지시(검색어 첫 문단·소제목)
+        working_title, body_notes = lead_keyword_flow.finalize(
+            working_title, lead_kw, lead_applied)
         logger.info(
             f"[GENERATOR] 제목 재조합 | "
             f"'{source_title.title[:30]}' → '{working_title[:30]}'"
@@ -372,7 +364,8 @@ class ContentGenerator:
                 _with_directive(ref_result.to_prompt_injection(),
                                 evidence_directive),
                 cpa_directive),
-            settings=fact_gate.with_prompt(settings),  # F3 말투 한 줄(스위치 있을 때만)
+            # F3 말투 한 줄(스위치 있을 때만) + 검색어·연도 본문 지시
+            settings=lead_keyword_flow.with_body(fact_gate.with_prompt(settings), body_notes),
             blog=blog,
             category_name=category_name,
             keywords_text=keywords_text,
@@ -614,6 +607,8 @@ class ContentGenerator:
 
         # GenerationHistory에 crawling_post_id 연결
         history.crawling_post_id = crawled_post.id
+        lead_keyword_flow.lead_keyword.journal(
+            blog, source_title_id, crawled_post.id, working_title, lead_kw, lead_applied)
 
         # 9. 원본 제목 사용 처리 — 그룹 전체를 소진한다(계획서 §4-4 C)
         # 그룹은 "같은 소재의 변형들" 이므로 하나를 쓰면 나머지도 쓸 이유가
