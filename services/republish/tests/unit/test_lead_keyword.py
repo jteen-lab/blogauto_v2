@@ -65,6 +65,8 @@ def test_judge_uses_related_keywords(monkeypatch):
     lead = lk.judge(stats, "고흥석류 효능 7가지 정리", [], 50)
     assert lead.status == "ok" and lead.pick.text == "석류 효능"
     assert lk.judge({"고흥석류효능": (5, "")}, "고흥석류 효능", [], 50).status == "low"
+    masked = lk.judge({"고흥석류효능": (18, ""), lk.MASKED: (1, "")}, "고흥석류 효능", [], 50)
+    assert masked.status == "fail"                           # 가려진 응답은 낮음으로 안 봄
     wide = lk.judge({"삼겹살": (139410, "중간")}, "삼겹살 맛있게 조리하는 법", [], 50)
     assert wide.status == "none" and wide.pick is None      # 넓은 한 낱말: 건너뛰지 않음
 
