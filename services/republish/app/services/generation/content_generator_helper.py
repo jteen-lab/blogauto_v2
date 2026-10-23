@@ -126,6 +126,11 @@ async def generate_content_with_meta(
             full_prompt = f"{full_prompt}\n\n{aeo}"
             logger.info("[GENERATOR] AEO 지시문 주입 | blog=%s", blog.name)
 
+    # 블로거는 검색 설명을 못 넣는다 — 첫 문단을 검색 설명처럼(lead_summary.py).
+    from .lead_summary import append as _lead_summary
+
+    full_prompt = _lead_summary(full_prompt, blog)
+
     # 분량 지시문 — 게이트 임계값에서 유도해 주입한다.
     # 이 지시가 없으면 모델은 모듈 프롬프트의 목표치를 소프트하게 받아
     # 중앙 1,883자·하위10% 1,484자로 흩어진다(400편 실측). 게이트가 보는
