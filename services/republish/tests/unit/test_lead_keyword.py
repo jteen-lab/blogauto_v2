@@ -16,7 +16,13 @@ def test_title_candidates_front_groups_keywords_and_stripped():
 
 
 def test_segment_keeps_title_words_and_generic_only():
-    assert pk.segment("석류효능", "고흥석류 효능 7가지") == "석류 효능"
+    assert pk.segment("석류효능", "고흥석류 효능 7가지", REGIONS) == "석류 효능"
+    assert pk.segment("석류효능", "고흥석류 효능 7가지") is None          # 지역 목록 없으면 못 뗌
+    assert pk.segment("닭볶음탕레시피", "주말 저녁 닭볶음탕레시피 비율") == "닭볶음탕 레시피"
+    assert pk.segment("엑셀시트", "엑셀과 스프레드시트 줄바꿈 단축키") is None  # '시트'는 뜻이 바뀜
+    assert pk.segment("컴퓨터가격", "컴퓨터 그래픽카드 교체 방법") is None    # 제목에서 온 말 하나뿐
+    assert pk.segment("24시간", "가족과 함께 만드는 24시간 신생아 케어") is None
+    assert pk.segment("자동차전화번호", "위택스 자동차세 연납 방법 및 고객센터 전화번호") is None
     assert pk.segment("하이패스등록방법", "하이패스 등록이 필요하다면 이렇게") == "하이패스 등록 방법"
     assert pk.segment("비타민c효능", "고흥석류 효능 7가지") is None      # 새 낱말
     assert pk.segment("국민은행대출", "우리은행 아파트담보대출 조건") is None
@@ -59,6 +65,8 @@ def test_judge_uses_related_keywords(monkeypatch):
     lead = lk.judge(stats, "고흥석류 효능 7가지 정리", [], 50)
     assert lead.status == "ok" and lead.pick.text == "석류 효능"
     assert lk.judge({"고흥석류효능": (5, "")}, "고흥석류 효능", [], 50).status == "low"
+    wide = lk.judge({"삼겹살": (139410, "중간")}, "삼겹살 맛있게 조리하는 법", [], 50)
+    assert wide.status == "none" and wide.pick is None      # 넓은 한 낱말: 건너뛰지 않음
 
 
 @pytest.mark.asyncio
