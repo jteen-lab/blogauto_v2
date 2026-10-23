@@ -42,7 +42,8 @@ _CACHE: Dict[Tuple[str, int], Tuple[float, "Lead"]] = {}
 
 @dataclass
 class Lead:
-    """검색량 판정. status = ok(고름) | low(바닥선 아래) | fail(조회 못 함)."""
+    """판정. status = ok(고름) | none(검색량은 있으나 맨 앞에 쓸 말 없음)
+    | low(모든 후보가 바닥선 아래 — N2 건너뜀) | fail(조회 못 함)."""
 
     status: str
     pick: Optional[Candidate] = None
@@ -98,11 +99,12 @@ def judge(stats: Dict[str, Tuple[int, str]], title: str,
     cands = pick.title_candidates(title, keywords, regions)
     for c in cands:
         c.volume, c.competition = stats.get(c.key, (0, ""))
-    allc = cands + pick.related_candidates(stats, title, {c.key for c in cands})
-    eligible = [c.volume for c in allc if " " in c.text or len(c.text) >= 3]
-    best = max(eligible, default=0)
+    allc = cands + pick.related_candidates(stats, title, {c.key for c in cands}, regions)
+    # N2 는 '모든 후보가 바닥선 아래'일 때만 — '삼겹살'(14만)처럼 넓은 한 낱말도 센다
+    best = max((c.volume for c in allc if len(c.key) >= 2), default=0)
     chosen = pick.choose(allc, low, pick.region_lead(pick.words(title), regions))
-    return Lead("ok" if chosen else "low", chosen, best)
+    status = "ok" if chosen else ("none" if best >= low else "low")
+    return Lead(status, chosen, best)
 
 
 async def measure(db: Any, user_id: int, title: str,
