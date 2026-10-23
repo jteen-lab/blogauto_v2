@@ -30,6 +30,7 @@ NEAR_RATIO = 1.5
 MAX_HINTS = 5
 _PUNCT = re.compile(r"[^\w가-힣\s]")
 _YEAR = re.compile(r"^(?:19|20)?\d{2}년?도?$")
+_PARTICLES = set("은 는 이 가 을 를 의 에 도 와 과 로 만 란".split())
 
 # 연관 검색어에 붙어도 주제가 바뀌지 않는 일반어(새 고유명사가 아님)
 GENERIC: Set[str] = set(
@@ -40,7 +41,9 @@ GENERIC: Set[str] = set(
     "순위 비교 단축키 변경 해지 취소 혜택 지원 기준 요금 할인 납부 환급 출력 복사 교체 "
     "수리 열기 뷰어 설정 꿀팁 팁 주의사항 증상 원인 예방 관리 이자 상환 공제 중간정산 "
     "시세표 감가율 감가 중고 중고차 할부 조건표 담보 담보대출 대출 개설 사용처 사용 "
-    "방법들 모바일 앱 어플 pc 엑셀 정상수치 수치 정상 기준표 총정리 쉽게 바로 빨리".split())
+    "방법들 정상수치 수치 정상 기준표 총정리 쉽게 바로 빨리".split())
+# 한 낱말 검색어로 쓰지 않을 말(너무 넓다)
+SINGLE_STOP: Set[str] = GENERIC | {"모바일", "pc", "앱", "어플", "체크리스트"}
 
 
 @dataclass
@@ -139,35 +142,64 @@ def _pieces(title: str) -> Set[str]:
     return out
 
 
-def _match_at(kw: str, i: int, pieces: Set[str]) -> Tuple[int, bool]:
-    """kw[i:] 앞에서 맞는 가장 긴 조각의 길이와 '제목 낱말에서 왔나'. 없으면 (0, False)."""
-    best, topic = 0, False
+def _from_title(part: str, pieces: Set[str], regions: Set[str]) -> bool:
+    """제목 낱말 그대로이거나, 앞 지역·연도만 뗀 꼴, 뒤 일반어·조사만 뗀 꼴인가.
+
+    '고흥석류'→'석류'(지역 뗌), '닭볶음탕레시피'→'닭볶음탕'(일반어 뗌)은 되고
+    '스프레드시트'→'시트', '리즈다이어트'→'다이어트'는 안 된다(뜻이 바뀐다).
+    """
+    for p in pieces:
+        if p == part:
+            return True
+        if p.startswith(part):
+            rest = p[len(part):]
+            if rest in GENERIC or rest in _PARTICLES or _strip_suffix(p) == part:
+                return True
+        if p.endswith(part):
+            head = p[:-len(part)]
+            if head in regions or _YEAR.match(head):
+                return True
+    return False
+
+
+def _match_at(kw: str, i: int, pieces: Set[str], regions: Set[str]) -> int:
+    """kw[i:] 앞에서 맞는 가장 긴 조각(제목 낱말 꼴 또는 일반어) 길이. 없으면 0."""
     for j in range(len(kw), i + 1, -1):
         part = kw[i:j]
-        from_title = any(p.startswith(part) or p.endswith(part) for p in pieces)
-        if from_title or part in GENERIC:
-            return j - i, from_title and part not in GENERIC
-    return best, topic
+        if part in GENERIC or _from_title(part, pieces, regions):
+            return j - i
+    return 0
 
 
-def segment(kw: str, title: str) -> Optional[str]:
-    """연관 검색어를 제목 낱말·일반어로 나눠 띄어 쓴 꼴. 새 낱말이 섞이면 None.
+def segment(kw: str, title: str, regions: Set[str] = frozenset()) -> Optional[str]:
+    """연관 검색어를 제목 낱말·일반어로 나눠 띄어 쓴 꼴. 아니면 None.
 
-    '석류효능' + '고흥석류 효능 …' → '석류 효능'. '비타민c효능' → None.
+    제목에서 온 조각이 둘 이상이어야 한다(주제 이탈 방지 — '컴퓨터 가격'은
+    '그래픽카드 교체' 글의 검색어가 아니다). '석류효능' + '고흥석류 효능 …' → '석류 효능'.
     """
     kw = (kw or "").replace(" ", "").lower()
     pieces = _pieces(title)
     chunks: List[str] = []
-    topic = False
     i = 0
     while i < len(kw):
-        n, from_title = _match_at(kw, i, pieces)
+        n = _match_at(kw, i, pieces, regions)
         if not n:
             return None
         chunks.append(kw[i:i + n])
-        topic = topic or from_title
         i += n
-    return " ".join(_split_generic_tail(chunks)) if topic else None
+    lower = title.lower().replace(" ", "")
+    count = sum(_weight(c, pieces, regions, lower) for c in chunks)
+    return " ".join(_split_generic_tail(chunks)) if count >= 2 else None
+
+
+def _weight(c: str, pieces: Set[str], regions: Set[str], lower: str) -> int:
+    """제목에서 온 조각 수. '닭볶음탕레시피'처럼 일반어 꼬리가 붙은 제목 낱말은 2."""
+    if c in GENERIC:
+        return int(c in lower)
+    if not _from_title(c, pieces, regions):
+        return 0
+    head = _split_generic_tail([c])[0]
+    return 2 if head != c and not head[0].isdigit() else 1
 
 
 def _split_generic_tail(chunks: List[str]) -> List[str]:
@@ -181,13 +213,13 @@ def _split_generic_tail(chunks: List[str]) -> List[str]:
 
 
 def related_candidates(stats: Dict[str, Tuple[int, str]], title: str,
-                       known: Set[str]) -> List[Candidate]:
+                       known: Set[str], regions: Set[str] = frozenset()) -> List[Candidate]:
     """조회 결과 중 제목에서 벗어나지 않는 연관 검색어."""
     out = []
     for key, (vol, comp) in stats.items():
         if key in known or len(key) < 2:
             continue
-        spaced = segment(key, title)
+        spaced = segment(key, title, regions)
         if spaced:
             out.append(Candidate(spaced, "related", vol, comp))
     return out
@@ -202,13 +234,20 @@ def _bigger_phrase(best: Candidate, pool: List[Candidate], floor: int) -> Candid
     return max(longer, key=lambda c: c.volume) if longer else best
 
 
+def usable(c: Candidate) -> bool:
+    """맨 앞 검색어로 쓸 수 있는 꼴(두 낱말↑, 또는 넓지 않은 세 글자↑ 한 낱말)."""
+    if " " in c.text:
+        return True
+    return (len(c.text) >= 3 and c.text.lower() not in SINGLE_STOP
+            and c.volume < BIG_VOLUME)
+
+
 def choose(cands: List[Candidate], floor: int = MIN_VOLUME,
            region_first: bool = False) -> Optional[Candidate]:
     """검색량을 채운 후보에서 하나. 바닥선을 넘는 후보가 없으면 None."""
     ok = [c for c in cands if c.volume >= floor]
     multi = [c for c in ok if " " in c.text]
-    single = [c for c in ok if " " not in c.text and len(c.text) >= 3]
-    pool = multi or single
+    pool = multi or [c for c in ok if usable(c)]
     if not pool:
         return None
     if region_first:
