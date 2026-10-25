@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import random
+import re
 from types import SimpleNamespace
 from typing import Any, List, Optional, Tuple
 
@@ -45,6 +46,15 @@ async def duplicate_of(db: Any, blog: Any, title: str, live_title: str,
     return tg.find_duplicate(title, 0, other)
 
 
+_TAILS = re.compile(r"\s*(?:알아보기|알아보자|무엇일까요?|무엇인가요|방법 안내|총정리)(?=\s|$)")
+
+
+def _drop_tails(title: str) -> str:
+    """'~알아보기'·'~무엇일까' 같은 꼬리를 뺀다(재조합 지시를 어긴 제목, 10/25 /613)."""
+    out = re.sub(r"\s{2,}", " ", _TAILS.sub("", title)).strip(" ,")
+    return out if len(out) >= 8 else title
+
+
 async def resolve(gen: Any, blog: Any, module: Any, live_title: str,
                   recombine: bool, main_title: Any = None) -> Tuple[str, List[str], str]:
     """(제목, 본문 지시, 기록용 메모)."""
@@ -64,7 +74,7 @@ async def resolve(gen: Any, blog: Any, module: Any, live_title: str,
         logger.warning("[RENEWAL_TITLE] 재조합 실패 → 원래 제목 | %s", e)
         title, notes = lkf.finalize(live_title, None, "none")
         return title, notes, "재조합 실패 — 원래 제목"
-    new = (rec.recombined_title or live_title).strip()
+    new = _drop_tails((rec.recombined_title or live_title).strip())
     title, notes = lkf.finalize(new, lead, applied)
     dup = await duplicate_of(gen.db, blog, title, live_title, settings)
     if dup:
