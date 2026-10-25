@@ -6,6 +6,8 @@ N1 확장(2026-10-23, 마케팅 지시·형 승인): 원래 제목 앞 낱말만
 
   title    원래 제목 앞 낱말 묶음 + 제목 핵심어(지금까지와 같음)
   stripped 앞 수식어(지역·연도)를 뺀 묶음 — '고흥석류 효능' → '석류 효능'
+  core     조사 붙은 낱말 뒤의 핵심 묶음 — '아파트와 공동주택의 완강기 설치 기준' →
+           '완강기 설치 기준'(10/25 /542: 앞 낱말만 재서 「완강기 설치기준」 2,250을 놓침)
   related  검색광고가 같은 조회에서 돌려준 연관 검색어 중, 원래 제목 낱말과
            일반어(방법·효능·조건…)로만 이루어진 것 — 새 고유명사가 들어오면 버린다
            ('비타민C효능'·'국민은행대출' X)
@@ -48,7 +50,7 @@ SINGLE_STOP: Set[str] = GENERIC | {"모바일", "pc", "앱", "어플", "체크�
 
 @dataclass
 class Candidate:
-    """검색량을 잴 후보. source = title|stripped|related."""
+    """검색량을 잴 후보. source = title|stripped|core|related."""
 
     text: str
     source: str
@@ -76,6 +78,25 @@ def _bundles(ws: List[str]) -> List[str]:
     return out
 
 
+_JOINERS = set("의 와 과".split())   # 명사를 잇는 조사만(‘아끼는’ 같은 어미는 아님)
+
+
+def core_words(ws: List[str]) -> List[str]:
+    """마지막 '의·와·과' 붙은 낱말('공동주택의') 뒤 낱말들. 아니면 [].
+
+    두 낱말 이상 남고, 첫 낱말이 일반어·숫자가 아닐 때만('할인 한도'처럼 주제 없는 말 X).
+    """
+    for i in range(len(ws) - 2, -1, -1):
+        w = ws[i]
+        if len(w) >= 3 and w[-1] in _JOINERS:
+            tail = ws[i + 1:]
+            head = _strip_suffix(tail[0]) or tail[0]
+            ok = (len(tail) >= 2 and head not in GENERIC and len(head) >= 2
+                  and not head[0].isdigit() and tail[0][-1] not in "는한할을를")
+            return tail if ok else []
+    return []
+
+
 def strip_modifiers(ws: List[str], regions: Set[str]) -> List[str]:
     """앞 수식어(지역 낱말·연도)를 뺀 낱말. 지역이 붙은 첫 낱말은 지역만 뗀다."""
     out = list(ws)
@@ -98,13 +119,15 @@ def region_lead(ws: List[str], regions: Set[str]) -> bool:
 
 def title_candidates(title: str, keywords: Optional[Iterable[str]],
                      regions: Set[str]) -> List[Candidate]:
-    """원래 제목 쪽 후보(title·stripped), 공백 뺀 꼴 기준 중복 없이."""
+    """원래 제목 쪽 후보(title·stripped·core), 공백 뺀 꼴 기준 중복 없이."""
     ws = words(title)
     raw = [Candidate(b, "title") for b in _bundles(ws)]
     raw += [Candidate(str(k).strip(), "title") for k in (keywords or []) if str(k).strip()]
     stripped = strip_modifiers(ws, regions)
     if stripped != ws:
         raw += [Candidate(b, "stripped") for b in _bundles(stripped)]
+    core = core_words(ws)
+    raw += [Candidate(b, "core") for b in [" ".join(core[:3])] + _bundles(core)]
     seen: Set[str] = set()
     out = []
     for c in raw:
@@ -117,6 +140,7 @@ def title_candidates(title: str, keywords: Optional[Iterable[str]],
 def hints(cands: List[Candidate], title: str) -> List[str]:
     """조회에 보낼 말(최대 5) — 두 낱말 묶음·수식어 뺀 묶음·핵심어·긴 낱말을 고루."""
     order = ([c for c in cands if c.source == "stripped"][:1]
+             + [c for c in cands if c.source == "core"][:2]
              + [c for c in cands if c.source == "title"])
     out: List[str] = []
     for c in order:
