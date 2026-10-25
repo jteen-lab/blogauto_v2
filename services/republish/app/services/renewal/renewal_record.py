@@ -26,6 +26,14 @@ _IMG = re.compile(r'<img[^>]+src=["\']([^"\']+)["\']', re.IGNORECASE)
 _OLD_UPLOAD = re.compile(r"/wp-content/uploads/20(1\d|2[0-5])/", re.IGNORECASE)
 
 
+MIN_KEEP = 0.9   # 보강(augment)은 원래 글자의 90% 아래로 줄면 갱신하지 않는다
+
+
+def text_len(html: str) -> int:
+    """태그·주석·공백을 뺀 글자 수."""
+    return len(re.sub(r"\s+", "", re.sub(r"<[^>]+>|<!--.*?-->", "", html or "", flags=re.S)))
+
+
 def image_urls(html: str) -> List[str]:
     """본문 그림 주소들."""
     return _IMG.findall(html or "")
