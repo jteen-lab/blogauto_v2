@@ -154,7 +154,13 @@ class PublishWorkflow:
                     "[REPUBLISH] 저장정리 오류(무시) | blog=%s | %s",
                     blog.name, exc,
                 )
-            due = await self._find_due_renewable_post(blog, cfg)
+            stage = ""
+            from app.services.renewal import renewal_pick
+            if renewal_pick.enabled(cfg):  # 성과 순서·옛 글 포함(renewal_performance_pick.md)
+                picked = await renewal_pick.find_due(self.db, blog, cfg)
+                due, stage = picked if picked else (None, "")
+            else:
+                due = await self._find_due_renewable_post(blog, cfg)
             if due:
                 from app.services.renewal.renewal_service import RenewalService
                 # #4 미매칭 글이면 리뉴얼 직전 자동 정식제목 등록 시도
@@ -176,7 +182,7 @@ class PublishWorkflow:
                 )
                 res = await RenewalService(
                     self.db, blog.user_id,
-                ).renew_post(blog, due, dry_run=False)
+                ).renew_post(blog, due, dry_run=False, stage=stage)
                 if res.get("success"):
                     res["action"] = "renewed"
                     return res
