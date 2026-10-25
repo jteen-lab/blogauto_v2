@@ -40,6 +40,17 @@ _REWRITE_TEXT = (
 logger = get_logger("renewal_generator", "app.log")
 
 
+def inject_featured(blog: Blog, html: str, image_url: str, title: str) -> str:
+    """대표 이미지를 본문 맨 앞에 넣는다(alt = 제목 — 앞 검색어가 맨 앞에 온다)."""
+    from ..publishing.html_injector import HtmlInjector
+
+    platform = (blog.platform.value if isinstance(blog.platform, BlogPlatform)
+                else str(blog.platform))
+    return HtmlInjector().inject_featured_image(
+        html=html, image_url=image_url, title=title,
+        editor_type=getattr(blog, "editor_type", "classic"), platform=platform)
+
+
 @dataclass
 class RenewalContent:
     """리뉴얼 재생성 결과(라이브 글 갱신 전 산출물)."""
@@ -269,30 +280,25 @@ class RenewalGenerator:
     async def _apply_image(
         self, blog, working_title, settings, final_html, plan,
     ):
-        """이미지 적용: reuse면 기존 URL 주입, new면 생성. (final_html, url)."""
-        if plan.image_action == "reuse" and plan.reuse_image_url:
-            from ..publishing.html_injector import HtmlInjector
+        """이미지 적용: reuse면 기존 URL 주입, new면 생성. (final_html, url).
 
-            platform = (
-                blog.platform.value
-                if isinstance(blog.platform, BlogPlatform)
-                else str(blog.platform)
-            )
-            html = HtmlInjector().inject_featured_image(
-                html=final_html,
-                image_url=plan.reuse_image_url,
-                title=working_title,
-                editor_type=getattr(blog, "editor_type", "classic"),
-                platform=platform,
-            )
-            return html, plan.reuse_image_url
+        새 글 발행은 대표 이미지를 **발행 단계**(publisher)가 본문에 넣는다. 리뉴얼은 그
+        단계를 거치지 않아 생성만 하고 본문에 안 들어갔다(10/25 미리보기 6편 모두 그림 0개).
+        그래서 여기서 직접 넣는다 — 갱신 때 로컬 그림은 updater 가 올리고 주소를 바꾼다.
+        """
+        if plan.image_action == "reuse" and plan.reuse_image_url:
+            return inject_featured(blog, final_html, plan.reuse_image_url,
+                                   working_title), plan.reuse_image_url
 
         img = await self.gen._generate_image_with_retry(
             blog=blog, working_title=working_title,
             settings=settings, final_html=final_html, keywords_text="",
         )
         if img and img.success and img.image_url:
-            return (img.final_html or final_html), img.image_url
+            html = img.final_html or final_html
+            if img.image_url not in html:
+                html = inject_featured(blog, html, img.image_url, working_title)
+            return html, img.image_url
         return final_html, None
 
     @staticmethod
