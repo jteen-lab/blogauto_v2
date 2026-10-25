@@ -49,9 +49,28 @@ async def duplicate_of(db: Any, blog: Any, title: str, live_title: str,
 _TAILS = re.compile(r"\s*(?:알아보기|알아보자|무엇일까요?|무엇인가요|방법 안내|총정리)(?=\s|$)")
 
 
+_JOIN_NOUN = r"(방법|계산법|기준|차이|비용|요금|순서|조건|절차|요령|이유|원리)"
+_END_TAIL = r"(?:꿀팁|팁|요령|정리)$"
+# 명사+은/는, 또는 조사 없이 바로 '…하게·…하는' 말이 붙은 것만(‘전기요금 누진’ 같은 명사 이음은 그대로)
+_LOOSE = re.compile(_JOIN_NOUN + r"(?:(?:은|는)\s+|\s+(?=\S*(?:게|는|한)\s))(?=\S+\s.*" + _END_TAIL + ")")
+
+
+def _join(m: "re.Match[str]") -> str:
+    """'방법은 …꿀팁' → '방법과 …꿀팁'(받침 있으면 과, 없으면 와)."""
+    noun = m.group(1)
+    code = ord(noun[-1]) - 0xAC00
+    return noun + ("과 " if 0 <= code < 11172 and code % 28 else "와 ")
+
+
 def _drop_tails(title: str) -> str:
-    """'~알아보기'·'~무엇일까' 같은 꼬리를 뺀다(재조합 지시를 어긴 제목, 10/25 /613)."""
+    """'~알아보기'·'~무엇일까' 꼬리를 빼고, '방법은 …꿀팁'처럼 조사가 어색한 이음을 '과/와'로.
+
+    10/25 /613: '제습기 전기세 절약 방법은 뽀송하게 유지하는 꿀팁' (마케팅 재검수).
+    """
     out = re.sub(r"\s{2,}", " ", _TAILS.sub("", title)).strip(" ,")
+    out = re.sub(_JOIN_NOUN + r"(?:은|는)$", r"\1", out)  # '방법은 무엇일까요' 꼬리를 뺀 뒤 남은 조사
+    if re.search(_END_TAIL, out):
+        out = _LOOSE.sub(_join, out, count=1)
     return out if len(out) >= 8 else title
 
 
