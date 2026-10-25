@@ -69,9 +69,12 @@ async def replace_images(db: Any, blog: Any, module: Any, post_id: str,
     img = await gen._generate_image_with_retry(
         blog=blog, working_title=title, settings=module.settings or {},
         final_html=stripped, keywords_text="")
-    if not (img and img.success and img.final_html):
+    if not (img and img.success and img.image_url):
         return {"success": False, "error": "이미지 생성 실패"}
-    new_html = img.final_html
+    from .renewal_generator import inject_featured
+    new_html = img.final_html or stripped   # 템플릿 모드는 그림 파일만 돌려준다
+    if img.image_url not in new_html:
+        new_html = inject_featured(blog, new_html, img.image_url, title)
     result = {"success": True, "dry_run": dry_run, "post_id": post_id, "title": title,
               "old_images": renewal_record.image_urls(content),
               "new_images": renewal_record.image_urls(new_html),
