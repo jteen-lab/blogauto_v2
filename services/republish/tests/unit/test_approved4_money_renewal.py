@@ -75,3 +75,10 @@ def test_new_image_is_injected_into_body():
     assert "if img.image_url not in html:" in src and "inject_featured(" in src
     src2 = Path("app/services/renewal/renewal_images.py").read_text()
     assert "inject_featured(" in src2
+
+
+def test_strip_images_removes_caption_shortcode():
+    html = ('[caption id="attachment_556" align="aligncenter" width="900"]<img src="a.png" alt="x"> 설명 글[/caption]'
+            '\n<h2>본문</h2>')
+    out = ri.strip_images(html)
+    assert "[caption" not in out and "설명 글" not in out and "본문" in out
