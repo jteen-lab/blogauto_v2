@@ -115,3 +115,28 @@ def test_gate_check_failure_holds_only_strict():
 
 def test_min_rewrite():
     assert MIN_REWRITE == 1300
+
+
+def test_after_premise_rewrite_check_failure_holds():
+    class Broken:
+        async def generate(self, **kw):
+            return None
+    out = asyncio.run(rf.run(Broken(), "<p>a.</p>", "", "고추냉이 와사비 차이", allow_premise=False))
+    assert out.hold == "사실 검사 호출 실패"
+
+
+def test_after_premise_rewrite_premise_left_holds():
+    ai = FakeAI([{"premise": "아직 틀림", "items": []}, {"premise": "아직 틀림", "items": []}])
+    out = asyncio.run(rf.run(ai, "<p>a.</p>", "", "고추냉이 와사비 차이", allow_premise=False))
+    assert out.hold and out.hold.startswith("전제를 바로잡지 못함")
+
+
+def test_scrub_plain_first_person():
+    out, removed = rf.scrub_claims("<p>저는 일본 요리를 사랑합니다. 와사비는 뿌리입니다.</p>")
+    assert removed and "와사비는 뿌리입니다." in out
+
+
+def test_drop_title_tails():
+    from app.services.renewal.renewal_title import _drop_tails
+    assert _drop_tails("제습기 전기세 절약 방법 알아보기 뽀송하게 유지하는 꿀팁") == \
+        "제습기 전기세 절약 방법 뽀송하게 유지하는 꿀팁"
