@@ -16,6 +16,7 @@ from .renewal_generator import RenewalGenerator
 from .renewal_plan import decide_renewal_plan
 from .renewal_source import RenewalSource
 from .renewal_updater import RenewalUpdater
+from . import renewal_ga, renewal_pick, renewal_record
 
 logger = get_logger("renewal_service", "app.log")
 
@@ -30,30 +31,23 @@ class RenewalService:
     async def renew_post(
         self, blog: Blog, crawled_post: CrawledPost,
         dry_run: bool = True, include_content: bool = False,
+        force_action: Optional[str] = None, stage: str = "",
     ) -> dict:
         """글 1개 리뉴얼. dry_run이면 재생성 결과만 반환(갱신 안 함).
 
         include_content=True면 dry_run 결과에 원본/재생성 본문 전문을 포함
         (설정 시 원본 vs 리뉴얼 비교 미리보기용).
+        force_action: 미리보기에서 판정을 정해 볼 때(augment/title/rewrite).
+        stage: 고르기 단계(renewal_pick) — 기록용.
         """
         cfg = blog.renewal_config or {}
-        title_mode = cfg.get("title_mode", "keep")
-
         live = await RenewalSource().fetch(
             blog, crawled_post.platform_post_id, crawled_post.url,
         )
         if not live:
-            return {"success": False, "error": "라이브 글 조회 실패"}
+            return await self._fetch_failed(blog, crawled_post, dry_run)
 
-        is_blogauto = crawled_post.source == "generated"
-        perf = await self._performance(blog, crawled_post)
-        plan = decide_renewal_plan(
-            title_mode, is_blogauto, live.image_origin,
-            live.featured_image_url or "",
-            action=perf.action, action_reason=perf.reason,
-        )
-
-        # **잘 되는 글은 건드리지 않는다.** 지금까지 없던 선택지다.
+        plan, protected = await self._plan(blog, crawled_post, live, cfg, force_action)
         if plan.skip:
             logger.info("[RENEWAL] 건너뜀 | blog=%s | post=%s | %s",
                         blog.name, crawled_post.id, plan.action_reason)
@@ -65,58 +59,122 @@ class RenewalService:
                     "action": plan.action, "reason": plan.action_reason,
                     "title": live.title}
 
-        module = await self._resolve_module(blog, crawled_post)
+        rc = await self._regenerate(blog, crawled_post, live, plan, cfg)
+        if isinstance(rc, dict):
+            return rc
+        if dry_run:
+            return self._preview(cfg, plan, live, rc, protected, stage, include_content)
+        return await self._apply(blog, crawled_post, live, plan, rc, cfg, stage)
+
+    async def _fetch_failed(self, blog: Blog, post: CrawledPost, dry_run: bool) -> dict:
+        """라이브 글이 없으면(지운 글 등) 같은 글을 매 회차 다시 고르지 않게 미룬다."""
+        if not dry_run and renewal_pick.enabled(blog.renewal_config):
+            post.last_renewed_at = datetime.now()
+            await self.db.commit()
+            renewal_record.journal(blog, {"post": post.id, "url": post.url,
+                                          "action": "fetch_failed"})
+        return {"success": False, "error": "라이브 글 조회 실패"}
+
+    async def _plan(self, blog: Blog, post: CrawledPost, live, cfg: dict,
+                    force_action: Optional[str]):
+        """(계획, 보호 글 여부). 보호 글은 rewrite 금지·제목 그대로."""
+        view = None
+        if renewal_pick.enabled(cfg):
+            view = await renewal_ga.load_view(self.db, blog.id)
+        perf = await self._performance(blog, post, view)
+        protected = bool(view and post.id in view.top_ids)
+        action, reason = force_action or perf.action, perf.reason
+        if force_action:
+            reason = f"미리보기 지정({force_action}) · 실제 판정: {perf.action} {perf.reason}"
+        if protected and action in ("rewrite", "title"):
+            action, reason = "augment", f"수익 상위 {renewal_ga.TOP_N} 보호 — 보강만 · {reason}"
+        title_mode = cfg.get("title_mode", "keep")
+        plan = decide_renewal_plan(
+            title_mode, post.source == "generated", live.image_origin,
+            live.featured_image_url or "", action=action, action_reason=reason,
+        )
+        if renewal_pick.enabled(cfg) and action == "rewrite" and not protected:
+            plan.recombine_title = True
+        if protected:
+            plan.recombine_title = False
+        return plan, protected
+
+    async def _regenerate(self, blog: Blog, post: CrawledPost, live, plan, cfg: dict):
+        """재생성 결과(RenewalContent) 또는 실패 dict."""
+        module = await self._resolve_module(blog, post)
         if not module:
             return {"success": False, "error": "생성 프롬프트 모듈 확인 불가"}
-
-        subtopic_id, topic_id = await self._resolve_category(crawled_post)
-        # user_id 미지정 시 블로그 소유자로 폴백(AIService 키 조회용).
-        gen_user_id = self.user_id or blog.user_id
-        gaps = await self._gaps(blog, crawled_post, live, plan)
-        rc = await RenewalGenerator(self.db, gen_user_id).regenerate(
+        subtopic_id, topic_id = await self._resolve_category(post)
+        main_title = None
+        if post.matched_main_title_id:
+            from ...models.title import MainTitle
+            main_title = await self.db.get(MainTitle, post.matched_main_title_id)
+        gaps = await self._gaps(blog, post, live, plan)
+        rc = await RenewalGenerator(self.db, self.user_id or blog.user_id).regenerate(
             blog, module, live.title, plan,
             subtopic_id=subtopic_id, topic_id=topic_id,
-            existing_content=live.content_html,
-            gap_instruction=gaps,
+            existing_content=live.content_html, gap_instruction=gaps,
+            strict_title=renewal_pick.enabled(cfg), main_title=main_title,
         )
         if not rc.success:
             return {"success": False, "error": rc.error}
+        left = renewal_record.old_images(rc.content_html)
+        if left:
+            rc.warnings.append(f"옛 업로드 이미지 {len(left)}개 남음: {left[:2]}")
+        rc.warnings.append(f"본문 그림 {len(renewal_record.image_urls(rc.content_html))}개")
+        return rc
 
-        if dry_run:
-            result = {
-                "success": True, "dry_run": True,
-                "title_mode": title_mode,
-                "recombine": plan.recombine_title,
-                "live_title": live.title, "new_title": rc.title,
-                "image_origin": live.image_origin,
-                "image_action": plan.image_action,
-                "content_len": len(rc.content_html),
-                "action": plan.action, "reason": plan.action_reason,
-                "gaps": gaps.splitlines()[4:] if gaps else [],
-                "warnings": rc.warnings,
-            }
-            if include_content:
-                # 설정 시 원본 vs 리뉴얼 비교용 본문 전문
-                result["original_html"] = live.content_html
-                result["new_html"] = rc.content_html
-                result["reuse_image_url"] = plan.reuse_image_url
-            return result
+    def _preview(self, cfg: dict, plan, live, rc, protected: bool, stage: str,
+                 include_content: bool) -> dict:
+        """dry_run 결과(라이브·DB 안 건드림)."""
+        result = {
+            "success": True, "dry_run": True,
+            "title_mode": cfg.get("title_mode", "keep"), "stage": stage,
+            "recombine": plan.recombine_title, "protected": protected,
+            "live_title": live.title, "new_title": rc.title, "title_note": getattr(rc, "title_note", ""),
+            "image_origin": live.image_origin, "image_action": plan.image_action,
+            "old_images": renewal_record.image_urls(live.content_html),
+            "new_images": renewal_record.image_urls(rc.content_html),
+            "new_image_file": rc.image_url,
+            "original_len": len(live.content_html or ""),
+            "content_len": len(rc.content_html),
+            "action": plan.action, "reason": plan.action_reason,
+            "warnings": rc.warnings,
+        }
+        if include_content:
+            # 설정 시 원본 vs 리뉴얼 비교용 본문 전문
+            result["original_html"] = live.content_html
+            result["new_html"] = rc.content_html
+            result["reuse_image_url"] = plan.reuse_image_url
+        return result
 
+    async def _apply(self, blog: Blog, post: CrawledPost, live, plan, rc,
+                     cfg: dict, stage: str) -> dict:
+        """원본 백업 → 라이브 갱신 → DB·기록."""
+        strict = renewal_pick.enabled(cfg)
+        if strict and not renewal_record.backup(blog, live.platform_post_id,
+                                                live.title, live.content_html):
+            return {"success": False, "error": "원본 백업 실패 — 갱신 안 함"}
         upd = await RenewalUpdater(self.db).update(
             blog, live.platform_post_id, rc.title, rc.content_html,
+            bump_date=bool(cfg.get("bump_date", not strict)),
         )
         if not upd.get("success"):
             return {"success": False, "error": "갱신 실패: " + upd.get("error", "")}
-
-        crawled_post.title = rc.title
-        crawled_post.content_html = rc.content_html
+        post.title = rc.title
+        post.content_html = rc.content_html
         if rc.image_url:
-            crawled_post.image_url = rc.image_url
-        crawled_post.last_renewed_at = datetime.now()
+            post.image_url = rc.image_url
+        post.last_renewed_at = datetime.now()
         await self.db.commit()
+        renewal_record.journal(blog, {
+            "post": post.id, "url": post.url, "stage": stage, "action": plan.action,
+            "reason": plan.action_reason, "old_title": live.title, "new_title": rc.title,
+            "image": plan.image_action, "image_changed": plan.image_action == "new",
+            "warnings": rc.warnings})
         logger.info(
             "[RENEWAL] 완료 | blog=%s | post=%s | title='%s' | image=%s",
-            blog.name, crawled_post.id, rc.title[:30], plan.image_action,
+            blog.name, post.id, rc.title[:30], plan.image_action,
         )
         return {
             "success": True, "title": rc.title,
@@ -124,11 +182,12 @@ class RenewalService:
             "action": plan.action, "reason": plan.action_reason,
         }
 
-    async def _performance(self, blog: Blog, crawled_post: CrawledPost):
+    async def _performance(self, blog: Blog, crawled_post: CrawledPost, view=None):
         """이 글의 성과 판정.
 
         지표가 없으면 legacy — **지금 동작 그대로**다. 없는 데이터를 0 으로
         읽으면 "유입 없는 글" 이 되어 멀쩡한 글이 갈아엎힌다.
+        서치콘솔 이력이 없으면 GA(page_metrics_daily)로 읽는다(view 가 있을 때).
         """
         from sqlalchemy import select
 
@@ -145,14 +204,18 @@ class RenewalService:
             ).limit(1)
         )).scalars().first()
         if not row:
+            if view is not None:
+                return await renewal_ga.performance(self.db, blog.id, crawled_post.id, view)
             return Performance(url_id=0, reason="발행 URL 이력 없음")
         try:
-            return await evaluate(self.db, row.id,
-                                  thresholds=cfg.get("thresholds"))
+            perf = await evaluate(self.db, row.id, thresholds=cfg.get("thresholds"))
         except Exception as e:  # noqa: BLE001 — 판정 실패로 리뉴얼을 막지 않는다
             logger.warning("[RENEWAL] 성과 판정 실패 | post=%s | %s",
                            crawled_post.id, e)
             return Performance(url_id=row.id, reason="판정 실패")
+        if perf.action == "legacy" and view is not None:
+            return await renewal_ga.performance(self.db, blog.id, crawled_post.id, view)
+        return perf
 
     async def _gaps(self, blog: Blog, crawled_post: CrawledPost,
                     live, plan) -> str:
