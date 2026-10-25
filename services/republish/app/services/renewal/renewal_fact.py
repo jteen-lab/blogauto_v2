@@ -34,7 +34,7 @@ STRICT_TOPICS = (
      "금액(할인율·한도·지원금)"),
 )
 _FAKE_FIRST = re.compile(
-    r"저도|저 역시|제가 (?:직접|처음|써|사용|해)|제 (?:아이|딸|아들|남편|아내|경험)|저희 (?:아이|집|가족)|"
+    r"저도|저 역시|저는 |제가 |저희는 |제가 (?:직접|처음|써|사용|해)|제 (?:아이|딸|아들|남편|아내|경험)|저희 (?:아이|집|가족)|"
     r"필자(?:는|가|도|의)|직접 (?:써|해|먹어|가) ?(?:보니|봤)")
 _VAGUE_CROWD = re.compile(
     r"많은 (?:사용자|소비자|이용자|분|사람|이)들?(?:이|은|도)[^.!?<]*"
@@ -50,6 +50,7 @@ CHECK_PROMPT = """당신은 한국 생활정보 블로그 글의 사실 검토�
    - "confidence": "높음" = 분명히 틀림·참고 자료와 어긋남·확인 안 되는 구체 숫자 단정,
      "중간" = 확인은 안 되지만 단정할 수 없음, "낮음" = 표현이 모호한 정도.
    - 수시로 바뀌는 할인율·한도·금액을 출처·기준일 없이 단정하면 "높음" 입니다.
+   - "낮음" 은 적지 않습니다. 가장 중요한 것부터 최대 12개, reason·fix_hint 는 짧게.
 2) 글 전체의 전제(제목이 묻는 것에 대한 기본 답)가 틀렸으면 "premise" 에 적습니다.
    예: '고추냉이와 와사비는 다른 식물' (실제로는 고추냉이=와사비, 튜브 제품은 대부분 서양고추냉이).
    전제가 맞으면 "premise" 는 빈 문자열.
@@ -111,12 +112,21 @@ def plain(html: str) -> str:
 
 
 async def _check(ai: Any, html: str, refs: str, title: str, model: tuple) -> Optional[dict]:
-    """검사 호출. 실패면 None, 아니면 {"premise", "items"}."""
+    """검사 호출(실패하면 한 번 더). 그래도 실패면 None, 아니면 {"premise", "items"}."""
+    for _ in range(2):
+        got = await _check_once(ai, html, refs, title, model)
+        if got is not None:
+            return got
+    return None
+
+
+async def _check_once(ai: Any, html: str, refs: str, title: str, model: tuple) -> Optional[dict]:
+    """검사 한 번. 10/25 재미리보기: 2,500토큰에서 잘려 실패 → 6,000."""
     prompt = CHECK_PROMPT.format(title=title, refs=(refs or "(없음)")[:f2.REF_LIMIT],
                                  body=plain(html))
     try:
         res = await ai.generate(prompt=prompt, provider=model[0], model=model[1],
-                                max_tokens=2500, temperature=0.0)
+                                max_tokens=6000, temperature=0.0)
     except Exception as e:  # noqa: BLE001
         logger.warning("[RENEWAL_FACT] 검사 호출 실패 | %s", e)
         return None
@@ -146,13 +156,17 @@ async def run(ai: Any, html: str, refs: str, title: str,
     got = await _check(ai, out.html, refs, title, model)
     rec["r2"] = got
     if got is None:
-        out.hold = "사실 검사 호출 실패" if out.strict else None
-        out.notes.append("사실 검사 실패" + (" — 엄격 주제라 갱신 안 함" if out.strict else " — 검사 없이 계속"))
+        # 전제를 바로잡아 다시 쓴 글(allow_premise=False)은 확인 못 하면 내보내지 않는다
+        must = out.strict or not allow_premise
+        out.hold = "사실 검사 호출 실패" if must else None
+        out.notes.append("사실 검사 실패" + (" — 갱신 안 함" if must else " — 검사 없이 계속"))
         return out
     if got["premise"] and allow_premise:
         out.premise = got["premise"]
         return out
     await _fix(ai, out, got, refs, model, title)
+    if not allow_premise and not out.hold and out.record.get("premise_left_after"):
+        out.hold = "전제를 바로잡지 못함 — " + out.record["premise_left_after"][:60]
     _log(title, out)
     return out
 
@@ -166,6 +180,7 @@ async def _fix(ai: Any, out: FactOutcome, got: dict, refs: str, model: tuple,
         rec["premise_left"] = got["premise"]
     if not bad and not got["premise"]:
         return
+    bad = bad[:8]
     fixes = await f2.fix(ai, bad, refs, model[0], model[1]) if bad else []
     given = {str(f.get("sentence") or "").strip() for f in fixes}
     fixes += [{"sentence": b["sentence"], "replacement": ""}
@@ -175,9 +190,12 @@ async def _fix(ai: Any, out: FactOutcome, got: dict, refs: str, model: tuple,
     again = await _check(ai, out.html, refs, title, model)
     rec["r3_recheck"] = again
     left = f2.high((again or {}).get("items"))
+    if (again or {}).get("premise"):
+        rec["premise_left_after"] = again["premise"]
     if again is None or left or (again or {}).get("premise"):
         why = ("재검사 실패" if again is None else
-               f"고친 뒤에도 틀린 문장 {len(left)}개" if left else "전제 오류 남음")
+               f"고친 뒤에도 틀린 문장 {len(left)}개: {left[0].get('sentence', '')[:50]}"
+               f" ({left[0].get('reason', '')[:40]})" if left else "전제 오류 남음")
         if out.strict:
             out.hold = f"{out.strict} — {why}"
         elif left:
