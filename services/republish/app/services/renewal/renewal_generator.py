@@ -34,7 +34,9 @@ _AUGMENT_TEXT = (
 )
 _REWRITE_TEXT = (
     "이 주제를 처음부터 다시 쓰세요. 기존 글은 검색에서 성과를 내지 못했으므로 "
-    "구성과 접근을 바꿔야 합니다."
+    "구성과 접근을 바꿔야 합니다. 검색한 사람이 제목을 보고 찾는 답(얼마인지·몇 개인지·"
+    "어떻게 계산하는지)을 첫 부분에 숫자와 계산 예시로 주고, 본문은 공백 빼고 1,800자 "
+    "이상으로 쓰세요."
 )
 
 logger = get_logger("renewal_generator", "app.log")
@@ -49,6 +51,19 @@ def inject_featured(blog: Blog, html: str, image_url: str, title: str) -> str:
     return HtmlInjector().inject_featured_image(
         html=html, image_url=image_url, title=title,
         editor_type=getattr(blog, "editor_type", "classic"), platform=platform)
+
+
+class _WriterBlog:
+    """블로그를 그대로 보이되 글쓰기 모델만 바꾼 대리 객체(DB 에 쓰지 않음)."""
+
+    def __init__(self, blog: Blog, model: tuple) -> None:
+        self._blog = blog
+        ai = dict(getattr(blog, "ai_config", None) or {})
+        ai["writing_ai"] = {"provider": model[0], "model": model[1]}
+        self.ai_config = ai
+
+    def __getattr__(self, name: str):
+        return getattr(self._blog, name)
 
 
 @dataclass
@@ -207,7 +222,16 @@ class RenewalGenerator:
             warnings.append(f"전제 바로잡음: {out.premise[:80]}")
             extra = gen_kwargs.get("extra_instruction") or ""
             gen_kwargs["extra_instruction"] = f"{extra}\n\n{rf.premise_instruction(out.premise)}".strip()
-            again = await generate_content_with_meta(**gen_kwargs)
+            # 바로잡기는 검사 모델로 쓴다 — gpt-4o-mini 는 지시를 받고도 옛 전제를 섞었다(10/25 /1773)
+            gen_kwargs["blog"] = _WriterBlog(gen_kwargs["blog"], rf._model(cfg))
+            st = dict(gen_kwargs["settings"])
+            st["content_generation"] = {**(st.get("content_generation") or {}), "max_tokens": 8000}
+            gen_kwargs["settings"] = st
+            try:
+                again = await generate_content_with_meta(**gen_kwargs)
+            except Exception as e:  # noqa: BLE001 — 바로잡기 실패면 갱신하지 않는다
+                warnings.append(f"사실 관문 보류: 전제 바로잡기 다시 쓰기 실패({e})")
+                return None
             out = await rf.run(self.gen.ai_service, again["content"], refs, title, cfg,
                                allow_premise=False)
         warnings += out.notes
