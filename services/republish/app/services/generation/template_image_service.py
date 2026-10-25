@@ -15,6 +15,7 @@ from typing import Optional, Tuple
 
 from ...core.config import settings
 from ...core.logger import get_logger
+from .card_text import card_text, draw_band, fix_orphan
 
 logger = get_logger("template_image", "app.log")
 
@@ -177,7 +178,10 @@ class TemplateImageService:
         font = self._load_font(config, font_size)
 
         max_width = width - padding["left"] - padding["right"]
-        lines = self._wrap_text(draw, title, font, max_width)
+        lines = self._wrap_text(draw, card_text(title), font, max_width)
+        draw_band(image, draw, lines, font, self._calculate_text_positions(
+            draw, lines, font, width, height, padding, line_height,
+            text_align, vertical_align), config)
 
         # 그림자 → 외곽선 포함 텍스트 그리기
         self._draw_text(
@@ -363,7 +367,9 @@ class TemplateImageService:
         if current_line:
             lines.append(current_line)
 
-        return lines or [text]
+        # 마지막 줄 한 글자('법')는 앞 줄 끝 낱말과 같이 내린다
+        return fix_orphan(lines, lambda t: draw.textbbox(
+            (0, 0), t, font=font)[2] <= max_width) or [text]
 
     def _calculate_text_positions(
         self, draw, lines: list, font, width: int, height: int,
