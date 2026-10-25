@@ -4,7 +4,7 @@
 세금 환급·연말정산, 정부 지원금·바우처, 병원비·검사 비용 같은 주제로(블로그 맡은 칸 안에서).
 
 - 모듈 ``money_info_daily``(정수)가 있을 때만. 오늘 이 블로그가 만든 글 중 P3 글이
-  그만큼 안 됐으면, 재고 후보(맡은 칸 안) 중 P3 제목을 먼저 쓴다. 없으면 원래 제목.
+  그만큼 안 됐으면, 재고 후보(맡은 칸 안, 앞 200개) 중 관문에 안 걸릴 P3 제목을 먼저 쓴다. 없으면 원래 제목.
 - 관문(대출 상품·건강 공식 출처·N1~N4·형제 중복)은 그대로 — 고른 뒤 똑같이 거친다.
 - 기록: 글마다 logs/money_info.jsonl 한 줄(p3 참/거짓). 마케팅이 4주 뒤 방문·체류를 비교.
 
@@ -26,6 +26,7 @@ logger = get_logger("money_pick", "app.log")
 
 KEY = "money_info_daily"
 JOURNAL = "money_info.jsonl"
+SCAN = 200   # 후보는 오래된 순이라 40개 안에 P3 가 없을 때가 많다(10/25 실측)
 KST = timezone(timedelta(hours=9))
 MONEY = re.compile(
     r"연회비|카드\s*혜택|캐시백|포인트\s*(적립|전환)|실손|보험금|보험\s*청구|보험료|"
@@ -66,14 +67,17 @@ async def prefer(executor: Any, blog: Any, title_id: int, settings: dict) -> int
             return title_id
         from .volume_floor import remembered
         from . import lead_keyword
+        from .topic_gate import check_title
         low = lead_keyword.floor(settings) if lead_keyword.enabled(settings) else None
         titles = await executor.inventory_trigger.find_available_titles(
-            blog.id, limit=40, module_settings=settings)
+            blog.id, limit=SCAN, module_settings=settings)
         for t in titles:
             if t.id == title_id and is_money(t.title):
                 return title_id
         for t in titles:
-            if is_money(t.title) and not (low and remembered(t, low) is False):
+            # 관문에 바로 걸릴 제목(지난 연도·위험주제·대출 상품)은 고르지 않는다
+            if is_money(t.title) and not check_title(t.title or "") \
+                    and not (low and remembered(t, low) is False):
                 logger.info("[MONEY_PICK] P3 먼저 | blog=%s | %s → %s | '%s'",
                             blog.name, title_id, t.id, (t.title or "")[:40])
                 return t.id
