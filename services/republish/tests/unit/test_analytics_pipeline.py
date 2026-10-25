@@ -166,7 +166,7 @@ class TestRenewalWiring:
         src = (ROOT / "app/services/renewal/renewal_service.py").read_text(
             encoding="utf-8")
         skip_at = src.index("if plan.skip:")
-        gen_at = src.index("RenewalGenerator(self.db, gen_user_id)")
+        gen_at = src.index("await self._regenerate(")
         assert skip_at < gen_at
 
     def test_generator_forced_mode_has_fallback_text(self):
