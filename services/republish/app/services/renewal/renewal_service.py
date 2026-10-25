@@ -4,7 +4,7 @@
 generator(재생성) → updater(라이브 갱신)를 묶는다. dry_run=True면 재생성까지만
 하고 라이브 글/DB를 건드리지 않는다(검증용, 기본값).
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -64,10 +64,31 @@ class RenewalService:
             if rc.get("merge") and not dry_run:
                 crawled_post.last_renewed_at = datetime.now()   # 같은 글을 매 회차 다시 고르지 않게
                 await self.db.commit()
+            elif not dry_run and not rc.get("success"):
+                await self._defer_failed(blog, crawled_post, live, plan, rc, stage)
             return rc
         if dry_run:
             return self._preview(cfg, plan, live, rc, protected, stage, include_content)
-        return await self._apply(blog, crawled_post, live, plan, rc, cfg, stage)
+        res = await self._apply(blog, crawled_post, live, plan, rc, cfg, stage)
+        if not res.get("success"):
+            await self._defer_failed(blog, crawled_post, live, plan, res, stage)
+        return res
+
+    async def _defer_failed(self, blog: Blog, post: CrawledPost, live, plan,
+                            res: dict, stage: str) -> None:
+        """관문 보류·생성 실패 글은 기록하고 미룬다(성과 고르기일 때).
+
+        미루지 않으면 같은 글이 회차마다 다시 골라져 검사 비용만 쓰고 계속 막힌다(10/25 켜기 전 점검).
+        어제 날짜로 적어 오늘 하루 상한(renewed_today)은 쓰지 않고, min_gap_days 동안 후보에서 빠진다.
+        """
+        if not renewal_pick.enabled(blog.renewal_config):
+            return
+        post.last_renewed_at = datetime.now() - timedelta(days=1)
+        await self.db.commit()
+        renewal_record.journal(blog, {
+            "post": post.id, "url": post.url, "stage": stage, "action": plan.action,
+            "reason": plan.action_reason, "result": "held", "error": res.get("error"),
+            "old_title": live.title, "warnings": res.get("warnings")})
 
     async def _fetch_failed(self, blog: Blog, post: CrawledPost, dry_run: bool) -> dict:
         """라이브 글이 없으면(지운 글 등) 같은 글을 매 회차 다시 고르지 않게 미룬다."""
@@ -198,7 +219,8 @@ class RenewalService:
         await self.db.commit()
         renewal_record.journal(blog, {
             "post": post.id, "url": post.url, "stage": stage, "action": plan.action,
-            "reason": plan.action_reason, "old_title": live.title, "new_title": rc.title,
+            "reason": plan.action_reason, "result": "renewed",
+            "old_title": live.title, "new_title": rc.title,
             "image": plan.image_action, "image_changed": plan.image_action == "new",
             "warnings": rc.warnings})
         logger.info(
