@@ -5,7 +5,7 @@ GA 는 옛 글 주소까지 날마다 쌓인다(방문이 있는 날만 행이 �
 
 - **없는 것을 0 으로 읽지 않는다.** 행이 없는 글을 '유입 0' 으로 보는 것은 그 블로그의
   GA 수집이 MIN_COVERAGE 일 이상 쌓였을 때만이다. 아니면 legacy(판정 안 함).
-- 창 = min(28일, 수집일수/2). 수집이 9/13 부터라 28일×2 를 다 채우지 못한다.
+- 수집 기간 = 이 블로그 첫 행 ~ GA 수집 마지막 날. 창 = min(28일, 수집 기간/2)(9/13 부터라 28일×2 를 못 채움).
 - 줄어듦은 네이버 유입으로, '유입 0' 은 전체 방문으로 본다(구글로 들어오는 글을 갈아엎지 않게).
 - 수익 글 보호: 최근 창 네이버 유입 상위 TOP_N 편은 rewrite 금지(→ augment), 제목 그대로.
 
@@ -85,10 +85,13 @@ def classify(stat: Optional[GaStat], usable: bool, protected: bool,
 
 async def load_view(db: AsyncSession, blog_id: int) -> GaView:
     """블로그의 GA 를 글별 두 창 합으로 읽는다."""
+    # 방문이 적은 블로그는 행이 드문드문이라 '행 있는 날 수'로 세면 수집 기간을 잘못 본다.
+    # 수집 기간 = 이 블로그 첫 행 ~ GA 수집 마지막 날(모든 블로그 중 최신).
     cov = (await db.execute(sql(
-        "select count(distinct date), max(date) from page_metrics_daily "
-        "where blog_id = :b"), {"b": blog_id})).first()
-    days, last = int(cov[0] or 0), cov[1]
+        "select (select min(date) from page_metrics_daily where blog_id = :b), "
+        "(select max(date) from page_metrics_daily)"), {"b": blog_id})).first()
+    first, last = cov[0], cov[1]
+    days = (last - first).days + 1 if first and last else 0
     win = window_for(days)
     if not last:
         return GaView(days, win, None, {}, set())
