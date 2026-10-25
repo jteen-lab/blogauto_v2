@@ -61,3 +61,17 @@ def test_strip_images_keeps_text():
 def test_old_images_detected():
     h = '<img src="https://d.com/wp-content/uploads/2023/06/x.png"><img src="https://d.com/wp-content/uploads/2026/10/blogauto_1.webp">'
     assert rr.old_images(h) == ["https://d.com/wp-content/uploads/2023/06/x.png"]
+
+
+def test_text_len_and_shrink_rule():
+    assert rr.text_len("<p>가 나</p><!-- x --><img src='a'>") == 2
+    assert rr.MIN_KEEP == 0.9
+
+
+def test_new_image_is_injected_into_body():
+    """템플릿 모드는 그림 파일만 준다 — 리뉴얼이 본문에 직접 넣어야 한다(10/25 미리보기 그림 0개)."""
+    from pathlib import Path
+    src = Path("app/services/renewal/renewal_generator.py").read_text()
+    assert "if img.image_url not in html:" in src and "inject_featured(" in src
+    src2 = Path("app/services/renewal/renewal_images.py").read_text()
+    assert "inject_featured(" in src2
