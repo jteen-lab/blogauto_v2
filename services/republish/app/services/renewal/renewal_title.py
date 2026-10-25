@@ -20,6 +20,8 @@ from ...core.logger import get_logger
 
 logger = get_logger("renewal_title", "app.log")
 
+DUP_NOTE = "새 제목 중복"
+
 
 def source_title(live_title: str, main_title: Any = None) -> SimpleNamespace:
     """lead_recombine 이 읽는 모양(제목·핵심어). 핵심어는 매칭된 정식제목 것을 쓴다."""
@@ -68,6 +70,6 @@ async def resolve(gen: Any, blog: Any, module: Any, live_title: str,
     if dup:
         logger.info("[RENEWAL_TITLE] 새 제목 중복 → 원래 제목 | '%s' | %s", title[:40], dup)
         title, notes = lkf.finalize(live_title, None, "none")
-        return title, notes, f"새 제목 중복({dup}) — 원래 제목"
+        return title, notes, f"{DUP_NOTE}({dup}) — 원래 제목"
     kw = getattr(lead, "text", "") if lead else ""
     return title, notes, json.dumps({"lead": kw, "applied": applied}, ensure_ascii=False)
