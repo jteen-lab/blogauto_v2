@@ -16,6 +16,7 @@ from ...models.blog import Blog
 from .inventory_trigger import InventoryTrigger
 from .generator import ContentGenerator
 from .flow_execution_context import StageParams
+from . import money_pick
 
 logger = logging.getLogger(__name__)
 
@@ -230,6 +231,7 @@ class FlowGenerateExecutor:
                         "inventory": check_result.current_inventory,
                         "threshold": check_result.threshold,
                     }
+                title_id = await money_pick.prefer(self, blog, title_id, module_settings)  # P3 approved4_lanes_money.md
 
             # 2.4 블로그 카테고리 관문 — 순서도: blog_category_scope.md
             title = await self._load_title(locals().get("title"), title_id)
@@ -281,6 +283,7 @@ class FlowGenerateExecutor:
                     f"소요: {gen_result.generation_time_seconds}초"
                 )
                 logger.info(f"[FLOW_GEN] {msg}")
+                money_pick.journal(blog, module_settings, gen_result.crawling_post_id, gen_result.recombined_title)
                 return {
                     "success": True,
                     "message": msg,
