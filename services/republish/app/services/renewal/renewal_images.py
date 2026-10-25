@@ -5,7 +5,7 @@
 
 - 워드프레스 '편집용 원문'(context=edit)을 읽는다. 화면용(rendered)을 다시 저장하면
   플러그인이 붙인 목차·광고가 본문에 굳는다.
-- 그림 블록(<!-- wp:image -->·figure·img)만 빼고 모듈 이미지 설정으로 새로 만든다.
+- 그림 블록(<!-- wp:image -->·[caption]·figure·img)만 빼고 모듈 이미지 설정으로 새로 만든다.
 - 백업 먼저(renewal_record.backup). 실패하면 갱신하지 않는다. 옛 이미지 파일은 지우지 않는다.
 - 주소·발행일 그대로(수정일만 바뀜).
 
@@ -26,6 +26,7 @@ logger = get_logger("renewal_images", "app.log")
 
 _WP_IMAGE_BLOCK = re.compile(r"<!--\s*wp:image.*?<!--\s*/wp:image\s*-->", re.S | re.I)
 _FIGURE_IMG = re.compile(r"<figure[^>]*>(?:(?!</figure>).)*?<img.*?</figure>", re.S | re.I)
+_CAPTION_IMG = re.compile(r"\[caption[^\]]*\](?:(?!\[/caption\]).)*?<img.*?\[/caption\]", re.S | re.I)
 _IMG = re.compile(r"<img[^>]*>", re.I)
 _EMPTY_P = re.compile(r"<p[^>]*>\s*(?:<a[^>]*>\s*</a>)?\s*</p>", re.I)
 
@@ -33,6 +34,7 @@ _EMPTY_P = re.compile(r"<p[^>]*>\s*(?:<a[^>]*>\s*</a>)?\s*</p>", re.I)
 def strip_images(content: str) -> str:
     """본문에서 그림만 뺀다(글자는 그대로). 순수 함수."""
     out = _WP_IMAGE_BLOCK.sub("", content or "")
+    out = _CAPTION_IMG.sub("", out)    # 클래식 편집기 [caption]…<img>…설명[/caption] 통째로
     out = _FIGURE_IMG.sub("", out)
     out = _IMG.sub("", out)
     return _EMPTY_P.sub("", out)
