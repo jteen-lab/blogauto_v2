@@ -139,7 +139,7 @@ def test_scrub_plain_first_person():
 def test_drop_title_tails():
     from app.services.renewal.renewal_title import _drop_tails
     assert _drop_tails("제습기 전기세 절약 방법 알아보기 뽀송하게 유지하는 꿀팁") == \
-        "제습기 전기세 절약 방법 뽀송하게 유지하는 꿀팁"
+        "제습기 전기세 절약 방법과 뽀송하게 유지하는 꿀팁"
 
 
 def test_plain_math_and_more_vague():
@@ -148,3 +148,21 @@ def test_plain_math_and_more_vague():
     assert "\\" not in out and "300W × 8" in out and "1 kW/1000 W" in out
     _, removed = rf.scrub_claims("<p>사용자들은 이 기능 덕분에 줄였다고 말합니다. 전기세 절약 효과가 있다는 보고도 있습니다. 1등급이 낫습니다.</p>")
     assert len(removed) == 2
+
+
+def test_title_awkward_particle_joined():
+    from app.services.renewal.renewal_title import _drop_tails
+    assert _drop_tails("제습기 전기세 절약 방법은 뽀송하게 유지하는 꿀팁") == \
+        "제습기 전기세 절약 방법과 뽀송하게 유지하는 꿀팁"
+    assert _drop_tails("전기요금 누진 차이는 이렇게 줄이는 팁") == "전기요금 누진 차이와 이렇게 줄이는 팁"
+    assert _drop_tails("에어컨 요금 계산 방법은 무엇일까요") == "에어컨 요금 계산 방법"
+    for keep in ("제습기 전기세 계산법과 줄이는 꿀팁", "제습기 전기세 계산 방법 정리",
+                 "완강기 설치 기준과 아파트 세대점검 정리"):
+        assert _drop_tails(keep) == keep
+
+
+def test_rewrite_text_month_and_weak_cause():
+    from app.services.renewal.renewal_generator import _REWRITE_TEXT
+    assert "72kWh" in _REWRITE_TEXT and "한전 요금표" in _REWRITE_TEXT and "1,800자" in _REWRITE_TEXT
+    assert "근거 약한 인과" in rf.CHECK_PROMPT
+    rf.CHECK_PROMPT.format(title="t", refs="r", body="b")  # 중괄호 깨짐 없음
