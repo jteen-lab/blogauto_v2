@@ -37,8 +37,10 @@ _FAKE_FIRST = re.compile(
     r"저도|저 역시|저는 |제가 |저희는 |제가 (?:직접|처음|써|사용|해)|제 (?:아이|딸|아들|남편|아내|경험)|저희 (?:아이|집|가족)|"
     r"필자(?:는|가|도|의)|직접 (?:써|해|먹어|가) ?(?:보니|봤)")
 _VAGUE_CROWD = re.compile(
-    r"많은 (?:사용자|소비자|이용자|분|사람|이)들?(?:이|은|도)[^.!?<]*"
-    r"(?:보고|전하|말하|후기|경험|평가|만족|추천|느끼|입을 모)")
+    r"(?:많은 )?(?:사용자|소비자|이용자|분|사람|이)들(?:이|은|도)[^.!?<]*"
+    r"(?:보고|전하|전합|말하|말합|후기|경험|평가|만족|추천|느끼|입을 모)"
+    r"|많은 (?:분|사람|이)(?:이|은|도)[^.!?<]*(?:보고|전하|말하|후기|경험|평가|만족|추천|느끼)"
+    r"|(?:는|다는) 보고(?:도|가) 있습니다")
 _SENTENCE = re.compile(r"[^<>.!?。]*[.!?。]")
 
 CHECK_PROMPT = """당신은 한국 생활정보 블로그 글의 사실 검토자입니다. 이 글은 옛 글을 고쳐 쓴 것이라
@@ -90,6 +92,20 @@ def strict_topic(title: str, html: str = "") -> Optional[str]:
     return None
 
 
+_TEX = ((r"\\[\[\]()]", ""), (r"\\text\{([^{}]*)\}", r"\1"), (r"\\times", "×"),
+        (r"\\frac\{([^{}]*)\}\{([^{}]*)\}", r"\1/\2"), (r"\\(?:,|;|quad)", " "))
+
+
+def plain_math(html: str) -> str:
+    """LaTeX 수식(\\[ \\text{} \\times \\frac{}{})을 보통 글자로 — 워드프레스에선 기호 그대로 보인다(10/25 /613)."""
+    if "\\" not in (html or ""):
+        return html
+    out = html
+    for pat, rep in _TEX:
+        out = re.sub(pat, rep, out)
+    return re.sub(r"[ \t]{2,}", " ", out)
+
+
 def scrub_claims(html: str) -> tuple:
     """R1 지어낸 1인칭 경험·근거 없는 일반화 문장 지우기. (본문, 지운 문장)."""
     removed: List[str] = []
@@ -101,7 +117,7 @@ def scrub_claims(html: str) -> tuple:
             return ""
         return s
 
-    out = _SENTENCE.sub(_cut, html or "")
+    out = _SENTENCE.sub(_cut, plain_math(html or ""))
     out = re.sub(r"<p[^>]*>\s*</p>", "", out)
     return re.sub(r"[ \t]{2,}", " ", out), removed
 
