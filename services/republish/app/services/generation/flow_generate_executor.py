@@ -237,16 +237,14 @@ class FlowGenerateExecutor:
                 msg = f"카테고리 밖 제목(id={title_id}) - 생성 건너뜀"
                 return {"success": True, "message": msg, "skipped": True}
             # 2.45 제목 관문(위험·지난연도·대출·제철·타블로그 중복·같은 블로그 비슷한 제목·모듈 거름망) — title_topic_gate.md
-            from . import blog_topic_filter, same_blog_dedupe, topic_gate
+            from . import blog_topic_filter, gate_retry, same_blog_dedupe, topic_gate, volume_floor
             blocked = scope_gate and (await topic_gate.apply(self.db, blog, title) or await same_blog_dedupe.apply(
                 self.db, blog, title, module_settings) or await blog_topic_filter.apply(self.db, blog, title, module_settings))
-            if blocked:
-                return {"success": True, "skipped": True, "message": f"{blocked} - 생성 건너뜀"}
-            from . import volume_floor  # N2 검색량 바닥선 — 낮으면 같은 회차에서 다음 제목(title_lead_keyword.md)
-            low = scope_gate and await volume_floor.check(self.db, self.user_id, blog, title, module_settings)
-            if low:
-                return await volume_floor.next_title(self, module, blog, stage_params, scope_gate, module_settings,
-                                                     (*_tried, title_id)) or {"success": True, "skipped": True, "message": f"{low} - 생성 건너뜀"}
+            # N2 검색량 바닥선(title_lead_keyword.md). 걸리면 같은 회차에서 다음 제목 — 최대 3개(10/25)
+            low = not blocked and scope_gate and await volume_floor.check(self.db, self.user_id, blog, title, module_settings)
+            if blocked or low:
+                return await gate_retry.next_title(self, module, blog, stage_params, scope_gate, module_settings,
+                                                   (*_tried, title_id), blocked or low)
 
             # 2.5 프롬프트 로테이션 — 같은 블로그·같은 니치라도 글마다
             # 구조를 바꾼다. 한 구조로 계속 나가면 패턴이 보인다.
