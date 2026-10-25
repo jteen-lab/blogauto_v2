@@ -122,6 +122,10 @@ class RenewalService:
         if left:
             rc.warnings.append(f"옛 업로드 이미지 {len(left)}개 남음: {left[:2]}")
         rc.warnings.append(f"본문 그림 {len(renewal_record.image_urls(rc.content_html))}개")
+        before, after = renewal_record.text_len(live.content_html), renewal_record.text_len(rc.content_html)
+        rc.shrunk = plan.action == "augment" and after < before * renewal_record.MIN_KEEP
+        if rc.shrunk:  # 보강인데 글이 줄면 갱신하지 않는다(수익 글 보호)
+            rc.warnings.append(f"보강인데 글자 {before}→{after} 줄어듦 — 실제 갱신 안 함")
         return rc
 
     def _preview(self, cfg: dict, plan, live, rc, protected: bool, stage: str,
@@ -138,6 +142,8 @@ class RenewalService:
             "new_image_file": rc.image_url,
             "original_len": len(live.content_html or ""),
             "content_len": len(rc.content_html),
+            "text_len": [renewal_record.text_len(live.content_html),
+                         renewal_record.text_len(rc.content_html)],
             "action": plan.action, "reason": plan.action_reason,
             "warnings": rc.warnings,
         }
@@ -152,6 +158,8 @@ class RenewalService:
                      cfg: dict, stage: str) -> dict:
         """원본 백업 → 라이브 갱신 → DB·기록."""
         strict = renewal_pick.enabled(cfg)
+        if getattr(rc, "shrunk", False):
+            return {"success": False, "error": "보강인데 본문이 줄어 갱신 안 함"}
         if strict and not renewal_record.backup(blog, live.platform_post_id,
                                                 live.title, live.content_html):
             return {"success": False, "error": "원본 백업 실패 — 갱신 안 함"}
