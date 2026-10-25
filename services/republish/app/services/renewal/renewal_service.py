@@ -61,6 +61,9 @@ class RenewalService:
 
         rc = await self._regenerate(blog, crawled_post, live, plan, cfg)
         if isinstance(rc, dict):
+            if rc.get("merge") and not dry_run:
+                crawled_post.last_renewed_at = datetime.now()   # 같은 글을 매 회차 다시 고르지 않게
+                await self.db.commit()
             return rc
         if dry_run:
             return self._preview(cfg, plan, live, rc, protected, stage, include_content)
@@ -115,9 +118,16 @@ class RenewalService:
             subtopic_id=subtopic_id, topic_id=topic_id,
             existing_content=live.content_html, gap_instruction=gaps,
             strict_title=renewal_pick.enabled(cfg), main_title=main_title,
+            self_url=post.url or "", fact_cfg=self._fact_cfg(cfg),
         )
+        if getattr(rc, "merge", False):
+            renewal_record.merge_candidate(blog, {
+                "post": post.id, "url": post.url, "title": live.title,
+                "note": rc.title_note, "action": plan.action})
+            return {"success": True, "skipped": True, "merge": True,
+                    "reason": rc.error, "title": live.title}
         if not rc.success:
-            return {"success": False, "error": rc.error}
+            return {"success": False, "error": rc.error, "warnings": rc.warnings}
         left = renewal_record.old_images(rc.content_html)
         if left:
             rc.warnings.append(f"옛 업로드 이미지 {len(left)}개 남음: {left[:2]}")
@@ -126,7 +136,18 @@ class RenewalService:
         rc.shrunk = plan.action == "augment" and after < before * renewal_record.MIN_KEEP
         if rc.shrunk:  # 보강인데 글이 줄면 갱신하지 않는다(수익 글 보호)
             rc.warnings.append(f"보강인데 글자 {before}→{after} 줄어듦 — 실제 갱신 안 함")
+        if plan.action == "rewrite" and after < renewal_record.MIN_REWRITE:
+            rc.shrunk = True  # 재작성은 줄어도 되지만 너무 짧으면 안 함
+            rc.warnings.append(f"재작성 본문 {after}자 < {renewal_record.MIN_REWRITE}자 — 실제 갱신 안 함")
         return rc
+
+    @staticmethod
+    def _fact_cfg(cfg: dict):
+        """사실 관문 설정 — 성과 고르기(pick=performance)일 때 기본으로 켠다."""
+        if not renewal_pick.enabled(cfg):
+            return None
+        fc = cfg.get("fact_gate") if isinstance(cfg.get("fact_gate"), dict) else {}
+        return None if fc.get("enabled") is False else fc
 
     def _preview(self, cfg: dict, plan, live, rc, protected: bool, stage: str,
                  include_content: bool) -> dict:
@@ -159,7 +180,7 @@ class RenewalService:
         """원본 백업 → 라이브 갱신 → DB·기록."""
         strict = renewal_pick.enabled(cfg)
         if getattr(rc, "shrunk", False):
-            return {"success": False, "error": "보강인데 본문이 줄어 갱신 안 함"}
+            return {"success": False, "error": "본문이 줄거나 짧아 갱신 안 함"}
         if strict and not renewal_record.backup(blog, live.platform_post_id,
                                                 live.title, live.content_html):
             return {"success": False, "error": "원본 백업 실패 — 갱신 안 함"}
