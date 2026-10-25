@@ -140,3 +140,11 @@ def test_drop_title_tails():
     from app.services.renewal.renewal_title import _drop_tails
     assert _drop_tails("제습기 전기세 절약 방법 알아보기 뽀송하게 유지하는 꿀팁") == \
         "제습기 전기세 절약 방법 뽀송하게 유지하는 꿀팁"
+
+
+def test_plain_math_and_more_vague():
+    h = r"<p>\[ \text{전기세} = 300W \times 8 \text{시간} \times \frac{1 \text{kW}}{1000 \text{W}} = 360원 \]</p>"
+    out = rf.plain_math(h)
+    assert "\\" not in out and "300W × 8" in out and "1 kW/1000 W" in out
+    _, removed = rf.scrub_claims("<p>사용자들은 이 기능 덕분에 줄였다고 말합니다. 전기세 절약 효과가 있다는 보고도 있습니다. 1등급이 낫습니다.</p>")
+    assert len(removed) == 2
