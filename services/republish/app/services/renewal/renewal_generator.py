@@ -63,6 +63,7 @@ class RenewalContent:
     error: str = ""
     warnings: list = field(default_factory=list)
     title_note: str = ""
+    merge: bool = False     # 겹침 검사로 제목 유지 → 리뉴얼 대신 합치기 후보
 
 
 class RenewalGenerator:
@@ -86,6 +87,8 @@ class RenewalGenerator:
         gap_instruction: str = "",
         strict_title: bool = False,
         main_title=None,
+        self_url: str = "",
+        fact_cfg: Optional[dict] = None,
     ) -> RenewalContent:
         """라이브 글을 현재 양식·최신 내용으로 재생성한다.
 
@@ -95,6 +98,8 @@ class RenewalGenerator:
             보강할 때만 들어온다.
         strict_title: 새 글과 같은 N1·N4·중복 검사로 제목을 정한다(renewal_title).
         main_title: 매칭된 정식제목(핵심어용).
+        self_url: 이 글 주소 — 자기 글로 가는 내부 링크를 뺀다.
+        fact_cfg: 사실 관문 설정(None 이면 끔). strict_title 과 함께 켠다(renewal_fact).
         """
         settings = module.settings or {}
         ai_config = blog.ai_config or {}
@@ -105,6 +110,10 @@ class RenewalGenerator:
             from . import renewal_title
             working_title, body_notes, title_note = await renewal_title.resolve(
                 self.gen, blog, module, live_title, plan.recombine_title, main_title)
+            if title_note.startswith(renewal_title.DUP_NOTE):
+                # 같은 사이트에 비슷한 글 — 고쳐 쓰지 말고 합치기 후보로(301 은 형 확인 뒤)
+                return RenewalContent(success=False, merge=True, title=live_title,
+                                      title_note=title_note, error="합치기 후보 — " + title_note)
         else:
             working_title = await self._resolve_title(
                 blog, module, live_title, plan, settings, ai_config,
@@ -144,15 +153,29 @@ class RenewalGenerator:
             extra_instruction=extra,
             existing_content=existing_for_prompt,
         )
+        body = content_result["content"]
+        if fact_cfg is not None:
+            body = await self._fact_gate(
+                body, working_title, ref_result, fact_cfg, warnings,
+                dict(ai_service=self.gen.ai_service, title=working_title,
+                     reference_injection=ref_result.to_prompt_injection(),
+                     settings=lead_keyword_flow.with_body(settings, body_notes),
+                     blog=blog, category_name=category_name, keywords_text="",
+                     prompt_override=override, extra_instruction=extra,
+                     existing_content=existing_for_prompt))
+            if body is None:
+                return RenewalContent(success=False, title=working_title, warnings=warnings,
+                                      error="사실 관문 통과 못 함 — " + warnings[-1])
         content_with_links = await self.gen.internal_linker.insert_links(
-            content=content_result["content"],
+            content=body,
             blog_id=blog.id,
             current_title=working_title,
             module_settings=settings,
             category=(topic_id, subtopic_id),
         )
+        from .renewal_record import strip_self_links
         final_html = await self.gen.substitution_processor.process(
-            content=content_with_links,
+            content=strip_self_links(content_with_links, self_url),
             blog_id=blog.id,
             text_replace_enabled=text_replace_enabled,
         )
@@ -172,6 +195,26 @@ class RenewalGenerator:
             warnings=warnings,
             title_note=title_note,
         )
+
+    async def _fact_gate(self, body: str, title: str, ref_result, cfg: dict,
+                         warnings: list, gen_kwargs: dict) -> Optional[str]:
+        """사실 관문. 전제가 틀렸으면 바로잡는 지시로 한 번 다시 쓴다. 보류면 None."""
+        from . import renewal_fact as rf
+
+        refs = ref_result.to_prompt_injection()
+        out = await rf.run(self.gen.ai_service, body, refs, title, cfg)
+        if out.premise:
+            warnings.append(f"전제 바로잡음: {out.premise[:80]}")
+            extra = gen_kwargs.get("extra_instruction") or ""
+            gen_kwargs["extra_instruction"] = f"{extra}\n\n{rf.premise_instruction(out.premise)}".strip()
+            again = await generate_content_with_meta(**gen_kwargs)
+            out = await rf.run(self.gen.ai_service, again["content"], refs, title, cfg,
+                               allow_premise=False)
+        warnings += out.notes
+        if out.hold:
+            warnings.append(f"사실 관문 보류: {out.hold}")
+            return None
+        return out.html
 
     @staticmethod
     def _strip_html(html: str) -> str:
