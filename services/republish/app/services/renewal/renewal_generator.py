@@ -22,6 +22,7 @@ from ...core.logger import get_logger
 from ...models.blog import Blog, BlogPlatform
 from ...models.module import Module
 from ..generation.content_generator_helper import generate_content_with_meta
+from ..generation import lead_keyword_flow
 from ..generation.generator import ContentGenerator
 from .renewal_plan import RenewalPlan
 
@@ -50,6 +51,7 @@ class RenewalContent:
     seo_meta: Optional[dict] = None
     error: str = ""
     warnings: list = field(default_factory=list)
+    title_note: str = ""
 
 
 class RenewalGenerator:
@@ -71,6 +73,8 @@ class RenewalGenerator:
         text_replace_enabled: bool = True,
         existing_content: str = "",
         gap_instruction: str = "",
+        strict_title: bool = False,
+        main_title=None,
     ) -> RenewalContent:
         """라이브 글을 현재 양식·최신 내용으로 재생성한다.
 
@@ -78,14 +82,22 @@ class RenewalGenerator:
             모드일 때 기존 내용 보존·확장용으로 주입한다.
         gap_instruction: 서치콘솔 실측으로 뽑은 '독자가 답을 못 찾은 것'.
             보강할 때만 들어온다.
+        strict_title: 새 글과 같은 N1·N4·중복 검사로 제목을 정한다(renewal_title).
+        main_title: 매칭된 정식제목(핵심어용).
         """
         settings = module.settings or {}
         ai_config = blog.ai_config or {}
         warnings: list = []
 
-        working_title = await self._resolve_title(
-            blog, module, live_title, plan, settings, ai_config,
-        )
+        title_note, body_notes = "", []
+        if strict_title:
+            from . import renewal_title
+            working_title, body_notes, title_note = await renewal_title.resolve(
+                self.gen, blog, module, live_title, plan.recombine_title, main_title)
+        else:
+            working_title = await self._resolve_title(
+                blog, module, live_title, plan, settings, ai_config,
+            )
 
         ref_result = await self._collect_references(
             working_title, module, settings, ai_config,
@@ -97,6 +109,9 @@ class RenewalGenerator:
                     error="참조자료 수집 실패 (required=True)",
                 )
             warnings.append("참조자료 없이 생성됨")
+        from ..generation.health_hold import REASON, needs_hold
+        if needs_hold(ref_result):  # 새 글과 같은 건강 글 보류(공식 출처 0건)
+            return RenewalContent(success=False, error=f"근거 부족으로 보류: {REASON}")
 
         category_name = await self._category_name(subtopic_id, topic_id)
 
@@ -110,7 +125,7 @@ class RenewalGenerator:
             ai_service=self.gen.ai_service,
             title=working_title,
             reference_injection=ref_result.to_prompt_injection(),
-            settings=settings,
+            settings=lead_keyword_flow.with_body(settings, body_notes),
             blog=blog,
             category_name=category_name,
             keywords_text="",
@@ -144,6 +159,7 @@ class RenewalGenerator:
             image_url=image_url,
             seo_meta=seo_meta,
             warnings=warnings,
+            title_note=title_note,
         )
 
     @staticmethod
