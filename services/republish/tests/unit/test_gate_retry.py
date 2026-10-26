@@ -70,3 +70,19 @@ def test_executor_routes_gate_block_through_retry():
     from pathlib import Path
     src = Path("app/services/generation/flow_generate_executor.py").read_text()
     assert "if blocked or low:" in src and "gate_retry.next_title(" in src
+
+
+def test_next_title_skips_titles_outside_blog_category(monkeypatch):
+    """10/26 수작남 — 다음 후보로 카테고리 밖 제목(급체 증상)을 집어 회차를 날리던 것."""
+    from app.services.titles import blog_scope
+
+    async def _sets(db, blog_id):
+        return {50}, set()
+    monkeypatch.setattr(blog_scope, "category_sets", _sets)
+    ex = Executor([SimpleNamespace(id=2, topic_id=1, subtopic_id=99, search_volume=None, search_volume_at=None),
+                   SimpleNamespace(id=3, topic_id=1, subtopic_id=50, search_volume=None, search_volume_at=None)])
+    ex.db = object()
+    assert _run(ex, (1,))["title"] == 3
+    ex2 = Executor([SimpleNamespace(id=2, topic_id=1, subtopic_id=99, search_volume=None, search_volume_at=None)])
+    ex2.db = object()
+    assert _run(ex2, (1,))["skipped"] is True

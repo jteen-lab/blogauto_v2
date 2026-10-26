@@ -27,14 +27,29 @@ def _skip(reason: str) -> dict:
     return {"success": True, "skipped": True, "message": f"{reason} - 생성 건너뜀"}
 
 
+async def _scope(db: Any, blog_id: int) -> Optional[Tuple[set, set]]:
+    """블로그 카테고리 묶음. db 가 없으면(시험용 가짜 실행기) None = 거르지 않음."""
+    if db is None:
+        return None
+    from ..titles.blog_scope import category_sets
+    return await category_sets(db, blog_id)
+
+
 async def pick_next(trigger: Any, blog_id: int, settings: dict,
-                    tried: Tuple[int, ...]) -> Optional[int]:
-    """이번 회차에 아직 안 본 다음 제목 id. 없으면 None."""
+                    tried: Tuple[int, ...], db: Any = None) -> Optional[int]:
+    """이번 회차에 아직 안 본 다음 제목 id. 없으면 None.
+
+    재고 후보엔 카테고리 밖 제목도 섞여 있다 — 집으면 '카테고리 밖'으로 회차를 날리므로 뺀다(10/26 수작남).
+    """
+    from ..titles.blog_scope import title_inside
     floor = lead_keyword.floor(settings) if lead_keyword.enabled(settings) else None
+    scope = await _scope(db, blog_id)
     titles = await trigger.find_available_titles(
         blog_id, limit=40, module_settings=settings)
     for t in titles:
         if t.id in tried or (floor is not None and remembered(t, floor) is False):
+            continue
+        if scope and not title_inside(*scope, getattr(t, "topic_id", None), getattr(t, "subtopic_id", None)):
             continue
         return t.id
     return None
@@ -49,7 +64,8 @@ async def next_title(executor: Any, module: Any, blog: Any, stage_params: Any,
                     len(tried), blog.name, reason[:80])
         return _skip(reason)
     try:
-        nxt = await pick_next(executor.inventory_trigger, blog.id, settings, tried)
+        nxt = await pick_next(executor.inventory_trigger, blog.id, settings, tried,
+                              getattr(executor, "db", None) if scope_gate else None)
     except Exception as e:  # noqa: BLE001
         logger.warning("[GATE_RETRY] 다음 제목 조회 실패 | blog=%s | %s", blog.name, e)
         return _skip(reason)
