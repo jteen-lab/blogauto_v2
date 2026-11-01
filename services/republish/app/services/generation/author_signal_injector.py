@@ -22,16 +22,23 @@ def editorial_notice_html(profile: dict) -> str:
     Args:
         profile: blog.author_profile (없으면 빈 dict)
 
+    editorial_notice_link_url(https) 가 있으면 문구 속 editorial_notice_link_text
+    (기본 '문의 페이지') 첫 자리를 그 주소 링크로 바꾼다(2026-11-01 라이프인포).
+
     Returns:
         꼬리말 <p> HTML. 키가 없거나 비어 있으면 EDITORIAL_NOTICE 와 완전히 같다.
     """
-    custom = ((profile or {}).get("editorial_notice") or "").strip()
+    profile = profile or {}
+    custom = (profile.get("editorial_notice") or "").strip()
     if not custom:
         return EDITORIAL_NOTICE
-    return (
-        '<p style="font-size:0.85em;color:#777;">'
-        f"{_html.escape(custom, quote=False)}</p>"
-    )
+    text = _html.escape(custom, quote=False)
+    url = (profile.get("editorial_notice_link_url") or "").strip()
+    word = (profile.get("editorial_notice_link_text") or "문의 페이지").strip()
+    if url.startswith("https://") and word and word in text:
+        link = f'<a href="{_html.escape(url)}">{_html.escape(word, quote=False)}</a>'
+        text = text.replace(_html.escape(word, quote=False), link, 1)
+    return f'<p style="font-size:0.85em;color:#777;">{text}</p>'
 
 
 def inject_author_signal(html: str, blog: Blog) -> str:
