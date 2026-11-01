@@ -70,3 +70,22 @@ def test_editorial_notice_custom_text_used():
     out = inject_author_signal("<p>본문</p>", blog)
     assert "공식 자료로 정리했습니다.</p>" in out
     assert "사람이 검수" not in out
+
+
+# ── 2026-11-01 꼬리말 속 문의 페이지 링크 ──────────────
+def test_editorial_notice_link_wraps_word():
+    """링크 주소가 있으면 '문의 페이지' 첫 자리만 링크가 된다."""
+    from app.services.generation.author_signal_injector import editorial_notice_html
+    out = editorial_notice_html({
+        "editorial_notice": "틀린 내용은 문의 페이지로 알려 주세요.",
+        "editorial_notice_link_url": "https://lifein4.com/%eb%ac%b8%ec%9d%98/",
+    })
+    assert '<a href="https://lifein4.com/%eb%ac%b8%ec%9d%98/">문의 페이지</a>로' in out
+
+
+def test_editorial_notice_link_ignored_without_https_or_word():
+    """주소가 https 가 아니거나 문구에 낱말이 없으면 링크 없이 글만."""
+    from app.services.generation.author_signal_injector import editorial_notice_html
+    a = editorial_notice_html({"editorial_notice": "문의 페이지로", "editorial_notice_link_url": "javascript:x"})
+    b = editorial_notice_html({"editorial_notice": "공식 자료", "editorial_notice_link_url": "https://a.com/"})
+    assert "<a " not in a and "<a " not in b
