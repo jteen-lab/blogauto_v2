@@ -8,6 +8,9 @@ flowchart TD
     C --> D{author_profile.editorial_notice 있음?}
     D -- 없음/빈 값 --> E[공통 EDITORIAL_NOTICE 그대로 - 다른 블로그 변화 없음]
     D -- 있음 --> F[그 문구를 같은 모양 p 로]
+    F --> L{editorial_notice_link_url https? + 문구에 link_text 기본 '문의 페이지'?}
+    L -- 예 --> M[그 낱말 첫 자리만 a 링크 - 2026-11-01 라이프인포]
+    L -- 아니오 --> G
+    M --> G
     E --> G[본문 끝에 붙임]
-    F --> G
 ```
