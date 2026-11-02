@@ -113,6 +113,12 @@ class GenerationHistory(Base):
         Integer, default=1, comment="같은 제목의 몇 번째 버전"
     )
 
+    # B6 기록 잇기(2026-11-02, alembic 091) — 어느 검색어·어느 사이트에서 나온 글인지
+    candidate_id: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True, comment="출발 검색어(keyword_candidates.id)")
+    source_site: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True, comment="원본 제목 출처 사이트")
+
     # 타임스탬프
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
