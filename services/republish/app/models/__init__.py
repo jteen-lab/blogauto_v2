@@ -90,6 +90,7 @@ from .cpa_offer import CpaOffer
 from .promo_link import PromoLink
 from .post_metric import PostMetricDaily
 from .page_metric import PageMetricDaily
+from .title_screen import TitleFingerprint, TitleSiteScore
 from .search_visibility import SearchVisibilityUrl
 from .keyword_candidate import KeywordCandidate
 from .keyword_cluster import KeywordCluster
@@ -173,6 +174,8 @@ __all__ = [
     "PromoLink",
     "PostMetricDaily",
     "PageMetricDaily",
+    "TitleFingerprint",
+    "TitleSiteScore",
     "SearchVisibilityUrl",
     "KeywordCandidate",
     "KeywordCluster",
