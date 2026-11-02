@@ -3136,12 +3136,14 @@ class FlowScheduler:
         # 생성까지 막으면 재고가 비어, 색인이 회복돼도 낼 글이 없다.
         # 순서도: docs/flowcharts/index_feedback.md
         from ..services.generation.index_feedback import (
-            IndexFeedback, cap_note, effective_cap, is_enabled as _idx_on,
+            IndexFeedback, cap_note, effective_cap, exempt as _idx_exempt,
+            is_enabled as _idx_on,
         )
 
         idx_on = False
         try:
-            idx_on = await _idx_on(db)
+            # GP 모듈이 되먹임에서 빠졌으면(승인 4곳 A1) 성장 프로파일 값 그대로
+            idx_on = await _idx_on(db) and not _idx_exempt(gp_settings)
         except Exception as e:  # noqa: BLE001 — 되먹임은 보조 장치다
             logger.warning(f"[SCHED:PUBLISH] 되먹임 설정 조회 실패(무시) | {e}")
 
