@@ -1,6 +1,8 @@
 """0-1 블로그별 재고 계기판 — 블로그마다 '쓸 제목·안 쓴 검색어가 며칠 치 남았나'.
 
     쓸 제목   = 정식 제목 available 중 거름(screened_out)·보류(hold)·CPA 전용이 아닌 것
+              + 거르기를 통과하고 정식 이동을 기다리는 임시 제목(이동은 6시간마다라 빼면
+                채우기가 '안 늘었다'고 잘못 본다)
     안 쓴 검색어 = 채택·켜짐·아직 제목 안 만든(titled=false) 검색어
     여러 블로그가 같은 칸을 쓰면 그 칸 수를 블로그 수로 나눈다.
     며칠 치 = 수 ÷ 하루 목표(성장 프로파일의 지금 구간 발행 수, 없으면 1)
@@ -108,9 +110,17 @@ async def _per_subtopic(db: AsyncSession) -> tuple:
     from ...models.keyword_candidate import VERDICT_ADOPT, KeywordCandidate
     from ...models.title import MainTitle
 
+    from ...models.title import TempTitle
+
     titles = dict((await db.execute(
         select(MainTitle.subtopic_id, func.count()).where(usable_title())
         .group_by(MainTitle.subtopic_id))).all())
+    pending = (await db.execute(
+        select(TempTitle.subtopic_id, func.count()).where(
+            TempTitle.screen_result == "pass", TempTitle.status.in_(["new", "categorized"]))
+        .group_by(TempTitle.subtopic_id))).all()
+    for sid, n in pending:
+        titles[sid] = (titles.get(sid) or 0) + n
     kws = dict((await db.execute(
         select(KeywordCandidate.subtopic_id, func.count()).where(
             KeywordCandidate.verdict == VERDICT_ADOPT, KeywordCandidate.is_active.is_(True),
