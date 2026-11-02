@@ -2,7 +2,8 @@
 
 - 제목이 30일 치 아래인 블로그 중 며칠 치가 가장 적은 곳부터, 한 회차에 한 블로그.
 - 그 블로그가 45일 치가 되면 다음 블로그.
-- 검색어부터 30일 치 아래면 검색어 창고 채우기를 먼저.
+- 검색어부터 30일 치 아래면 검색어 창고 채우기를 먼저. 채우는 블로그가 없어도 검색어가
+  30일 치 아래인 블로그 중 가장 적은 곳 하나를 회차마다 채운다(0단계 재수집).
 - 시드 70% = 그 블로그 칸, 30% = 무작위. 부족한 블로그가 없으면 100% 무작위.
 - 3회차 연속 며칠 치가 안 늘면 멈추고 logs/title_fill_stall.jsonl 에 한 줄
   (호스트 작업이 마케팅 상태.md 에 옮긴다). 14일 뒤 다시 대상이 된다.
@@ -119,16 +120,18 @@ async def plan(db: AsyncSession, user_id: int) -> FillPlan:
     stocks = await inventory.stock(db)
     state = await _load(db)
     cur = _advance(state, stocks)
-    if cur is None:
-        await _save(db, state)
-        return FillPlan(note="부족한 블로그 없음 — 100% 무작위")
-    out = FillPlan(blog=cur, note=f"{cur.name} {cur.title_days}일 치 채우는 중")
-    if cur.keyword_days < inventory.SHORT_DAYS:
+    out = FillPlan(blog=cur, note=f"{cur.name} {cur.title_days}일 치 채우는 중" if cur
+                   else "부족한 블로그 없음 — 100% 무작위")
+    # 검색어 창고(0단계): 채우는 블로그가 검색어부터 모자라면 그 블로그, 아니면 검색어가
+    # 가장 모자란 블로그 하나(30일 치 아래일 때만)를 이번 회차에 채운다.
+    kw = cur if cur and cur.keyword_days < inventory.SHORT_DAYS else min(
+        stocks, key=lambda b: b.keyword_days, default=None)
+    if kw is not None and kw.keyword_days < inventory.SHORT_DAYS:
         from . import extract, warehouse
 
         cat = await extract.catalog(db, user_id)
         out.refilled = await warehouse.refill(
-            db, user_id, cur.blog_id, cur.subtopics, {s: v[0] for s, v in cat.items()})
+            db, user_id, kw.blog_id, kw.subtopics, {s: v[0] for s, v in cat.items()})
     # 회차가 여기까지 왔을 때만 셈을 남긴다(중간 실패를 '안 늘었다'로 세지 않게)
     await _save(db, state)
     return out
