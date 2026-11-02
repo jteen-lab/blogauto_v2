@@ -27,6 +27,9 @@ DEFAULT_TITLES_PER_KEYWORD = 30  # 키워드 하나에서 가져올 제목 수
 # 한 도메인에서 다 못 채우면 다음 도메인으로 넘어가 이어서 채운다.
 DEFAULT_EXTRACT_URLS = 100
 
+# 수집 회차 뒤 D 방식으로 거를 새 임시 제목 수(gpt-4o-mini 50개 묶음 4번)
+DEFAULT_SCREEN_LIMIT = 200
+
 # 재고가 이보다 적은 니치를 '부족' 으로 본다. 화면과 같은 기준이다.
 DEFAULT_LOW_NICHE = 20
 
@@ -87,6 +90,11 @@ class TitleCollectSettings:
     # 저장 시점 니치 대조
     niche_mode: str = NICHE_MARK
 
+    # D 방식(2026-11-02, 마케팅·형 승인) — 블로그 단위 채우기·회차 뒤 거르기·우선 사이트만 훑기
+    fill_by_blog: bool = True
+    screen_limit: int = DEFAULT_SCREEN_LIMIT
+    extract_priority_only: bool = True
+
     # 이 니치만 채운다(요약탭에서 카드 하나를 눌러 돌릴 때).
     # 비면 전체 — 모듈·오토런은 늘 비어 있다.
     subtopic_ids: tuple = ()
@@ -112,6 +120,9 @@ class TitleCollectSettings:
                                      DEFAULT_LOW_NICHE, 1, 1000),
             niche_mode=mode if mode in NICHE_MODES else NICHE_MARK,
             subtopic_ids=_ids(source.get("subtopic_ids")),
+            fill_by_blog=bool(source.get("fill_by_blog", True)),
+            screen_limit=_int(source, "screen_limit", DEFAULT_SCREEN_LIMIT, 0, 2000),
+            extract_priority_only=bool(source.get("extract_priority_only", True)),
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -126,4 +137,7 @@ class TitleCollectSettings:
             "low_niche_threshold": self.low_niche_threshold,
             "niche_mode": self.niche_mode,
             "subtopic_ids": list(self.subtopic_ids),
+            "fill_by_blog": self.fill_by_blog,
+            "screen_limit": self.screen_limit,
+            "extract_priority_only": self.extract_priority_only,
         }
