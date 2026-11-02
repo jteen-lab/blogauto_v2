@@ -461,8 +461,10 @@ class TestOfferBlogWiring:
 
     SCOPE = (ROOT / "app/services/generation/title_scope.py").read_text(
         encoding="utf-8")
+    # 세는 쪽(count_available_titles)은 11/2 inventory_count_mixin 으로 떼어냈다
     INV = (ROOT / "app/services/generation/inventory_trigger.py").read_text(
-        encoding="utf-8")
+        encoding="utf-8") + (ROOT / "app/services/generation/inventory_count_mixin.py"
+                             ).read_text(encoding="utf-8")
     API = (ROOT / "app/routers/cpa.py").read_text(encoding="utf-8")
     HTML = (ROOT / "app/templates/collection/_cpa_offers.html").read_text(encoding="utf-8")
 
@@ -502,7 +504,8 @@ class TestOfferBlogWiring:
     def test_count_matches_pick(self):
         """세는 기준과 꺼내는 기준이 다르면 재고 판단이 어긋난다."""
         block = self.INV[self.INV.index("async def count_available_titles"):]
-        head = block[:block.index("async def ", 20)]
+        end = block.find("async def ", 20)
+        head = block if end < 0 else block[:end]
         assert "title_condition(" in head
 
     def test_pick_uses_the_same_helper(self):
