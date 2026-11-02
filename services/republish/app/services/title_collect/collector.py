@@ -57,6 +57,7 @@ class TitleCollector:
         self.db = db
         self.user_id = user_id
         self.search = search_service
+        self.fill = None   # D 0-1 채우기 계획(fill_by_blog 일 때)
 
     async def run(self, cfg: TitleCollectSettings,
                   gate: NicheGate) -> Dict[str, Any]:
@@ -89,7 +90,7 @@ class TitleCollector:
                     domains[host] = domains.get(host, 0) + 1
                 if result["stored"]:
                     saved += 1
-                elif result["reason"] == "filtered":
+                elif result["reason"] in ("filtered", "blocked_site", "fingerprint"):
                     blocked += 1
                 elif result["reason"] == "off_niche":
                     off_niche += 1
@@ -102,6 +103,7 @@ class TitleCollector:
         logger.info("[TITLE_COLLECT] 시드 %d개 → 제목 %d개 · 도메인 %d개(신규 %d)",
                     len(seeds), saved, len(domains), registered)
         return {"saved": saved, "blocked": blocked, "off_niche": off_niche,
+                "fill": getattr(self.fill, "note", None),
                 "seeds": len(seeds), "domains": len(domains),
                 "new_domains": registered, "samples": store.samples[:100]}
 
@@ -127,6 +129,10 @@ class TitleCollector:
         # 다른 니치를 채우면 사용자가 누른 카드의 숫자가 안 움직인다.
         if cfg.subtopic_ids:
             return await self._niche_seeds(base, order, cfg, limit)
+
+        # D 방식 0-1(2026-11-02): 블로그 단위 '며칠 치' 기준 — 70% 부족 블로그 / 30% 무작위
+        if cfg.fill_by_blog:
+            return await self._fill_seeds(limit)
 
         picked: List[KeywordCandidate] = []
         if cfg.prioritize_low_niche:
@@ -156,6 +162,14 @@ class TitleCollector:
             if len(picked) >= limit:
                 break
         return picked[:limit]
+
+    async def _fill_seeds(self, limit: int) -> List[KeywordCandidate]:
+        """D 방식 0-1 채우기 차례로 시드를 고른다(검색어 모자라면 창고 먼저)."""
+        from ..title_screen import filler
+
+        self.fill = await filler.plan(self.db, self.user_id)
+        logger.info("[TITLE_COLLECT] 채우기 차례 — %s", self.fill.note)
+        return await filler.seeds(self.db, self.user_id, self.fill, max(1, limit))
 
     async def _niche_seeds(self, base, order, cfg: TitleCollectSettings,
                            limit: int) -> List[Any]:
