@@ -32,7 +32,7 @@ from .content_generator_helper import (
 )
 from .author_signal_injector import inject_author_signal
 from .title_trim import trim as trim_title
-from . import lead_keyword_flow
+from . import lead_keyword_flow, lead_siblings
 from ..promo.auto_attach import attach as attach_promo_link
 from .title_lifecycle import (
     consume_group, distinct_or_original, is_recombined, pick_style,
@@ -586,6 +586,7 @@ class ContentGenerator:
             generation_time_seconds=elapsed,
             content_length=len(final_html),
         )
+        lead_siblings.stamp_origin(history, source_title)   # B6 출발 검색어·출처
         self.db.add(history)
         await self.db.flush()
 
