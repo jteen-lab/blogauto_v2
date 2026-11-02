@@ -66,6 +66,7 @@ from .routers.data_urls import router as data_urls_router
 from .routers.titles import router as titles_router  # Phase C: MainTitle API
 from .routers.title_groups import router as title_groups_router  # Phase C: TitleGroup API
 from .routers.title_transfer import router as title_transfer_router  # Phase D: Title Transfer API
+from .routers.title_screen import router as title_screen_router  # D 방식 계기판(2026-11-02)
 from .routers.blog_settings import router as blog_settings_router  # 블로그 설정 API
 from .routers.blog_settings_seo import router as blog_settings_seo_router  # 블로그 SEO 설정 API
 from .routers.blog_settings_renewal import router as blog_settings_renewal_router  # 블로그 재발행 리뉴얼 설정 API
@@ -364,6 +365,7 @@ app.include_router(data_urls_router, prefix=settings.api_v1_prefix)
 app.include_router(titles_router, prefix=settings.api_v1_prefix)  # Phase C: MainTitle
 app.include_router(title_groups_router, prefix=settings.api_v1_prefix)  # Phase C: TitleGroup
 app.include_router(title_transfer_router, prefix=settings.api_v1_prefix)  # Phase D: Title Transfer
+app.include_router(title_screen_router, prefix=settings.api_v1_prefix)  # D 방식 계기판
 app.include_router(blog_settings_router, prefix=settings.api_v1_prefix)  # 블로그 설정
 app.include_router(blog_settings_seo_router, prefix=settings.api_v1_prefix)  # 블로그 SEO 설정
 app.include_router(blog_settings_renewal_router, prefix=settings.api_v1_prefix)  # 블로그 재발행 리뉴얼 설정
