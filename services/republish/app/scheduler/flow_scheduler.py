@@ -2952,6 +2952,9 @@ class FlowScheduler:
             # 필터 설정
             filter_opts = settings.get("filter", {})
             categories = filter_opts.get("categories", [])
+            # D 방식(2026-11-02): 거르기 통과(pass) 제목만 정식으로 옮긴다
+            from app.services.title_screen import config as screen_config
+            screen_only = await screen_config.enabled(db)
 
             logger.info(
                 f"[FLOW_SCHEDULER] 데이터 모듈 실행 | module={module.name} | "
@@ -2972,6 +2975,8 @@ class FlowScheduler:
 
             if transfer_mode == "auto":
                 query = query.where(TempTitle.topic_id.isnot(None))
+            if screen_only:
+                query = query.where(TempTitle.screen_result == "pass")
 
             if categories:
                 query = query.where(TempTitle.topic_id.in_(categories))
@@ -2998,6 +3003,8 @@ class FlowScheduler:
 
             if transfer_mode == "auto":
                 id_query = id_query.where(TempTitle.topic_id.isnot(None))
+            if screen_only:
+                id_query = id_query.where(TempTitle.screen_result == "pass")
 
             if categories:
                 id_query = id_query.where(TempTitle.topic_id.in_(categories))
