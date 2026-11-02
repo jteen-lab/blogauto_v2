@@ -66,24 +66,26 @@ async def refill(db: AsyncSession, user_id: int, blog_id: int,
             KeywordCandidate.is_active.is_(True), KeywordCandidate.verdict == VERDICT_ADOPT)
         .group_by(KeywordCandidate.subtopic_id))).all())
     out = {"added": 0, "junk": 0, "low": 0, "seeds": 0}
+    seen: set = set()   # 씨앗끼리 같은 연관어가 겹친다(세션 자동 flush 가 꺼져 있다)
     for seed, sid in await seeds_for(db, blog_id, subtopics, kw_count):
         res = await service.get_keyword_stats([seed], include_related=True)
         if not res.get("success"):
             continue
         out["seeds"] += 1
         rows = (res.get("keywords") or []) + (res.get("related_keywords") or [])
-        await _store(db, user_id, seed, sid, topic_of.get(sid), rows[:200], out)
+        await _store(db, user_id, seed, sid, topic_of.get(sid), rows[:200], out, seen)
     await db.commit()
     logger.info("[TITLE_SCREEN] 검색어 창고 채우기 blog=%s → %s", blog_id, out)
     return out
 
 
 async def _store(db: AsyncSession, user_id: int, seed: str, sid: int, tid, rows: list,
-                 out: Dict[str, int]) -> None:
-    """한 씨앗의 응답을 거르고 넣는다(이미 있는 말은 건너뜀)."""
+                 out: Dict[str, int], seen: set) -> None:
+    """한 씨앗의 응답을 거르고 넣는다(이미 있는 말·이번 회차에 넣은 말은 건너뜀)."""
     norm = norm_col(KeywordCandidate.keyword)
     keys = [key(r.get("keyword") or "") for r in rows]
-    have = set((await db.execute(select(norm).where(
+    have = seen
+    have.update((await db.execute(select(norm).where(
         KeywordCandidate.user_id == user_id, norm.in_(keys)))).scalars().all())
     now, added = datetime.now(timezone.utc), 0
     for r in rows:
@@ -108,3 +110,4 @@ async def _store(db: AsyncSession, user_id: int, seed: str, sid: int, tid, rows:
         if added >= PER_SEED:
             break
     out["added"] += added
+    await db.flush()
