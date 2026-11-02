@@ -19,9 +19,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, List, Optional, Tuple
 
-from sqlalchemy import case
+from sqlalchemy import case, or_
 
 from ...models.title import MainTitle
+
+
+# D 방식 판정 중 고를 때 빼는 것(거름·보류)
+SCREEN_SKIP = ("screened_out", "hold")
 
 
 @dataclass(frozen=True)
@@ -57,10 +61,16 @@ def pick_opts(settings: Optional[dict]) -> PickOpts:
 
 
 def conditions(opts: PickOpts) -> List[Any]:
-    """후보 거름 조건(WHERE 에 더한다)."""
-    if not opts.skip_held_count:
-        return []
-    return [MainTitle.hold_count < opts.skip_held_count]
+    """후보 거름 조건(WHERE 에 더한다).
+
+    D 방식(2026-11-02)으로 거름(screened_out)·보류(hold) 표시된 제목은 스위치와
+    상관없이 모든 블로그에서 뺀다 — 지우지 않고 2주 채점 뒤 삭제를 정한다.
+    """
+    out = [or_(MainTitle.screen_result.is_(None),
+               MainTitle.screen_result.notin_(list(SCREEN_SKIP)))]
+    if opts.skip_held_count:
+        out.append(MainTitle.hold_count < opts.skip_held_count)
+    return out
 
 
 def order(opts: PickOpts) -> List[Any]:
@@ -68,7 +78,10 @@ def order(opts: PickOpts) -> List[Any]:
 
     스위치가 없으면 예전 그대로 오래된 순.
     """
+    passed = case((MainTitle.screen_result == "pass", 0), else_=1)
     if not opts.prefer_sources:
-        return [MainTitle.created_at.asc()]
+        # D 방식(B1): 거르기 통과 제목 먼저, 그 안에서 검색량 큰 순, 그다음 예전대로
+        return [passed, MainTitle.search_volume.desc().nullslast(), MainTitle.created_at.asc()]
     first = case((MainTitle.source.in_(list(opts.prefer_sources)), 0), else_=1)
-    return [first, MainTitle.created_at.desc()]
+    return [first, passed, MainTitle.search_volume.desc().nullslast(),
+            MainTitle.created_at.desc()]
