@@ -207,6 +207,19 @@ def cap_note(gp_daily: Optional[int],
     return note
 
 
+EXEMPT_KEY = "index_feedback_exempt"
+
+
+def exempt(gp_settings: Optional[dict]) -> bool:
+    """성장 프로파일 모듈이 되먹임에서 빠졌나(2026-11-02 승인 4곳 A1, 형 지시).
+
+    4곳은 색인 0건이라 되먹임이 성장 프로파일 값을 하루 1개로 덮어썼다.
+    GP 모듈 settings 에 ``index_feedback_exempt: true`` 인 곳만 빠지고,
+    나머지는 지금과 같다. 순서도: docs/flowcharts/approved4_a1_volume.md
+    """
+    return bool(gp_settings) and gp_settings.get(EXEMPT_KEY) is True
+
+
 async def stop_enabled(db: AsyncSession) -> bool:
     """정지까지 적용할지. **기본 꺼짐** — 켜면 해당 블로그 발행이 멈춘다."""
     from ..system_settings_service import SystemSettingsService
