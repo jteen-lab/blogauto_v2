@@ -166,7 +166,21 @@ class TitleWorkbench:
             result["saved"] += found.get("saved") or 0
             result["samples"].extend(found.get("samples") or [])
 
+        result["screen"] = await self._screen(cfg)
         return result
+
+    async def _screen(self, cfg: TitleCollectSettings) -> Dict[str, Any]:
+        """D 방식 2~6단계 — 새 임시 제목을 회차마다 screen_limit 개씩 거른다."""
+        from ..title_screen import config, screen
+
+        if not cfg.screen_limit or not await config.enabled(self.db):
+            return {"skipped": True}
+        try:
+            return await screen.screen_new_temp(self.db, self.user_id, cfg.screen_limit)
+        except Exception as e:  # noqa: BLE001 — 거르기 실패로 수집 결과를 잃지 않는다
+            await self.db.rollback()
+            logger.warning("[TITLE_SCREEN] 회차 거르기 실패 | %s", e)
+            return {"error": str(e)[:200]}
 
     async def _generate(self, raw: dict, settings: Any) -> Dict[str, Any]:
         """생성 섹션. L1 은 기존 제목 모듈 실행기를 그대로 부른다."""
