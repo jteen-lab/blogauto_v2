@@ -122,6 +122,14 @@ class MainTitle(Base):
         Integer, nullable=True, comment="맨 앞 검색어 후보 최대 검색량(네이버 한 달)")
     search_volume_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True, comment="검색량 잰 시각")
+    # D 방식 거르기(2026-11-02, alembic 091) — 고른 검색어와 판정.
+    # screen_result = pass | hold | screened_out(거름: 고를 때 빠짐, 지우지 않음)
+    lead_keyword: Mapped[Optional[str]] = mapped_column(
+        String(200), nullable=True, comment="검색량 실측으로 고른 가장 큰 검색어")
+    screen_result: Mapped[Optional[str]] = mapped_column(
+        String(20), nullable=True, index=True, comment="pass|hold|screened_out")
+    screened_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="판정 시각")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -190,6 +198,16 @@ class TempTitle(Base):
     expires_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True, index=True,
         comment="시의성 만료 시각(뉴스 소재 제목)")
+    # D 방식 거르기(2026-11-02, alembic 091). screen_result = pass | hold.
+    # 떨어진 제목은 지우고 지문만 남기므로 여기에 'fail' 은 남지 않는다.
+    lead_keyword: Mapped[Optional[str]] = mapped_column(
+        String(200), nullable=True, comment="검색량 실측으로 고른 가장 큰 검색어")
+    search_volume: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True, comment="고른 검색어 한 달 검색량")
+    screen_result: Mapped[Optional[str]] = mapped_column(
+        String(20), nullable=True, index=True, comment="pass|hold")
+    screened_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="판정 시각")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
