@@ -134,9 +134,10 @@ def instruction(c: Candidate, title: str) -> str:
     lines = [
         f"\n- 제목 맨 앞을 「{c.text}」(네이버 한 달 검색 약 {c.volume:,}회, 사람들이 실제로 "
         "치는 말)로 시작할 것. 띄어쓰기·낱말 순서 그대로, 중간에 다른 말을 끼우지 말 것",
-        "- 그 바로 뒤에 쉼표 하나, 이어서 이 글로 알 수 있는 것 하나(순서·조건·비용·비교 중 "
-        "하나)를 붙인다. '~은 무엇일까', '~알아보기', '~방법 안내', '~무엇인가요', "
-        "'~이 필요하다면' 같은 꼬리는 쓰지 않는다",
+        "- 그 바로 뒤에 쉼표 하나, 이어서 사람들이 실제로 붙여 치는 말 하나(방법·비용·기간·"
+        "서류·조건·시간 등)와 이 글로 알 수 있는 것을 붙인다. '~은 무엇일까', '~알아보기', "
+        "'~방법 안내', '~안내', '~총정리', '~무엇인가요', '~이 필요하다면' 같은 꼬리는 쓰지 않는다",
+        "- 남의 블로그 이름·회사 사례를 제목에 넣지 않는다",
     ]
     dropped = [w for w in pick.words(title)[:3]
                if w.replace(" ", "") not in c.key and len(w) >= 2][:2]
@@ -154,7 +155,8 @@ def body_directive(c: Candidate) -> str:
 
 async def apply(db: Any, user_id: int, settings: Optional[dict], title: str,
                 keywords: Optional[List[str]] = None,
-                cpa: bool = False) -> Tuple[Optional[dict], Optional[Candidate]]:
+                cpa: bool = False, known: Optional[Candidate] = None,
+                extra: str = "") -> Tuple[Optional[dict], Optional[Candidate]]:
     """켜져 있으면 재조합용 설정 사본에 맨 앞 검색어 지시를 붙인다.
 
     Returns:
@@ -164,7 +166,9 @@ async def apply(db: Any, user_id: int, settings: Optional[dict], title: str,
     if not enabled(settings) or "title_recombine" not in settings:
         return settings, None
     try:
-        lead = await measure(db, user_id, title, keywords, floor(settings))
+        # D 방식으로 이미 잰 말이 있으면 그것을 쓴다(extra = 같은 검색어 다른 글 각도)
+        lead = Lead("ok", known, known.volume) if known else \
+            await measure(db, user_id, title, keywords, floor(settings))
     except Exception as e:  # noqa: BLE001 — 검색량 실패로 생성을 막지 않는다
         logger.warning("[LEAD_KW] 판정 실패(그대로 진행) | %s", e)
         return settings, None
@@ -178,7 +182,7 @@ async def apply(db: Any, user_id: int, settings: Optional[dict], title: str,
         return settings, c
     out = copy.deepcopy(settings)
     tr = out["title_recombine"]
-    tr["custom_prompt"] = (tr.get("custom_prompt") or "") + instruction(c, title)
+    tr["custom_prompt"] = (tr.get("custom_prompt") or "") + instruction(c, title) + extra
     logger.info("[LEAD_KW] 맨 앞 검색어 「%s」(%d회·%s) | '%s'",
                 c.text, c.volume, c.source, title[:30])
     return out, c
