@@ -20,6 +20,8 @@ from .title_scope import (blog_cpa_scope, log_empty,
 from ...models.crawled_post import CrawledPost
 from ...models.category import BlogCategory
 from .inventory_category_mixin import InventoryCategoryMixin
+from .inventory_count_mixin import InventoryCountMixin
+from . import title_pick_order as pick
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +41,7 @@ class InventoryCheckResult:
     available_title_text: Optional[str] = None
 
 
-class InventoryTrigger(InventoryCategoryMixin):
+class InventoryTrigger(InventoryCountMixin, InventoryCategoryMixin):
     """
     재고 기반 생성 트리거 서비스
 
@@ -49,6 +51,8 @@ class InventoryTrigger(InventoryCategoryMixin):
 
     def __init__(self, db: AsyncSession):
         self.db = db
+        # 모듈 title_pick 스위치(검색량 제목 먼저·보류 많은 제목 빼기). 조회마다 다시 정한다.
+        self._pick = pick.NONE
 
     async def check_inventory(
         self, blog_id: int,
@@ -129,6 +133,7 @@ class InventoryTrigger(InventoryCategoryMixin):
             사용 가능한 MainTitle 목록
         """
         blog_id_str = str(blog_id)
+        self._pick = pick.pick_opts(module_settings)
 
         # 카테고리 소스 결정: 모듈 설정 우선, 없으면 BlogCategory 폴백
         if module_settings and module_settings.get("categories"):
@@ -174,8 +179,10 @@ class InventoryTrigger(InventoryCategoryMixin):
         )
 
         # 2차: 부족하면 카테고리 일치 available 제목 보충 (매칭 무관)
-        if len(matched_titles) < limit:
-            remaining = limit - len(matched_titles)
+        prefer = self._pick.prefer_sources
+        if len(matched_titles) < limit or prefer:
+            # 출처를 고르면 매칭 제목이 칸을 다 채워도 검색량 제목을 함께 가져와 앞에 둔다(A1)
+            remaining = limit if prefer else limit - len(matched_titles)
             exclude_ids = [t.id for t in matched_titles]
             fallback_titles = await self._query_titles_list(
                 blog_id_str, category_conditions,
@@ -184,6 +191,9 @@ class InventoryTrigger(InventoryCategoryMixin):
                 sibling_blog_ids=sibling_ids, cpa_offer_ids=cpa_ids, cpa_subtopic_ids=cpa_subs,
             )
             matched_titles.extend(fallback_titles)
+        if prefer:   # 매칭 여부보다 출처가 먼저(A1)
+            matched_titles.sort(key=lambda t: t.source not in prefer)
+            matched_titles = matched_titles[:limit]
 
         # 3차: 카테고리 미설정 블로그만 전체 available 폴백
         if not matched_titles and not has_category:
@@ -194,66 +204,6 @@ class InventoryTrigger(InventoryCategoryMixin):
             )
 
         return matched_titles
-
-    async def count_available_titles(
-        self,
-        blog_id: int,
-        module_settings: Optional[dict] = None,
-    ) -> int:
-        """이 블로그가 **실제로 꺼내 쓸 수 있는** 제목 수.
-
-        키워드 모듈의 재고 판단이 이 값을 쓴다. 세는 기준과 꺼내는 기준이
-        다르면, 꺼낼 수 없는 제목을 재고로 세어 "재고 충분" 으로 판단하거나
-        (생성이 굶는다) 반대로 영원히 부족으로 판단해 API 를 낭비한다.
-        실제로 후자가 일어났다(키워드 관리 검토서 D-5).
-
-        Args:
-            blog_id: 블로그 ID
-            module_settings: 프롬프트 모듈 settings(카테고리/니치 강제용)
-
-        Returns:
-            꺼내 쓸 수 있는 제목 수
-        """
-        if module_settings and module_settings.get("categories"):
-            subtopic_ids, topic_only_ids = self._parse_module_categories(
-                module_settings["categories"]
-            )
-            source = "module_settings"
-        else:
-            subtopic_ids, topic_only_ids = \
-                await self._get_blog_category_filter_ids(blog_id)
-            source = "blog_category"
-
-        subtopic_ids, topic_only_ids, source = self._apply_niche(
-            module_settings, subtopic_ids, topic_only_ids, source
-        )
-
-        conditions = [MainTitle.status != "archived"]
-        conditions.append(
-            MainTitle.id.notin_(
-                self._published_title_ids_subquery(str(blog_id))
-            )
-        )
-        category_conditions = []
-        if subtopic_ids:
-            category_conditions.append(
-                MainTitle.subtopic_id.in_(list(subtopic_ids)))
-        if topic_only_ids:
-            category_conditions.append(
-                MainTitle.topic_id.in_(list(topic_only_ids)))
-        # 꺼내는 기준과 같아야 한다. 다르면 못 꺼낼 제목을 재고로 세어
-        # "재고 충분" 으로 판단하고 생성이 굶는다(키워드 관리 검토서 D-5).
-        owned, subs = await blog_cpa_scope(self.db, blog_id)
-        conditions.append(title_condition(category_conditions, owned, subs))
-
-        count = (await self.db.execute(
-            select(func.count(MainTitle.id)).where(*conditions)
-        )).scalar() or 0
-        logger.debug(
-            f"[INVENTORY] 사용 가능 제목 {count}개 | blog_id={blog_id} | "
-            f"소스={source}"
-        )
-        return count
 
     async def _query_titles_list(
         self,
@@ -299,10 +249,10 @@ class InventoryTrigger(InventoryCategoryMixin):
 
         if exclude_ids:
             conditions.append(MainTitle.id.notin_(exclude_ids))
+        conditions.extend(pick.conditions(self._pick))
 
         # 오퍼 전용 제목을 앞으로 — 하위주제 일반 제목에 밀리면 안 된다
-        order = ([offer_first_order()] if cpa_offer_ids else []) + [
-            MainTitle.created_at.asc()]
+        order = ([offer_first_order()] if cpa_offer_ids else []) + pick.order(self._pick)
         query = (
             select(MainTitle)
             .where(*conditions)
@@ -345,6 +295,7 @@ class InventoryTrigger(InventoryCategoryMixin):
         카테고리 미설정이면 전체 대상에서 선택
         """
         blog_id_str = str(blog_id)
+        self._pick = pick.pick_opts(module_settings)
 
         # 카테고리 소스 결정: 모듈 설정 우선, 없으면 BlogCategory 폴백
         if module_settings and module_settings.get("categories"):
@@ -384,6 +335,17 @@ class InventoryTrigger(InventoryCategoryMixin):
             f"has_category={has_category} | cpa={cpa_ids} | "
             f"subtopic_ids={subtopic_ids} | topic_only_ids={topic_only_ids}"
         )
+
+        # 0차(title_pick.prefer_source): 칸 안 검색량 제목 먼저 — 매칭 여부보다 앞
+        if self._pick.prefer_sources:
+            title = await self._query_title_with_filters(
+                blog_id_str, category_conditions, matched_only=False, preferred_only=True,
+                sibling_blog_ids=sibling_ids, cpa_offer_ids=cpa_ids, cpa_subtopic_ids=cpa_subs,
+            )
+            if title:
+                logger.info(f"[INVENTORY] 제목 선택: 0차(검색량 제목) | id={title.id}")
+                return title
+            logger.warning(f"[TITLE_PICK] 칸 안 검색량 제목 0개 — 키워드 시드 보강 필요 | blog_id={blog_id}")
 
         # 1차: 매칭 + 카테고리(subtopic) 일치 제목
         title = await self._query_title_with_filters(
@@ -443,6 +405,7 @@ class InventoryTrigger(InventoryCategoryMixin):
         sibling_blog_ids: Optional[List[int]] = None,
         cpa_offer_ids: Optional[List[int]] = None,
         cpa_subtopic_ids: Optional[List[int]] = None,
+        preferred_only: bool = False,
     ) -> Optional[MainTitle]:
         """
         필터 조건 조합으로 후보 제목 조회 후 랜덤 1개 선택
@@ -457,6 +420,7 @@ class InventoryTrigger(InventoryCategoryMixin):
             category_conditions: 카테고리 OR 조건 리스트
             matched_only: True면 매칭 제목만, False면 카테고리 일치 제목 전체
             cpa_offer_ids: 담당 CPA 오퍼. 있으면 그 오퍼 제목만 뽑는다.
+            preferred_only: title_pick.prefer_source 출처 제목만(새 것 10개 중 무작위)
 
         Returns:
             MainTitle 또는 None (랜덤 선택)
@@ -479,12 +443,12 @@ class InventoryTrigger(InventoryCategoryMixin):
         # 5개로 세면서 일반 제목을 뽑았다(2026-09-09 실측).
         conditions.append(title_condition(
             category_conditions, cpa_offer_ids, cpa_subtopic_ids))
-
-        query = (
-            select(MainTitle)
-            .where(*conditions)
-            .limit(10)
-        )
+        conditions.extend(pick.conditions(self._pick))
+        query = select(MainTitle)
+        if preferred_only:
+            conditions.append(MainTitle.source.in_(list(self._pick.prefer_sources)))
+            query = query.order_by(*pick.order(self._pick))
+        query = query.where(*conditions).limit(10)
         result = await self.db.execute(query)
         candidates = list(result.scalars().all())
 
