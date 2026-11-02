@@ -173,6 +173,11 @@ class TitleTransferService(SimilarityGroupingMixin):
                 # 키워드로 넓힐지" 를 알아야 한다(alembic 068·071).
                 candidate_id=getattr(temp_title, "candidate_id", None),
                 expires_at=getattr(temp_title, "expires_at", None),
+                # D 방식 판정(alembic 091) — 고른 검색어·검색량·통과 표시를 물려준다
+                lead_keyword=getattr(temp_title, "lead_keyword", None),
+                search_volume=getattr(temp_title, "search_volume", None),
+                screen_result=getattr(temp_title, "screen_result", None),
+                screened_at=getattr(temp_title, "screened_at", None),
             )
 
             main_titles_to_add.append({
