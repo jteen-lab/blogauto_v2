@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any, List, Optional, Tuple
 
 from ...core.logger import get_logger
-from . import lead_keyword
+from . import lead_keyword, lead_siblings
 from .lead_keyword_pick import Candidate
 from .title_lifecycle import title_keywords
 
@@ -30,8 +30,13 @@ async def lead_recombine(gen: Any, source_title: Any, settings: dict, provider: 
     # CPA 오퍼 제목·재조합을 꺼 둔 모듈(슈마즈)은 제목을 건드리지 않고 검색어만 기록
     cpa = bool(getattr(source_title, "cpa_offer_id", None)) or (
         (settings.get("title_recombine") or {}).get("enabled") is False)
+    # 7단계(D 방식): 거르기에서 고른 검색어 + 같은 검색어 다른 글 각도
+    known = lead_siblings.known(source_title)
+    extra = lead_siblings.sibling_note(
+        await lead_siblings.siblings(gen.db, source_title, known.text)) if known else ""
     title_settings, lead = await lead_keyword.apply(
-        gen.db, gen.user_id, settings, source_title.title, kws, cpa=cpa)
+        gen.db, gen.user_id, settings, source_title.title, kws, cpa=cpa,
+        known=known, extra=extra)
 
     async def run() -> Any:
         return await gen.title_recombiner.recombine(
