@@ -325,6 +325,21 @@ def _about_body_from_profile(profile: Dict[str, Any]) -> str:
     return body
 
 
+def _contact_body_from_profile(profile: Dict[str, Any]) -> str:
+    """author_profile.contact_body → 문의 페이지 body(비었으면 빈 문자열).
+
+    블로그별 문의 안내문(2026-11-02 인포노트). 폼이 빠지지 않도록
+    ``{{contact}}``가 없으면 끝에 덧붙인다.
+    """
+    raw = profile.get("contact_body")
+    if not isinstance(raw, str) or not raw.strip():
+        return ""
+    body = about_body_to_html(raw[:ABOUT_BODY_MAX_LEN])
+    if "{{contact}}" not in body:
+        body += "\n{{contact}}"
+    return body
+
+
 # "블로그이름은(는)" 처럼 남는 기계적 조사 표기 → 앞말 받침에 맞춰 하나만 남긴다.
 _JOSA_PAIRS = {
     "은": "는", "는": "은", "이": "가", "가": "이", "을": "를", "를": "을",
@@ -394,8 +409,8 @@ def build_required_pages(
         owner_email: contact_form_url 미설정 시 문의 채널에 노출할 이메일
         preset_code: 문체 프리셋 코드(없으면 표준)
         overrides: {page_type: 편집된 body} — 있으면 프리셋 본문 대신 사용
-            (모듈 설정이라 여러 블로그 공유). 소개 페이지는 블로그별
-            author_profile.about_body가 있으면 그것이 최우선.
+            (모듈 설정이라 여러 블로그 공유). 소개·문의 페이지는 블로그별
+            author_profile.about_body / contact_body 가 있으면 그것이 최우선.
 
     Returns:
         {page_type: (title, html)} — page_type은 REQUIRED_PAGE_TYPES 값
@@ -415,14 +430,16 @@ def build_required_pages(
 
     preset = get_preset(preset_code)
     about_body = _about_body_from_profile(profile)
+    contact_body = _contact_body_from_profile(profile)
     pages: Dict[str, Tuple[str, str]] = {}
     for page_type in REQUIRED_PAGE_TYPES:
         # 문의 페이지에서만 폼을 바로 노출하고, 나머지는 바로가기 링크만 둔다.
         ctx["contact"] = _contact_section(ctx, embed=(page_type == "contact"))
         spec = preset["pages"][page_type]
-        # 우선순위: (소개) 블로그별 about_body > 모듈 overrides > 프리셋
+        # 우선순위: (소개·문의) 블로그별 about_body/contact_body > 모듈 overrides > 프리셋
+        own = {"about": about_body, "contact": contact_body}.get(page_type, "")
         body_src = (
-            (about_body if page_type == "about" else "")
+            own
             or overrides.get(page_type)
             or spec["body"]
         )
