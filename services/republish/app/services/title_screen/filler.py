@@ -119,8 +119,8 @@ async def plan(db: AsyncSession, user_id: int) -> FillPlan:
     stocks = await inventory.stock(db)
     state = await _load(db)
     cur = _advance(state, stocks)
-    await _save(db, state)
     if cur is None:
+        await _save(db, state)
         return FillPlan(note="부족한 블로그 없음 — 100% 무작위")
     out = FillPlan(blog=cur, note=f"{cur.name} {cur.title_days}일 치 채우는 중")
     if cur.keyword_days < inventory.SHORT_DAYS:
@@ -129,6 +129,8 @@ async def plan(db: AsyncSession, user_id: int) -> FillPlan:
         cat = await extract.catalog(db, user_id)
         out.refilled = await warehouse.refill(
             db, user_id, cur.blog_id, cur.subtopics, {s: v[0] for s, v in cat.items()})
+    # 회차가 여기까지 왔을 때만 셈을 남긴다(중간 실패를 '안 늘었다'로 세지 않게)
+    await _save(db, state)
     return out
 
 
