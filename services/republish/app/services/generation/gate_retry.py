@@ -5,6 +5,7 @@
 그대로 두고, 걸린 뒤 같은 회차에서 다음 후보로 넘어간다(N2 검색량 바닥선과 같은 길).
 
 - 이번 회차에 본 제목은 바닥선·관문이 한 묶음으로 센다 — 최대 ``MAX_TRIES`` 개.
+  모듈 settings ``gate_retry_max`` 로 블로그마다 늘린다(11/2 승인 4곳 10, 최대 ``MAX_CAP``).
 - 30일 안에 검색량 '낮음'으로 잰 제목은 다음 후보에서 뺀다(바닥선 스위치가 켜졌을 때만).
 
 순서도: docs/flowcharts/title_topic_gate.md (관문에 걸려도 같은 회차에서 다음 제목)
@@ -20,6 +21,16 @@ from .volume_floor import remembered
 logger = get_logger("gate_retry", "app.log")
 
 MAX_TRIES = 3
+MAX_CAP = 15
+
+
+def max_tries(settings: Optional[dict]) -> int:
+    """이번 회차에 볼 제목 수. 모듈 gate_retry_max(없으면 3)."""
+    try:
+        n = int((settings or {}).get("gate_retry_max") or MAX_TRIES)
+    except (TypeError, ValueError):
+        n = MAX_TRIES
+    return max(1, min(n, MAX_CAP))
 
 
 def _skip(reason: str) -> dict:
@@ -45,7 +56,7 @@ async def pick_next(trigger: Any, blog_id: int, settings: dict,
     floor = lead_keyword.floor(settings) if lead_keyword.enabled(settings) else None
     scope = await _scope(db, blog_id)
     titles = await trigger.find_available_titles(
-        blog_id, limit=40, module_settings=settings)
+        blog_id, limit=max(40, max_tries(settings) * 8), module_settings=settings)
     for t in titles:
         if t.id in tried or (floor is not None and remembered(t, floor) is False):
             continue
@@ -59,7 +70,7 @@ async def next_title(executor: Any, module: Any, blog: Any, stage_params: Any,
                      scope_gate: bool, settings: dict, tried: Tuple[int, ...],
                      reason: str) -> dict:
     """같은 회차에서 다음 제목으로 다시 실행한 결과. 더 볼 제목이 없으면 건너뜀."""
-    if len(tried) >= MAX_TRIES:
+    if len(tried) >= max_tries(settings):
         logger.info("[GATE_RETRY] 이번 회차 %d개 모두 걸림 — 다음 회차로 | blog=%s | 끝 사유: %s",
                     len(tried), blog.name, reason[:80])
         return _skip(reason)
