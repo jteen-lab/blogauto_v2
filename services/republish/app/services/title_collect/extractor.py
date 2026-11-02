@@ -63,6 +63,15 @@ class DomainExtractor:
         """한 회차. 예산을 다 채우거나 볼 도메인이 떨어지면 끝난다."""
         budget = max(1, cfg.extract_urls)
         store = TitleStore(self.db, self.user_id, gate)
+        # D 방식 1단계: 사이트 통째로 훑기는 점수 30% 이상(우선) 사이트만
+        self._only = None
+        if cfg.extract_priority_only:
+            from ..title_screen import sites
+
+            self._only = await sites.priority_sites(self.db)
+            if not self._only:
+                return {"skipped": True, "saved": 0, "domains": 0,
+                        "message": "우선 사이트(통과율 30% 이상)가 아직 없습니다"}
         saved = blocked = visited = 0
         no_sitemap: List[str] = []
 
@@ -102,7 +111,9 @@ class DomainExtractor:
             .where(NicheDomain.user_id == self.user_id,
                    NicheDomain.is_blocked.is_(False),
                    NicheDomain.extract_status.in_(
-                       [EXTRACT_PARTIAL, EXTRACT_PENDING]))
+                       [EXTRACT_PARTIAL, EXTRACT_PENDING]),
+                   *([NicheDomain.domain.in_(list(self._only))]
+                     if getattr(self, "_only", None) else []))
             .order_by(NicheDomain.last_extracted_at.asc().nullslast())
             .limit(30)
         )).scalars().all())
@@ -146,7 +157,7 @@ class DomainExtractor:
                 candidate_id=None, source=SRC_DOMAIN_EXTRACT)
             if result["stored"]:
                 saved += 1
-            elif result["reason"] in ("filtered", "off_niche"):
+            elif result["reason"] in ("filtered", "off_niche", "blocked_site", "fingerprint"):
                 blocked += 1
 
         seen = len(window)
