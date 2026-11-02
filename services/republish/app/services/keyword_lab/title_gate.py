@@ -149,7 +149,8 @@ class TitleGate:
 
         await self.db.flush()
         ready = [t.id for t, ok in staged if ok]
-        moved = await self._move(ready, row.keyword)
+        moved = await self._move(
+            ready, row.keyword, row.id if isinstance(row, KeywordCandidate) else None)
         logger.info(
             "[TITLE_GATE] 제목 %d편 | 재고 %d · 차단 %d · 미분류 %d · 중복 %d",
             len(titles), moved.get("moved", 0), blocked, queued,
@@ -165,8 +166,8 @@ class TitleGate:
         }
 
     # ── 내부 ─────────────────────────────────────────────
-    async def _move(self, temp_ids: List[int],
-                    keyword: str) -> Dict[str, Any]:
+    async def _move(self, temp_ids: List[int], keyword: str,
+                    candidate_id: Optional[int] = None) -> Dict[str, Any]:
         """분류된 임시 제목만 정식 재고로 옮긴다(중복·유사도 그룹핑 포함)."""
         if not temp_ids:
             await self.db.commit()
@@ -176,10 +177,11 @@ class TitleGate:
 
         service = TitleTransferService(self.db, user_id=self.user_id)
         result = await service.move_to_main(temp_ids, auto_group=True)
-        await self._stamp(temp_ids, keyword)
+        await self._stamp(temp_ids, keyword, candidate_id)
         return result
 
-    async def _stamp(self, temp_ids: List[int], keyword: str) -> None:
+    async def _stamp(self, temp_ids: List[int], keyword: str,
+                     candidate_id: Optional[int] = None) -> None:
         """출처와 원본 키워드를 재고에 남긴다.
 
         이관 서비스는 source 를 'transfer' 로 적는다. 기존 수집분과 성과를
@@ -193,6 +195,9 @@ class TitleGate:
         for row in rows:
             row.source = SOURCE
             row.keywords = json.dumps([keyword], ensure_ascii=False)
+            # B6(2026-11-02): 어느 검색어에서 나온 제목인지 — 지금까지 비어 있었다
+            if candidate_id and not row.candidate_id:
+                row.candidate_id = candidate_id
         if rows:
             await self.db.commit()
 
