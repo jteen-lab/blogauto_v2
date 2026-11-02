@@ -150,3 +150,26 @@ def test_about_does_not_claim_operator_review():
     for preset in PRESETS:
         about = preset["pages"]["about"]["body"]
         assert "검수" not in about
+
+
+# ── 2026-11-02 블로그별 문의 안내문(contact_body) ──────────────
+def test_contact_body_overrides_preset_and_keeps_form():
+    """contact_body 가 있으면 그 글이 문의 페이지 본문이 되고 폼은 남는다."""
+    from types import SimpleNamespace
+    from app.services.publishing.required_pages_templates import build_required_pages
+    blog = SimpleNamespace(name="인포노트", url="https://a.kr/", author_profile={
+        "name": "인포노트", "contact_form_url": "https://tally.so/r/x",
+        "contact_body": "<h2>문의하기</h2><p>틀린 내용 제보를 받습니다.</p>",
+    })
+    _, html = build_required_pages(blog, "a@b.c")["contact"]
+    assert "틀린 내용 제보를 받습니다." in html
+    assert "tally.so" in html
+
+
+def test_contact_body_absent_uses_preset():
+    """contact_body 가 없으면 예전과 같은 프리셋 문의 페이지."""
+    from types import SimpleNamespace
+    from app.services.publishing.required_pages_templates import build_required_pages
+    blog = SimpleNamespace(name="블로그", url="https://a.kr/", author_profile={"name": "블로그"})
+    _, html = build_required_pages(blog, "a@b.c")["contact"]
+    assert "문의하기" in html
