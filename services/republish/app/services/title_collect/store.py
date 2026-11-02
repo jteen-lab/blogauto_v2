@@ -53,6 +53,7 @@ class TitleStore:
         self._filters: Optional[List[ContentFilter]] = None
         self._matcher = None
         self._seen: Set[str] = set()
+        self._blocked: Optional[Set[str]] = None
 
     async def add(self, title: str, url: str, keyword: str,
                   candidate_id: Optional[int], source: str,
@@ -80,9 +81,12 @@ class TitleStore:
             self._seen.add(key)
             return {"stored": False, "reason": "duplicate", "domain": host}
 
-        if blocking_filter(await self._load_filters(), text, "title"):
+        # D 방식(2026-11-02): 차단된 사이트·이미 버린 제목(지문)도 여기서 버린다
+        why = await self._screened(text, url) or (
+            "filtered" if blocking_filter(await self._load_filters(), text, "title") else None)
+        if why:
             self._seen.add(key)
-            return {"stored": False, "reason": "filtered", "domain": host}
+            return {"stored": False, "reason": why, "domain": host}
 
         topic_id, subtopic_id, matched_id = await self._classify(text)
         if not await self.gate.should_store(topic_id):
@@ -102,6 +106,24 @@ class TitleStore:
         if len(self.samples) < 100:
             self.samples.append(text)
         return {"stored": True, "reason": "ok", "domain": host}
+
+    async def _screened(self, title: str, url: str) -> Optional[str]:
+        """차단 사이트면 'blocked_site', 지문이 있으면 'fingerprint'. 실패는 통과."""
+        from ...models.title_screen import TitleFingerprint
+        from ..title_screen import rules, sites
+
+        try:
+            if self._blocked is None:
+                self._blocked = await sites.blocked_sites(self.db)
+            if rules.site_key(url) in self._blocked:
+                return "blocked_site"
+            found = (await self.db.execute(select(TitleFingerprint.id).where(
+                TitleFingerprint.fingerprint == rules.fingerprint(title)).limit(1)
+            )).scalar_one_or_none()
+        except Exception as e:  # noqa: BLE001
+            logger.warning("[TITLE_STORE] 지문·사이트 확인 실패(통과) | %s", e)
+            return None
+        return "fingerprint" if found else None
 
     async def _load_filters(self) -> List[ContentFilter]:
         """활성 필터. 조회가 실패해도 회차를 죽이지 않는다."""
