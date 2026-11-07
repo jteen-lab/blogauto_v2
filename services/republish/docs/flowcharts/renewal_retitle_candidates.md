@@ -27,7 +27,7 @@ flowchart TD
     R --> E[시험 글 exclude_paths · 고칠 글 목록 · 위험주제 제목 뺌]
     E --> T{60일 네이버·구글 유입·서치콘솔 클릭 0?}
     T -- 아니오 --> K[후보 아님]
-    T -- 예 --> W[keyword_metrics 네이버 월 100 이상 중 제목에 든 말 상위 5개]
+    T -- 예 --> W[창고 keyword_metrics + 네이버 검색광고 연관어(무료), 월 100 이상<br/>제목 낱말 둘 이상으로 된 말 또는 제목에 든 5글자 이상 말, 상위 5개]
     W --> O[logs/retitle_candidates.json 덮어쓰기<br/>내용과 맞는지는 판정 안 함]
 ```
 
