@@ -166,3 +166,11 @@ def test_rewrite_text_month_and_weak_cause():
     assert "72kWh" in _REWRITE_TEXT and "한전 요금표" in _REWRITE_TEXT and "1,800자" in _REWRITE_TEXT
     assert "근거 약한 인과" in rf.CHECK_PROMPT
     rf.CHECK_PROMPT.format(title="t", refs="r", body="b")  # 중괄호 깨짐 없음
+
+
+def test_scrub_claims_keeps_words_ending_in_je_ga():
+    """'문제가', '결제가' 는 지어낸 1인칭이 아니다 (11/7 시범에서 멀쩡한 문장을 지우던 것)."""
+    h = "<p>결제가 이루어집니다. 보안 문제가 생길 수 있습니다. 제가 직접 써 봤습니다.</p>"
+    out, removed = rf.scrub_claims(h)
+    assert "결제가 이루어집니다" in out and "보안 문제가" in out
+    assert len(removed) == 1 and "제가 직접" in removed[0]
