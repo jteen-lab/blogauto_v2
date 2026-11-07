@@ -16,7 +16,7 @@ from .renewal_generator import RenewalGenerator
 from .renewal_plan import decide_renewal_plan
 from .renewal_source import RenewalSource
 from .renewal_updater import RenewalUpdater
-from . import renewal_ga, renewal_pick, renewal_record
+from . import renewal_fixlist, renewal_ga, renewal_pick, renewal_record
 
 logger = get_logger("renewal_service", "app.log")
 
@@ -89,6 +89,9 @@ class RenewalService:
             "post": post.id, "url": post.url, "stage": stage, "action": plan.action,
             "reason": plan.action_reason, "result": "held", "error": res.get("error"),
             "old_title": live.title, "warnings": res.get("warnings")})
+        reason = renewal_fixlist.fact_reason(res.get("error"))
+        if reason:  # 옛 글은 공개된 채라 잊히지 않게 따로 남긴다
+            renewal_fixlist.add(blog, post.id, post.url, live.title, reason)
 
     async def _fetch_failed(self, blog: Blog, post: CrawledPost, dry_run: bool) -> dict:
         """라이브 글이 없으면(지운 글 등) 같은 글을 매 회차 다시 고르지 않게 미룬다."""
@@ -223,6 +226,7 @@ class RenewalService:
             "old_title": live.title, "new_title": rc.title,
             "image": plan.image_action, "image_changed": plan.image_action == "new",
             "warnings": rc.warnings})
+        renewal_fixlist.close_if_open(post.id, "리뉴얼로 고침")
         logger.info(
             "[RENEWAL] 완료 | blog=%s | post=%s | title='%s' | image=%s",
             blog.name, post.id, rc.title[:30], plan.image_action,
