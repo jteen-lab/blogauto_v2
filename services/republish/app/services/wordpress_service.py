@@ -16,6 +16,23 @@ from .wordpress_api import WordPressAPI, WordPressAPIError
 logger = get_logger("wordpress_service", "republish.log")
 
 
+def date_bump_exclude_query(blog: Blog) -> str:
+    """날짜를 옮기지 않을 글 번호를 WP 목록 조회 조건으로 만든다.
+
+    제목 재조합 시범(2026-11-07)의 시범·대조군은 발행일을 지켜야 하는데, 재발행은
+    가장 오래된 글부터 하루 4~5편씩 날짜를 옮겨 12/5 전에 이 글들까지 닿는다.
+
+    Args:
+        blog: 블로그 객체 (renewal_config.date_bump_exclude_ids 를 본다)
+
+    Returns:
+        "&exclude=1,2" 꼴 문자열. 목록이 없으면 빈 문자열
+    """
+    ids = (blog.renewal_config or {}).get("date_bump_exclude_ids") or []
+    clean = [str(i) for i in ids if str(i).isdigit()]
+    return f"&exclude={','.join(clean)}" if clean else ""
+
+
 class WordPressRepublishService:
     """WordPress 재발행 서비스"""
 
@@ -35,8 +52,9 @@ class WordPressRepublishService:
         try:
             logger.info(f"[WP_REPUBLISH] Getting oldest post | BlogID={blog.id}")
 
-            # 오래된 순으로 1개 조회
-            url = self.api._get_api_url(blog, "posts?per_page=1&orderby=date&order=asc&status=publish")
+            # 오래된 순으로 1개 조회 (시험 글은 날짜를 그대로 둔다 — renewal_config.date_bump_exclude_ids)
+            query = "posts?per_page=1&orderby=date&order=asc&status=publish"
+            url = self.api._get_api_url(blog, query + date_bump_exclude_query(blog))
             headers = self.api._get_auth_headers(blog)
 
             result = await self.api._make_request("GET", url, headers)
