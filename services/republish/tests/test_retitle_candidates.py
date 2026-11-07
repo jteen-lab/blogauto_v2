@@ -26,6 +26,19 @@ def test_같은_말은_한_번만_상위_다섯까지():
     assert len(rc.match_keywords(" ".join(many), many)) == rc.TOP_KEYWORDS
 
 
+def test_글과_상관없이_큰_한_낱말은_빼고_조사는_넘긴다():
+    vols = {"신한은행": 1199200, "어떻게": 7960, "부동산경매": 26000}
+    assert rc.match_keywords("신한은행 송달료 조회법", vols) == []
+    got = rc.match_keywords("부동산 경매로 임대업 시작하기", vols)
+    assert [k["keyword"] for k in got] == ["부동산경매"]
+    assert rc.match_keywords("꿈드리미카드 사용처", {"꿈드리미카드": 1850})[0]["volume"] == 1850
+
+
+def test_검색광고에_물을_말은_이웃한_두_낱말():
+    assert rc.hint_pairs("신한은행 송달료 조회법") == ["신한은행송달료", "송달료조회법"]
+    assert len(rc.hint_pairs("가나 다라 마바 사아 자차 카타 파하")) == rc.ADS_HINTS
+
+
 def test_유입이나_클릭이_있으면_후보가_아니다():
     assert rc.has_no_search(_row(), {}) is True
     assert rc.has_no_search(_row(), {"/12/": 3}) is False
