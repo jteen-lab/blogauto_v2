@@ -21,6 +21,18 @@ async def collect_analytics_job() -> None:
                     result.get("blogs"), result.get("rows"))
     except Exception as e:  # noqa: BLE001 — 잡이 죽으면 다음 회차도 안 돈다
         logger.error("[ANALYTICS_JOB] 실패 | %s", e, exc_info=True)
+    await build_retitle_list()
+
+
+async def build_retitle_list() -> None:
+    """새 유입으로 제목 재조합 후보·고칠 글 목록을 다시 쓴다. 글은 고치지 않는다."""
+    from ..services.renewal import retitle_candidates
+
+    try:
+        async with db_manager.get_session() as db:
+            await retitle_candidates.build(db)
+    except Exception as e:  # noqa: BLE001 — 목록 실패가 유입 수집을 막지 않는다
+        logger.error("[RETITLE_LIST] 실패 | %s", e, exc_info=True)
 
 
 async def collect_safely(db) -> dict:
