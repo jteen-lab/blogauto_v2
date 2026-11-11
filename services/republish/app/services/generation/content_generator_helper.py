@@ -160,7 +160,8 @@ async def generate_content_with_meta(
     # 경험 지시를 덮어써야 하므로 다른 지시문보다 뒤에 둔다.
     from ..prompt_builder.experience_rules import append_block as _exp_rules
 
-    full_prompt = _exp_rules(full_prompt, title, [category_name])
+    full_prompt = _exp_rules(full_prompt, title, [category_name],
+                             no_reviews=bool(settings.get("experience_no_reviews")))
 
     # AI 제공자: 블로그 ai_config.writing_ai 설정만 사용
     provider = writing_ai.get("provider")
