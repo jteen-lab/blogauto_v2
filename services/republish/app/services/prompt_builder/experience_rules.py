@@ -73,9 +73,21 @@ def _snippets(review_snippets: Optional[Sequence[str]]) -> List[str]:
     return out
 
 
+NO_REVIEWS_KEY = "experience_no_reviews"
+NO_REVIEWS_A = (
+    "(A) 후기 요약형 금지 — \"후기를 보면/종합하면\", \"자료마다\", \"자료에 따르면\", "
+    "\"레시피마다 다르다\" 같은 남의 글 비교·요약 표현을 쓰지 않는다. 조건에 따라 "
+    "달라지는 부분은 판단 기준을 단정형으로 쓴다(예: \"국물이 많으면 한 숟가락 늘립니다\").")
+NO_REVIEWS_C = "(C) 1인칭 경험 금지 — \"저도 ~해 봤는데\" 같은 1인칭 경험·회고를 쓰지 않는다."
+
+
 def build_block(risk: str = RISK_LOW,
-                review_snippets: Optional[Sequence[str]] = None) -> str:
-    """'경험 서술 규칙' 블록 텍스트."""
+                review_snippets: Optional[Sequence[str]] = None,
+                no_reviews: bool = False) -> str:
+    """'경험 서술 규칙' 블록 텍스트.
+
+    no_reviews=True(모듈 experience_no_reviews) 면 (A) 후기 요약형과 (C) 1인칭을 끈다.
+    """
     lines = [
         BLOCK_HEADER,
         OVERRIDE_LINE,
@@ -91,7 +103,10 @@ def build_block(risk: str = RISK_LOW,
         "예: \"실제로 신청 화면에 들어가면 먼저 ~를 고르게 됩니다\". "
         "자료에 없는 단계·화면·버튼은 만들지 않는다.",
     ]
-    if risk == RISK_LOW:
+    if no_reviews:
+        lines[[n for n, ln in enumerate(lines) if ln.startswith("(A)")][0]] = NO_REVIEWS_A
+        lines.append(NO_REVIEWS_C)
+    elif risk == RISK_LOW:
         lines.append(
             "(C) 1인칭 생활 경험 — 글 전체에서 1~2문장까지, 짧게. 냄새·촉감·"
             "번거로움·뿌듯함 같은 일반적인 감각·감정만 쓴다. 자료에 없는 "
@@ -111,7 +126,7 @@ def build_block(risk: str = RISK_LOW,
         "- 자료에 후기·절차 재료가 없으면 경험 문단을 억지로 만들지 말고 "
         "건너뛴다(구조가 후기·에피소드를 요구해도 사실 설명으로 대신한다)",
     ]
-    snips = _snippets(review_snippets)
+    snips = [] if no_reviews else _snippets(review_snippets)
     if snips:
         lines += ["", "후기 재료 (그대로 옮기지 말고 (A) 형식으로 풀어 쓸 것):"]
         lines += [f"- {s}" for s in snips]
@@ -120,9 +135,10 @@ def build_block(risk: str = RISK_LOW,
 
 def append_block(prompt: str, title: str = "",
                  topic_names: Optional[Iterable[str]] = None,
-                 review_snippets: Optional[Sequence[str]] = None) -> str:
+                 review_snippets: Optional[Sequence[str]] = None,
+                 no_reviews: bool = False) -> str:
     """프롬프트 맨 끝에 규칙 블록을 붙인다(이미 있으면 그대로)."""
     if BLOCK_HEADER in (prompt or ""):
         return prompt
-    block = build_block(classify_risk(title, topic_names), review_snippets)
+    block = build_block(classify_risk(title, topic_names), review_snippets, no_reviews)
     return f"{(prompt or '').rstrip()}\n\n{block}"
