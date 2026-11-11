@@ -41,3 +41,20 @@ flowchart TD
 (A) 형식으로 쓰도록 안내한다.
 
 코드: `services/republish/app/services/prompt_builder/experience_rules.py`
+
+## 모듈 스위치 — 후기 요약형 끄기 (2026-11-11, 레시피노트 애드센스 재정비)
+
+레시피노트 글에 "직접 해 본 사람들의 후기를 종합하면 ~"이 반복돼 '남의 글 모음' 티가 났다(마케팅 진단 11/11).
+레시피처럼 조리 기준만 있으면 되는 블로그는 (A) 후기 요약형과 (C) 1인칭을 끈다.
+
+스위치: 모듈 settings `experience_no_reviews: true` (없으면 예전 그대로)
+
+```mermaid
+flowchart TD
+    M{settings.experience_no_reviews?} -->|아니오| OLD[예전 블록: A 후기 요약형 · B 절차 체험형 · C 위험도별]
+    M -->|예| NEW[A 대신 '후기·자료 비교 표현 금지, 조건별 판단 기준을 단정형으로'<br/>B 절차 체험형 그대로<br/>C 1인칭 금지(위험도와 상관없이)]
+    OLD --> Z[프롬프트 맨 끝]
+    NEW --> Z
+```
+
+- 켠 모듈: 197(레시피노트). 두 조립 위치(content_generator_helper·pipeline_tester_helpers) 모두 같은 키를 본다.
