@@ -107,3 +107,22 @@ class TestBlocksNoFakeExperience:
         assert "본인 1인칭 시점" not in t
         assert "본인 경험·실패담" not in t
         assert "본인도 헷갈렸던" not in t
+
+
+# ── 모듈 스위치 experience_no_reviews — 레시피노트 11/11 ──
+
+def test_no_reviews_drops_review_summary_and_first_person():
+    from app.services.prompt_builder import experience_rules as er
+    block = er.build_block(er.RISK_LOW, ["직접 해 보니 짰다"], no_reviews=True)
+    assert "(A) 후기 요약형 금지" in block
+    assert "직접 해 본 분들의 후기를 보면 ~" not in block
+    assert "(C) 1인칭 경험 금지" in block and "(C) 1인칭 생활 경험" not in block
+    assert "후기 재료" not in block
+    assert "(B) 절차 체험형" in block
+
+
+def test_no_reviews_default_keeps_old_block():
+    from app.services.prompt_builder import experience_rules as er
+    assert er.build_block(er.RISK_LOW) == er.build_block(er.RISK_LOW, None, False)
+    assert "직접 해 본 분들의 후기를 보면 ~" in er.append_block("본문", "김치찌개 레시피")
+    assert "(A) 후기 요약형 금지" in er.append_block("본문", "김치찌개 레시피", no_reviews=True)
