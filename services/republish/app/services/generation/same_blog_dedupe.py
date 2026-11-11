@@ -195,21 +195,83 @@ async def _candidates(db, blog, settings: dict):
     return await history_titles(db, ids, days), STRONG_SHARED, f"{span} {where}에"
 
 
-async def apply(db, blog, title, module_settings: Optional[dict]) -> Optional[str]:
-    """스위치가 켜진 모듈만. 건너뛰면 사유, 아니면 None. 판정 오류는 통과."""
-    settings = module_settings or {}
-    if not settings.get("dedupe_same_blog"):
+DISH_KEY = "dedupe_dish_days"
+# 요리 이름 뒤에 붙는 말 — 이게 둘째 낱말이면 첫 낱말만으로 요리 이름이다('들깨무국 레시피').
+DISH_TAILS = ("레시피", "만들기", "만드는", "만드는법", "끓이는", "끓이는법", "황금레시피")
+DISH_SPLIT = re.compile(r"[,，:：—–|?!·()\[\]]| - ")
+DISH_MIN_ALONE = 3     # 첫 낱말 하나만으로 요리 이름으로 볼 최소 글자(김치·말린 같은 2글자는 안 됨)
+
+
+def _compact(title: str) -> str:
+    """비교용 — NFKC·소문자, 글자·숫자만 남기고 붙여 쓴다."""
+    s = unicodedata.normalize("NFKC", title or "").lower()
+    return re.sub(r"[^0-9a-z가-힣]", "", s)
+
+
+def dish_names(title: str) -> Set[str]:
+    """제목 맨 앞 구절의 요리 이름(검색어가 맨 앞에 오는 제목 기준).
+
+    '들깨무국 레시피, …' → {들깨무국} · '닭볶음탕레시피 감칠맛 …' → {닭볶음탕, 닭볶음탕감칠맛}
+    '말린 고구마줄기볶음, …' → {말린고구마줄기볶음} · '돼지고기 볶음 …' → {돼지고기볶음}
+    """
+    head = DISH_SPLIT.split(unicodedata.normalize("NFKC", title or ""), 1)[0]
+    words = [_compact(w) for w in head.split()][:2]
+    words = [w for w in words if w]
+    if not words:
+        return set()
+    first = words[0]
+    tail_first = first.endswith("레시피") and len(first) > 5
+    if tail_first:
+        first = first[: -len("레시피")]
+    names: Set[str] = set()
+    if len(words) == 1 or tail_first or words[1] in DISH_TAILS:
+        if len(first) >= DISH_MIN_ALONE:
+            names.add(first)
+    if len(words) == 2 and words[1] not in DISH_TAILS:
+        names.add(first + words[1])
+    return names
+
+
+def same_dish(a: str, b: str) -> bool:
+    """한쪽 제목 맨 앞 요리 이름이 다른 쪽 제목 안에 그대로 있나(띄어쓰기 무시)."""
+    ca, cb = _compact(a), _compact(b)
+    return (any(n in cb for n in dish_names(a))
+            or any(n in ca for n in dish_names(b)))
+
+
+async def dish_hit(db, blog, text: str, settings: dict) -> Optional[str]:
+    """요리 이름 모드(settings.dedupe_dish_days) — days일 안 같은 요리 제목, 없으면 None."""
+    days = settings.get(DISH_KEY)
+    if not days:
         return None
+    recent = await history_titles(db, [blog.id], max(1, int(days)))
+    for other in recent:
+        if other != text and same_dish(text, other):
+            return f"제목 관문(같은요리) — {int(days)}일 안에 이 블로그에 「{other[:30]}」"
+    return None
+
+
+async def apply(db, blog, title, module_settings: Optional[dict]) -> Optional[str]:
+    """스위치가 켜진 모듈만. 건너뛰면 사유, 아니면 None. 판정 오류는 통과.
+
+    dedupe_same_blog(비슷한 제목) 다음에 dedupe_dish_days(같은 요리)를 본다.
+    """
+    settings = module_settings or {}
     text = getattr(title, "title", "") or ""
+    msg = None
     try:
-        recent, strong, span = await _candidates(db, blog, settings)
-        hit = find_similar(text, recent, strong=strong)
+        if settings.get("dedupe_same_blog"):
+            recent, strong, span = await _candidates(db, blog, settings)
+            hit = find_similar(text, recent, strong=strong)
+            if hit:
+                msg = f"제목 관문(같은블로그중복) — {span} 「{hit[:30]}」"
+        if not msg:
+            msg = await dish_hit(db, blog, text, settings)
     except Exception as e:  # noqa: BLE001
         logger.warning("[SAME_BLOG] 판정 실패(통과) | blog=%s | %s", blog.id, e)
         return None
-    if not hit:
+    if not msg:
         return None
-    msg = f"제목 관문(같은블로그중복) — {span} 「{hit[:30]}」"
     logger.info("[SAME_BLOG] 건너뜀 | blog=%s | title_id=%s | '%s' | %s",
                 blog.id, getattr(title, "id", None), text[:40], msg)
     return msg
