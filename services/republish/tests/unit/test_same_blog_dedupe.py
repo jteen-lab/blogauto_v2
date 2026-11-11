@@ -94,3 +94,39 @@ def test_long_mode_uses_sibling_history(monkeypatch):
     msg = asyncio.run(sb.apply(None, blog, title, settings))
     assert calls == {"history": ([14, 9, 7, 8], 0)}
     assert "지금까지 같은 사이트(형제 블로그 포함)에" in msg
+
+
+# ── 요리 이름 모드(dedupe_dish_days) — 레시피노트 11/11 ──
+
+def test_dish_names_from_lead_phrase():
+    assert sb.dish_names("들깨무국 레시피, 끓이는 법 깔끔하고 고소한 아침국") == {"들깨무국"}
+    assert sb.dish_names("닭볶음탕레시피 감칠맛 양념비율 4인분") == {"닭볶음탕", "닭볶음탕감칠맛"}
+    assert sb.dish_names("말린 고구마줄기볶음, 삶는법과 묵나물") == {"말린고구마줄기볶음"}
+    assert sb.dish_names("돼지고기 볶음 레시피 완벽 분석") == {"돼지고기볶음"}
+    assert sb.dish_names("김치 냉장고 없이 겨울에") == {"김치냉장고"}   # 2글자 '김치' 혼자는 안 봄
+
+
+def test_same_dish_catches_repeats_but_not_neighbours():
+    assert sb.same_dish("김치찌개 레시피, 묵은지로 끓이는 시간",
+                        "냉장고 재료로 끓이는 얼큰한 김치찌개레시피 순서")
+    assert sb.same_dish("말린 고구마줄기볶음, 삶는법과 묵나물 레시피 뭐가 좋을까",
+                        "말린 고구마줄기볶음, 고구마순볶음 삶는법과 볶음 요령 정리")
+    assert not sb.same_dish("돼지고기 볶음 레시피 완벽 분석",
+                            "돼지고기김치찌개 부위별 차이와 맛있게 끓이는 법")
+    assert not sb.same_dish("들깨무국 레시피, 끓이는 법", "묵은지로 깊고 진한 맛 내는 김치찌개레시피")
+
+
+def test_dish_mode_runs_without_same_blog_switch(monkeypatch):
+    calls = _fake_apply(monkeypatch, [], ["말린 고구마줄기볶음, 고구마순볶음 삶는법과 볶음 요령 정리"], [19])
+    blog = SimpleNamespace(id=19)
+    title = SimpleNamespace(id=3, title="말린 고구마줄기볶음, 삶는법과 묵나물 레시피 뭐가 좋을까")
+    msg = asyncio.run(sb.apply(None, blog, title, {"dedupe_dish_days": 30}))
+    assert calls == {"history": ([19], 30)}
+    assert msg.startswith("제목 관문(같은요리) — 30일 안에 이 블로그에")
+
+
+def test_dish_mode_off_when_key_absent(monkeypatch):
+    calls = _fake_apply(monkeypatch, [], ["김치찌개 레시피"], [19])
+    blog, title = SimpleNamespace(id=19), SimpleNamespace(id=4, title="김치찌개 레시피, 묵은지")
+    assert asyncio.run(sb.apply(None, blog, title, {})) is None
+    assert calls == {}
