@@ -344,6 +344,24 @@ async def list_main_titles(
     )
 
 
+def _display_date(row: dict) -> Optional[str]:
+    """정식제목 탭 '등록일' 칸에 보일 날짜를 고른다.
+
+    발행대기(글은 만들었고 아직 발행 전) 행은 글이 발행대기에 들어간 날
+    (생성 CrawledPost.created_at)을, 그 밖의 행은 정식제목 등록일을 쓴다.
+
+    Args:
+        row: main_to_dict 가 만든 행 dict
+
+    Returns:
+        ISO 날짜 문자열 또는 None
+    """
+    mcp = row.get("matched_crawled_post")
+    if mcp and not mcp.get("published_at") and mcp.get("created_at"):
+        return mcp["created_at"]
+    return row.get("created_at")
+
+
 @router.get("/unified")
 async def list_titles_unified(
     blog_id: int = Query(..., description="블로그 ID (필수)"),
@@ -590,7 +608,11 @@ async def list_titles_unified(
                 ),
                 "image_url": cp.image_url,
                 "has_content": bool(cp.content_html),
+                "created_at": (
+                    cp.created_at.isoformat() if cp.created_at else None
+                ),
             }
+        d["display_date"] = _display_date(d)
         return d
 
     def unmatched_to_dict(cp):
@@ -623,7 +645,9 @@ async def list_titles_unified(
         if sort_field in CATEGORY_SORT_FIELDS:
             # 분류가 없는 제목·미매칭 크롤글은 빈 문자열로 한쪽에 모인다
             return ((row.get("category_path") or ""), title_key(row))
-        if sort_field in ("created_at", "updated_at"):
+        if sort_field == "created_at":
+            return row.get("display_date") or row.get("crawled_at") or ""
+        if sort_field == "updated_at":
             return (
                 row.get(sort_field)
                 or row.get("created_at")
