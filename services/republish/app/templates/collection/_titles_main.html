@@ -573,7 +573,8 @@
                                 <!-- 등록일 -->
                                 <td class="text-center text-sm text-gray-500">
                                     <template x-if="row._kind === 'main'">
-                                        <span x-text="formatDate(row.created_at)"></span>
+                                        <span x-text="formatDate(row.display_date || row.created_at)"
+                                              :title="row.matched_crawled_post && !row.matched_crawled_post.published_at ? '발행대기에 들어간 날 (정식제목 등록: ' + formatDate(row.created_at) + ')' : '정식제목 등록일'"></span>
                                     </template>
                                     <template x-if="row._kind === 'unmatched'">
                                         <span x-text="row.crawled_at ? new Date(row.crawled_at).toLocaleDateString('ko-KR') : '-'"></span>
@@ -711,7 +712,7 @@
                             </div>
                             <div class="mobile-card-row">
                                 <span class="mobile-card-label">등록일</span>
-                                <span class="mobile-card-value" x-text="formatDate(title.created_at)"></span>
+                                <span class="mobile-card-value" x-text="formatDate(title.display_date || title.created_at)"></span>
                             </div>
                             <!-- 생성 콘텐츠 정보 (모바일 확장) -->
                             <template x-if="title.matched_crawled_post">
